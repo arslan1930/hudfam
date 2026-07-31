@@ -38,9 +38,13 @@ Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
 1. Admin creates project folders (`rexbo.de`, `xyw.com`, …) and assigns team
-2. Team adds negotiated sites (status **Agreed**)
-3. Admin sends packs and updates Rejected / Processing / Completed
-4. Team reads results and refills sites
+2. Under each project → **Clients** tab: create client email folders (name + email)
+3. Inside a client folder: add **publication orders** (site, article URL, date sent, price, live URL)
+4. Fill Live URL → **Mark completed**; download CSV from **Orders export**
+5. Team adds negotiated sites (status **Agreed**); Admin also uses send-pack flow as before
+
+### Already installed earlier?
+Open `upgrade.php` once to add client/order tables, then delete it.
 
 ## Troubleshooting
 | Problem | Fix |
