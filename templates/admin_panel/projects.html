@@ -1,0 +1,35 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Projects · Hudfam{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>Project folders</h1>
+    <p class="muted">Each client campaign (e.g. rexbo.de) has its own requirements and workflow.</p>
+  </div>
+  <a class="btn" href="{% url 'admin_project_create' %}">New project</a>
+</div>
+
+<form class="card filters" method="get">
+  <div>
+    <label>Search</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="rexbo.de, niche…">
+  </div>
+  <button class="btn" type="submit">Search</button>
+</form>
+
+<div class="folders">
+{% for p in projects %}
+  <a class="folder" href="{% url 'admin_project_detail' p.pk %}">
+    <h3>{{ p.name }}</h3>
+    <p class="muted">{{ p.client_name|default:"Client project" }} · {{ p.niche|default:"No niche set" }}</p>
+    <p>
+      <span class="badge {{ p.status }}">{{ p.status }}</span>
+      · {{ p.member_count }} team
+      · budget {{ p.budget|default:"—" }}
+    </p>
+  </a>
+{% empty %}
+  <div class="card">No projects yet. Create folders like <strong>rexbo.de</strong> or <strong>xyw.com</strong>.</div>
+{% endfor %}
+</div>
+{% endblock %}

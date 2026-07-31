@@ -1,0 +1,29 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Update {{ item.site.domain }} · Hudfam{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>{{ item.site.domain }}</h1>
+    <p class="muted">Project {{ item.pitch.project.name }} · {{ item.pitch.title }}</p>
+  </div>
+</div>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-grid">
+      {% for field in form %}
+      <div class="{% if field.name in 'reject_comment client_notes' %}full{% endif %}">
+        <label>{{ field.label }}</label>
+        {{ field }}
+        {% for error in field.errors %}<div class="help" style="color:var(--bad)">{{ error }}</div>{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    <p class="help">Reject keeps the reason forever. Complete requires a live link and creates a published record.</p>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save status</button>
+      <a class="btn secondary" href="{% url 'admin_project_detail' item.pitch.project_id %}">Back</a>
+    </p>
+  </form>
+</div>
+{% endblock %}

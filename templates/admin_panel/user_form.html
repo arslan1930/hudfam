@@ -1,0 +1,20 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}{{ title }} · Hudfam{% endblock %}
+{% block content %}
+<div class="topbar"><div><h1>{{ title }}</h1></div></div>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+      <label>{{ field.label }}</label>
+      {{ field }}
+      {% for error in field.errors %}<div class="help" style="color:var(--bad)">{{ error }}</div>{% endfor %}
+    {% endfor %}
+    <p class="help">Leave password blank when editing to keep the current password.</p>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save</button>
+      <a class="btn secondary" href="{% url 'admin_users' %}">Cancel</a>
+    </p>
+  </form>
+</div>
+{% endblock %}

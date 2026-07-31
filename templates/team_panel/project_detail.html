@@ -1,0 +1,99 @@
+{% extends "team_panel/base_team.html" %}
+{% block title %}{{ project.name }} · Hudfam{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <p class="muted">Work only to this project’s requirements. Statuses are updated by Admin.</p>
+  </div>
+  <a class="btn" href="{% url 'team_site_create' %}?project={{ project.pk }}">Add site for this project</a>
+</div>
+
+<div class="card">
+  <div class="grid">
+    <div><span class="muted">Niche</span><br><strong>{{ project.niche|default:"—" }}</strong></div>
+    <div><span class="muted">Countries</span><br><strong>{{ project.countries|default:"—" }}</strong></div>
+    <div><span class="muted">Budget</span><br><strong>{{ project.budget|default:"—" }}</strong></div>
+    <div><span class="muted">Price range</span><br><strong>{{ project.price_min|default:"—" }} – {{ project.price_max|default:"—" }} {{ project.currency }}</strong></div>
+    <div><span class="muted">Min DR / DA / Traffic</span><br><strong>{{ project.min_dr|default:"—" }} / {{ project.min_da|default:"—" }} / {{ project.min_traffic|default:"—" }}</strong></div>
+    <div><span class="muted">Avoid</span><br><strong>{{ project.avoid_notes|default:"—" }}</strong></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <a class="{% if tab == 'brief' %}active{% endif %}" href="?tab=brief">Brief</a>
+  <a class="{% if tab == 'sites' %}active{% endif %}" href="?tab=sites">Sites</a>
+  <a class="{% if tab == 'sent' %}active{% endif %}" href="?tab=sent">Sent</a>
+  <a class="{% if tab == 'rejected' %}active{% endif %}" href="?tab=rejected">Rejected</a>
+  <a class="{% if tab == 'processing' %}active{% endif %}" href="?tab=processing">Processing</a>
+  <a class="{% if tab == 'completed' %}active{% endif %}" href="?tab=completed">Completed</a>
+  <a class="{% if tab == 'published' %}active{% endif %}" href="?tab=published">Published</a>
+</div>
+
+{% if tab == 'brief' %}
+<div class="card">
+  <h2>What Admin set for this client</h2>
+  <p>{{ project.requirements_brief|linebreaksbr|default:"No brief." }}</p>
+  <h3>Workflow</h3>
+  <p>{{ project.workflow_notes|linebreaksbr|default:"—" }}</p>
+</div>
+{% elif tab == 'sites' %}
+<div class="card">
+  <table>
+    <thead><tr><th>Domain</th><th>Metrics</th><th>Price</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for s in project_sites %}
+      <tr>
+        <td><a href="{% url 'team_site_detail' s.pk %}">{{ s.domain }}</a></td>
+        <td>DR {{ s.dr|default:"—" }} / DA {{ s.da|default:"—" }}</td>
+        <td>{{ s.backlink_price|default:"—" }}</td>
+        <td><span class="badge {{ s.status }}">{{ s.status }}</span></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="muted">No sites for this project yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif tab == 'rejected' %}
+<div class="card">
+  {% for item in items_rejected %}
+    <div class="history-item">
+      <strong>{{ item.site.domain }}</strong>
+      <span class="badge rejected">{{ item.get_reject_reason_code_display }}</span>
+      <div class="muted">{{ item.reject_comment }}</div>
+    </div>
+  {% empty %}<p class="muted">No rejects yet.</p>{% endfor %}
+</div>
+{% elif tab == 'sent' %}
+<div class="card">
+  {% for item in items_sent %}
+    <div class="history-item"><strong>{{ item.site.domain }}</strong> <span class="badge sent">sent</span></div>
+  {% empty %}<p class="muted">Nothing sent yet.</p>{% endfor %}
+</div>
+{% elif tab == 'processing' %}
+<div class="card">
+  {% for item in items_processing %}
+    <div class="history-item"><strong>{{ item.site.domain }}</strong> <span class="badge processing">processing</span></div>
+  {% empty %}<p class="muted">Nothing processing.</p>{% endfor %}
+</div>
+{% elif tab == 'completed' %}
+<div class="card">
+  {% for item in items_completed %}
+    <div class="history-item">
+      <strong>{{ item.site.domain }}</strong> <span class="badge completed">completed</span>
+      <div><a href="{{ item.live_link }}" target="_blank">{{ item.live_link }}</a></div>
+    </div>
+  {% empty %}<p class="muted">Nothing completed.</p>{% endfor %}
+</div>
+{% elif tab == 'published' %}
+<div class="card">
+  {% for row in published %}
+    <div class="history-item">
+      <strong>{{ row.site.domain }}</strong>
+      <div><a href="{{ row.live_link }}" target="_blank">{{ row.live_link }}</a></div>
+    </div>
+  {% empty %}<p class="muted">No published records.</p>{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

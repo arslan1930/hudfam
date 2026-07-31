@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hudfam
+      POSTGRES_USER: hudfam
+      POSTGRES_PASSWORD: hudfam
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: change-me-in-production
+      DEBUG: "False"
+      ALLOWED_HOSTS: "*"
+      DATABASE_URL: postgres://hudfam:hudfam@db:5432/hudfam
+      SEED_DEMO: "1"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
