@@ -1,19 +1,18 @@
-__pycache__/
-*.py[cod]
-*.sqlite3
-db.sqlite3
+# Local / secrets
+public_html/config.php
 .env
-.venv/
-venv/
-*.egg-info/
-dist/
-build/
 .DS_Store
-staticfiles/
-media/
 .idea/
 .vscode/
+
+# Editor / OS junk
 *.log
-.coverage
-htmlcov/
-public_html/config.php
+Thumbs.db
+
+# Accidental Python leftovers
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+db.sqlite3
+*.sqlite3
