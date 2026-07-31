@@ -1,93 +1,51 @@
 # Hudfam
 
-Office linkbuilding inventory and client project workflow — **Admin panel** + **Team panel**.
+Linkbuilding inventory and client publication workflow — **Admin** + **Team** panels.
 
-## Hostinger shared hosting (plain PHP)
+Plain **PHP + MySQL** app for Hostinger shared hosting (and any PHP host).
 
-Use the PHP app in [`public_html/`](public_html/) — works on Hostinger shared hosting with MySQL.
+## Features
 
-1. Upload everything inside `public_html/` to your domain’s web root  
-2. Open `https://YOUR-DOMAIN/install.php`  
-3. Enter MySQL details → install → delete `install.php`  
-4. Login: `admin` / `admin123` · `teammate` / `team123`
+- Project folders per campaign (`rexbo.de`, `xyw.com`, …)
+- Team adds negotiated sites; Admin sends packs and updates statuses
+- **Client email folders** under each project (name + email)
+- **Publication orders**: article URL, date sent, client price, live URL → mark completed
+- Download CSV spreadsheet of order records
+
+## Deploy on Hostinger
 
 Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
 
----
-
-## Django version (VPS / Render / Railway)
-
-## What it does
-
-- **Project folders** per client campaign (`rexbo.de`, `xyw.com`, …) with their own niche, countries, budget, prices, and rules
-- **Team** negotiates sites (Gmail stays outside), saves agreed prices, sees Admin results
-- **Admin only** manages clients/projects, sends site packs, updates reject / processing / completed
-- Rejection comments and published placements are **kept forever**; sites can be offered again later
-- Excel/CSV import & export, search/filters, pagination ready for **100k+** sites
-
-## Stack
-
-- Django 5 + server-rendered HTML templates
-- SQLite locally; PostgreSQL via Docker / `DATABASE_URL`
-- openpyxl / pandas for spreadsheets
-
-## Quick start (local)
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python manage.py migrate
-python manage.py seed_demo
-python manage.py runserver
-```
-
-Open http://127.0.0.1:8000/
-
-| User | Password | Panel |
-|------|----------|--------|
-| `admin` | `admin123` | Admin |
-| `teammate` | `team123` | Team |
-| `teammate2` | `team123` | Team |
-
-## Docker (Postgres)
-
-```bash
-docker compose up --build
-```
-
-App: http://localhost:8000/  
-Demo users are seeded when `SEED_DEMO=1`.
-
-## Main URLs
-
-- `/login/`
-- `/admin-panel/` — projects, sites, send packs, import, users
-- `/team/` — assigned project folders, add sites, results feed
-- `/django-admin/` — Django admin
-
-## Workflow
-
-1. Admin creates a project folder and sets requirements + assigns team
-2. Team opens the folder, finds/negotiates sites, marks **Agreed** with price
-3. Admin builds a pack from the Agreed pool and sends it to the client
-4. Admin updates each site: **Rejected** (+ reason) / **Processing** / **Completed** (+ live link)
-5. Team reads results and refills better sites
-6. Completed orders create **Published** records
-
-## Deploy to cloud (Render / Railway)
-
-**Hostinger shared hosting cannot run this app.** Use Render (recommended):
-
-1. Go to https://render.com → **Login with GitHub**
-2. **New +** → **Blueprint** → select repo `arslan1930/hudfam`
-3. Branch: `main`
-4. Apply the blueprint (`render.yaml` creates web + free Postgres)
-5. Open the `.onrender.com` URL and login:
+1. Create a MySQL database in hPanel  
+2. Upload everything inside [`public_html/`](public_html/) to your domain’s web root  
+3. Open `https://YOUR-DOMAIN/install.php` → enter DB details → Install  
+4. Delete `install.php` (and `upgrade.php` if you used it)  
+5. Login:
    - Admin: `admin` / `admin123`
    - Team: `teammate` / `team123`
 
-Full click-by-click steps (including Railway): see [DEPLOY.md](DEPLOY.md).
+### Already installed an older copy?
+Upload the new files, then open `/upgrade.php` once to add client/order tables, then delete it.
 
-> Free Render Postgres expires after 30 days — fine to launch; upgrade later for production.
+## Local preview (optional)
+
+```bash
+# With PHP + MySQL available:
+cd public_html
+# create config.php from config.sample.php, import sql/schema.sql, then:
+php -S 127.0.0.1:8080
+```
+
+## Project layout
+
+```text
+public_html/          ← upload this folder’s contents to the server
+  index.php
+  install.php
+  upgrade.php
+  assets/
+  includes/
+  pages/admin/
+  pages/team/
+  sql/
+```
