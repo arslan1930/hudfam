@@ -16,3 +16,4 @@ media/
 *.log
 .coverage
 htmlcov/
+public_html/config.php
