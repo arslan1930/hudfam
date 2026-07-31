@@ -43,6 +43,20 @@ $published = db()->prepare(
 $published->execute([$id]);
 $published = $published->fetchAll();
 
+$projectClients = [];
+try {
+    $cStmt = db()->prepare(
+        'SELECT c.*,
+          (SELECT COUNT(*) FROM publication_orders o WHERE o.client_id=c.id) AS order_count,
+          (SELECT COUNT(*) FROM publication_orders o WHERE o.client_id=c.id AND o.status="processing") AS processing_count
+         FROM clients c WHERE c.project_id=? ORDER BY c.name'
+    );
+    $cStmt->execute([$id]);
+    $projectClients = $cStmt->fetchAll();
+} catch (Throwable $e) {
+    $projectClients = [];
+}
+
 render_header($project['name'], 'admin');
 ?>
 <div class="topbar">
@@ -51,7 +65,9 @@ render_header($project['name'], 'admin');
     <p class="muted"><?= h($project['client_name'] ?: 'Client campaign') ?> · <?= h($project['niche'] ?: '—') ?> · <?= h($project['countries'] ?: '—') ?></p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_pitch_create&project_id=<?= $id ?>">Send pack</a>
+    <a class="btn" href="index.php?page=admin_client_form&project_id=<?= $id ?>">New client folder</a>
+    <a class="btn secondary" href="index.php?page=admin_pitch_create&project_id=<?= $id ?>">Send pack</a>
+    <a class="btn secondary" href="index.php?page=admin_orders_export&project_id=<?= $id ?>&download=1">Download orders CSV</a>
     <a class="btn secondary" href="index.php?page=admin_project_form&id=<?= $id ?>">Edit requirements</a>
   </div>
 </div>
@@ -64,7 +80,7 @@ render_header($project['name'], 'admin');
   </div>
 </div>
 <div class="tabs">
-  <?php foreach (['brief','sites','sent','rejected','processing','completed','published'] as $t): ?>
+  <?php foreach (['brief','clients','sites','sent','rejected','processing','completed','published'] as $t): ?>
     <a class="<?= $tab===$t?'active':'' ?>" href="index.php?page=admin_project&id=<?= $id ?>&tab=<?= $t ?>"><?= ucfirst($t) ?></a>
   <?php endforeach; ?>
 </div>
@@ -76,6 +92,26 @@ render_header($project['name'], 'admin');
   <p><?= nl2br(h($project['workflow_notes'] ?: '—')) ?></p>
   <h3>Assigned team</h3>
   <p><?php foreach ($members as $m): ?><span class="badge"><?= h($m['username']) ?></span> <?php endforeach; ?><?php if (!$members): ?><span class="muted">None</span><?php endif; ?></p>
+</div>
+<?php elseif ($tab === 'clients'): ?>
+<div class="topbar" style="margin-bottom:0.5rem">
+  <p class="muted">Client email folders for deals under this project.</p>
+  <a class="btn" href="index.php?page=admin_client_form&project_id=<?= $id ?>">Add client folder</a>
+</div>
+<div class="folders">
+<?php foreach ($projectClients as $c): ?>
+  <a class="folder" href="index.php?page=admin_client&id=<?= (int)$c['id'] ?>">
+    <h3><?= h($c['name']) ?></h3>
+    <p class="muted"><?= h($c['email']) ?></p>
+    <p>
+      <span class="badge"><?= (int)$c['order_count'] ?> orders</span>
+      <?php if ((int)$c['processing_count'] > 0): ?>
+        <span class="badge processing"><?= (int)$c['processing_count'] ?> processing</span>
+      <?php endif; ?>
+    </p>
+  </a>
+<?php endforeach; ?>
+<?php if (!$projectClients): ?><div class="card">No client folders yet. Run upgrade.php if tables are missing, then add a client.</div><?php endif; ?>
 </div>
 <?php elseif ($tab === 'sites'): ?>
 <div class="card">
