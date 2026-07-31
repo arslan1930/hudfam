@@ -61,13 +61,18 @@ Demo users are seeded when `SEED_DEMO=1`.
 5. Team reads results and refills better sites
 6. Completed orders create **Published** records
 
-## Deploy to cloud
+## Deploy to cloud (Render / Railway)
 
-Set env vars:
+**Hostinger shared hosting cannot run this app.** Use Render (recommended):
 
-- `SECRET_KEY`
-- `DEBUG=False`
-- `ALLOWED_HOSTS=your.domain`
-- `DATABASE_URL=postgres://...`
+1. Go to https://render.com → **Login with GitHub**
+2. **New +** → **Blueprint** → select repo `arslan1930/hudfam`
+3. Branch: `main`
+4. Apply the blueprint (`render.yaml` creates web + free Postgres)
+5. Open the `.onrender.com` URL and login:
+   - Admin: `admin` / `admin123`
+   - Team: `teammate` / `team123`
 
-Then run migrate + gunicorn (see `Dockerfile` / `entrypoint.sh`). Works on Railway, Render, Fly.io, or any VPS with Docker.
+Full click-by-click steps (including Railway): see [DEPLOY.md](DEPLOY.md).
+
+> Free Render Postgres expires after 30 days — fine to launch; upgrade later for production.
