@@ -67,7 +67,7 @@ Demo users are seeded when `SEED_DEMO=1`.
 
 1. Go to https://render.com → **Login with GitHub**
 2. **New +** → **Blueprint** → select repo `arslan1930/hudfam`
-3. Branch: `cursor/hudfam-linkbuilding-app-f3f8` (or `main` after merge)
+3. Branch: `main`
 4. Apply the blueprint (`render.yaml` creates web + free Postgres)
 5. Open the `.onrender.com` URL and login:
    - Admin: `admin` / `admin123`

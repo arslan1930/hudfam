@@ -7,7 +7,7 @@ Shared hosting cannot run this app. Use **Render** (steps below) or Railway.
 1. Open https://render.com and sign up / log in (**Login with GitHub**).
 2. Click **New +** → **Blueprint**.
 3. Connect the GitHub repo: `arslan1930/hudfam`.
-4. Select branch: `cursor/hudfam-linkbuilding-app-f3f8` (or `main` after you merge the PR).
+4. Select branch: `main` (use the deploy PR branch until it is merged).
 5. Render reads `render.yaml` and creates:
    - Postgres database `hudfam-db`
    - Web service `hudfam`
@@ -26,7 +26,7 @@ Change these passwords after first login.
 2. **New +** → **Web Service** → pick `arslan1930/hudfam`.
 3. Settings:
    - Language: Python
-   - Branch: `cursor/hudfam-linkbuilding-app-f3f8`
+   - Branch: `main`
    - Build command: `./build.sh`
    - Start command: `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2`
 4. Environment variables:
