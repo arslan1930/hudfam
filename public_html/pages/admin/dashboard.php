@@ -26,8 +26,10 @@ render_header('Admin dashboard', 'admin');
     <p class="muted">Hello <?= h($user['username']) ?> — manage projects, packs, and statuses.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_project_form">New project</a>
-    <a class="btn secondary" href="index.php?page=admin_site_form">Add site</a>
+    <a class="btn" href="index.php?page=admin_client_form">New client folder</a>
+    <a class="btn secondary" href="index.php?page=admin_clients">Clients</a>
+    <a class="btn secondary" href="index.php?page=admin_orders_export">Orders CSV</a>
+    <a class="btn secondary" href="index.php?page=admin_project_form">New project</a>
   </div>
 </div>
 <div class="grid">
