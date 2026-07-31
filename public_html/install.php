@@ -93,6 +93,46 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $ins->execute([$s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7], $s[8], $s[9], $s[9], $s[10], $s[11]]);
         }
 
+        $pdo->prepare(
+            'INSERT INTO clients (project_id, name, email, notes, created_by)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE name=VALUES(name)'
+        )->execute([
+            $rexboId,
+            'Hans Mueller',
+            'hans@rexbo.de',
+            'Main contact for Rexbo deals.',
+            $adminId,
+        ]);
+        $clientId = (int) $pdo->query(
+            "SELECT id FROM clients WHERE project_id={$rexboId} AND email='hans@rexbo.de'"
+        )->fetchColumn();
+        $siteId = (int) $pdo->query(
+            "SELECT id FROM sites WHERE domain='de-finance-news.example'"
+        )->fetchColumn();
+        $existsOrder = (int) $pdo->query(
+            "SELECT COUNT(*) FROM publication_orders WHERE client_id={$clientId}"
+        )->fetchColumn();
+        if ($clientId && !$existsOrder) {
+            $pdo->prepare(
+                'INSERT INTO publication_orders
+                (client_id, site_id, site_domain, article_url, sent_for_publication_at, client_price, currency, live_url, status, admin_notes, created_by)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+            )->execute([
+                $clientId,
+                $siteId ?: null,
+                'de-finance-news.example',
+                'https://docs.example.com/rexbo-article-1.docx',
+                date('Y-m-d'),
+                120,
+                'EUR',
+                '',
+                'processing',
+                'Demo order — waiting for live URL.',
+                $adminId,
+            ]);
+        }
+
         $configPhp = "<?php\nreturn [\n"
             . "    'db_host' => " . var_export($host, true) . ",\n"
             . "    'db_name' => " . var_export($name, true) . ",\n"
