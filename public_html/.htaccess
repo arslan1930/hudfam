@@ -1,0 +1,14 @@
+# Hudfam PHP app for Hostinger shared hosting
+Options -Indexes
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Optional pretty home redirect
+  RewriteRule ^$ index.php [L]
+</IfModule>
+
+# Protect config if Apache allows
+<Files "config.php">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+</Files>

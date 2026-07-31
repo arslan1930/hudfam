@@ -1,6 +1,21 @@
 # Hudfam
 
-Office linkbuilding inventory and client project workflow — **Admin panel** + **Team panel**, no React/Next.js.
+Office linkbuilding inventory and client project workflow — **Admin panel** + **Team panel**.
+
+## Hostinger shared hosting (plain PHP)
+
+Use the PHP app in [`public_html/`](public_html/) — works on Hostinger shared hosting with MySQL.
+
+1. Upload everything inside `public_html/` to your domain’s web root  
+2. Open `https://YOUR-DOMAIN/install.php`  
+3. Enter MySQL details → install → delete `install.php`  
+4. Login: `admin` / `admin123` · `teammate` / `team123`
+
+Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
+
+---
+
+## Django version (VPS / Render / Railway)
 
 ## What it does
 
