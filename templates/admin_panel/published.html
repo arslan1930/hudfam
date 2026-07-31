@@ -1,0 +1,39 @@
+{% extends "admin_panel/base_admin.html" %}
+{% block title %}Published · Hudfam{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>Published placements</h1>
+    <p class="muted">Permanent record of live links you already placed.</p>
+  </div>
+</div>
+<form class="card filters" method="get">
+  <div>
+    <label>Search</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="domain, project, link">
+  </div>
+  <button class="btn" type="submit">Search</button>
+</form>
+<div class="card">
+  <table>
+    <thead><tr><th>Site</th><th>Project</th><th>Live link</th><th>Date</th></tr></thead>
+    <tbody>
+    {% for row in page %}
+      <tr>
+        <td>{{ row.site.domain }}</td>
+        <td><a href="{% url 'admin_project_detail' row.project_id %}">{{ row.project.name }}</a></td>
+        <td><a href="{{ row.live_link }}" target="_blank">{{ row.live_link }}</a></td>
+        <td>{{ row.published_at|date:"Y-m-d" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="muted">No published placements yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="pagination">
+    {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&q={{ q }}">Prev</a>{% endif %}
+    <span>Page {{ page.number }} / {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="?page={{ page.next_page_number }}&q={{ q }}">Next</a>{% endif %}
+  </div>
+</div>
+{% endblock %}

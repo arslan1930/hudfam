@@ -1,0 +1,29 @@
+{% extends "team_panel/base_team.html" %}
+{% block title %}{{ title }} · Hudfam{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="muted">Negotiate via Gmail outside the app, then save the agreed price here.</p>
+  </div>
+</div>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-grid">
+      {% for field in form %}
+      <div class="{% if field.name in 'outreach_notes warning_flags' %}full{% endif %}">
+        <label>{{ field.label }}</label>
+        {{ field }}
+        {% for error in field.errors %}<div class="help" style="color:var(--bad)">{{ error }}</div>{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    <p class="help">Status Agreed requires a backlink price. After Admin sends to a client, editing locks.</p>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save site</button>
+      <a class="btn secondary" href="{% url 'team_sites' %}">Cancel</a>
+    </p>
+  </form>
+</div>
+{% endblock %}

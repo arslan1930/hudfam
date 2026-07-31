@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Login · Hudfam{% endblock %}
+{% block body %}
+<div class="login-wrap">
+  <div class="login-card">
+    <h1>Hudfam</h1>
+    <p class="muted">Linkbuilding inventory &amp; client project workflows.</p>
+    {% if error %}<ul class="messages"><li class="error">{{ error }}</li></ul>{% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <label>Username</label>
+      <input type="text" name="username" required autofocus>
+      <label>Password</label>
+      <input type="password" name="password" required>
+      <p style="margin-top:1.25rem"><button class="btn" type="submit">Sign in</button></p>
+    </form>
+    <p class="help">Demo: admin / admin123 · teammate / team123</p>
+  </div>
+</div>
+{% endblock %}
