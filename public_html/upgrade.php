@@ -1,25 +1,56 @@
 <?php
 /**
- * One-time upgrade: adds clients + publication_orders tables.
- * Open once, then delete this file.
+ * One-time upgrade runner for existing Hostinger installs.
+ * Open once after uploading new files, then delete this file.
  */
 session_start();
 require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
+require __DIR__ . '/includes/geo.php';
 
 $error = '';
 $done = false;
-$seeded = false;
+$notes = [];
 
 if (!file_exists(__DIR__ . '/config.php')) {
     $error = 'config.php missing. Run install.php first.';
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['run'])) {
     try {
         $pdo = db();
-        $sql = file_get_contents(__DIR__ . '/sql/upgrade_clients_orders.sql');
-        $pdo->exec($sql);
 
-        // Seed demo client/order if missing
+        // Clients + publication orders
+        $pdo->exec(file_get_contents(__DIR__ . '/sql/upgrade_clients_orders.sql'));
+        $notes[] = 'clients / publication_orders OK';
+
+        // Countries table
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS countries (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              region VARCHAR(40) NOT NULL DEFAULT 'other',
+              code VARCHAR(10) NOT NULL DEFAULT '',
+              name VARCHAR(100) NOT NULL,
+              default_language VARCHAR(50) NOT NULL DEFAULT '',
+              is_active TINYINT(1) NOT NULL DEFAULT 1,
+              UNIQUE KEY uniq_country_name (name),
+              INDEX (region),
+              INDEX (code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        seed_countries_if_empty($pdo);
+        $notes[] = 'countries OK';
+
+        // Publisher quote columns (idempotent)
+        $cols = $pdo->query('SHOW COLUMNS FROM sites')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('publisher_quote_price', $cols, true)) {
+            $pdo->exec('ALTER TABLE sites ADD COLUMN publisher_quote_price DECIMAL(12,2) NULL AFTER traffic');
+            $notes[] = 'added publisher_quote_price';
+        }
+        if (!in_array('publisher_quote_date', $cols, true)) {
+            $pdo->exec('ALTER TABLE sites ADD COLUMN publisher_quote_date DATE NULL AFTER publisher_quote_price');
+            $notes[] = 'added publisher_quote_date';
+        }
+
+        // Demo client/order if missing
         $rexboId = (int) $pdo->query("SELECT id FROM projects WHERE name='rexbo.de' LIMIT 1")->fetchColumn();
         $adminId = (int) $pdo->query("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1")->fetchColumn();
         if ($rexboId && $adminId) {
@@ -28,36 +59,8 @@ if (!file_exists(__DIR__ . '/config.php')) {
                  VALUES (?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE name=VALUES(name)'
             )->execute([$rexboId, 'Hans Mueller', 'hans@rexbo.de', 'Main contact for Rexbo deals.', $adminId]);
-            $clientId = (int) $pdo->query(
-                "SELECT id FROM clients WHERE project_id={$rexboId} AND email='hans@rexbo.de'"
-            )->fetchColumn();
-            $count = (int) $pdo->query(
-                "SELECT COUNT(*) FROM publication_orders WHERE client_id={$clientId}"
-            )->fetchColumn();
-            if ($clientId && $count === 0) {
-                $siteId = (int) $pdo->query(
-                    "SELECT id FROM sites WHERE domain='de-finance-news.example'"
-                )->fetchColumn();
-                $pdo->prepare(
-                    'INSERT INTO publication_orders
-                    (client_id, site_id, site_domain, article_url, sent_for_publication_at, client_price, currency, live_url, status, admin_notes, created_by)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-                )->execute([
-                    $clientId,
-                    $siteId ?: null,
-                    'de-finance-news.example',
-                    'https://docs.example.com/rexbo-article-1.docx',
-                    date('Y-m-d'),
-                    120,
-                    'EUR',
-                    '',
-                    'processing',
-                    'Demo order — waiting for live URL.',
-                    $adminId,
-                ]);
-                $seeded = true;
-            }
         }
+
         $done = true;
     } catch (Throwable $e) {
         $error = $e->getMessage();
@@ -76,11 +79,12 @@ if (!file_exists(__DIR__ . '/config.php')) {
 <div class="login-wrap">
   <div class="login-card">
     <h1>Upgrade</h1>
-    <p class="muted">Adds client email folders + publication orders tables.</p>
+    <p class="muted">Adds clients/orders, countries, and publisher quote fields.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
     <?php if ($done): ?>
-      <p>Upgrade complete<?= $seeded ? ' (demo client/order seeded)' : '' ?>.</p>
-      <p><a href="index.php?page=admin_clients">Open Clients</a></p>
+      <p>Upgrade complete.</p>
+      <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
+      <p><a href="index.php?page=team_countries">Open country folders</a> · <a href="index.php?page=admin_clients">Clients</a></p>
       <p class="help"><strong>Delete upgrade.php now.</strong></p>
     <?php else: ?>
       <form method="post"><button class="btn" type="submit">Run upgrade</button></form>

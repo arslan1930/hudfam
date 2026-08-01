@@ -16,7 +16,7 @@ render_header('My projects', 'team');
 <div class="topbar">
   <div>
     <h1>My project folders</h1>
-    <p class="muted">Click a folder to start work for that client.</p>
+    <p class="muted">Read briefs and results only. Sites are added in Inventory / Country folders.</p>
   </div>
 </div>
 <div class="folders">

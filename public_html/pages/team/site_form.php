@@ -1,13 +1,20 @@
 <?php
 $user = require_team();
 $id = (int) get('id');
-$projectPrefill = (int) get('project');
+$preCountry = trim((string) get('country'));
+$preRegion = trim((string) get('region'));
+$preLang = trim((string) get('language'));
+
 $site = [
-    'domain'=>'','url'=>'','region'=>'','country'=>'','niche'=>'','language'=>'',
-    'dr'=>'','da'=>'','traffic'=>'','backlink_price'=>'','banner_price_yearly'=>'',
-    'currency'=>'EUR','status'=>'draft','publisher_email'=>'','outreach_notes'=>'',
-    'warning_flags'=>'','assigned_to'=>$user['id'],'primary_project_id'=>$projectPrefill ?: '',
+    'domain' => '', 'url' => '', 'region' => $preRegion, 'country' => $preCountry,
+    'niche' => '', 'language' => $preLang,
+    'dr' => '', 'da' => '', 'traffic' => '',
+    'publisher_quote_price' => '', 'publisher_quote_date' => date('Y-m-d'),
+    'backlink_price' => '', 'banner_price_yearly' => '',
+    'currency' => 'EUR', 'status' => 'draft', 'publisher_email' => '',
+    'outreach_notes' => '', 'warning_flags' => '', 'assigned_to' => $user['id'],
 ];
+
 if ($id) {
     $stmt = db()->prepare('SELECT * FROM sites WHERE id=?');
     $stmt->execute([$id]);
@@ -24,16 +31,8 @@ if ($id) {
 } else {
     $canEdit = true;
 }
-if (is_admin($user)) {
-    $projects = db()->query("SELECT id, name FROM projects WHERE status='active' ORDER BY name")->fetchAll();
-} else {
-    $p = db()->prepare(
-        "SELECT p.id, p.name FROM projects p JOIN project_members pm ON pm.project_id=p.id
-         WHERE pm.user_id=? AND p.status='active' ORDER BY p.name"
-    );
-    $p->execute([$user['id']]);
-    $projects = $p->fetchAll();
-}
+
+$countryOptions = list_countries(null, true);
 $history = [];
 if ($id) {
     $h = db()->prepare(
@@ -55,25 +54,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!in_array($status, ['draft', 'negotiating', 'agreed'], true) && !is_admin($user)) {
         $status = 'draft';
     }
-    $price = trim((string) post('backlink_price'));
-    $price = $price === '' ? null : $price;
+    $agreed = trim((string) post('backlink_price'));
+    $agreed = $agreed === '' ? null : $agreed;
+    $quote = trim((string) post('publisher_quote_price'));
+    $quote = $quote === '' ? null : $quote;
+    $quoteDate = trim((string) post('publisher_quote_date'));
+    $region = (string) post('region');
+    $country = trim((string) post('country'));
+    $language = trim((string) post('language'));
+
+    // Auto-fill language/region from country catalog when empty
+    if ($country !== '') {
+        foreach ($countryOptions as $c) {
+            if (strcasecmp($c['name'], $country) === 0) {
+                if ($region === '') {
+                    $region = $c['region'];
+                }
+                if ($language === '' && $c['default_language'] !== '') {
+                    $language = $c['default_language'];
+                }
+                break;
+            }
+        }
+    }
+
     if ($domain === '') {
         flash('error', 'Domain is required.');
-    } elseif ($status === 'agreed' && $price === null) {
+    } elseif ($status === 'agreed' && $agreed === null) {
         flash('error', 'Agreed price is required before status Agreed.');
     } else {
-        $assigned = is_admin($user) && post('assigned_to') !== '' ? (int) post('assigned_to') : (int) $user['id'];
+        $assigned = (int) $user['id'];
+        if (is_admin($user)) {
+            $assigned = $user['id'];
+        }
         $data = [
             $domain,
             trim((string) post('url')),
-            (string) post('region'),
-            trim((string) post('country')),
+            $region,
+            $country,
             trim((string) post('niche')),
-            trim((string) post('language')),
+            $language,
             trim((string) post('dr')) === '' ? null : (int) post('dr'),
             trim((string) post('da')) === '' ? null : (int) post('da'),
             trim((string) post('traffic')) === '' ? null : (int) post('traffic'),
-            $price,
+            $quote,
+            $quoteDate !== '' ? $quoteDate : null,
+            $agreed,
             trim((string) post('banner_price_yearly')) === '' ? null : post('banner_price_yearly'),
             trim((string) post('currency')) ?: 'EUR',
             $status,
@@ -81,36 +107,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) post('outreach_notes')),
             trim((string) post('warning_flags')),
             $assigned,
-            post('primary_project_id') === '' ? null : (int) post('primary_project_id'),
         ];
         if ($id) {
             $data[] = $id;
             db()->prepare(
-                'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?, backlink_price=?, banner_price_yearly=?, currency=?, status=?, publisher_email=?, outreach_notes=?, warning_flags=?, assigned_to=?, primary_project_id=? WHERE id=?'
+                'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?,
+                 publisher_quote_price=?, publisher_quote_date=?, backlink_price=?, banner_price_yearly=?, currency=?,
+                 status=?, publisher_email=?, outreach_notes=?, warning_flags=?, assigned_to=?, primary_project_id=NULL
+                 WHERE id=?'
             )->execute($data);
         } else {
             $data[] = $user['id'];
             db()->prepare(
-                'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic, backlink_price, banner_price_yearly, currency, status, publisher_email, outreach_notes, warning_flags, assigned_to, primary_project_id, created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic,
+                 publisher_quote_price, publisher_quote_date, backlink_price, banner_price_yearly, currency,
+                 status, publisher_email, outreach_notes, warning_flags, assigned_to, primary_project_id, created_by)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)'
             )->execute($data);
             $id = (int) db()->lastInsertId();
         }
-        flash('ok', 'Site saved.');
-        $proj = (int) post('primary_project_id');
-        if ($proj) {
-            redirect('index.php?page=team_project&id=' . $proj . '&tab=sites');
+        flash('ok', 'Inventory site saved.');
+        if ($country !== '') {
+            redirect('index.php?page=team_country&name=' . urlencode($country));
         }
         redirect('index.php?page=team_site_form&id=' . $id);
     }
 }
 
-render_header($id ? $site['domain'] : 'Add site', 'team');
+render_header($id ? $site['domain'] : 'Add inventory site', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add site' ?></h1>
-    <p class="muted"><?= $canEdit ? 'Negotiate via Gmail, then save agreed price here.' : 'Read-only — pipeline controlled by Admin.' ?></p>
+    <h1><?= $id ? h($site['domain']) : 'Add inventory site' ?></h1>
+    <p class="muted"><?= $canEdit ? 'Catalog only — contact the website owner/blogger, then save their quote and agreed price.' : 'Read-only — pipeline controlled by Admin.' ?></p>
   </div>
 </div>
 <div class="grid" style="grid-template-columns:2fr 1fr">
@@ -123,50 +152,68 @@ render_header($id ? $site['domain'] : 'Add site', 'team');
     <div><label>Region</label>
       <select name="region">
         <option value="">—</option>
-        <?php foreach (['europe'=>'Europe','north_america'=>'North America','english'=>'English','other'=>'Other'] as $k=>$v): ?>
-          <option value="<?= $k ?>" <?= $site['region']===$k?'selected':'' ?>><?= $v ?></option>
+        <?php foreach (regions() as $k => $v): ?>
+          <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
-    <div><label>Country</label><input name="country" value="<?= h($site['country']) ?>"></div>
+    <div><label>Country</label>
+      <select name="country" id="country_select">
+        <option value="">—</option>
+        <?php foreach ($countryOptions as $c): ?>
+          <option value="<?= h($c['name']) ?>"
+            data-region="<?= h($c['region']) ?>"
+            data-lang="<?= h($c['default_language']) ?>"
+            <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div><label>Language</label><input name="language" id="language_input" value="<?= h($site['language']) ?>"></div>
     <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
-    <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
-    <div><label>DR</label><input name="dr" value="<?= h((string)$site['dr']) ?>"></div>
-    <div><label>DA</label><input name="da" value="<?= h((string)$site['da']) ?>"></div>
-    <div><label>Traffic</label><input name="traffic" value="<?= h((string)$site['traffic']) ?>"></div>
-    <div><label>Backlink price</label><input name="backlink_price" value="<?= h((string)$site['backlink_price']) ?>"></div>
-    <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string)$site['banner_price_yearly']) ?>"></div>
+    <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
+    <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
+    <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
+    <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>" placeholder="Price website owner gave"></div>
+    <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
+    <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>" placeholder="Final negotiated price"></div>
+    <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
     <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
     <div><label>Status</label>
       <select name="status">
-        <?php foreach (['draft','negotiating','agreed'] as $st): ?>
-          <option value="<?= $st ?>" <?= $site['status']===$st?'selected':'' ?>><?= $st ?></option>
+        <?php foreach (['draft', 'negotiating', 'agreed'] as $st): ?>
+          <option value="<?= $st ?>" <?= $site['status'] === $st ? 'selected' : '' ?>><?= $st ?></option>
         <?php endforeach; ?>
       </select>
     </div>
-    <div><label>Project folder</label>
-      <select name="primary_project_id">
-        <option value="">—</option>
-        <?php foreach ($projects as $p): ?>
-          <option value="<?= (int)$p['id'] ?>" <?= (string)$site['primary_project_id']===(string)$p['id']?'selected':'' ?>><?= h($p['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div><label>Publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
+    <div><label>Publisher / blogger email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
     <div class="full"><label>Notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
     <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
   </div>
-  <p class="help">Status Agreed requires a backlink price.</p>
-  <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save site</button></p>
+  <p class="help">Publisher quote = price from the website owner. Agreed price = final deal. Status <strong>Agreed</strong> requires an agreed price. Sites stay in inventory (not inside projects).</p>
+  <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save to inventory</button></p>
 </form>
+<script>
+(function(){
+  var sel = document.getElementById('country_select');
+  var lang = document.getElementById('language_input');
+  var region = document.querySelector('select[name=region]');
+  if (!sel) return;
+  sel.addEventListener('change', function(){
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt) return;
+    if (region && opt.dataset.region) region.value = opt.dataset.region;
+    if (lang && opt.dataset.lang && !lang.value) lang.value = opt.dataset.lang;
+  });
+})();
+</script>
 <?php else: ?>
   <table>
-    <tr><th>Country / niche</th><td><?= h($site['country']) ?> · <?= h($site['niche']) ?></td></tr>
-    <tr><th>DR / DA / Traffic</th><td><?= h((string)$site['dr']) ?> / <?= h((string)$site['da']) ?> / <?= h((string)$site['traffic']) ?></td></tr>
-    <tr><th>Price</th><td><?= money_or_dash($site['backlink_price']) ?> <?= h($site['currency']) ?></td></tr>
+    <tr><th>Country / language</th><td><?= h($site['country']) ?> · <?= h($site['language']) ?></td></tr>
+    <tr><th>DR / DA / Traffic</th><td><?= h((string) $site['dr']) ?> / <?= h((string) $site['da']) ?> / <?= h((string) $site['traffic']) ?></td></tr>
+    <tr><th>Publisher quote</th><td><?= money_or_dash($site['publisher_quote_price'] ?? null) ?> on <?= h((string) ($site['publisher_quote_date'] ?? '—')) ?></td></tr>
+    <tr><th>Agreed price</th><td><?= money_or_dash($site['backlink_price']) ?> <?= h($site['currency']) ?></td></tr>
     <tr><th>Status</th><td><?= badge($site['status']) ?></td></tr>
     <tr><th>Notes</th><td><?= h($site['outreach_notes'] ?: '—') ?></td></tr>
-    <tr><th>Flags</th><td><?= h($site['warning_flags'] ?: '—') ?></td></tr>
   </table>
 <?php endif; ?>
 </div>

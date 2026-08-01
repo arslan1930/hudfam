@@ -31,6 +31,9 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $sql = file_get_contents(__DIR__ . '/sql/schema.sql');
         $pdo->exec($sql);
 
+        require_once __DIR__ . '/includes/geo.php';
+        seed_countries_if_empty($pdo);
+
         $adminHash = password_hash('admin123', PASSWORD_DEFAULT);
         $teamHash = password_hash('team123', PASSWORD_DEFAULT);
         $pdo->prepare(
@@ -79,18 +82,28 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)')->execute([$rexboId, $teamId]);
         $pdo->prepare('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)')->execute([$xywId, $teamId]);
 
+        // Inventory demo sites (not tied to projects)
         $sites = [
-            ['de-finance-news.example', 'DE', 'europe', 'Finance', 42, 38, 22000, 120, 'agreed', $teamId, $rexboId, 'EUR'],
-            ['berlin-biz-daily.example', 'DE', 'europe', 'Business', 35, 30, 9000, 90, 'agreed', $teamId, $rexboId, 'EUR'],
-            ['us-money-wire.example', 'US', 'north_america', 'Finance', 55, 48, 80000, 180, 'agreed', $teamId, $xywId, 'USD'],
+            // domain, country, region, language, niche, dr, da, traffic, quote, quote_date, agreed, status, currency
+            ['de-finance-news.example', 'Germany', 'europe', 'German', 'Finance', 42, 38, 22000, 140, date('Y-m-d', strtotime('-14 days')), 120, 'agreed', 'EUR'],
+            ['berlin-biz-daily.example', 'Germany', 'europe', 'German', 'Business', 35, 30, 9000, 100, date('Y-m-d', strtotime('-7 days')), 90, 'agreed', 'EUR'],
+            ['us-money-wire.example', 'United States', 'north_america', 'English', 'Finance', 55, 48, 80000, 200, date('Y-m-d', strtotime('-21 days')), 180, 'agreed', 'USD'],
         ];
         $ins = $pdo->prepare(
-            'INSERT INTO sites (domain, country, region, niche, dr, da, traffic, backlink_price, status, assigned_to, created_by, primary_project_id, currency)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE status=VALUES(status)'
+            'INSERT INTO sites (domain, country, region, language, niche, dr, da, traffic,
+             publisher_quote_price, publisher_quote_date, backlink_price, status, assigned_to, created_by, primary_project_id, currency)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)
+             ON DUPLICATE KEY UPDATE status=VALUES(status),
+               publisher_quote_price=VALUES(publisher_quote_price),
+               publisher_quote_date=VALUES(publisher_quote_date),
+               backlink_price=VALUES(backlink_price),
+               country=VALUES(country), language=VALUES(language)'
         );
         foreach ($sites as $s) {
-            $ins->execute([$s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7], $s[8], $s[9], $s[9], $s[10], $s[11]]);
+            $ins->execute([
+                $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7],
+                $s[8], $s[9], $s[10], $s[11], $teamId, $teamId, $s[12],
+            ]);
         }
 
         $pdo->prepare(

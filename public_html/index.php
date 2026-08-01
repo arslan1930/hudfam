@@ -4,6 +4,7 @@ session_start();
 require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
+require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -37,12 +38,15 @@ $routes = [
     'admin_client' => 'pages/admin/client_detail.php',
     'admin_order_form' => 'pages/admin/order_form.php',
     'admin_orders_export' => 'pages/admin/orders_export.php',
+    'admin_countries' => 'pages/admin/countries.php',
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_projects' => 'pages/team/projects.php',
     'team_project' => 'pages/team/project_detail.php',
     'team_sites' => 'pages/team/sites.php',
     'team_site_form' => 'pages/team/site_form.php',
     'team_results' => 'pages/team/results.php',
+    'team_countries' => 'pages/team/countries.php',
+    'team_country' => 'pages/team/country_detail.php',
 ];
 
 if (!isset($routes[$page])) {

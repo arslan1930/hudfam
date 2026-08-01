@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS sites (
   dr INT NULL,
   da INT NULL,
   traffic INT NULL,
+  publisher_quote_price DECIMAL(12,2) NULL,
+  publisher_quote_date DATE NULL,
   backlink_price DECIMAL(12,2) NULL,
   banner_price_yearly DECIMAL(12,2) NULL,
   currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
@@ -77,6 +79,18 @@ CREATE TABLE IF NOT EXISTS sites (
   CONSTRAINT fk_sites_assigned FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_sites_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_sites_project FOREIGN KEY (primary_project_id) REFERENCES projects(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS countries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  region VARCHAR(40) NOT NULL DEFAULT 'other',
+  code VARCHAR(10) NOT NULL DEFAULT '',
+  name VARCHAR(100) NOT NULL,
+  default_language VARCHAR(50) NOT NULL DEFAULT '',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  UNIQUE KEY uniq_country_name (name),
+  INDEX (region),
+  INDEX (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS pitches (
