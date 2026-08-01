@@ -21,6 +21,8 @@ function render_header(string $title, string $panel = ''): void
         $links = [
             'admin_dashboard' => 'Dashboard',
             'admin_projects' => 'Projects',
+            'admin_sites' => 'Inventory',
+            'admin_bulk_import' => 'Bulk import',
             'admin_clients' => 'Clients',
             'admin_orders_export' => 'Orders export',
             'admin_countries' => 'Countries',
@@ -30,6 +32,7 @@ function render_header(string $title, string $panel = ''): void
     } else {
         $links = [
             'team_dashboard' => 'Dashboard',
+            'team_search' => 'Super search',
             'team_projects' => 'Projects',
             'team_results' => 'Results feed',
             'team_countries' => 'Countries',

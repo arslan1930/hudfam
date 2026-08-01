@@ -40,8 +40,9 @@ render_header('Team dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Open a project → Super-search its inventory, add sites, and note which of your Gmails got the reply.</p>
+    <p class="muted">Use Super search to check domains (site details only). Work inside your assigned projects to add/filter sites.</p>
   </div>
+  <a class="btn" href="index.php?page=team_search">Super search</a>
 </div>
 
 <div class="card">

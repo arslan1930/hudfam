@@ -13,7 +13,8 @@ $language = trim((string) get('language'));
 $mailbox = trim((string) get('mailbox'));
 $pageNum = max(1, (int) get('p', 1));
 
-$superResults = $superQ !== '' ? search_project_inventory($id, $superQ, 40) : [];
+// Global DB check — site metrics only (no client/project/email secrets)
+$superResults = $superQ !== '' ? search_inventory_safe_for_team($superQ, 40) : [];
 $inventory = project_inventory_query($id, compact('q', 'status', 'region', 'country', 'language', 'mailbox'), $pageNum, 50);
 $rows = $inventory['rows'];
 $total = $inventory['total'];
@@ -51,10 +52,11 @@ render_header($project['name'], 'team');
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted">Project inventory — add sites, filter, and Super-search only inside this project.</p>
+    <p class="muted">Work this project’s list below. Super search checks the whole inventory for duplicates — site details only.</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=team_site_form&project_id=<?= $id ?>">Add site</a>
+    <a class="btn secondary" href="index.php?page=team_search">Super search</a>
   </div>
 </div>
 
@@ -62,41 +64,38 @@ render_header($project['name'], 'team');
   <input type="hidden" name="page" value="team_project">
   <input type="hidden" name="id" value="<?= $id ?>">
   <input type="hidden" name="tab" value="inventory">
-  <label for="sq">Super search — is this website already in <strong><?= h($project['name']) ?></strong>?</label>
+  <label for="sq">Super search — already in our database?</label>
   <div class="super-search-row">
-    <input id="sq" name="sq" value="<?= h($superQ) ?>" autofocus
-           placeholder="Domain, blogger email, our Gmail, contact name…">
+    <input id="sq" name="sq" value="<?= h($superQ) ?>" autofocus placeholder="example.com">
     <button class="btn" type="submit">Search</button>
     <?php if ($superQ !== ''): ?>
       <a class="btn secondary" href="index.php?page=team_project&id=<?= $id ?>&tab=inventory">Clear</a>
     <?php endif; ?>
   </div>
-  <p class="help">Results are only from this project’s inventory (not other clients).</p>
+  <p class="help">Shows country, language, DR, DA, traffic only — never client name, emails, or project details.</p>
 </form>
 
 <?php if ($superQ !== ''): ?>
 <div class="card">
-  <h2>Super search results · “<?= h($superQ) ?>” · <?= count($superResults) ?> hit(s)</h2>
+  <h2>Super search · “<?= h($superQ) ?>” · <?= count($superResults) ?> domain(s)</h2>
   <table>
     <thead>
-      <tr>
-        <th>Domain</th><th>Status</th><th>Agreed</th>
-        <th>Blogger email</th><th>Our mailbox</th><th>Contact name</th>
-      </tr>
+      <tr><th>Domain</th><th>Country</th><th>Language</th><th>DR</th><th>DA</th><th>Traffic</th><th></th></tr>
     </thead>
     <tbody>
     <?php foreach ($superResults as $s): ?>
       <tr>
-        <td><a href="index.php?page=team_site_form&id=<?= (int) $s['id'] ?>"><?= h($s['domain']) ?></a></td>
-        <td><?= badge($s['status']) ?></td>
-        <td><?= money_or_dash($s['backlink_price']) ?> <?= h($s['currency']) ?></td>
-        <td><?= h($s['publisher_email'] ?: '—') ?></td>
-        <td><strong><?= h($s['our_mailbox'] ?: '—') ?></strong></td>
-        <td><?= h($s['our_contact_name'] ?: '—') ?></td>
+        <td><strong><?= h($s['domain']) ?></strong></td>
+        <td><?= h($s['country'] ?: '—') ?></td>
+        <td><?= h($s['language'] ?: '—') ?></td>
+        <td><?= h((string) ($s['dr'] ?? '—')) ?></td>
+        <td><?= h((string) ($s['da'] ?? '—')) ?></td>
+        <td><?= h((string) ($s['traffic'] ?? '—')) ?></td>
+        <td><span class="badge agreed">Already in inventory</span></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$superResults): ?>
-      <tr><td colspan="6" class="muted">Not in this project inventory yet. <a href="index.php?page=team_site_form&project_id=<?= $id ?>">Add it</a>.</td></tr>
+      <tr><td colspan="7" class="muted">Not in the database. <a href="index.php?page=team_site_form&project_id=<?= $id ?>">Add to this project</a>.</td></tr>
     <?php endif; ?>
     </tbody>
   </table>

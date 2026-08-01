@@ -78,6 +78,7 @@ render_header($project['name'], 'admin');
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
+    <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk import</a>
     <a class="btn secondary" href="index.php?page=admin_client_form&project_id=<?= $id ?>">New client folder</a>
     <a class="btn secondary" href="index.php?page=admin_pitch_create&project_id=<?= $id ?>">Send pack</a>
     <a class="btn secondary" href="index.php?page=admin_orders_export&project_id=<?= $id ?>&download=1">Download orders CSV</a>
@@ -217,29 +218,32 @@ render_header($project['name'], 'admin');
 </form>
 <div class="card">
   <div class="topbar" style="margin-bottom:0.5rem">
-    <p class="muted"><?= $siteTotal ?> site(s) — build this project’s inventory here</p>
-    <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
+    <p class="muted"><?= $siteTotal ?> site(s) — language, country, DA/DR/traffic, order status, comments, client name</p>
+    <div class="actions">
+      <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
+      <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk CSV</a>
+    </div>
   </div>
   <table>
     <thead>
       <tr>
-        <th>Domain</th><th>Metrics</th><th>Quote / Agreed</th><th>Status</th>
-        <th>Our mailbox</th><th>Contact</th><th>Owner</th>
+        <th>Domain</th><th>Client</th><th>Country / lang</th><th>DR / DA / Traffic</th>
+        <th>Order status</th><th>Comments</th><th>Site status</th>
       </tr>
     </thead>
     <tbody>
     <?php foreach ($sites as $s): ?>
       <tr>
         <td><a href="index.php?page=admin_site_form&id=<?= (int)$s['id'] ?>"><?= h($s['domain']) ?></a></td>
-        <td>DR <?= h((string)($s['dr'] ?? '—')) ?> / DA <?= h((string)($s['da'] ?? '—')) ?></td>
-        <td><?= money_or_dash($s['publisher_quote_price'] ?? null) ?> / <?= money_or_dash($s['backlink_price']) ?></td>
+        <td><?= h($s['inventory_client_name'] ?: '—') ?></td>
+        <td><?= h($s['country'] ?: '—') ?> · <?= h($s['language'] ?: '—') ?></td>
+        <td><?= h((string)($s['dr'] ?? '—')) ?> / <?= h((string)($s['da'] ?? '—')) ?> / <?= h((string)($s['traffic'] ?? '—')) ?></td>
+        <td><?= h(inventory_order_statuses()[$s['order_status'] ?? ''] ?? ($s['order_status'] ?: '—')) ?></td>
+        <td class="help"><?php $c = (string) ($s['admin_comments'] ?? ''); echo h(strlen($c) > 60 ? substr($c, 0, 57) . '…' : ($c ?: '—')); ?></td>
         <td><?= badge($s['status']) ?></td>
-        <td><strong><?= h($s['our_mailbox'] ?: '—') ?></strong></td>
-        <td><?= h($s['our_contact_name'] ?: '—') ?></td>
-        <td><?= h($s['owner'] ?: '—') ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$sites): ?><tr><td colspan="7" class="muted">No sites in this project yet. Add inventory for this client.</td></tr><?php endif; ?>
+    <?php if (!$sites): ?><tr><td colspan="7" class="muted">No sites yet. Add one or bulk-import CSV.</td></tr><?php endif; ?>
     </tbody>
   </table>
   <div class="actions" style="margin-top:0.8rem">

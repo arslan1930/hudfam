@@ -57,6 +57,18 @@ if (!file_exists(__DIR__ . '/config.php')) {
             $pdo->exec("ALTER TABLE sites ADD COLUMN our_contact_name VARCHAR(150) NOT NULL DEFAULT '' AFTER our_mailbox");
             $notes[] = 'added our_contact_name';
         }
+        if (!in_array('inventory_client_name', $cols, true)) {
+            $pdo->exec("ALTER TABLE sites ADD COLUMN inventory_client_name VARCHAR(255) NOT NULL DEFAULT '' AFTER our_contact_name");
+            $notes[] = 'added inventory_client_name';
+        }
+        if (!in_array('order_status', $cols, true)) {
+            $pdo->exec("ALTER TABLE sites ADD COLUMN order_status VARCHAR(40) NOT NULL DEFAULT '' AFTER inventory_client_name");
+            $notes[] = 'added order_status';
+        }
+        if (!in_array('admin_comments', $cols, true)) {
+            $pdo->exec('ALTER TABLE sites ADD COLUMN admin_comments TEXT NULL AFTER order_status');
+            $notes[] = 'added admin_comments';
+        }
 
         // Assign orphan sites to first project so project_id can be required
         $firstProject = (int) $pdo->query('SELECT id FROM projects ORDER BY id LIMIT 1')->fetchColumn();

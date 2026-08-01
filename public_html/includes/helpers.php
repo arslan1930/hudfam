@@ -61,6 +61,19 @@ function site_statuses(): array
     ];
 }
 
+/** Admin inventory order status (publication / deal order), not pitch item status. */
+function inventory_order_statuses(): array
+{
+    return [
+        '' => '—',
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'on_hold' => 'On hold',
+        'cancelled' => 'Cancelled',
+    ];
+}
+
 function badge(string $status): string
 {
     return '<span class="badge ' . h($status) . '">' . h($status) . '</span>';

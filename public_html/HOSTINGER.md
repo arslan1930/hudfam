@@ -37,14 +37,14 @@ Do **not** upload the Django files (`manage.py`, `core/`, etc.) into `public_htm
 Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
-1. Admin creates a **project** (client campaign) and builds **that project’s inventory**
-2. Team opens the project → **Super search** (this project only) → add/filter sites
-3. On each site: **publisher quote + agreed price**, plus **Our Gmail/mailbox + contact name** (which inbox got the blogger reply)
-4. Same domain can exist in multiple projects (separate copies / prices / mailboxes)
-5. Admin sends packs from **that project’s** agreed sites; publication orders + CSV as before
+1. Admin creates a **project**, then fills inventory (language, country, DA, DR, traffic, order status, comments, client name)
+2. Admin can **Bulk import CSV** (10,000+ sites) into a project
+3. Team uses **Super search** by domain — sees only site details (country/language/DR/DA/traffic), never client name/email/project secrets
+4. If Super search finds the domain, Team should not add it again
+5. Admin sends packs / publication orders as before
 
 ### Already installed earlier?
-Open `upgrade.php` once (clients/orders, countries, quote fields, per-project uniqueness, our-mailbox), then delete it.
+Open `upgrade.php` once, then delete it.
 
 ## Troubleshooting
 | Problem | Fix |

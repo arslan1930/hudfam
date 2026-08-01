@@ -94,19 +94,25 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $ins = $pdo->prepare(
             'INSERT INTO sites (domain, primary_project_id, country, region, language, niche, dr, da, traffic,
              publisher_quote_price, publisher_quote_date, backlink_price, status, assigned_to, created_by, currency,
-             our_mailbox, our_contact_name)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             our_mailbox, our_contact_name, inventory_client_name, order_status, admin_comments)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
              ON DUPLICATE KEY UPDATE status=VALUES(status),
                publisher_quote_price=VALUES(publisher_quote_price),
                publisher_quote_date=VALUES(publisher_quote_date),
                backlink_price=VALUES(backlink_price),
                our_mailbox=VALUES(our_mailbox),
-               our_contact_name=VALUES(our_contact_name)'
+               our_contact_name=VALUES(our_contact_name),
+               inventory_client_name=VALUES(inventory_client_name),
+               order_status=VALUES(order_status),
+               admin_comments=VALUES(admin_comments)'
         );
         foreach ($sites as $s) {
+            $clientName = ((int) $s[1] === (int) $rexboId) ? 'Rexbo' : 'XYW';
+            $orderSt = $s[12] === 'agreed' ? 'pending' : '';
             $ins->execute([
                 $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7], $s[8],
                 $s[9], $s[10], $s[11], $s[12], $teamId, $teamId, $s[13], $s[14], $s[15],
+                $clientName, $orderSt, 'Demo admin comment',
             ]);
         }
 
