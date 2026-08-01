@@ -22,7 +22,7 @@ render_header('Prospects', 'admin');
 <div class="topbar">
   <div>
     <h1>Prospects</h1>
-    <p class="muted"><?= $total ?> sites · Team outreach list · no prices · read-only here</p>
+    <p class="muted"><?= $total ?> site<?= $total === 1 ? '' : 's' ?> · Team outreach list · no prices · read-only here</p>
   </div>
 </div>
 <form class="card filters" method="get">
