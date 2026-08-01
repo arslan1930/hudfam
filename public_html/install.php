@@ -35,12 +35,20 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         seed_countries_if_empty($pdo);
 
         $adminHash = password_hash('admin123', PASSWORD_DEFAULT);
+        $admin2Hash = password_hash('admin123', PASSWORD_DEFAULT);
         $teamHash = password_hash('team123', PASSWORD_DEFAULT);
         $pdo->prepare(
-            'INSERT INTO users (username, password_hash, full_name, email, role)
-             VALUES (?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role)'
-        )->execute(['admin', $adminHash, 'Admin', 'admin@hudfam.local', 'admin']);
+            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role),
+               phone=VALUES(phone), contact_details=VALUES(contact_details), full_name=VALUES(full_name)'
+        )->execute(['admin', $adminHash, 'Sara Khan', 'sara@hudfam.local', '+49 30 111111', 'Primary EU admin · Slack @sara', 'admin']);
+        $pdo->prepare(
+            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role),
+               phone=VALUES(phone), contact_details=VALUES(contact_details), full_name=VALUES(full_name)'
+        )->execute(['admin2', $admin2Hash, 'Marcus Lee', 'marcus@hudfam.local', '+1 212 555 0100', 'NA admin · Slack @marcus', 'admin']);
         $pdo->prepare(
             'INSERT INTO users (username, password_hash, full_name, email, role)
              VALUES (?, ?, ?, ?, ?)
@@ -48,6 +56,7 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         )->execute(['teammate', $teamHash, 'Alex', 'team@hudfam.local', 'team']);
 
         $adminId = (int) $pdo->query("SELECT id FROM users WHERE username='admin'")->fetchColumn();
+        $admin2Id = (int) $pdo->query("SELECT id FROM users WHERE username='admin2'")->fetchColumn();
         $teamId = (int) $pdo->query("SELECT id FROM users WHERE username='teammate'")->fetchColumn();
 
         $pdo->prepare(
@@ -81,6 +90,24 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $xywId = (int) $pdo->query("SELECT id FROM projects WHERE name='xyw.com'")->fetchColumn();
         $pdo->prepare('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)')->execute([$rexboId, $teamId]);
         $pdo->prepare('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)')->execute([$xywId, $teamId]);
+        // Multi-admin collaboration on each project
+        foreach ([$rexboId, $xywId] as $pid) {
+            $pdo->prepare('INSERT IGNORE INTO project_admins (project_id, user_id) VALUES (?, ?)')->execute([$pid, $adminId]);
+            $pdo->prepare('INSERT IGNORE INTO project_admins (project_id, user_id) VALUES (?, ?)')->execute([$pid, $admin2Id]);
+        }
+
+        // Sample prospect sites (no prices) for Team uniqueness checks
+        $prospectIns = $pdo->prepare(
+            'INSERT INTO prospect_sites (domain, country, language, region, niche, notes, status, created_by)
+             VALUES (?,?,?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE country=VALUES(country), language=VALUES(language)'
+        );
+        foreach ([
+            ['prospect-blog-de.example', 'Germany', 'German', 'europe', 'Finance', 'Need to email for guest post', 'new'],
+            ['outreach-target-us.example', 'United States', 'English', 'north_america', 'Business', 'Cold outreach', 'contacting'],
+        ] as $pr) {
+            $prospectIns->execute([$pr[0], $pr[1], $pr[2], $pr[3], $pr[4], $pr[5], $pr[6], $teamId]);
+        }
 
         // Per-project inventory demos (same domain can exist under another project)
         $sites = [

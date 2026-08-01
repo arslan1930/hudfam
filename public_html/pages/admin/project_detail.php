@@ -13,10 +13,11 @@ $mailbox = trim((string) get('mailbox'));
 $pageNum = max(1, (int) get('p', 1));
 
 $members = db()->prepare(
-    'SELECT u.username FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=?'
+    'SELECT u.username, u.full_name FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=?'
 );
 $members->execute([$id]);
 $members = $members->fetchAll();
+$collabAdmins = project_collaborating_admins($id);
 
 $superResults = $superQ !== '' ? search_project_inventory($id, $superQ, 40) : [];
 $inventory = project_inventory_query($id, compact('q', 'status', 'region', 'country', 'language', 'mailbox'), $pageNum, 50);
@@ -145,8 +146,26 @@ render_header($project['name'], 'admin');
   <p><?= nl2br(h($project['requirements_brief'] ?: 'No brief yet.')) ?></p>
   <h3>Workflow</h3>
   <p><?= nl2br(h($project['workflow_notes'] ?: '—')) ?></p>
+  <h3>Collaborating admins</h3>
+  <?php if ($collabAdmins): ?>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Contact details</th></tr></thead>
+      <tbody>
+      <?php foreach ($collabAdmins as $a): ?>
+        <tr>
+          <td><strong><?= h($a['full_name'] ?: $a['username']) ?></strong></td>
+          <td><?= h($a['email'] ?: '—') ?></td>
+          <td><?= h($a['phone'] ?: '—') ?></td>
+          <td class="help"><?= h($a['contact_details'] ?: '—') ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  <?php else: ?>
+    <p class="muted">No collaborating admins assigned. <a href="index.php?page=admin_project_form&id=<?= $id ?>">Edit project</a></p>
+  <?php endif; ?>
   <h3>Assigned team</h3>
-  <p><?php foreach ($members as $m): ?><span class="badge"><?= h($m['username']) ?></span> <?php endforeach; ?><?php if (!$members): ?><span class="muted">None</span><?php endif; ?></p>
+  <p><?php foreach ($members as $m): ?><span class="badge"><?= h($m['full_name'] ?: $m['username']) ?></span> <?php endforeach; ?><?php if (!$members): ?><span class="muted">None</span><?php endif; ?></p>
 </div>
 <?php elseif ($tab === 'clients'): ?>
 <div class="topbar" style="margin-bottom:0.5rem">

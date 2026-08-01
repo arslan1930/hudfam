@@ -7,28 +7,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $active = post('is_active') ? 1 : 0;
     $full = trim((string) post('full_name'));
     $email = trim((string) post('email'));
+    $phone = trim((string) post('phone'));
+    $contact = trim((string) post('contact_details'));
     $password = (string) post('password');
+
     if ($username === '') {
         flash('error', 'Username required.');
-    } elseif ($id) {
-        if ($password !== '') {
-            db()->prepare('UPDATE users SET username=?, full_name=?, email=?, role=?, is_active=?, password_hash=? WHERE id=?')
-                ->execute([$username, $full, $email, $role, $active, password_hash($password, PASSWORD_DEFAULT), $id]);
-        } else {
-            db()->prepare('UPDATE users SET username=?, full_name=?, email=?, role=?, is_active=? WHERE id=?')
-                ->execute([$username, $full, $email, $role, $active, $id]);
-        }
-        flash('ok', 'User updated.');
+    } elseif ($role === 'admin' && $full === '') {
+        flash('error', 'Admins need a unique full name.');
     } else {
-        if ($password === '') {
-            $password = bin2hex(random_bytes(4));
+        // Enforce unique full name among admins
+        if ($role === 'admin' && $full !== '') {
+            $dup = db()->prepare(
+                "SELECT id FROM users WHERE role='admin' AND full_name=? AND id<>? LIMIT 1"
+            );
+            $dup->execute([$full, $id]);
+            if ($dup->fetchColumn()) {
+                flash('error', 'Another admin already uses this full name. Each admin needs a unique name.');
+                redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+            }
         }
-        db()->prepare('INSERT INTO users (username, password_hash, full_name, email, role, is_active) VALUES (?,?,?,?,?,?)')
-            ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $full, $email, $role, $active]);
-        flash('ok', 'User created. Password: ' . $password);
+        try {
+            if ($id) {
+                if ($password !== '') {
+                    db()->prepare(
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=? WHERE id=?'
+                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $id]);
+                } else {
+                    db()->prepare(
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
+                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
+                }
+                flash('ok', 'User updated.');
+            } else {
+                if ($password === '') {
+                    $password = bin2hex(random_bytes(4));
+                }
+                db()->prepare(
+                    'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, is_active)
+                     VALUES (?,?,?,?,?,?,?,?)'
+                )->execute([$username, password_hash($password, PASSWORD_DEFAULT), $full, $email, $phone, $contact, $role, $active]);
+                flash('ok', 'User created. Password: ' . $password);
+            }
+        } catch (PDOException $e) {
+            flash('error', 'Could not save (username must be unique).');
+        }
     }
     redirect('index.php?page=admin_users');
 }
+
 $editId = (int) get('edit');
 $edit = null;
 if ($editId) {
@@ -36,22 +63,50 @@ if ($editId) {
     $s->execute([$editId]);
     $edit = $s->fetch();
 }
-$users = db()->query('SELECT * FROM users ORDER BY role, username')->fetchAll();
-render_header('Users', 'admin');
+$users = db()->query('SELECT * FROM users ORDER BY role, full_name, username')->fetchAll();
+$admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
+
+render_header('Admins & users', 'admin');
 ?>
 <div class="topbar">
-  <div><h1>Users</h1><p class="muted">Admin manages clients/statuses. Team supplies sites.</p></div>
+  <div>
+    <h1>Admins & users</h1>
+    <p class="muted">Each admin has a unique name + contact details. Assign admins as collaborators on projects.</p>
+  </div>
 </div>
+
+<div class="card">
+  <h2>Admin directory</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Phone</th><th>Contact details</th><th>Active</th></tr></thead>
+    <tbody>
+    <?php foreach ($admins as $u): ?>
+      <tr>
+        <td><strong><?= h($u['full_name'] ?: '—') ?></strong></td>
+        <td><?= h($u['username']) ?></td>
+        <td><?= h($u['email'] ?: '—') ?></td>
+        <td><?= h(($u['phone'] ?? '') !== '' ? $u['phone'] : '—') ?></td>
+        <td class="help"><?= h(($u['contact_details'] ?? '') !== '' ? $u['contact_details'] : '—') ?></td>
+        <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (!$admins): ?><tr><td colspan="6" class="muted">No admins yet.</td></tr><?php endif; ?>
+    </tbody>
+  </table>
+</div>
+
 <div class="grid" style="grid-template-columns:1.2fr 1fr">
 <div class="card">
+  <h2>All users</h2>
   <table>
-    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Active</th><th></th></tr></thead>
+    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Contact</th><th>Active</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($users as $u): ?>
       <tr>
         <td><?= h($u['username']) ?></td>
         <td><?= h($u['full_name'] ?: '—') ?></td>
         <td><span class="badge"><?= h($u['role']) ?></span></td>
+        <td class="help"><?= h($u['email'] ?: '—') ?><?= !empty($u['phone']) ? ' · ' . h($u['phone']) : '' ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
         <td><a href="index.php?page=admin_users&edit=<?= (int)$u['id'] ?>">Edit</a></td>
       </tr>
@@ -60,16 +115,20 @@ render_header('Users', 'admin');
   </table>
 </div>
 <div class="card">
-  <h2><?= $edit ? 'Edit user' : 'New user' ?></h2>
+  <h2><?= $edit ? 'Edit user' : 'New admin / team user' ?></h2>
   <form method="post">
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="id" value="<?= (int)($edit['id'] ?? 0) ?>">
     <label>Username</label>
     <input name="username" value="<?= h($edit['username'] ?? '') ?>" required>
-    <label>Full name</label>
+    <label>Full name <?= ($edit['role'] ?? '') === 'admin' || !isset($edit) ? '(unique for admins)' : '' ?></label>
     <input name="full_name" value="<?= h($edit['full_name'] ?? '') ?>">
     <label>Email</label>
-    <input name="email" value="<?= h($edit['email'] ?? '') ?>">
+    <input name="email" value="<?= h($edit['email'] ?? '') ?>" type="email">
+    <label>Phone</label>
+    <input name="phone" value="<?= h($edit['phone'] ?? '') ?>">
+    <label>Contact details</label>
+    <textarea name="contact_details" rows="2" placeholder="Slack, secondary email, working hours…"><?= h($edit['contact_details'] ?? '') ?></textarea>
     <label>Role</label>
     <select name="role">
       <option value="team" <?= ($edit['role'] ?? '')==='team'?'selected':'' ?>>team</option>

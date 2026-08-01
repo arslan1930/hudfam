@@ -37,11 +37,12 @@ Do **not** upload the Django files (`manage.py`, `core/`, etc.) into `public_htm
 Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
-1. Admin creates a **project**, then fills inventory (language, country, DA, DR, traffic, order status, comments, client name)
-2. Admin can **Bulk import CSV** (10,000+ sites) into a project
-3. Team uses **Super search** by domain — sees only site details (country/language/DR/DA/traffic), never client name/email/project secrets
-4. If Super search finds the domain, Team should not add it again
-5. Admin sends packs / publication orders as before
+1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
+2. Admin builds **catalog inventory** (prices, order status, client name) — single or CSV bulk import
+3. **Team → Check & add sites**: paste up to 100k domains → filter against **prospect inventory only** → add only unique
+4. Prospect inventory (no prices) grows daily; filter by country/language before outreach
+5. Catalog Super search still shows site metrics only (no client/project secrets)
+6. Admin sends packs / publication orders as before
 
 ### Already installed earlier?
 Open `upgrade.php` once, then delete it.

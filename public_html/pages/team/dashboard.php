@@ -40,9 +40,12 @@ render_header('Team dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Use Super search to check domains (site details only). Work inside your assigned projects to add/filter sites.</p>
+    <p class="muted">Check & add unique sites into prospect inventory first. Catalog search is for priced inventory (site details only).</p>
   </div>
-  <a class="btn" href="index.php?page=team_search">Super search</a>
+  <div class="actions">
+    <a class="btn" href="index.php?page=team_prospect_check">Check & add sites</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Prospect inventory</a>
+  </div>
 </div>
 
 <div class="card">

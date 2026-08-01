@@ -21,18 +21,21 @@ function render_header(string $title, string $panel = ''): void
         $links = [
             'admin_dashboard' => 'Dashboard',
             'admin_projects' => 'Projects',
-            'admin_sites' => 'Inventory',
+            'admin_sites' => 'Catalog inventory',
             'admin_bulk_import' => 'Bulk import',
+            'admin_prospects' => 'Prospects',
             'admin_clients' => 'Clients',
             'admin_orders_export' => 'Orders export',
             'admin_countries' => 'Countries',
             'admin_published' => 'Published',
-            'admin_users' => 'Users',
+            'admin_users' => 'Admins & users',
         ];
     } else {
         $links = [
             'team_dashboard' => 'Dashboard',
-            'team_search' => 'Super search',
+            'team_prospect_check' => 'Check & add sites',
+            'team_prospects' => 'Prospect inventory',
+            'team_search' => 'Catalog search',
             'team_projects' => 'Projects',
             'team_results' => 'Results feed',
             'team_countries' => 'Countries',

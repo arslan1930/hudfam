@@ -6,6 +6,7 @@ require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/inventory.php';
+require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -41,12 +42,16 @@ $routes = [
     'admin_order_form' => 'pages/admin/order_form.php',
     'admin_orders_export' => 'pages/admin/orders_export.php',
     'admin_countries' => 'pages/admin/countries.php',
+    'admin_prospects' => 'pages/admin/prospects.php',
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_projects' => 'pages/team/projects.php',
     'team_project' => 'pages/team/project_detail.php',
     'team_sites' => 'pages/team/sites.php',
     'team_site_form' => 'pages/team/site_form.php',
     'team_search' => 'pages/team/search.php',
+    'team_prospects' => 'pages/team/prospects.php',
+    'team_prospect_check' => 'pages/team/prospect_check.php',
+    'team_prospect_form' => 'pages/team/prospect_form.php',
     'team_results' => 'pages/team/results.php',
     'team_countries' => 'pages/team/countries.php',
     'team_country' => 'pages/team/country_detail.php',
