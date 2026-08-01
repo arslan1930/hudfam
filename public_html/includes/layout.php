@@ -23,7 +23,6 @@ function render_header(string $title, string $panel = ''): void
             'admin_projects' => 'Projects',
             'admin_clients' => 'Clients',
             'admin_orders_export' => 'Orders export',
-            'admin_sites' => 'Inventory',
             'admin_countries' => 'Countries',
             'admin_published' => 'Published',
             'admin_users' => 'Users',
@@ -31,11 +30,9 @@ function render_header(string $title, string $panel = ''): void
     } else {
         $links = [
             'team_dashboard' => 'Dashboard',
-            'team_sites' => 'Inventory',
-            'team_countries' => 'Countries',
-            'team_site_form' => 'Add site',
+            'team_projects' => 'Projects',
             'team_results' => 'Results feed',
-            'team_projects' => 'Project briefs',
+            'team_countries' => 'Countries',
         ];
     }
     foreach ($links as $page => $label) {

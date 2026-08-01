@@ -39,7 +39,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
         seed_countries_if_empty($pdo);
         $notes[] = 'countries OK';
 
-        // Publisher quote columns (idempotent)
+        // Site columns (idempotent)
         $cols = $pdo->query('SHOW COLUMNS FROM sites')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('publisher_quote_price', $cols, true)) {
             $pdo->exec('ALTER TABLE sites ADD COLUMN publisher_quote_price DECIMAL(12,2) NULL AFTER traffic');
@@ -49,8 +49,85 @@ if (!file_exists(__DIR__ . '/config.php')) {
             $pdo->exec('ALTER TABLE sites ADD COLUMN publisher_quote_date DATE NULL AFTER publisher_quote_price');
             $notes[] = 'added publisher_quote_date';
         }
+        if (!in_array('our_mailbox', $cols, true)) {
+            $pdo->exec("ALTER TABLE sites ADD COLUMN our_mailbox VARCHAR(190) NOT NULL DEFAULT '' AFTER publisher_email");
+            $notes[] = 'added our_mailbox';
+        }
+        if (!in_array('our_contact_name', $cols, true)) {
+            $pdo->exec("ALTER TABLE sites ADD COLUMN our_contact_name VARCHAR(150) NOT NULL DEFAULT '' AFTER our_mailbox");
+            $notes[] = 'added our_contact_name';
+        }
 
-        // Demo client/order if missing
+        // Assign orphan sites to first project so project_id can be required
+        $firstProject = (int) $pdo->query('SELECT id FROM projects ORDER BY id LIMIT 1')->fetchColumn();
+        if ($firstProject) {
+            $orphans = (int) $pdo->query(
+                'SELECT COUNT(*) FROM sites WHERE primary_project_id IS NULL'
+            )->fetchColumn();
+            if ($orphans > 0) {
+                $pdo->prepare(
+                    'UPDATE sites SET primary_project_id = ? WHERE primary_project_id IS NULL'
+                )->execute([$firstProject]);
+                $notes[] = "assigned {$orphans} orphan site(s) to project #{$firstProject}";
+            }
+        }
+
+        // Switch unique constraint: domain → (project, domain)
+        $indexes = $pdo->query('SHOW INDEX FROM sites')->fetchAll(PDO::FETCH_ASSOC);
+        $hasDomainUnique = false;
+        $hasProjectDomainUnique = false;
+        foreach ($indexes as $idx) {
+            if ((int) $idx['Non_unique'] === 0 && $idx['Column_name'] === 'domain' && $idx['Key_name'] !== 'PRIMARY') {
+                // Could be single-column unique on domain
+                $key = $idx['Key_name'];
+                $colsInKey = array_values(array_filter($indexes, fn($i) => $i['Key_name'] === $key));
+                if (count($colsInKey) === 1) {
+                    $hasDomainUnique = $key;
+                }
+            }
+            if ($idx['Key_name'] === 'uniq_project_domain') {
+                $hasProjectDomainUnique = true;
+            }
+        }
+        if ($hasDomainUnique) {
+            $pdo->exec('ALTER TABLE sites DROP INDEX `' . str_replace('`', '``', $hasDomainUnique) . '`');
+            $notes[] = 'dropped global unique on domain';
+        }
+        if (!$hasProjectDomainUnique) {
+            // Resolve duplicate domains within same project before adding unique
+            $dups = $pdo->query(
+                'SELECT primary_project_id, domain, COUNT(*) c FROM sites
+                 WHERE primary_project_id IS NOT NULL
+                 GROUP BY primary_project_id, domain HAVING c > 1'
+            )->fetchAll();
+            foreach ($dups as $d) {
+                $rows = $pdo->prepare(
+                    'SELECT id FROM sites WHERE primary_project_id=? AND domain=? ORDER BY id'
+                );
+                $rows->execute([$d['primary_project_id'], $d['domain']]);
+                $ids = $rows->fetchAll(PDO::FETCH_COLUMN);
+                array_shift($ids); // keep first
+                foreach ($ids as $dupId) {
+                    $pdo->prepare('UPDATE sites SET domain = CONCAT(domain, "-dup-", id) WHERE id=?')
+                        ->execute([$dupId]);
+                }
+            }
+            $pdo->exec('ALTER TABLE sites ADD UNIQUE KEY uniq_project_domain (primary_project_id, domain)');
+            $notes[] = 'added uniq_project_domain';
+        }
+
+        // Index mailbox
+        $indexNames = array_unique(array_column($indexes, 'Key_name'));
+        if (!in_array('our_mailbox', $indexNames, true)) {
+            try {
+                $pdo->exec('ALTER TABLE sites ADD INDEX (our_mailbox)');
+                $notes[] = 'indexed our_mailbox';
+            } catch (Throwable $e) {
+                // already exists or unsupported — ignore
+            }
+        }
+
+        // Demo client if missing
         $rexboId = (int) $pdo->query("SELECT id FROM projects WHERE name='rexbo.de' LIMIT 1")->fetchColumn();
         $adminId = (int) $pdo->query("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1")->fetchColumn();
         if ($rexboId && $adminId) {
@@ -79,12 +156,12 @@ if (!file_exists(__DIR__ . '/config.php')) {
 <div class="login-wrap">
   <div class="login-card">
     <h1>Upgrade</h1>
-    <p class="muted">Adds clients/orders, countries, and publisher quote fields.</p>
+    <p class="muted">Adds clients/orders, countries, quote fields, per-project inventory uniqueness, and our-mailbox fields.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
     <?php if ($done): ?>
       <p>Upgrade complete.</p>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
-      <p><a href="index.php?page=team_countries">Open country folders</a> · <a href="index.php?page=admin_clients">Clients</a></p>
+      <p><a href="index.php?page=admin_projects">Open projects</a></p>
       <p class="help"><strong>Delete upgrade.php now.</strong></p>
     <?php else: ?>
       <form method="post"><button class="btn" type="submit">Run upgrade</button></form>

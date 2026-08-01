@@ -23,18 +23,18 @@ render_header('Admin dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['username']) ?> — manage projects, packs, and statuses.</p>
+    <p class="muted">Hello <?= h($user['username']) ?> — create a project, build its inventory, then send packs.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_client_form">New client folder</a>
+    <a class="btn" href="index.php?page=admin_project_form">New project</a>
+    <a class="btn secondary" href="index.php?page=admin_client_form">New client folder</a>
     <a class="btn secondary" href="index.php?page=admin_clients">Clients</a>
     <a class="btn secondary" href="index.php?page=admin_orders_export">Orders CSV</a>
-    <a class="btn secondary" href="index.php?page=admin_project_form">New project</a>
   </div>
 </div>
 <div class="grid">
   <div class="card stat"><span class="muted">Active projects</span><strong><?= $activeProjects ?></strong></div>
-  <div class="card stat"><span class="muted">Agreed pool</span><strong><?= $agreed ?></strong></div>
+  <div class="card stat"><span class="muted">Agreed (all projects)</span><strong><?= $agreed ?></strong></div>
   <div class="card stat"><span class="muted">Processing</span><strong><?= $processing ?></strong></div>
 </div>
 <div class="card">

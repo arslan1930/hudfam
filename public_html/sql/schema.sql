@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS project_members (
 
 CREATE TABLE IF NOT EXISTS sites (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  domain VARCHAR(255) NOT NULL UNIQUE,
+  domain VARCHAR(255) NOT NULL,
   url VARCHAR(500) NOT NULL DEFAULT '',
   region VARCHAR(40) NOT NULL DEFAULT '',
   country VARCHAR(100) NOT NULL DEFAULT '',
@@ -62,23 +62,28 @@ CREATE TABLE IF NOT EXISTS sites (
   currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
   status ENUM('draft','negotiating','agreed','sent','rejected','processing','completed','blocked') NOT NULL DEFAULT 'draft',
   publisher_email VARCHAR(190) NOT NULL DEFAULT '',
+  our_mailbox VARCHAR(190) NOT NULL DEFAULT '',
+  our_contact_name VARCHAR(150) NOT NULL DEFAULT '',
   outreach_notes TEXT,
   warning_flags VARCHAR(500) NOT NULL DEFAULT '',
   assigned_to INT NULL,
   created_by INT NULL,
-  primary_project_id INT NULL,
+  primary_project_id INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_project_domain (primary_project_id, domain),
+  INDEX (domain),
   INDEX (status),
   INDEX (country),
   INDEX (niche),
   INDEX (assigned_to),
+  INDEX (our_mailbox),
   INDEX (dr),
   INDEX (da),
   INDEX (traffic),
   CONSTRAINT fk_sites_assigned FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_sites_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_sites_project FOREIGN KEY (primary_project_id) REFERENCES projects(id) ON DELETE SET NULL
+  CONSTRAINT fk_sites_project FOREIGN KEY (primary_project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS countries (

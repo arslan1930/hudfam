@@ -60,8 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($members as $uid) {
             $ins->execute([$id, $uid]);
         }
-        flash('ok', 'Project saved.');
-        redirect('index.php?page=admin_project&id=' . $id);
+        flash('ok', 'Project saved. Build this project’s inventory next.');
+        redirect('index.php?page=admin_project&id=' . $id . '&tab=inventory');
     }
 }
 

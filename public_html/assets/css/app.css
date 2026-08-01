@@ -93,6 +93,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.9rem; }
 .form-grid .full { grid-column: 1 / -1; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.7rem; align-items: end; }
+.super-search label { margin-top: 0; }
+.super-search-row { display: flex; gap: 0.55rem; flex-wrap: wrap; align-items: center; margin-top: 0.35rem; }
+.super-search-row input {
+  flex: 1 1 240px;
+  font-size: 1.05rem;
+  padding: 0.7rem 0.85rem;
+  border: 2px solid var(--brand);
+}
 .badge {
   display: inline-block;
   padding: 0.12rem 0.45rem;
