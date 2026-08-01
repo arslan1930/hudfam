@@ -74,12 +74,152 @@ function inventory_order_statuses(): array
     ];
 }
 
+function prospect_statuses(): array
+{
+    return [
+        'new' => 'New',
+        'contacting' => 'Contacting',
+        'replied' => 'Replied',
+        'skipped' => 'Skipped',
+    ];
+}
+
+function project_statuses(): array
+{
+    return [
+        'active' => 'Active',
+        'paused' => 'Paused',
+        'archived' => 'Archived',
+        'completed' => 'Completed',
+    ];
+}
+
+function pitch_item_statuses(): array
+{
+    return [
+        'sent' => 'Sent',
+        'rejected' => 'Rejected',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+    ];
+}
+
+function publication_order_statuses(): array
+{
+    return [
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+    ];
+}
+
+/** Resolve a status code to a human label across known status maps. */
+function status_label(string $status): string
+{
+    if ($status === '') {
+        return '—';
+    }
+    $maps = [
+        site_statuses(),
+        prospect_statuses(),
+        project_statuses(),
+        pitch_item_statuses(),
+        publication_order_statuses(),
+        inventory_order_statuses(),
+    ];
+    foreach ($maps as $map) {
+        if (array_key_exists($status, $map) && $map[$status] !== '') {
+            return (string) $map[$status];
+        }
+    }
+    // Fallback: title-case snake_case codes
+    return ucwords(str_replace('_', ' ', $status));
+}
+
 function badge(string $status): string
 {
-    return '<span class="badge ' . h($status) . '">' . h($status) . '</span>';
+    $label = status_label($status);
+    $cls = preg_replace('/[^a-z0-9_-]/i', '', $status) ?: 'unknown';
+    return '<span class="badge ' . h($cls) . '">' . h($label) . '</span>';
 }
 
 function money_or_dash($value): string
 {
     return $value === null || $value === '' ? '—' : h((string) $value);
+}
+
+/**
+ * Breadcrumb trail. Each crumb: ['label' => string, 'href' => ?string]
+ */
+function render_breadcrumbs(array $crumbs): void
+{
+    if (!$crumbs) {
+        return;
+    }
+    echo '<nav class="breadcrumbs" aria-label="Breadcrumb">';
+    $last = count($crumbs) - 1;
+    foreach ($crumbs as $i => $crumb) {
+        if ($i > 0) {
+            echo '<span class="sep" aria-hidden="true">›</span>';
+        }
+        $label = (string) ($crumb['label'] ?? '');
+        $href = $crumb['href'] ?? null;
+        if ($href && $i < $last) {
+            echo '<a href="' . h((string) $href) . '">' . h($label) . '</a>';
+        } else {
+            echo '<span class="current">' . h($label) . '</span>';
+        }
+    }
+    echo '</nav>';
+}
+
+/**
+ * Short glossary clarifying Prospects vs Catalog vs Super search.
+ * $panel: 'admin' | 'team'
+ */
+function render_glossary(string $panel): void
+{
+    echo '<div class="glossary card" role="note">';
+    echo '<h2 class="glossary-title">Quick guide</h2>';
+    echo '<dl class="glossary-list">';
+    echo '<div><dt>Prospects</dt><dd>Outreach list — domains to contact. <strong>No prices.</strong></dd></div>';
+    echo '<div><dt>Catalog</dt><dd>Priced sites inside projects (quotes, mailbox, deal status).</dd></div>';
+    if ($panel === 'team') {
+        echo '<div><dt>Super search</dt><dd>Duplicate check across catalog — site metrics only (no client secrets).</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Filter uniques → Prospects → Open a project → Add priced sites → Watch Results.</dd></div>';
+    } else {
+        echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Create project → Build catalog → Send pack → Track orders.</dd></div>';
+    }
+    echo '</dl></div>';
+}
+
+/**
+ * Compact numbered workflow strip for dashboards.
+ * $steps: list of ['label' => string, 'href' => ?string, 'hint' => ?string]
+ */
+function render_workflow(array $steps): void
+{
+    if (!$steps) {
+        return;
+    }
+    echo '<ol class="workflow">';
+    foreach ($steps as $i => $step) {
+        $n = $i + 1;
+        $label = (string) ($step['label'] ?? '');
+        $href = $step['href'] ?? null;
+        $hint = (string) ($step['hint'] ?? '');
+        echo '<li>';
+        echo '<span class="workflow-n">' . $n . '</span>';
+        echo '<span class="workflow-body">';
+        if ($href) {
+            echo '<a href="' . h((string) $href) . '">' . h($label) . '</a>';
+        } else {
+            echo '<strong>' . h($label) . '</strong>';
+        }
+        if ($hint !== '') {
+            echo '<span class="muted">' . h($hint) . '</span>';
+        }
+        echo '</span></li>';
+    }
+    echo '</ol>';
 }

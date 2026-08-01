@@ -51,8 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-render_header('Check & add sites', 'team');
+render_header('Filter & add', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Prospects', 'href' => 'index.php?page=team_prospects'],
+    ['label' => 'Filter & add'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Filter & add prospect sites</h1>

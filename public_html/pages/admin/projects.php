@@ -16,7 +16,7 @@ render_header('Projects', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Project folders</h1>
+    <h1>Projects</h1>
     <p class="muted">Each client campaign has its own requirements.</p>
   </div>
   <a class="btn" href="index.php?page=admin_project_form">New project</a>

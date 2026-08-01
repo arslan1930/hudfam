@@ -5,10 +5,14 @@ $results = $superQ !== '' ? search_inventory_safe_for_team($superQ, 60) : [];
 
 render_header('Super search', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Super search'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Super search</h1>
-    <p class="muted">Check if a website is already in our inventory. You only see site details — not client names, emails, or project info.</p>
+    <p class="muted">Duplicate check across the <strong>catalog</strong>. You only see site metrics — not client names, emails, or project info.</p>
   </div>
 </div>
 
@@ -23,7 +27,7 @@ render_header('Super search', 'team');
       <a class="btn secondary" href="index.php?page=team_search">Clear</a>
     <?php endif; ?>
   </div>
-  <p class="help">If the domain appears below, do <strong>not</strong> add it again — it is already in the database.</p>
+  <p class="help">If the domain appears below, do <strong>not</strong> add it again — it is already in the catalog. For prospect uniqueness, use <a href="index.php?page=team_prospect_check">Filter &amp; add</a>.</p>
 </form>
 
 <?php if ($superQ !== ''): ?>
@@ -50,13 +54,13 @@ render_header('Super search', 'team');
         <td><?= h((string) ($s['dr'] ?? '—')) ?></td>
         <td><?= h((string) ($s['da'] ?? '—')) ?></td>
         <td><?= h((string) ($s['traffic'] ?? '—')) ?></td>
-        <td><span class="badge agreed">Already in inventory</span></td>
+        <td><span class="badge agreed">Already in catalog</span></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$results): ?>
       <tr>
         <td colspan="7" class="muted">
-          Not found in inventory. You can add it inside the correct
+          Not found in catalog. You can add it inside the correct
           <a href="index.php?page=team_projects">project</a>.
         </td>
       </tr>

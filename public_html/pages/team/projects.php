@@ -21,8 +21,8 @@ render_header('Projects', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Project inventories</h1>
-    <p class="muted">Each project has its own site list. Super search only looks inside the project you open.</p>
+    <h1>Projects</h1>
+    <p class="muted">Each project has its own catalog. Use Super search for a global duplicate check (metrics only).</p>
   </div>
 </div>
 <div class="folders">

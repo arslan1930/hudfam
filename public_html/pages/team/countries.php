@@ -5,8 +5,8 @@ render_header('Countries', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Country reference</h1>
-    <p class="muted">Country list for filters. Site inventory lives inside each <a href="index.php?page=team_projects">project</a> — Super search is per project.</p>
+    <h1>Countries</h1>
+    <p class="muted">Reference for filters. Catalog sites live inside each <a href="index.php?page=team_projects">project</a>. Use <a href="index.php?page=team_search">Super search</a> for duplicates.</p>
   </div>
   <a class="btn" href="index.php?page=team_projects">Open projects</a>
 </div>
