@@ -51,6 +51,22 @@ Open `upgrade.php` once, then delete it.
 | Problem | Fix |
 |--------|-----|
 | 404 on domain | Files not in correct `public_html` / wrong domain document root |
+| **No design / unstyled page** | Upload the **`assets/`** folder (must include `assets/css/app.css`). Also upload **`asset.php`**. Open `https://YOUR-DOMAIN/asset.php?f=css/app.css` — you should see CSS text. If that 404s, files are in the wrong folder (do not nest `public_html/public_html`). |
 | Database error on install | Check DB name/user/password; host is usually `localhost` |
 | Blank page | Enable PHP error display temporarily, or check hPanel error logs |
 | Permission denied writing config | Create `config.php` manually from `config.sample.php` |
+
+### Correct upload layout (web root)
+```text
+public_html/          ← Hostinger web root for your domain
+  index.php
+  asset.php           ← serves CSS if /assets URL fails
+  install.php
+  assets/
+    css/
+      app.css         ← required for design
+  includes/
+  pages/
+  sql/
+  .htaccess
+```
