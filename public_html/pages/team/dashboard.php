@@ -43,9 +43,9 @@ render_header('Team dashboard', 'team');
     <p class="muted">Prospects first (no prices), then priced catalog work inside each project.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Prospects</a>
-    <a class="btn secondary" href="index.php?page=team_search">Super search</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Dated batches</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Old inventory</a>
   </div>
 </div>
 

@@ -8,7 +8,12 @@ $region = '';
 $niche = '';
 $notes = '';
 $result = null;
-$added = null;
+
+$old = list_prospect_domain_names(25000);
+$oldText = implode("\n", $old['domains']);
+if ($old['truncated']) {
+    $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
@@ -21,19 +26,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $domains = parse_domain_list($raw);
 
     if ($action === 'add_new') {
-        // Re-filter from pasted text (avoids huge hidden-field POSTs on 10k–100k lists)
         $filter = filter_domains_against_prospects($domains);
         $selected = $filter['new'];
         $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-        flash('ok', "Added {$added['inserted']} unique prospect site(s). Skipped {$added['skipped']} already in prospect inventory.");
-        redirect('index.php?page=team_prospects&country=' . urlencode($country) . '&language=' . urlencode($language));
+        $msg = "Added {$added['inserted']} unique site(s) to old inventory";
+        if (!empty($added['batch_id'])) {
+            $msg .= " and today’s batch (#{$added['batch_id']})";
+        }
+        $msg .= ". Skipped {$added['skipped']} already known.";
+        flash('ok', $msg);
+        $redir = 'index.php?page=team_prospect_check';
+        if (!empty($added['batch_id'])) {
+            $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
+        }
+        redirect($redir);
     }
 
-    // Default: filter only
     if (count($domains) > 100000) {
         flash('error', 'Please paste at most 100,000 domains per run (split into batches).');
     } elseif (!$domains) {
-        flash('error', 'Paste at least one domain.');
+        flash('error', 'Paste at least one domain in Box 2.');
     } else {
         $result = filter_domains_against_prospects($domains);
     }
@@ -48,45 +60,66 @@ render_header('Filter & add', 'team');
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Filter &amp; add prospects</h1>
-    <p class="muted">Paste domains first. We filter against <strong>Prospects only</strong> (no prices). Only unique domains can be added.</p>
+    <h1>Filter & add prospect sites</h1>
+    <p class="muted">
+      Box 1 = old inventory (prospect list). Box 2 = new sites.
+      Filter removes old from new → Add sites saves to <strong>both</strong> old inventory and today’s dated batch.
+    </p>
   </div>
-  <a class="btn secondary" href="index.php?page=team_prospects">Prospects</a>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Dated batches</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Full prospect list</a>
+  </div>
 </div>
 
-<form class="card" method="post">
+<form method="post" id="filter_form">
   <input type="hidden" name="action" value="filter">
-  <label for="domains">Paste domains (one per line, or comma/space separated — up to 100,000)</label>
-  <textarea id="domains" name="domains" rows="12" required placeholder="site1.com&#10;site2.de&#10;https://www.site3.com"><?= h($raw) ?></textarea>
 
-  <div class="form-grid" style="margin-top:0.5rem">
-    <div><label>Country (for new sites)</label>
-      <select name="country" id="country_select">
-        <option value="">—</option>
-        <?php foreach ($countryOptions as $c): ?>
-          <option value="<?= h($c['name']) ?>"
-            data-region="<?= h($c['region']) ?>"
-            data-lang="<?= h($c['default_language']) ?>"
-            <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+  <div class="grid two-box">
+    <div class="card box-panel">
+      <h2>Box 1 — Old inventory</h2>
+      <p class="help"><?= (int) $old['total'] ?> site name(s) · no https · used for filter compare</p>
+      <textarea class="inventory-box" id="old_inventory" rows="16" readonly><?= h($oldText) ?></textarea>
     </div>
-    <div><label>Language</label><input name="language" id="language_input" value="<?= h($language) ?>"></div>
-    <div><label>Region</label>
-      <select name="region">
-        <option value="">—</option>
-        <?php foreach (regions() as $k => $v): ?>
-          <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-        <?php endforeach; ?>
-      </select>
+    <div class="card box-panel">
+      <h2>Box 2 — New sites to filter</h2>
+      <p class="help">Paste domains (one per line or comma/space). https:// is stripped automatically.</p>
+      <textarea class="inventory-box" id="domains" name="domains" rows="16" required
+        placeholder="site1.com&#10;site2.de&#10;https://www.site3.com"><?= h($raw) ?></textarea>
     </div>
-    <div><label>Niche</label><input name="niche" value="<?= h($niche) ?>"></div>
-    <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
   </div>
-  <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">1. Filter unique vs Prospects</button>
-  </p>
+
+  <div class="card">
+    <div class="form-grid">
+      <div><label>Country (for new sites)</label>
+        <select name="country" id="country_select">
+          <option value="">—</option>
+          <?php foreach ($countryOptions as $c): ?>
+            <option value="<?= h($c['name']) ?>"
+              data-region="<?= h($c['region']) ?>"
+              data-lang="<?= h($c['default_language']) ?>"
+              <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Language</label><input name="language" id="language_input" value="<?= h($language) ?>"></div>
+      <div><label>Region</label>
+        <select name="region">
+          <option value="">—</option>
+          <?php foreach (regions() as $k => $v): ?>
+            <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Niche</label><input name="niche" value="<?= h($niche) ?>"></div>
+      <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
+    </div>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Filter sites</button>
+    </p>
+  </div>
 </form>
+
 <script>
 (function(){
   var sel = document.getElementById('country_select');
@@ -106,23 +139,23 @@ render_header('Filter & add', 'team');
 <div class="card">
   <h2>Filter results</h2>
   <p>
-    Parsed: <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in prospects: <strong><?= count($result['existing']) ?></strong> ·
-    New (unique): <strong><?= count($result['new']) ?></strong>
+    From Box 2: <strong><?= (int) $result['total_input'] ?></strong> ·
+    Already in Box 1 (excluded): <strong><?= count($result['existing']) ?></strong> ·
+    Unique (new): <strong><?= count($result['new']) ?></strong>
   </p>
 </div>
 
-<div class="grid" style="grid-template-columns:1fr 1fr">
+<div class="grid two-box">
   <div class="card">
-    <h2>Already in Prospects (do not re-add)</h2>
+    <h2>Excluded — already in old inventory</h2>
     <?php if ($result['existing']): ?>
-      <textarea rows="14" readonly><?= h(implode("\n", $result['existing'])) ?></textarea>
+      <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
     <?php else: ?>
-      <p class="muted">None — all pasted domains are new to prospects.</p>
+      <p class="muted">None excluded — all pasted domains are new.</p>
     <?php endif; ?>
   </div>
   <div class="card">
-    <h2>New — safe to add</h2>
+    <h2>Unique results — ready to add</h2>
     <?php if ($result['new']): ?>
       <form method="post">
         <input type="hidden" name="action" value="add_new">
@@ -132,14 +165,14 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="region" value="<?= h($region) ?>">
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
-        <textarea rows="14" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">These will be saved into Prospects (no prices). Country/language from the form above are applied.</p>
+        <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
+        <p class="help">Add sites → writes to <strong>Box 1 (old inventory)</strong> and <strong>today’s dated batch</strong> for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
         <p class="actions" style="margin-top:0.8rem">
-          <button class="btn" type="submit">2. Add <?= count($result['new']) ?> unique site(s)</button>
+          <button class="btn" type="submit">Add sites (<?= count($result['new']) ?>)</button>
         </p>
       </form>
     <?php else: ?>
-      <p class="muted">No new domains — everything is already in Prospects.</p>
+      <p class="muted">No unique domains left — everything was already in Box 1.</p>
     <?php endif; ?>
   </div>
 </div>

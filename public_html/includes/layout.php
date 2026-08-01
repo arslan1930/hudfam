@@ -51,45 +51,29 @@ function render_header(string $title, string $panel = ''): void
     echo '<nav aria-label="' . h($roleLabel) . ' navigation">';
 
     if ($panel === 'admin') {
-        $groups = [
-            'Overview' => [
-                'admin_dashboard' => 'Dashboard',
-            ],
-            'Catalog & projects' => [
-                'admin_projects' => 'Projects',
-                'admin_sites' => 'Catalog',
-                'admin_bulk_import' => 'Bulk import',
-            ],
-            'Outreach' => [
-                'admin_prospects' => 'Prospects',
-            ],
-            'Clients & orders' => [
-                'admin_clients' => 'Clients',
-                'admin_orders_export' => 'Orders export',
-                'admin_published' => 'Published',
-            ],
-            'Settings' => [
-                'admin_countries' => 'Countries',
-                'admin_users' => 'Admins & users',
-            ],
+        $links = [
+            'admin_dashboard' => 'Dashboard',
+            'admin_projects' => 'Projects',
+            'admin_sites' => 'Catalog inventory',
+            'admin_bulk_import' => 'Bulk import',
+            'admin_prospects' => 'Prospects',
+            'admin_prospect_batches' => 'Prospect batches',
+            'admin_clients' => 'Clients',
+            'admin_orders_export' => 'Orders export',
+            'admin_countries' => 'Countries',
+            'admin_published' => 'Published',
+            'admin_users' => 'Admins & users',
         ];
     } else {
-        $groups = [
-            'Overview' => [
-                'team_dashboard' => 'Dashboard',
-            ],
-            'Prospects' => [
-                'team_prospect_check' => 'Filter & add',
-                'team_prospects' => 'Prospects',
-            ],
-            'Catalog' => [
-                'team_search' => 'Super search',
-                'team_projects' => 'Projects',
-                'team_results' => 'Results',
-            ],
-            'Reference' => [
-                'team_countries' => 'Countries',
-            ],
+        $links = [
+            'team_dashboard' => 'Dashboard',
+            'team_prospect_check' => 'Filter & add sites',
+            'team_prospect_batches' => 'Dated batches',
+            'team_prospects' => 'Old inventory',
+            'team_search' => 'Catalog search',
+            'team_projects' => 'Projects',
+            'team_results' => 'Results feed',
+            'team_countries' => 'Countries',
         ];
     }
 

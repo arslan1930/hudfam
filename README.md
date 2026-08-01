@@ -6,7 +6,7 @@ Plain **PHP + MySQL** app for Hostinger shared hosting (and any PHP host).
 
 ## Features
 
-- **Prospect inventory** (Team) — no prices; bulk paste check (unique vs prospects only); country/language filters
+- **Two-box Team filter** — old prospect inventory vs new paste; unique results add to both old list and dated batches (per teammate per day)
 - **Catalog inventory** (Admin) — language, country, DA/DR/traffic, order status, comments, client name + CSV bulk import
 - **Multi-admin** — unique name + contact details; collaborate on each project
 - Team catalog Super search — site metrics only (no client/project secrets)
