@@ -72,18 +72,27 @@ try {
 
 render_header($project['name'], 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Projects', 'href' => 'index.php?page=admin_projects'],
+    ['label' => $project['name']],
+]); ?>
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted"><?= h($project['client_name'] ?: 'Client campaign') ?> · <?= h($project['niche'] ?: '—') ?> · <?= h($project['countries'] ?: '—') ?> · <?= $siteTotal ?> inventory sites</p>
+    <p class="muted"><?= h($project['client_name'] ?: 'Client campaign') ?> · <?= h($project['niche'] ?: '—') ?> · <?= h($project['countries'] ?: '—') ?> · <?= $siteTotal ?> catalog site<?= $siteTotal === 1 ? '' : 's' ?></p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
+    <a class="btn" href="index.php?page=admin_pitch_create&project_id=<?= $id ?>">Send pack</a>
     <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk import</a>
-    <a class="btn secondary" href="index.php?page=admin_client_form&project_id=<?= $id ?>">New client folder</a>
-    <a class="btn secondary" href="index.php?page=admin_pitch_create&project_id=<?= $id ?>">Send pack</a>
-    <a class="btn secondary" href="index.php?page=admin_orders_export&project_id=<?= $id ?>&download=1">Download orders CSV</a>
-    <a class="btn secondary" href="index.php?page=admin_project_form&id=<?= $id ?>">Edit requirements</a>
+    <a class="btn secondary" href="index.php?page=admin_project_form&id=<?= $id ?>">Edit</a>
+    <details class="more-actions">
+      <summary class="btn secondary small">More</summary>
+      <div class="more-actions-menu">
+        <a href="index.php?page=admin_client_form&project_id=<?= $id ?>">New client folder</a>
+        <a href="index.php?page=admin_orders_export&project_id=<?= $id ?>&download=1">Download orders CSV</a>
+      </div>
+    </details>
   </div>
 </div>
 
@@ -91,7 +100,7 @@ render_header($project['name'], 'admin');
   <input type="hidden" name="page" value="admin_project">
   <input type="hidden" name="id" value="<?= $id ?>">
   <input type="hidden" name="tab" value="inventory">
-  <label for="sq">Super search — project inventory only</label>
+  <label for="sq">Super search — this project’s catalog only</label>
   <div class="super-search-row">
     <input id="sq" name="sq" value="<?= h($superQ) ?>" placeholder="Domain, blogger email, our Gmail, contact name…">
     <button class="btn" type="submit">Search</button>
@@ -136,8 +145,19 @@ render_header($project['name'], 'admin');
   </div>
 </div>
 <div class="tabs">
-  <?php foreach (['inventory','brief','clients','sent','rejected','processing','completed','published'] as $t): ?>
-    <a class="<?= $tab===$t?'active':'' ?>" href="index.php?page=admin_project&id=<?= $id ?>&tab=<?= $t ?>"><?= ucfirst($t) ?></a>
+  <?php
+  $tabLabels = [
+      'inventory' => 'Catalog',
+      'brief' => 'Brief',
+      'clients' => 'Clients',
+      'sent' => 'Sent',
+      'rejected' => 'Rejected',
+      'processing' => 'Processing',
+      'completed' => 'Completed',
+      'published' => 'Published',
+  ];
+  foreach ($tabLabels as $t => $label): ?>
+    <a class="<?= $tab===$t?'active':'' ?>" href="index.php?page=admin_project&id=<?= $id ?>&tab=<?= $t ?>"><?= h($label) ?></a>
   <?php endforeach; ?>
 </div>
 <?php if ($tab === 'brief'): ?>

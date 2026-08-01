@@ -40,22 +40,35 @@ render_header('Team dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Check & add unique sites into prospect inventory first. Catalog search is for priced inventory (site details only).</p>
+    <p class="muted">Prospects first (no prices), then priced catalog work inside each project.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Check & add sites</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Prospect inventory</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Prospects</a>
+    <a class="btn secondary" href="index.php?page=team_search">Super search</a>
   </div>
 </div>
 
+<?php
+render_workflow([
+    ['label' => 'Filter uniques', 'href' => 'index.php?page=team_prospect_check', 'hint' => 'Paste vs prospect list'],
+    ['label' => 'Prospects', 'href' => 'index.php?page=team_prospects', 'hint' => 'Outreach list · no prices'],
+    ['label' => 'Work a project', 'href' => 'index.php?page=team_projects', 'hint' => 'Add priced catalog sites'],
+    ['label' => 'Results', 'href' => 'index.php?page=team_results', 'hint' => 'Sent / rejected / live'],
+]);
+render_glossary('team');
+?>
+
 <div class="card">
   <h2>Your projects</h2>
-  <div class="folders" style="margin-top:0.8rem">
+  <p class="muted" style="margin:0 0 0.7rem">Open a project to edit its catalog (prices, mailbox, status).</p>
+  <div class="folders">
   <?php foreach ($projects as $p): ?>
     <a class="folder" href="index.php?page=team_project&id=<?= (int) $p['id'] ?>&tab=inventory">
       <h3><?= h($p['name']) ?></h3>
       <p class="muted"><?= h($p['niche'] ?: '—') ?> · <?= h($p['countries'] ?: '—') ?></p>
-      <p><span class="badge"><?= (int) ($counts[(int) $p['id']] ?? 0) ?> sites</span></p>
+      <?php $n = (int) ($counts[(int) $p['id']] ?? 0); ?>
+      <p><span class="badge"><?= $n ?> catalog site<?= $n === 1 ? '' : 's' ?></span></p>
     </a>
   <?php endforeach; ?>
   <?php if (!$projects): ?><p class="muted">No projects assigned.</p><?php endif; ?>

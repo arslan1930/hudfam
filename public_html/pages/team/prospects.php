@@ -31,15 +31,19 @@ $qs = http_build_query(array_filter([
     'language' => $language, 'region' => $region, 'status' => $status,
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Prospect inventory', 'team');
+render_header('Prospects', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Prospects'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1>Prospect inventory</h1>
-    <p class="muted"><?= $total ?> sites to contact · no prices · grows as Team adds unique domains</p>
+    <h1>Prospects</h1>
+    <p class="muted"><?= $total ?> sites to contact · no prices · filter uniques before adding</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Check & add sites</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
     <a class="btn secondary" href="index.php?page=team_prospect_form">Add one site</a>
   </div>
 </div>
@@ -77,8 +81,8 @@ render_header('Prospect inventory', 'team');
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
-      <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
-        <option value="<?= $st ?>" <?= $status === $st ? 'selected' : '' ?>><?= $st ?></option>
+      <?php foreach (prospect_statuses() as $code => $label): ?>
+        <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
       <?php endforeach; ?>
     </select>
   </div>
@@ -107,15 +111,15 @@ render_header('Prospect inventory', 'team');
             <input type="hidden" name="action" value="update_status">
             <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
             <select name="status" onchange="this.form.submit()">
-              <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
-                <option value="<?= $st ?>" <?= $s['status'] === $st ? 'selected' : '' ?>><?= $st ?></option>
+              <?php foreach (prospect_statuses() as $code => $label): ?>
+                <option value="<?= h($code) ?>" <?= $s['status'] === $code ? 'selected' : '' ?>><?= h($label) ?></option>
               <?php endforeach; ?>
             </select>
           </form>
         </td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="7" class="muted">No prospects yet. <a href="index.php?page=team_prospect_check">Check & add</a></td></tr><?php endif; ?>
+    <?php if (!$rows): ?><tr><td colspan="7" class="muted">No prospects yet. <a href="index.php?page=team_prospect_check">Filter &amp; add</a></td></tr><?php endif; ?>
     </tbody>
   </table>
   <div class="actions" style="margin-top:0.8rem">

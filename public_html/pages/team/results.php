@@ -28,7 +28,7 @@ render_header('Results', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Results feed</h1>
+    <h1>Results</h1>
     <p class="muted">Read-only statuses from Admin. Use them to refill better sites.</p>
   </div>
 </div>
