@@ -9,6 +9,7 @@ $project = [
     'avoid_notes' => '', 'workflow_notes' => '', 'requirements_brief' => '',
 ];
 $memberIds = [];
+$adminIds = [];
 if ($id) {
     $stmt = db()->prepare('SELECT * FROM projects WHERE id=?');
     $stmt->execute([$id]);
@@ -16,8 +17,10 @@ if ($id) {
     $memberIds = db()->prepare('SELECT user_id FROM project_members WHERE project_id=?');
     $memberIds->execute([$id]);
     $memberIds = array_map('intval', array_column($memberIds->fetchAll(), 'user_id'));
+    $adminIds = project_admin_ids($id);
 }
-$teamUsers = db()->query("SELECT id, username FROM users WHERE role='team' AND is_active=1 ORDER BY username")->fetchAll();
+$teamUsers = db()->query("SELECT id, username, full_name FROM users WHERE role='team' AND is_active=1 ORDER BY username")->fetchAll();
+$adminUsers = list_admin_users(true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fields = [
@@ -33,6 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data[$f] = $v === '' ? null : $v;
     }
     $members = array_map('intval', (array) ($_POST['members'] ?? []));
+    $admins = array_map('intval', (array) ($_POST['admins'] ?? []));
+    // Always include the saving admin as collaborator
+    if (!in_array((int) $user['id'], $admins, true)) {
+        $admins[] = (int) $user['id'];
+    }
     if ($data['name'] === '') {
         flash('error', 'Project name is required.');
     } else {
@@ -60,7 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($members as $uid) {
             $ins->execute([$id, $uid]);
         }
-        flash('ok', 'Project saved. Build this project’s inventory next.');
+        sync_project_admins($id, $admins);
+        flash('ok', 'Project saved. Collaborating admins and team updated.');
         redirect('index.php?page=admin_project&id=' . $id . '&tab=inventory');
     }
 }
@@ -94,9 +103,21 @@ render_header($id ? 'Edit project' : 'New project', 'admin');
     <div class="full"><label>Avoid</label><textarea name="avoid_notes" rows="2"><?= h($project['avoid_notes']) ?></textarea></div>
     <div class="full"><label>Workflow notes</label><textarea name="workflow_notes" rows="2"><?= h($project['workflow_notes']) ?></textarea></div>
     <div class="full"><label>Requirements brief</label><textarea name="requirements_brief" rows="3"><?= h($project['requirements_brief']) ?></textarea></div>
+    <div class="full"><label>Collaborating admins</label>
+      <p class="help">Multiple admins can work on this project. Each has unique name + contact details under Users.</p>
+      <?php foreach ($adminUsers as $au): ?>
+        <label style="font-weight:500;display:block">
+          <input type="checkbox" name="admins[]" value="<?= (int) $au['id'] ?>"
+            <?= in_array((int) $au['id'], $adminIds, true) || (!$id && (int) $au['id'] === (int) $user['id']) ? 'checked' : '' ?>>
+          <?= h($au['full_name'] ?: $au['username']) ?>
+          <span class="muted">· <?= h($au['email'] ?: 'no email') ?><?= $au['phone'] !== '' ? ' · ' . h($au['phone']) : '' ?></span>
+        </label>
+      <?php endforeach; ?>
+      <?php if (!$adminUsers): ?><p class="muted">Create admin users first.</p><?php endif; ?>
+    </div>
     <div class="full"><label>Assigned team</label>
       <?php foreach ($teamUsers as $tu): ?>
-        <label style="font-weight:500"><input type="checkbox" name="members[]" value="<?= (int) $tu['id'] ?>" <?= in_array((int)$tu['id'], $memberIds, true)?'checked':'' ?>> <?= h($tu['username']) ?></label>
+        <label style="font-weight:500"><input type="checkbox" name="members[]" value="<?= (int) $tu['id'] ?>" <?= in_array((int)$tu['id'], $memberIds, true)?'checked':'' ?>> <?= h($tu['full_name'] ?: $tu['username']) ?></label>
       <?php endforeach; ?>
     </div>
   </div>

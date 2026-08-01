@@ -57,6 +57,18 @@ if (!file_exists(__DIR__ . '/config.php')) {
             $pdo->exec("ALTER TABLE sites ADD COLUMN our_contact_name VARCHAR(150) NOT NULL DEFAULT '' AFTER our_mailbox");
             $notes[] = 'added our_contact_name';
         }
+        if (!in_array('inventory_client_name', $cols, true)) {
+            $pdo->exec("ALTER TABLE sites ADD COLUMN inventory_client_name VARCHAR(255) NOT NULL DEFAULT '' AFTER our_contact_name");
+            $notes[] = 'added inventory_client_name';
+        }
+        if (!in_array('order_status', $cols, true)) {
+            $pdo->exec("ALTER TABLE sites ADD COLUMN order_status VARCHAR(40) NOT NULL DEFAULT '' AFTER inventory_client_name");
+            $notes[] = 'added order_status';
+        }
+        if (!in_array('admin_comments', $cols, true)) {
+            $pdo->exec('ALTER TABLE sites ADD COLUMN admin_comments TEXT NULL AFTER order_status');
+            $notes[] = 'added admin_comments';
+        }
 
         // Assign orphan sites to first project so project_id can be required
         $firstProject = (int) $pdo->query('SELECT id FROM projects ORDER BY id LIMIT 1')->fetchColumn();
@@ -127,6 +139,54 @@ if (!file_exists(__DIR__ . '/config.php')) {
             }
         }
 
+        // Admin contact fields
+        $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('phone', $userCols, true)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(80) NOT NULL DEFAULT '' AFTER email");
+            $notes[] = 'added users.phone';
+        }
+        if (!in_array('contact_details', $userCols, true)) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN contact_details TEXT NULL AFTER phone');
+            $notes[] = 'added users.contact_details';
+        }
+
+        // Project admin collaborators
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS project_admins (
+              project_id INT NOT NULL,
+              user_id INT NOT NULL,
+              PRIMARY KEY (project_id, user_id),
+              CONSTRAINT fk_pa_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+              CONSTRAINT fk_pa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        $notes[] = 'project_admins OK';
+
+        // Prospect inventory
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS prospect_sites (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              domain VARCHAR(255) NOT NULL,
+              url VARCHAR(500) NOT NULL DEFAULT '',
+              country VARCHAR(100) NOT NULL DEFAULT '',
+              language VARCHAR(50) NOT NULL DEFAULT '',
+              region VARCHAR(40) NOT NULL DEFAULT '',
+              niche VARCHAR(255) NOT NULL DEFAULT '',
+              notes TEXT,
+              status ENUM('new','contacting','replied','skipped') NOT NULL DEFAULT 'new',
+              created_by INT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              UNIQUE KEY uniq_prospect_domain (domain),
+              INDEX (country),
+              INDEX (language),
+              INDEX (region),
+              INDEX (status),
+              CONSTRAINT fk_prospect_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        $notes[] = 'prospect_sites OK';
+
         // Demo client if missing
         $rexboId = (int) $pdo->query("SELECT id FROM projects WHERE name='rexbo.de' LIMIT 1")->fetchColumn();
         $adminId = (int) $pdo->query("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1")->fetchColumn();
@@ -136,6 +196,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
                  VALUES (?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE name=VALUES(name)'
             )->execute([$rexboId, 'Hans Mueller', 'hans@rexbo.de', 'Main contact for Rexbo deals.', $adminId]);
+            // Ensure creating admin is a collaborator
+            $pdo->prepare('INSERT IGNORE INTO project_admins (project_id, user_id) VALUES (?,?)')
+                ->execute([$rexboId, $adminId]);
         }
 
         $done = true;
@@ -156,7 +219,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 <div class="login-wrap">
   <div class="login-card">
     <h1>Upgrade</h1>
-    <p class="muted">Adds clients/orders, countries, quote fields, per-project inventory uniqueness, and our-mailbox fields.</p>
+    <p class="muted">Adds prospect inventory, multi-admin contacts/collaboration, catalog fields, and prior upgrades.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
     <?php if ($done): ?>
       <p>Upgrade complete.</p>

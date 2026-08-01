@@ -6,11 +6,11 @@ Plain **PHP + MySQL** app for Hostinger shared hosting (and any PHP host).
 
 ## Features
 
-- **Per-project inventory** — each client/project has its own site list (same domain allowed in multiple projects)
-- **Super search** on each project — find domain / blogger email / our Gmail / contact name inside that inventory only
-- **Our mailbox + contact name** — remember which of your Gmails got the blogger’s reply
-- **Publisher quote + agreed price** (+ quote date)
-- Admin sends packs from that project’s agreed sites; client folders + publication orders + CSV
+- **Prospect inventory** (Team) — no prices; bulk paste check (unique vs prospects only); country/language filters
+- **Catalog inventory** (Admin) — language, country, DA/DR/traffic, order status, comments, client name + CSV bulk import
+- **Multi-admin** — unique name + contact details; collaborate on each project
+- Team catalog Super search — site metrics only (no client/project secrets)
+- Client folders + publication orders + CSV export
 
 ## Deploy on Hostinger
 

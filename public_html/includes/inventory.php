@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Project-scoped inventory helpers.
+ * Project-scoped inventory + safe team Super search + bulk import.
  */
 
 function require_project_access(int $projectId, array $user): array
@@ -25,9 +25,63 @@ function require_project_access(int $projectId, array $user): array
     return $project;
 }
 
+function normalize_domain(string $domain): string
+{
+    $domain = strtolower(trim($domain));
+    $domain = preg_replace('#^https?://#i', '', $domain);
+    $domain = preg_replace('#^www\.#i', '', $domain);
+    $domain = rtrim(explode('/', $domain)[0], '.');
+    return $domain;
+}
+
 /**
- * Super-search within one project's inventory.
- * Matches domain, URL, blogger email, our mailbox, contact name, niche, notes.
+ * Team Super search — whole database, site details only.
+ * Never returns client name, admin comments, project name, emails, or mailboxes.
+ */
+function search_inventory_safe_for_team(string $q, int $limit = 50): array
+{
+    $q = trim($q);
+    if ($q === '') {
+        return [];
+    }
+    $domainExact = normalize_domain($q);
+    $like = '%' . $domainExact . '%';
+
+    // One row per domain — site metrics only (no client/project/email fields)
+    $sql = "SELECT
+              s.domain,
+              MAX(s.country) AS country,
+              MAX(s.language) AS language,
+              MAX(s.region) AS region,
+              MAX(s.niche) AS niche,
+              MAX(s.dr) AS dr,
+              MAX(s.da) AS da,
+              MAX(s.traffic) AS traffic,
+              COUNT(*) AS copies_in_db,
+              MAX(s.updated_at) AS updated_at
+            FROM sites s
+            WHERE s.domain = ? OR s.domain LIKE ? OR s.url LIKE ?
+            GROUP BY s.domain
+            ORDER BY MAX(s.updated_at) DESC
+            LIMIT " . (int) $limit;
+    $stmt = db()->prepare($sql);
+    $stmt->execute([
+        $domainExact,
+        $like,
+        '%' . $q . '%',
+    ]);
+    $rows = $stmt->fetchAll();
+    // Prefer exact domain matches first
+    usort($rows, static function ($a, $b) use ($domainExact) {
+        $ae = ($a['domain'] === $domainExact) ? 0 : (str_starts_with($a['domain'], $domainExact) ? 1 : 2);
+        $be = ($b['domain'] === $domainExact) ? 0 : (str_starts_with($b['domain'], $domainExact) ? 1 : 2);
+        return $ae <=> $be;
+    });
+    return $rows;
+}
+
+/**
+ * Admin Super search within one project (full row including confidential fields).
  */
 function search_project_inventory(int $projectId, string $q, int $limit = 50): array
 {
@@ -36,9 +90,7 @@ function search_project_inventory(int $projectId, string $q, int $limit = 50): a
         return [];
     }
     $like = '%' . $q . '%';
-    $domainExact = strtolower(preg_replace('#^https?://#i', '', $q));
-    $domainExact = rtrim($domainExact, '/');
-    $domainExact = preg_replace('#^www\.#i', '', $domainExact);
+    $domainExact = normalize_domain($q);
 
     $sql = "SELECT s.*, u.username owner
             FROM sites s
@@ -48,6 +100,7 @@ function search_project_inventory(int $projectId, string $q, int $limit = 50): a
                 s.domain LIKE ? OR s.url LIKE ? OR s.niche LIKE ?
                 OR s.publisher_email LIKE ? OR s.our_mailbox LIKE ?
                 OR s.our_contact_name LIKE ? OR s.outreach_notes LIKE ?
+                OR s.admin_comments LIKE ? OR s.inventory_client_name LIKE ?
                 OR s.country LIKE ? OR s.language LIKE ?
                 OR s.domain = ?
               )
@@ -61,6 +114,7 @@ function search_project_inventory(int $projectId, string $q, int $limit = 50): a
     $stmt->execute([
         $projectId,
         $like, $like, $like,
+        $like, $like,
         $like, $like,
         $like, $like,
         $like, $like,
@@ -80,12 +134,21 @@ function project_inventory_query(int $projectId, array $filters, int $pageNum = 
         $like = '%' . $q . '%';
         $where[] = '(s.domain LIKE ? OR s.url LIKE ? OR s.publisher_email LIKE ?
                      OR s.our_mailbox LIKE ? OR s.our_contact_name LIKE ?
-                     OR s.niche LIKE ? OR s.outreach_notes LIKE ?)';
-        array_push($params, $like, $like, $like, $like, $like, $like, $like);
+                     OR s.niche LIKE ? OR s.outreach_notes LIKE ?
+                     OR s.inventory_client_name LIKE ? OR s.admin_comments LIKE ?)';
+        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like, $like);
     }
     if (!empty($filters['status'])) {
         $where[] = 's.status = ?';
         $params[] = $filters['status'];
+    }
+    if (!empty($filters['order_status'])) {
+        $where[] = 's.order_status = ?';
+        $params[] = $filters['order_status'];
+    }
+    if (!empty($filters['client_name'])) {
+        $where[] = 's.inventory_client_name LIKE ?';
+        $params[] = '%' . $filters['client_name'] . '%';
     }
     apply_site_geo_filters($where, $params, [
         'region' => $filters['region'] ?? '',
@@ -104,8 +167,59 @@ function project_inventory_query(int $projectId, array $filters, int $pageNum = 
     $pageNum = max(1, $pageNum);
     $offset = ($pageNum - 1) * $per;
     $stmt = db()->prepare(
-        "SELECT s.*, u.username owner FROM sites s
+        "SELECT s.*, u.username owner, p.name project_name FROM sites s
          LEFT JOIN users u ON u.id = s.assigned_to
+         LEFT JOIN projects p ON p.id = s.primary_project_id
+         WHERE $whereSql ORDER BY s.updated_at DESC LIMIT $per OFFSET $offset"
+    );
+    $stmt->execute($params);
+    return [
+        'rows' => $stmt->fetchAll(),
+        'total' => $total,
+        'pages' => max(1, (int) ceil($total / $per)),
+        'page' => $pageNum,
+    ];
+}
+
+/** Admin cross-project inventory list. */
+function admin_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array
+{
+    $where = ['1=1'];
+    $params = [];
+    $q = trim((string) ($filters['q'] ?? ''));
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $where[] = '(s.domain LIKE ? OR s.inventory_client_name LIKE ? OR s.admin_comments LIKE ?
+                     OR s.country LIKE ? OR s.language LIKE ?)';
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    if (!empty($filters['project_id'])) {
+        $where[] = 's.primary_project_id = ?';
+        $params[] = (int) $filters['project_id'];
+    }
+    if (!empty($filters['status'])) {
+        $where[] = 's.status = ?';
+        $params[] = $filters['status'];
+    }
+    if (!empty($filters['order_status'])) {
+        $where[] = 's.order_status = ?';
+        $params[] = $filters['order_status'];
+    }
+    apply_site_geo_filters($where, $params, [
+        'region' => $filters['region'] ?? '',
+        'country' => $filters['country'] ?? '',
+        'language' => $filters['language'] ?? '',
+    ]);
+    $whereSql = implode(' AND ', $where);
+    $count = db()->prepare("SELECT COUNT(*) FROM sites s WHERE $whereSql");
+    $count->execute($params);
+    $total = (int) $count->fetchColumn();
+    $pageNum = max(1, $pageNum);
+    $offset = ($pageNum - 1) * $per;
+    $stmt = db()->prepare(
+        "SELECT s.*, p.name project_name, p.client_name project_client
+         FROM sites s
+         JOIN projects p ON p.id = s.primary_project_id
          WHERE $whereSql ORDER BY s.updated_at DESC LIMIT $per OFFSET $offset"
     );
     $stmt->execute($params);
@@ -139,11 +253,188 @@ function distinct_project_languages(int $projectId): array
     return array_column($stmt->fetchAll(), 'language');
 }
 
-function normalize_domain(string $domain): string
+function bulk_csv_headers(): array
 {
-    $domain = strtolower(trim($domain));
-    $domain = preg_replace('#^https?://#i', '', $domain);
-    $domain = preg_replace('#^www\.#i', '', $domain);
-    $domain = rtrim(explode('/', $domain)[0], '.');
-    return $domain;
+    return [
+        'domain', 'language', 'country', 'da', 'dr', 'traffic',
+        'order_status', 'admin_comments', 'client_name',
+        'region', 'niche', 'url', 'status',
+        'publisher_quote_price', 'backlink_price', 'currency',
+        'our_mailbox', 'our_contact_name',
+    ];
+}
+
+/**
+ * Stream-import CSV into a project. Supports 10k+ rows via chunked inserts.
+ *
+ * @return array{inserted:int,updated:int,skipped:int,errors:string[]}
+ */
+function bulk_import_sites_csv(int $projectId, string $tmpPath, int $createdBy): array
+{
+    @set_time_limit(0);
+    @ini_set('memory_limit', '512M');
+
+    $fh = fopen($tmpPath, 'rb');
+    if (!$fh) {
+        return ['inserted' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['Could not open CSV file.']];
+    }
+
+    // Strip UTF-8 BOM
+    $first = fgets($fh);
+    if ($first === false) {
+        fclose($fh);
+        return ['inserted' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['Empty CSV.']];
+    }
+    $first = preg_replace('/^\xEF\xBB\xBF/', '', $first);
+    $header = str_getcsv($first);
+    $header = array_map(static fn($h) => strtolower(trim((string) $h)), $header);
+    $map = [];
+    foreach ($header as $i => $name) {
+        $map[$name] = $i;
+    }
+    if (!isset($map['domain'])) {
+        fclose($fh);
+        return ['inserted' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['CSV must include a domain column.']];
+    }
+
+    $validOrder = array_keys(inventory_order_statuses());
+    $validStatus = array_keys(site_statuses());
+
+    $sql = 'INSERT INTO sites (
+              domain, primary_project_id, language, country, da, dr, traffic,
+              order_status, admin_comments, inventory_client_name,
+              region, niche, url, status,
+              publisher_quote_price, backlink_price, currency,
+              our_mailbox, our_contact_name, created_by, assigned_to
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE
+              language=VALUES(language),
+              country=VALUES(country),
+              da=VALUES(da),
+              dr=VALUES(dr),
+              traffic=VALUES(traffic),
+              order_status=VALUES(order_status),
+              admin_comments=VALUES(admin_comments),
+              inventory_client_name=VALUES(inventory_client_name),
+              region=VALUES(region),
+              niche=VALUES(niche),
+              url=VALUES(url),
+              status=VALUES(status),
+              publisher_quote_price=VALUES(publisher_quote_price),
+              backlink_price=VALUES(backlink_price),
+              currency=VALUES(currency),
+              our_mailbox=VALUES(our_mailbox),
+              our_contact_name=VALUES(our_contact_name)';
+    $stmt = db()->prepare($sql);
+
+    $inserted = 0;
+    $updated = 0;
+    $skipped = 0;
+    $errors = [];
+    $line = 1;
+    $batch = 0;
+
+    $cell = static function (array $row, array $map, string $key): string {
+        if (!isset($map[$key])) {
+            return '';
+        }
+        $i = $map[$key];
+        return isset($row[$i]) ? trim((string) $row[$i]) : '';
+    };
+
+    db()->beginTransaction();
+    try {
+        while (($row = fgetcsv($fh)) !== false) {
+            $line++;
+            if ($row === [null] || $row === false) {
+                continue;
+            }
+            // Skip blank lines
+            if (count(array_filter($row, static fn($v) => trim((string) $v) !== '')) === 0) {
+                continue;
+            }
+
+            $domain = normalize_domain($cell($row, $map, 'domain'));
+            if ($domain === '') {
+                $skipped++;
+                if (count($errors) < 30) {
+                    $errors[] = "Line {$line}: missing domain";
+                }
+                continue;
+            }
+
+            $orderStatus = strtolower($cell($row, $map, 'order_status'));
+            if ($orderStatus !== '' && !in_array($orderStatus, $validOrder, true)) {
+                $orderStatus = '';
+            }
+            $status = strtolower($cell($row, $map, 'status') ?: 'draft');
+            if (!in_array($status, $validStatus, true)) {
+                $status = 'draft';
+            }
+
+            $da = $cell($row, $map, 'da');
+            $dr = $cell($row, $map, 'dr');
+            $traffic = $cell($row, $map, 'traffic');
+            $quote = $cell($row, $map, 'publisher_quote_price');
+            $agreed = $cell($row, $map, 'backlink_price');
+
+            // Detect insert vs update
+            $exists = db()->prepare(
+                'SELECT id FROM sites WHERE primary_project_id=? AND domain=? LIMIT 1'
+            );
+            $exists->execute([$projectId, $domain]);
+            $wasExisting = (bool) $exists->fetchColumn();
+
+            try {
+                $stmt->execute([
+                    $domain,
+                    $projectId,
+                    $cell($row, $map, 'language'),
+                    $cell($row, $map, 'country'),
+                    $da === '' ? null : (int) $da,
+                    $dr === '' ? null : (int) $dr,
+                    $traffic === '' ? null : (int) $traffic,
+                    $orderStatus,
+                    $cell($row, $map, 'admin_comments') !== '' ? $cell($row, $map, 'admin_comments') : $cell($row, $map, 'comments'),
+                    $cell($row, $map, 'client_name'),
+                    $cell($row, $map, 'region'),
+                    $cell($row, $map, 'niche'),
+                    $cell($row, $map, 'url'),
+                    $status,
+                    $quote === '' ? null : $quote,
+                    $agreed === '' ? null : $agreed,
+                    $cell($row, $map, 'currency') ?: 'EUR',
+                    $cell($row, $map, 'our_mailbox'),
+                    $cell($row, $map, 'our_contact_name'),
+                    $createdBy,
+                    $createdBy,
+                ]);
+                if ($wasExisting) {
+                    $updated++;
+                } else {
+                    $inserted++;
+                }
+            } catch (Throwable $e) {
+                $skipped++;
+                if (count($errors) < 30) {
+                    $errors[] = "Line {$line} ({$domain}): " . $e->getMessage();
+                }
+            }
+
+            $batch++;
+            if ($batch % 250 === 0) {
+                db()->commit();
+                db()->beginTransaction();
+            }
+        }
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        $errors[] = 'Import aborted: ' . $e->getMessage();
+    }
+    fclose($fh);
+
+    return compact('inserted', 'updated', 'skipped', 'errors');
 }

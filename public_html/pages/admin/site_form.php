@@ -30,6 +30,8 @@ if (!$site) {
         'backlink_price' => '', 'banner_price_yearly' => '',
         'currency' => $project['currency'] ?: 'EUR', 'status' => 'draft',
         'publisher_email' => '', 'our_mailbox' => '', 'our_contact_name' => '',
+        'inventory_client_name' => $project['client_name'] ?? '',
+        'order_status' => '', 'admin_comments' => '',
         'outreach_notes' => '', 'warning_flags' => '', 'assigned_to' => '',
         'primary_project_id' => $projectId,
     ];
@@ -57,8 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $quote = trim((string) post('publisher_quote_price'));
     $quote = $quote === '' ? null : $quote;
     $quoteDate = trim((string) post('publisher_quote_date'));
-    $ourMailbox = trim((string) post('our_mailbox'));
-    $ourContact = trim((string) post('our_contact_name'));
+    $orderStatus = (string) post('order_status');
+    if (!array_key_exists($orderStatus, inventory_order_statuses())) {
+        $orderStatus = '';
+    }
 
     if ($domain === '') {
         flash('error', 'Domain is required.');
@@ -82,8 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) post('currency')) ?: 'EUR',
             $status,
             trim((string) post('publisher_email')),
-            $ourMailbox,
-            $ourContact,
+            trim((string) post('our_mailbox')),
+            trim((string) post('our_contact_name')),
+            trim((string) post('inventory_client_name')),
+            $orderStatus,
+            trim((string) post('admin_comments')),
             trim((string) post('outreach_notes')),
             trim((string) post('warning_flags')),
             post('assigned_to') === '' ? null : (int) post('assigned_to'),
@@ -95,17 +102,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 db()->prepare(
                     'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?,
                      publisher_quote_price=?, publisher_quote_date=?, backlink_price=?, banner_price_yearly=?, currency=?,
-                     status=?, publisher_email=?, our_mailbox=?, our_contact_name=?, outreach_notes=?, warning_flags=?,
-                     assigned_to=?, primary_project_id=? WHERE id=?'
+                     status=?, publisher_email=?, our_mailbox=?, our_contact_name=?,
+                     inventory_client_name=?, order_status=?, admin_comments=?,
+                     outreach_notes=?, warning_flags=?, assigned_to=?, primary_project_id=? WHERE id=?'
                 )->execute($data);
             } else {
                 $data[] = $user['id'];
                 db()->prepare(
                     'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic,
                      publisher_quote_price, publisher_quote_date, backlink_price, banner_price_yearly, currency,
-                     status, publisher_email, our_mailbox, our_contact_name, outreach_notes, warning_flags,
-                     assigned_to, primary_project_id, created_by)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                     status, publisher_email, our_mailbox, our_contact_name,
+                     inventory_client_name, order_status, admin_comments,
+                     outreach_notes, warning_flags, assigned_to, primary_project_id, created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
                 )->execute($data);
                 $id = (int) db()->lastInsertId();
             }
@@ -116,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('index.php?page=admin_project&id=' . $projectId . '&tab=inventory');
         } catch (PDOException $e) {
             if (str_contains($e->getMessage(), 'uniq_project_domain') || str_contains($e->getMessage(), 'Duplicate')) {
-                flash('error', 'This domain already exists in this project. Use Super search.');
+                flash('error', 'This domain already exists in this project.');
             } else {
                 flash('error', 'Could not save site.');
             }
@@ -129,18 +138,10 @@ render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 
 <div class="topbar">
   <div>
     <h1><?= $id ? h($site['domain']) : 'Add inventory site' ?></h1>
-    <p class="muted">Project · <a href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory"><?= h($project['name']) ?></a></p>
+    <p class="muted">Admin-only fields (client name, order status, comments) are hidden from Team Super search.</p>
   </div>
   <div class="actions">
-    <?php if ($id): ?>
-    <form method="post">
-      <?php foreach (['domain','url','region','country','niche','language','dr','da','traffic','publisher_quote_price','publisher_quote_date','backlink_price','banner_price_yearly','currency','status','publisher_email','our_mailbox','our_contact_name','outreach_notes','warning_flags','assigned_to'] as $k): ?>
-        <input type="hidden" name="<?= h($k) ?>" value="<?= h((string) ($site[$k] ?? '')) ?>">
-      <?php endforeach; ?>
-      <input type="hidden" name="reset_agreed" value="1">
-      <button class="btn secondary" type="submit">Reset to Agreed</button>
-    </form>
-    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $projectId ?>">Bulk import</a>
     <a class="btn secondary" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Back</a>
   </div>
 </div>
@@ -150,14 +151,6 @@ render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 
   <div class="form-grid">
     <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
     <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
-    <div><label>Region</label>
-      <select name="region">
-        <option value="">—</option>
-        <?php foreach (regions() as $k => $v): ?>
-          <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
     <div><label>Country</label>
       <select name="country">
         <option value="">—</option>
@@ -167,16 +160,33 @@ render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 
       </select>
     </div>
     <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
+    <div><label>Region</label>
+      <select name="region">
+        <option value="">—</option>
+        <?php foreach (regions() as $k => $v): ?>
+          <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
     <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
     <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
     <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
     <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
+    <div><label>Client name (admin only)</label><input name="inventory_client_name" value="<?= h((string) ($site['inventory_client_name'] ?? '')) ?>"></div>
+    <div><label>Order status (admin only)</label>
+      <select name="order_status">
+        <?php foreach (inventory_order_statuses() as $code => $label): ?>
+          <option value="<?= h($code) ?>" <?= ($site['order_status'] ?? '') === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="full"><label>Admin comments (admin only)</label><textarea name="admin_comments" rows="2"><?= h((string) ($site['admin_comments'] ?? '')) ?></textarea></div>
     <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>"></div>
     <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
     <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>"></div>
     <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
     <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
-    <div><label>Status</label>
+    <div><label>Site status</label>
       <select name="status">
         <?php foreach (site_statuses() as $code => $label): ?>
           <option value="<?= $code ?>" <?= $site['status'] === $code ? 'selected' : '' ?>><?= h($label) ?></option>
@@ -192,12 +202,11 @@ render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 
       </select>
     </div>
     <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
-    <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>" placeholder="outreach1@gmail.com"></div>
-    <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>" placeholder="Name on that inbox"></div>
-    <div class="full"><label>Notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
+    <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>"></div>
+    <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>"></div>
+    <div class="full"><label>Team notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
     <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
   </div>
-  <p class="help">Sites belong only to this project. The same domain can be added again under a different project.</p>
   <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
 </form>
 </div>
