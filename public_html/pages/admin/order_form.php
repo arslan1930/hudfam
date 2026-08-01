@@ -39,8 +39,8 @@ if (!$id) {
 }
 
 $sites = db()->prepare(
-    'SELECT id, domain, backlink_price, status FROM sites
-     WHERE primary_project_id = ? OR status IN ("agreed","processing","sent")
+    'SELECT id, domain, backlink_price, status, our_mailbox FROM sites
+     WHERE primary_project_id = ?
      ORDER BY domain LIMIT 500'
 );
 $sites->execute([(int) $client['project_id']]);

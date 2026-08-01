@@ -82,27 +82,31 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)')->execute([$rexboId, $teamId]);
         $pdo->prepare('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)')->execute([$xywId, $teamId]);
 
-        // Inventory demo sites (not tied to projects)
+        // Per-project inventory demos (same domain can exist under another project)
         $sites = [
-            // domain, country, region, language, niche, dr, da, traffic, quote, quote_date, agreed, status, currency
-            ['de-finance-news.example', 'Germany', 'europe', 'German', 'Finance', 42, 38, 22000, 140, date('Y-m-d', strtotime('-14 days')), 120, 'agreed', 'EUR'],
-            ['berlin-biz-daily.example', 'Germany', 'europe', 'German', 'Business', 35, 30, 9000, 100, date('Y-m-d', strtotime('-7 days')), 90, 'agreed', 'EUR'],
-            ['us-money-wire.example', 'United States', 'north_america', 'English', 'Finance', 55, 48, 80000, 200, date('Y-m-d', strtotime('-21 days')), 180, 'agreed', 'USD'],
+            // domain, projectId, country, region, language, niche, dr, da, traffic, quote, quote_date, agreed, status, currency, mailbox, contact
+            ['de-finance-news.example', $rexboId, 'Germany', 'europe', 'German', 'Finance', 42, 38, 22000, 140, date('Y-m-d', strtotime('-14 days')), 120, 'agreed', 'EUR', 'outreach.de@gmail.com', 'Alex DE'],
+            ['berlin-biz-daily.example', $rexboId, 'Germany', 'europe', 'German', 'Business', 35, 30, 9000, 100, date('Y-m-d', strtotime('-7 days')), 90, 'agreed', 'EUR', 'outreach.de@gmail.com', 'Alex DE'],
+            ['us-money-wire.example', $xywId, 'United States', 'north_america', 'English', 'Finance', 55, 48, 80000, 200, date('Y-m-d', strtotime('-21 days')), 180, 'agreed', 'USD', 'finance.outreach@gmail.com', 'Alex US'],
+            // Same domain copied into another project with different mailbox/price
+            ['us-money-wire.example', $rexboId, 'United States', 'north_america', 'English', 'Finance', 55, 48, 80000, 190, date('Y-m-d', strtotime('-10 days')), 150, 'negotiating', 'EUR', 'outreach.de@gmail.com', 'Alex DE'],
         ];
         $ins = $pdo->prepare(
-            'INSERT INTO sites (domain, country, region, language, niche, dr, da, traffic,
-             publisher_quote_price, publisher_quote_date, backlink_price, status, assigned_to, created_by, primary_project_id, currency)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)
+            'INSERT INTO sites (domain, primary_project_id, country, region, language, niche, dr, da, traffic,
+             publisher_quote_price, publisher_quote_date, backlink_price, status, assigned_to, created_by, currency,
+             our_mailbox, our_contact_name)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
              ON DUPLICATE KEY UPDATE status=VALUES(status),
                publisher_quote_price=VALUES(publisher_quote_price),
                publisher_quote_date=VALUES(publisher_quote_date),
                backlink_price=VALUES(backlink_price),
-               country=VALUES(country), language=VALUES(language)'
+               our_mailbox=VALUES(our_mailbox),
+               our_contact_name=VALUES(our_contact_name)'
         );
         foreach ($sites as $s) {
             $ins->execute([
-                $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7],
-                $s[8], $s[9], $s[10], $s[11], $teamId, $teamId, $s[12],
+                $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7], $s[8],
+                $s[9], $s[10], $s[11], $s[12], $teamId, $teamId, $s[13], $s[14], $s[15],
             ]);
         }
 
@@ -121,7 +125,7 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
             "SELECT id FROM clients WHERE project_id={$rexboId} AND email='hans@rexbo.de'"
         )->fetchColumn();
         $siteId = (int) $pdo->query(
-            "SELECT id FROM sites WHERE domain='de-finance-news.example'"
+            "SELECT id FROM sites WHERE domain='de-finance-news.example' AND primary_project_id={$rexboId}"
         )->fetchColumn();
         $existsOrder = (int) $pdo->query(
             "SELECT COUNT(*) FROM publication_orders WHERE client_id={$clientId}"

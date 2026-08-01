@@ -13,8 +13,8 @@ $region = (string) get('region');
 $country = trim((string) get('country'));
 $language = trim((string) get('language'));
 
-$where = ["s.status='agreed'"];
-$params = [];
+$where = ["s.status='agreed'", 's.primary_project_id = ?'];
+$params = [$projectId];
 apply_site_geo_filters($where, $params, compact('region', 'country', 'language'));
 $whereSql = implode(' AND ', $where);
 $agreedStmt = db()->prepare("SELECT s.* FROM sites s WHERE $whereSql ORDER BY s.domain");
@@ -57,14 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $countryOptions = list_countries(null, true);
-$langs = distinct_site_languages();
+$langs = distinct_project_languages($projectId);
 
 render_header('Send pack', 'admin');
 ?>
 <div class="topbar">
   <div>
     <h1>Send pack · <?= h($project['name']) ?></h1>
-    <p class="muted">Filter inventory by country/language, then select agreed sites.</p>
+    <p class="muted">Agreed sites from this project’s inventory only.</p>
   </div>
 </div>
 
@@ -118,6 +118,7 @@ render_header('Send pack', 'admin');
           · DR <?= h((string) ($site['dr'] ?? '—')) ?>
           · quote <?= money_or_dash($site['publisher_quote_price'] ?? null) ?>
           · agreed <?= money_or_dash($site['backlink_price']) ?> <?= h($site['currency']) ?>
+          · mailbox <?= h($site['our_mailbox'] ?: '—') ?> (<?= h($site['our_contact_name'] ?: '—') ?>)
           <?php if ($site['warning_flags']): ?><br><span class="badge rejected"><?= h($site['warning_flags']) ?></span><?php endif; ?>
           <?php foreach ($history as $hrow): ?>
             <br><span class="muted"><?= h($hrow['item_status']) ?><?php if ($hrow['reject_reason_code']): ?> · <?= h(reject_reasons()[$hrow['reject_reason_code']] ?? $hrow['reject_reason_code']) ?><?php endif; ?><?php if ($hrow['reject_comment']): ?> — <?= h($hrow['reject_comment']) ?><?php endif; ?></span>

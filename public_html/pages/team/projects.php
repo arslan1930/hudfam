@@ -11,20 +11,27 @@ if (is_admin($user)) {
     $stmt->execute([$uid]);
     $projects = $stmt->fetchAll();
 }
-render_header('My projects', 'team');
+$counts = [];
+foreach ($projects as $p) {
+    $c = db()->prepare('SELECT COUNT(*) FROM sites WHERE primary_project_id=?');
+    $c->execute([(int) $p['id']]);
+    $counts[(int) $p['id']] = (int) $c->fetchColumn();
+}
+render_header('Projects', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>My project folders</h1>
-    <p class="muted">Read briefs and results only. Sites are added in Inventory / Country folders.</p>
+    <h1>Project inventories</h1>
+    <p class="muted">Each project has its own site list. Super search only looks inside the project you open.</p>
   </div>
 </div>
 <div class="folders">
 <?php foreach ($projects as $p): ?>
-  <a class="folder" href="index.php?page=team_project&id=<?= (int)$p['id'] ?>">
+  <a class="folder" href="index.php?page=team_project&id=<?= (int)$p['id'] ?>&tab=inventory">
     <h3><?= h($p['name']) ?></h3>
     <p class="muted"><?= h($p['niche'] ?: '—') ?></p>
     <p><?= h($p['countries'] ?: '—') ?> · <?= money_or_dash($p['price_min']) ?>–<?= money_or_dash($p['price_max']) ?> <?= h($p['currency']) ?></p>
+    <p><span class="badge"><?= (int) ($counts[(int)$p['id']] ?? 0) ?> sites</span></p>
   </a>
 <?php endforeach; ?>
 <?php if (!$projects): ?><div class="card">No assigned projects.</div><?php endif; ?>

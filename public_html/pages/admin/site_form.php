@@ -1,22 +1,40 @@
 <?php
 $user = require_admin();
 $id = (int) get('id');
-$site = [
-    'domain' => '', 'url' => '', 'region' => '', 'country' => '', 'niche' => '', 'language' => '',
-    'dr' => '', 'da' => '', 'traffic' => '',
-    'publisher_quote_price' => '', 'publisher_quote_date' => '',
-    'backlink_price' => '', 'banner_price_yearly' => '',
-    'currency' => 'EUR', 'status' => 'draft', 'publisher_email' => '', 'outreach_notes' => '',
-    'warning_flags' => '', 'assigned_to' => '', 'primary_project_id' => '',
-];
+$projectId = (int) get('project_id');
+
+$site = null;
 if ($id) {
     $stmt = db()->prepare('SELECT * FROM sites WHERE id=?');
     $stmt->execute([$id]);
-    $found = $stmt->fetch();
-    if ($found) {
-        $site = $found;
+    $site = $stmt->fetch();
+    if (!$site) {
+        flash('error', 'Site not found.');
+        redirect('index.php?page=admin_projects');
     }
+    $projectId = (int) $site['primary_project_id'];
 }
+
+if (!$projectId) {
+    flash('error', 'Choose a project, then add sites to its inventory.');
+    redirect('index.php?page=admin_projects');
+}
+
+$project = require_project_access($projectId, $user);
+
+if (!$site) {
+    $site = [
+        'domain' => '', 'url' => '', 'region' => '', 'country' => '', 'niche' => '', 'language' => '',
+        'dr' => '', 'da' => '', 'traffic' => '',
+        'publisher_quote_price' => '', 'publisher_quote_date' => '',
+        'backlink_price' => '', 'banner_price_yearly' => '',
+        'currency' => $project['currency'] ?: 'EUR', 'status' => 'draft',
+        'publisher_email' => '', 'our_mailbox' => '', 'our_contact_name' => '',
+        'outreach_notes' => '', 'warning_flags' => '', 'assigned_to' => '',
+        'primary_project_id' => $projectId,
+    ];
+}
+
 $teamUsers = db()->query("SELECT id, username FROM users WHERE role='team' AND is_active=1 ORDER BY username")->fetchAll();
 $countryOptions = list_countries(null, true);
 $history = [];
@@ -32,13 +50,16 @@ if ($id) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $domain = strtolower(trim((string) post('domain')));
+    $domain = normalize_domain((string) post('domain'));
     $status = (string) post('status');
     $price = trim((string) post('backlink_price'));
     $price = $price === '' ? null : $price;
     $quote = trim((string) post('publisher_quote_price'));
     $quote = $quote === '' ? null : $quote;
     $quoteDate = trim((string) post('publisher_quote_date'));
+    $ourMailbox = trim((string) post('our_mailbox'));
+    $ourContact = trim((string) post('our_contact_name'));
+
     if ($domain === '') {
         flash('error', 'Domain is required.');
     } elseif ($status === 'agreed' && $price === null) {
@@ -61,50 +82,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) post('currency')) ?: 'EUR',
             $status,
             trim((string) post('publisher_email')),
+            $ourMailbox,
+            $ourContact,
             trim((string) post('outreach_notes')),
             trim((string) post('warning_flags')),
             post('assigned_to') === '' ? null : (int) post('assigned_to'),
+            $projectId,
         ];
-        if ($id) {
-            $data[] = $id;
-            db()->prepare(
-                'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?,
-                 publisher_quote_price=?, publisher_quote_date=?, backlink_price=?, banner_price_yearly=?, currency=?,
-                 status=?, publisher_email=?, outreach_notes=?, warning_flags=?, assigned_to=? WHERE id=?'
-            )->execute($data);
-        } else {
-            $data[] = $user['id'];
-            db()->prepare(
-                'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic,
-                 publisher_quote_price, publisher_quote_date, backlink_price, banner_price_yearly, currency,
-                 status, publisher_email, outreach_notes, warning_flags, assigned_to, primary_project_id, created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)'
-            )->execute($data);
-            $id = (int) db()->lastInsertId();
+        try {
+            if ($id) {
+                $data[] = $id;
+                db()->prepare(
+                    'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?,
+                     publisher_quote_price=?, publisher_quote_date=?, backlink_price=?, banner_price_yearly=?, currency=?,
+                     status=?, publisher_email=?, our_mailbox=?, our_contact_name=?, outreach_notes=?, warning_flags=?,
+                     assigned_to=?, primary_project_id=? WHERE id=?'
+                )->execute($data);
+            } else {
+                $data[] = $user['id'];
+                db()->prepare(
+                    'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic,
+                     publisher_quote_price, publisher_quote_date, backlink_price, banner_price_yearly, currency,
+                     status, publisher_email, our_mailbox, our_contact_name, outreach_notes, warning_flags,
+                     assigned_to, primary_project_id, created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                )->execute($data);
+                $id = (int) db()->lastInsertId();
+            }
+            if (post('reset_agreed') === '1' && $price !== null) {
+                db()->prepare("UPDATE sites SET status='agreed' WHERE id=?")->execute([$id]);
+            }
+            flash('ok', 'Site saved to project inventory.');
+            redirect('index.php?page=admin_project&id=' . $projectId . '&tab=inventory');
+        } catch (PDOException $e) {
+            if (str_contains($e->getMessage(), 'uniq_project_domain') || str_contains($e->getMessage(), 'Duplicate')) {
+                flash('error', 'This domain already exists in this project. Use Super search.');
+            } else {
+                flash('error', 'Could not save site.');
+            }
         }
-        if (post('reset_agreed') === '1' && $price !== null) {
-            db()->prepare("UPDATE sites SET status='agreed' WHERE id=?")->execute([$id]);
-        }
-        flash('ok', 'Site saved.');
-        redirect('index.php?page=admin_site_form&id=' . $id);
     }
 }
 
-render_header($id ? $site['domain'] : 'Add site', 'admin');
+render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 'admin');
 ?>
 <div class="topbar">
-  <div><h1><?= $id ? h($site['domain']) : 'Add inventory site' ?></h1></div>
-  <?php if ($id): ?>
-  <form method="post" class="actions">
-    <?php foreach ($site as $k => $v): if (is_array($v)) {
-        continue;
-    } ?>
-      <input type="hidden" name="<?= h($k) ?>" value="<?= h((string) $v) ?>">
-    <?php endforeach; ?>
-    <input type="hidden" name="reset_agreed" value="1">
-    <button class="btn secondary" type="submit">Reset to Agreed</button>
-  </form>
-  <?php endif; ?>
+  <div>
+    <h1><?= $id ? h($site['domain']) : 'Add inventory site' ?></h1>
+    <p class="muted">Project · <a href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory"><?= h($project['name']) ?></a></p>
+  </div>
+  <div class="actions">
+    <?php if ($id): ?>
+    <form method="post">
+      <?php foreach (['domain','url','region','country','niche','language','dr','da','traffic','publisher_quote_price','publisher_quote_date','backlink_price','banner_price_yearly','currency','status','publisher_email','our_mailbox','our_contact_name','outreach_notes','warning_flags','assigned_to'] as $k): ?>
+        <input type="hidden" name="<?= h($k) ?>" value="<?= h((string) ($site[$k] ?? '')) ?>">
+      <?php endforeach; ?>
+      <input type="hidden" name="reset_agreed" value="1">
+      <button class="btn secondary" type="submit">Reset to Agreed</button>
+    </form>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Back</a>
+  </div>
 </div>
 <div class="grid" style="grid-template-columns:2fr 1fr">
 <div class="card">
@@ -153,11 +191,13 @@ render_header($id ? $site['domain'] : 'Add site', 'admin');
         <?php endforeach; ?>
       </select>
     </div>
-    <div><label>Publisher / blogger email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
+    <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
+    <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>" placeholder="outreach1@gmail.com"></div>
+    <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>" placeholder="Name on that inbox"></div>
     <div class="full"><label>Notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
     <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
   </div>
-  <p class="help">Publisher quote = price from website owner. Agreed price = final catalog price.</p>
+  <p class="help">Sites belong only to this project. The same domain can be added again under a different project.</p>
   <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
 </form>
 </div>

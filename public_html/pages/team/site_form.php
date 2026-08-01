@@ -1,36 +1,45 @@
 <?php
 $user = require_team();
 $id = (int) get('id');
-$preCountry = trim((string) get('country'));
-$preRegion = trim((string) get('region'));
-$preLang = trim((string) get('language'));
+$projectId = (int) get('project_id');
 
-$site = [
-    'domain' => '', 'url' => '', 'region' => $preRegion, 'country' => $preCountry,
-    'niche' => '', 'language' => $preLang,
-    'dr' => '', 'da' => '', 'traffic' => '',
-    'publisher_quote_price' => '', 'publisher_quote_date' => date('Y-m-d'),
-    'backlink_price' => '', 'banner_price_yearly' => '',
-    'currency' => 'EUR', 'status' => 'draft', 'publisher_email' => '',
-    'outreach_notes' => '', 'warning_flags' => '', 'assigned_to' => $user['id'],
-];
-
+$site = null;
 if ($id) {
     $stmt = db()->prepare('SELECT * FROM sites WHERE id=?');
     $stmt->execute([$id]);
-    $found = $stmt->fetch();
-    if (!$found) {
+    $site = $stmt->fetch();
+    if (!$site) {
         flash('error', 'Site not found.');
-        redirect('index.php?page=team_sites');
+        redirect('index.php?page=team_projects');
     }
-    $canEdit = is_admin($user) || (
-        (int) $found['assigned_to'] === (int) $user['id']
-        && in_array($found['status'], ['draft', 'negotiating', 'agreed'], true)
-    );
-    $site = $found;
-} else {
-    $canEdit = true;
+    $projectId = (int) $site['primary_project_id'];
 }
+
+if (!$projectId) {
+    flash('error', 'Open a project first, then add sites to its inventory.');
+    redirect('index.php?page=team_projects');
+}
+
+$project = require_project_access($projectId, $user);
+
+if (!$site) {
+    $site = [
+        'domain' => '', 'url' => '', 'region' => '', 'country' => trim((string) get('country')),
+        'niche' => '', 'language' => trim((string) get('language')),
+        'dr' => '', 'da' => '', 'traffic' => '',
+        'publisher_quote_price' => '', 'publisher_quote_date' => date('Y-m-d'),
+        'backlink_price' => '', 'banner_price_yearly' => '',
+        'currency' => $project['currency'] ?: 'EUR', 'status' => 'draft',
+        'publisher_email' => '', 'our_mailbox' => '', 'our_contact_name' => '',
+        'outreach_notes' => '', 'warning_flags' => '', 'assigned_to' => $user['id'],
+        'primary_project_id' => $projectId,
+    ];
+}
+
+$canEdit = !$id || is_admin($user) || (
+    (int) $site['assigned_to'] === (int) $user['id']
+    && in_array($site['status'], ['draft', 'negotiating', 'agreed'], true)
+);
 
 $countryOptions = list_countries(null, true);
 $history = [];
@@ -49,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('error', 'This site is locked after Admin sent it.');
         redirect('index.php?page=team_site_form&id=' . $id);
     }
-    $domain = strtolower(trim((string) post('domain')));
+    $domain = normalize_domain((string) post('domain'));
     $status = (string) post('status');
     if (!in_array($status, ['draft', 'negotiating', 'agreed'], true) && !is_admin($user)) {
         $status = 'draft';
@@ -62,8 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $region = (string) post('region');
     $country = trim((string) post('country'));
     $language = trim((string) post('language'));
+    $ourMailbox = trim((string) post('our_mailbox'));
+    $ourContact = trim((string) post('our_contact_name'));
 
-    // Auto-fill language/region from country catalog when empty
     if ($country !== '') {
         foreach ($countryOptions as $c) {
             if (strcasecmp($c['name'], $country) === 0) {
@@ -83,10 +93,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($status === 'agreed' && $agreed === null) {
         flash('error', 'Agreed price is required before status Agreed.');
     } else {
-        $assigned = (int) $user['id'];
-        if (is_admin($user)) {
-            $assigned = $user['id'];
-        }
         $data = [
             $domain,
             trim((string) post('url')),
@@ -104,50 +110,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) post('currency')) ?: 'EUR',
             $status,
             trim((string) post('publisher_email')),
+            $ourMailbox,
+            $ourContact,
             trim((string) post('outreach_notes')),
             trim((string) post('warning_flags')),
-            $assigned,
+            (int) $user['id'],
+            $projectId,
         ];
-        if ($id) {
-            $data[] = $id;
-            db()->prepare(
-                'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?,
-                 publisher_quote_price=?, publisher_quote_date=?, backlink_price=?, banner_price_yearly=?, currency=?,
-                 status=?, publisher_email=?, outreach_notes=?, warning_flags=?, assigned_to=?, primary_project_id=NULL
-                 WHERE id=?'
-            )->execute($data);
-        } else {
-            $data[] = $user['id'];
-            db()->prepare(
-                'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic,
-                 publisher_quote_price, publisher_quote_date, backlink_price, banner_price_yearly, currency,
-                 status, publisher_email, outreach_notes, warning_flags, assigned_to, primary_project_id, created_by)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)'
-            )->execute($data);
-            $id = (int) db()->lastInsertId();
+        try {
+            if ($id) {
+                $data[] = $id;
+                db()->prepare(
+                    'UPDATE sites SET domain=?, url=?, region=?, country=?, niche=?, language=?, dr=?, da=?, traffic=?,
+                     publisher_quote_price=?, publisher_quote_date=?, backlink_price=?, banner_price_yearly=?, currency=?,
+                     status=?, publisher_email=?, our_mailbox=?, our_contact_name=?, outreach_notes=?, warning_flags=?,
+                     assigned_to=?, primary_project_id=? WHERE id=?'
+                )->execute($data);
+            } else {
+                $data[] = $user['id'];
+                db()->prepare(
+                    'INSERT INTO sites (domain, url, region, country, niche, language, dr, da, traffic,
+                     publisher_quote_price, publisher_quote_date, backlink_price, banner_price_yearly, currency,
+                     status, publisher_email, our_mailbox, our_contact_name, outreach_notes, warning_flags,
+                     assigned_to, primary_project_id, created_by)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                )->execute($data);
+                $id = (int) db()->lastInsertId();
+            }
+            flash('ok', 'Saved to project inventory.');
+            redirect('index.php?page=team_project&id=' . $projectId . '&tab=inventory');
+        } catch (PDOException $e) {
+            if (str_contains($e->getMessage(), 'uniq_project_domain') || str_contains($e->getMessage(), 'Duplicate')) {
+                flash('error', 'This domain is already in this project inventory. Use Super search to find it.');
+            } else {
+                flash('error', 'Could not save site.');
+            }
         }
-        flash('ok', 'Inventory site saved.');
-        if ($country !== '') {
-            redirect('index.php?page=team_country&name=' . urlencode($country));
-        }
-        redirect('index.php?page=team_site_form&id=' . $id);
     }
 }
 
-render_header($id ? $site['domain'] : 'Add inventory site', 'team');
+render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add inventory site' ?></h1>
-    <p class="muted"><?= $canEdit ? 'Catalog only — contact the website owner/blogger, then save their quote and agreed price.' : 'Read-only — pipeline controlled by Admin.' ?></p>
+    <h1><?= $id ? h($site['domain']) : 'Add site' ?></h1>
+    <p class="muted">Project inventory · <a href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory"><?= h($project['name']) ?></a></p>
   </div>
+  <a class="btn secondary" href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory">Back to inventory</a>
 </div>
 <div class="grid" style="grid-template-columns:2fr 1fr">
 <div class="card">
 <?php if ($canEdit): ?>
 <form method="post">
   <div class="form-grid">
-    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
+    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com"></div>
     <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
     <div><label>Region</label>
       <select name="region">
@@ -173,9 +189,9 @@ render_header($id ? $site['domain'] : 'Add inventory site', 'team');
     <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
     <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
     <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
-    <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>" placeholder="Price website owner gave"></div>
+    <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>"></div>
     <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
-    <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>" placeholder="Final negotiated price"></div>
+    <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>"></div>
     <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
     <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
     <div><label>Status</label>
@@ -185,12 +201,14 @@ render_header($id ? $site['domain'] : 'Add inventory site', 'team');
         <?php endforeach; ?>
       </select>
     </div>
-    <div><label>Publisher / blogger email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
+    <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>" placeholder="blogger@site.com"></div>
+    <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>" placeholder="outreach1@gmail.com" required></div>
+    <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>" placeholder="Name on that inbox / signature" required></div>
     <div class="full"><label>Notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
     <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
   </div>
-  <p class="help">Publisher quote = price from the website owner. Agreed price = final deal. Status <strong>Agreed</strong> requires an agreed price. Sites stay in inventory (not inside projects).</p>
-  <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save to inventory</button></p>
+  <p class="help"><strong>Our Gmail / mailbox</strong> = which of your inboxes got the blogger’s reply, so teammates know where to continue the chat.</p>
+  <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save to project inventory</button></p>
 </form>
 <script>
 (function(){
@@ -209,9 +227,10 @@ render_header($id ? $site['domain'] : 'Add inventory site', 'team');
 <?php else: ?>
   <table>
     <tr><th>Country / language</th><td><?= h($site['country']) ?> · <?= h($site['language']) ?></td></tr>
-    <tr><th>DR / DA / Traffic</th><td><?= h((string) $site['dr']) ?> / <?= h((string) $site['da']) ?> / <?= h((string) $site['traffic']) ?></td></tr>
     <tr><th>Publisher quote</th><td><?= money_or_dash($site['publisher_quote_price'] ?? null) ?> on <?= h((string) ($site['publisher_quote_date'] ?? '—')) ?></td></tr>
     <tr><th>Agreed price</th><td><?= money_or_dash($site['backlink_price']) ?> <?= h($site['currency']) ?></td></tr>
+    <tr><th>Blogger email</th><td><?= h($site['publisher_email'] ?: '—') ?></td></tr>
+    <tr><th>Our mailbox</th><td><?= h(($site['our_mailbox'] ?? '') ?: '—') ?> · <?= h(($site['our_contact_name'] ?? '') ?: '—') ?></td></tr>
     <tr><th>Status</th><td><?= badge($site['status']) ?></td></tr>
     <tr><th>Notes</th><td><?= h($site['outreach_notes'] ?: '—') ?></td></tr>
   </table>

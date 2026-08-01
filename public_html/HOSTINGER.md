@@ -37,14 +37,14 @@ Do **not** upload the Django files (`manage.py`, `core/`, etc.) into `public_htm
 Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
-1. Admin creates project folders and client email folders; manages **Countries**
-2. **Team** works only in **Inventory / Country folders** (not inside projects)
-3. Team contacts website owners → save **Publisher quote + date** and **Agreed price**
-4. Admin sends packs from agreed inventory (filter by country/language)
-5. Admin publication orders: article URL, date sent, client price, live URL → complete + CSV export
+1. Admin creates a **project** (client campaign) and builds **that project’s inventory**
+2. Team opens the project → **Super search** (this project only) → add/filter sites
+3. On each site: **publisher quote + agreed price**, plus **Our Gmail/mailbox + contact name** (which inbox got the blogger reply)
+4. Same domain can exist in multiple projects (separate copies / prices / mailboxes)
+5. Admin sends packs from **that project’s** agreed sites; publication orders + CSV as before
 
 ### Already installed earlier?
-Open `upgrade.php` once (clients/orders + countries + quote fields), then delete it.
+Open `upgrade.php` once (clients/orders, countries, quote fields, per-project uniqueness, our-mailbox), then delete it.
 
 ## Troubleshooting
 | Problem | Fix |
