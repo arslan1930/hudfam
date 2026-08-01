@@ -23,7 +23,7 @@ render_header('Admin dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['username']) ?> — create a project, build its inventory, then send packs.</p>
+    <p class="muted">Hello <?= h($user['username']) ?> — manage projects, catalog, and client orders.</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=admin_project_form">New project</a>
@@ -32,18 +32,29 @@ render_header('Admin dashboard', 'admin');
     <a class="btn secondary" href="index.php?page=admin_orders_export">Orders CSV</a>
   </div>
 </div>
+
+<?php
+render_workflow([
+    ['label' => 'Create project', 'href' => 'index.php?page=admin_project_form', 'hint' => 'Folder + requirements'],
+    ['label' => 'Build catalog', 'href' => 'index.php?page=admin_sites', 'hint' => 'Import or add priced sites'],
+    ['label' => 'Send pack', 'href' => 'index.php?page=admin_projects', 'hint' => 'Agreed sites to client'],
+    ['label' => 'Track orders', 'href' => 'index.php?page=admin_orders_export', 'hint' => 'Publication CSV'],
+]);
+render_glossary('admin');
+?>
+
 <div class="grid">
   <div class="card stat"><span class="muted">Active projects</span><strong><?= $activeProjects ?></strong></div>
-  <div class="card stat"><span class="muted">Agreed (all projects)</span><strong><?= $agreed ?></strong></div>
+  <div class="card stat"><span class="muted">Agreed (catalog)</span><strong><?= $agreed ?></strong></div>
   <div class="card stat"><span class="muted">Processing</span><strong><?= $processing ?></strong></div>
 </div>
 <div class="card">
-  <h2>Sites by status</h2>
+  <h2>Catalog sites by status</h2>
   <div class="actions" style="margin-top:0.7rem">
     <?php foreach ($counts as $status => $c): ?>
-      <span class="badge <?= h($status) ?>"><?= h($status) ?> · <?= $c ?></span>
+      <?= badge((string) $status) ?> <span class="muted" style="margin-right:0.6rem">· <?= $c ?></span>
     <?php endforeach; ?>
-    <?php if (!$counts): ?><p class="muted">No sites yet.</p><?php endif; ?>
+    <?php if (!$counts): ?><p class="muted">No catalog sites yet.</p><?php endif; ?>
   </div>
 </div>
 <div class="grid" style="grid-template-columns:1fr 1fr">

@@ -42,7 +42,7 @@ render_header('Bulk import', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Bulk inventory import</h1>
+    <h1>Bulk catalog import</h1>
     <p class="muted">Upload 10,000+ sites via CSV into a project. Duplicate domains in the same project are updated.</p>
   </div>
   <div class="actions">
@@ -108,7 +108,7 @@ render_header('Bulk import', 'admin');
     </ul>
   <?php endif; ?>
   <?php if ($projectId): ?>
-    <p class="actions"><a class="btn" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Open project inventory</a></p>
+    <p class="actions"><a class="btn" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Open project catalog</a></p>
   <?php endif; ?>
 </div>
 <?php endif; ?>

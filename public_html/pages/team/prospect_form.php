@@ -75,8 +75,8 @@ render_header($id ? $site['domain'] : 'Add prospect', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add one prospect site' ?></h1>
-    <p class="muted">Prospect inventory only (no prices). Prefer <a href="index.php?page=team_prospect_check">bulk check</a> for lists.</p>
+    <h1><?= $id ? h($site['domain']) : 'Add one prospect' ?></h1>
+    <p class="muted">Prospects only (no prices). Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
   </div>
   <a class="btn secondary" href="index.php?page=team_prospects">Back</a>
 </div>

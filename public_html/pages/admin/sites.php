@@ -31,12 +31,16 @@ $qs = http_build_query(array_filter([
     'project_id' => $projectId ?: '',
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Inventory', 'admin');
+render_header('Catalog', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Catalog'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1>Admin inventory</h1>
-    <p class="muted"><?= $total ?> sites · language, country, DA/DR/traffic, order status, comments, client name</p>
+    <h1>Catalog</h1>
+    <p class="muted"><?= $total ?> priced sites across projects · language, country, metrics, order status, client name</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=admin_bulk_import">Bulk import CSV</a>

@@ -21,8 +21,8 @@ render_header('Prospects', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Prospect inventory (Team outreach list)</h1>
-    <p class="muted"><?= $total ?> sites · no prices · Team checks uniqueness here before adding</p>
+    <h1>Prospects</h1>
+    <p class="muted"><?= $total ?> sites · Team outreach list · no prices · read-only here</p>
   </div>
 </div>
 <form class="card filters" method="get">
@@ -55,8 +55,8 @@ render_header('Prospects', 'admin');
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
-      <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
-        <option value="<?= $st ?>" <?= $status === $st ? 'selected' : '' ?>><?= $st ?></option>
+      <?php foreach (prospect_statuses() as $code => $label): ?>
+        <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
       <?php endforeach; ?>
     </select>
   </div>

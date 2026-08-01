@@ -49,10 +49,14 @@ $qs = http_build_query($qsBase);
 
 render_header($project['name'], 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Projects', 'href' => 'index.php?page=team_projects'],
+    ['label' => $project['name']],
+]); ?>
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted">Work this project’s list below. Super search checks the whole inventory for duplicates — site details only.</p>
+    <p class="muted">Work this project’s catalog below. Super search checks the whole catalog for duplicates — site metrics only.</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=team_site_form&project_id=<?= $id ?>">Add site</a>
@@ -64,7 +68,7 @@ render_header($project['name'], 'team');
   <input type="hidden" name="page" value="team_project">
   <input type="hidden" name="id" value="<?= $id ?>">
   <input type="hidden" name="tab" value="inventory">
-  <label for="sq">Super search — already in our database?</label>
+  <label for="sq">Super search — already in the catalog?</label>
   <div class="super-search-row">
     <input id="sq" name="sq" value="<?= h($superQ) ?>" autofocus placeholder="example.com">
     <button class="btn" type="submit">Search</button>
@@ -91,7 +95,7 @@ render_header($project['name'], 'team');
         <td><?= h((string) ($s['dr'] ?? '—')) ?></td>
         <td><?= h((string) ($s['da'] ?? '—')) ?></td>
         <td><?= h((string) ($s['traffic'] ?? '—')) ?></td>
-        <td><span class="badge agreed">Already in inventory</span></td>
+        <td><span class="badge agreed">Already in catalog</span></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$superResults): ?>
@@ -113,8 +117,18 @@ render_header($project['name'], 'team');
 </div>
 
 <div class="tabs">
-  <?php foreach (['inventory','brief','sent','rejected','processing','completed','published'] as $t): ?>
-    <a class="<?= $tab===$t?'active':'' ?>" href="index.php?page=team_project&id=<?= $id ?>&tab=<?= $t ?>"><?= ucfirst($t) ?></a>
+  <?php
+  $tabLabels = [
+      'inventory' => 'Catalog',
+      'brief' => 'Brief',
+      'sent' => 'Sent',
+      'rejected' => 'Rejected',
+      'processing' => 'Processing',
+      'completed' => 'Completed',
+      'published' => 'Published',
+  ];
+  foreach ($tabLabels as $t => $label): ?>
+    <a class="<?= $tab===$t?'active':'' ?>" href="index.php?page=team_project&id=<?= $id ?>&tab=<?= $t ?>"><?= h($label) ?></a>
   <?php endforeach; ?>
 </div>
 

@@ -135,8 +135,9 @@ render_header($id ? 'Edit order' : 'New publication order', 'admin');
     <div><label>Currency</label><input name="currency" value="<?= h($order['currency']) ?>"></div>
     <div><label>Status</label>
       <select name="status">
-        <option value="processing" <?= $order['status']==='processing'?'selected':'' ?>>processing</option>
-        <option value="completed" <?= $order['status']==='completed'?'selected':'' ?>>completed</option>
+        <?php foreach (publication_order_statuses() as $code => $label): ?>
+          <option value="<?= h($code) ?>" <?= $order['status'] === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+        <?php endforeach; ?>
       </select>
     </div>
     <div class="full"><label>Live URL <span class="muted">(blank until published)</span></label><input name="live_url" value="<?= h($order['live_url']) ?>" placeholder="Paste live published URL here"></div>

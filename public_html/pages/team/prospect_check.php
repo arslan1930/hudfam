@@ -39,14 +39,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-render_header('Check & add sites', 'team');
+render_header('Filter & add', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Prospects', 'href' => 'index.php?page=team_prospects'],
+    ['label' => 'Filter & add'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1>Check & add prospect sites</h1>
-    <p class="muted">Paste domains first. We filter against <strong>prospect inventory only</strong> (no prices). Only unique domains can be added.</p>
+    <h1>Filter &amp; add prospects</h1>
+    <p class="muted">Paste domains first. We filter against <strong>Prospects only</strong> (no prices). Only unique domains can be added.</p>
   </div>
-  <a class="btn secondary" href="index.php?page=team_prospects">Prospect inventory</a>
+  <a class="btn secondary" href="index.php?page=team_prospects">Prospects</a>
 </div>
 
 <form class="card" method="post">
@@ -79,7 +84,7 @@ render_header('Check & add sites', 'team');
     <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
   </div>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">1. Filter unique vs prospect inventory</button>
+    <button class="btn" type="submit">1. Filter unique vs Prospects</button>
   </p>
 </form>
 <script>
@@ -109,7 +114,7 @@ render_header('Check & add sites', 'team');
 
 <div class="grid" style="grid-template-columns:1fr 1fr">
   <div class="card">
-    <h2>Already in prospect inventory (do not re-add)</h2>
+    <h2>Already in Prospects (do not re-add)</h2>
     <?php if ($result['existing']): ?>
       <textarea rows="14" readonly><?= h(implode("\n", $result['existing'])) ?></textarea>
     <?php else: ?>
@@ -128,13 +133,13 @@ render_header('Check & add sites', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea rows="14" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">These will be saved into prospect inventory (no prices). Country/language from the form above are applied.</p>
+        <p class="help">These will be saved into Prospects (no prices). Country/language from the form above are applied.</p>
         <p class="actions" style="margin-top:0.8rem">
           <button class="btn" type="submit">2. Add <?= count($result['new']) ?> unique site(s)</button>
         </p>
       </form>
     <?php else: ?>
-      <p class="muted">No new domains — everything is already in prospect inventory.</p>
+      <p class="muted">No new domains — everything is already in Prospects.</p>
     <?php endif; ?>
   </div>
 </div>
