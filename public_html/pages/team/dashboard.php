@@ -67,7 +67,8 @@ render_glossary('team');
     <a class="folder" href="index.php?page=team_project&id=<?= (int) $p['id'] ?>&tab=inventory">
       <h3><?= h($p['name']) ?></h3>
       <p class="muted"><?= h($p['niche'] ?: '—') ?> · <?= h($p['countries'] ?: '—') ?></p>
-      <p><span class="badge"><?= (int) ($counts[(int) $p['id']] ?? 0) ?> catalog sites</span></p>
+      <?php $n = (int) ($counts[(int) $p['id']] ?? 0); ?>
+      <p><span class="badge"><?= $n ?> catalog site<?= $n === 1 ? '' : 's' ?></span></p>
     </a>
   <?php endforeach; ?>
   <?php if (!$projects): ?><p class="muted">No projects assigned.</p><?php endif; ?>

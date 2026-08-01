@@ -40,7 +40,7 @@ render_header('Catalog', 'admin');
 <div class="topbar">
   <div>
     <h1>Catalog</h1>
-    <p class="muted"><?= $total ?> priced sites across projects · language, country, metrics, order status, client name</p>
+    <p class="muted"><?= $total ?> priced site<?= $total === 1 ? '' : 's' ?> across projects · language, country, metrics, order status, client name</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=admin_bulk_import">Bulk import CSV</a>

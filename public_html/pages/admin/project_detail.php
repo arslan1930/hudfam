@@ -79,7 +79,7 @@ render_header($project['name'], 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted"><?= h($project['client_name'] ?: 'Client campaign') ?> · <?= h($project['niche'] ?: '—') ?> · <?= h($project['countries'] ?: '—') ?> · <?= $siteTotal ?> catalog sites</p>
+    <p class="muted"><?= h($project['client_name'] ?: 'Client campaign') ?> · <?= h($project['niche'] ?: '—') ?> · <?= h($project['countries'] ?: '—') ?> · <?= $siteTotal ?> catalog site<?= $siteTotal === 1 ? '' : 's' ?></p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
