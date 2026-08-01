@@ -6,11 +6,11 @@ Plain **PHP + MySQL** app for Hostinger shared hosting (and any PHP host).
 
 ## Features
 
-- Project folders per campaign (`rexbo.de`, `xyw.com`, …)
-- Team adds negotiated sites; Admin sends packs and updates statuses
-- **Client email folders** under each project (name + email)
-- **Publication orders**: article URL, date sent, client price, live URL → mark completed
-- Download CSV spreadsheet of order records
+- **Inventory catalog** — Team adds sites outside projects (country folders by region)
+- **Publisher quote + agreed price** — quote from website owner/blogger + final agreed price/date
+- Project briefs for Team; Admin sends packs from agreed inventory (country/language filters)
+- **Client email folders** under each project
+- **Publication orders**: article URL, date sent, client price, live URL → complete + CSV export
 
 ## Deploy on Hostinger
 
@@ -25,7 +25,7 @@ Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
    - Team: `teammate` / `team123`
 
 ### Already installed an older copy?
-Upload the new files, then open `/upgrade.php` once to add client/order tables, then delete it.
+Upload the new files, then open `/upgrade.php` once (clients/orders + countries + quote fields), then delete it.
 
 ## Local preview (optional)
 

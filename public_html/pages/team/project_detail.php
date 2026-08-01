@@ -42,9 +42,9 @@ render_header($project['name'], 'team');
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted">Statuses are updated by Admin only.</p>
+    <p class="muted">Brief + results only. Add sites in <a href="index.php?page=team_sites">Inventory</a> / <a href="index.php?page=team_countries">Countries</a> — not inside projects.</p>
   </div>
-  <a class="btn" href="index.php?page=team_site_form&project=<?= $id ?>">Add site for this project</a>
+  <a class="btn" href="index.php?page=team_site_form">Add inventory site</a>
 </div>
 <div class="card">
   <div class="grid">
