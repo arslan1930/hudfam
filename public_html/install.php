@@ -16,7 +16,7 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['db_name'] ?? '');
     $user = trim($_POST['db_user'] ?? '');
     $pass = (string) ($_POST['db_pass'] ?? '');
-    $app = trim($_POST['app_name'] ?? 'Hudfam');
+    $app = trim($_POST['app_name'] ?? 'TechxForm');
 
     try {
         if ($name === '' || $user === '') {
@@ -234,14 +234,14 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Install Hudfam</title>
+  <title>Install TechxForm</title>
   <link rel="stylesheet" href="asset.php?f=css/app.css">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
 <div class="login-wrap">
   <div class="login-card">
-    <h1>Hudfam install</h1>
+    <h1>TechxForm install</h1>
     <?php if ($done): ?>
       <p>Installed. <a href="index.php">Go to login</a></p>
       <p class="help">Demo: admin / admin123 · admin2 / admin123 · teammate / team123</p>
@@ -251,7 +251,7 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
       <form method="post">
         <label>App name</label>
-        <input name="app_name" value="Hudfam">
+        <input name="app_name" value="TechxForm">
         <label>DB host</label>
         <input name="db_host" value="localhost" required>
         <label>DB name</label>

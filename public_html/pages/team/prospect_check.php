@@ -8,47 +8,53 @@ $region = '';
 $niche = '';
 $notes = '';
 $result = null;
+$old = ['domains' => [], 'total' => 0, 'truncated' => false];
+$oldText = '';
 
-$old = list_prospect_domain_names(25000);
-$oldText = implode("\n", $old['domains']);
-if ($old['truncated']) {
-    $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = (string) post('action');
-    $raw = (string) post('domains');
-    $country = trim((string) post('country'));
-    $language = trim((string) post('language'));
-    $region = (string) post('region');
-    $niche = trim((string) post('niche'));
-    $notes = trim((string) post('notes'));
-    $domains = parse_domain_list($raw);
-
-    if ($action === 'add_new') {
-        $filter = filter_domains_against_prospects($domains);
-        $selected = $filter['new'];
-        $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-        $msg = "Added {$added['inserted']} unique site(s) to old inventory";
-        if (!empty($added['batch_id'])) {
-            $msg .= " and today’s batch (#{$added['batch_id']})";
-        }
-        $msg .= ". Skipped {$added['skipped']} already known.";
-        flash('ok', $msg);
-        $redir = 'index.php?page=team_prospect_check';
-        if (!empty($added['batch_id'])) {
-            $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
-        }
-        redirect($redir);
+try {
+    $old = list_prospect_domain_names(25000);
+    $oldText = implode("\n", $old['domains']);
+    if ($old['truncated']) {
+        $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
     }
 
-    if (count($domains) > 100000) {
-        flash('error', 'Please paste at most 100,000 domains per run (split into batches).');
-    } elseif (!$domains) {
-        flash('error', 'Paste at least one domain in Box 2.');
-    } else {
-        $result = filter_domains_against_prospects($domains);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $action = (string) post('action');
+        $raw = (string) post('domains');
+        $country = trim((string) post('country'));
+        $language = trim((string) post('language'));
+        $region = (string) post('region');
+        $niche = trim((string) post('niche'));
+        $notes = trim((string) post('notes'));
+        $domains = parse_domain_list($raw);
+
+        if ($action === 'add_new') {
+            $filter = filter_domains_against_prospects($domains);
+            $selected = $filter['new'];
+            $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
+            $msg = "Added {$added['inserted']} unique site(s) to old inventory";
+            if (!empty($added['batch_id'])) {
+                $msg .= " and today’s batch (#{$added['batch_id']})";
+            }
+            $msg .= ". Skipped {$added['skipped']} already known.";
+            flash('ok', $msg);
+            $redir = 'index.php?page=team_prospect_check';
+            if (!empty($added['batch_id'])) {
+                $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
+            }
+            redirect($redir);
+        }
+
+        if (count($domains) > 100000) {
+            flash('error', 'Please paste at most 100,000 domains per run (split into batches).');
+        } elseif (!$domains) {
+            flash('error', 'Paste at least one domain in Box 2.');
+        } else {
+            $result = filter_domains_against_prospects($domains);
+        }
     }
+} catch (Throwable $e) {
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try Filter again.');
 }
 
 render_header('Filter & add', 'team');

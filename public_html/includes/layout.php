@@ -19,22 +19,33 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_sites' => ['admin_site_form'],
         'admin_clients' => ['admin_client', 'admin_client_form', 'admin_order_form'],
         'admin_prospects' => [],
+        'admin_prospect_batches' => [],
         'team_projects' => ['team_project', 'team_site_form', 'team_sites'],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
+        'team_prospect_batches' => ['team_prospect_batch'],
         'team_countries' => ['team_country'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
 
+function brand_logo_url(): string
+{
+    // Prefer PHP asset server (Hostinger-safe), with filemtime cache-bust
+    $file = dirname(__DIR__) . '/assets/img/techxform-logo.svg';
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=img/techxform-logo.svg&v=' . rawurlencode($v));
+}
+
 function render_header(string $title, string $panel = ''): void
 {
-    $app = app_config()['app_name'] ?? 'Hudfam';
+    $app = app_config()['app_name'] ?? 'TechxForm';
     $user = current_user();
     $base = app_base_path();
     // PHP-served CSS first (Hostinger-safe), then static file as second source
     $cssPhp = stylesheet_url();
     $cssFile = asset_url('assets/css/app.css');
+    $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
@@ -56,34 +67,54 @@ function render_header(string $title, string $panel = ''): void
     $roleLabel = $panel === 'admin' ? 'Admin' : 'Team';
 
     echo '<div class="shell"><aside class="sidebar">';
-    echo '<a class="brand" href="' . h($home) . '">' . h($app) . '</a>';
+    echo '<a class="brand" href="' . h($home) . '">';
+    echo '<img class="brand-logo" src="' . h($logo) . '" alt="' . h($app) . '">';
+    echo '<span>' . h($app) . '</span></a>';
     echo '<div class="sidebar-role">' . h($roleLabel) . ' · ' . h((string) ($user['username'] ?? '')) . '</div>';
     echo '<nav aria-label="' . h($roleLabel) . ' navigation">';
 
     if ($panel === 'admin') {
-        $links = [
-            'admin_dashboard' => 'Dashboard',
-            'admin_projects' => 'Projects',
-            'admin_sites' => 'Catalog inventory',
-            'admin_bulk_import' => 'Bulk import',
-            'admin_prospects' => 'Prospects',
-            'admin_prospect_batches' => 'Prospect batches',
-            'admin_clients' => 'Clients',
-            'admin_orders_export' => 'Orders export',
-            'admin_countries' => 'Countries',
-            'admin_published' => 'Published',
-            'admin_users' => 'Admins & users',
+        $groups = [
+            'Overview' => [
+                'admin_dashboard' => 'Dashboard',
+            ],
+            'Catalog & projects' => [
+                'admin_projects' => 'Projects',
+                'admin_sites' => 'Catalog',
+                'admin_bulk_import' => 'Bulk import',
+            ],
+            'Outreach' => [
+                'admin_prospects' => 'Prospects',
+                'admin_prospect_batches' => 'Prospect batches',
+            ],
+            'Clients & orders' => [
+                'admin_clients' => 'Clients',
+                'admin_orders_export' => 'Orders export',
+                'admin_published' => 'Published',
+            ],
+            'Settings' => [
+                'admin_countries' => 'Countries',
+                'admin_users' => 'Admins & users',
+            ],
         ];
     } else {
-        $links = [
-            'team_dashboard' => 'Dashboard',
-            'team_prospect_check' => 'Filter & add sites',
-            'team_prospect_batches' => 'Dated batches',
-            'team_prospects' => 'Old inventory',
-            'team_search' => 'Catalog search',
-            'team_projects' => 'Projects',
-            'team_results' => 'Results feed',
-            'team_countries' => 'Countries',
+        $groups = [
+            'Overview' => [
+                'team_dashboard' => 'Dashboard',
+            ],
+            'Prospects' => [
+                'team_prospect_check' => 'Filter & add',
+                'team_prospects' => 'Prospects',
+                'team_prospect_batches' => 'Dated batches',
+            ],
+            'Catalog' => [
+                'team_search' => 'Super search',
+                'team_projects' => 'Projects',
+                'team_results' => 'Results',
+            ],
+            'Reference' => [
+                'team_countries' => 'Countries',
+            ],
         ];
     }
 
