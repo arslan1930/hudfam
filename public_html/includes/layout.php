@@ -31,10 +31,20 @@ function render_header(string $title, string $panel = ''): void
 {
     $app = app_config()['app_name'] ?? 'Hudfam';
     $user = current_user();
+    $base = app_base_path();
+    // PHP-served CSS first (Hostinger-safe), then static file as second source
+    $cssPhp = stylesheet_url();
+    $cssFile = asset_url('assets/css/app.css');
+
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
-    echo '<link rel="stylesheet" href="assets/css/app.css">';
+    // Helps relative links when the app lives in a subfolder (e.g. /hudfam/)
+    if ($base !== '') {
+        echo '<base href="' . h($base . '/') . '">';
+    }
+    echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
+    echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
     echo '</head><body>';
 
     if (!$user || $panel === '') {

@@ -5,6 +5,64 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+/**
+ * Web path of the folder that contains index.php ('' at domain root, '/subdir' otherwise).
+ * Fixes broken CSS/JS when the app is not at the domain root on Hostinger.
+ */
+function app_base_path(): string
+{
+    static $base = null;
+    if ($base !== null) {
+        return $base;
+    }
+    $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
+    // asset.php / install.php / upgrade.php also live in the app root
+    $dir = dirname($script);
+    if ($dir === '/' || $dir === '\\' || $dir === '.' || $dir === '') {
+        $base = '';
+    } else {
+        $base = rtrim($dir, '/');
+    }
+    return $base;
+}
+
+/** App-root URL for a relative path like "index.php?page=login" or "assets/css/app.css". */
+function app_url(string $path = ''): string
+{
+    $path = ltrim(str_replace('\\', '/', $path), '/');
+    $base = app_base_path();
+    if ($path === '') {
+        return $base === '' ? '/' : $base . '/';
+    }
+    return ($base === '' ? '' : $base) . '/' . $path;
+}
+
+/**
+ * URL for a file under public_html/ (adds ?v=mtime cache-bust).
+ * Prefer this for CSS so styles always load in subfolders / after deploy.
+ */
+function asset_url(string $relativePath): string
+{
+    $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+    $url = app_url($relativePath);
+    $file = dirname(__DIR__) . '/' . $relativePath;
+    if (is_file($file)) {
+        $url .= (str_contains($url, '?') ? '&' : '?') . 'v=' . filemtime($file);
+    }
+    return $url;
+}
+
+/**
+ * Stylesheet URL that always works via PHP (Hostinger-safe fallback).
+ * Use when the static /assets/ path 404s due to upload/path mistakes.
+ */
+function stylesheet_url(): string
+{
+    $file = dirname(__DIR__) . '/assets/css/app.css';
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
+}
+
 function redirect(string $path): void
 {
     header('Location: ' . $path);
