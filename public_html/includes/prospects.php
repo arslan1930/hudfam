@@ -62,9 +62,47 @@ function filter_domains_against_prospects(array $domains): array
 }
 
 /**
- * Insert new prospect domains. Skips any that somehow already exist.
+ * Plain domain names for Box 1 (old inventory). No https.
  *
- * @return array{inserted:int,skipped:int}
+ * @return array{domains:string[],total:int,truncated:bool}
+ */
+function list_prospect_domain_names(int $maxDisplay = 25000): array
+{
+    $total = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
+    $stmt = db()->query(
+        'SELECT domain FROM prospect_sites ORDER BY domain ASC LIMIT ' . (int) $maxDisplay
+    );
+    $domains = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    return [
+        'domains' => $domains,
+        'total' => $total,
+        'truncated' => $total > count($domains),
+    ];
+}
+
+/**
+ * Get or create today's batch for a teammate (one row per user per day).
+ */
+function get_or_create_prospect_batch(int $userId, string $country, string $language, string $region, string $niche, string $notes): int
+{
+    $date = date('Y-m-d');
+    $stmt = db()->prepare('SELECT id FROM prospect_batches WHERE user_id=? AND batch_date=? LIMIT 1');
+    $stmt->execute([$userId, $date]);
+    $id = (int) $stmt->fetchColumn();
+    if ($id) {
+        return $id;
+    }
+    db()->prepare(
+        'INSERT INTO prospect_batches (user_id, batch_date, site_count, country, language, region, niche, notes)
+         VALUES (?,?,0,?,?,?,?,?)'
+    )->execute([$userId, $date, $country, $language, $region, $niche, $notes]);
+    return (int) db()->lastInsertId();
+}
+
+/**
+ * Insert new prospect domains into old inventory + dated batch (both sides).
+ *
+ * @return array{inserted:int,skipped:int,batch_id:int|null}
  */
 function add_prospect_domains(
     array $domains,
@@ -81,10 +119,9 @@ function add_prospect_domains(
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
     if (!$toAdd) {
-        return ['inserted' => 0, 'skipped' => $skipped];
+        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null];
     }
 
-    // Auto region/language from country catalog
     if ($country !== '') {
         foreach (list_countries(null, true) as $c) {
             if (strcasecmp($c['name'], $country) === 0) {
@@ -99,27 +136,48 @@ function add_prospect_domains(
         }
     }
 
+    $batchId = get_or_create_prospect_batch(
+        (int) $user['id'],
+        $country,
+        $language,
+        $region,
+        $niche,
+        $notes
+    );
+
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, country, language, region, niche, notes, status, created_by)
          VALUES (?,?,?,?,?,?,\'new\',?)'
     );
+    $insItem = db()->prepare(
+        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+    );
     $inserted = 0;
     db()->beginTransaction();
     try {
-        $batch = 0;
+        $n = 0;
         foreach ($toAdd as $d) {
             try {
                 $ins->execute([$d, $country, $language, $region, $niche, $notes, $user['id']]);
+                $siteId = (int) db()->lastInsertId();
+                $insItem->execute([$batchId, $d, $siteId ?: null]);
                 $inserted++;
             } catch (PDOException $e) {
                 $skipped++;
             }
-            $batch++;
-            if ($batch % 250 === 0) {
+            $n++;
+            if ($n % 250 === 0) {
                 db()->commit();
                 db()->beginTransaction();
             }
         }
+        $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+        $cnt->execute([$batchId]);
+        $siteCount = (int) $cnt->fetchColumn();
+        db()->prepare(
+            'UPDATE prospect_batches SET site_count=?, country=?, language=?, region=?, niche=?, notes=?, updated_at=NOW() WHERE id=?'
+        )->execute([$siteCount, $country, $language, $region, $niche, $notes, $batchId]);
         db()->commit();
     } catch (Throwable $e) {
         if (db()->inTransaction()) {
@@ -127,7 +185,43 @@ function add_prospect_domains(
         }
         throw $e;
     }
-    return ['inserted' => $inserted, 'skipped' => $skipped];
+    return ['inserted' => $inserted, 'skipped' => $skipped, 'batch_id' => $batchId];
+}
+
+function list_prospect_batches(?int $userId = null, int $limit = 60): array
+{
+    $sql = "SELECT b.*, u.username, u.full_name
+            FROM prospect_batches b
+            JOIN users u ON u.id = b.user_id";
+    $params = [];
+    if ($userId) {
+        $sql .= ' WHERE b.user_id = ?';
+        $params[] = $userId;
+    }
+    $sql .= ' ORDER BY b.batch_date DESC, b.id DESC LIMIT ' . (int) $limit;
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+function get_prospect_batch(int $batchId): ?array
+{
+    $stmt = db()->prepare(
+        "SELECT b.*, u.username, u.full_name
+         FROM prospect_batches b JOIN users u ON u.id=b.user_id WHERE b.id=?"
+    );
+    $stmt->execute([$batchId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function get_prospect_batch_domains(int $batchId, int $limit = 50000): array
+{
+    $stmt = db()->prepare(
+        'SELECT domain FROM prospect_batch_items WHERE batch_id=? ORDER BY domain LIMIT ' . (int) $limit
+    );
+    $stmt->execute([$batchId]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
 function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array

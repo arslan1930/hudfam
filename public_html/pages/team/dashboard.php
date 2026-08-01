@@ -43,8 +43,9 @@ render_header('Team dashboard', 'team');
     <p class="muted">Check & add unique sites into prospect inventory first. Catalog search is for priced inventory (site details only).</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Check & add sites</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Prospect inventory</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Dated batches</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Old inventory</a>
   </div>
 </div>
 

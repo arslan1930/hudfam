@@ -102,11 +102,41 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
              VALUES (?,?,?,?,?,?,?,?)
              ON DUPLICATE KEY UPDATE country=VALUES(country), language=VALUES(language)'
         );
-        foreach ([
+        $demoProspects = [
             ['prospect-blog-de.example', 'Germany', 'German', 'europe', 'Finance', 'Need to email for guest post', 'new'],
             ['outreach-target-us.example', 'United States', 'English', 'north_america', 'Business', 'Cold outreach', 'contacting'],
-        ] as $pr) {
+        ];
+        foreach ($demoProspects as $pr) {
             $prospectIns->execute([$pr[0], $pr[1], $pr[2], $pr[3], $pr[4], $pr[5], $pr[6], $teamId]);
+        }
+        // Demo dated batch (yesterday) so Dated batches page has an example
+        $pdo->prepare(
+            'INSERT INTO prospect_batches (user_id, batch_date, site_count, country, language, region, niche, notes)
+             VALUES (?,?,?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE site_count=VALUES(site_count)'
+        )->execute([
+            $teamId,
+            date('Y-m-d', strtotime('-1 day')),
+            2,
+            'Germany',
+            'German',
+            'europe',
+            'Finance',
+            'Demo batch from install',
+        ]);
+        $demoBatchId = (int) $pdo->query(
+            'SELECT id FROM prospect_batches WHERE user_id=' . (int) $teamId . ' ORDER BY id DESC LIMIT 1'
+        )->fetchColumn();
+        if ($demoBatchId) {
+            $itemIns = $pdo->prepare(
+                'INSERT IGNORE INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)'
+            );
+            foreach ($demoProspects as $pr) {
+                $sid = (int) $pdo->query(
+                    "SELECT id FROM prospect_sites WHERE domain=" . $pdo->quote($pr[0])
+                )->fetchColumn();
+                $itemIns->execute([$demoBatchId, $pr[0], $sid ?: null]);
+            }
         }
 
         // Per-project inventory demos (same domain can exist under another project)
@@ -213,7 +243,7 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
     <h1>Hudfam install</h1>
     <?php if ($done): ?>
       <p>Installed. <a href="index.php">Go to login</a></p>
-      <p class="help">Demo: admin / admin123 · teammate / team123</p>
+      <p class="help">Demo: admin / admin123 · admin2 / admin123 · teammate / team123</p>
       <p class="help"><strong>Delete install.php now</strong> for security.</p>
     <?php else: ?>
       <p class="muted">Enter MySQL details from Hostinger hPanel → Databases.</p>
