@@ -28,13 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $domains = parse_domain_list($raw);
 
     if ($action === 'add_new') {
-        $projectFilter = filter_domains_against_project($projectId, $domains);
-        $globalFilter = filter_domains_against_catalogs_and_inventory($projectFilter['new']);
-        $toAdd = $globalFilter['new'];
-        $skipped = count($projectFilter['existing']) + count($globalFilter['existing']);
+        // Team path: add_domains_to_project also skips catalogs + Our inventory
         $added = add_domains_to_project(
             $projectId,
-            $toAdd,
+            $domains,
             $user,
             $country,
             $language,
@@ -42,10 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $niche,
             $notes
         );
-        $skipped += max(0, $added['skipped'] - 0);
         flash(
             'ok',
-            "Added {$added['inserted']} unique site(s) to {$project['name']}. Skipped {$skipped} already known (this project, other catalogs, or Our inventory)."
+            "Added {$added['inserted']} unique site(s) to {$project['name']}. Skipped {$added['skipped']} already known (this project, other catalogs, or Our inventory)."
         );
         $redirCountry = $country !== '' ? '&sheet=' . urlencode($country) : '';
         redirect('index.php?page=team_project&id=' . $projectId . '&tab=inventory' . $redirCountry);

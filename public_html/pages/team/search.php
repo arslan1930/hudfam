@@ -14,10 +14,10 @@ render_header('Search all sheets', 'team');
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Search all country sheets</h1>
+    <h1>Search a website before you add it</h1>
     <p class="muted">
-      One search across every project catalog sheet (by country) and Our inventory.
-      Use this <strong>before</strong> Filter &amp; add so you never paste a repeated site.
+      Checks <strong>all project catalogs</strong> + <strong>Our inventory</strong>.
+      Use this before Filter &amp; add so you never paste a repeated site.
     </p>
   </div>
   <a class="btn secondary" href="index.php?page=team_projects">Open a project</a>

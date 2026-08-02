@@ -845,6 +845,8 @@ function team_domain_comments(array $hit, string $rejectCode = ''): array
 
 /**
  * Insert unique domains into a project's catalog (skips already present).
+ * Team callers also skip domains already in any catalog or Our inventory.
+ * Admin callers stay project-scoped so they can seed a new project's Box 1.
  *
  * @return array{inserted:int,skipped:int}
  */
@@ -863,6 +865,11 @@ function add_domains_to_project(
     $check = filter_domains_against_project($projectId, $domains);
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
+    if (!is_admin($user) && $toAdd) {
+        $global = filter_domains_against_catalogs_and_inventory($toAdd);
+        $skipped += count($global['existing']);
+        $toAdd = $global['new'];
+    }
     if (!$toAdd) {
         return ['inserted' => 0, 'skipped' => $skipped];
     }
