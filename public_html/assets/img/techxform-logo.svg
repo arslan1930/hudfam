@@ -1,11 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="TechxForm">
   <defs>
-    <linearGradient id="txf" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="txfBg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#cfe0ff"/>
+      <stop offset="100%" stop-color="#e5e7eb"/>
+    </linearGradient>
+    <linearGradient id="txfMark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6b7280"/>
+      <stop offset="100%" stop-color="#374151"/>
     </linearGradient>
   </defs>
-  <rect width="40" height="40" rx="10" fill="url(#txf)"/>
-  <path d="M8 12h24v4H24v16h-4V16H8v-4z" fill="#1a5cff"/>
-  <path d="M28 22l4 4-4 4" fill="none" stroke="#0b3d91" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="40" height="40" rx="10" fill="url(#txfBg)"/>
+  <path d="M8 12h24v4H24v16h-4V16H8v-4z" fill="url(#txfMark)"/>
+  <path d="M28 22l4 4-4 4" fill="none" stroke="#1f2937" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
