@@ -60,7 +60,7 @@ render_header('Super search', 'team');
         <td><?= h((string) ($s['dr'] ?? '—')) ?></td>
         <td><?= h((string) ($s['da'] ?? '—')) ?></td>
         <td><?= h((string) ($s['traffic'] ?? '—')) ?></td>
-        <td><span class="badge agreed">Already in catalog</span></td>
+        <td><span class="badge agreed">In a project catalog</span></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$results): ?>
