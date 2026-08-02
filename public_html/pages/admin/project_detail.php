@@ -10,6 +10,7 @@ $region = (string) get('region');
 $country = trim((string) get('country'));
 $language = trim((string) get('language'));
 $mailbox = trim((string) get('mailbox'));
+$sheet = (string) get('sheet', 'all');
 $pageNum = max(1, (int) get('p', 1));
 
 $members = db()->prepare(
@@ -19,8 +20,20 @@ $members->execute([$id]);
 $members = $members->fetchAll();
 $collabAdmins = project_collaborating_admins($id);
 
+$countrySheets = project_country_sheets($id, (string) ($project['countries'] ?? ''));
+$emptyCountry = false;
+if ($sheet === '_none') {
+    $emptyCountry = true;
+    $country = '';
+} elseif ($sheet !== 'all' && $sheet !== '') {
+    $country = $sheet;
+}
+
 $superResults = $superQ !== '' ? search_project_inventory($id, $superQ, 40) : [];
-$inventory = project_inventory_query($id, compact('q', 'status', 'region', 'country', 'language', 'mailbox'), $pageNum, 50);
+$inventory = project_inventory_query($id, [
+    'q' => $q, 'status' => $status, 'region' => $region, 'country' => $country,
+    'language' => $language, 'mailbox' => $mailbox, 'empty_country' => $emptyCountry,
+], $pageNum, 50);
 $sites = $inventory['rows'];
 $siteTotal = $inventory['total'];
 $sitePages = $inventory['pages'];
@@ -29,10 +42,13 @@ $langs = distinct_project_languages($id);
 $mailboxes = distinct_project_mailboxes($id);
 $qsBase = array_filter([
     'page' => 'admin_project', 'id' => $id, 'tab' => 'inventory',
+    'sheet' => $sheet !== 'all' ? $sheet : '',
     'q' => $q, 'status' => $status, 'region' => $region,
-    'country' => $country, 'language' => $language, 'mailbox' => $mailbox,
+    'country' => $sheet === 'all' ? $country : '',
+    'language' => $language, 'mailbox' => $mailbox,
 ], fn($v) => $v !== '' && $v !== null);
 $qs = http_build_query($qsBase);
+$sheetLabel = $sheet === 'all' ? 'All countries' : ($sheet === '_none' ? 'No country' : $sheet);
 
 $itemsStmt = db()->prepare(
     "SELECT pi.*, s.domain, s.our_mailbox, s.our_contact_name FROM pitch_items pi
@@ -209,10 +225,36 @@ render_header($project['name'], 'admin');
 <?php if (!$projectClients): ?><div class="card">No client folders yet. Run upgrade.php if tables are missing, then add a client.</div><?php endif; ?>
 </div>
 <?php elseif ($tab === 'inventory'): ?>
+<div class="card">
+  <div class="topbar" style="margin-bottom:0.6rem">
+    <div>
+      <h2>Country sheets</h2>
+      <p class="help">Each country is its own sheet in this project’s catalog. Add sites daily via Filter &amp; add (set Country). Team searches all sheets from one bar.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" href="index.php?page=admin_project_filter&amp;project_id=<?= $id ?><?= $sheet !== 'all' && $sheet !== '_none' ? '&amp;country=' . urlencode($sheet) : '' ?>">Add to sheet</a>
+      <a class="btn secondary" href="index.php?page=admin_bulk_import&amp;project_id=<?= $id ?>">Daily CSV</a>
+    </div>
+  </div>
+  <div class="sheet-tabs">
+    <a class="<?= $sheet === 'all' ? 'active' : '' ?>" href="index.php?page=admin_project&amp;id=<?= $id ?>&amp;tab=inventory&amp;sheet=all">All</a>
+    <?php foreach ($countrySheets as $sh): ?>
+      <?php
+        $key = $sh['is_empty_country'] ? '_none' : $sh['name'];
+        $label = $sh['is_empty_country'] ? 'No country' : $sh['name'];
+      ?>
+      <a class="<?= $sheet === $key ? 'active' : '' ?>" href="index.php?page=admin_project&amp;id=<?= $id ?>&amp;tab=inventory&amp;sheet=<?= urlencode($key) ?>">
+        <?= h($label) ?> <span class="sheet-count"><?= (int) $sh['count'] ?></span>
+      </a>
+    <?php endforeach; ?>
+  </div>
+</div>
+
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_project">
   <input type="hidden" name="id" value="<?= $id ?>">
   <input type="hidden" name="tab" value="inventory">
+  <input type="hidden" name="sheet" value="<?= h($sheet) ?>">
   <div><label>Filter</label><input name="q" value="<?= h($q) ?>"></div>
   <div><label>Status</label>
     <select name="status">
@@ -230,6 +272,7 @@ render_header($project['name'], 'admin');
       <?php endforeach; ?>
     </select>
   </div>
+  <?php if ($sheet === 'all'): ?>
   <div><label>Country</label>
     <select name="country">
       <option value="">All</option>
@@ -238,6 +281,7 @@ render_header($project['name'], 'admin');
       <?php endforeach; ?>
     </select>
   </div>
+  <?php endif; ?>
   <div><label>Language</label>
     <select name="language">
       <option value="">All</option>
@@ -258,10 +302,10 @@ render_header($project['name'], 'admin');
 </form>
 <div class="card">
   <div class="topbar" style="margin-bottom:0.5rem">
-    <p class="muted"><?= $siteTotal ?> site(s) — open a domain to edit DR, traffic, quote &amp; agreed price, order status, comments</p>
+    <p class="muted"><strong><?= h($sheetLabel) ?></strong> · <?= $siteTotal ?> site(s) — open a domain to edit DR, traffic, quote &amp; agreed price</p>
     <div class="actions">
-      <a class="btn" href="index.php?page=admin_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
-      <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk CSV</a>
+      <a class="btn" href="index.php?page=admin_project_filter&amp;project_id=<?= $id ?><?= $sheet !== 'all' && $sheet !== '_none' ? '&amp;country=' . urlencode($sheet) : '' ?>">Filter &amp; add</a>
+      <a class="btn secondary" href="index.php?page=admin_bulk_import&amp;project_id=<?= $id ?>">Bulk CSV</a>
     </div>
   </div>
   <table>

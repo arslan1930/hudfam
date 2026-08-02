@@ -38,10 +38,10 @@ Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
 1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
-2. Admin opens a **project** and seeds its **own catalog** (Filter & add, one site, or CSV) — each project is separate
-3. Admin fills **DR, traffic, quote & agreed (decided) prices** on catalog sites (form or CSV)
-4. **Team → project → Filter & add**: Box 1 = that project’s catalog · Box 2 = new sites → add uniques only for this project
-5. **Team → project search**: see this project’s DR / traffic / quote / agreed; global Super search stays metrics-only across catalogs
+2. Admin opens a **project → Catalog**: country **sheets** (Germany, Austria, …). Fill daily via Filter & add (set Country) or CSV
+3. Admin fills **DR, traffic, quote & agreed prices** on sites in each sheet
+4. **Team → Search all sheets** (one bar): checks every country sheet + Our inventory; shows comments (already have it, used, low traffic, …)
+5. **Team → project → Filter & add**: only domains new across catalogs + inventory; lands in the chosen country sheet
 6. Global **Our inventory** (Prospects) Filter & add stays separate for outreach lists / dated batches
 7. Admin sends packs / publication orders as before
 

@@ -208,11 +208,15 @@ function project_inventory_query(int $projectId, array $filters, int $pageNum = 
         $where[] = 's.inventory_client_name LIKE ?';
         $params[] = '%' . $filters['client_name'] . '%';
     }
-    apply_site_geo_filters($where, $params, [
-        'region' => $filters['region'] ?? '',
-        'country' => $filters['country'] ?? '',
-        'language' => $filters['language'] ?? '',
-    ]);
+    if (!empty($filters['empty_country'])) {
+        $where[] = "(TRIM(COALESCE(s.country,'')) = '')";
+    } else {
+        apply_site_geo_filters($where, $params, [
+            'region' => $filters['region'] ?? '',
+            'country' => $filters['country'] ?? '',
+            'language' => $filters['language'] ?? '',
+        ]);
+    }
     if (!empty($filters['mailbox'])) {
         $where[] = 's.our_mailbox = ?';
         $params[] = $filters['mailbox'];
@@ -574,6 +578,264 @@ function domain_in_project(int $projectId, string $domain): bool
     );
     $stmt->execute([$projectId, $domain]);
     return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Country “sheets” for a project catalog (backed by sites.country).
+ * Includes countries that already have rows, plus names listed on the project brief.
+ *
+ * @return list<array{name:string,count:int,is_empty_country:bool}>
+ */
+function project_country_sheets(int $projectId, string $projectCountriesField = ''): array
+{
+    $counts = [];
+    $stmt = db()->prepare(
+        "SELECT TRIM(country) AS country_name, COUNT(*) AS c
+         FROM sites WHERE primary_project_id=?
+         GROUP BY TRIM(country)
+         ORDER BY CASE WHEN TRIM(country)='' OR country IS NULL THEN 1 ELSE 0 END, country_name"
+    );
+    $stmt->execute([$projectId]);
+    foreach ($stmt->fetchAll() as $row) {
+        $name = trim((string) ($row['country_name'] ?? ''));
+        $counts[$name] = (int) $row['c'];
+    }
+
+    // Suggested sheets from project.countries (e.g. "Germany, Austria")
+    foreach (preg_split('/[,;\/|]+/', $projectCountriesField) ?: [] as $part) {
+        $name = trim($part);
+        if ($name !== '' && !array_key_exists($name, $counts)) {
+            $counts[$name] = 0;
+        }
+    }
+
+    $sheets = [];
+    foreach ($counts as $name => $count) {
+        $sheets[] = [
+            'name' => $name,
+            'count' => $count,
+            'is_empty_country' => $name === '',
+        ];
+    }
+    usort($sheets, static function ($a, $b) {
+        if ($a['is_empty_country'] !== $b['is_empty_country']) {
+            return $a['is_empty_country'] ? 1 : -1;
+        }
+        return strcasecmp($a['name'], $b['name']);
+    });
+    return $sheets;
+}
+
+/**
+ * True if domain exists in Our inventory or any project catalog.
+ */
+function domain_known_globally(string $domain): bool
+{
+    $domain = normalize_domain($domain);
+    if ($domain === '') {
+        return false;
+    }
+    $p = db()->prepare('SELECT 1 FROM prospect_sites WHERE domain=? LIMIT 1');
+    $p->execute([$domain]);
+    if ($p->fetchColumn()) {
+        return true;
+    }
+    $s = db()->prepare('SELECT 1 FROM sites WHERE domain=? LIMIT 1');
+    $s->execute([$domain]);
+    return (bool) $s->fetchColumn();
+}
+
+/**
+ * Split domains into already-known (any catalog or Our inventory) vs new.
+ *
+ * @return array{existing:string[],new:string[],total_input:int}
+ */
+function filter_domains_against_catalogs_and_inventory(array $domains): array
+{
+    @set_time_limit(0);
+    $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    if (!$domains) {
+        return ['existing' => [], 'new' => [], 'total_input' => 0];
+    }
+    $found = [];
+    $chunkSize = 500;
+    for ($i = 0, $n = count($domains); $i < $n; $i += $chunkSize) {
+        $chunk = array_slice($domains, $i, $chunkSize);
+        $ph = implode(',', array_fill(0, count($chunk), '?'));
+        $ps = db()->prepare("SELECT domain FROM prospect_sites WHERE domain IN ($ph)");
+        $ps->execute($chunk);
+        foreach ($ps->fetchAll(PDO::FETCH_COLUMN) as $d) {
+            $found[$d] = true;
+        }
+        $ss = db()->prepare("SELECT domain FROM sites WHERE domain IN ($ph)");
+        $ss->execute($chunk);
+        foreach ($ss->fetchAll(PDO::FETCH_COLUMN) as $d) {
+            $found[$d] = true;
+        }
+    }
+    $existing = [];
+    $new = [];
+    foreach ($domains as $d) {
+        if (isset($found[$d])) {
+            $existing[] = $d;
+        } else {
+            $new[] = $d;
+        }
+    }
+    return [
+        'existing' => $existing,
+        'new' => $new,
+        'total_input' => count($domains),
+    ];
+}
+
+/**
+ * Team pre-add lookup across all country sheets (all projects) + Our inventory.
+ *
+ * @return array{domain:string,in_inventory:bool,catalog_rows:array,comments:string[],partial:array}
+ */
+function lookup_domain_for_team(string $q): array
+{
+    $domain = normalize_domain($q);
+    $out = [
+        'domain' => $domain,
+        'in_inventory' => false,
+        'inventory' => null,
+        'catalog_rows' => [],
+        'comments' => [],
+        'partial' => [],
+    ];
+    if ($domain === '') {
+        return $out;
+    }
+
+    try {
+        $inv = db()->prepare(
+            'SELECT domain, country, language, status, created_at FROM prospect_sites WHERE domain=? LIMIT 1'
+        );
+        $inv->execute([$domain]);
+        $invRow = $inv->fetch();
+        if ($invRow) {
+            $out['in_inventory'] = true;
+            $out['inventory'] = $invRow;
+        }
+    } catch (Throwable $e) {
+        // prospect tables may be missing on old installs
+    }
+
+    $cat = db()->prepare(
+        "SELECT s.id, s.domain, s.country, s.language, s.region, s.niche,
+                s.dr, s.da, s.traffic, s.status, s.warning_flags,
+                s.publisher_quote_price, s.backlink_price, s.currency,
+                s.primary_project_id, p.name AS project_name, s.updated_at
+         FROM sites s
+         JOIN projects p ON p.id = s.primary_project_id
+         WHERE s.domain = ?
+         ORDER BY s.updated_at DESC
+         LIMIT 20"
+    );
+    $cat->execute([$domain]);
+    $out['catalog_rows'] = $cat->fetchAll();
+
+    // Latest reject reason for first catalog hit (if any)
+    $rejectCode = '';
+    if ($out['catalog_rows']) {
+        $siteId = (int) $out['catalog_rows'][0]['id'];
+        $rj = db()->prepare(
+            "SELECT reject_reason_code FROM pitch_items
+             WHERE site_id=? AND item_status='rejected' AND reject_reason_code<>''
+             ORDER BY updated_at DESC LIMIT 1"
+        );
+        $rj->execute([$siteId]);
+        $rejectCode = (string) ($rj->fetchColumn() ?: '');
+    }
+
+    $out['comments'] = team_domain_comments($out, $rejectCode);
+
+    // Partial matches for discovery (metrics only)
+    $like = $domain . '%';
+    $partial = db()->prepare(
+        "SELECT s.domain, MAX(s.country) AS country, MAX(s.language) AS language,
+                MAX(s.dr) AS dr, MAX(s.da) AS da, MAX(s.traffic) AS traffic
+         FROM sites s
+         WHERE s.domain <> ? AND (s.domain LIKE ? OR s.domain LIKE ?)
+         GROUP BY s.domain
+         ORDER BY s.domain ASC
+         LIMIT 15"
+    );
+    $partial->execute([$domain, $like, '%' . $domain . '%']);
+    $out['partial'] = $partial->fetchAll();
+
+    return $out;
+}
+
+/**
+ * @param array{in_inventory:bool,catalog_rows:array} $hit
+ * @return list<string>
+ */
+function team_domain_comments(array $hit, string $rejectCode = ''): array
+{
+    $comments = [];
+    if (!empty($hit['in_inventory'])) {
+        $comments[] = 'Already in Our inventory';
+    }
+    $rows = $hit['catalog_rows'] ?? [];
+    if ($rows) {
+        $comments[] = 'We already have it';
+        $countries = [];
+        foreach ($rows as $r) {
+            $c = trim((string) ($r['country'] ?? ''));
+            if ($c !== '') {
+                $countries[$c] = true;
+            }
+        }
+        if ($countries) {
+            $comments[] = 'Country sheet: ' . implode(', ', array_keys($countries));
+        }
+        $statuses = array_unique(array_map(static fn($r) => (string) ($r['status'] ?? ''), $rows));
+        foreach ($statuses as $st) {
+            if (in_array($st, ['completed', 'processing', 'sent'], true)) {
+                $comments[] = 'Used';
+                break;
+            }
+        }
+        foreach ($statuses as $st) {
+            if ($st === 'blocked') {
+                $comments[] = 'Blocked';
+            }
+            if ($st === 'rejected') {
+                $comments[] = 'Rejected';
+            }
+        }
+        $flags = strtolower(implode(' ', array_column($rows, 'warning_flags')));
+        $minTraffic = null;
+        foreach ($rows as $r) {
+            if ($r['traffic'] !== null && $r['traffic'] !== '') {
+                $t = (int) $r['traffic'];
+                $minTraffic = $minTraffic === null ? $t : min($minTraffic, $t);
+            }
+        }
+        if (
+            $rejectCode === 'low_metrics'
+            || str_contains($flags, 'low traffic')
+            || str_contains($flags, 'low_metrics')
+            || ($minTraffic !== null && $minTraffic < 1000)
+        ) {
+            $comments[] = 'Low traffic';
+        }
+        if ($rejectCode === 'already_used') {
+            $comments[] = 'Already used';
+        } elseif ($rejectCode !== '' && isset(reject_reasons()[$rejectCode])) {
+            $comments[] = reject_reasons()[$rejectCode];
+        }
+        foreach ($rows as $r) {
+            $wf = trim((string) ($r['warning_flags'] ?? ''));
+            if ($wf !== '' && !in_array($wf, $comments, true)) {
+                $comments[] = $wf;
+            }
+        }
+    }
+    return array_values(array_unique($comments));
 }
 
 /**

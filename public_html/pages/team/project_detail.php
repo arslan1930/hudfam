@@ -11,14 +11,28 @@ $region = (string) get('region');
 $country = trim((string) get('country'));
 $language = trim((string) get('language'));
 $mailbox = trim((string) get('mailbox'));
+$sheet = (string) get('sheet', 'all');
 $pageNum = max(1, (int) get('p', 1));
+
+$countrySheets = project_country_sheets($id, (string) ($project['countries'] ?? ''));
+$emptyCountry = false;
+if ($sheet === '_none') {
+    $emptyCountry = true;
+    $country = '';
+} elseif ($sheet !== 'all' && $sheet !== '') {
+    $country = $sheet;
+}
 
 // This project's catalog — metrics + quote/agreed (no admin-only client/comments)
 $superResults = $superQ !== '' ? search_project_inventory_for_team($id, $superQ, 40) : [];
-$inventory = project_inventory_query($id, compact('q', 'status', 'region', 'country', 'language', 'mailbox'), $pageNum, 50);
+$inventory = project_inventory_query($id, [
+    'q' => $q, 'status' => $status, 'region' => $region, 'country' => $country,
+    'language' => $language, 'mailbox' => $mailbox, 'empty_country' => $emptyCountry,
+], $pageNum, 50);
 $rows = $inventory['rows'];
 $total = $inventory['total'];
 $pages = $inventory['pages'];
+$sheetLabel = $sheet === 'all' ? 'All countries' : ($sheet === '_none' ? 'No country' : $sheet);
 
 $countryOptions = list_countries(null, true);
 $langs = distinct_project_languages($id);
@@ -42,8 +56,10 @@ $published = $published->fetchAll();
 
 $qsBase = array_filter([
     'page' => 'team_project', 'id' => $id, 'tab' => 'inventory',
+    'sheet' => $sheet !== 'all' ? $sheet : '',
     'q' => $q, 'status' => $status, 'region' => $region,
-    'country' => $country, 'language' => $language, 'mailbox' => $mailbox,
+    'country' => $sheet === 'all' ? $country : '',
+    'language' => $language, 'mailbox' => $mailbox,
 ], fn($v) => $v !== '' && $v !== null);
 $qs = http_build_query($qsBase);
 
@@ -56,12 +72,12 @@ render_header($project['name'], 'team');
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted">This project has its own catalog. Filter &amp; add checks new sites against Box 1 (this project only).</p>
+    <p class="muted">Catalog is split into country sheets. Search all sheets first from the Team search bar before adding.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
+    <a class="btn" href="index.php?page=team_search">Search all sheets</a>
+    <a class="btn secondary" href="index.php?page=team_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
     <a class="btn secondary" href="index.php?page=team_site_form&project_id=<?= $id ?>">Add one site</a>
-    <a class="btn secondary" href="index.php?page=team_search">Super search</a>
   </div>
 </div>
 
@@ -156,10 +172,33 @@ render_header($project['name'], 'team');
 </div>
 
 <?php elseif ($tab === 'inventory'): ?>
+<div class="card">
+  <div class="topbar" style="margin-bottom:0.6rem">
+    <div>
+      <h2>Country sheets</h2>
+      <p class="help">Browse one country’s sites in this project. Before adding new domains, use <a href="index.php?page=team_search">Search all sheets</a>.</p>
+    </div>
+    <a class="btn" href="index.php?page=team_search">Search all sheets</a>
+  </div>
+  <div class="sheet-tabs">
+    <a class="<?= $sheet === 'all' ? 'active' : '' ?>" href="index.php?page=team_project&amp;id=<?= $id ?>&amp;tab=inventory&amp;sheet=all">All</a>
+    <?php foreach ($countrySheets as $sh): ?>
+      <?php
+        $key = $sh['is_empty_country'] ? '_none' : $sh['name'];
+        $label = $sh['is_empty_country'] ? 'No country' : $sh['name'];
+      ?>
+      <a class="<?= $sheet === $key ? 'active' : '' ?>" href="index.php?page=team_project&amp;id=<?= $id ?>&amp;tab=inventory&amp;sheet=<?= urlencode($key) ?>">
+        <?= h($label) ?> <span class="sheet-count"><?= (int) $sh['count'] ?></span>
+      </a>
+    <?php endforeach; ?>
+  </div>
+</div>
+
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="team_project">
   <input type="hidden" name="id" value="<?= $id ?>">
   <input type="hidden" name="tab" value="inventory">
+  <input type="hidden" name="sheet" value="<?= h($sheet) ?>">
   <div><label>Filter</label><input name="q" value="<?= h($q) ?>" placeholder="domain, email, mailbox…"></div>
   <div><label>Status</label>
     <select name="status">
@@ -177,6 +216,7 @@ render_header($project['name'], 'team');
       <?php endforeach; ?>
     </select>
   </div>
+  <?php if ($sheet === 'all'): ?>
   <div><label>Country</label>
     <select name="country">
       <option value="">All</option>
@@ -185,6 +225,7 @@ render_header($project['name'], 'team');
       <?php endforeach; ?>
     </select>
   </div>
+  <?php endif; ?>
   <div><label>Language</label>
     <select name="language">
       <option value="">All</option>
@@ -206,8 +247,8 @@ render_header($project['name'], 'team');
 
 <div class="card">
   <div class="topbar" style="margin-bottom:0.5rem">
-    <p class="muted"><?= $total ?> site(s) in this project</p>
-    <a class="btn" href="index.php?page=team_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
+    <p class="muted"><strong><?= h($sheetLabel) ?></strong> · <?= $total ?> site(s)</p>
+    <a class="btn" href="index.php?page=team_project_filter&amp;project_id=<?= $id ?><?= $sheet !== 'all' && $sheet !== '_none' ? '&amp;country=' . urlencode($sheet) : '' ?>">Filter &amp; add</a>
   </div>
   <table>
     <thead>

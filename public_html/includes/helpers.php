@@ -242,13 +242,13 @@ function render_glossary(string $panel): void
     echo '<div><dt>Our inventory</dt><dd>Master unique domain list (Admin adds URLs). <strong>No prices.</strong> Team Filter checks against this.</dd></div>';
     echo '<div><dt>Catalog</dt><dd>Priced sites inside projects (quotes, mailbox, deal status).</dd></div>';
     if ($panel === 'team') {
-        echo '<div><dt>Project Filter &amp; add</dt><dd>Paste new sites vs that project’s catalog (Box 1). Only uniques for this project are added.</dd></div>';
-        echo '<div><dt>Super search</dt><dd>Duplicate check across catalog — site metrics only (no client secrets).</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Open a project → Filter &amp; add uniques → Price / outreach → Watch Results.</dd></div>';
+        echo '<div><dt>Search all sheets</dt><dd>One bar across every country sheet + Our inventory. Shows comments before you add.</dd></div>';
+        echo '<div><dt>Country sheets</dt><dd>Each project catalog is split by country. Filter &amp; add only accepts domains not already known.</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Search domain → Open project sheet → Filter &amp; add uniques → Outreach → Results.</dd></div>';
     } else {
-        echo '<div><dt>Project catalog</dt><dd>Each project has its own inventory. Seed with Filter &amp; add or CSV, then teammates add uniques the same way.</dd></div>';
-        echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Create project → Seed catalog → Team Filter &amp; add → Send pack → Track orders.</dd></div>';
+        echo '<div><dt>Country sheets</dt><dd>Project catalog tables by country. Add sites daily (Filter &amp; add or CSV) with Country set.</dd></div>';
+        echo '<div><dt>Team search</dt><dd>One Team bar reads all sheets — teammates see already have it / used / low traffic before adding.</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Create project → Fill country sheets daily → Team searches → Send pack → Track orders.</dd></div>';
     }
     echo '</dl></div>';
 }

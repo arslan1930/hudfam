@@ -4,15 +4,13 @@ $projectId = (int) get('project_id', post('project_id'));
 $project = require_project_access($projectId, $user);
 $countryOptions = list_countries(null, true);
 $raw = '';
-$country = '';
+$country = trim((string) get('country'));
 $language = '';
 $region = '';
 $niche = '';
 $notes = '';
 $result = null;
-$old = ['domains' => [], 'total' => 0, 'truncated' => false];
-$oldText = '';
-
+$globalSkipped = [];
 $old = list_project_domain_names($projectId, 25000);
 $oldText = implode("\n", $old['domains']);
 if ($old['truncated']) {
@@ -30,10 +28,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $domains = parse_domain_list($raw);
 
     if ($action === 'add_new') {
-        $filter = filter_domains_against_project($projectId, $domains);
+        $projectFilter = filter_domains_against_project($projectId, $domains);
+        $globalFilter = filter_domains_against_catalogs_and_inventory($projectFilter['new']);
+        $toAdd = $globalFilter['new'];
+        $skipped = count($projectFilter['existing']) + count($globalFilter['existing']);
         $added = add_domains_to_project(
             $projectId,
-            $filter['new'],
+            $toAdd,
             $user,
             $country,
             $language,
@@ -41,11 +42,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $niche,
             $notes
         );
+        $skipped += max(0, $added['skipped'] - 0);
         flash(
             'ok',
-            "Added {$added['inserted']} unique site(s) to {$project['name']} catalog. Skipped {$added['skipped']} already in this project."
+            "Added {$added['inserted']} unique site(s) to {$project['name']}. Skipped {$skipped} already known (this project, other catalogs, or Our inventory)."
         );
-        redirect('index.php?page=team_project&id=' . $projectId . '&tab=inventory');
+        $redirCountry = $country !== '' ? '&sheet=' . urlencode($country) : '';
+        redirect('index.php?page=team_project&id=' . $projectId . '&tab=inventory' . $redirCountry);
     }
 
     if (count($domains) > 100000) {
@@ -53,7 +56,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!$domains) {
         flash('error', 'Paste at least one domain in Box 2.');
     } else {
-        $result = filter_domains_against_project($projectId, $domains);
+        $projectFilter = filter_domains_against_project($projectId, $domains);
+        $globalFilter = filter_domains_against_catalogs_and_inventory($projectFilter['new']);
+        $globalSkipped = $globalFilter['existing'];
+        $result = [
+            'existing' => array_values(array_unique(array_merge($projectFilter['existing'], $globalFilter['existing']))),
+            'new' => $globalFilter['new'],
+            'total_input' => $projectFilter['total_input'],
+            'in_project' => $projectFilter['existing'],
+            'elsewhere' => $globalFilter['existing'],
+        ];
     }
 }
 
@@ -68,12 +80,14 @@ render_header('Filter & add · ' . $project['name'], 'team');
   <div>
     <h1>Filter & add · <?= h($project['name']) ?></h1>
     <p class="muted">
-      Box 1 = <strong>this project’s catalog</strong> (seeded by Admin). Box 2 = new sites.
-      Filter removes catalog domains → only <strong>unique for this project</strong> can be added.
+      Box 1 = this project’s country sheets. Filter also skips domains already in
+      <strong>any catalog sheet</strong> or <strong>Our inventory</strong>.
+      Prefer <a href="index.php?page=team_search">Search all sheets</a> for one domain first.
     </p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory">Project catalog</a>
+    <a class="btn" href="index.php?page=team_search">Search all sheets</a>
+    <a class="btn secondary" href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory">Country sheets</a>
   </div>
 </div>
 
@@ -146,18 +160,22 @@ render_header('Filter & add · ' . $project['name'], 'team');
   <h2>Filter results</h2>
   <p>
     From Box 2: <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in this project (excluded): <strong><?= count($result['existing']) ?></strong> ·
-    Unique (new): <strong><?= count($result['new']) ?></strong>
+    Already known (excluded): <strong><?= count($result['existing']) ?></strong>
+    <?php if (!empty($result['elsewhere'])): ?>
+      <span class="muted">(<?= count($result['elsewhere']) ?> in other catalogs / inventory)</span>
+    <?php endif; ?>
+    · Unique (new): <strong><?= count($result['new']) ?></strong>
   </p>
 </div>
 
 <div class="grid two-box">
   <div class="card">
-    <h2>Excluded — already in project catalog</h2>
+    <h2>Excluded — already known</h2>
     <?php if ($result['existing']): ?>
       <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
+      <p class="help">In this project’s sheets, another project catalog, or Our inventory. <a href="index.php?page=team_search">Search</a> a domain for comments.</p>
     <?php else: ?>
-      <p class="muted">None excluded — all pasted domains are new for this project.</p>
+      <p class="muted">None excluded — all pasted domains are new.</p>
     <?php endif; ?>
   </div>
   <div class="card">
@@ -173,13 +191,13 @@ render_header('Filter & add · ' . $project['name'], 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Add sites → writes into <strong><?= h($project['name']) ?></strong> catalog (Box 1). Other projects are not checked.</p>
+        <p class="help">Add sites → country sheet <strong><?= h($country !== '' ? $country : 'No country') ?></strong> in <?= h($project['name']) ?>.</p>
         <p class="actions" style="margin-top:0.8rem">
           <button class="btn" type="submit">Add sites (<?= count($result['new']) ?>)</button>
         </p>
       </form>
     <?php else: ?>
-      <p class="muted">No unique domains left — everything was already in this project’s catalog.</p>
+      <p class="muted">No unique domains left — everything was already known.</p>
     <?php endif; ?>
   </div>
 </div>

@@ -108,7 +108,7 @@ function render_header(string $title, string $panel = ''): void
                 'team_prospect_batches' => 'Dated batches',
             ],
             'Catalog' => [
-                'team_search' => 'Super search',
+                'team_search' => 'Search all sheets',
                 'team_projects' => 'Projects',
                 'team_results' => 'Results',
             ],

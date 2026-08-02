@@ -357,6 +357,42 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   color: #fff;
   border-color: transparent;
 }
+.sheet-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.sheet-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.sheet-tabs a:hover { border-color: #9ca3af; text-decoration: none; }
+.sheet-tabs a.active {
+  background: var(--grad-btn);
+  color: #fff;
+  border-color: transparent;
+}
+.sheet-count {
+  display: inline-block;
+  min-width: 1.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  font-size: 0.78rem;
+  text-align: center;
+}
+.sheet-tabs a.active .sheet-count { background: rgba(255,255,255,0.22); }
+.comment-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.35rem 0 0.6rem; }
 .messages { list-style: none; padding: 0; }
 .messages li { padding: 0.7rem 0.9rem; border-radius: 10px; margin-bottom: 0.7rem; background: #e7f5ef; border: 1px solid #b7dcc8; }
 .messages li.error { background: #f8e4e4; border-color: #e0b1b1; }
