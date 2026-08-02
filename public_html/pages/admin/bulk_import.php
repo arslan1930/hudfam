@@ -42,12 +42,12 @@ render_header('Bulk import', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Bulk inventory import</h1>
-    <p class="muted">Upload 10,000+ sites via CSV into a project. Duplicate domains in the same project are updated.</p>
+    <h1>Bulk import</h1>
+    <p class="muted">CSV into a project catalog · duplicates in the same project are updated.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_bulk_import&template=1">Download CSV template</a>
-    <a class="btn secondary" href="index.php?page=admin_sites">Inventory</a>
+    <a class="btn secondary" href="index.php?page=admin_bulk_import&template=1">CSV template</a>
+    <a class="btn secondary" href="index.php?page=admin_sites">Catalog</a>
   </div>
 </div>
 

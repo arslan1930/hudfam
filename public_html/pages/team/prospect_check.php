@@ -29,12 +29,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $filter = filter_domains_against_prospects($domains);
         $selected = $filter['new'];
         $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-        $msg = "Added {$added['inserted']} unique site(s) to old inventory";
+        $msg = 'Added ' . (int) $added['inserted'] . ' sites to inventory';
         if (!empty($added['batch_id'])) {
-            $msg .= " and today’s batch (#{$added['batch_id']})";
+            $msg .= ' · Batch: today';
         }
-        $msg .= ". Skipped {$added['skipped']} already known.";
-        flash('ok', $msg);
+        if ((int) $added['skipped'] > 0) {
+            $msg .= ' · Skipped ' . (int) $added['skipped'] . ' already known';
+        }
+        flash('ok', $msg . '.');
         $redir = 'index.php?page=team_prospect_check';
         if (!empty($added['batch_id'])) {
             $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
@@ -43,50 +45,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (count($domains) > 100000) {
-        flash('error', 'Please paste at most 100,000 domains per run (split into batches).');
+        flash('error', 'Paste at most 100,000 domains per run (split into batches).');
     } elseif (!$domains) {
-        flash('error', 'Paste at least one domain in Box 2.');
+        flash('error', 'Paste at least one domain under “Paste new sites”.');
     } else {
         $result = filter_domains_against_prospects($domains);
     }
 }
 
-render_header('Check & add sites', 'team');
+$stepPaste = !$result ? 'active' : 'done';
+$stepFilter = $result ? 'active' : '';
+$stepAdd = ($result && $result['new']) ? 'active' : '';
+
+render_header('Filter & add', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Filter & add prospect sites</h1>
-    <p class="muted">
-      Box 1 = old inventory (prospect list). Box 2 = new sites.
-      Filter removes old from new → Add sites saves to <strong>both</strong> old inventory and today’s dated batch.
-    </p>
+    <h1>Filter & add sites</h1>
+    <p class="muted">Find unique domains, then save them to inventory and today’s batch.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Dated batches</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Full prospect list</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">My batches</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">All sites</a>
   </div>
 </div>
+
+<ul class="steps">
+  <li class="step <?= $stepPaste ?>"><span class="num">1</span> Paste new</li>
+  <li class="step <?= $stepFilter ?>"><span class="num">2</span> Filter</li>
+  <li class="step <?= $stepAdd ?>"><span class="num">3</span> Add unique</li>
+</ul>
 
 <form method="post" id="filter_form">
   <input type="hidden" name="action" value="filter">
 
   <div class="grid two-box">
-    <div class="card box-panel">
-      <h2>Box 1 — Old inventory</h2>
-      <p class="help"><?= (int) $old['total'] ?> site name(s) · no https · used for filter compare</p>
-      <textarea class="inventory-box" id="old_inventory" rows="16" readonly><?= h($oldText) ?></textarea>
+    <div class="card box-panel panel-muted">
+      <h2>① Already in inventory</h2>
+      <p class="help"><?= (int) $old['total'] ?> site names · used to remove duplicates</p>
+      <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="No sites yet"><?= h($oldText) ?></textarea>
     </div>
     <div class="card box-panel">
-      <h2>Box 2 — New sites to filter</h2>
-      <p class="help">Paste domains (one per line or comma/space). https:// is stripped automatically.</p>
-      <textarea class="inventory-box" id="domains" name="domains" rows="16" required
+      <h2>② Paste new sites</h2>
+      <p class="help">One per line (or commas). https:// is removed automatically.</p>
+      <textarea class="inventory-box" id="domains" name="domains" rows="14" required
         placeholder="site1.com&#10;site2.de&#10;https://www.site3.com"><?= h($raw) ?></textarea>
     </div>
   </div>
 
-  <div class="card">
-    <div class="form-grid">
-      <div><label>Country (for new sites)</label>
+  <div class="actions-sticky">
+    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block">Filter sites</button>
+  </div>
+
+  <details class="card" style="margin-top:1rem" <?= ($country || $language || $niche || $notes) ? 'open' : '' ?>>
+    <summary style="cursor:pointer;font-weight:700">Details for new sites (country, language…)</summary>
+    <div class="form-grid" style="margin-top:0.6rem">
+      <div><label>Country</label>
         <select name="country" id="country_select">
           <option value="">—</option>
           <?php foreach ($countryOptions as $c): ?>
@@ -109,10 +123,7 @@ render_header('Check & add sites', 'team');
       <div><label>Niche</label><input name="niche" value="<?= h($niche) ?>"></div>
       <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
     </div>
-    <p class="actions" style="margin-top:1rem">
-      <button class="btn" type="submit">Filter sites</button>
-    </p>
-  </div>
+  </details>
 </form>
 
 <script>
@@ -132,25 +143,25 @@ render_header('Check & add sites', 'team');
 
 <?php if ($result): ?>
 <div class="card">
-  <h2>Filter results</h2>
-  <p>
-    From Box 2: <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in Box 1 (excluded): <strong><?= count($result['existing']) ?></strong> ·
-    Unique (new): <strong><?= count($result['new']) ?></strong>
+  <h2>Results</h2>
+  <p class="muted" style="margin:0">
+    Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
+    Already known <strong><?= count($result['existing']) ?></strong> ·
+    Unique <strong><?= count($result['new']) ?></strong>
   </p>
 </div>
 
 <div class="grid two-box">
-  <div class="card">
-    <h2>Excluded — already in old inventory</h2>
+  <div class="card panel-muted">
+    <h2>Already known (skipped)</h2>
     <?php if ($result['existing']): ?>
-      <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
+      <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
     <?php else: ?>
-      <p class="muted">None excluded — all pasted domains are new.</p>
+      <div class="empty-state"><p>Nothing skipped — all pasted domains are new.</p></div>
     <?php endif; ?>
   </div>
-  <div class="card">
-    <h2>Unique results — ready to add</h2>
+  <div class="card panel-ok">
+    <h2>Unique — add these</h2>
     <?php if ($result['new']): ?>
       <form method="post">
         <input type="hidden" name="action" value="add_new">
@@ -160,14 +171,17 @@ render_header('Check & add sites', 'team');
         <input type="hidden" name="region" value="<?= h($region) ?>">
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
-        <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Add sites → writes to <strong>Box 1 (old inventory)</strong> and <strong>today’s dated batch</strong> for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
-        <p class="actions" style="margin-top:0.8rem">
-          <button class="btn" type="submit">Add sites (<?= count($result['new']) ?>)</button>
-        </p>
+        <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
+        <p class="help">Saves to inventory and today’s batch for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
+        <div class="actions-sticky">
+          <button class="btn large block" type="submit">Add sites (<?= count($result['new']) ?>)</button>
+        </div>
       </form>
     <?php else: ?>
-      <p class="muted">No unique domains left — everything was already in Box 1.</p>
+      <div class="empty-state">
+        <p>No unique domains left — everything was already in inventory.</p>
+        <a class="btn secondary" href="index.php?page=team_prospect_check">Paste a new list</a>
+      </div>
     <?php endif; ?>
   </div>
 </div>

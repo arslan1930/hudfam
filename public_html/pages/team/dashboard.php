@@ -14,11 +14,16 @@ if (is_admin($user)) {
     $projects = $stmt->fetchAll();
 }
 
-$counts = [];
-foreach ($projects as $p) {
-    $c = db()->prepare('SELECT COUNT(*) FROM sites WHERE primary_project_id=?');
-    $c->execute([(int) $p['id']]);
-    $counts[(int) $p['id']] = (int) $c->fetchColumn();
+$prospectTotal = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
+$todayBatch = null;
+try {
+    $tb = db()->prepare(
+        'SELECT * FROM prospect_batches WHERE user_id=? AND batch_date=CURDATE() LIMIT 1'
+    );
+    $tb->execute([$uid]);
+    $todayBatch = $tb->fetch() ?: null;
+} catch (Throwable $e) {
+    $todayBatch = null;
 }
 
 $projectIds = array_column($projects, 'id') ?: [0];
@@ -30,52 +35,53 @@ $results = db()->prepare(
      JOIN pitches ph ON ph.id=pi.pitch_id
      JOIN projects p ON p.id=ph.project_id
      WHERE ph.project_id IN ($in) AND pi.item_status != 'sent'
-     ORDER BY pi.updated_at DESC LIMIT 10"
+     ORDER BY pi.updated_at DESC LIMIT 8"
 );
 $results->execute($projectIds);
 $results = $results->fetchAll();
 
-render_header('Team dashboard', 'team');
+render_header('Dashboard', 'team');
 ?>
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Check & add unique sites into prospect inventory first. Catalog search is for priced inventory (site details only).</p>
-  </div>
-  <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Dated batches</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Old inventory</a>
+    <p class="muted">Start with unique sites, then work your projects.</p>
   </div>
 </div>
 
-<div class="card">
-  <h2>Your projects</h2>
-  <div class="folders" style="margin-top:0.8rem">
-  <?php foreach ($projects as $p): ?>
-    <a class="folder" href="index.php?page=team_project&id=<?= (int) $p['id'] ?>&tab=inventory">
-      <h3><?= h($p['name']) ?></h3>
-      <p class="muted"><?= h($p['niche'] ?: '—') ?> · <?= h($p['countries'] ?: '—') ?></p>
-      <p><span class="badge"><?= (int) ($counts[(int) $p['id']] ?? 0) ?> sites</span></p>
-    </a>
-  <?php endforeach; ?>
-  <?php if (!$projects): ?><p class="muted">No projects assigned.</p><?php endif; ?>
-  </div>
+<div class="launch-cards">
+  <a class="launch-card" href="index.php?page=team_prospect_check">
+    <h2>Filter & add</h2>
+    <p>Paste new domains, remove duplicates, save unique sites.</p>
+  </a>
+  <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
+    <h2>Today’s batch</h2>
+    <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' sites added today' : 'No adds yet today — open your batches' ?></p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_projects">
+    <h2>My projects</h2>
+    <p><?= count($projects) ?> active · inventory has <?= $prospectTotal ?> prospect sites</p>
+  </a>
 </div>
 
 <div class="card">
-  <h2>Latest results</h2>
-  <?php foreach ($results as $item): ?>
-    <div class="history-item">
-      <strong><?= h($item['domain']) ?></strong> · <?= h($item['project_name']) ?>
-      <?= badge($item['item_status']) ?>
-      <div class="muted">
-        Mailbox: <?= h($item['our_mailbox'] ?: '—') ?> ·
-        <?php if ($item['reject_reason_code']): ?><?= h(reject_reasons()[$item['reject_reason_code']] ?? $item['reject_reason_code']) ?> — <?php endif; ?>
-        <?= h($item['reject_comment'] ?: $item['client_notes']) ?>
+  <h2>Recent results</h2>
+  <?php if ($results): ?>
+    <?php foreach ($results as $item): ?>
+      <div class="history-item">
+        <strong><?= h($item['domain']) ?></strong> · <?= h($item['project_name']) ?>
+        <?= badge($item['item_status']) ?>
+        <div class="muted">
+          <?php if ($item['reject_reason_code']): ?><?= h(reject_reasons()[$item['reject_reason_code']] ?? $item['reject_reason_code']) ?> — <?php endif; ?>
+          <?= h($item['reject_comment'] ?: $item['client_notes']) ?>
+        </div>
       </div>
+    <?php endforeach; ?>
+  <?php else: ?>
+    <div class="empty-state">
+      <p>No project results yet.</p>
+      <a class="btn secondary" href="index.php?page=team_projects">Open projects</a>
     </div>
-  <?php endforeach; ?>
-  <?php if (!$results): ?><p class="muted">No results yet.</p><?php endif; ?>
+  <?php endif; ?>
 </div>
 <?php render_footer('team'); ?>

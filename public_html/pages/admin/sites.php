@@ -31,15 +31,15 @@ $qs = http_build_query(array_filter([
     'project_id' => $projectId ?: '',
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Inventory', 'admin');
+render_header('Catalog', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Admin inventory</h1>
-    <p class="muted"><?= $total ?> sites · language, country, DA/DR/traffic, order status, comments, client name</p>
+    <h1>Catalog</h1>
+    <p class="muted"><?= $total ?> priced sites · filter by project, country, language, order status</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_bulk_import">Bulk import CSV</a>
+    <a class="btn" href="index.php?page=admin_bulk_import">Bulk import</a>
     <?php if ($projectId): ?>
       <a class="btn secondary" href="index.php?page=admin_site_form&project_id=<?= $projectId ?>">Add site</a>
     <?php endif; ?>
@@ -121,13 +121,19 @@ render_header('Inventory', 'admin');
         <td><?= badge($s['status']) ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="8" class="muted">No sites. Use Bulk import or open a project to add sites.</td></tr><?php endif; ?>
     </tbody>
   </table>
+  <?php if (!$rows): ?>
+  <div class="empty-state">
+    <p>No catalog sites yet.</p>
+    <a class="btn" href="index.php?page=admin_bulk_import">Bulk import CSV</a>
+  </div>
+  <?php else: ?>
   <div class="actions" style="margin-top:0.8rem">
     <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
     <span>Page <?= $pageNum ?> / <?= $pages ?></span>
     <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
   </div>
+  <?php endif; ?>
 </div>
 <?php render_footer('admin'); ?>

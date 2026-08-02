@@ -3,23 +3,24 @@ $user = require_team();
 // Admins see all batches; team sees own (admins collaborating may want all — show all for admin, own for team)
 $batches = is_admin($user) ? list_prospect_batches(null, 100) : list_prospect_batches((int) $user['id'], 100);
 
-render_header('Dated batches', 'team');
+render_header('My batches', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Prospect batches by date</h1>
-    <p class="muted">Each teammate’s daily adds — also stored in old inventory (Box 1).</p>
+    <h1>My batches</h1>
+    <p class="muted">Daily adds by teammate — also saved in All sites.</p>
   </div>
-  <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
+  <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
 </div>
 
 <div class="card">
+  <?php if ($batches): ?>
   <table>
     <thead>
       <tr>
         <th>Date</th>
         <th>Teammate</th>
-        <th>Sites added</th>
+        <th>Sites</th>
         <th>Country / lang</th>
         <th></th>
       </tr>
@@ -34,10 +35,13 @@ render_header('Dated batches', 'team');
         <td><a class="btn small" href="index.php?page=team_prospect_batch&id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$batches): ?>
-      <tr><td colspan="5" class="muted">No batches yet. Use Filter & add sites.</td></tr>
-    <?php endif; ?>
     </tbody>
   </table>
+  <?php else: ?>
+  <div class="empty-state">
+    <p>No batches yet.</p>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
+  </div>
+  <?php endif; ?>
 </div>
 <?php render_footer('team'); ?>
