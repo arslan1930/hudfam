@@ -82,8 +82,9 @@ render_header($project['name'], 'admin');
     <p class="muted"><?= h($project['client_name'] ?: 'Client campaign') ?> · <?= h($project['niche'] ?: '—') ?> · <?= h($project['countries'] ?: '—') ?> · <?= $siteTotal ?> catalog site<?= $siteTotal === 1 ? '' : 's' ?></p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
+    <a class="btn" href="index.php?page=admin_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
     <a class="btn" href="index.php?page=admin_pitch_create&project_id=<?= $id ?>">Send pack</a>
+    <a class="btn secondary" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add one site</a>
     <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk import</a>
     <a class="btn secondary" href="index.php?page=admin_project_form&id=<?= $id ?>">Edit</a>
     <details class="more-actions">
@@ -259,7 +260,7 @@ render_header($project['name'], 'admin');
   <div class="topbar" style="margin-bottom:0.5rem">
     <p class="muted"><?= $siteTotal ?> site(s) — language, country, DA/DR/traffic, order status, comments, client name</p>
     <div class="actions">
-      <a class="btn" href="index.php?page=admin_site_form&project_id=<?= $id ?>">Add site</a>
+      <a class="btn" href="index.php?page=admin_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
       <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk CSV</a>
     </div>
   </div>

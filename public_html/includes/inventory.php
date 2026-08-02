@@ -438,3 +438,174 @@ function bulk_import_sites_csv(int $projectId, string $tmpPath, int $createdBy):
 
     return compact('inserted', 'updated', 'skipped', 'errors');
 }
+
+/**
+ * Plain domain names for a project's catalog (Filter Box 1).
+ *
+ * @return array{domains:string[],total:int,truncated:bool}
+ */
+function list_project_domain_names(int $projectId, int $maxDisplay = 25000): array
+{
+    $count = db()->prepare('SELECT COUNT(*) FROM sites WHERE primary_project_id=?');
+    $count->execute([$projectId]);
+    $total = (int) $count->fetchColumn();
+    $stmt = db()->prepare(
+        'SELECT domain FROM sites WHERE primary_project_id=? ORDER BY domain ASC LIMIT ' . (int) $maxDisplay
+    );
+    $stmt->execute([$projectId]);
+    $domains = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    return [
+        'domains' => $domains,
+        'total' => $total,
+        'truncated' => $total > count($domains),
+    ];
+}
+
+/**
+ * Check pasted domains against one project's catalog only.
+ *
+ * @return array{existing:string[],new:string[],invalid:int,total_input:int}
+ */
+function filter_domains_against_project(int $projectId, array $domains): array
+{
+    @set_time_limit(0);
+    $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    $existing = [];
+    $new = [];
+    if (!$domains) {
+        return ['existing' => [], 'new' => [], 'invalid' => 0, 'total_input' => 0];
+    }
+
+    $chunkSize = 500;
+    $found = [];
+    for ($i = 0, $n = count($domains); $i < $n; $i += $chunkSize) {
+        $chunk = array_slice($domains, $i, $chunkSize);
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $params = array_merge([$projectId], $chunk);
+        $stmt = db()->prepare(
+            "SELECT domain FROM sites WHERE primary_project_id=? AND domain IN ($placeholders)"
+        );
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $d) {
+            $found[$d] = true;
+        }
+    }
+    foreach ($domains as $d) {
+        if (isset($found[$d])) {
+            $existing[] = $d;
+        } else {
+            $new[] = $d;
+        }
+    }
+    return [
+        'existing' => $existing,
+        'new' => $new,
+        'invalid' => 0,
+        'total_input' => count($domains),
+    ];
+}
+
+function domain_in_project(int $projectId, string $domain): bool
+{
+    $domain = normalize_domain($domain);
+    if ($domain === '') {
+        return false;
+    }
+    $stmt = db()->prepare(
+        'SELECT 1 FROM sites WHERE primary_project_id=? AND domain=? LIMIT 1'
+    );
+    $stmt->execute([$projectId, $domain]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Insert unique domains into a project's catalog (skips already present).
+ *
+ * @return array{inserted:int,skipped:int}
+ */
+function add_domains_to_project(
+    int $projectId,
+    array $domains,
+    array $user,
+    string $country = '',
+    string $language = '',
+    string $region = '',
+    string $niche = '',
+    string $notes = ''
+): array {
+    @set_time_limit(0);
+    $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    $check = filter_domains_against_project($projectId, $domains);
+    $toAdd = $check['new'];
+    $skipped = count($check['existing']);
+    if (!$toAdd) {
+        return ['inserted' => 0, 'skipped' => $skipped];
+    }
+
+    if ($country !== '') {
+        foreach (list_countries(null, true) as $c) {
+            if (strcasecmp($c['name'], $country) === 0) {
+                if ($region === '') {
+                    $region = $c['region'];
+                }
+                if ($language === '' && $c['default_language'] !== '') {
+                    $language = $c['default_language'];
+                }
+                break;
+            }
+        }
+    }
+
+    $project = db()->prepare('SELECT currency, client_name FROM projects WHERE id=?');
+    $project->execute([$projectId]);
+    $proj = $project->fetch() ?: [];
+    $currency = (string) ($proj['currency'] ?? 'EUR') ?: 'EUR';
+    $clientName = is_admin($user) ? (string) ($proj['client_name'] ?? '') : '';
+
+    $ins = db()->prepare(
+        'INSERT INTO sites (
+            domain, url, region, country, niche, language, currency, status,
+            inventory_client_name, outreach_notes, assigned_to, primary_project_id, created_by
+         ) VALUES (?,?,?,?,?,?,?,\'draft\',?,?,?,?,?)'
+    );
+
+    $inserted = 0;
+    $assignedTo = is_admin($user) ? null : (int) $user['id'];
+    db()->beginTransaction();
+    try {
+        $n = 0;
+        foreach ($toAdd as $d) {
+            try {
+                $ins->execute([
+                    $d,
+                    '',
+                    $region,
+                    $country,
+                    $niche,
+                    $language,
+                    $currency,
+                    $clientName,
+                    $notes,
+                    $assignedTo,
+                    $projectId,
+                    (int) $user['id'],
+                ]);
+                $inserted++;
+            } catch (PDOException $e) {
+                $skipped++;
+            }
+            $n++;
+            if ($n % 250 === 0) {
+                db()->commit();
+                db()->beginTransaction();
+            }
+        }
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    return ['inserted' => $inserted, 'skipped' => $skipped];
+}

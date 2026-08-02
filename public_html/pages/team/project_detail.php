@@ -56,10 +56,11 @@ render_header($project['name'], 'team');
 <div class="topbar">
   <div>
     <h1><?= h($project['name']) ?></h1>
-    <p class="muted">Work this project’s catalog below. Super search checks the whole catalog for duplicates — site metrics only.</p>
+    <p class="muted">This project has its own catalog. Filter &amp; add checks new sites against Box 1 (this project only).</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_site_form&project_id=<?= $id ?>">Add site</a>
+    <a class="btn" href="index.php?page=team_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
+    <a class="btn secondary" href="index.php?page=team_site_form&project_id=<?= $id ?>">Add one site</a>
     <a class="btn secondary" href="index.php?page=team_search">Super search</a>
   </div>
 </div>

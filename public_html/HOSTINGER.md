@@ -38,9 +38,9 @@ Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
 1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
-2. Admin builds **catalog inventory** (prices, order status, client name) — single or CSV bulk import
-3. **Team → Filter & add sites**: Box 1 = old prospect names · Box 2 = paste new → **Filter sites** → **Add sites** (writes to old inventory + today’s dated batch)
-4. **Dated batches**: each teammate’s daily adds (e.g. 100 today, 150 tomorrow); also in Box 1 old inventory
+2. Admin opens a **project** and seeds its **catalog** (Filter & add paste, one site, or CSV bulk) — each project has its own inventory
+3. **Team → project → Filter & add**: Box 1 = that project’s catalog · Box 2 = paste new → **Filter sites** → **Add sites** (uniques for this project only)
+4. Global **Our inventory** Filter & add (Prospects) remains separate for outreach lists / dated batches
 5. Catalog Super search still shows site metrics only (no client/project secrets)
 6. Admin sends packs / publication orders as before
 
