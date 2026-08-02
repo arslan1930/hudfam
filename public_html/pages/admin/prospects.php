@@ -6,28 +6,49 @@ $language = trim((string) get('language'));
 $region = (string) get('region');
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
-$inv = prospect_inventory_query(compact('q', 'country', 'language', 'region', 'status'), $pageNum, 50);
-$rows = $inv['rows'];
-$total = $inv['total'];
-$pages = $inv['pages'];
+$rows = [];
+$total = 0;
+$pages = 1;
 $countryOptions = list_countries(null, true);
-$langs = distinct_prospect_languages();
+$langs = [];
+
+try {
+    $inv = prospect_inventory_query(compact('q', 'country', 'language', 'region', 'status'), $pageNum, 50);
+    $rows = $inv['rows'];
+    $total = $inv['total'];
+    $pages = $inv['pages'];
+    $langs = distinct_prospect_languages();
+} catch (Throwable $e) {
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload.');
+}
+
 $qs = http_build_query(array_filter([
     'page' => 'admin_prospects', 'q' => $q, 'country' => $country,
     'language' => $language, 'region' => $region, 'status' => $status,
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Prospects', 'admin');
+render_header('Our inventory', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Our inventory'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1>Prospects</h1>
-    <p class="muted"><?= $total ?> site<?= $total === 1 ? '' : 's' ?> · Team outreach list · no prices · read-only here</p>
+    <h1>Our inventory</h1>
+    <p class="muted">
+      <?= $total ?> site<?= $total === 1 ? '' : 's' ?> · master unique list (no prices).
+      Team Filter checks new sites against this list.
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
+    <a class="btn secondary" href="index.php?page=admin_prospect_batches">Prospect batches</a>
   </div>
 </div>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>"></div>
+  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
   <div><label>Country</label>
     <select name="country">
       <option value="">All</option>
@@ -75,7 +96,14 @@ render_header('Prospects', 'admin');
         <td><?= h(substr((string) $s['created_at'], 0, 10)) ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="5" class="muted">Empty prospect list.</td></tr><?php endif; ?>
+    <?php if (!$rows): ?>
+      <tr>
+        <td colspan="5" class="muted">
+          Our inventory is empty.
+          <a href="index.php?page=admin_prospect_add">Add sites</a> (paste URLs) so Team can filter uniques against this list.
+        </td>
+      </tr>
+    <?php endif; ?>
     </tbody>
   </table>
   <div class="actions" style="margin-top:0.8rem">
