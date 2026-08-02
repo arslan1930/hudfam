@@ -65,8 +65,8 @@ render_header('Filter & add · ' . $project['name'], 'admin');
   <div>
     <h1>Seed / filter catalog · <?= h($project['name']) ?></h1>
     <p class="muted">
-      Seed this project’s inventory first. Teammates then use the same Filter &amp; add against Box 1
-      so only domains <strong>new to this project</strong> are added.
+      Seed this project’s catalog first. Then open each site (or CSV) to add DR, traffic, quote &amp; agreed price.
+      Teammates use the same Filter &amp; add against Box 1 so only domains <strong>new to this project</strong> are added.
     </p>
   </div>
   <div class="actions">

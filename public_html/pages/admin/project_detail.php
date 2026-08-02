@@ -258,7 +258,7 @@ render_header($project['name'], 'admin');
 </form>
 <div class="card">
   <div class="topbar" style="margin-bottom:0.5rem">
-    <p class="muted"><?= $siteTotal ?> site(s) — language, country, DA/DR/traffic, order status, comments, client name</p>
+    <p class="muted"><?= $siteTotal ?> site(s) — open a domain to edit DR, traffic, quote &amp; agreed price, order status, comments</p>
     <div class="actions">
       <a class="btn" href="index.php?page=admin_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
       <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $id ?>">Bulk CSV</a>
@@ -268,7 +268,7 @@ render_header($project['name'], 'admin');
     <thead>
       <tr>
         <th>Domain</th><th>Client</th><th>Country / lang</th><th>DR / DA / Traffic</th>
-        <th>Order status</th><th>Comments</th><th>Site status</th>
+        <th>Quote / Agreed</th><th>Order status</th><th>Comments</th><th>Site status</th>
       </tr>
     </thead>
     <tbody>
@@ -278,12 +278,16 @@ render_header($project['name'], 'admin');
         <td><?= h($s['inventory_client_name'] ?: '—') ?></td>
         <td><?= h($s['country'] ?: '—') ?> · <?= h($s['language'] ?: '—') ?></td>
         <td><?= h((string)($s['dr'] ?? '—')) ?> / <?= h((string)($s['da'] ?? '—')) ?> / <?= h((string)($s['traffic'] ?? '—')) ?></td>
+        <td>
+          <?= money_or_dash($s['publisher_quote_price'] ?? null) ?>
+          / <?= money_or_dash($s['backlink_price'] ?? null) ?> <?= h($s['currency'] ?? '') ?>
+        </td>
         <td><?= h(inventory_order_statuses()[$s['order_status'] ?? ''] ?? ($s['order_status'] ?: '—')) ?></td>
         <td class="help"><?php $c = (string) ($s['admin_comments'] ?? ''); echo h(strlen($c) > 60 ? substr($c, 0, 57) . '…' : ($c ?: '—')); ?></td>
         <td><?= badge($s['status']) ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$sites): ?><tr><td colspan="7" class="muted">No sites yet. Add one or bulk-import CSV.</td></tr><?php endif; ?>
+    <?php if (!$sites): ?><tr><td colspan="8" class="muted">No sites yet. Use Filter &amp; add to seed this project’s catalog, then open each site to add DR / prices.</td></tr><?php endif; ?>
     </tbody>
   </table>
   <div class="actions" style="margin-top:0.8rem">

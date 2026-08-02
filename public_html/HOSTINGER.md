@@ -38,11 +38,12 @@ Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
 1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
-2. Admin opens a **project** and seeds its **catalog** (Filter & add paste, one site, or CSV bulk) — each project has its own inventory
-3. **Team → project → Filter & add**: Box 1 = that project’s catalog · Box 2 = paste new → **Filter sites** → **Add sites** (uniques for this project only)
-4. Global **Our inventory** Filter & add (Prospects) remains separate for outreach lists / dated batches
-5. Catalog Super search still shows site metrics only (no client/project secrets)
-6. Admin sends packs / publication orders as before
+2. Admin opens a **project** and seeds its **own catalog** (Filter & add, one site, or CSV) — each project is separate
+3. Admin fills **DR, traffic, quote & agreed (decided) prices** on catalog sites (form or CSV)
+4. **Team → project → Filter & add**: Box 1 = that project’s catalog · Box 2 = new sites → add uniques only for this project
+5. **Team → project search**: see this project’s DR / traffic / quote / agreed; global Super search stays metrics-only across catalogs
+6. Global **Our inventory** (Prospects) Filter & add stays separate for outreach lists / dated batches
+7. Admin sends packs / publication orders as before
 
 ### Already installed earlier?
 Open `upgrade.php` once, then delete it.

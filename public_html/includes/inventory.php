@@ -125,6 +125,64 @@ function search_project_inventory(int $projectId, string $q, int $limit = 50): a
     return $stmt->fetchAll();
 }
 
+/**
+ * Team search inside one project catalog.
+ * Returns site metrics + quote/agreed prices for that project only.
+ * Never returns client name, admin comments, or other confidential admin fields.
+ */
+function search_project_inventory_for_team(int $projectId, string $q, int $limit = 50): array
+{
+    $q = trim($q);
+    if ($q === '') {
+        return [];
+    }
+    $like = '%' . $q . '%';
+    $domainExact = normalize_domain($q);
+
+    $sql = "SELECT
+              s.id,
+              s.domain,
+              s.country,
+              s.language,
+              s.region,
+              s.niche,
+              s.dr,
+              s.da,
+              s.traffic,
+              s.publisher_quote_price,
+              s.backlink_price,
+              s.currency,
+              s.status,
+              s.our_mailbox,
+              s.our_contact_name,
+              s.updated_at
+            FROM sites s
+            WHERE s.primary_project_id = ?
+              AND (
+                s.domain LIKE ? OR s.url LIKE ? OR s.niche LIKE ?
+                OR s.country LIKE ? OR s.language LIKE ?
+                OR s.our_mailbox LIKE ? OR s.our_contact_name LIKE ?
+                OR s.domain = ?
+              )
+            ORDER BY
+              CASE WHEN s.domain = ? THEN 0
+                   WHEN s.domain LIKE ? THEN 1
+                   ELSE 2 END,
+              s.updated_at DESC
+            LIMIT " . (int) $limit;
+    $stmt = db()->prepare($sql);
+    $stmt->execute([
+        $projectId,
+        $like, $like, $like,
+        $like, $like,
+        $like, $like,
+        $domainExact,
+        $domainExact,
+        $domainExact . '%',
+    ]);
+    return $stmt->fetchAll();
+}
+
 function project_inventory_query(int $projectId, array $filters, int $pageNum = 1, int $per = 50): array
 {
     $where = ['s.primary_project_id = ?'];

@@ -12,7 +12,10 @@ render_header('Super search', 'team');
 <div class="topbar">
   <div>
     <h1>Super search</h1>
-    <p class="muted">Duplicate check across the <strong>catalog</strong>. You only see site metrics — not client names, emails, or project info.</p>
+    <p class="muted">
+      Cross-project duplicate check (site metrics only — no client names, emails, or prices).
+      For quote / agreed price inside a campaign, open that <a href="index.php?page=team_projects">project</a>.
+    </p>
   </div>
 </div>
 
@@ -27,7 +30,10 @@ render_header('Super search', 'team');
       <a class="btn secondary" href="index.php?page=team_search">Clear</a>
     <?php endif; ?>
   </div>
-  <p class="help">If the domain appears below, do <strong>not</strong> add it again — it is already in the catalog. For prospect uniqueness, use <a href="index.php?page=team_prospect_check">Filter &amp; add</a>.</p>
+  <p class="help">
+    Hits mean the domain exists in <strong>some</strong> project catalog (DR / DA / traffic only).
+    To add uniques to a project, use that project’s <strong>Filter &amp; add</strong>.
+  </p>
 </form>
 
 <?php if ($superQ !== ''): ?>

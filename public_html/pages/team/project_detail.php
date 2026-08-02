@@ -13,8 +13,8 @@ $language = trim((string) get('language'));
 $mailbox = trim((string) get('mailbox'));
 $pageNum = max(1, (int) get('p', 1));
 
-// Global DB check — site metrics only (no client/project/email secrets)
-$superResults = $superQ !== '' ? search_inventory_safe_for_team($superQ, 40) : [];
+// This project's catalog — metrics + quote/agreed (no admin-only client/comments)
+$superResults = $superQ !== '' ? search_project_inventory_for_team($id, $superQ, 40) : [];
 $inventory = project_inventory_query($id, compact('q', 'status', 'region', 'country', 'language', 'mailbox'), $pageNum, 50);
 $rows = $inventory['rows'];
 $total = $inventory['total'];
@@ -69,7 +69,7 @@ render_header($project['name'], 'team');
   <input type="hidden" name="page" value="team_project">
   <input type="hidden" name="id" value="<?= $id ?>">
   <input type="hidden" name="tab" value="inventory">
-  <label for="sq">Super search — already in the catalog?</label>
+  <label for="sq">Search this project’s catalog</label>
   <div class="super-search-row">
     <input id="sq" name="sq" value="<?= h($superQ) ?>" autofocus placeholder="example.com">
     <button class="btn" type="submit">Search</button>
@@ -77,30 +77,44 @@ render_header($project['name'], 'team');
       <a class="btn secondary" href="index.php?page=team_project&id=<?= $id ?>&tab=inventory">Clear</a>
     <?php endif; ?>
   </div>
-  <p class="help">Shows country, language, DR, DA, traffic only — never client name, emails, or project details.</p>
+  <p class="help">
+    Results are for <strong><?= h($project['name']) ?></strong> only — DR, DA, traffic, quote &amp; agreed price.
+    Cross-project duplicate check: <a href="index.php?page=team_search">Super search</a>.
+  </p>
 </form>
 
 <?php if ($superQ !== ''): ?>
 <div class="card">
-  <h2>Super search · “<?= h($superQ) ?>” · <?= count($superResults) ?> domain(s)</h2>
+  <h2>Catalog search · “<?= h($superQ) ?>” · <?= count($superResults) ?> site(s)</h2>
   <table>
     <thead>
-      <tr><th>Domain</th><th>Country</th><th>Language</th><th>DR</th><th>DA</th><th>Traffic</th><th></th></tr>
+      <tr>
+        <th>Domain</th><th>Country / lang</th><th>DR / DA / Traffic</th>
+        <th>Quote / Agreed</th><th>Status</th><th></th>
+      </tr>
     </thead>
     <tbody>
     <?php foreach ($superResults as $s): ?>
       <tr>
-        <td><strong><?= h($s['domain']) ?></strong></td>
-        <td><?= h($s['country'] ?: '—') ?></td>
-        <td><?= h($s['language'] ?: '—') ?></td>
-        <td><?= h((string) ($s['dr'] ?? '—')) ?></td>
-        <td><?= h((string) ($s['da'] ?? '—')) ?></td>
-        <td><?= h((string) ($s['traffic'] ?? '—')) ?></td>
-        <td><span class="badge agreed">Already in catalog</span></td>
+        <td><a href="index.php?page=team_site_form&amp;id=<?= (int) $s['id'] ?>"><strong><?= h($s['domain']) ?></strong></a></td>
+        <td><?= h($s['country'] ?: '—') ?> · <?= h($s['language'] ?: '—') ?></td>
+        <td><?= h((string) ($s['dr'] ?? '—')) ?> / <?= h((string) ($s['da'] ?? '—')) ?> / <?= h((string) ($s['traffic'] ?? '—')) ?></td>
+        <td>
+          <?= money_or_dash($s['publisher_quote_price'] ?? null) ?>
+          / <?= money_or_dash($s['backlink_price'] ?? null) ?> <?= h($s['currency'] ?? '') ?>
+        </td>
+        <td><?= badge($s['status']) ?></td>
+        <td><span class="badge agreed">In this project</span></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$superResults): ?>
-      <tr><td colspan="7" class="muted">Not in the database. <a href="index.php?page=team_site_form&project_id=<?= $id ?>">Add to this project</a>.</td></tr>
+      <tr>
+        <td colspan="6" class="muted">
+          Not in this project’s catalog.
+          <a href="index.php?page=team_project_filter&amp;project_id=<?= $id ?>">Filter &amp; add</a>
+          or <a href="index.php?page=team_site_form&amp;project_id=<?= $id ?>">Add one site</a>.
+        </td>
+      </tr>
     <?php endif; ?>
     </tbody>
   </table>
@@ -198,7 +212,8 @@ render_header($project['name'], 'team');
   <table>
     <thead>
       <tr>
-        <th>Domain</th><th>Country</th><th>Quote / Agreed</th><th>Status</th>
+        <th>Domain</th><th>Country / lang</th><th>DR / DA / Traffic</th>
+        <th>Quote / Agreed</th><th>Status</th>
         <th>Our mailbox</th><th>Contact</th>
       </tr>
     </thead>
@@ -207,6 +222,7 @@ render_header($project['name'], 'team');
       <tr>
         <td><a href="index.php?page=team_site_form&id=<?= (int) $s['id'] ?>"><?= h($s['domain']) ?></a></td>
         <td><?= h($s['country'] ?: '—') ?> · <?= h($s['language'] ?: '—') ?></td>
+        <td><?= h((string) ($s['dr'] ?? '—')) ?> / <?= h((string) ($s['da'] ?? '—')) ?> / <?= h((string) ($s['traffic'] ?? '—')) ?></td>
         <td>
           <?= money_or_dash($s['publisher_quote_price'] ?? null) ?>
           / <?= money_or_dash($s['backlink_price']) ?> <?= h($s['currency']) ?>
