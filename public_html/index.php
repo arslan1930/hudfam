@@ -7,6 +7,7 @@ require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/inventory.php';
 require __DIR__ . '/includes/prospects.php';
+require __DIR__ . '/includes/email_campaigns.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -45,6 +46,8 @@ $routes = [
     'admin_prospects' => 'pages/admin/prospects.php',
     'admin_prospect_add' => 'pages/admin/prospect_add.php',
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
+    'admin_email_campaigns' => 'pages/admin/email_campaigns.php',
+    'admin_email_campaign_import' => 'pages/admin/email_campaign_import.php',
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_projects' => 'pages/team/projects.php',
     'team_project' => 'pages/team/project_detail.php',
@@ -59,6 +62,8 @@ $routes = [
     'team_results' => 'pages/team/results.php',
     'team_countries' => 'pages/team/countries.php',
     'team_country' => 'pages/team/country_detail.php',
+    'team_email_campaigns' => 'pages/team/email_campaigns.php',
+    'team_email_search' => 'pages/team/email_search.php',
 ];
 
 if (!isset($routes[$page])) {
