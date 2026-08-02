@@ -247,7 +247,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Upgrade Hudfam</title>
+  <title>Upgrade TechxForm</title>
   <link rel="stylesheet" href="asset.php?f=css/app.css">
   <link rel="stylesheet" href="assets/css/app.css">
 </head>

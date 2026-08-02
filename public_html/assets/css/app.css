@@ -1,16 +1,16 @@
 :root {
-  --bg: #f3f0e8;
-  --bg-2: #e8e3d6;
-  --ink: #1c2430;
-  --muted: #5c6672;
-  --line: #cfc7b6;
-  --panel: #fffdf8;
-  --brand: #0f4c5c;
-  --brand-2: #16697a;
+  --bg: #eef5ff;
+  --bg-2: #ffffff;
+  --ink: #0b1f3a;
+  --muted: #5a6b82;
+  --line: #d7e3f4;
+  --panel: #ffffff;
+  --brand: #1a5cff;
+  --brand-2: #3b82f6;
   --ok: #2f6f4e;
   --warn: #9a6700;
   --bad: #8b2e2e;
-  --shadow: 0 10px 30px rgba(28, 36, 48, 0.08);
+  --shadow: 0 10px 30px rgba(11, 31, 58, 0.08);
   --radius: 14px;
   --font: Georgia, "Times New Roman", serif;
   --sans: "Segoe UI", Tahoma, sans-serif;
@@ -20,29 +20,52 @@ body {
   margin: 0;
   font-family: var(--sans);
   color: var(--ink);
-  background: linear-gradient(180deg, var(--bg), var(--bg-2));
+  background: linear-gradient(180deg, #dceaff 0%, #ffffff 50%, #f3f8ff 100%);
   min-height: 100vh;
 }
 a { color: var(--brand-2); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .shell { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }
 .sidebar {
-  background: linear-gradient(180deg, #0f4c5c, #123844);
+  background: linear-gradient(180deg, #0b3d91, #1a5cff);
   color: #f4f7f8;
   padding: 1.25rem 1rem;
 }
 .sidebar .brand {
   font-family: var(--font);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #fff;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   margin-bottom: 0.35rem;
   text-decoration: none;
 }
+.sidebar .brand:hover { text-decoration: none; color: #fff; }
+.brand-logo {
+  height: 32px;
+  width: auto;
+  display: block;
+  flex: 0 0 auto;
+}
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+}
+.login-brand .brand-logo {
+  height: 48px;
+}
+.login-brand h1 {
+  margin: 0;
+  text-align: center;
+}
 .sidebar-role {
   font-size: 0.78rem;
-  color: #a8c4cc;
+  color: #c5d9ff;
   margin-bottom: 1.1rem;
   padding: 0 0.15rem;
   letter-spacing: 0.02em;
@@ -67,7 +90,7 @@ a:hover { text-decoration: underline; }
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #8fadb6;
+  color: #9db8ef;
   padding: 0 0.7rem 0.35rem;
   font-weight: 700;
 }
