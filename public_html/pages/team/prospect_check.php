@@ -32,7 +32,7 @@ try {
             $filter = filter_domains_against_prospects($domains);
             $selected = $filter['new'];
             $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-            $msg = "Added {$added['inserted']} unique site(s) to old inventory";
+            $msg = "Added {$added['inserted']} unique site(s) to Our inventory";
             if (!empty($added['batch_id'])) {
                 $msg .= " and today’s batch (#{$added['batch_id']})";
             }
@@ -61,15 +61,15 @@ render_header('Filter & add', 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Prospects', 'href' => 'index.php?page=team_prospects'],
+    ['label' => 'Our inventory', 'href' => 'index.php?page=team_prospects'],
     ['label' => 'Filter & add'],
 ]); ?>
 <div class="topbar">
   <div>
     <h1>Filter & add prospect sites</h1>
     <p class="muted">
-      Box 1 = old inventory (prospect list). Box 2 = new sites.
-      Filter removes old from new → Add sites saves to <strong>both</strong> old inventory and today’s dated batch.
+      Box 1 = <strong>Our inventory</strong> (Admin master list). Box 2 = new sites to check.
+      Filter removes inventory domains from new → only <strong>unique</strong> sites can be added.
     </p>
   </div>
   <div class="actions">
@@ -83,8 +83,8 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel">
-      <h2>Box 1 — Old inventory</h2>
-      <p class="help"><?= (int) $old['total'] ?> site name(s) · no https · used for filter compare</p>
+      <h2>Box 1 — Our inventory</h2>
+      <p class="help"><?= (int) $old['total'] ?> site name(s) · Admin master list · used for unique filter</p>
       <textarea class="inventory-box" id="old_inventory" rows="16" readonly><?= h($oldText) ?></textarea>
     </div>
     <div class="card box-panel">
@@ -153,7 +153,7 @@ render_header('Filter & add', 'team');
 
 <div class="grid two-box">
   <div class="card">
-    <h2>Excluded — already in old inventory</h2>
+    <h2>Excluded — already in Our inventory</h2>
     <?php if ($result['existing']): ?>
       <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
     <?php else: ?>
@@ -172,7 +172,7 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Add sites → writes to <strong>Box 1 (old inventory)</strong> and <strong>today’s dated batch</strong> for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
+        <p class="help">Add sites → writes to <strong>Our inventory (Box 1)</strong> and <strong>today’s dated batch</strong> for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
         <p class="actions" style="margin-top:0.8rem">
           <button class="btn" type="submit">Add sites (<?= count($result['new']) ?>)</button>
         </p>

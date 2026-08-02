@@ -18,7 +18,7 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_projects' => ['admin_project', 'admin_project_form', 'admin_pitch_create', 'admin_pitch_item'],
         'admin_sites' => ['admin_site_form'],
         'admin_clients' => ['admin_client', 'admin_client_form', 'admin_order_form'],
-        'admin_prospects' => [],
+        'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => [],
         'team_projects' => ['team_project', 'team_site_form', 'team_sites'],
         'team_prospects' => ['team_prospect_form'],
@@ -84,7 +84,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_bulk_import' => 'Bulk import',
             ],
             'Outreach' => [
-                'admin_prospects' => 'Prospects',
+                'admin_prospects' => 'Our inventory',
                 'admin_prospect_batches' => 'Prospect batches',
             ],
             'Clients & orders' => [
@@ -104,7 +104,7 @@ function render_header(string $title, string $panel = ''): void
             ],
             'Prospects' => [
                 'team_prospect_check' => 'Filter & add',
-                'team_prospects' => 'Prospects',
+                'team_prospects' => 'Our inventory',
                 'team_prospect_batches' => 'Dated batches',
             ],
             'Catalog' => [

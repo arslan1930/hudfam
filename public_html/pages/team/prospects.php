@@ -42,16 +42,16 @@ $qs = http_build_query(array_filter([
     'language' => $language, 'region' => $region, 'status' => $status,
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Prospects', 'team');
+render_header('Our inventory', 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Prospects'],
+    ['label' => 'Our inventory'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Prospects</h1>
-    <p class="muted"><?= $total ?> sites to contact · no prices · filter uniques before adding</p>
+    <h1>Our inventory</h1>
+    <p class="muted"><?= $total ?> site<?= $total === 1 ? '' : 's' ?> · master unique list (Admin seeds this) · filter before adding more</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>

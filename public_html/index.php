@@ -43,6 +43,7 @@ $routes = [
     'admin_orders_export' => 'pages/admin/orders_export.php',
     'admin_countries' => 'pages/admin/countries.php',
     'admin_prospects' => 'pages/admin/prospects.php',
+    'admin_prospect_add' => 'pages/admin/prospect_add.php',
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_projects' => 'pages/team/projects.php',
