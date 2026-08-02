@@ -13,7 +13,7 @@ render_header('Dated batches', 'team');
 <div class="topbar">
   <div>
     <h1>Prospect batches by date</h1>
-    <p class="muted">Each teammate’s daily adds — also stored in old inventory (Box 1).</p>
+    <p class="muted">Each teammate’s daily adds — also stored in Our inventory (Box 1).</p>
   </div>
   <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
 </div>

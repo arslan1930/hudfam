@@ -56,6 +56,7 @@ a:hover { text-decoration: underline; }
   width: auto;
   display: block;
   flex: 0 0 auto;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.15));
 }
 .login-brand {
   display: flex;
@@ -65,7 +66,7 @@ a:hover { text-decoration: underline; }
   margin-bottom: 0.35rem;
 }
 .login-brand .brand-logo {
-  height: 48px;
+  height: 52px;
 }
 .login-brand h1 {
   margin: 0;
@@ -159,8 +160,8 @@ a:hover { text-decoration: underline; }
   display: flex;
   gap: 0.65rem;
   align-items: flex-start;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border: 1px solid #c9ddf8;
   border-radius: var(--radius);
   padding: 0.75rem 0.85rem;
   box-shadow: var(--shadow);
@@ -176,6 +177,7 @@ a:hover { text-decoration: underline; }
   font-size: 0.85rem;
   display: grid;
   place-items: center;
+  box-shadow: 0 3px 8px rgba(24, 119, 242, 0.35);
 }
 .workflow-body {
   display: flex;
@@ -213,7 +215,7 @@ a:hover { text-decoration: underline; }
 }
 .badge.new, .badge.contacting { background: var(--brand-soft); color: var(--brand-deep); }
 .badge.replied { background: #d9efe3; color: var(--ok); }
-.badge.skipped, .badge.paused, .badge.archived, .badge.on_hold, .badge.cancelled { background: #ece8df; color: var(--muted); }
+.badge.skipped, .badge.paused, .badge.archived, .badge.on_hold, .badge.cancelled { background: #e4e6eb; color: var(--muted); }
 .more-actions { position: relative; display: inline-block; }
 .more-actions > summary {
   list-style: none;

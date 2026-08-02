@@ -239,14 +239,14 @@ function render_glossary(string $panel): void
     echo '<div class="glossary card" role="note">';
     echo '<h2 class="glossary-title">Quick guide</h2>';
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Prospects</dt><dd>Outreach list — domains to contact. <strong>No prices.</strong></dd></div>';
+    echo '<div><dt>Our inventory</dt><dd>Master unique domain list (Admin adds URLs). <strong>No prices.</strong> Team Filter checks against this.</dd></div>';
     echo '<div><dt>Catalog</dt><dd>Priced sites inside projects (quotes, mailbox, deal status).</dd></div>';
     if ($panel === 'team') {
         echo '<div><dt>Super search</dt><dd>Duplicate check across catalog — site metrics only (no client secrets).</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Filter uniques → Prospects → Open a project → Add priced sites → Watch Results.</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Filter uniques vs Our inventory → Open a project → Add priced sites → Watch Results.</dd></div>';
     } else {
         echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Create project → Build catalog → Send pack → Track orders.</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Seed Our inventory → Create project → Build catalog → Send pack → Track orders.</dd></div>';
     }
     echo '</dl></div>';
 }

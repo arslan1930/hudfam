@@ -45,14 +45,14 @@ render_header('Team dashboard', 'team');
   <div class="actions">
     <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Dated batches</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Old inventory</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Our inventory</a>
   </div>
 </div>
 
 <?php
 render_workflow([
-    ['label' => 'Filter uniques', 'href' => 'index.php?page=team_prospect_check', 'hint' => 'Paste vs prospect list'],
-    ['label' => 'Prospects', 'href' => 'index.php?page=team_prospects', 'hint' => 'Outreach list · no prices'],
+    ['label' => 'Filter uniques', 'href' => 'index.php?page=team_prospect_check', 'hint' => 'Paste vs Our inventory'],
+    ['label' => 'Our inventory', 'href' => 'index.php?page=team_prospects', 'hint' => 'Master unique list · no prices'],
     ['label' => 'Work a project', 'href' => 'index.php?page=team_projects', 'hint' => 'Add priced catalog sites'],
     ['label' => 'Results', 'href' => 'index.php?page=team_results', 'hint' => 'Sent / rejected / live'],
 ]);
