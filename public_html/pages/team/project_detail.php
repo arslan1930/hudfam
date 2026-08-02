@@ -193,7 +193,7 @@ render_header($project['name'], 'team');
 <div class="card">
   <div class="topbar" style="margin-bottom:0.5rem">
     <p class="muted"><?= $total ?> site(s) in this project</p>
-    <a class="btn" href="index.php?page=team_site_form&project_id=<?= $id ?>">Add site</a>
+    <a class="btn" href="index.php?page=team_project_filter&project_id=<?= $id ?>">Filter &amp; add</a>
   </div>
   <table>
     <thead>
