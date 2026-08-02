@@ -210,6 +210,11 @@ function project_inventory_query(int $projectId, array $filters, int $pageNum = 
     }
     if (!empty($filters['empty_country'])) {
         $where[] = "(TRIM(COALESCE(s.country,'')) = '')";
+        apply_site_geo_filters($where, $params, [
+            'region' => $filters['region'] ?? '',
+            'country' => '',
+            'language' => $filters['language'] ?? '',
+        ]);
     } else {
         apply_site_geo_filters($where, $params, [
             'region' => $filters['region'] ?? '',
