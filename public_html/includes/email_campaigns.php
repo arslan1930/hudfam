@@ -386,3 +386,50 @@ function email_campaign_status_comment(string $status): string
         default => $status,
     };
 }
+
+/**
+ * Team quick-cut: paste emails only → mark status → removed from Ready send list (record kept).
+ *
+ * @return array{cut:int,already:int,missing:string[],rows:list<array>}
+ */
+function email_campaign_quick_cut(string $rawEmails, string $status, array $user, string $notes = ''): array
+{
+    ensure_email_campaign_schema();
+    if (!in_array($status, ['replied', 'dealing', 'do_not_email'], true)) {
+        $status = 'replied';
+    }
+    $rawEmails = str_replace(["\r\n", "\r", ',', ';', "\t"], "\n", $rawEmails);
+    $parts = preg_split('/\s+/', $rawEmails) ?: [];
+    $emails = [];
+    foreach ($parts as $p) {
+        $e = normalize_campaign_email($p);
+        if ($e !== '' && str_contains($e, '@') && filter_var($e, FILTER_VALIDATE_EMAIL)) {
+            $emails[$e] = true;
+        }
+    }
+    $emails = array_keys($emails);
+    $cut = 0;
+    $already = 0;
+    $missing = [];
+    $rows = [];
+    $find = db()->prepare('SELECT * FROM email_campaign_contacts WHERE email=? LIMIT 1');
+    foreach ($emails as $email) {
+        $find->execute([$email]);
+        $row = $find->fetch();
+        if (!$row) {
+            $missing[] = $email;
+            continue;
+        }
+        if (in_array($row['status'], email_campaign_cut_statuses(), true)) {
+            $already++;
+            $rows[] = $row;
+            continue;
+        }
+        email_campaign_set_status((int) $row['id'], $status, $user, $notes);
+        $find->execute([$email]);
+        $updated = $find->fetch() ?: $row;
+        $rows[] = $updated;
+        $cut++;
+    }
+    return compact('cut', 'already', 'missing', 'rows');
+}

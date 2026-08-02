@@ -111,7 +111,7 @@ function render_header(string $title, string $panel = ''): void
                 'team_prospect_batches' => 'Dated batches',
             ],
             'Email campaigns' => [
-                'team_email_search' => 'Search emails',
+                'team_email_search' => 'Cut replied emails',
                 'team_email_campaigns' => 'Country sheets',
             ],
             'Catalog' => [
