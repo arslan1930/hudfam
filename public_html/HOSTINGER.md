@@ -40,7 +40,7 @@ Change passwords under **Admin → Users**.
 1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
 2. Admin builds **catalog inventory** (prices, order status, client name) — single or CSV bulk import
 3. **Team → Filter & add sites**: Box 1 = old prospect names · Box 2 = paste new → **Filter sites** → **Add sites** (writes to old inventory + today’s dated batch)
-4. **Dated batches**: each teammate’s daily adds (e.g. 100 today, 150 tomorrow); also in Box 1 old inventory
+4. **Add history** (Admin → Add history): each teammate’s websites by day; also stored in Our inventory / Filter Box 1
 5. Catalog Super search still shows site metrics only (no client/project secrets)
 6. Admin sends packs / publication orders as before
 

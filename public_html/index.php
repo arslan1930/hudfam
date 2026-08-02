@@ -45,6 +45,7 @@ $routes = [
     'admin_prospects' => 'pages/admin/prospects.php',
     'admin_prospect_add' => 'pages/admin/prospect_add.php',
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
+    'admin_prospect_batch' => 'pages/admin/prospect_batch.php',
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_projects' => 'pages/team/projects.php',
     'team_project' => 'pages/team/project_detail.php',

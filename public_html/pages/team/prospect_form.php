@@ -52,11 +52,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Already in prospect inventory. Filter first — do not add duplicates.');
             redirect('index.php?page=team_prospect_check');
         }
-        db()->prepare(
-            'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
-             VALUES (?,?,?,?,?,?,?,?,?)'
-        )->execute([$domain, $url, $country, $language, $region, $niche, $notes, $status, $user['id']]);
-        flash('ok', 'Prospect added.');
+        // Writes inventory + today's add history batch for this teammate
+        $added = add_prospect_domains([$domain], $user, $country, $language, $region, $niche, $notes);
+        if ($added['inserted'] < 1) {
+            flash('error', 'Already in prospect inventory. Filter first — do not add duplicates.');
+            redirect('index.php?page=team_prospect_check');
+        }
+        if ($url !== '' || $status !== 'new') {
+            db()->prepare(
+                'UPDATE prospect_sites SET url=?, status=? WHERE domain=?'
+            )->execute([$url, $status, $domain]);
+        }
+        flash('ok', 'Prospect added (also saved in today’s add history).');
+        if (!empty($added['batch_id'])) {
+            redirect('index.php?page=team_prospect_batch&id=' . (int) $added['batch_id']);
+        }
         redirect('index.php?page=team_prospects');
     } else {
         try {

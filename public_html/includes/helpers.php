@@ -246,6 +246,7 @@ function render_glossary(string $panel): void
         echo '<div><dt>Workflow</dt><dd>Filter uniques vs Our inventory → Open a project → Add priced sites → Watch Results.</dd></div>';
     } else {
         echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
+        echo '<div><dt>Add history</dt><dd>Which websites each teammate added, saved by person and day.</dd></div>';
         echo '<div><dt>Workflow</dt><dd>Seed Our inventory → Create project → Build catalog → Send pack → Track orders.</dd></div>';
     }
     echo '</dl></div>';
