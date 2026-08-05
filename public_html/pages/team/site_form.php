@@ -92,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('error', 'Domain is required.');
     } elseif ($status === 'agreed' && $agreed === null) {
         flash('error', 'Agreed price is required before status Agreed.');
-    } elseif (!$id && !empty(search_inventory_safe_for_team($domain, 1))) {
-        flash('error', 'This domain is already in our inventory. Use Super search — do not add it again.');
+    } elseif (!$id && domain_known_globally($domain)) {
+        flash('error', 'This domain is already in a catalog sheet or Our inventory. Search it first.');
         redirect('index.php?page=team_search&sq=' . urlencode($domain));
     } else {
         $data = [

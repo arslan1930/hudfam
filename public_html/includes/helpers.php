@@ -242,8 +242,9 @@ function render_glossary(string $panel): void
     echo '<div><dt>Our inventory</dt><dd>Master unique domain list (Admin adds URLs). <strong>No prices.</strong> Team Filter checks against this.</dd></div>';
     echo '<div><dt>Catalog</dt><dd>Priced sites inside projects (quotes, mailbox, deal status).</dd></div>';
     if ($panel === 'team') {
-        echo '<div><dt>Super search</dt><dd>Duplicate check across catalog — site metrics only (no client secrets).</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Filter uniques vs Our inventory → Open a project → Add priced sites → Watch Results.</dd></div>';
+        echo '<div><dt>Search all sheets</dt><dd>One bar across every country sheet + Our inventory. Shows comments before you add.</dd></div>';
+        echo '<div><dt>Country sheets</dt><dd>Each project catalog is split by country. Filter &amp; add only accepts domains not already known.</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Search domain → Open project sheet → Filter &amp; add uniques → Outreach → Results.</dd></div>';
     } else {
         echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
         echo '<div><dt>Add history</dt><dd>Which websites each teammate added, saved by person and day.</dd></div>';

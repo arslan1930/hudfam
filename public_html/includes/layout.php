@@ -15,7 +15,7 @@ function nav_is_active(string $navPage, string $current): bool
     }
     // Highlight parent section for detail/form routes
     $aliases = [
-        'admin_projects' => ['admin_project', 'admin_project_form', 'admin_pitch_create', 'admin_pitch_item'],
+        'admin_projects' => ['admin_project', 'admin_project_form', 'admin_project_filter', 'admin_pitch_create', 'admin_pitch_item'],
         'admin_sites' => ['admin_site_form'],
         'admin_clients' => ['admin_client', 'admin_client_form', 'admin_order_form'],
         'admin_prospects' => ['admin_prospect_add'],
@@ -25,6 +25,7 @@ function nav_is_active(string $navPage, string $current): bool
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_countries' => ['team_country'],
+        'team_email_campaigns' => ['team_email_search'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -107,8 +108,12 @@ function render_header(string $title, string $panel = ''): void
                 'team_prospects' => 'Our inventory',
                 'team_prospect_batches' => 'Dated batches',
             ],
+            'Email campaigns' => [
+                'team_email_search' => 'Cut replied emails',
+                'team_email_campaigns' => 'Country sheets',
+            ],
             'Catalog' => [
-                'team_search' => 'Super search',
+                'team_search' => 'Search all sheets',
                 'team_projects' => 'Projects',
                 'team_results' => 'Results',
             ],
