@@ -15,13 +15,12 @@ function nav_is_active(string $navPage, string $current): bool
     }
     // Highlight parent section for detail/form routes
     $aliases = [
-        'admin_projects' => ['admin_project', 'admin_project_form', 'admin_pitch_create', 'admin_pitch_item'],
+        'admin_projects' => ['admin_project', 'admin_project_form', 'admin_project_filter', 'admin_pitch_create', 'admin_pitch_item'],
         'admin_sites' => ['admin_site_form'],
         'admin_clients' => ['admin_client', 'admin_client_form', 'admin_order_form'],
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => [],
-        'admin_email_campaigns' => ['admin_email_campaign_import'],
-        'team_projects' => ['team_project', 'team_site_form', 'team_sites'],
+        'team_projects' => ['team_project', 'team_project_filter', 'team_site_form', 'team_sites'],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
@@ -115,7 +114,7 @@ function render_header(string $title, string $panel = ''): void
                 'team_email_campaigns' => 'Country sheets',
             ],
             'Catalog' => [
-                'team_search' => 'Super search',
+                'team_search' => 'Search all sheets',
                 'team_projects' => 'Projects',
                 'team_results' => 'Results',
             ],

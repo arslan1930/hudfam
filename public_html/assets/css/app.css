@@ -392,6 +392,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   text-align: center;
 }
 .sheet-tabs a.active .sheet-count { background: rgba(255,255,255,0.22); }
+.comment-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.35rem 0 0.6rem; }
 .messages { list-style: none; padding: 0; }
 .messages li { padding: 0.7rem 0.9rem; border-radius: 10px; margin-bottom: 0.7rem; background: #e7f5ef; border: 1px solid #b7dcc8; }
 .messages li.error { background: #f8e4e4; border-color: #e0b1b1; }
