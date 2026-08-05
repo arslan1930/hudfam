@@ -14,9 +14,10 @@ Laravel is fine in principle; this app stays **plain PHP** (no framework) so Hos
 
 ## Features
 
+- **Global country catalogs** — Admin Catalog = country folders; manual Add + Bulk import per country (no project required)
+- **Team catalog search** — select country first, then search/add against that country’s Admin data
 - **Two-box Team filter** — old prospect inventory vs new paste; unique results add to both old list and dated batches
-- **Project catalog** — country sheets, Filter & add, Admin prices (DR/traffic/agreed)
-- **Team pre-add search** — check domains across catalogs + inventory (already have / used / low traffic)
+- **Project catalog** — country sheets, Filter & add, Admin prices (DR/traffic/agreed) for pitching
 - **Email campaign inventory** — country sheets of URL + email; Admin export Ready; Team paste-cut Replied/Dealing
 - **Client folders** + publication orders + CSV export
 - Multi-admin collaboration per project
@@ -34,7 +35,7 @@ Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
    - Team: `teammate` / `team123`
 
 ### Already installed an older copy?
-Upload the new files, then open `/upgrade.php` once, then delete it.
+Upload the new files, then open `/upgrade.php` once (country catalog + prior upgrades), then delete it.
 
 ## Local preview (optional)
 

@@ -1,12 +1,14 @@
 <?php
 $user = require_admin();
-$projects = db()->query("SELECT id, name, client_name FROM projects WHERE status!='archived' ORDER BY name")->fetchAll();
-$projectId = (int) get('project_id');
+ensure_country_catalog_schema();
+
+$country = trim((string) (post('country') ?: get('country')));
+$countryGroups = country_catalog_countries_grouped();
 $result = null;
 
 if (isset($_GET['template'])) {
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=hudfam-inventory-template.csv');
+    header('Content-Disposition: attachment; filename=country-catalog-template.csv');
     $out = fopen('php://output', 'wb');
     fputcsv($out, bulk_csv_headers());
     fputcsv($out, [
@@ -21,33 +23,36 @@ if (isset($_GET['template'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $projectId = (int) post('project_id');
-    require_project_access($projectId, $user);
+    $country = trim((string) post('country'));
+    if ($country === '') {
+        flash('error', 'Select a country catalog first.');
+        redirect('index.php?page=admin_bulk_import');
+    }
     if (empty($_FILES['csv']['tmp_name']) || !is_uploaded_file($_FILES['csv']['tmp_name'])) {
         flash('error', 'Please upload a CSV file.');
-        redirect('index.php?page=admin_bulk_import&project_id=' . $projectId);
+        redirect('index.php?page=admin_bulk_import&country=' . urlencode($country));
     }
-    $name = (string) ($_FILES['csv']['name'] ?? '');
-    if (!preg_match('/\.csv$/i', $name) && ($_FILES['csv']['type'] ?? '') !== 'text/csv') {
-        // still allow if tmp exists — some browsers send application/octet-stream
-    }
-    $result = bulk_import_sites_csv($projectId, $_FILES['csv']['tmp_name'], (int) $user['id']);
+    $result = bulk_import_country_catalog_csv($country, $_FILES['csv']['tmp_name'], (int) $user['id']);
     flash(
         'ok',
-        "Import done: {$result['inserted']} inserted, {$result['updated']} updated, {$result['skipped']} skipped."
+        "Import into {$country}: {$result['inserted']} inserted, {$result['updated']} updated, {$result['skipped']} skipped."
     );
 }
 
 render_header('Bulk import', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Catalog', 'href' => 'index.php?page=admin_sites'],
+    ['label' => 'Bulk import'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Bulk import</h1>
-    <p class="muted">CSV into a project catalog · duplicates in the same project are updated.</p>
+    <p class="muted">CSV into a <strong>country catalog</strong> · duplicates in the same country are updated. Not tied to a client project.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_bulk_import&template=1">CSV template</a>
-    <a class="btn secondary" href="index.php?page=admin_sites">Catalog</a>
+    <a class="btn secondary" href="index.php?page=admin_bulk_import&amp;template=1">CSV template</a>
+    <a class="btn secondary" href="index.php?page=admin_sites<?= $country !== '' ? '&sheet=' . urlencode($country) : '' ?>">Catalog</a>
   </div>
 </div>
 
@@ -55,13 +60,13 @@ render_header('Bulk import', 'admin');
   <h2>CSV columns</h2>
   <p class="help">
     Required: <code>domain</code>.  
-    Recommended: <code>language</code>, <code>country</code>, <code>da</code>, <code>dr</code>, <code>traffic</code>,
+    Recommended: <code>language</code>, <code>da</code>, <code>dr</code>, <code>traffic</code>,
     <code>order_status</code>, <code>admin_comments</code> (or <code>comments</code>), <code>client_name</code>.  
     Optional: region, niche, url, status, prices, our_mailbox, our_contact_name.
   </p>
   <p class="help">
-    <code>order_status</code>: pending, processing, completed, on_hold, cancelled.  
-    Team Super search will see only site metrics — not client name, comments, or project details.
+    Rows are saved into the <strong>selected country</strong> (CSV <code>country</code> column is ignored for placement).
+    <code>order_status</code>: pending, processing, completed, on_hold, cancelled.
   </p>
 </div>
 
@@ -69,13 +74,20 @@ render_header('Bulk import', 'admin');
 <form method="post" enctype="multipart/form-data">
   <div class="form-grid">
     <div>
-      <label>Target project</label>
-      <select name="project_id" required>
-        <option value="">— choose project —</option>
-        <?php foreach ($projects as $p): ?>
-          <option value="<?= (int) $p['id'] ?>" <?= $projectId === (int) $p['id'] ? 'selected' : '' ?>>
-            <?= h($p['name']) ?><?= $p['client_name'] ? ' · ' . h($p['client_name']) : '' ?>
-          </option>
+      <label>Target country catalog <span class="help">(required)</span></label>
+      <select name="country" required>
+        <option value="">— Select country —</option>
+        <?php foreach ($countryGroups as $regionCode => $block): ?>
+          <?php if (empty($block['countries'])) {
+              continue;
+          } ?>
+          <optgroup label="<?= h($block['label']) ?>">
+            <?php foreach ($block['countries'] as $c): ?>
+              <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>>
+                <?= h($c['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </optgroup>
         <?php endforeach; ?>
       </select>
     </div>
@@ -84,16 +96,16 @@ render_header('Bulk import', 'admin');
       <input type="file" name="csv" accept=".csv,text/csv" required>
     </div>
   </div>
-  <p class="help" style="margin-top:0.7rem">Large files: keep under your host’s upload limit (Hostinger often 64–128MB). Split into multiple CSVs if needed.</p>
+  <p class="help" style="margin-top:0.7rem">Large files: keep under your host’s upload limit. Split into multiple CSVs if needed.</p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">Import CSV</button>
+    <button class="btn" type="submit">Import CSV into country</button>
   </p>
 </form>
 </div>
 
 <?php if ($result): ?>
 <div class="card">
-  <h2>Last import summary</h2>
+  <h2>Last import summary · <?= h($country) ?></h2>
   <p>
     Inserted: <strong><?= (int) $result['inserted'] ?></strong> ·
     Updated: <strong><?= (int) $result['updated'] ?></strong> ·
@@ -107,8 +119,8 @@ render_header('Bulk import', 'admin');
       <?php endforeach; ?>
     </ul>
   <?php endif; ?>
-  <?php if ($projectId): ?>
-    <p class="actions"><a class="btn" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Open project catalog</a></p>
+  <?php if ($country !== ''): ?>
+    <p class="actions"><a class="btn" href="index.php?page=admin_sites&amp;sheet=<?= urlencode($country) ?>">Open <?= h($country) ?> catalog</a></p>
   <?php endif; ?>
 </div>
 <?php endif; ?>

@@ -226,6 +226,13 @@ if (!file_exists(__DIR__ . '/config.php')) {
         $pdo->exec(file_get_contents(__DIR__ . '/sql/upgrade_email_campaigns.sql'));
         $notes[] = 'email_campaign_contacts OK';
 
+        // Global country catalog (company-wide country folders)
+        require_once __DIR__ . '/includes/inventory.php';
+        require_once __DIR__ . '/includes/country_catalog.php';
+        ensure_country_catalog_schema();
+        $migrated = migrate_sites_into_country_catalog();
+        $notes[] = 'country_catalog_sites OK' . ($migrated ? " (migrated {$migrated} row ops from project sites)" : '');
+
         // Demo client if missing
         $rexboId = (int) $pdo->query("SELECT id FROM projects WHERE name='rexbo.de' LIMIT 1")->fetchColumn();
         $adminId = (int) $pdo->query("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1")->fetchColumn();
@@ -259,7 +266,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 <div class="login-wrap">
   <div class="login-card">
     <h1>Upgrade</h1>
-    <p class="muted">Adds email campaign sheets, prospect inventory, multi-admin contacts, catalog fields, and prior upgrades.</p>
+    <p class="muted">Adds global country catalog, email campaign sheets, prospect inventory, multi-admin contacts, and prior upgrades.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
     <?php if ($done): ?>
       <p>Upgrade complete.</p>

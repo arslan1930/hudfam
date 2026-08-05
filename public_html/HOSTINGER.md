@@ -44,7 +44,7 @@ Change passwords under **Admin → Users**.
 4. Multiple admins: unique name + contact details; collaborate per project
 
 ### Already installed earlier?
-Open `upgrade.php` once, then delete it.
+Open `upgrade.php` once (country catalog + prior upgrades), then delete it.
 
 ## Troubleshooting
 | Problem | Fix |

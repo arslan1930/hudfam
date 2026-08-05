@@ -8,6 +8,7 @@ require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/inventory.php';
 require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/email_campaigns.php';
+require __DIR__ . '/includes/country_catalog.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -35,6 +36,7 @@ $routes = [
     'admin_pitch_item' => 'pages/admin/pitch_item.php',
     'admin_sites' => 'pages/admin/sites.php',
     'admin_site_form' => 'pages/admin/site_form.php',
+    'admin_catalog_site_form' => 'pages/admin/catalog_site_form.php',
     'admin_bulk_import' => 'pages/admin/bulk_import.php',
     'admin_users' => 'pages/admin/users.php',
     'admin_published' => 'pages/admin/published.php',
