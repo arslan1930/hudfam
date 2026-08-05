@@ -38,17 +38,16 @@ Upload **only** the files listed above (the contents of this folder). There is n
 Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
-1. **Admin**: Projects → Catalog / Bulk import → Send pack → Clients / Orders  
-2. **Team**: Filter & add (paste → filter → add unique) → My batches / All sites  
-3. Prospects (Team list, no prices) stay separate from Catalog (priced sites)  
-4. Multiple admins: unique name + contact details; collaborate per project
+1. **Admin**: Add URLs → Our database → Add history → Users  
+2. **Team**: Filter & add (paste → filter → add unique) → Our database → Add history  
 
 ### Already installed earlier?
-Open `upgrade.php` once (country catalog + prior upgrades), then delete it.
+Open `upgrade.php` once if tables are missing, then delete it.
 
 ## Troubleshooting
 | Problem | Fix |
 |--------|-----|
+| **403 Forbidden** | Re-upload the latest `.htaccess` from this folder (Hostinger-safe). In File Manager set folders to **755** and files to **644**. Confirm `index.php` is in the web root (not nested `public_html/public_html`). Then open `https://YOUR-DOMAIN/index.php?page=login`. |
 | 404 on domain | Files not in correct `public_html` / wrong domain document root |
 | **No design / unstyled page** | Upload the **`assets/`** folder (must include `assets/css/app.css` and `assets/img/techxform-logo.svg`). Also upload **`asset.php`**. Open `https://YOUR-DOMAIN/asset.php?f=css/app.css` — you should see CSS text. If that 404s, files are in the wrong folder (do not nest `public_html/public_html`). |
 | Filter / Prospects errors | Open `upgrade.php` once (creates prospect tables), then delete it. Newer builds also auto-create those tables on first use. |

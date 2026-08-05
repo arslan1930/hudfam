@@ -18,9 +18,9 @@ function require_admin(): array
 {
     $user = require_login();
     if ($user['role'] !== 'admin') {
-        http_response_code(403);
-        echo 'Admin access required.';
-        exit;
+        // Never show a raw 403 page — send teammates to their panel
+        flash('error', 'Admin access required. You were sent to the Team panel.');
+        redirect('index.php?page=team_dashboard');
     }
     return $user;
 }
@@ -29,9 +29,8 @@ function require_team(): array
 {
     $user = require_login();
     if (!in_array($user['role'], ['admin', 'team'], true)) {
-        http_response_code(403);
-        echo 'Team access required.';
-        exit;
+        flash('error', 'Please sign in with a Team or Admin account.');
+        redirect('index.php?page=login');
     }
     return $user;
 }

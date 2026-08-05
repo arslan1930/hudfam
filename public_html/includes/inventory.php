@@ -67,9 +67,8 @@ function require_project_access(int $projectId, array $user): array
         $chk = db()->prepare('SELECT 1 FROM project_members WHERE project_id=? AND user_id=?');
         $chk->execute([$projectId, $user['id']]);
         if (!$chk->fetchColumn()) {
-            http_response_code(403);
-            echo 'You are not assigned to this project.';
-            exit;
+            flash('error', 'You are not assigned to this project.');
+            redirect(is_admin($user) ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
         }
     }
     return $project;
