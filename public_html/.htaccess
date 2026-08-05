@@ -1,5 +1,5 @@
-# TechxForm PHP app for Hostinger shared hosting (no Node / React)
-Options -Indexes
+# TechxForm — Hostinger / LiteSpeed safe (plain PHP)
+DirectoryIndex index.php index.html
 
 <IfModule mod_mime.c>
   AddType text/css .css
@@ -11,17 +11,28 @@ Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # Never rewrite real files/folders (CSS, assets, asset.php, etc.)
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
+  # Do not expose private PHP folders as URLs
+  RewriteRule ^(includes|pages|sql)(/|$) - [F,L]
+
+  # Real files (CSS, JS, images, asset.php, install.php, etc.) — serve as-is
+  RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # Optional pretty home redirect
-  RewriteRule ^$ index.php [L]
+  # Everything else → front controller (avoids Hostinger 403 on directories)
+  RewriteRule ^ index.php [L]
 </IfModule>
 
-# Protect config if Apache allows
 <Files "config.php">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</Files>
+
+<Files "config.sample.php">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>

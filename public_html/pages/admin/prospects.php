@@ -120,7 +120,7 @@ render_header('Our database', 'admin');
     </tbody>
   </table>
   <?php if (!$rows): ?>
-  <div class="empty-state"><p>No prospect sites yet — Team adds them via Filter & add.</p></div>
+  <div class="empty-state"><p>Our database is empty. Use Add URLs, or ask Team to Filter &amp; add.</p></div>
   <?php else: ?>
   <div class="actions" style="margin-top:0.8rem">
     <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
