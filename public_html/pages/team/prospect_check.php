@@ -32,9 +32,9 @@ try {
             $filter = filter_domains_against_prospects($domains);
             $selected = $filter['new'];
             $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-            $msg = 'Added ' . (int) $added['inserted'] . ' sites to inventory';
+            $msg = 'Added ' . (int) $added['inserted'] . ' sites to Our database';
             if (!empty($added['batch_id'])) {
-                $msg .= ' · Batch: today';
+                $msg .= ' · saved in today’s history';
             }
             if ((int) $added['skipped'] > 0) {
                 $msg .= ' · Skipped ' . (int) $added['skipped'] . ' already known';
@@ -67,20 +67,20 @@ render_header('Filter & add', 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Our inventory', 'href' => 'index.php?page=team_prospects'],
+    ['label' => 'Our database', 'href' => 'index.php?page=team_prospects'],
     ['label' => 'Filter & add'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Filter & add sites</h1>
-    <p class="muted">Find unique domains, then save them to inventory and today’s batch.</p>
+    <h1>Filter &amp; add</h1>
+    <p class="muted">Paste domains → remove ones already in Our database → add only unique sites.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">My batches</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">All sites</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
+    <a class="btn secondary" href="index.php?page=team_prospects">Our database</a>
   </div>
 </div>
-<?= guide_team_filter() ?>
+<?= guide_filter_add() ?>
 
 <ul class="steps">
   <li class="step <?= $stepPaste ?>"><span class="num">1</span> Paste new</li>
@@ -93,7 +93,7 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel panel-muted">
-      <h2>① Already in inventory</h2>
+      <h2>① Already in database</h2>
       <p class="help"><?= (int) $old['total'] ?> site names · used to remove duplicates</p>
       <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="No sites yet"><?= h($oldText) ?></textarea>
     </div>
@@ -184,14 +184,14 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Saves to inventory and today’s batch for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
+        <p class="help">Saves to Our database and today’s history for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
         <div class="actions-sticky">
           <button class="btn large block" type="submit">Add sites (<?= count($result['new']) ?>)</button>
         </div>
       </form>
     <?php else: ?>
       <div class="empty-state">
-        <p>No unique domains left — everything was already in inventory.</p>
+        <p>No unique domains left — everything was already in Our database.</p>
         <a class="btn secondary" href="index.php?page=team_prospect_check">Paste a new list</a>
       </div>
     <?php endif; ?>

@@ -8,15 +8,16 @@ try {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Dated batches.');
 }
 
-render_header('My batches', 'team');
+render_header('Add history', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>My batches</h1>
-    <p class="muted">Daily adds by teammate — also saved in All sites.</p>
+    <h1>Add history</h1>
+    <p class="muted">Sites you added, saved by day. They are also in Our database.</p>
   </div>
-  <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
+  <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
+<?= guide_add_history() ?>
 
 <div class="card">
   <?php if ($batches): ?>

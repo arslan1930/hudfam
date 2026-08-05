@@ -38,7 +38,7 @@ render_header('Add history · ' . $batch['batch_date'], 'admin');
   <?php if (!empty($batch['notes'])): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">Saved in Our inventory and in this teammate’s daily add history.</p>
+  <p class="help">Saved in Our database and in this teammate’s daily add history.</p>
   <?php if ($domains): ?>
     <textarea class="inventory-box" rows="16" readonly><?= h(implode("\n", $domains)) ?></textarea>
     <details style="margin-top:1rem">

@@ -40,20 +40,23 @@ $qs = http_build_query(array_filter([
     'created_by' => $createdBy ?: '',
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Our inventory', 'admin');
+render_header('Our database', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Our inventory'],
+    ['label' => 'Our database'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Prospects</h1>
-    <p class="muted"><?= $total ?> team outreach sites · no prices (separate from Catalog)</p>
+    <h1>Our database</h1>
+    <p class="muted"><?= $total ?> unique domains · shared with Team</p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospect_batches">Batches</a>
+  <div class="actions">
+    <a class="btn" href="index.php?page=admin_prospect_add">Add URLs</a>
+    <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
+  </div>
 </div>
-<?= guide_admin_inventory() ?>
+<?= guide_inventory() ?>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>

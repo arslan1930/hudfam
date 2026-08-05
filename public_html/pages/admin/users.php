@@ -70,8 +70,8 @@ render_header('Admins & users', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Admins & users</h1>
-    <p class="muted">Each admin has a unique name + contact details. Assign admins as collaborators on projects.</p>
+    <h1>Users</h1>
+    <p class="muted">Admin and Team logins for the shared URL database.</p>
   </div>
 </div>
 <?= guide_admin_users() ?>
