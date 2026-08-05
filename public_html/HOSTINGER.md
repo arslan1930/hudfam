@@ -37,12 +37,10 @@ Do **not** upload the Django files (`manage.py`, `core/`, etc.) into `public_htm
 Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
-1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
-2. Admin builds **catalog inventory** (prices, order status, client name) — single or CSV bulk import
-3. **Team → Filter & add sites**: Box 1 = old prospect names · Box 2 = paste new → **Filter sites** → **Add sites** (writes to old inventory + today’s dated batch)
-4. **Add history** (Admin → Add history): each teammate’s websites by day; also stored in Our inventory / Filter Box 1
-5. Catalog Super search still shows site metrics only (no client/project secrets)
-6. Admin sends packs / publication orders as before
+1. **Admin**: Projects → Catalog / Bulk import → Send pack → Clients / Orders  
+2. **Team**: Filter & add (paste → filter → add unique) → My batches / All sites  
+3. Prospects (Team list, no prices) stay separate from Catalog (priced sites)  
+4. Multiple admins: unique name + contact details; collaborate per project
 
 ### Already installed earlier?
 Open `upgrade.php` once, then delete it.

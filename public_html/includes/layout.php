@@ -42,12 +42,7 @@ function render_header(string $title, string $panel = ''): void
 {
     $app = app_config()['app_name'] ?? 'TechxForm';
     $user = current_user();
-    $base = app_base_path();
-    // PHP-served CSS first (Hostinger-safe), then static file as second source
-    $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
-    $logo = brand_logo_url();
-
+    $current = (string) ($_GET['page'] ?? '');
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
@@ -64,73 +59,84 @@ function render_header(string $title, string $panel = ''): void
     }
 
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
-    $current = current_route_page();
-    $roleLabel = $panel === 'admin' ? 'Admin' : 'Team';
+    $displayName = trim((string) ($user['full_name'] ?? '')) !== ''
+        ? $user['full_name']
+        : $user['username'];
 
     echo '<div class="shell"><aside class="sidebar">';
-    echo '<a class="brand" href="' . h($home) . '">';
-    echo '<img class="brand-logo" src="' . h($logo) . '" alt="' . h($app) . '">';
-    echo '<span>' . h($app) . '</span></a>';
-    echo '<div class="sidebar-role">' . h($roleLabel) . ' · ' . h((string) ($user['username'] ?? '')) . '</div>';
-    echo '<nav aria-label="' . h($roleLabel) . ' navigation">';
+    echo '<a class="brand" href="' . h($home) . '">' . h($app) . '</a>';
+    echo '<div class="sidebar-user">' . h($displayName);
+    echo '<span>' . h($panel === 'admin' ? 'Admin' : 'Team') . '</span></div>';
+    echo '<nav>';
 
     if ($panel === 'admin') {
-        $groups = [
-            'Overview' => [
+        $sections = [
+            '' => [
                 'admin_dashboard' => 'Dashboard',
             ],
-            'Catalog & projects' => [
+            'Campaigns' => [
                 'admin_projects' => 'Projects',
                 'admin_sites' => 'Catalog',
                 'admin_bulk_import' => 'Bulk import',
-            ],
-            'Outreach' => [
-                'admin_prospects' => 'Our inventory',
-                'admin_prospect_batches' => 'Add history',
-            ],
-            'Clients & orders' => [
                 'admin_clients' => 'Clients',
-                'admin_orders_export' => 'Orders export',
+                'admin_orders_export' => 'Orders',
                 'admin_published' => 'Published',
             ],
-            'Settings' => [
+            'Team list' => [
+                'admin_prospects' => 'Prospects',
+                'admin_prospect_batches' => 'Batches',
+            ],
+            'Setup' => [
                 'admin_countries' => 'Countries',
-                'admin_users' => 'Admins & users',
+                'admin_users' => 'Users',
             ],
         ];
     } else {
-        $groups = [
-            'Overview' => [
+        $sections = [
+            '' => [
                 'team_dashboard' => 'Dashboard',
             ],
             'Prospects' => [
                 'team_prospect_check' => 'Filter & add',
-                'team_prospects' => 'Our inventory',
-                'team_prospect_batches' => 'Dated batches',
+                'team_prospect_batches' => 'My batches',
+                'team_prospects' => 'All sites',
             ],
-            'Email campaigns' => [
-                'team_email_search' => 'Cut replied emails',
-                'team_email_campaigns' => 'Country sheets',
-            ],
-            'Catalog' => [
-                'team_search' => 'Search all sheets',
+            'Work' => [
+                'team_search' => 'Catalog search',
                 'team_projects' => 'Projects',
                 'team_results' => 'Results',
-            ],
-            'Reference' => [
                 'team_countries' => 'Countries',
             ],
         ];
     }
 
-    foreach ($groups as $groupLabel => $links) {
-        echo '<div class="nav-group">';
-        echo '<div class="nav-group-label">' . h($groupLabel) . '</div>';
-        foreach ($links as $page => $label) {
-            $active = nav_is_active($page, $current) ? ' active' : '';
-            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($page) . '">' . h($label) . '</a>';
+    foreach ($sections as $section => $links) {
+        if ($section !== '') {
+            echo '<div class="nav-section">' . h($section) . '</div>';
         }
-        echo '</div>';
+        foreach ($links as $page => $label) {
+            $cls = $current === $page ? ' class="active"' : '';
+            // Highlight related detail pages under parent nav
+            if ($page === 'team_prospect_batches' && $current === 'team_prospect_batch') {
+                $cls = ' class="active"';
+            }
+            if ($page === 'admin_projects' && in_array($current, ['admin_project', 'admin_project_form', 'admin_pitch_create', 'admin_pitch_item'], true)) {
+                $cls = ' class="active"';
+            }
+            if ($page === 'admin_sites' && $current === 'admin_site_form') {
+                $cls = ' class="active"';
+            }
+            if ($page === 'admin_clients' && in_array($current, ['admin_client', 'admin_client_form', 'admin_order_form'], true)) {
+                $cls = ' class="active"';
+            }
+            if ($page === 'team_projects' && $current === 'team_project') {
+                $cls = ' class="active"';
+            }
+            if ($page === 'team_prospect_check' && $current === 'team_prospect_form') {
+                $cls = ' class="active"';
+            }
+            echo '<a href="index.php?page=' . h($page) . '"' . $cls . '>' . h($label) . '</a>';
+        }
     }
 
     echo '<div class="nav-group nav-group-end">';

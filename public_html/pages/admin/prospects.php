@@ -48,16 +48,10 @@ render_header('Our inventory', 'admin');
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Our inventory</h1>
-    <p class="muted">
-      <?= $total ?> site<?= $total === 1 ? '' : 's' ?> · master unique list (no prices).
-      Team Filter checks new sites against this list.
-    </p>
+    <h1>Prospects</h1>
+    <p class="muted"><?= $total ?> team outreach sites · no prices (separate from Catalog)</p>
   </div>
-  <div class="actions">
-    <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
-    <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
-  </div>
+  <a class="btn secondary" href="index.php?page=admin_prospect_batches">Batches</a>
 </div>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
@@ -119,20 +113,16 @@ render_header('Our inventory', 'admin');
         <td><?= h(substr((string) $s['created_at'], 0, 10)) ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?>
-      <tr>
-        <td colspan="5" class="muted">
-          Our inventory is empty.
-          <a href="index.php?page=admin_prospect_add">Add sites</a> (paste URLs) so Team can filter uniques against this list.
-        </td>
-      </tr>
-    <?php endif; ?>
     </tbody>
   </table>
+  <?php if (!$rows): ?>
+  <div class="empty-state"><p>No prospect sites yet — Team adds them via Filter & add.</p></div>
+  <?php else: ?>
   <div class="actions" style="margin-top:0.8rem">
     <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
     <span>Page <?= $pageNum ?> / <?= $pages ?></span>
     <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
   </div>
+  <?php endif; ?>
 </div>
 <?php render_footer('admin'); ?>

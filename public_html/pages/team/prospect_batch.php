@@ -21,15 +21,19 @@ render_header('Batch ' . $batch['batch_date'], 'team');
     <p class="muted"><?= (int) $batch['site_count'] ?> site(s) · <?= h($batch['country'] ?: '—') ?> · <?= h($batch['language'] ?: '—') ?></p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">All batches</a>
-    <a class="btn" href="index.php?page=team_prospect_check">Filter & add more</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">My batches</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
   </div>
 </div>
 <div class="card">
   <?php if ($batch['notes']): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">These domains are also in Box 1 (old prospect inventory).</p>
-  <textarea class="inventory-box" rows="18" readonly><?= h(implode("\n", $domains)) ?></textarea>
+  <p class="help">Also stored in All sites (inventory).</p>
+  <?php if ($domains): ?>
+    <textarea class="inventory-box" rows="18" readonly><?= h(implode("\n", $domains)) ?></textarea>
+  <?php else: ?>
+    <div class="empty-state"><p>No domains in this batch.</p></div>
+  <?php endif; ?>
 </div>
 <?php render_footer('team'); ?>
