@@ -41,8 +41,9 @@ Change passwords under **Admin → Users**.
 2. Admin builds **catalog inventory** (prices, order status, client name) — single or CSV bulk import
 3. **Team → Filter & add sites**: Box 1 = old prospect names · Box 2 = paste new → **Filter sites** → **Add sites** (writes to old inventory + today’s dated batch)
 4. **Dated batches**: each teammate’s daily adds (e.g. 100 today, 150 tomorrow); also in Box 1 old inventory
-5. Catalog Super search still shows site metrics only (no client/project secrets)
-6. Admin sends packs / publication orders as before
+5. **Email campaigns** (separate): Admin fills per-country sheets (URL + email) → export Ready CSV → send → mark Emailed. Team marks Replied/Dealing to cut from future sends
+6. Catalog Super search still shows site metrics only (no client/project secrets)
+7. Admin sends packs / publication orders as before
 
 ### Already installed earlier?
 Open `upgrade.php` once, then delete it.
