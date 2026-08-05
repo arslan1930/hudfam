@@ -1,7 +1,12 @@
 <?php
 $user = require_team();
 // Admins see all batches; team sees own (admins collaborating may want all — show all for admin, own for team)
-$batches = is_admin($user) ? list_prospect_batches(null, 100) : list_prospect_batches((int) $user['id'], 100);
+$batches = [];
+try {
+    $batches = is_admin($user) ? list_prospect_batches(null, 100) : list_prospect_batches((int) $user['id'], 100);
+} catch (Throwable $e) {
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Dated batches.');
+}
 
 render_header('My batches', 'team');
 ?>

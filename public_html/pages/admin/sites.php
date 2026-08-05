@@ -33,6 +33,10 @@ $qs = http_build_query(array_filter([
 
 render_header('Catalog', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Catalog'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Catalog</h1>

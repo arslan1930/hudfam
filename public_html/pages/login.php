@@ -9,11 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $error = 'Invalid username or password.';
 }
+$app = app_config()['app_name'] ?? 'TechxForm';
 render_header('Login');
 ?>
 <div class="login-wrap">
   <div class="login-card">
-    <h1><?= h(app_config()['app_name'] ?? 'Hudfam') ?></h1>
+    <div class="login-brand">
+      <img class="brand-logo" src="<?= h(brand_logo_url()) ?>" alt="<?= h($app) ?>">
+      <h1><?= h($app) ?></h1>
+    </div>
     <p class="muted">Linkbuilding inventory &amp; project folders.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
     <form method="post">

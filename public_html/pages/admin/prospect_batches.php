@@ -3,6 +3,10 @@ require_admin();
 $batches = list_prospect_batches(null, 150);
 render_header('Batches', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Add history'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Batches</h1>
@@ -10,10 +14,19 @@ render_header('Batches', 'admin');
   </div>
   <a class="btn secondary" href="index.php?page=admin_prospects">Prospects</a>
 </div>
+
 <div class="card">
   <?php if ($batches): ?>
   <table>
-    <thead><tr><th>Date</th><th>Teammate</th><th>Count</th><th>Country / lang</th><th></th></tr></thead>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Teammate</th>
+        <th>Sites</th>
+        <th>Country / lang</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
     <?php foreach ($batches as $b): ?>
       <tr>

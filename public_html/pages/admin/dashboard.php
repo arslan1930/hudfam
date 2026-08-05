@@ -63,7 +63,7 @@ render_header('Dashboard', 'admin');
   <h2>Catalog by status</h2>
   <div class="actions" style="margin-top:0.7rem">
     <?php foreach ($counts as $status => $c): ?>
-      <span class="badge <?= h($status) ?>"><?= h($status) ?> · <?= $c ?></span>
+      <?= badge((string) $status) ?> <span class="muted" style="margin-right:0.6rem">· <?= $c ?></span>
     <?php endforeach; ?>
     <?php if (!$counts): ?><p class="muted">No catalog sites yet.</p><?php endif; ?>
   </div>

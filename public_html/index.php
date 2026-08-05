@@ -7,6 +7,7 @@ require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/inventory.php';
 require __DIR__ . '/includes/prospects.php';
+require __DIR__ . '/includes/email_campaigns.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -29,6 +30,7 @@ $routes = [
     'admin_projects' => 'pages/admin/projects.php',
     'admin_project' => 'pages/admin/project_detail.php',
     'admin_project_form' => 'pages/admin/project_form.php',
+    'admin_project_filter' => 'pages/admin/project_filter.php',
     'admin_pitch_create' => 'pages/admin/pitch_create.php',
     'admin_pitch_item' => 'pages/admin/pitch_item.php',
     'admin_sites' => 'pages/admin/sites.php',
@@ -43,10 +45,13 @@ $routes = [
     'admin_orders_export' => 'pages/admin/orders_export.php',
     'admin_countries' => 'pages/admin/countries.php',
     'admin_prospects' => 'pages/admin/prospects.php',
+    'admin_prospect_add' => 'pages/admin/prospect_add.php',
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
+    'admin_prospect_batch' => 'pages/admin/prospect_batch.php',
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_projects' => 'pages/team/projects.php',
     'team_project' => 'pages/team/project_detail.php',
+    'team_project_filter' => 'pages/team/project_filter.php',
     'team_sites' => 'pages/team/sites.php',
     'team_site_form' => 'pages/team/site_form.php',
     'team_search' => 'pages/team/search.php',
@@ -58,6 +63,8 @@ $routes = [
     'team_results' => 'pages/team/results.php',
     'team_countries' => 'pages/team/countries.php',
     'team_country' => 'pages/team/country_detail.php',
+    'team_email_campaigns' => 'pages/team/email_campaigns.php',
+    'team_email_search' => 'pages/team/email_search.php',
 ];
 
 if (!isset($routes[$page])) {

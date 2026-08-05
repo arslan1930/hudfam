@@ -1,7 +1,21 @@
-# Hudfam PHP app for Hostinger shared hosting
+# TechxForm PHP app for Hostinger shared hosting (no Node / React)
 Options -Indexes
+
+<IfModule mod_mime.c>
+  AddType text/css .css
+  AddType application/javascript .js
+  AddType application/json .json
+  AddType image/svg+xml .svg
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # Never rewrite real files/folders (CSS, assets, asset.php, etc.)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
   # Optional pretty home redirect
   RewriteRule ^$ index.php [L]
 </IfModule>

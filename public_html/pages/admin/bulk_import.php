@@ -108,7 +108,7 @@ render_header('Bulk import', 'admin');
     </ul>
   <?php endif; ?>
   <?php if ($projectId): ?>
-    <p class="actions"><a class="btn" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Open project inventory</a></p>
+    <p class="actions"><a class="btn" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Open project catalog</a></p>
   <?php endif; ?>
 </div>
 <?php endif; ?>

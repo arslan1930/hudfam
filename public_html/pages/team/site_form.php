@@ -92,8 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('error', 'Domain is required.');
     } elseif ($status === 'agreed' && $agreed === null) {
         flash('error', 'Agreed price is required before status Agreed.');
-    } elseif (!$id && !empty(search_inventory_safe_for_team($domain, 1))) {
-        flash('error', 'This domain is already in our inventory. Use Super search — do not add it again.');
+    } elseif (!$id && domain_known_globally($domain)) {
+        flash('error', 'This domain is already in a catalog sheet or Our inventory. Search it first.');
         redirect('index.php?page=team_search&sq=' . urlencode($domain));
     } else {
         $data = [
@@ -140,11 +140,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 )->execute($data);
                 $id = (int) db()->lastInsertId();
             }
-            flash('ok', 'Saved to project inventory.');
+            flash('ok', 'Saved to project catalog.');
             redirect('index.php?page=team_project&id=' . $projectId . '&tab=inventory');
         } catch (PDOException $e) {
             if (str_contains($e->getMessage(), 'uniq_project_domain') || str_contains($e->getMessage(), 'Duplicate')) {
-                flash('error', 'This domain is already in this project inventory. Use Super search to find it.');
+                flash('error', 'This domain is already in this project catalog. Use Super search to find it.');
             } else {
                 flash('error', 'Could not save site.');
             }
@@ -154,64 +154,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Projects', 'href' => 'index.php?page=team_projects'],
+    ['label' => $project['name'], 'href' => 'index.php?page=team_project&id=' . $projectId . '&tab=inventory'],
+    ['label' => $id ? (string) $site['domain'] : 'Add site'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add site' ?></h1>
-    <p class="muted">Project inventory · <a href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory"><?= h($project['name']) ?></a></p>
+    <h1><?= $id ? h($site['domain']) : 'Add catalog site' ?></h1>
+    <p class="muted">Project catalog · <a href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory"><?= h($project['name']) ?></a></p>
   </div>
-  <a class="btn secondary" href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory">Back to inventory</a>
+  <a class="btn secondary" href="index.php?page=team_project&id=<?= $projectId ?>&tab=inventory">Back to catalog</a>
 </div>
 <div class="grid" style="grid-template-columns:2fr 1fr">
 <div class="card">
 <?php if ($canEdit): ?>
 <form method="post">
-  <div class="form-grid">
-    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com"></div>
-    <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
-    <div><label>Region</label>
-      <select name="region">
-        <option value="">—</option>
-        <?php foreach (regions() as $k => $v): ?>
-          <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-        <?php endforeach; ?>
-      </select>
+  <fieldset class="form-section">
+    <legend>Site metrics</legend>
+    <div class="form-grid">
+      <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com"></div>
+      <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
+      <div><label>Region</label>
+        <select name="region">
+          <option value="">—</option>
+          <?php foreach (regions() as $k => $v): ?>
+            <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Country</label>
+        <select name="country" id="country_select">
+          <option value="">—</option>
+          <?php foreach ($countryOptions as $c): ?>
+            <option value="<?= h($c['name']) ?>"
+              data-region="<?= h($c['region']) ?>"
+              data-lang="<?= h($c['default_language']) ?>"
+              <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Language</label><input name="language" id="language_input" value="<?= h($site['language']) ?>"></div>
+      <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
+      <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
+      <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
+      <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
     </div>
-    <div><label>Country</label>
-      <select name="country" id="country_select">
-        <option value="">—</option>
-        <?php foreach ($countryOptions as $c): ?>
-          <option value="<?= h($c['name']) ?>"
-            data-region="<?= h($c['region']) ?>"
-            data-lang="<?= h($c['default_language']) ?>"
-            <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Pricing &amp; status</legend>
+    <div class="form-grid">
+      <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>"></div>
+      <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
+      <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>"></div>
+      <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
+      <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
+      <div><label>Site status</label>
+        <select name="status">
+          <?php foreach (['draft', 'negotiating', 'agreed'] as $st): ?>
+            <option value="<?= $st ?>" <?= $site['status'] === $st ? 'selected' : '' ?>><?= h(status_label($st)) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
     </div>
-    <div><label>Language</label><input name="language" id="language_input" value="<?= h($site['language']) ?>"></div>
-    <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
-    <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
-    <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
-    <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
-    <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>"></div>
-    <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
-    <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>"></div>
-    <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
-    <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
-    <div><label>Status</label>
-      <select name="status">
-        <?php foreach (['draft', 'negotiating', 'agreed'] as $st): ?>
-          <option value="<?= $st ?>" <?= $site['status'] === $st ? 'selected' : '' ?>><?= $st ?></option>
-        <?php endforeach; ?>
-      </select>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Outreach</legend>
+    <div class="form-grid">
+      <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>" placeholder="blogger@site.com"></div>
+      <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>" placeholder="outreach1@gmail.com" required></div>
+      <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>" placeholder="Name on that inbox / signature" required></div>
+      <div class="full"><label>Notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
+      <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
     </div>
-    <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>" placeholder="blogger@site.com"></div>
-    <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>" placeholder="outreach1@gmail.com" required></div>
-    <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>" placeholder="Name on that inbox / signature" required></div>
-    <div class="full"><label>Notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
-    <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
-  </div>
+  </fieldset>
   <p class="help"><strong>Our Gmail / mailbox</strong> = which of your inboxes got the blogger’s reply, so teammates know where to continue the chat.</p>
-  <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save to project inventory</button></p>
+  <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save to project catalog</button></p>
 </form>
 <script>
 (function(){
@@ -243,7 +263,6 @@ render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 
   <h2>Client results history</h2>
   <?php foreach ($history as $item): ?>
     <div class="history-item">
-      <strong><?= h($item['project_name']) ?></strong><br>
       <?= badge($item['item_status']) ?>
       <?php if ($item['reject_reason_code']): ?> · <?= h(reject_reasons()[$item['reject_reason_code']] ?? $item['reject_reason_code']) ?><?php endif; ?>
       <div class="muted"><?= h($item['reject_comment'] ?: $item['client_notes']) ?></div>

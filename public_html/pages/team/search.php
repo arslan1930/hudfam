@@ -1,20 +1,31 @@
 <?php
 $user = require_team();
 $superQ = trim((string) get('sq'));
-$results = $superQ !== '' ? search_inventory_safe_for_team($superQ, 60) : [];
+$lookup = null;
+if ($superQ !== '') {
+    $lookup = lookup_domain_for_team($superQ);
+}
 
-render_header('Super search', 'team');
+render_header('Search all sheets', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Search all sheets'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1>Super search</h1>
-    <p class="muted">Check if a website is already in our inventory. You only see site details — not client names, emails, or project info.</p>
+    <h1>Search a website before you add it</h1>
+    <p class="muted">
+      Checks <strong>all project catalogs</strong> + <strong>Our inventory</strong>.
+      Use this before Filter &amp; add so you never paste a repeated site.
+    </p>
   </div>
+  <a class="btn secondary" href="index.php?page=team_projects">Open a project</a>
 </div>
 
 <form class="card super-search" method="get" action="index.php">
   <input type="hidden" name="page" value="team_search">
-  <label for="sq">Search by domain</label>
+  <label for="sq">Website / domain</label>
   <div class="super-search-row">
     <input id="sq" name="sq" value="<?= h($superQ) ?>" autofocus
            placeholder="example.com">
@@ -23,46 +34,99 @@ render_header('Super search', 'team');
       <a class="btn secondary" href="index.php?page=team_search">Clear</a>
     <?php endif; ?>
   </div>
-  <p class="help">If the domain appears below, do <strong>not</strong> add it again — it is already in the database.</p>
+  <p class="help">
+    Results use Admin’s daily sheet data: country, DR, DA, traffic, status, and comments
+    (already have it, used, low traffic, inventory, …).
+  </p>
 </form>
 
-<?php if ($superQ !== ''): ?>
+<?php if ($lookup !== null): ?>
+  <?php
+    $known = $lookup['in_inventory'] || !empty($lookup['catalog_rows']);
+    $domain = $lookup['domain'];
+  ?>
 <div class="card">
-  <h2>Results · “<?= h($superQ) ?>” · <?= count($results) ?> domain(s)</h2>
+  <h2>Result · <?= h($domain !== '' ? $domain : $superQ) ?></h2>
+  <?php if ($known): ?>
+    <p class="help" style="margin-bottom:0.75rem">Do <strong>not</strong> add this domain again — it is already known.</p>
+    <div class="comment-badges">
+      <?php foreach ($lookup['comments'] as $c): ?>
+        <span class="badge rejected"><?= h($c) ?></span>
+      <?php endforeach; ?>
+    </div>
+  <?php else: ?>
+    <p class="muted">Not found in any country sheet or Our inventory — safe to add in the correct project.</p>
+    <p class="actions" style="margin-top:0.8rem">
+      <a class="btn" href="index.php?page=team_projects">Choose project → Filter &amp; add</a>
+    </p>
+  <?php endif; ?>
+</div>
+
+<?php if ($lookup['in_inventory'] && $lookup['inventory']): ?>
+<div class="card">
+  <h2>Our inventory</h2>
+  <table>
+    <thead><tr><th>Domain</th><th>Country / lang</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong><?= h($lookup['inventory']['domain']) ?></strong></td>
+        <td><?= h($lookup['inventory']['country'] ?: '—') ?> · <?= h($lookup['inventory']['language'] ?: '—') ?></td>
+        <td><?= h($lookup['inventory']['status'] ?: '—') ?></td>
+        <td><span class="badge agreed">Inventory</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>
+
+<?php if ($lookup['catalog_rows']): ?>
+<div class="card">
+  <h2>Project catalog sheets</h2>
   <table>
     <thead>
       <tr>
-        <th>Domain</th>
-        <th>Country</th>
-        <th>Language</th>
-        <th>DR</th>
-        <th>DA</th>
-        <th>Traffic</th>
-        <th></th>
+        <th>Domain</th><th>Project</th><th>Country sheet</th>
+        <th>DR / DA / Traffic</th><th>Quote / Agreed</th><th>Status</th>
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($results as $s): ?>
+    <?php foreach ($lookup['catalog_rows'] as $s): ?>
       <tr>
         <td><strong><?= h($s['domain']) ?></strong></td>
+        <td><?= h($s['project_name']) ?></td>
+        <td><?= h($s['country'] !== '' ? $s['country'] : 'No country') ?></td>
+        <td><?= h((string) ($s['dr'] ?? '—')) ?> / <?= h((string) ($s['da'] ?? '—')) ?> / <?= h((string) ($s['traffic'] ?? '—')) ?></td>
+        <td>
+          <?= money_or_dash($s['publisher_quote_price'] ?? null) ?>
+          / <?= money_or_dash($s['backlink_price'] ?? null) ?> <?= h($s['currency'] ?? '') ?>
+        </td>
+        <td><?= badge($s['status']) ?></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>
+
+<?php if ($lookup['partial']): ?>
+<div class="card">
+  <h2>Similar domains</h2>
+  <table>
+    <thead><tr><th>Domain</th><th>Country</th><th>Language</th><th>DR</th><th>DA</th><th>Traffic</th></tr></thead>
+    <tbody>
+    <?php foreach ($lookup['partial'] as $s): ?>
+      <tr>
+        <td><a href="index.php?page=team_search&amp;sq=<?= urlencode($s['domain']) ?>"><?= h($s['domain']) ?></a></td>
         <td><?= h($s['country'] ?: '—') ?></td>
         <td><?= h($s['language'] ?: '—') ?></td>
         <td><?= h((string) ($s['dr'] ?? '—')) ?></td>
         <td><?= h((string) ($s['da'] ?? '—')) ?></td>
         <td><?= h((string) ($s['traffic'] ?? '—')) ?></td>
-        <td><span class="badge agreed">Already in inventory</span></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$results): ?>
-      <tr>
-        <td colspan="7" class="muted">
-          Not found in inventory. You can add it inside the correct
-          <a href="index.php?page=team_projects">project</a>.
-        </td>
-      </tr>
-    <?php endif; ?>
     </tbody>
   </table>
 </div>
+<?php endif; ?>
 <?php endif; ?>
 <?php render_footer('team'); ?>

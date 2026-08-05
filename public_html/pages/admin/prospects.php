@@ -5,20 +5,47 @@ $country = trim((string) get('country'));
 $language = trim((string) get('language'));
 $region = (string) get('region');
 $status = (string) get('status');
+$createdBy = (int) get('created_by');
 $pageNum = max(1, (int) get('p', 1));
-$inv = prospect_inventory_query(compact('q', 'country', 'language', 'region', 'status'), $pageNum, 50);
-$rows = $inv['rows'];
-$total = $inv['total'];
-$pages = $inv['pages'];
+$rows = [];
+$total = 0;
+$pages = 1;
 $countryOptions = list_countries(null, true);
-$langs = distinct_prospect_languages();
+$langs = [];
+$adders = [];
+
+try {
+    $inv = prospect_inventory_query(
+        compact('q', 'country', 'language', 'region', 'status') + ['created_by' => $createdBy ?: null],
+        $pageNum,
+        50
+    );
+    $rows = $inv['rows'];
+    $total = $inv['total'];
+    $pages = $inv['pages'];
+    $langs = distinct_prospect_languages();
+    $adders = db()->query(
+        "SELECT DISTINCT u.id, u.username, u.full_name
+         FROM prospect_sites p
+         JOIN users u ON u.id = p.created_by
+         ORDER BY u.full_name, u.username"
+    )->fetchAll();
+} catch (Throwable $e) {
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload.');
+}
+
 $qs = http_build_query(array_filter([
     'page' => 'admin_prospects', 'q' => $q, 'country' => $country,
     'language' => $language, 'region' => $region, 'status' => $status,
+    'created_by' => $createdBy ?: '',
 ], fn($v) => $v !== '' && $v !== null));
 
-render_header('Prospects', 'admin');
+render_header('Our inventory', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Our inventory'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Prospects</h1>
@@ -28,7 +55,7 @@ render_header('Prospects', 'admin');
 </div>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>"></div>
+  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
   <div><label>Country</label>
     <select name="country">
       <option value="">All</option>
@@ -56,8 +83,18 @@ render_header('Prospects', 'admin');
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
-      <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
-        <option value="<?= $st ?>" <?= $status === $st ? 'selected' : '' ?>><?= $st ?></option>
+      <?php foreach (prospect_statuses() as $code => $label): ?>
+        <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div><label>Added by</label>
+    <select name="created_by">
+      <option value="">Anyone</option>
+      <?php foreach ($adders as $adder): ?>
+        <option value="<?= (int) $adder['id'] ?>" <?= $createdBy === (int) $adder['id'] ? 'selected' : '' ?>>
+          <?= h($adder['full_name'] ?: $adder['username']) ?>
+        </option>
       <?php endforeach; ?>
     </select>
   </div>

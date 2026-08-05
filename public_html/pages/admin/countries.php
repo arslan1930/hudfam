@@ -51,8 +51,8 @@ render_header('Countries', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Country folders</h1>
-    <p class="muted">Organize inventory by region → country. Team browses these folders.</p>
+    <h1>Countries</h1>
+    <p class="muted">Reference list for region → country → default language. Used in catalog and prospect filters.</p>
   </div>
 </div>
 

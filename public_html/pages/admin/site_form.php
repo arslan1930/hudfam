@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (post('reset_agreed') === '1' && $price !== null) {
                 db()->prepare("UPDATE sites SET status='agreed' WHERE id=?")->execute([$id]);
             }
-            flash('ok', 'Site saved to project inventory.');
+            flash('ok', 'Site saved to project catalog.');
             redirect('index.php?page=admin_project&id=' . $projectId . '&tab=inventory');
         } catch (PDOException $e) {
             if (str_contains($e->getMessage(), 'uniq_project_domain') || str_contains($e->getMessage(), 'Duplicate')) {
@@ -135,78 +135,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 render_header(($id ? $site['domain'] : 'Add site') . ' · ' . $project['name'], 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Projects', 'href' => 'index.php?page=admin_projects'],
+    ['label' => $project['name'], 'href' => 'index.php?page=admin_project&id=' . $projectId . '&tab=inventory'],
+    ['label' => $id ? (string) $site['domain'] : 'Add site'],
+]); ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add inventory site' ?></h1>
-    <p class="muted">Admin-only fields (client name, order status, comments) are hidden from Team Super search.</p>
+    <h1><?= $id ? h($site['domain']) : 'Add catalog site' ?></h1>
+    <p class="muted">Admin-only fields (client name, order status, comments) stay hidden from Team Super search.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_bulk_import&project_id=<?= $projectId ?>">Bulk import</a>
-    <a class="btn secondary" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Back</a>
+    <a class="btn secondary" href="index.php?page=admin_project&id=<?= $projectId ?>&tab=inventory">Back to catalog</a>
   </div>
 </div>
 <div class="grid" style="grid-template-columns:2fr 1fr">
 <div class="card">
 <form method="post">
-  <div class="form-grid">
-    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
-    <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
-    <div><label>Country</label>
-      <select name="country">
-        <option value="">—</option>
-        <?php foreach ($countryOptions as $c): ?>
-          <option value="<?= h($c['name']) ?>" <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+  <fieldset class="form-section">
+    <legend>Site metrics</legend>
+    <p class="section-help">Visible in Team Super search (domain + metrics only).</p>
+    <div class="form-grid">
+      <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
+      <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
+      <div><label>Country</label>
+        <select name="country">
+          <option value="">—</option>
+          <?php foreach ($countryOptions as $c): ?>
+            <option value="<?= h($c['name']) ?>" <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
+      <div><label>Region</label>
+        <select name="region">
+          <option value="">—</option>
+          <?php foreach (regions() as $k => $v): ?>
+            <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
+      <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
+      <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
+      <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
     </div>
-    <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
-    <div><label>Region</label>
-      <select name="region">
-        <option value="">—</option>
-        <?php foreach (regions() as $k => $v): ?>
-          <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-        <?php endforeach; ?>
-      </select>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Pricing</legend>
+    <div class="form-grid">
+      <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>"></div>
+      <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
+      <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>"></div>
+      <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
+      <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
+      <div><label>Site status</label>
+        <select name="status">
+          <?php foreach (site_statuses() as $code => $label): ?>
+            <option value="<?= $code ?>" <?= $site['status'] === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
     </div>
-    <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
-    <div><label>DR</label><input name="dr" value="<?= h((string) $site['dr']) ?>"></div>
-    <div><label>DA</label><input name="da" value="<?= h((string) $site['da']) ?>"></div>
-    <div><label>Traffic</label><input name="traffic" value="<?= h((string) $site['traffic']) ?>"></div>
-    <div><label>Client name (admin only)</label><input name="inventory_client_name" value="<?= h((string) ($site['inventory_client_name'] ?? '')) ?>"></div>
-    <div><label>Order status (admin only)</label>
-      <select name="order_status">
-        <?php foreach (inventory_order_statuses() as $code => $label): ?>
-          <option value="<?= h($code) ?>" <?= ($site['order_status'] ?? '') === $code ? 'selected' : '' ?>><?= h($label) ?></option>
-        <?php endforeach; ?>
-      </select>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Outreach</legend>
+    <div class="form-grid">
+      <div><label>Assigned to</label>
+        <select name="assigned_to">
+          <option value="">—</option>
+          <?php foreach ($teamUsers as $tu): ?>
+            <option value="<?= (int) $tu['id'] ?>" <?= (string) $site['assigned_to'] === (string) $tu['id'] ? 'selected' : '' ?>><?= h($tu['username']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
+      <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>"></div>
+      <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>"></div>
+      <div class="full"><label>Team notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
+      <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
     </div>
-    <div class="full"><label>Admin comments (admin only)</label><textarea name="admin_comments" rows="2"><?= h((string) ($site['admin_comments'] ?? '')) ?></textarea></div>
-    <div><label>Publisher quote price</label><input name="publisher_quote_price" value="<?= h((string) ($site['publisher_quote_price'] ?? '')) ?>"></div>
-    <div><label>Quote date</label><input type="date" name="publisher_quote_date" value="<?= h((string) ($site['publisher_quote_date'] ?? '')) ?>"></div>
-    <div><label>Agreed price</label><input name="backlink_price" value="<?= h((string) $site['backlink_price']) ?>"></div>
-    <div><label>Banner / year</label><input name="banner_price_yearly" value="<?= h((string) $site['banner_price_yearly']) ?>"></div>
-    <div><label>Currency</label><input name="currency" value="<?= h($site['currency']) ?>"></div>
-    <div><label>Site status</label>
-      <select name="status">
-        <?php foreach (site_statuses() as $code => $label): ?>
-          <option value="<?= $code ?>" <?= $site['status'] === $code ? 'selected' : '' ?>><?= h($label) ?></option>
-        <?php endforeach; ?>
-      </select>
+  </fieldset>
+
+  <fieldset class="form-section">
+    <legend>Admin only</legend>
+    <p class="section-help">Never shown in Team Super search.</p>
+    <div class="form-grid">
+      <div><label>Client name</label><input name="inventory_client_name" value="<?= h((string) ($site['inventory_client_name'] ?? '')) ?>"></div>
+      <div><label>Order status</label>
+        <select name="order_status">
+          <?php foreach (inventory_order_statuses() as $code => $label): ?>
+            <option value="<?= h($code) ?>" <?= ($site['order_status'] ?? '') === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="full"><label>Admin comments</label><textarea name="admin_comments" rows="2"><?= h((string) ($site['admin_comments'] ?? '')) ?></textarea></div>
     </div>
-    <div><label>Assigned to</label>
-      <select name="assigned_to">
-        <option value="">—</option>
-        <?php foreach ($teamUsers as $tu): ?>
-          <option value="<?= (int) $tu['id'] ?>" <?= (string) $site['assigned_to'] === (string) $tu['id'] ? 'selected' : '' ?>><?= h($tu['username']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div><label>Blogger / publisher email</label><input name="publisher_email" value="<?= h($site['publisher_email']) ?>"></div>
-    <div><label>Our Gmail / mailbox</label><input name="our_mailbox" value="<?= h($site['our_mailbox'] ?? '') ?>"></div>
-    <div><label>Our contact name</label><input name="our_contact_name" value="<?= h($site['our_contact_name'] ?? '') ?>"></div>
-    <div class="full"><label>Team notes</label><textarea name="outreach_notes" rows="2"><?= h($site['outreach_notes']) ?></textarea></div>
-    <div class="full"><label>Warning flags</label><input name="warning_flags" value="<?= h($site['warning_flags']) ?>"></div>
-  </div>
+  </fieldset>
+
   <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
 </form>
 </div>

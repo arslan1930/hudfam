@@ -8,22 +8,25 @@ $region = '';
 $niche = '';
 $notes = '';
 $result = null;
+$old = ['domains' => [], 'total' => 0, 'truncated' => false];
+$oldText = '';
 
-$old = list_prospect_domain_names(25000);
-$oldText = implode("\n", $old['domains']);
-if ($old['truncated']) {
-    $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-}
+try {
+    $old = list_prospect_domain_names(25000);
+    $oldText = implode("\n", $old['domains']);
+    if ($old['truncated']) {
+        $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
+    }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = (string) post('action');
-    $raw = (string) post('domains');
-    $country = trim((string) post('country'));
-    $language = trim((string) post('language'));
-    $region = (string) post('region');
-    $niche = trim((string) post('niche'));
-    $notes = trim((string) post('notes'));
-    $domains = parse_domain_list($raw);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $action = (string) post('action');
+        $raw = (string) post('domains');
+        $country = trim((string) post('country'));
+        $language = trim((string) post('language'));
+        $region = (string) post('region');
+        $niche = trim((string) post('niche'));
+        $notes = trim((string) post('notes'));
+        $domains = parse_domain_list($raw);
 
     if ($action === 'add_new') {
         $filter = filter_domains_against_prospects($domains);
@@ -41,8 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($added['batch_id'])) {
             $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
         }
-        redirect($redir);
-    }
 
     if (count($domains) > 100000) {
         flash('error', 'Paste at most 100,000 domains per run (split into batches).');
@@ -51,6 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $result = filter_domains_against_prospects($domains);
     }
+} catch (Throwable $e) {
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try Filter again.');
 }
 
 $stepPaste = !$result ? 'active' : 'done';
@@ -59,6 +62,11 @@ $stepAdd = ($result && $result['new']) ? 'active' : '';
 
 render_header('Filter & add', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Our inventory', 'href' => 'index.php?page=team_prospects'],
+    ['label' => 'Filter & add'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Filter & add sites</h1>

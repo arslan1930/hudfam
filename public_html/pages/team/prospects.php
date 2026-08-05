@@ -6,26 +6,37 @@ $language = trim((string) get('language'));
 $region = (string) get('region');
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
+$rows = [];
+$total = 0;
+$pages = 1;
+$countryOptions = list_countries(null, true);
+$langs = [];
+$countriesUsed = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'update_status') {
-    $id = (int) post('id');
-    $st = (string) post('status');
-    if (in_array($st, ['new', 'contacting', 'replied', 'skipped'], true)) {
-        db()->prepare('UPDATE prospect_sites SET status=? WHERE id=?')->execute([$st, $id]);
-        flash('ok', 'Prospect status updated.');
+try {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'update_status') {
+        ensure_prospect_schema();
+        $id = (int) post('id');
+        $st = (string) post('status');
+        if (in_array($st, ['new', 'contacting', 'replied', 'skipped'], true)) {
+            db()->prepare('UPDATE prospect_sites SET status=? WHERE id=?')->execute([$st, $id]);
+            flash('ok', 'Prospect status updated.');
+        }
+        redirect('index.php?page=team_prospects&' . http_build_query(array_filter([
+            'q' => $q, 'country' => $country, 'language' => $language, 'region' => $region, 'status' => $status, 'p' => $pageNum,
+        ])));
     }
-    redirect('index.php?page=team_prospects&' . http_build_query(array_filter([
-        'q' => $q, 'country' => $country, 'language' => $language, 'region' => $region, 'status' => $status, 'p' => $pageNum,
-    ])));
+
+    $inv = prospect_inventory_query(compact('q', 'country', 'language', 'region', 'status'), $pageNum, 50);
+    $rows = $inv['rows'];
+    $total = $inv['total'];
+    $pages = $inv['pages'];
+    $langs = distinct_prospect_languages();
+    $countriesUsed = distinct_prospect_countries();
+} catch (Throwable $e) {
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Prospects.');
 }
 
-$inv = prospect_inventory_query(compact('q', 'country', 'language', 'region', 'status'), $pageNum, 50);
-$rows = $inv['rows'];
-$total = $inv['total'];
-$pages = $inv['pages'];
-$countryOptions = list_countries(null, true);
-$langs = distinct_prospect_languages();
-$countriesUsed = distinct_prospect_countries();
 $qs = http_build_query(array_filter([
     'page' => 'team_prospects', 'q' => $q, 'country' => $country,
     'language' => $language, 'region' => $region, 'status' => $status,
@@ -33,6 +44,10 @@ $qs = http_build_query(array_filter([
 
 render_header('All sites', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Our inventory'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>All sites</h1>
@@ -77,8 +92,8 @@ render_header('All sites', 'team');
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
-      <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
-        <option value="<?= $st ?>" <?= $status === $st ? 'selected' : '' ?>><?= $st ?></option>
+      <?php foreach (prospect_statuses() as $code => $label): ?>
+        <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
       <?php endforeach; ?>
     </select>
   </div>
@@ -107,8 +122,8 @@ render_header('All sites', 'team');
             <input type="hidden" name="action" value="update_status">
             <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
             <select name="status" onchange="this.form.submit()">
-              <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
-                <option value="<?= $st ?>" <?= $s['status'] === $st ? 'selected' : '' ?>><?= $st ?></option>
+              <?php foreach (prospect_statuses() as $code => $label): ?>
+                <option value="<?= h($code) ?>" <?= $s['status'] === $code ? 'selected' : '' ?>><?= h($label) ?></option>
               <?php endforeach; ?>
             </select>
           </form>
