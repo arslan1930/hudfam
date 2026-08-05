@@ -528,8 +528,44 @@ function list_admin_users(bool $activeOnly = true): array
     return db()->query($sql)->fetchAll();
 }
 
+/**
+ * Ensure project_admins exists (Hostinger safety net if upgrade.php was skipped).
+ * Missing this table fatals Admin → Projects → open project.
+ */
+function ensure_project_admins_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $pdo = db();
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS project_admins (
+          project_id INT NOT NULL,
+          user_id INT NOT NULL,
+          PRIMARY KEY (project_id, user_id),
+          CONSTRAINT fk_pa_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          CONSTRAINT fk_pa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    // Admin contact fields used on project detail
+    try {
+        $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('phone', $userCols, true)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(80) NOT NULL DEFAULT '' AFTER email");
+        }
+        if (!in_array('contact_details', $userCols, true)) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN contact_details TEXT NULL AFTER phone');
+        }
+    } catch (Throwable $e) {
+        // ignore — page can still load without contact columns
+    }
+}
+
 function project_admin_ids(int $projectId): array
 {
+    ensure_project_admins_schema();
     $stmt = db()->prepare('SELECT user_id FROM project_admins WHERE project_id=?');
     $stmt->execute([$projectId]);
     return array_map('intval', array_column($stmt->fetchAll(), 'user_id'));
@@ -537,6 +573,7 @@ function project_admin_ids(int $projectId): array
 
 function sync_project_admins(int $projectId, array $adminIds): void
 {
+    ensure_project_admins_schema();
     db()->prepare('DELETE FROM project_admins WHERE project_id=?')->execute([$projectId]);
     $ins = db()->prepare('INSERT INTO project_admins (project_id, user_id) VALUES (?,?)');
     foreach (array_unique(array_map('intval', $adminIds)) as $uid) {
@@ -548,6 +585,7 @@ function sync_project_admins(int $projectId, array $adminIds): void
 
 function project_collaborating_admins(int $projectId): array
 {
+    ensure_project_admins_schema();
     $stmt = db()->prepare(
         "SELECT u.id, u.username, u.full_name, u.email, u.phone, u.contact_details
          FROM project_admins pa

@@ -339,40 +339,100 @@ function email_campaign_export_ready(string $country, bool $markEmailed, array $
     return $rows;
 }
 
-function lookup_email_campaign(string $q): array
+/**
+ * Lookup contacts, optionally limited to one country sheet.
+ *
+ * @return array{exact:?array,matches:list<array>,q:string,country:string}
+ */
+function lookup_email_campaign(string $q, string $country = ''): array
 {
     ensure_email_campaign_schema();
     $q = trim($q);
+    $country = trim($country);
     $email = normalize_campaign_email($q);
     $domain = function_exists('normalize_domain') ? normalize_domain($q) : strtolower($q);
+    $countrySql = '';
+    $countryParams = [];
+    if ($country !== '') {
+        $countrySql = ' AND TRIM(country) = ?';
+        $countryParams[] = $country;
+    }
     $exact = null;
     if ($email !== '' && str_contains($email, '@')) {
-        $s = db()->prepare('SELECT * FROM email_campaign_contacts WHERE email=? LIMIT 1');
-        $s->execute([$email]);
+        $s = db()->prepare('SELECT * FROM email_campaign_contacts WHERE email=?' . $countrySql . ' LIMIT 1');
+        $s->execute(array_merge([$email], $countryParams));
         $exact = $s->fetch() ?: null;
     }
     if (!$exact && $domain !== '') {
         $s = db()->prepare(
-            'SELECT * FROM email_campaign_contacts WHERE domain=? OR email=? ORDER BY updated_at DESC LIMIT 20'
+            'SELECT * FROM email_campaign_contacts WHERE (domain=? OR email=?)' . $countrySql
+            . ' ORDER BY updated_at DESC LIMIT 20'
         );
-        $s->execute([$domain, $email]);
+        $s->execute(array_merge([$domain, $email], $countryParams));
         $rows = $s->fetchAll();
         if ($rows) {
-            return ['exact' => null, 'matches' => $rows, 'q' => $q];
+            return ['exact' => null, 'matches' => $rows, 'q' => $q, 'country' => $country];
         }
     }
     $like = '%' . $q . '%';
     $partial = db()->prepare(
         'SELECT * FROM email_campaign_contacts
-         WHERE email LIKE ? OR domain LIKE ? OR url LIKE ?
-         ORDER BY updated_at DESC LIMIT 25'
+         WHERE (email LIKE ? OR domain LIKE ? OR url LIKE ?)' . $countrySql
+         . ' ORDER BY updated_at DESC LIMIT 25'
     );
-    $partial->execute([$like, $like, $like]);
+    $partial->execute(array_merge([$like, $like, $like], $countryParams));
     return [
         'exact' => $exact,
         'matches' => $exact ? [$exact] : $partial->fetchAll(),
         'q' => $q,
+        'country' => $country,
     ];
+}
+
+/**
+ * Country picker for email cut/search: region groups + any extra sheet names.
+ *
+ * @return array<string, array{label:string, countries:list<array{name:string,region:string}>}>
+ */
+function email_campaign_countries_grouped_for_select(): array
+{
+    $grouped = countries_grouped();
+    // Prefer Europe / North America / English first; keep Other last.
+    $order = ['europe', 'north_america', 'english', 'other'];
+    $ordered = [];
+    foreach ($order as $code) {
+        if (isset($grouped[$code])) {
+            $ordered[$code] = $grouped[$code];
+            unset($grouped[$code]);
+        }
+    }
+    foreach ($grouped as $code => $block) {
+        $ordered[$code] = $block;
+    }
+
+    $known = [];
+    foreach ($ordered as $block) {
+        foreach ($block['countries'] as $c) {
+            $known[strtolower(trim((string) $c['name']))] = true;
+        }
+    }
+    foreach (email_campaign_country_sheets() as $sheet) {
+        $name = trim((string) $sheet['country']);
+        if ($name === '' || isset($known[strtolower($name)])) {
+            continue;
+        }
+        if (!isset($ordered['other'])) {
+            $ordered['other'] = ['label' => 'Other', 'countries' => []];
+        }
+        $ordered['other']['countries'][] = [
+            'name' => $name,
+            'region' => 'other',
+            'code' => '',
+            'default_language' => '',
+        ];
+        $known[strtolower($name)] = true;
+    }
+    return $ordered;
 }
 
 function email_campaign_status_comment(string $status): string
@@ -388,13 +448,29 @@ function email_campaign_status_comment(string $status): string
 }
 
 /**
- * Team quick-cut: paste emails only → mark status → removed from Ready send list (record kept).
+ * Team quick-cut: choose country sheet, paste emails → mark status → cut from Ready (record kept).
  *
- * @return array{cut:int,already:int,missing:string[],rows:list<array>}
+ * @return array{cut:int,already:int,missing:string[],rows:list<array>,country:string,error:?string}
  */
-function email_campaign_quick_cut(string $rawEmails, string $status, array $user, string $notes = ''): array
-{
+function email_campaign_quick_cut(
+    string $rawEmails,
+    string $status,
+    array $user,
+    string $notes = '',
+    string $country = ''
+): array {
     ensure_email_campaign_schema();
+    $country = trim($country);
+    if ($country === '') {
+        return [
+            'cut' => 0,
+            'already' => 0,
+            'missing' => [],
+            'rows' => [],
+            'country' => '',
+            'error' => 'country_required',
+        ];
+    }
     if (!in_array($status, ['replied', 'dealing', 'do_not_email'], true)) {
         $status = 'replied';
     }
@@ -412,9 +488,12 @@ function email_campaign_quick_cut(string $rawEmails, string $status, array $user
     $already = 0;
     $missing = [];
     $rows = [];
-    $find = db()->prepare('SELECT * FROM email_campaign_contacts WHERE email=? LIMIT 1');
+    // Only match inside the selected country sheet
+    $find = db()->prepare(
+        'SELECT * FROM email_campaign_contacts WHERE email=? AND TRIM(country)=? LIMIT 1'
+    );
     foreach ($emails as $email) {
-        $find->execute([$email]);
+        $find->execute([$email, $country]);
         $row = $find->fetch();
         if (!$row) {
             $missing[] = $email;
@@ -426,10 +505,17 @@ function email_campaign_quick_cut(string $rawEmails, string $status, array $user
             continue;
         }
         email_campaign_set_status((int) $row['id'], $status, $user, $notes);
-        $find->execute([$email]);
+        $find->execute([$email, $country]);
         $updated = $find->fetch() ?: $row;
         $rows[] = $updated;
         $cut++;
     }
-    return compact('cut', 'already', 'missing', 'rows');
+    return [
+        'cut' => $cut,
+        'already' => $already,
+        'missing' => $missing,
+        'rows' => $rows,
+        'country' => $country,
+        'error' => null,
+    ];
 }
