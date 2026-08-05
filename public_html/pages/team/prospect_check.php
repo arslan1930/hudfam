@@ -93,7 +93,7 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel panel-muted">
-      <h2>① Already in database</h2>
+      <h2>① Already in Our database</h2>
       <p class="help"><?= (int) $old['total'] ?> site names · used to remove duplicates</p>
       <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="No sites yet"><?= h($oldText) ?></textarea>
     </div>
