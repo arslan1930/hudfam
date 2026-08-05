@@ -1,6 +1,7 @@
 # Run Hudfam on Hostinger shared hosting
 
-This folder is a **plain PHP + MySQL** app. It works on Hostinger shared hosting (no Django / Node / Docker).
+This folder is a **plain PHP + MySQL + HTML + CSS** app (AJAX/JSON optional).  
+It works on Hostinger shared hosting — **no Django, Node.js, React, npm, or Docker**.
 
 ## 1. Create MySQL database
 1. Hostinger hPanel → **Databases → MySQL Databases**
@@ -19,7 +20,7 @@ Upload **everything inside** `public_html/` to your domain’s `public_html` (or
 - `config.sample.php`
 - `.htaccess`
 
-Do **not** upload the Django files (`manage.py`, `core/`, etc.) into `public_html`.
+Upload **only** the files listed above (the contents of this folder). There is no separate frontend build step.
 
 ### Easy ways
 - Git on server (if SSH enabled): clone repo, then copy `public_html/*` into the web root  
