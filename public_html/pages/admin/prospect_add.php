@@ -15,7 +15,7 @@ try {
             flash('error', 'Paste at least one URL or domain.');
         } elseif ($action === 'save') {
             $added = add_prospect_domains($domains, $user);
-            $msg = "Added {$added['inserted']} unique site(s) to Our inventory.";
+            $msg = "Added {$added['inserted']} unique site(s) to Our database.";
             $msg .= " Skipped {$added['skipped']} already in the list.";
             flash('ok', $msg);
             redirect('index.php?page=admin_prospects');
@@ -28,19 +28,20 @@ try {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try again.');
 }
 
-render_header('Add sites · Our inventory', 'admin');
+render_header('Add URLs', 'admin');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Our inventory', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => 'Add sites'],
+    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => 'Add URLs'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add sites to Our inventory</h1>
-    <p class="muted">Paste URLs or domains only (no prices). Team Filter checks new sites against this list so only uniques can be added.</p>
+    <h1>Add URLs to Our database</h1>
+    <p class="muted">Paste URLs or domains. Team will filter new lists against this same database.</p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospects">Back to inventory</a>
+  <a class="btn secondary" href="index.php?page=admin_prospects">Back to database</a>
 </div>
+<?= guide_admin_add() ?>
 
 <form class="card" method="post">
   <input type="hidden" name="action" value="preview">
@@ -51,7 +52,7 @@ render_header('Add sites · Our inventory', 'admin');
     <code>https://</code> and paths are stripped automatically → stored as domain names only.
   </p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">1. Check unique vs inventory</button>
+    <button class="btn" type="submit">1. Check unique vs database</button>
   </p>
 </form>
 
@@ -60,13 +61,13 @@ render_header('Add sites · Our inventory', 'admin');
   <h2>Preview</h2>
   <p>
     Parsed: <strong><?= (int) $preview['total_input'] ?></strong> ·
-    Already in Our inventory: <strong><?= count($preview['existing']) ?></strong> ·
+    Already in Our database: <strong><?= count($preview['existing']) ?></strong> ·
     New (unique): <strong><?= count($preview['new']) ?></strong>
   </p>
 </div>
 <div class="grid two-box">
   <div class="card">
-    <h2>Already in inventory (will skip)</h2>
+    <h2>Already in database (will skip)</h2>
     <?php if ($preview['existing']): ?>
       <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($preview['existing'], 0, 5000))) ?><?= count($preview['existing']) > 5000 ? "\n… +" . (count($preview['existing']) - 5000) . ' more' : '' ?></textarea>
     <?php else: ?>
@@ -80,13 +81,13 @@ render_header('Add sites · Our inventory', 'admin');
         <input type="hidden" name="action" value="save">
         <input type="hidden" name="urls" value="<?= h($raw) ?>">
         <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($preview['new'], 0, 5000))) ?><?= count($preview['new']) > 5000 ? "\n… +" . (count($preview['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">These domains join Our inventory. Teammates will see them in Filter Box 1 and cannot re-add them.</p>
+        <p class="help">These domains join Our database. Teammates will see them in Filter Box 1 and cannot re-add them.</p>
         <p class="actions" style="margin-top:0.8rem">
-          <button class="btn" type="submit">2. Add <?= count($preview['new']) ?> site(s) to inventory</button>
+          <button class="btn" type="submit">2. Add <?= count($preview['new']) ?> site(s) to database</button>
         </p>
       </form>
     <?php else: ?>
-      <p class="muted">No unique domains left — everything is already in Our inventory.</p>
+      <p class="muted">No unique domains left — everything is already in Our database.</p>
     <?php endif; ?>
   </div>
 </div>

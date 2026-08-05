@@ -46,19 +46,19 @@ render_header('All sites', 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Our inventory'],
+    ['label' => 'Our database'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>All sites</h1>
-    <p class="muted"><?= $total ?> prospects · no prices · filter by country/language</p>
+    <h1>Our database</h1>
+    <p class="muted"><?= $total ?> unique domains · shared with Admin</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
     <a class="btn secondary" href="index.php?page=team_prospect_form">Add one</a>
   </div>
 </div>
-<?= guide_admin_inventory() ?>
+<?= guide_inventory() ?>
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="team_prospects">

@@ -49,13 +49,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!$id) {
         $exists = filter_domains_against_prospects([$domain]);
         if ($exists['existing']) {
-            flash('error', 'Already in prospect inventory. Filter first — do not add duplicates.');
+            flash('error', 'Already in Our database. Filter first — do not add duplicates.');
             redirect('index.php?page=team_prospect_check');
         }
         // Writes inventory + today's add history batch for this teammate
         $added = add_prospect_domains([$domain], $user, $country, $language, $region, $niche, $notes);
         if ($added['inserted'] < 1) {
-            flash('error', 'Already in prospect inventory. Filter first — do not add duplicates.');
+            flash('error', 'Already in Our database. Filter first — do not add duplicates.');
             redirect('index.php?page=team_prospect_check');
         }
         if ($url !== '' || $status !== 'new') {
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('ok', 'Prospect updated.');
             redirect('index.php?page=team_prospects');
         } catch (PDOException $e) {
-            flash('error', 'Domain already exists in prospect inventory.');
+            flash('error', 'Domain already exists in Our database.');
         }
     }
 }

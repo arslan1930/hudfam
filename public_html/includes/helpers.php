@@ -306,26 +306,21 @@ function render_breadcrumbs(array $crumbs): void
 }
 
 /**
- * Short glossary clarifying Catalog vs Our inventory vs Email campaigns.
+ * Short glossary for the simple inventory panel.
  * $panel: 'admin' | 'team'
  */
 function render_glossary(string $panel): void
 {
     echo '<div class="glossary card" role="note">';
-    echo '<h2 class="glossary-title">Key terms (read this first)</h2>';
+    echo '<h2 class="glossary-title">How this works</h2>';
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Project</dt><dd>One client/campaign folder. Owns its own country sheets in Catalog.</dd></div>';
-    echo '<div><dt>Catalog</dt><dd>Priced websites: <strong>Project → Country</strong>. Team Catalog search uses this.</dd></div>';
-    echo '<div><dt>Our inventory</dt><dd>Company-wide unique domains. <strong>No prices.</strong> Team Filter &amp; add works against this.</dd></div>';
-    echo '<div><dt>Email campaigns</dt><dd>URL + email lists by country for outreach. Ready = can send; cut when someone replies.</dd></div>';
-    if ($panel === 'team') {
-        echo '<div><dt>Catalog search</dt><dd>Pick Project → Country → Language, then look up or add a domain on that sheet.</dd></div>';
-        echo '<div><dt>Filter &amp; add</dt><dd>Paste domains → drop duplicates already in Our inventory → save uniques.</dd></div>';
-        echo '<div><dt>Cut replied</dt><dd>Paste emails that replied so they leave the Ready send list.</dd></div>';
+    echo '<div><dt>Our database</dt><dd>One shared list of unique website domains (URLs).</dd></div>';
+    echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
+    echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
+    if ($panel === 'admin') {
+        echo '<div><dt>Your job</dt><dd>Add URLs to the database and manage Team users.</dd></div>';
     } else {
-        echo '<div><dt>Bulk import</dt><dd>CSV many domains into one project’s country sheet.</dd></div>';
-        echo '<div><dt>Send pack</dt><dd>Email a shortlist of catalog sites from a project to the client.</dd></div>';
-        echo '<div><dt>Global catalog</dt><dd>Optional company-wide country lists (not tied to one project).</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
     }
     echo '</dl></div>';
 }

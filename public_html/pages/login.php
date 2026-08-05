@@ -18,7 +18,7 @@ render_header('Login');
       <img class="brand-logo" src="<?= h(brand_logo_url()) ?>" alt="<?= h($app) ?>">
       <h1><?= h($app) ?></h1>
     </div>
-    <p class="muted">Linkbuilding inventory &amp; project folders.</p>
+    <p class="muted">Shared URL database — Admin adds sites, Team filters and adds unique ones.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
     <form method="post">
       <label>Username</label>

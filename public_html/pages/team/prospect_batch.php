@@ -29,7 +29,7 @@ render_header('Batch ' . $batch['batch_date'], 'team');
   <?php if ($batch['notes']): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">Also stored in All sites (inventory).</p>
+  <p class="help">Also stored in Our database.</p>
   <?php if ($domains): ?>
     <textarea class="inventory-box" rows="18" readonly><?= h(implode("\n", $domains)) ?></textarea>
   <?php else: ?>
