@@ -4,8 +4,58 @@
  * Project-scoped inventory + safe team Super search + bulk import.
  */
 
+/**
+ * Ensure newer sites inventory columns exist (Hostinger safety net).
+ */
+function ensure_site_inventory_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $pdo = db();
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM sites')->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        return;
+    }
+    $add = static function (string $sql) use ($pdo): void {
+        try {
+            $pdo->exec($sql);
+        } catch (Throwable $e) {
+            // Column may already exist on race / partial upgrade
+        }
+    };
+    if (!in_array('publisher_quote_price', $cols, true)) {
+        $add('ALTER TABLE sites ADD COLUMN publisher_quote_price DECIMAL(12,2) NULL AFTER traffic');
+    }
+    if (!in_array('publisher_quote_date', $cols, true)) {
+        $add('ALTER TABLE sites ADD COLUMN publisher_quote_date DATE NULL AFTER publisher_quote_price');
+    }
+    if (!in_array('our_mailbox', $cols, true)) {
+        $add("ALTER TABLE sites ADD COLUMN our_mailbox VARCHAR(190) NOT NULL DEFAULT '' AFTER publisher_email");
+    }
+    if (!in_array('our_contact_name', $cols, true)) {
+        $add("ALTER TABLE sites ADD COLUMN our_contact_name VARCHAR(150) NOT NULL DEFAULT '' AFTER our_mailbox");
+    }
+    if (!in_array('inventory_client_name', $cols, true)) {
+        $add("ALTER TABLE sites ADD COLUMN inventory_client_name VARCHAR(255) NOT NULL DEFAULT '' AFTER our_contact_name");
+    }
+    if (!in_array('order_status', $cols, true)) {
+        $add("ALTER TABLE sites ADD COLUMN order_status VARCHAR(40) NOT NULL DEFAULT '' AFTER inventory_client_name");
+    }
+    if (!in_array('admin_comments', $cols, true)) {
+        $add('ALTER TABLE sites ADD COLUMN admin_comments TEXT NULL AFTER order_status');
+    }
+}
+
 function require_project_access(int $projectId, array $user): array
 {
+    ensure_site_inventory_schema();
+    if (function_exists('ensure_project_admins_schema')) {
+        ensure_project_admins_schema();
+    }
     $stmt = db()->prepare('SELECT * FROM projects WHERE id=?');
     $stmt->execute([$projectId]);
     $project = $stmt->fetch();
@@ -185,6 +235,7 @@ function search_project_inventory_for_team(int $projectId, string $q, int $limit
 
 function project_inventory_query(int $projectId, array $filters, int $pageNum = 1, int $per = 50): array
 {
+    ensure_site_inventory_schema();
     $where = ['s.primary_project_id = ?'];
     $params = [$projectId];
     $q = trim((string) ($filters['q'] ?? ''));
@@ -251,6 +302,7 @@ function project_inventory_query(int $projectId, array $filters, int $pageNum = 
 /** Admin cross-project inventory list. */
 function admin_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array
 {
+    ensure_site_inventory_schema();
     $where = ['1=1'];
     $params = [];
     $q = trim((string) ($filters['q'] ?? ''));
