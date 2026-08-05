@@ -32,6 +32,7 @@ render_header('Results', 'team');
     <p class="muted">Read-only statuses from Admin. Use them to refill better sites.</p>
   </div>
 </div>
+<?= guide_team_results() ?>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="team_results">
   <div>

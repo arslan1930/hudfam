@@ -306,24 +306,26 @@ function render_breadcrumbs(array $crumbs): void
 }
 
 /**
- * Short glossary clarifying Prospects vs Catalog vs Super search.
+ * Short glossary clarifying Catalog vs Our inventory vs Email campaigns.
  * $panel: 'admin' | 'team'
  */
 function render_glossary(string $panel): void
 {
     echo '<div class="glossary card" role="note">';
-    echo '<h2 class="glossary-title">Quick guide</h2>';
+    echo '<h2 class="glossary-title">Key terms (read this first)</h2>';
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Our inventory</dt><dd>Master unique domain list (Admin adds URLs). <strong>No prices.</strong> Team Filter checks against this.</dd></div>';
-    echo '<div><dt>Catalog</dt><dd>Priced sites inside projects (quotes, mailbox, deal status).</dd></div>';
+    echo '<div><dt>Project</dt><dd>One client/campaign folder. Owns its own country sheets in Catalog.</dd></div>';
+    echo '<div><dt>Catalog</dt><dd>Priced websites: <strong>Project → Country</strong>. Team Catalog search uses this.</dd></div>';
+    echo '<div><dt>Our inventory</dt><dd>Company-wide unique domains. <strong>No prices.</strong> Team Filter &amp; add works against this.</dd></div>';
+    echo '<div><dt>Email campaigns</dt><dd>URL + email lists by country for outreach. Ready = can send; cut when someone replies.</dd></div>';
     if ($panel === 'team') {
-        echo '<div><dt>Search all sheets</dt><dd>One bar across every country sheet + Our inventory. Shows comments before you add.</dd></div>';
-        echo '<div><dt>Country sheets</dt><dd>Each project catalog is split by country. Filter &amp; add only accepts domains not already known.</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Search domain → Open project sheet → Filter &amp; add uniques → Outreach → Results.</dd></div>';
+        echo '<div><dt>Catalog search</dt><dd>Pick Project → Country → Language, then look up or add a domain on that sheet.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Paste domains → drop duplicates already in Our inventory → save uniques.</dd></div>';
+        echo '<div><dt>Cut replied</dt><dd>Paste emails that replied so they leave the Ready send list.</dd></div>';
     } else {
-        echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
-        echo '<div><dt>Add history</dt><dd>Which websites each teammate added, saved by person and day.</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Seed Our inventory → Create project → Build catalog → Send pack → Track orders.</dd></div>';
+        echo '<div><dt>Bulk import</dt><dd>CSV many domains into one project’s country sheet.</dd></div>';
+        echo '<div><dt>Send pack</dt><dd>Email a shortlist of catalog sites from a project to the client.</dd></div>';
+        echo '<div><dt>Global catalog</dt><dd>Optional company-wide country lists (not tied to one project).</dd></div>';
     }
     echo '</dl></div>';
 }

@@ -90,6 +90,7 @@ render_header('Bulk import', 'admin');
     <a class="btn secondary" href="index.php?page=admin_sites<?= $projectId ? '&project_id=' . $projectId : '' ?>">Catalog</a>
   </div>
 </div>
+<?= guide_admin_bulk_import() ?>
 
 <div class="card">
   <h2>CSV columns</h2>

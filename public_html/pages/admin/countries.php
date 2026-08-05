@@ -55,6 +55,7 @@ render_header('Countries', 'admin');
     <p class="muted">Reference list for region → country → default language. Used in catalog and prospect filters.</p>
   </div>
 </div>
+<?= guide_admin_countries() ?>
 
 <div class="grid" style="grid-template-columns:1.4fr 1fr">
 <div>

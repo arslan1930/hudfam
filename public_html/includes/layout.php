@@ -79,49 +79,49 @@ function render_header(string $title, string $panel = ''): void
     if ($panel === 'admin') {
         $groups = [
             'Overview' => [
-                'admin_dashboard' => 'Dashboard',
+                'admin_dashboard' => ['Dashboard', 'How the panel works + stats'],
             ],
             'Catalog & projects' => [
-                'admin_projects' => 'Projects',
-                'admin_sites' => 'Catalog',
-                'admin_bulk_import' => 'Bulk import',
+                'admin_projects' => ['Projects', 'Client/campaign folders'],
+                'admin_sites' => ['Catalog', 'Priced sites: project → country'],
+                'admin_bulk_import' => ['Bulk import', 'CSV into one project country sheet'],
             ],
             'Outreach' => [
-                'admin_prospects' => 'Our inventory',
-                'admin_prospect_batches' => 'Prospect batches',
-                'admin_email_campaigns' => 'Email campaigns',
+                'admin_prospects' => ['Our inventory', 'Unique domains · no prices'],
+                'admin_prospect_batches' => ['Prospect batches', 'Who added what, by day'],
+                'admin_email_campaigns' => ['Email campaigns', 'URL + email by country'],
             ],
             'Clients & orders' => [
-                'admin_clients' => 'Clients',
-                'admin_orders_export' => 'Orders export',
-                'admin_published' => 'Published',
+                'admin_clients' => ['Clients', 'Who receives packs'],
+                'admin_orders_export' => ['Orders export', 'Export agreed/order rows'],
+                'admin_published' => ['Published', 'Live published placements'],
             ],
             'Settings' => [
-                'admin_countries' => 'Countries',
-                'admin_users' => 'Admins & users',
+                'admin_countries' => ['Countries', 'Master country list'],
+                'admin_users' => ['Admins & users', 'Logins for Admin and Team'],
             ],
         ];
     } else {
         $groups = [
             'Overview' => [
-                'team_dashboard' => 'Dashboard',
+                'team_dashboard' => ['Dashboard', 'How the panel works'],
             ],
             'Prospects' => [
-                'team_prospect_check' => 'Filter & add',
-                'team_prospects' => 'Our inventory',
-                'team_prospect_batches' => 'Dated batches',
+                'team_prospect_check' => ['Filter & add', 'Paste domains → keep uniques'],
+                'team_prospects' => ['Our inventory', 'Unique domains · no prices'],
+                'team_prospect_batches' => ['Dated batches', 'What you added by day'],
             ],
             'Email campaigns' => [
-                'team_email_search' => 'Cut replied emails',
-                'team_email_campaigns' => 'Country sheets',
+                'team_email_search' => ['Cut replied emails', 'Remove replied from Ready list'],
+                'team_email_campaigns' => ['Country sheets', 'Browse URL + email by country'],
             ],
             'Catalog' => [
-                'team_search' => 'Catalog search',
-                'team_projects' => 'Projects',
-                'team_results' => 'Results',
+                'team_search' => ['Catalog search', 'Project → country → language'],
+                'team_projects' => ['Projects', 'Your assigned client folders'],
+                'team_results' => ['Results', 'Client agreed / rejected feedback'],
             ],
             'Reference' => [
-                'team_countries' => 'Countries',
+                'team_countries' => ['Countries', 'Country reference list'],
             ],
         ];
     }
@@ -129,9 +129,17 @@ function render_header(string $title, string $panel = ''): void
     foreach ($groups as $groupLabel => $links) {
         echo '<div class="nav-group">';
         echo '<div class="nav-group-label">' . h($groupLabel) . '</div>';
-        foreach ($links as $page => $label) {
+        foreach ($links as $page => $meta) {
+            $label = is_array($meta) ? (string) $meta[0] : (string) $meta;
+            $hint = is_array($meta) ? (string) ($meta[1] ?? '') : '';
             $active = nav_is_active($page, $current) ? ' active' : '';
-            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($page) . '">' . h($label) . '</a>';
+            $titleAttr = $hint !== '' ? ' title="' . h($hint) . '"' : '';
+            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($page) . '"' . $titleAttr . '>';
+            echo '<span class="nav-label">' . h($label) . '</span>';
+            if ($hint !== '') {
+                echo '<span class="nav-hint">' . h($hint) . '</span>';
+            }
+            echo '</a>';
         }
         echo '</div>';
     }

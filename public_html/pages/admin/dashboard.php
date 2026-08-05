@@ -29,12 +29,15 @@ render_header('Dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — run campaigns from project → catalog → pack.</p>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — build projects, fill Catalog by country, then Team works from the same sheets.</p>
   </div>
 </div>
 
+<?php render_glossary('admin'); ?>
+<?= render_admin_panel_guide() ?>
+
 <div class="card">
-  <h2>Workflow</h2>
+  <h2>Quick actions</h2>
   <div class="workflow-strip">
     <a class="btn" href="index.php?page=admin_project_form">New project</a>
     <span class="arrow">→</span>
@@ -47,9 +50,11 @@ render_header('Dashboard', 'admin');
     <a class="btn secondary" href="index.php?page=admin_orders_export">Orders</a>
   </div>
   <p class="help" style="margin-top:0.8rem">
-    Team prospects (no prices):
+    Our inventory (no prices):
     <a href="index.php?page=admin_prospects"><?= $prospectTotal ?> sites</a> ·
     <a href="index.php?page=admin_prospect_batches">Batches</a>
+    · Email:
+    <a href="index.php?page=admin_email_campaigns">Campaigns</a>
   </p>
 </div>
 

@@ -53,6 +53,7 @@ render_header('Our inventory', 'admin');
   </div>
   <a class="btn secondary" href="index.php?page=admin_prospect_batches">Batches</a>
 </div>
+<?= guide_admin_inventory() ?>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>

@@ -74,6 +74,7 @@ render_header('Admins & users', 'admin');
     <p class="muted">Each admin has a unique name + contact details. Assign admins as collaborators on projects.</p>
   </div>
 </div>
+<?= guide_admin_users() ?>
 
 <div class="card">
   <h2>Admin directory</h2>

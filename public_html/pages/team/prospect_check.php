@@ -80,6 +80,7 @@ render_header('Filter & add', 'team');
     <a class="btn secondary" href="index.php?page=team_prospects">All sites</a>
   </div>
 </div>
+<?= guide_team_filter() ?>
 
 <ul class="steps">
   <li class="step <?= $stepPaste ?>"><span class="num">1</span> Paste new</li>

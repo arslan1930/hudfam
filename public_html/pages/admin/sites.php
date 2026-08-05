@@ -45,6 +45,7 @@ if ($globalMode) {
             <a class="btn" href="index.php?page=admin_catalog_site_form">Add global site</a>
           </div>
         </div>
+        <?= guide_admin_global_catalog() ?>
         <?php
         $byRegion = [];
         foreach ($folders as $f) {
@@ -140,6 +141,7 @@ if ($projectId <= 0) {
         <a class="btn secondary" href="index.php?page=admin_bulk_import">Bulk import</a>
       </div>
     </div>
+    <?= guide_admin_catalog() ?>
     <div class="folders">
       <?php foreach ($projects as $p): ?>
         <a class="folder" href="index.php?page=admin_sites&amp;project_id=<?= (int) $p['id'] ?>">

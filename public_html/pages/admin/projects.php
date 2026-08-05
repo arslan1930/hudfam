@@ -21,6 +21,7 @@ render_header('Projects', 'admin');
   </div>
   <a class="btn" href="index.php?page=admin_project_form">New project</a>
 </div>
+<?= guide_admin_projects() ?>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_projects">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>"></div>

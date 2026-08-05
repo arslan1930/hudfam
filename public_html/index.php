@@ -9,6 +9,7 @@ require __DIR__ . '/includes/inventory.php';
 require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/email_campaigns.php';
 require __DIR__ . '/includes/country_catalog.php';
+require __DIR__ . '/includes/guides.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
