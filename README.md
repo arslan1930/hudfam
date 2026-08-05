@@ -1,16 +1,25 @@
-# Hudfam
+# Hudfam / TechxForm
 
 Linkbuilding inventory and client publication workflow — **Admin** + **Team** panels.
 
-Plain **PHP + MySQL** app for Hostinger shared hosting (and any PHP host).
+## Stack (plain code only)
+
+- **PHP** + **MySQL** + **HTML** + **CSS**
+- Optional **AJAX / JSON** form posts (same PHP pages)
+- Runs on **Hostinger shared hosting** (upload `public_html/`)
+
+**Not used:** Django, Node.js, React, Next.js, npm, Docker, Render/Railway Python deploy.
+
+Laravel is fine in principle; this app stays **plain PHP** (no framework) so Hostinger install stays one-folder upload + `install.php`.
 
 ## Features
 
-- **Two-box Team filter** — old prospect inventory vs new paste; unique results add to both old list and dated batches (per teammate per day)
-- **Catalog inventory** (Admin) — language, country, DA/DR/traffic, order status, comments, client name + CSV bulk import
-- **Multi-admin** — unique name + contact details; collaborate on each project
-- Team catalog Super search — site metrics only (no client/project secrets)
-- Client folders + publication orders + CSV export
+- **Two-box Team filter** — old prospect inventory vs new paste; unique results add to both old list and dated batches
+- **Project catalog** — country sheets, Filter & add, Admin prices (DR/traffic/agreed)
+- **Team pre-add search** — check domains across catalogs + inventory (already have / used / low traffic)
+- **Email campaign inventory** — country sheets of URL + email; Admin export Ready; Team paste-cut Replied/Dealing
+- **Client folders** + publication orders + CSV export
+- Multi-admin collaboration per project
 
 ## Deploy on Hostinger
 
@@ -25,7 +34,7 @@ Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
    - Team: `teammate` / `team123`
 
 ### Already installed an older copy?
-Upload the new files, then open `/upgrade.php` once (clients/orders + countries + quote fields), then delete it.
+Upload the new files, then open `/upgrade.php` once, then delete it.
 
 ## Local preview (optional)
 
@@ -43,6 +52,7 @@ public_html/          ← upload this folder’s contents to the server
   index.php
   install.php
   upgrade.php
+  asset.php
   assets/
   includes/
   pages/admin/
