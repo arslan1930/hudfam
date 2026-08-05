@@ -7,9 +7,8 @@ if (!$batch) {
     redirect('index.php?page=team_prospect_batches');
 }
 if (!is_admin($user) && (int) $batch['user_id'] !== (int) $user['id']) {
-    http_response_code(403);
-    echo 'You can only view your own batches.';
-    exit;
+    flash('error', 'You can only view your own add history.');
+    redirect('index.php?page=team_prospect_batches');
 }
 $domains = get_prospect_batch_domains($id);
 
