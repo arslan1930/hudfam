@@ -91,6 +91,81 @@ function get(string $key, $default = '')
     return $_GET[$key] ?? $default;
 }
 
+/**
+ * Persist catalog UI context (project / country / language) in the PHP session
+ * so selections survive page refresh for Team and Admin.
+ *
+ * @return array{project_id:int,country:string,language:string}
+ */
+function catalog_context_get(string $panel = 'team'): array
+{
+    $key = $panel === 'admin' ? 'admin_catalog_ctx' : 'team_catalog_ctx';
+    $ctx = $_SESSION[$key] ?? [];
+    return [
+        'project_id' => (int) ($ctx['project_id'] ?? 0),
+        'country' => trim((string) ($ctx['country'] ?? '')),
+        'language' => trim((string) ($ctx['language'] ?? '')),
+    ];
+}
+
+/**
+ * @param array{project_id?:int|string,country?:string,language?:string} $data
+ */
+function catalog_context_save(string $panel, array $data): void
+{
+    $key = $panel === 'admin' ? 'admin_catalog_ctx' : 'team_catalog_ctx';
+    $cur = catalog_context_get($panel);
+    if (array_key_exists('project_id', $data)) {
+        $cur['project_id'] = (int) $data['project_id'];
+    }
+    if (array_key_exists('country', $data)) {
+        $cur['country'] = trim((string) $data['country']);
+    }
+    if (array_key_exists('language', $data)) {
+        $cur['language'] = trim((string) $data['language']);
+    }
+    $_SESSION[$key] = $cur;
+}
+
+/**
+ * Merge request values over session defaults, then save back to session.
+ *
+ * @return array{project_id:int,country:string,language:string}
+ */
+function catalog_context_from_request(string $panel = 'team'): array
+{
+    if ((string) get('clear_ctx') === '1') {
+        catalog_context_save($panel, ['project_id' => 0, 'country' => '', 'language' => '']);
+        return catalog_context_get($panel);
+    }
+    $saved = catalog_context_get($panel);
+    $projectId = $saved['project_id'];
+    $country = $saved['country'];
+    $language = $saved['language'];
+    if (array_key_exists('project_id', $_POST)) {
+        $projectId = (int) $_POST['project_id'];
+    } elseif (array_key_exists('project_id', $_GET)) {
+        $projectId = (int) $_GET['project_id'];
+    }
+    if (array_key_exists('country', $_POST)) {
+        $country = trim((string) $_POST['country']);
+    } elseif (array_key_exists('country', $_GET)) {
+        $country = trim((string) $_GET['country']);
+    }
+    if (array_key_exists('language', $_POST)) {
+        $language = trim((string) $_POST['language']);
+    } elseif (array_key_exists('language', $_GET)) {
+        $language = trim((string) $_GET['language']);
+    }
+    $out = [
+        'project_id' => $projectId,
+        'country' => $country,
+        'language' => $language,
+    ];
+    catalog_context_save($panel, $out);
+    return $out;
+}
+
 function reject_reasons(): array
 {
     return [

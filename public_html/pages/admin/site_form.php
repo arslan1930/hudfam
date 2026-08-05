@@ -1,7 +1,8 @@
 <?php
 $user = require_admin();
 $id = (int) get('id');
-$projectId = (int) get('project_id');
+$ctx = catalog_context_from_request('admin');
+$projectId = (int) get('project_id') ?: (int) $ctx['project_id'];
 
 $site = null;
 if ($id) {
@@ -10,21 +11,24 @@ if ($id) {
     $site = $stmt->fetch();
     if (!$site) {
         flash('error', 'Site not found.');
-        redirect('index.php?page=admin_projects');
+        redirect('index.php?page=admin_sites');
     }
     $projectId = (int) $site['primary_project_id'];
 }
 
 if (!$projectId) {
-    flash('error', 'Choose a project, then add sites to its inventory.');
-    redirect('index.php?page=admin_projects');
+    flash('error', 'Choose a project, then add sites to its country catalog.');
+    redirect('index.php?page=admin_sites');
 }
+catalog_context_save('admin', ['project_id' => $projectId]);
 
 $project = require_project_access($projectId, $user);
 
 if (!$site) {
+    $prefCountry = trim((string) (get('country') ?: $ctx['country']));
+    $prefLanguage = trim((string) (get('language') ?: $ctx['language']));
     $site = [
-        'domain' => '', 'url' => '', 'region' => '', 'country' => '', 'niche' => '', 'language' => '',
+        'domain' => '', 'url' => '', 'region' => '', 'country' => $prefCountry, 'niche' => '', 'language' => $prefLanguage,
         'dr' => '', 'da' => '', 'traffic' => '',
         'publisher_quote_price' => '', 'publisher_quote_date' => '',
         'backlink_price' => '', 'banner_price_yearly' => '',
@@ -121,8 +125,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (post('reset_agreed') === '1' && $price !== null) {
                 db()->prepare("UPDATE sites SET status='agreed' WHERE id=?")->execute([$id]);
             }
-            flash('ok', 'Site saved to project catalog.');
-            redirect('index.php?page=admin_project&id=' . $projectId . '&tab=inventory');
+            flash('ok', $id ? 'Site updated.' : 'Site added to project country catalog.');
+            $savedCountry = trim((string) post('country'));
+            $savedLang = trim((string) post('language'));
+            catalog_context_save('admin', [
+                'project_id' => $projectId,
+                'country' => $savedCountry,
+                'language' => $savedLang,
+            ]);
+            $redir = 'index.php?page=admin_sites&project_id=' . $projectId;
+            if ($savedCountry !== '') {
+                $redir .= '&sheet=' . urlencode($savedCountry);
+            }
+            redirect($redir);
         } catch (PDOException $e) {
             if (str_contains($e->getMessage(), 'uniq_project_domain') || str_contains($e->getMessage(), 'Duplicate')) {
                 flash('error', 'This domain already exists in this project.');

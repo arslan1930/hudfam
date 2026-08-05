@@ -941,3 +941,101 @@ function add_domains_to_project(
     }
     return ['inserted' => $inserted, 'skipped' => $skipped];
 }
+
+/**
+ * Team/Admin lookup inside one project's country (+ optional language).
+ *
+ * @return array{domain:string,project_id:int,country:string,language:string,site:?array,in_project:bool,in_inventory:bool,inventory:?array}
+ */
+function lookup_domain_in_project_country(
+    string $q,
+    int $projectId,
+    string $country,
+    string $language = ''
+): array {
+    $domain = normalize_domain($q);
+    $country = trim($country);
+    $language = trim($language);
+    $site = null;
+    if ($domain !== '' && $projectId > 0 && $country !== '') {
+        $sql = 'SELECT s.*, p.name AS project_name FROM sites s
+                JOIN projects p ON p.id = s.primary_project_id
+                WHERE s.primary_project_id=? AND s.domain=? AND TRIM(s.country)=?';
+        $params = [$projectId, $domain, $country];
+        if ($language !== '') {
+            $sql .= ' AND TRIM(s.language)=?';
+            $params[] = $language;
+        }
+        $sql .= ' LIMIT 1';
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        $site = $stmt->fetch() ?: null;
+        if (!$site && $language !== '') {
+            $stmt = db()->prepare(
+                'SELECT s.*, p.name AS project_name FROM sites s
+                 JOIN projects p ON p.id = s.primary_project_id
+                 WHERE s.primary_project_id=? AND s.domain=? AND TRIM(s.country)=? LIMIT 1'
+            );
+            $stmt->execute([$projectId, $domain, $country]);
+            $site = $stmt->fetch() ?: null;
+        }
+    }
+    $inventory = null;
+    $inInventory = false;
+    if ($domain !== '' && function_exists('ensure_prospect_schema')) {
+        ensure_prospect_schema();
+        $p = db()->prepare('SELECT * FROM prospect_sites WHERE domain=? LIMIT 1');
+        $p->execute([$domain]);
+        $inventory = $p->fetch() ?: null;
+        $inInventory = (bool) $inventory;
+    }
+    return [
+        'domain' => $domain,
+        'project_id' => $projectId,
+        'country' => $country,
+        'language' => $language,
+        'site' => $site,
+        'in_project' => (bool) $site,
+        'in_inventory' => $inInventory,
+        'inventory' => $inventory,
+    ];
+}
+
+/**
+ * Language options for a project country sheet (defaults + existing values).
+ *
+ * @return list<string>
+ */
+function project_country_language_options(int $projectId, string $country = ''): array
+{
+    $langs = [];
+    foreach (list_countries(null, true) as $c) {
+        if ($country !== '' && strcasecmp($c['name'], $country) !== 0) {
+            continue;
+        }
+        $dl = trim((string) ($c['default_language'] ?? ''));
+        if ($dl !== '') {
+            $langs[$dl] = true;
+        }
+    }
+    if ($projectId > 0) {
+        $sql = "SELECT DISTINCT language FROM sites WHERE primary_project_id=? AND language <> ''";
+        $params = [$projectId];
+        if ($country !== '') {
+            $sql .= ' AND TRIM(country)=?';
+            $params[] = $country;
+        }
+        $sql .= ' ORDER BY language';
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $lang) {
+            $langs[(string) $lang] = true;
+        }
+    }
+    foreach (['English', 'German', 'French', 'Spanish', 'Italian', 'Dutch', 'Polish'] as $l) {
+        $langs[$l] = true;
+    }
+    $out = array_keys($langs);
+    sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
+}

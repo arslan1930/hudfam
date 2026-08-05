@@ -280,3 +280,40 @@ CREATE TABLE IF NOT EXISTS email_campaign_contacts (
   CONSTRAINT fk_ecc_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_ecc_updated FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Global country catalog (company-wide country folders)
+-- Prefer upgrade.php / ensure_country_catalog_schema(); this file is a reference.
+
+CREATE TABLE IF NOT EXISTS country_catalog_sites (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL,
+  url VARCHAR(500) NOT NULL DEFAULT '',
+  country VARCHAR(100) NOT NULL DEFAULT '',
+  language VARCHAR(50) NOT NULL DEFAULT '',
+  region VARCHAR(40) NOT NULL DEFAULT '',
+  niche VARCHAR(255) NOT NULL DEFAULT '',
+  da INT NULL,
+  dr INT NULL,
+  traffic INT NULL,
+  publisher_quote_price DECIMAL(12,2) NULL,
+  backlink_price DECIMAL(12,2) NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
+  status VARCHAR(40) NOT NULL DEFAULT 'draft',
+  order_status VARCHAR(40) NOT NULL DEFAULT '',
+  inventory_client_name VARCHAR(255) NOT NULL DEFAULT '',
+  admin_comments TEXT NULL,
+  our_mailbox VARCHAR(190) NOT NULL DEFAULT '',
+  our_contact_name VARCHAR(150) NOT NULL DEFAULT '',
+  created_by INT NULL,
+  updated_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_country_catalog_domain (country, domain),
+  INDEX (country),
+  INDEX (domain),
+  INDEX (status),
+  INDEX (order_status),
+  INDEX (region),
+  CONSTRAINT fk_ccs_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ccs_updated FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
