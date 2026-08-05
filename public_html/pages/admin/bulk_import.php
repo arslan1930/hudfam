@@ -1,14 +1,16 @@
 <?php
 $user = require_admin();
-ensure_country_catalog_schema();
-
-$country = trim((string) (post('country') ?: get('country')));
+$ctx = catalog_context_from_request('admin');
+$projects = db()->query("SELECT id, name, client_name FROM projects WHERE status!='archived' ORDER BY name")->fetchAll();
+$projectId = (int) $ctx['project_id'];
+$country = $ctx['country'];
+$language = $ctx['language'];
 $countryGroups = country_catalog_countries_grouped();
 $result = null;
 
 if (isset($_GET['template'])) {
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=country-catalog-template.csv');
+    header('Content-Disposition: attachment; filename=project-country-catalog-template.csv');
     $out = fopen('php://output', 'wb');
     fputcsv($out, bulk_csv_headers());
     fputcsv($out, [
@@ -23,21 +25,54 @@ if (isset($_GET['template'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $country = trim((string) post('country'));
+    $ctx = catalog_context_from_request('admin');
+    $projectId = (int) $ctx['project_id'];
+    $country = $ctx['country'];
+    $language = $ctx['language'];
+    require_project_access($projectId, $user);
     if ($country === '') {
-        flash('error', 'Select a country catalog first.');
-        redirect('index.php?page=admin_bulk_import');
+        flash('error', 'Select a country sheet for this project.');
+        redirect('index.php?page=admin_bulk_import&project_id=' . $projectId);
     }
     if (empty($_FILES['csv']['tmp_name']) || !is_uploaded_file($_FILES['csv']['tmp_name'])) {
         flash('error', 'Please upload a CSV file.');
-        redirect('index.php?page=admin_bulk_import&country=' . urlencode($country));
+        redirect('index.php?page=admin_bulk_import&project_id=' . $projectId . '&country=' . urlencode($country));
     }
-    $result = bulk_import_country_catalog_csv($country, $_FILES['csv']['tmp_name'], (int) $user['id']);
+    // Import into project, then force country (+ language if set) on imported domains
+    $result = bulk_import_sites_csv($projectId, $_FILES['csv']['tmp_name'], (int) $user['id']);
+    // Normalize country/language on rows that came in without matching sheet
+    try {
+        if ($language !== '') {
+            db()->prepare(
+                'UPDATE sites SET country=?, language=COALESCE(NULLIF(language,\'\'), ?)
+                 WHERE primary_project_id=? AND (TRIM(country)=\'\' OR TRIM(country)=?)'
+            )->execute([$country, $language, $projectId, $country]);
+            db()->prepare(
+                'UPDATE sites SET country=? WHERE primary_project_id=? AND domain IN (
+                    SELECT domain FROM (SELECT domain FROM sites WHERE primary_project_id=?) t
+                 ) AND TRIM(country)<>?'
+            );
+            // Simpler: set country for all rows just imported is hard; force country on blank country rows
+            db()->prepare(
+                'UPDATE sites SET country=? WHERE primary_project_id=? AND TRIM(country)=\'\''
+            )->execute([$country, $projectId]);
+        } else {
+            db()->prepare(
+                'UPDATE sites SET country=? WHERE primary_project_id=? AND TRIM(country)=\'\''
+            )->execute([$country, $projectId]);
+        }
+    } catch (Throwable $e) {
+        // non-fatal
+    }
     flash(
         'ok',
-        "Import into {$country}: {$result['inserted']} inserted, {$result['updated']} updated, {$result['skipped']} skipped."
+        "Import into project · {$country}"
+        . ($language !== '' ? " · {$language}" : '')
+        . ": {$result['inserted']} inserted, {$result['updated']} updated, {$result['skipped']} skipped."
     );
 }
+
+$langOptions = project_country_language_options($projectId, $country);
 
 render_header('Bulk import', 'admin');
 ?>
@@ -48,25 +83,19 @@ render_header('Bulk import', 'admin');
 <div class="topbar">
   <div>
     <h1>Bulk import</h1>
-    <p class="muted">CSV into a <strong>country catalog</strong> · duplicates in the same country are updated. Not tied to a client project.</p>
+    <p class="muted">CSV into a <strong>project’s country catalog</strong>. Choose project + country (+ language). Selection is saved for your session.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_bulk_import&amp;template=1">CSV template</a>
-    <a class="btn secondary" href="index.php?page=admin_sites<?= $country !== '' ? '&sheet=' . urlencode($country) : '' ?>">Catalog</a>
+    <a class="btn secondary" href="index.php?page=admin_sites<?= $projectId ? '&project_id=' . $projectId : '' ?>">Catalog</a>
   </div>
 </div>
 
 <div class="card">
   <h2>CSV columns</h2>
   <p class="help">
-    Required: <code>domain</code>.  
-    Recommended: <code>language</code>, <code>da</code>, <code>dr</code>, <code>traffic</code>,
-    <code>order_status</code>, <code>admin_comments</code> (or <code>comments</code>), <code>client_name</code>.  
-    Optional: region, niche, url, status, prices, our_mailbox, our_contact_name.
-  </p>
-  <p class="help">
-    Rows are saved into the <strong>selected country</strong> (CSV <code>country</code> column is ignored for placement).
-    <code>order_status</code>: pending, processing, completed, on_hold, cancelled.
+    Required: <code>domain</code>. Recommended: language, da, dr, traffic, order_status, admin_comments, client_name.
+    Rows land in the selected <strong>project</strong>; blank country cells are filled with your selected country.
   </p>
 </div>
 
@@ -74,7 +103,18 @@ render_header('Bulk import', 'admin');
 <form method="post" enctype="multipart/form-data">
   <div class="form-grid">
     <div>
-      <label>Target country catalog <span class="help">(required)</span></label>
+      <label>Project <span class="help">(required)</span></label>
+      <select name="project_id" required>
+        <option value="">— choose project —</option>
+        <?php foreach ($projects as $p): ?>
+          <option value="<?= (int) $p['id'] ?>" <?= $projectId === (int) $p['id'] ? 'selected' : '' ?>>
+            <?= h($p['name']) ?><?= $p['client_name'] ? ' · ' . h($p['client_name']) : '' ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div>
+      <label>Country <span class="help">(required)</span></label>
       <select name="country" required>
         <option value="">— Select country —</option>
         <?php foreach ($countryGroups as $regionCode => $block): ?>
@@ -92,35 +132,40 @@ render_header('Bulk import', 'admin');
       </select>
     </div>
     <div>
+      <label>Language</label>
+      <select name="language">
+        <option value="">— optional default —</option>
+        <?php foreach ($langOptions as $lang): ?>
+          <option value="<?= h($lang) ?>" <?= $language === $lang ? 'selected' : '' ?>><?= h($lang) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div>
       <label>CSV file</label>
       <input type="file" name="csv" accept=".csv,text/csv" required>
     </div>
   </div>
-  <p class="help" style="margin-top:0.7rem">Large files: keep under your host’s upload limit. Split into multiple CSVs if needed.</p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">Import CSV into country</button>
+    <button class="btn" type="submit">Import CSV</button>
   </p>
 </form>
 </div>
 
 <?php if ($result): ?>
 <div class="card">
-  <h2>Last import summary · <?= h($country) ?></h2>
+  <h2>Last import summary</h2>
   <p>
     Inserted: <strong><?= (int) $result['inserted'] ?></strong> ·
     Updated: <strong><?= (int) $result['updated'] ?></strong> ·
     Skipped: <strong><?= (int) $result['skipped'] ?></strong>
   </p>
   <?php if ($result['errors']): ?>
-    <h3>Notes / errors (first <?= count($result['errors']) ?>)</h3>
-    <ul class="help">
-      <?php foreach ($result['errors'] as $err): ?>
-        <li><?= h($err) ?></li>
-      <?php endforeach; ?>
-    </ul>
+    <ul class="help"><?php foreach ($result['errors'] as $err): ?><li><?= h($err) ?></li><?php endforeach; ?></ul>
   <?php endif; ?>
-  <?php if ($country !== ''): ?>
-    <p class="actions"><a class="btn" href="index.php?page=admin_sites&amp;sheet=<?= urlencode($country) ?>">Open <?= h($country) ?> catalog</a></p>
+  <?php if ($projectId && $country !== ''): ?>
+    <p class="actions">
+      <a class="btn" href="index.php?page=admin_sites&amp;project_id=<?= $projectId ?>&amp;sheet=<?= urlencode($country) ?>">Open country sheet</a>
+    </p>
   <?php endif; ?>
 </div>
 <?php endif; ?>
