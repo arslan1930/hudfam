@@ -38,12 +38,11 @@ Change passwords under **Admin → Users**.
 
 ## 5. Use the workflow
 1. **Admins** (multiple): each has unique name + contact details; assign collaborating admins per project
-2. Admin opens a **project → Catalog**: country **sheets** (Germany, Austria, …). Fill daily via Filter & add (set Country) or CSV
-3. Admin fills **DR, traffic, quote & agreed prices** on sites in each sheet
-4. **Team → Search all sheets** (one bar): checks every country sheet + Our inventory; shows comments (already have it, used, low traffic, …)
-5. **Team → project → Filter & add**: only domains new across catalogs + inventory; lands in the chosen country sheet
-6. Global **Our inventory** (Prospects) Filter & add stays separate for outreach lists / dated batches
-7. Admin sends packs / publication orders as before
+2. Admin builds **catalog inventory** (prices, order status, client name) — single or CSV bulk import
+3. **Team → Filter & add sites**: Box 1 = old prospect names · Box 2 = paste new → **Filter sites** → **Add sites** (writes to old inventory + today’s dated batch)
+4. **Add history** (Admin → Add history): each teammate’s websites by day; also stored in Our inventory / Filter Box 1
+5. Catalog Super search still shows site metrics only (no client/project secrets)
+6. Admin sends packs / publication orders as before
 
 ### Already installed earlier?
 Open `upgrade.php` once, then delete it.

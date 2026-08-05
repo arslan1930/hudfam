@@ -246,9 +246,9 @@ function render_glossary(string $panel): void
         echo '<div><dt>Country sheets</dt><dd>Each project catalog is split by country. Filter &amp; add only accepts domains not already known.</dd></div>';
         echo '<div><dt>Workflow</dt><dd>Search domain → Open project sheet → Filter &amp; add uniques → Outreach → Results.</dd></div>';
     } else {
-        echo '<div><dt>Country sheets</dt><dd>Project catalog tables by country. Add sites daily (Filter &amp; add or CSV) with Country set.</dd></div>';
-        echo '<div><dt>Team search</dt><dd>One Team bar reads all sheets — teammates see already have it / used / low traffic before adding.</dd></div>';
-        echo '<div><dt>Workflow</dt><dd>Create project → Fill country sheets daily → Team searches → Send pack → Track orders.</dd></div>';
+        echo '<div><dt>Super search</dt><dd>Find domains inside a project (or Team’s safe catalog search).</dd></div>';
+        echo '<div><dt>Add history</dt><dd>Which websites each teammate added, saved by person and day.</dd></div>';
+        echo '<div><dt>Workflow</dt><dd>Seed Our inventory → Create project → Build catalog → Send pack → Track orders.</dd></div>';
     }
     echo '</dl></div>';
 }
