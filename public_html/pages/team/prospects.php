@@ -58,6 +58,7 @@ render_header('All sites', 'team');
     <a class="btn secondary" href="index.php?page=team_prospect_form">Add one</a>
   </div>
 </div>
+<?= guide_admin_inventory() ?>
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="team_prospects">

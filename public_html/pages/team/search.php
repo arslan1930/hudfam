@@ -113,6 +113,7 @@ render_header('Catalog search', 'team');
     <a class="btn secondary" href="index.php?page=team_search&amp;clear_ctx=1">Clear selection</a>
   </div>
 </div>
+<?= guide_team_search() ?>
 
 <form class="card super-search" method="get" action="index.php" id="ctx_form">
   <input type="hidden" name="page" value="team_search">

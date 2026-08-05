@@ -45,14 +45,25 @@ render_header('Dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Start with unique sites, then work your projects.</p>
+    <p class="muted">Search the priced Catalog, filter unique inventory, and cut replied emails — Admin sets prices and campaigns.</p>
   </div>
 </div>
 
+<?php render_glossary('team'); ?>
+<?= render_team_panel_guide() ?>
+
 <div class="launch-cards">
+  <a class="launch-card" href="index.php?page=team_search">
+    <h2>Catalog search</h2>
+    <p>Project → Country → Language, then find or add a priced site.</p>
+  </a>
   <a class="launch-card" href="index.php?page=team_prospect_check">
     <h2>Filter & add</h2>
-    <p>Paste new domains, remove duplicates, save unique sites.</p>
+    <p>Paste domains, drop duplicates, save unique sites (no prices).</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_email_search">
+    <h2>Cut replied emails</h2>
+    <p>Paste emails that replied so they leave the Ready send list.</p>
   </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Today’s batch</h2>

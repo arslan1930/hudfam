@@ -65,6 +65,7 @@ render_header('Cut replied emails', 'team');
   </div>
   <a class="btn secondary" href="index.php?page=team_email_campaigns">Country sheets</a>
 </div>
+<?= guide_team_email_cut() ?>
 
 <form class="card" method="post">
   <input type="hidden" name="action" value="quick_cut">

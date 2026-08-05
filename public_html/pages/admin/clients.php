@@ -40,6 +40,7 @@ render_header('Clients', 'admin');
   </div>
 </div>
 
+<?= guide_admin_clients() ?>
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_clients">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="name, email, project"></div>

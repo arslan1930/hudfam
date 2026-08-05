@@ -100,6 +100,7 @@ render_header('Email campaigns', 'admin');
     <a class="btn" href="index.php?page=admin_email_campaign_import&amp;country=<?= urlencode($sheet !== 'all' && $sheet !== '_none' ? $sheet : '') ?>">Import sheet</a>
   </div>
 </div>
+<?= guide_admin_email_campaigns() ?>
 
 <div class="card">
   <h2>Country sheets</h2>

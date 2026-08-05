@@ -55,6 +55,7 @@ render_header('Email campaigns', 'team');
   </div>
   <a class="btn" href="index.php?page=team_email_search">Search contacts</a>
 </div>
+<?= guide_team_email_sheets() ?>
 
 <div class="card">
   <div class="sheet-tabs">

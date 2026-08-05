@@ -22,9 +22,10 @@ render_header('Projects', 'team');
 <div class="topbar">
   <div>
     <h1>Projects</h1>
-    <p class="muted">Each project has its own catalog. Use Super search for a global duplicate check (metrics only).</p>
+    <p class="muted">Each project has its own catalog. Use Catalog search (Project → Country → Language) to look up or add sites.</p>
   </div>
 </div>
+<?= guide_team_projects() ?>
 <div class="folders">
 <?php foreach ($projects as $p): ?>
   <a class="folder" href="index.php?page=team_project&id=<?= (int)$p['id'] ?>&tab=inventory">
