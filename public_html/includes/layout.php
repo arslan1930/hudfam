@@ -25,6 +25,7 @@ function nav_is_active(string $navPage, string $current): bool
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_countries' => ['team_country'],
+        'team_email_campaigns' => ['team_email_search'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -86,6 +87,7 @@ function render_header(string $title, string $panel = ''): void
             'Outreach' => [
                 'admin_prospects' => 'Our inventory',
                 'admin_prospect_batches' => 'Prospect batches',
+                'admin_email_campaigns' => 'Email campaigns',
             ],
             'Clients & orders' => [
                 'admin_clients' => 'Clients',
@@ -106,6 +108,10 @@ function render_header(string $title, string $panel = ''): void
                 'team_prospect_check' => 'Filter & add',
                 'team_prospects' => 'Our inventory',
                 'team_prospect_batches' => 'Dated batches',
+            ],
+            'Email campaigns' => [
+                'team_email_search' => 'Cut replied emails',
+                'team_email_campaigns' => 'Country sheets',
             ],
             'Catalog' => [
                 'team_search' => 'Search all sheets',
