@@ -20,12 +20,14 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_clients' => ['admin_client', 'admin_client_form', 'admin_order_form'],
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
-        'team_projects' => ['team_project', 'team_site_form', 'team_sites'],
+        'admin_email_campaigns' => ['admin_email_campaign_import'],
+        'team_projects' => ['team_project', 'team_project_filter', 'team_site_form', 'team_sites'],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_countries' => ['team_country'],
-        'team_email_campaigns' => ['team_email_search'],
+        'team_email_campaigns' => [],
+        'team_email_search' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -42,7 +44,12 @@ function render_header(string $title, string $panel = ''): void
 {
     $app = app_config()['app_name'] ?? 'TechxForm';
     $user = current_user();
-    $current = (string) ($_GET['page'] ?? '');
+    $base = app_base_path();
+    // PHP-served CSS first (Hostinger-safe), then static file as second source
+    $cssPhp = stylesheet_url();
+    $cssFile = asset_url('assets/css/app.css');
+    $logo = brand_logo_url();
+
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
@@ -59,84 +66,74 @@ function render_header(string $title, string $panel = ''): void
     }
 
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
-    $displayName = trim((string) ($user['full_name'] ?? '')) !== ''
-        ? $user['full_name']
-        : $user['username'];
+    $current = current_route_page();
+    $roleLabel = $panel === 'admin' ? 'Admin' : 'Team';
 
     echo '<div class="shell"><aside class="sidebar">';
-    echo '<a class="brand" href="' . h($home) . '">' . h($app) . '</a>';
-    echo '<div class="sidebar-user">' . h($displayName);
-    echo '<span>' . h($panel === 'admin' ? 'Admin' : 'Team') . '</span></div>';
-    echo '<nav>';
+    echo '<a class="brand" href="' . h($home) . '">';
+    echo '<img class="brand-logo" src="' . h($logo) . '" alt="' . h($app) . '">';
+    echo '<span>' . h($app) . '</span></a>';
+    echo '<div class="sidebar-role">' . h($roleLabel) . ' · ' . h((string) ($user['username'] ?? '')) . '</div>';
+    echo '<nav aria-label="' . h($roleLabel) . ' navigation">';
 
     if ($panel === 'admin') {
-        $sections = [
-            '' => [
+        $groups = [
+            'Overview' => [
                 'admin_dashboard' => 'Dashboard',
             ],
-            'Campaigns' => [
+            'Catalog & projects' => [
                 'admin_projects' => 'Projects',
                 'admin_sites' => 'Catalog',
                 'admin_bulk_import' => 'Bulk import',
+            ],
+            'Outreach' => [
+                'admin_prospects' => 'Our inventory',
+                'admin_prospect_batches' => 'Prospect batches',
+                'admin_email_campaigns' => 'Email campaigns',
+            ],
+            'Clients & orders' => [
                 'admin_clients' => 'Clients',
-                'admin_orders_export' => 'Orders',
+                'admin_orders_export' => 'Orders export',
                 'admin_published' => 'Published',
             ],
-            'Team list' => [
-                'admin_prospects' => 'Prospects',
-                'admin_prospect_batches' => 'Batches',
-            ],
-            'Setup' => [
+            'Settings' => [
                 'admin_countries' => 'Countries',
-                'admin_users' => 'Users',
+                'admin_users' => 'Admins & users',
             ],
         ];
     } else {
-        $sections = [
-            '' => [
+        $groups = [
+            'Overview' => [
                 'team_dashboard' => 'Dashboard',
             ],
             'Prospects' => [
                 'team_prospect_check' => 'Filter & add',
-                'team_prospect_batches' => 'My batches',
-                'team_prospects' => 'All sites',
+                'team_prospects' => 'Our inventory',
+                'team_prospect_batches' => 'Dated batches',
             ],
-            'Work' => [
-                'team_search' => 'Catalog search',
+            'Email campaigns' => [
+                'team_email_search' => 'Cut replied emails',
+                'team_email_campaigns' => 'Country sheets',
+            ],
+            'Catalog' => [
+                'team_search' => 'Super search',
                 'team_projects' => 'Projects',
                 'team_results' => 'Results',
+            ],
+            'Reference' => [
                 'team_countries' => 'Countries',
             ],
         ];
     }
 
-    foreach ($sections as $section => $links) {
-        if ($section !== '') {
-            echo '<div class="nav-section">' . h($section) . '</div>';
-        }
+    foreach ($groups as $groupLabel => $links) {
+        echo '<div class="nav-group">';
+        echo '<div class="nav-group-label">' . h($groupLabel) . '</div>';
         foreach ($links as $page => $label) {
-            $cls = $current === $page ? ' class="active"' : '';
-            // Highlight related detail pages under parent nav
-            if ($page === 'team_prospect_batches' && $current === 'team_prospect_batch') {
-                $cls = ' class="active"';
-            }
-            if ($page === 'admin_projects' && in_array($current, ['admin_project', 'admin_project_form', 'admin_pitch_create', 'admin_pitch_item'], true)) {
-                $cls = ' class="active"';
-            }
-            if ($page === 'admin_sites' && $current === 'admin_site_form') {
-                $cls = ' class="active"';
-            }
-            if ($page === 'admin_clients' && in_array($current, ['admin_client', 'admin_client_form', 'admin_order_form'], true)) {
-                $cls = ' class="active"';
-            }
-            if ($page === 'team_projects' && $current === 'team_project') {
-                $cls = ' class="active"';
-            }
-            if ($page === 'team_prospect_check' && $current === 'team_prospect_form') {
-                $cls = ' class="active"';
-            }
-            echo '<a href="index.php?page=' . h($page) . '"' . $cls . '>' . h($label) . '</a>';
+            $active = nav_is_active($page, $current) ? ' active' : '';
+            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($page) . '">' . h($label) . '</a>';
         }
+        echo '</div>';
     }
 
     echo '<div class="nav-group nav-group-end">';

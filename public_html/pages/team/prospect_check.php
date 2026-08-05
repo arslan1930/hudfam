@@ -28,29 +28,32 @@ try {
         $notes = trim((string) post('notes'));
         $domains = parse_domain_list($raw);
 
-    if ($action === 'add_new') {
-        $filter = filter_domains_against_prospects($domains);
-        $selected = $filter['new'];
-        $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-        $msg = 'Added ' . (int) $added['inserted'] . ' sites to inventory';
-        if (!empty($added['batch_id'])) {
-            $msg .= ' · Batch: today';
-        }
-        if ((int) $added['skipped'] > 0) {
-            $msg .= ' · Skipped ' . (int) $added['skipped'] . ' already known';
-        }
-        flash('ok', $msg . '.');
-        $redir = 'index.php?page=team_prospect_check';
-        if (!empty($added['batch_id'])) {
-            $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
+        if ($action === 'add_new') {
+            $filter = filter_domains_against_prospects($domains);
+            $selected = $filter['new'];
+            $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
+            $msg = 'Added ' . (int) $added['inserted'] . ' sites to inventory';
+            if (!empty($added['batch_id'])) {
+                $msg .= ' · Batch: today';
+            }
+            if ((int) $added['skipped'] > 0) {
+                $msg .= ' · Skipped ' . (int) $added['skipped'] . ' already known';
+            }
+            flash('ok', $msg . '.');
+            $redir = 'index.php?page=team_prospect_check';
+            if (!empty($added['batch_id'])) {
+                $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
+            }
+            redirect($redir);
         }
 
-    if (count($domains) > 100000) {
-        flash('error', 'Paste at most 100,000 domains per run (split into batches).');
-    } elseif (!$domains) {
-        flash('error', 'Paste at least one domain under “Paste new sites”.');
-    } else {
-        $result = filter_domains_against_prospects($domains);
+        if (count($domains) > 100000) {
+            flash('error', 'Paste at most 100,000 domains per run (split into batches).');
+        } elseif (!$domains) {
+            flash('error', 'Paste at least one domain under “Paste new sites”.');
+        } else {
+            $result = filter_domains_against_prospects($domains);
+        }
     }
 } catch (Throwable $e) {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try Filter again.');
