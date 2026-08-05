@@ -1,7 +1,15 @@
-# Run Hudfam on Hostinger shared hosting
+# Run TechxForm on Hostinger shared hosting
 
-This folder is a **plain PHP + MySQL + HTML + CSS** app (AJAX/JSON optional).  
-It works on Hostinger shared hosting — **no Django, Node.js, React, npm, or Docker**.
+This folder is a **plain PHP + MySQL + HTML + CSS** app.  
+**No Django, Node.js, React, npm, or Docker.**
+
+## What the app does
+One shared **URL database**:
+1. **Admin** adds URLs  
+2. **Team** filters new lists against the database and adds only unique sites  
+3. **Add history** shows who added what, by day  
+
+Removed (not in the app anymore): Catalog, Email campaigns, Orders, Published, Projects.
 
 ## 1. Create MySQL database
 1. Hostinger hPanel → **Databases → MySQL Databases**
@@ -9,22 +17,13 @@ It works on Hostinger shared hosting — **no Django, Node.js, React, npm, or Do
 3. Note: host (usually `localhost`), db name, user, password
 
 ## 2. Upload files
-Upload **everything inside** `public_html/` to your domain’s `public_html` (or subdomain folder):
+Upload **everything inside** `public_html/` to your domain’s web root:
 
-- `index.php`
-- `install.php`
-- `assets/`
-- `includes/`
-- `pages/`
-- `sql/`
-- `config.sample.php`
-- `.htaccess`
+- `index.php`, `asset.php`, `install.php`, `upgrade.php`
+- `assets/`, `includes/`, `pages/`, `sql/`
+- `config.sample.php`, `.htaccess`
 
-Upload **only** the files listed above (the contents of this folder). There is no separate frontend build step.
-
-### Easy ways
-- Git on server (if SSH enabled): clone repo, then copy `public_html/*` into the web root  
-- Or zip `public_html` and upload via File Manager / FTP
+Do **not** nest `public_html/public_html`.
 
 ## 3. Install
 1. Open `https://YOUR-DOMAIN/install.php`
@@ -37,35 +36,32 @@ Upload **only** the files listed above (the contents of this folder). There is n
 
 Change passwords under **Admin → Users**.
 
-## 5. Use the workflow
-1. **Admin**: Projects → Catalog / Bulk import → Send pack → Clients / Orders  
-2. **Team**: Filter & add (paste → filter → add unique) → My batches / All sites  
-3. Prospects (Team list, no prices) stay separate from Catalog (priced sites)  
-4. Multiple admins: unique name + contact details; collaborate per project
+## 5. Daily use
+| Role | Menu |
+|------|------|
+| Admin | Dashboard · Our database · Add URLs · Add history · Users |
+| Team | Dashboard · Filter & add · Our database · Add history |
 
 ### Already installed earlier?
-Open `upgrade.php` once (country catalog + prior upgrades), then delete it.
+Open `upgrade.php` once, then delete it.
 
 ## Troubleshooting
 | Problem | Fix |
 |--------|-----|
-| 404 on domain | Files not in correct `public_html` / wrong domain document root |
-| **No design / unstyled page** | Upload the **`assets/`** folder (must include `assets/css/app.css` and `assets/img/techxform-logo.svg`). Also upload **`asset.php`**. Open `https://YOUR-DOMAIN/asset.php?f=css/app.css` — you should see CSS text. If that 404s, files are in the wrong folder (do not nest `public_html/public_html`). |
-| Filter / Prospects errors | Open `upgrade.php` once (creates prospect tables), then delete it. Newer builds also auto-create those tables on first use. |
-| Still says Hudfam | Edit `config.php` and set `'app_name' => 'TechxForm'`. |
-| Database error on install | Check DB name/user/password; host is usually `localhost` |
-| Blank page | Enable PHP error display temporarily, or check hPanel error logs |
-| Permission denied writing config | Create `config.php` manually from `config.sample.php` |
+| **403 Forbidden** | Re-upload `.htaccess`. Folders **755**, files **644**. Open `index.php?page=login`. |
+| 404 on domain | Wrong document root / nested folder |
+| **No design** | Upload `assets/` + `asset.php`. Test `asset.php?f=css/app.css` |
+| Filter / database errors | Run `upgrade.php` once, then delete it |
+| Database error on install | Check DB name/user/password; host usually `localhost` |
+| Blank page | Check hPanel error logs |
 
-### Correct upload layout (web root)
+### Correct upload layout
 ```text
-public_html/          ← Hostinger web root for your domain
+public_html/          ← Hostinger web root
   index.php
-  asset.php           ← serves CSS if /assets URL fails
+  asset.php
   install.php
-  assets/
-    css/
-      app.css         ← required for design
+  assets/css/app.css
   includes/
   pages/
   sql/

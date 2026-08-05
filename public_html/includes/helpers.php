@@ -91,122 +91,6 @@ function get(string $key, $default = '')
     return $_GET[$key] ?? $default;
 }
 
-/**
- * Persist catalog UI context (project / country / language) in the PHP session
- * so selections survive page refresh for Team and Admin.
- *
- * @return array{project_id:int,country:string,language:string}
- */
-function catalog_context_get(string $panel = 'team'): array
-{
-    $key = $panel === 'admin' ? 'admin_catalog_ctx' : 'team_catalog_ctx';
-    $ctx = $_SESSION[$key] ?? [];
-    return [
-        'project_id' => (int) ($ctx['project_id'] ?? 0),
-        'country' => trim((string) ($ctx['country'] ?? '')),
-        'language' => trim((string) ($ctx['language'] ?? '')),
-    ];
-}
-
-/**
- * @param array{project_id?:int|string,country?:string,language?:string} $data
- */
-function catalog_context_save(string $panel, array $data): void
-{
-    $key = $panel === 'admin' ? 'admin_catalog_ctx' : 'team_catalog_ctx';
-    $cur = catalog_context_get($panel);
-    if (array_key_exists('project_id', $data)) {
-        $cur['project_id'] = (int) $data['project_id'];
-    }
-    if (array_key_exists('country', $data)) {
-        $cur['country'] = trim((string) $data['country']);
-    }
-    if (array_key_exists('language', $data)) {
-        $cur['language'] = trim((string) $data['language']);
-    }
-    $_SESSION[$key] = $cur;
-}
-
-/**
- * Merge request values over session defaults, then save back to session.
- *
- * @return array{project_id:int,country:string,language:string}
- */
-function catalog_context_from_request(string $panel = 'team'): array
-{
-    if ((string) get('clear_ctx') === '1') {
-        catalog_context_save($panel, ['project_id' => 0, 'country' => '', 'language' => '']);
-        return catalog_context_get($panel);
-    }
-    $saved = catalog_context_get($panel);
-    $projectId = $saved['project_id'];
-    $country = $saved['country'];
-    $language = $saved['language'];
-    if (array_key_exists('project_id', $_POST)) {
-        $projectId = (int) $_POST['project_id'];
-    } elseif (array_key_exists('project_id', $_GET)) {
-        $projectId = (int) $_GET['project_id'];
-    }
-    if (array_key_exists('country', $_POST)) {
-        $country = trim((string) $_POST['country']);
-    } elseif (array_key_exists('country', $_GET)) {
-        $country = trim((string) $_GET['country']);
-    }
-    if (array_key_exists('language', $_POST)) {
-        $language = trim((string) $_POST['language']);
-    } elseif (array_key_exists('language', $_GET)) {
-        $language = trim((string) $_GET['language']);
-    }
-    $out = [
-        'project_id' => $projectId,
-        'country' => $country,
-        'language' => $language,
-    ];
-    catalog_context_save($panel, $out);
-    return $out;
-}
-
-function reject_reasons(): array
-{
-    return [
-        'already_used' => 'Already used',
-        'casino_links' => 'Casino links',
-        'weak_site' => 'Weak site',
-        'mfa' => 'MFA (Made for advertising)',
-        'bad_niche' => 'Bad niche fit',
-        'price_high' => 'Price too high',
-        'low_metrics' => 'Low traffic / metrics',
-        'other' => 'Other',
-    ];
-}
-
-function site_statuses(): array
-{
-    return [
-        'draft' => 'Draft',
-        'negotiating' => 'Negotiating',
-        'agreed' => 'Agreed',
-        'sent' => 'Sent',
-        'rejected' => 'Rejected',
-        'processing' => 'Processing',
-        'completed' => 'Completed',
-        'blocked' => 'Blocked',
-    ];
-}
-
-/** Admin inventory order status (publication / deal order), not pitch item status. */
-function inventory_order_statuses(): array
-{
-    return [
-        '' => '—',
-        'pending' => 'Pending',
-        'processing' => 'Processing',
-        'completed' => 'Completed',
-        'on_hold' => 'On hold',
-        'cancelled' => 'Cancelled',
-    ];
-}
-
 function prospect_statuses(): array
 {
     return [
@@ -217,54 +101,16 @@ function prospect_statuses(): array
     ];
 }
 
-function project_statuses(): array
-{
-    return [
-        'active' => 'Active',
-        'paused' => 'Paused',
-        'archived' => 'Archived',
-        'completed' => 'Completed',
-    ];
-}
-
-function pitch_item_statuses(): array
-{
-    return [
-        'sent' => 'Sent',
-        'rejected' => 'Rejected',
-        'processing' => 'Processing',
-        'completed' => 'Completed',
-    ];
-}
-
-function publication_order_statuses(): array
-{
-    return [
-        'processing' => 'Processing',
-        'completed' => 'Completed',
-    ];
-}
-
-/** Resolve a status code to a human label across known status maps. */
+/** Resolve a status code to a human label. */
 function status_label(string $status): string
 {
     if ($status === '') {
         return '—';
     }
-    $maps = [
-        site_statuses(),
-        prospect_statuses(),
-        project_statuses(),
-        pitch_item_statuses(),
-        publication_order_statuses(),
-        inventory_order_statuses(),
-    ];
-    foreach ($maps as $map) {
-        if (array_key_exists($status, $map) && $map[$status] !== '') {
-            return (string) $map[$status];
-        }
+    $map = prospect_statuses();
+    if (array_key_exists($status, $map) && $map[$status] !== '') {
+        return (string) $map[$status];
     }
-    // Fallback: title-case snake_case codes
     return ucwords(str_replace('_', ' ', $status));
 }
 
