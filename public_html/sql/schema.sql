@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(150) NOT NULL DEFAULT '',
   email VARCHAR(190) NOT NULL DEFAULT '',
+  email_verified_at DATETIME NULL DEFAULT NULL,
   phone VARCHAR(80) NOT NULL DEFAULT '',
   contact_details TEXT,
   role ENUM('admin','team') NOT NULL DEFAULT 'team',
@@ -14,6 +15,20 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX (role),
   INDEX (full_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  purpose ENUM('email_verify','password_reset') NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_token_hash (token_hash),
+  INDEX (user_id, purpose),
+  INDEX (expires_at),
+  CONSTRAINT fk_auth_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS countries (
@@ -79,4 +94,28 @@ CREATE TABLE IF NOT EXISTS prospect_batch_items (
   INDEX (domain),
   CONSTRAINT fk_pbi_batch FOREIGN KEY (batch_id) REFERENCES prospect_batches(id) ON DELETE CASCADE,
   CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Admin assigns work to teammates
+CREATE TABLE IF NOT EXISTS team_tasks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  notes TEXT NULL,
+  country VARCHAR(100) NOT NULL DEFAULT '',
+  language VARCHAR(50) NOT NULL DEFAULT '',
+  niche VARCHAR(255) NOT NULL DEFAULT '',
+  target_count INT NULL,
+  status ENUM('open','in_progress','done','cancelled') NOT NULL DEFAULT 'open',
+  assigned_to INT NOT NULL,
+  created_by INT NOT NULL,
+  due_date DATE NULL,
+  completed_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (assigned_to, status),
+  INDEX (created_by),
+  INDEX (country),
+  INDEX (due_date),
+  CONSTRAINT fk_task_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_task_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

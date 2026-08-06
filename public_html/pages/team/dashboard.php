@@ -19,6 +19,13 @@ try {
     $todayBatch = null;
 }
 
+$openTaskCount = 0;
+try {
+    $openTaskCount = count_open_tasks_for_user($uid);
+} catch (Throwable $e) {
+    $openTaskCount = 0;
+}
+
 render_header('Dashboard', 'team');
 $frequent = user_frequent_countries($uid, 6);
 $topCountry = $frequent[0]['name'] ?? '';
@@ -36,6 +43,10 @@ $topCountry = $frequent[0]['name'] ?? '';
 <?= render_frequent_country_chips($frequent, 'index.php?page=team_prospect_check&country=') ?>
 
 <div class="launch-cards">
+  <a class="launch-card" href="index.php?page=team_tasks">
+    <h2>My tasks</h2>
+    <p><?= $openTaskCount > 0 ? $openTaskCount . ' open task' . ($openTaskCount === 1 ? '' : 's') . ' from Admin.' : 'No open tasks right now.' ?></p>
+  </a>
   <a class="launch-card" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
     <h2>Filter &amp; add</h2>
     <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . ' (your most-used).' : 'Select country → paste → Filter (all countries) → add unique.' ?></p>

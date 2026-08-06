@@ -25,6 +25,15 @@ try {
 } catch (Throwable $e) {
     $recent = [];
 }
+$openTasks = 0;
+try {
+    ensure_tasks_schema();
+    $openTasks = (int) db()->query(
+        "SELECT COUNT(*) FROM team_tasks WHERE status IN ('open','in_progress')"
+    )->fetchColumn();
+} catch (Throwable $e) {
+    $openTasks = 0;
+}
 
 render_header('Dashboard', 'admin');
 $frequent = user_frequent_countries((int) $user['id'], 6);
@@ -45,6 +54,7 @@ $topCountry = $frequent[0]['name'] ?? '';
 <div class="grid">
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
   <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
+  <div class="card stat"><span class="muted">Open tasks</span><strong><?= $openTasks ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
 </div>
 
@@ -53,9 +63,17 @@ $topCountry = $frequent[0]['name'] ?? '';
     <h2>Add sites</h2>
     <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . ' (your most-used).' : 'Paste example.com into a country folder.' ?></p>
   </a>
+  <a class="launch-card" href="index.php?page=admin_tasks">
+    <h2>Tasks</h2>
+    <p><?= $openTasks ?> open — assign countries/work to teammates.</p>
+  </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
     <p>Open country folders — browse by country.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_account">
+    <h2>Account</h2>
+    <p>Verify email &amp; recover Admin password.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_users">
     <h2>Users</h2>
