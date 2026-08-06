@@ -96,11 +96,11 @@ function guide_inventory(): string
     return render_page_purpose(
         'Our database — country folders',
         'Each country has its own site database. Admin opens a country folder to view or add sites.',
-        'Pick a country folder. For large databases use Download all (.txt) or View all names.',
+        'Pick a country folder. Download/view large lists; Admin can select & delete sites.',
         [
             'Open a country folder.',
             'Download all / View all names for 10k–100k site lists.',
-            'Add root domains into that country’s database.',
+            'Admin: select checkboxes to delete, or remove by filter / .txt list.',
         ]
     );
 }

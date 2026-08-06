@@ -1055,6 +1055,112 @@ function stream_prospect_domains_export(string $countryKey, string $q = '', stri
     exit;
 }
 
+function count_prospect_sites_filtered(string $countryKey, string $q = '', string $status = ''): int
+{
+    ensure_prospect_schema();
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    $stmt = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
+    $stmt->execute($params);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Delete selected site IDs within one country (max 1000).
+ *
+ * @param list<int|string> $ids
+ */
+function delete_prospect_sites_by_ids(array $ids, string $countryKey): int
+{
+    ensure_prospect_schema();
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn($id) => $id > 0)));
+    if ($ids === []) {
+        return 0;
+    }
+    if (count($ids) > 1000) {
+        $ids = array_slice($ids, 0, 1000);
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    if ($countryKey === '_none') {
+        $sql = "DELETE FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=''";
+        $params = $ids;
+    } else {
+        $sql = "DELETE FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=?";
+        $params = array_merge($ids, [$countryKey]);
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->rowCount();
+}
+
+/**
+ * Delete root domains from one country database.
+ *
+ * @param list<string> $domains
+ */
+function delete_prospect_sites_by_domains(array $domains, string $countryKey): int
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    $clean = [];
+    foreach ($domains as $d) {
+        $d = strtolower(trim((string) $d));
+        if ($d === '') {
+            continue;
+        }
+        // Accept exact root domains; also salvage from messy upload lines
+        $root = is_plain_site_domain($d) ? $d : extract_root_domain_candidate($d);
+        if ($root !== '') {
+            $clean[$root] = true;
+        }
+    }
+    $list = array_keys($clean);
+    if ($list === []) {
+        return 0;
+    }
+
+    $deleted = 0;
+    $chunkSize = 500;
+    for ($i = 0, $n = count($list); $i < $n; $i += $chunkSize) {
+        $chunk = array_slice($list, $i, $chunkSize);
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        if ($countryKey === '_none') {
+            $sql = "DELETE FROM prospect_sites WHERE TRIM(country)='' AND domain IN ($placeholders)";
+            $params = $chunk;
+        } else {
+            $sql = "DELETE FROM prospect_sites WHERE TRIM(country)=? AND domain IN ($placeholders)";
+            $params = array_merge([$countryKey], $chunk);
+        }
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        $deleted += $stmt->rowCount();
+    }
+    return $deleted;
+}
+
+/** Delete all sites matching country + optional search/status filter. */
+function delete_prospect_sites_by_filter(string $countryKey, string $q = '', string $status = ''): int
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    // Delete via id chunks to avoid long locks / huge single DELETE
+    $idsStmt = db()->prepare("SELECT p.id FROM prospect_sites p WHERE $whereSql");
+    $idsStmt->execute($params);
+    $ids = $idsStmt->fetchAll(PDO::FETCH_COLUMN);
+    if (!$ids) {
+        return 0;
+    }
+    $deleted = 0;
+    foreach (array_chunk(array_map('intval', $ids), 1000) as $chunk) {
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $stmt = db()->prepare("DELETE FROM prospect_sites WHERE id IN ($placeholders)");
+        $stmt->execute($chunk);
+        $deleted += $stmt->rowCount();
+    }
+    return $deleted;
+}
+
 function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 100): array
 {
     ensure_prospect_schema();
