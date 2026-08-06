@@ -590,8 +590,12 @@ td.col-actions {
 }
 @media (max-width: 900px) {
   .users-workspace { grid-template-columns: 1fr; }
+  .users-workspace.is-editing .users-form-panel { order: -1; }
   .users-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .users-fields { grid-template-columns: 1fr; }
+  .users-list-head { align-items: flex-start; flex-direction: column; }
+  .user-row-actions { width: 100%; }
+  .user-row-actions .btn { flex: 1 1 auto; text-align: center; }
 }
 .topbar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
 h1,h2,h3 { font-family: var(--font); margin: 0 0 0.4rem; color: var(--ink); }
