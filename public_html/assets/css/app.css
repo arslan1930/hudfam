@@ -859,6 +859,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   box-shadow: 0 8px 22px rgba(31, 41, 55, 0.1);
   text-decoration: none;
 }
+/* Author display rules beat UA [hidden]; force hide for live folder search */
+a.folder[hidden],
+[data-folder-group][hidden] {
+  display: none !important;
+}
 .tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.9rem 0; }
 .tabs a {
   padding: 0.35rem 0.7rem;
