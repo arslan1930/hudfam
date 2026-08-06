@@ -366,6 +366,30 @@ function ensure_prospect_schema(): void
           CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS prospect_site_trash (
+          trash_id INT AUTO_INCREMENT PRIMARY KEY,
+          undo_token CHAR(32) NOT NULL,
+          original_id INT NULL,
+          domain VARCHAR(255) NOT NULL,
+          url VARCHAR(500) NOT NULL DEFAULT '',
+          country VARCHAR(100) NOT NULL DEFAULT '',
+          language VARCHAR(50) NOT NULL DEFAULT '',
+          region VARCHAR(40) NOT NULL DEFAULT '',
+          niche VARCHAR(255) NOT NULL DEFAULT '',
+          notes TEXT NULL,
+          status ENUM('new','contacting','replied','skipped') NOT NULL DEFAULT 'new',
+          created_by INT NULL,
+          site_created_at DATETIME NULL,
+          site_updated_at DATETIME NULL,
+          deleted_by INT NULL,
+          deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX (undo_token),
+          INDEX (country),
+          INDEX (domain),
+          INDEX (deleted_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
 }
 
 /**
@@ -1065,16 +1089,198 @@ function count_prospect_sites_filtered(string $countryKey, string $q = '', strin
 }
 
 /**
- * Delete selected site IDs within one country (max 1000).
+ * IDs matching country + keyword/status filter (capped for select-all).
+ *
+ * @return list<int>
+ */
+function list_prospect_ids_filtered(string $countryKey, string $q = '', string $status = '', int $limit = 1000): array
+{
+    ensure_prospect_schema();
+    $limit = max(1, min(1000, $limit));
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    $stmt = db()->prepare(
+        "SELECT p.id FROM prospect_sites p WHERE $whereSql ORDER BY p.domain ASC LIMIT " . (int) $limit
+    );
+    $stmt->execute($params);
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
+ * Move rows into trash then delete from live table. Returns undo token.
+ *
+ * @param list<array<string,mixed>> $rows full prospect_sites rows
+ * @return array{deleted:int,undo_token:string}
+ */
+function trash_and_delete_prospect_rows(array $rows, int $deletedBy = 0): array
+{
+    ensure_prospect_schema();
+    if ($rows === []) {
+        return ['deleted' => 0, 'undo_token' => ''];
+    }
+    $token = bin2hex(random_bytes(16));
+    $ins = db()->prepare(
+        'INSERT INTO prospect_site_trash
+           (undo_token, original_id, domain, url, country, language, region, niche, notes, status,
+            created_by, site_created_at, site_updated_at, deleted_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    );
+    $ids = [];
+    db()->beginTransaction();
+    try {
+        foreach ($rows as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $ids[] = $id;
+            $ins->execute([
+                $token,
+                $id,
+                (string) ($row['domain'] ?? ''),
+                (string) ($row['url'] ?? ''),
+                (string) ($row['country'] ?? ''),
+                (string) ($row['language'] ?? ''),
+                (string) ($row['region'] ?? ''),
+                (string) ($row['niche'] ?? ''),
+                $row['notes'] ?? null,
+                (string) ($row['status'] ?? 'new'),
+                $row['created_by'] !== null && $row['created_by'] !== '' ? (int) $row['created_by'] : null,
+                $row['created_at'] ?? null,
+                $row['updated_at'] ?? null,
+                $deletedBy > 0 ? $deletedBy : null,
+            ]);
+        }
+        $ids = array_values(array_unique($ids));
+        $deleted = 0;
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '?'));
+            $del = db()->prepare("DELETE FROM prospect_sites WHERE id IN ($ph)");
+            $del->execute($chunk);
+            $deleted += $del->rowCount();
+        }
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    return ['deleted' => $deleted, 'undo_token' => $token];
+}
+
+/**
+ * Restore sites from a trash undo token (skips domain+country that already exist).
+ *
+ * @return array{restored:int,skipped:int}
+ */
+function undo_prospect_delete(string $token): array
+{
+    ensure_prospect_schema();
+    $token = trim($token);
+    if ($token === '' || !preg_match('/^[a-f0-9]{32}$/', $token)) {
+        return ['restored' => 0, 'skipped' => 0];
+    }
+    $stmt = db()->prepare('SELECT * FROM prospect_site_trash WHERE undo_token=? ORDER BY trash_id');
+    $stmt->execute([$token]);
+    $rows = $stmt->fetchAll();
+    if (!$rows) {
+        return ['restored' => 0, 'skipped' => 0];
+    }
+
+    $ins = db()->prepare(
+        'INSERT INTO prospect_sites
+           (domain, url, country, language, region, niche, notes, status, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)'
+    );
+    $restored = 0;
+    $skipped = 0;
+    $trashIds = [];
+    db()->beginTransaction();
+    try {
+        foreach ($rows as $row) {
+            $domain = (string) $row['domain'];
+            $country = (string) $row['country'];
+            $exists = db()->prepare(
+                'SELECT id FROM prospect_sites WHERE TRIM(country)=? AND domain=? LIMIT 1'
+            );
+            $exists->execute([$country, $domain]);
+            if ($exists->fetchColumn()) {
+                $skipped++;
+                $trashIds[] = (int) $row['trash_id'];
+                continue;
+            }
+            $createdAt = $row['site_created_at'] ?: date('Y-m-d H:i:s');
+            try {
+                $ins->execute([
+                    $domain,
+                    (string) ($row['url'] ?? ''),
+                    $country,
+                    (string) ($row['language'] ?? ''),
+                    (string) ($row['region'] ?? ''),
+                    (string) ($row['niche'] ?? ''),
+                    $row['notes'] ?? '',
+                    (string) ($row['status'] ?? 'new'),
+                    $row['created_by'] !== null && $row['created_by'] !== '' ? (int) $row['created_by'] : null,
+                    $createdAt,
+                ]);
+                $restored++;
+            } catch (PDOException $e) {
+                $skipped++;
+            }
+            $trashIds[] = (int) $row['trash_id'];
+        }
+        if ($trashIds) {
+            foreach (array_chunk($trashIds, 500) as $chunk) {
+                $ph = implode(',', array_fill(0, count($chunk), '?'));
+                db()->prepare("DELETE FROM prospect_site_trash WHERE trash_id IN ($ph)")->execute($chunk);
+            }
+        }
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    return ['restored' => $restored, 'skipped' => $skipped];
+}
+
+/**
+ * Recent delete batches for a country (for Undo / restore UI).
+ *
+ * @return list<array{undo_token:string,deleted_at:string,site_count:int}>
+ */
+function list_prospect_trash_batches(string $countryKey, int $limit = 10): array
+{
+    ensure_prospect_schema();
+    $limit = max(1, min(50, $limit));
+    if ($countryKey === '_none') {
+        $sql = "SELECT undo_token, MAX(deleted_at) AS deleted_at, COUNT(*) AS site_count
+                FROM prospect_site_trash WHERE TRIM(country)=''
+                GROUP BY undo_token ORDER BY deleted_at DESC LIMIT $limit";
+        $stmt = db()->query($sql);
+    } else {
+        $sql = "SELECT undo_token, MAX(deleted_at) AS deleted_at, COUNT(*) AS site_count
+                FROM prospect_site_trash WHERE TRIM(country)=?
+                GROUP BY undo_token ORDER BY deleted_at DESC LIMIT $limit";
+        $stmt = db()->prepare($sql);
+        $stmt->execute([$countryKey]);
+    }
+    return $stmt->fetchAll();
+}
+
+/**
+ * Delete selected site IDs within one country (max 1000). Keeps trash for Undo.
  *
  * @param list<int|string> $ids
+ * @return array{deleted:int,undo_token:string}
  */
-function delete_prospect_sites_by_ids(array $ids, string $countryKey): int
+function delete_prospect_sites_by_ids(array $ids, string $countryKey, int $deletedBy = 0): array
 {
     ensure_prospect_schema();
     $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn($id) => $id > 0)));
     if ($ids === []) {
-        return 0;
+        return ['deleted' => 0, 'undo_token' => ''];
     }
     if (count($ids) > 1000) {
         $ids = array_slice($ids, 0, 1000);
@@ -1082,23 +1288,25 @@ function delete_prospect_sites_by_ids(array $ids, string $countryKey): int
 
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     if ($countryKey === '_none') {
-        $sql = "DELETE FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=''";
+        $sql = "SELECT * FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=''";
         $params = $ids;
     } else {
-        $sql = "DELETE FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=?";
+        $sql = "SELECT * FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=?";
         $params = array_merge($ids, [$countryKey]);
     }
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    return $stmt->rowCount();
+    $rows = $stmt->fetchAll();
+    return trash_and_delete_prospect_rows($rows, $deletedBy);
 }
 
 /**
- * Delete root domains from one country database.
+ * Delete root domains from one country database (with Undo trash).
  *
  * @param list<string> $domains
+ * @return array{deleted:int,undo_token:string}
  */
-function delete_prospect_sites_by_domains(array $domains, string $countryKey): int
+function delete_prospect_sites_by_domains(array $domains, string $countryKey, int $deletedBy = 0): array
 {
     ensure_prospect_schema();
     @set_time_limit(0);
@@ -1108,7 +1316,6 @@ function delete_prospect_sites_by_domains(array $domains, string $countryKey): i
         if ($d === '') {
             continue;
         }
-        // Accept exact root domains; also salvage from messy upload lines
         $root = is_plain_site_domain($d) ? $d : extract_root_domain_candidate($d);
         if ($root !== '') {
             $clean[$root] = true;
@@ -1116,49 +1323,26 @@ function delete_prospect_sites_by_domains(array $domains, string $countryKey): i
     }
     $list = array_keys($clean);
     if ($list === []) {
-        return 0;
+        return ['deleted' => 0, 'undo_token' => ''];
     }
 
-    $deleted = 0;
-    $chunkSize = 500;
-    for ($i = 0, $n = count($list); $i < $n; $i += $chunkSize) {
-        $chunk = array_slice($list, $i, $chunkSize);
+    $rows = [];
+    foreach (array_chunk($list, 500) as $chunk) {
         $placeholders = implode(',', array_fill(0, count($chunk), '?'));
         if ($countryKey === '_none') {
-            $sql = "DELETE FROM prospect_sites WHERE TRIM(country)='' AND domain IN ($placeholders)";
+            $sql = "SELECT * FROM prospect_sites WHERE TRIM(country)='' AND domain IN ($placeholders)";
             $params = $chunk;
         } else {
-            $sql = "DELETE FROM prospect_sites WHERE TRIM(country)=? AND domain IN ($placeholders)";
+            $sql = "SELECT * FROM prospect_sites WHERE TRIM(country)=? AND domain IN ($placeholders)";
             $params = array_merge([$countryKey], $chunk);
         }
         $stmt = db()->prepare($sql);
         $stmt->execute($params);
-        $deleted += $stmt->rowCount();
+        foreach ($stmt->fetchAll() as $row) {
+            $rows[] = $row;
+        }
     }
-    return $deleted;
-}
-
-/** Delete all sites matching country + optional search/status filter. */
-function delete_prospect_sites_by_filter(string $countryKey, string $q = '', string $status = ''): int
-{
-    ensure_prospect_schema();
-    @set_time_limit(0);
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
-    // Delete via id chunks to avoid long locks / huge single DELETE
-    $idsStmt = db()->prepare("SELECT p.id FROM prospect_sites p WHERE $whereSql");
-    $idsStmt->execute($params);
-    $ids = $idsStmt->fetchAll(PDO::FETCH_COLUMN);
-    if (!$ids) {
-        return 0;
-    }
-    $deleted = 0;
-    foreach (array_chunk(array_map('intval', $ids), 1000) as $chunk) {
-        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-        $stmt = db()->prepare("DELETE FROM prospect_sites WHERE id IN ($placeholders)");
-        $stmt->execute($chunk);
-        $deleted += $stmt->rowCount();
-    }
-    return $deleted;
+    return trash_and_delete_prospect_rows($rows, $deletedBy);
 }
 
 function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 100): array
