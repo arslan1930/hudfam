@@ -96,11 +96,11 @@ function guide_inventory(): string
     return render_page_purpose(
         'Our database — country folders',
         'Each country has its own site database. Admin opens a country folder to view or add sites.',
-        'Pick a country folder, then browse or add root domains (example.com / example.co.uk) for that country.',
+        'Pick a country folder. For large databases use Download all (.txt) or View all names.',
         [
             'Open a country folder.',
-            'Add root domains (example.com / example.co.uk) into that country’s database.',
-            'Team can filter against the same country list.',
+            'Download all / View all names for 10k–100k site lists.',
+            'Add root domains into that country’s database.',
         ]
     );
 }

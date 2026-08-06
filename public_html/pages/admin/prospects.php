@@ -3,7 +3,6 @@ require_admin();
 ensure_prospect_schema();
 
 $sheet = (string) get('country');
-// Prefer ?country= for folder; also accept sheet=
 if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
 }
@@ -31,7 +30,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1>Country databases</h1>
-        <p class="muted">Each country is its own site database. Open a folder to view or add sites (example.com). <?= (int) $grandTotal ?> sites total.</p>
+        <p class="muted">Each country is its own site database. Open a folder to browse, download all names, or add sites. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
@@ -39,12 +38,12 @@ if (!$inCountry && !$emptyCountry) {
     </div>
     <?= render_page_purpose(
         'Our database — one folder per country',
-        'URLs are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add sites to paste example.com names into that country only.',
+        'Sites are stored separately for each country.',
+        'Open a country folder. For large lists (10k–100k), use Download all (.txt) or View all names instead of paging.',
         [
             'Open a country folder.',
-            'Add root domains (example.com / example.co.uk) into that country’s database.',
-            'Team Filter & add can check against the same country list.',
+            'Download all or view all names for big databases.',
+            'Add sites (root domains) into that country’s database.',
         ]
     ) ?>
     <?php foreach ($byRegion as $regionLabel => $list): ?>
@@ -74,56 +73,101 @@ if (!$inCountry && !$emptyCountry) {
 
 // --- One country database ---
 $countryName = $emptyCountry ? '' : $sheet;
+$countryKey = $emptyCountry ? '_none' : $countryName;
 $q = trim((string) get('q'));
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
-$inv = prospect_inventory_query([
-    'q' => $q,
-    'country' => $countryName,
-    'status' => $status,
-] + ($emptyCountry ? [] : []), $pageNum, 50);
+$per = normalize_prospect_per_page((int) get('per', 100));
+$view = (string) get('view'); // '' | 'names'
+$export = (string) get('export');
 
-// For empty country, prospect_inventory_query with country='' won't filter empty — need special case
+if ($export === 'txt') {
+    stream_prospect_domains_export($countryKey, $q, $status);
+}
+
+$sheetLabel = $emptyCountry ? 'No country' : $countryName;
+$baseQs = array_filter([
+    'page' => 'admin_prospects',
+    'country' => $countryKey,
+    'q' => $q,
+    'status' => $status,
+    'per' => $per,
+], static fn($v) => $v !== '' && $v !== null);
+$qs = http_build_query($baseQs);
+$exportUrl = 'index.php?' . http_build_query($baseQs + ['export' => 'txt']);
+$namesUrl = 'index.php?' . http_build_query($baseQs + ['view' => 'names']);
+$tableUrl = 'index.php?' . http_build_query($baseQs);
+
+// --- View all names (one per line) ---
+if ($view === 'names') {
+    $plain = list_prospect_domains_plain($countryKey, $q, $status, 150000);
+    $text = implode("\n", $plain['domains']);
+    render_header('Our database · ' . $sheetLabel . ' · all names', 'admin');
+    ?>
+    <?php render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+        ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+        ['label' => $sheetLabel, 'href' => $tableUrl],
+        ['label' => 'All names'],
+    ]); ?>
+    <div class="topbar">
+      <div>
+        <h1><?= h($sheetLabel) ?> — all site names</h1>
+        <p class="muted">
+          <?= (int) $plain['total'] ?> site<?= (int) $plain['total'] === 1 ? '' : 's' ?>
+          <?php if ($plain['truncated']): ?>
+            · showing first <?= count($plain['domains']) ?> — download .txt for the full list
+          <?php else: ?>
+            · one per line (copy or download)
+          <?php endif; ?>
+        </p>
+      </div>
+      <div class="actions">
+        <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
+        <a class="btn secondary" href="<?= h($tableUrl) ?>">Table view</a>
+        <?php if (!$emptyCountry): ?>
+          <a class="btn secondary" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+        <?php endif; ?>
+      </div>
+    </div>
+    <div class="card">
+      <textarea class="inventory-box" rows="28" readonly id="all_names"><?= h($text) ?></textarea>
+      <p class="actions" style="margin-top:0.8rem">
+        <button class="btn secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('all_names').value)">Copy all</button>
+        <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
+      </p>
+    </div>
+    <?php
+    render_footer('admin');
+    return;
+}
+
+// --- Table view ---
 if ($emptyCountry) {
-    $where = ["TRIM(p.country)=''"];
-    $params = [];
-    if ($q !== '') {
-        $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
-        $params[] = $like;
-        $params[] = $like;
-    }
-    if ($status !== '') {
-        $where[] = 'p.status = ?';
-        $params[] = $status;
-    }
-    $whereSql = implode(' AND ', $where);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
-    $pages = max(1, (int) ceil($total / 50));
-    $offset = ($pageNum - 1) * 50;
+    $pages = max(1, (int) ceil($total / $per));
+    $offset = ($pageNum - 1) * $per;
     $stmt = db()->prepare(
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full
          FROM prospect_sites p
          LEFT JOIN users u ON u.id = p.created_by
-         WHERE $whereSql ORDER BY p.created_at DESC LIMIT 50 OFFSET $offset"
+         WHERE $whereSql ORDER BY p.domain ASC LIMIT $per OFFSET $offset"
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
 } else {
+    $inv = prospect_inventory_query([
+        'q' => $q,
+        'country' => $countryName,
+        'status' => $status,
+    ], $pageNum, $per);
     $rows = $inv['rows'];
     $total = $inv['total'];
     $pages = $inv['pages'];
 }
-
-$sheetLabel = $emptyCountry ? 'No country' : $countryName;
-$qs = http_build_query(array_filter([
-    'page' => 'admin_prospects',
-    'country' => $emptyCountry ? '_none' : $countryName,
-    'q' => $q,
-    'status' => $status,
-], static fn($v) => $v !== '' && $v !== null));
 
 render_header('Our database · ' . $sheetLabel, 'admin');
 ?>
@@ -135,11 +179,13 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
+    <p class="muted"><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> · for large lists use Download or View all names</p>
   </div>
   <div class="actions">
+    <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
+    <a class="btn secondary" href="<?= h($namesUrl) ?>">View all names</a>
     <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+      <a class="btn secondary" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
@@ -147,13 +193,20 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
-  <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain or url…"></div>
+  <input type="hidden" name="country" value="<?= h($countryKey) ?>">
+  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
       <?php foreach (prospect_statuses() as $code => $label): ?>
         <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div><label>Per page</label>
+    <select name="per">
+      <?php foreach (prospect_per_page_choices() as $n): ?>
+        <option value="<?= (int) $n ?>" <?= $per === $n ? 'selected' : '' ?>><?= (int) $n ?></option>
       <?php endforeach; ?>
     </select>
   </div>
@@ -183,10 +236,12 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       <?php endif; ?>
     </div>
   <?php else: ?>
-    <div class="actions" style="margin-top:0.8rem">
+    <div class="actions" style="margin-top:0.8rem;flex-wrap:wrap;gap:0.75rem">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span>Page <?= $pageNum ?> / <?= $pages ?></span>
+      <span>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $per ?> per page</span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <a class="btn secondary" href="<?= h($namesUrl) ?>">View all names</a>
+      <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
     </div>
   <?php endif; ?>
 </div>

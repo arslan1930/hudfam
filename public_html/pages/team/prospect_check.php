@@ -34,7 +34,7 @@ if ($country !== '' && ($language === '' || $region === '')) {
 
 try {
     if ($country !== '') {
-        $old = list_prospect_domain_names(25000, $country);
+        $old = list_prospect_domain_names(100000, $country);
         $oldText = implode("\n", $old['domains']);
         if ($old['truncated']) {
             $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
@@ -99,7 +99,7 @@ try {
                     flash('ok', clean_site_list_summary($clean));
                 }
                 $result = filter_domains_against_prospects($domains, $country);
-                $old = list_prospect_domain_names(25000, $country);
+                $old = list_prospect_domain_names(100000, $country);
                 $oldText = implode("\n", $old['domains']);
                 if ($old['truncated']) {
                     $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
@@ -189,6 +189,10 @@ render_header('Filter & add', 'team');
           Select a country to load its database.
         <?php else: ?>
           <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> in <?= h($country) ?> · used to remove duplicates
+          <?php if ((int) $old['total'] > 0): ?>
+            · <a href="index.php?page=team_prospects&amp;country=<?= urlencode($country) ?>&amp;export=txt">Download all (.txt)</a>
+            · <a href="index.php?page=team_prospects&amp;country=<?= urlencode($country) ?>&amp;view=names">View all names</a>
+          <?php endif; ?>
         <?php endif; ?>
       </p>
       <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="Select a country first"><?= h($oldText) ?></textarea>

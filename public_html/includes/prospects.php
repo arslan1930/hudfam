@@ -496,10 +496,11 @@ function filter_domains_against_prospects(array $domains, string $country = ''):
  *
  * @return array{domains:string[],total:int,truncated:bool}
  */
-function list_prospect_domain_names(int $maxDisplay = 25000, string $country = ''): array
+function list_prospect_domain_names(int $maxDisplay = 100000, string $country = ''): array
 {
     ensure_prospect_schema();
     $country = trim($country);
+    $maxDisplay = max(1, min(150000, $maxDisplay));
     if ($country !== '') {
         $count = db()->prepare('SELECT COUNT(*) FROM prospect_sites WHERE TRIM(country)=?');
         $count->execute([$country]);
@@ -953,16 +954,118 @@ function get_prospect_batch_items(int $batchId, int $limit = 50000): array
     return $stmt->fetchAll();
 }
 
-function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array
+/** Allowed page sizes for country site tables (large lists). */
+function prospect_per_page_choices(): array
+{
+    return [50, 100, 250, 500, 1000];
+}
+
+function normalize_prospect_per_page(int $per): int
+{
+    return in_array($per, prospect_per_page_choices(), true) ? $per : 100;
+}
+
+/**
+ * Build WHERE for listing/exporting one country’s sites.
+ *
+ * @return array{0:string,1:list<mixed>}
+ */
+function prospect_country_where(string $countryKey, string $q = '', string $status = ''): array
+{
+    $emptyCountry = ($countryKey === '_none');
+    $where = [];
+    $params = [];
+    if ($emptyCountry) {
+        $where[] = "TRIM(p.country)=''";
+    } else {
+        $where[] = 'TRIM(p.country)=?';
+        $params[] = $countryKey;
+    }
+    $q = trim($q);
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
+        array_push($params, $like, $like, $like, $like);
+    }
+    if ($status !== '') {
+        $where[] = 'p.status = ?';
+        $params[] = $status;
+    }
+    return [implode(' AND ', $where), $params];
+}
+
+/**
+ * Plain domain list for “view all names” (ordered A–Z).
+ *
+ * @return array{domains:string[],total:int,truncated:bool}
+ */
+function list_prospect_domains_plain(
+    string $countryKey,
+    string $q = '',
+    string $status = '',
+    int $max = 150000
+): array {
+    ensure_prospect_schema();
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
+    $count->execute($params);
+    $total = (int) $count->fetchColumn();
+    $max = max(1, min(200000, $max));
+    $stmt = db()->prepare(
+        "SELECT p.domain FROM prospect_sites p WHERE $whereSql ORDER BY p.domain ASC LIMIT " . (int) $max
+    );
+    $stmt->execute($params);
+    $domains = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    return [
+        'domains' => $domains,
+        'total' => $total,
+        'truncated' => $total > count($domains),
+    ];
+}
+
+/**
+ * Download all matching domains as a .txt file (one per line). Best for 100k+ lists.
+ */
+function stream_prospect_domains_export(string $countryKey, string $q = '', string $status = ''): void
 {
     ensure_prospect_schema();
+    @set_time_limit(0);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+
+    $label = $countryKey === '_none' ? 'no-country' : $countryKey;
+    $safe = preg_replace('/[^a-zA-Z0-9._-]+/', '-', $label) ?: 'country';
+    $filename = 'sites-' . $safe . '-' . date('Y-m-d') . '.txt';
+
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+
+    $stmt = db()->prepare(
+        "SELECT p.domain FROM prospect_sites p WHERE $whereSql ORDER BY p.domain ASC"
+    );
+    $stmt->execute($params);
+    while ($domain = $stmt->fetchColumn()) {
+        echo $domain, "\n";
+        if (ob_get_level() > 0) {
+            @ob_flush();
+        }
+        @flush();
+    }
+    exit;
+}
+
+function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 100): array
+{
+    ensure_prospect_schema();
+    $per = normalize_prospect_per_page($per);
     $where = ['1=1'];
     $params = [];
     $q = trim((string) ($filters['q'] ?? ''));
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
-        array_push($params, $like, $like, $like);
+        $where[] = '(p.domain LIKE ? OR p.niche LIKE ? OR p.notes LIKE ? OR p.url LIKE ?)';
+        array_push($params, $like, $like, $like, $like);
     }
     if (!empty($filters['country'])) {
         $where[] = 'p.country = ?';
@@ -994,7 +1097,7 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full
          FROM prospect_sites p
          LEFT JOIN users u ON u.id = p.created_by
-         WHERE $whereSql ORDER BY p.created_at DESC LIMIT $per OFFSET $offset"
+         WHERE $whereSql ORDER BY p.domain ASC LIMIT $per OFFSET $offset"
     );
     $stmt->execute($params);
     return [
@@ -1002,6 +1105,7 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
         'total' => $total,
         'pages' => max(1, (int) ceil($total / $per)),
         'page' => $pageNum,
+        'per' => $per,
     ];
 }
 
