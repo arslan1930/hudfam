@@ -42,18 +42,16 @@ $topCountry = $frequent[0]['name'] ?? '';
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — country folders for browsing; each domain exists only once in the whole database.</p>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?>.</p>
   </div>
   <a class="btn" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Add sites<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
 </div>
 
-<?php render_glossary('admin'); ?>
-<?= render_admin_panel_guide() ?>
 <?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
 
 <div class="grid">
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
-  <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
+  <div class="card stat"><span class="muted">Added sites (days)</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Open tasks</span><strong><?= $openTasks ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
 </div>
@@ -61,27 +59,23 @@ $topCountry = $frequent[0]['name'] ?? '';
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
     <h2>Add sites</h2>
-    <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . ' (your most-used).' : 'Paste example.com into a country folder.' ?></p>
+    <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . '.' : 'Paste domains into a country folder.' ?></p>
   </a>
-  <a class="launch-card" href="index.php?page=admin_tasks">
-    <h2>Tasks</h2>
-    <p><?= $openTasks ?> open — assign countries/work to teammates.</p>
+  <a class="launch-card" href="index.php?page=admin_users">
+    <h2>Users &amp; tasks</h2>
+    <p><?= $openTasks ?> open tasks · manage teammates.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
-    <p>Open country folders — browse by country.</p>
+    <p>Browse by country.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_account">
     <h2>Account</h2>
-    <p>Verify email &amp; recover Admin password.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=admin_users">
-    <h2>Users</h2>
-    <p>Add, edit, or remove teammates and set passwords.</p>
+    <p>Email &amp; password.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches">
-    <h2>Add history</h2>
-    <p>See who added sites, by day.</p>
+    <h2>Added sites</h2>
+    <p>Who added sites, by day.</p>
   </a>
 </div>
 

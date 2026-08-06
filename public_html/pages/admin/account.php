@@ -86,17 +86,6 @@ render_header('Account', 'admin');
   </div>
 </div>
 
-<?= render_page_purpose(
-    'Account — email & password',
-    'Keep a verified Admin email so you can recover your password if you forget it.',
-    'Save email → Verify → then use Forgot password on the login page when needed.',
-    [
-        'Save your Admin email.',
-        'Click Send verification and open the link in your inbox.',
-        'Change password here, or request a reset email after verification.',
-    ]
-) ?>
-
 <div class="grid" style="grid-template-columns:1fr 1fr">
   <div class="card">
     <h2>Email</h2>

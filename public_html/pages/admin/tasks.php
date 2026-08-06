@@ -64,30 +64,21 @@ $tasks = list_team_tasks($assigneeFilter > 0 ? $assigneeFilter : null, $statusFi
 $editId = (int) get('edit');
 $edit = $editId ? get_team_task($editId) : null;
 $highlight = (int) get('highlight');
+$defaultAssignee = (int) ($edit['assigned_to'] ?? ($assigneeFilter ?: 0));
 
 render_header('Tasks', 'admin');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Users', 'href' => 'index.php?page=admin_users'],
     ['label' => 'Tasks'],
 ]); ?>
 <div class="topbar">
   <div>
     <h1>Assign tasks</h1>
-    <p class="muted">Give each teammate a clear job (country, target, due date). They see it on their Tasks page and can jump into Filter &amp; add.</p>
+    <p class="muted">Assign work to teammates.</p>
   </div>
+  <a class="btn secondary" href="index.php?page=admin_users">Back to Users</a>
 </div>
-
-<?= render_page_purpose(
-    'Tasks — assign work to teammates',
-    'Plan who should add sites for which country.',
-    'Create a task → teammate opens Tasks → works Filter & add for that country → marks done.',
-    [
-        'Pick teammate + country + optional target count.',
-        'Teammate sees the task on their panel.',
-        'Update status or remove when finished.',
-    ]
-) ?>
 
 <div class="grid" style="grid-template-columns:1fr 1.1fr">
   <div class="card">
@@ -101,7 +92,7 @@ render_header('Tasks', 'admin');
       <select name="assigned_to" required data-searchable="1">
         <option value="">— Teammate —</option>
         <?php foreach ($teamUsers as $t): ?>
-          <option value="<?= (int) $t['id'] ?>" <?= (int) ($edit['assigned_to'] ?? 0) === (int) $t['id'] ? 'selected' : '' ?>>
+          <option value="<?= (int) $t['id'] ?>" <?= $defaultAssignee === (int) $t['id'] ? 'selected' : '' ?>>
             <?= h($t['full_name'] ?: $t['username']) ?>
           </option>
         <?php endforeach; ?>

@@ -102,15 +102,52 @@ $users = db()->query('SELECT * FROM users ORDER BY role, full_name, username')->
 $admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
 $team = array_values(array_filter($users, fn($u) => $u['role'] === 'team'));
 
+ensure_tasks_schema();
+$openTasks = list_team_tasks(null, 'open', 20);
+$inProgressTasks = list_team_tasks(null, 'in_progress', 20);
+$recentTasks = array_merge($openTasks, $inProgressTasks);
+usort($recentTasks, static fn($a, $b) => ((int) $b['id']) <=> ((int) $a['id']));
+$recentTasks = array_slice($recentTasks, 0, 12);
+
 render_header('Admins & users', 'admin');
 ?>
 <div class="topbar">
   <div>
     <h1>Users</h1>
-    <p class="muted">Add, edit, or remove teammates. Only Admin can set or change passwords.</p>
+    <p class="muted">Manage accounts and assign tasks to teammates.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="index.php?page=admin_tasks">Assign tasks</a>
   </div>
 </div>
-<?= guide_admin_users() ?>
+
+<div class="card">
+  <div class="topbar" style="margin:0;padding:0;border:0">
+    <div>
+      <h2 style="margin:0">Tasks</h2>
+      <p class="muted" style="margin:0.35rem 0 0">Assign country work to teammates from here.</p>
+    </div>
+    <a class="btn" href="index.php?page=admin_tasks">New task</a>
+  </div>
+  <?php if (!$recentTasks): ?>
+    <p class="help" style="margin-top:0.85rem">No open tasks yet.</p>
+  <?php else: ?>
+    <table style="margin-top:0.85rem">
+      <thead><tr><th>Task</th><th>Teammate</th><th>Country</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      <?php foreach ($recentTasks as $t): ?>
+        <tr>
+          <td><strong><?= h($t['title']) ?></strong></td>
+          <td><?= h($t['assignee_name'] ?: $t['assignee_username']) ?></td>
+          <td><?= h($t['country'] ?: '—') ?></td>
+          <td><span class="badge"><?= h(task_status_label((string) $t['status'])) ?></span></td>
+          <td><a href="index.php?page=admin_tasks&amp;edit=<?= (int) $t['id'] ?>">Edit</a></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  <?php endif; ?>
+</div>
 
 <div class="card">
   <h2>Admin directory</h2>
@@ -146,7 +183,8 @@ render_header('Admins & users', 'admin');
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
         <td class="actions">
           <a href="index.php?page=admin_users&edit=<?= (int)$u['id'] ?>">Edit</a>
-          <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Add history</a>
+          <a href="index.php?page=admin_tasks&amp;user=<?= (int) $u['id'] ?>">Assign task</a>
+          <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Added sites</a>
           <form method="post" style="display:inline" onsubmit="return confirm(<?= h(json_encode('Remove teammate ' . $u['username'] . '? Their sites stay in Our database.', JSON_UNESCAPED_UNICODE)) ?>);">
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">

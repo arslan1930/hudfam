@@ -33,19 +33,9 @@ if (!$inCountry && !$emptyCountry) {
         <p class="muted">Browse, download, add, or delete sites. Mistaken deletes can be undone. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
-        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
+        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Added sites</a>
       </div>
     </div>
-    <?= render_page_purpose(
-        'Our database — country folders',
-        'Sites are stored separately for each country.',
-        'Search by keyword → Select all → Delete. Use Undo if you delete by mistake.',
-        [
-            'Open a country folder.',
-            'Search keywords, select sites, then delete.',
-            'Undo restores the last delete from trash.',
-        ]
-    ) ?>
     <?php
       $freqAdmin = user_frequent_countries((int) $user['id'], 8);
       echo render_frequent_country_chips($freqAdmin, 'index.php?page=admin_prospects&country=');

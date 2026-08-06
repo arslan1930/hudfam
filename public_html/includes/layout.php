@@ -16,12 +16,11 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
-        'admin_tasks' => [],
+        'admin_users' => ['admin_tasks'],
         'admin_account' => [],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
-        'team_tasks' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -71,22 +70,20 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_prospects' => ['Our database', 'Country folders → URLs'],
-                'admin_prospect_add' => ['Add sites', 'Paste example.com into a country'],
-                'admin_tasks' => ['Tasks', 'Assign work to teammates'],
-                'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
-                'admin_users' => ['Users', 'Admin and Team logins'],
-                'admin_account' => ['Account', 'Email verify & password'],
+                'admin_prospects' => ['Our database', 'Country folders'],
+                'admin_prospect_add' => ['Add sites', 'Paste into a country'],
+                'admin_prospect_batches' => ['Added sites', 'Who added what, by day'],
+                'admin_users' => ['Users', 'Accounts & assign tasks'],
+                'admin_account' => ['Account', 'Email & password'],
             ],
         ];
     } else {
         $groups = [
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_tasks' => ['My tasks', 'Work assigned by Admin'],
-                'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
-                'team_prospects' => ['Our database', 'Country folders → URLs'],
-                'team_prospect_batches' => ['Add history', 'Your daily adds'],
+                'team_prospect_check' => ['Filter & add', 'Paste → add unique'],
+                'team_prospects' => ['Our database', 'Country folders'],
+                'team_prospect_batches' => ['Added sites', 'Your daily adds'],
             ],
         ];
     }

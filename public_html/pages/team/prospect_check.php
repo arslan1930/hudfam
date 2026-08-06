@@ -75,7 +75,7 @@ try {
                 $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
                 $msg = 'Added ' . (int) $added['inserted'] . ' sites to ' . $country;
                 if (!empty($added['batch_id'])) {
-                    $msg .= ' · saved in today’s history';
+                    $msg .= ' · saved in Added sites';
                 }
                 if ((int) $clean['dup_db'] > 0 || (int) $added['skipped'] > 0) {
                     $msg .= ' · skipped duplicates already in Our database (any country)';
@@ -131,11 +131,10 @@ render_header('Filter & add', 'team');
     <p class="muted">Type to search a country → paste → Filter against <strong>all countries</strong> → add only globally unique sites.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Added sites</a>
     <a class="btn secondary" href="index.php?page=team_prospects">Country folders</a>
   </div>
 </div>
-<?= guide_filter_add() ?>
 <?= render_frequent_country_chips($frequent, 'index.php?page=team_prospect_check&country=') ?>
 
 <ul class="steps">
@@ -259,7 +258,7 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Saves into <?= h($country) ?> and today’s history for <?= h($user['full_name'] ?: $user['username']) ?>. Already-known domains stay skipped.</p>
+        <p class="help">Saves into <?= h($country) ?> and Added sites for <?= h($user['full_name'] ?: $user['username']) ?>. Already-known domains stay skipped.</p>
         <div class="actions-sticky">
           <button class="btn large block" type="submit">Add to <?= h($country) ?> (<?= count($result['new']) ?>)</button>
         </div>

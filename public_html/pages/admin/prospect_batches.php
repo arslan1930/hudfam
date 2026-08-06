@@ -1,20 +1,19 @@
 <?php
 require_admin();
 $batches = list_prospect_batches(null, 150);
-render_header('Add history', 'admin');
+render_header('Added sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Add history'],
+    ['label' => 'Added sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add history</h1>
+    <h1>Added sites</h1>
     <p class="muted">Who added how many sites each day.</p>
   </div>
   <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
 </div>
-<?= guide_add_history() ?>
 
 <div class="card">
   <?php if ($batches): ?>
