@@ -97,15 +97,14 @@ render_header($id ? $site['domain'] : 'Add prospect', 'team');
   <div class="form-grid">
     <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
     <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
-    <div><label>Country database <?= !$id ? '<span class="help">(required)</span>' : '' ?></label>
-      <select name="country" <?= !$id ? 'required' : '' ?>>
-        <option value="">— Select country —</option>
-        <?php foreach ($countryOptions as $c): ?>
-          <option value="<?= h($c['name']) ?>" <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+    <div>
+      <label for="country">Country database <span class="help"><?= !$id ? '(required — type to search)' : '(type to search)' ?></span></label>
+      <?= render_country_select('country', (string) ($site['country'] ?? ''), 'country', !$id, '— Select country —') ?>
     </div>
-    <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
+    <div>
+      <label for="language">Language <span class="help">(optional — type to search)</span></label>
+      <?= render_language_select('language', (string) ($site['language'] ?? ''), 'language') ?>
+    </div>
     <div><label>Region</label>
       <select name="region">
         <option value="">—</option>
