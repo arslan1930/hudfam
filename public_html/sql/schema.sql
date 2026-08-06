@@ -89,10 +89,12 @@ CREATE TABLE IF NOT EXISTS prospect_batch_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   batch_id INT NOT NULL,
   domain VARCHAR(255) NOT NULL,
+  country VARCHAR(100) NOT NULL DEFAULT '',
   prospect_site_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_batch_domain (batch_id, domain),
   INDEX (domain),
+  INDEX (country),
   CONSTRAINT fk_pbi_batch FOREIGN KEY (batch_id) REFERENCES prospect_batches(id) ON DELETE CASCADE,
   CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

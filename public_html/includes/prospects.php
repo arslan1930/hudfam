@@ -372,14 +372,44 @@ function ensure_prospect_schema(): void
           id INT AUTO_INCREMENT PRIMARY KEY,
           batch_id INT NOT NULL,
           domain VARCHAR(255) NOT NULL,
+          country VARCHAR(100) NOT NULL DEFAULT '',
           prospect_site_id INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_batch_domain (batch_id, domain),
           INDEX (domain),
+          INDEX (country),
           CONSTRAINT fk_pbi_batch FOREIGN KEY (batch_id) REFERENCES prospect_batches(id) ON DELETE CASCADE,
           CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    try {
+        $itemCols = $pdo->query('SHOW COLUMNS FROM prospect_batch_items')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('country', $itemCols, true)) {
+            $pdo->exec(
+                "ALTER TABLE prospect_batch_items
+                 ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT '' AFTER domain"
+            );
+            try {
+                $pdo->exec('ALTER TABLE prospect_batch_items ADD INDEX (country)');
+            } catch (Throwable $e) {
+                // index may already exist
+            }
+            // Backfill from live inventory, then batch label
+            $pdo->exec(
+                "UPDATE prospect_batch_items i
+                 LEFT JOIN prospect_sites p ON p.domain = i.domain
+                 LEFT JOIN prospect_batches b ON b.id = i.batch_id
+                 SET i.country = CASE
+                   WHEN p.country IS NOT NULL AND TRIM(p.country) <> '' THEN TRIM(p.country)
+                   WHEN b.country IS NOT NULL AND TRIM(b.country) <> '' THEN TRIM(b.country)
+                   ELSE ''
+                 END
+                 WHERE TRIM(i.country) = ''"
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS prospect_site_trash (
           trash_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -850,8 +880,8 @@ function add_prospect_domains(
          VALUES (?,\'\',?,?,?,?,?,\'new\',?)'
     );
     $insItem = db()->prepare(
-        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
-         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+        'INSERT INTO prospect_batch_items (batch_id, domain, country, prospect_site_id) VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id), country=VALUES(country)'
     );
     $inserted = 0;
     db()->beginTransaction();
@@ -861,7 +891,7 @@ function add_prospect_domains(
             try {
                 $ins->execute([$d, $country, $language, $region, $niche, $notes, $user['id']]);
                 $siteId = (int) db()->lastInsertId();
-                $insItem->execute([$batchId, $d, $siteId ?: null]);
+                $insItem->execute([$batchId, $d, $country, $siteId ?: null]);
                 $inserted++;
             } catch (PDOException $e) {
                 $skipped++;
@@ -954,8 +984,8 @@ function admin_add_sites_to_database(string $raw, array $user, string $country, 
          VALUES (?,\'\',?,?,?,\'\',\'\',\'new\',?)'
     );
     $insItem = db()->prepare(
-        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
-         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+        'INSERT INTO prospect_batch_items (batch_id, domain, country, prospect_site_id) VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id), country=VALUES(country)'
     );
 
     $inserted = 0;
@@ -966,7 +996,7 @@ function admin_add_sites_to_database(string $raw, array $user, string $country, 
             try {
                 $ins->execute([$domain, $country, $language, $region, $user['id']]);
                 $siteId = (int) db()->lastInsertId();
-                $insItem->execute([$batchId, $domain, $siteId ?: null]);
+                $insItem->execute([$batchId, $domain, $country, $siteId ?: null]);
                 $inserted++;
             } catch (PDOException $e) {
                 // race / already exists — skip
@@ -1196,9 +1226,9 @@ function sync_missing_prospect_batch_history(int $limit = 5000): int
     }
 
     $insItem = db()->prepare(
-        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id, created_at)
-         VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+        'INSERT INTO prospect_batch_items (batch_id, domain, country, prospect_site_id, created_at)
+         VALUES (?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id), country=VALUES(country)'
     );
     $countStmt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
     $updateBatch = db()->prepare(
@@ -1226,6 +1256,7 @@ function sync_missing_prospect_batch_history(int $limit = 5000): int
             $insItem->execute([
                 $batchId,
                 $row['domain'],
+                canonicalize_country_name(trim((string) ($row['country'] ?? ''))),
                 (int) $row['id'],
                 $date . ' 12:00:00',
             ]);
@@ -1284,21 +1315,31 @@ function get_today_prospect_batch(int $userId): ?array
 
 /**
  * Domains the teammate added today since last Clear (for copy list on Filter & add).
+ * Grouped by country so multi-country days can be copied per country batch.
  *
- * @return array{batch_id:int|null,domains:string[],total_today:int,cleared:bool,can_undo:bool}
+ * @return array{
+ *   batch_id:int|null,
+ *   domains:string[],
+ *   by_country:list<array{country:string,label:string,domains:string[],text:string,count:int}>,
+ *   total_today:int,
+ *   cleared:bool,
+ *   can_undo:bool
+ * }
  */
 function team_today_new_sites_for_copy(int $userId): array
 {
     ensure_prospect_schema();
+    $empty = [
+        'batch_id' => null,
+        'domains' => [],
+        'by_country' => [],
+        'total_today' => 0,
+        'cleared' => false,
+        'can_undo' => false,
+    ];
     $batch = get_today_prospect_batch($userId);
     if (!$batch) {
-        return [
-            'batch_id' => null,
-            'domains' => [],
-            'total_today' => 0,
-            'cleared' => false,
-            'can_undo' => false,
-        ];
+        return $empty;
     }
     $batchId = (int) $batch['id'];
     $clearedAt = $batch['list_cleared_at'] ?? null;
@@ -1308,22 +1349,75 @@ function team_today_new_sites_for_copy(int $userId): array
 
     if ($clearedAt) {
         $stmt = db()->prepare(
-            'SELECT domain FROM prospect_batch_items
-             WHERE batch_id=? AND created_at > ?
-             ORDER BY created_at ASC, domain ASC
-             LIMIT 50000'
+            "SELECT i.domain,
+                    COALESCE(
+                      NULLIF(TRIM(i.country), ''),
+                      NULLIF(TRIM(p.country), ''),
+                      NULLIF(TRIM(b.country), ''),
+                      ''
+                    ) AS country
+             FROM prospect_batch_items i
+             INNER JOIN prospect_batches b ON b.id = i.batch_id
+             LEFT JOIN prospect_sites p ON p.domain = i.domain
+             WHERE i.batch_id=? AND i.created_at > ?
+             ORDER BY country ASC, i.created_at ASC, i.domain ASC
+             LIMIT 50000"
         );
         $stmt->execute([$batchId, $clearedAt]);
     } else {
         $stmt = db()->prepare(
-            'SELECT domain FROM prospect_batch_items
-             WHERE batch_id=?
-             ORDER BY created_at ASC, domain ASC
-             LIMIT 50000'
+            "SELECT i.domain,
+                    COALESCE(
+                      NULLIF(TRIM(i.country), ''),
+                      NULLIF(TRIM(p.country), ''),
+                      NULLIF(TRIM(b.country), ''),
+                      ''
+                    ) AS country
+             FROM prospect_batch_items i
+             INNER JOIN prospect_batches b ON b.id = i.batch_id
+             LEFT JOIN prospect_sites p ON p.domain = i.domain
+             WHERE i.batch_id=?
+             ORDER BY country ASC, i.created_at ASC, i.domain ASC
+             LIMIT 50000"
         );
         $stmt->execute([$batchId]);
     }
-    $domains = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $domains = [];
+    $groups = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $domain = (string) ($row['domain'] ?? '');
+        if ($domain === '') {
+            continue;
+        }
+        $rawCountry = trim((string) ($row['country'] ?? ''));
+        $country = $rawCountry !== '' ? canonicalize_country_name($rawCountry) : '';
+        $key = $country !== '' ? $country : '_none';
+        if (!isset($groups[$key])) {
+            $groups[$key] = [
+                'country' => $country,
+                'label' => $country !== '' ? $country : 'No country',
+                'domains' => [],
+            ];
+        }
+        $groups[$key]['domains'][] = $domain;
+        $domains[] = $domain;
+    }
+
+    $byCountry = [];
+    foreach ($groups as $g) {
+        $byCountry[] = [
+            'country' => $g['country'],
+            'label' => $g['label'],
+            'domains' => $g['domains'],
+            'text' => implode("\n", $g['domains']),
+            'count' => count($g['domains']),
+        ];
+    }
+    usort($byCountry, static function ($a, $b) {
+        return strcasecmp((string) $a['label'], (string) $b['label']);
+    });
+
     $undo = $_SESSION['team_copy_clear_undo'] ?? null;
     $canUndo = is_array($undo)
         && (int) ($undo['user_id'] ?? 0) === $userId
@@ -1331,6 +1425,7 @@ function team_today_new_sites_for_copy(int $userId): array
     return [
         'batch_id' => $batchId,
         'domains' => $domains,
+        'by_country' => $byCountry,
         'total_today' => $totalToday,
         'cleared' => $clearedAt !== null && $clearedAt !== '',
         'can_undo' => $canUndo,

@@ -159,6 +159,7 @@ try {
 
 $todayCopy = team_today_new_sites_for_copy($uid);
 $todayText = implode("\n", $todayCopy['domains']);
+$todayByCountry = $todayCopy['by_country'] ?? [];
 
 $tldCheck = [
     'warn' => false,
@@ -407,10 +408,13 @@ document.querySelectorAll('.db-preview').forEach(function(el){
       <h2 style="margin:0">My new sites today (copy)</h2>
       <p class="muted" style="margin:0.35rem 0 0">
         <?= count($todayCopy['domains']) ?> site<?= count($todayCopy['domains']) === 1 ? '' : 's' ?> in this list
+        <?php if (count($todayByCountry) > 1): ?>
+          · <?= count($todayByCountry) ?> countries
+        <?php endif; ?>
         <?php if ((int) $todayCopy['total_today'] > count($todayCopy['domains'])): ?>
           · <?= (int) $todayCopy['total_today'] ?> added today total
         <?php endif; ?>
-        · select all / copy as needed. Clear when you start a fresh list (sites stay saved).
+        · copy one country at a time, or copy all. Clear when you start a fresh list (sites stay saved).
       </p>
     </div>
     <div class="actions">
@@ -437,10 +441,30 @@ document.querySelectorAll('.db-preview').forEach(function(el){
       <p><?= $todayCopy['cleared'] ? 'List cleared. Add more sites, or Undo clear.' : 'No new sites in the copy list yet — add unique sites above.' ?></p>
     </div>
   <?php else: ?>
-    <textarea class="inventory-box" id="today_sites_copy" rows="12" readonly style="margin-top:0.85rem"><?= h($todayText) ?></textarea>
-    <p class="actions" style="margin-top:0.75rem">
-      <button class="btn secondary" type="button" onclick="(function(){var t=document.getElementById('today_sites_copy');t.focus();t.select();try{document.execCommand('copy');}catch(e){} })();">Copy all</button>
-    </p>
+    <?php foreach ($todayByCountry as $idx => $group): ?>
+      <div style="margin-top:1rem;padding-top:<?= $idx > 0 ? '1rem' : '0.5rem' ?>;<?= $idx > 0 ? 'border-top:1px solid var(--line);' : '' ?>">
+        <div class="topbar" style="margin:0 0 0.55rem;padding:0;border:0">
+          <div>
+            <h3 style="margin:0;font-size:1.05rem"><?= h($group['label']) ?></h3>
+            <p class="muted" style="margin:0.2rem 0 0"><?= (int) $group['count'] ?> site<?= (int) $group['count'] === 1 ? '' : 's' ?></p>
+          </div>
+          <button class="btn secondary" type="button"
+            onclick="(function(){var t=document.getElementById('today_sites_copy_<?= (int) $idx ?>');t.focus();t.select();try{navigator.clipboard.writeText(t.value);}catch(e){try{document.execCommand('copy');}catch(e2){}}})();">
+            Copy <?= h($group['label']) ?>
+          </button>
+        </div>
+        <textarea class="inventory-box" id="today_sites_copy_<?= (int) $idx ?>" rows="<?= min(14, max(4, (int) $group['count'] + 1)) ?>" readonly><?= h($group['text']) ?></textarea>
+      </div>
+    <?php endforeach; ?>
+    <?php if (count($todayByCountry) > 1): ?>
+      <details style="margin-top:1.1rem">
+        <summary>All countries combined (<?= count($todayCopy['domains']) ?>)</summary>
+        <textarea class="inventory-box" id="today_sites_copy" rows="10" readonly style="margin-top:0.65rem"><?= h($todayText) ?></textarea>
+        <p class="actions" style="margin-top:0.65rem">
+          <button class="btn secondary" type="button" onclick="(function(){var t=document.getElementById('today_sites_copy');t.focus();t.select();try{navigator.clipboard.writeText(t.value);}catch(e){try{document.execCommand('copy');}catch(e2){}}})();">Copy all countries</button>
+        </p>
+      </details>
+    <?php endif; ?>
   <?php endif; ?>
 </div>
 <?php render_footer('team'); ?>
