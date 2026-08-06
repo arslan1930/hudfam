@@ -118,7 +118,27 @@ function render_footer(string $panel = ''): void
     if (current_user() && $panel !== '') {
         echo '</main></div>';
     }
-    // One open Actions menu at a time; keeps options readable in tables
-    echo '<script>(function(){document.addEventListener("toggle",function(e){var t=e.target;if(!t||!t.classList||!t.classList.contains("more-actions")||!t.open)return;document.querySelectorAll("details.more-actions[open]").forEach(function(d){if(d!==t)d.removeAttribute("open");});},true);document.addEventListener("click",function(e){var open=document.querySelector("details.more-actions[open]");if(!open)return;if(open.contains(e.target))return;open.removeAttribute("open");});})();</script>';
+    // Position Actions menus with position:fixed (tables clip absolute children).
+    echo '<script>(function(){';
+    echo 'function placeMenu(details){';
+    echo 'var menu=details.querySelector(".more-actions-menu");var btn=details.querySelector("summary");';
+    echo 'if(!menu||!btn)return;';
+    echo 'var r=btn.getBoundingClientRect();var mw=Math.max(180,menu.offsetWidth||180);';
+    echo 'var left=Math.min(Math.max(8,r.right-mw),window.innerWidth-mw-8);';
+    echo 'var top=r.bottom+6;';
+    echo 'if(top+menu.offsetHeight>window.innerHeight-8){top=Math.max(8,r.top-menu.offsetHeight-6);}';
+    echo 'menu.style.left=left+"px";menu.style.top=top+"px";';
+    echo '}';
+    echo 'document.addEventListener("toggle",function(e){';
+    echo 'var t=e.target;if(!t||!t.classList||!t.classList.contains("more-actions"))return;';
+    echo 'if(t.open){document.querySelectorAll("details.more-actions[open]").forEach(function(d){if(d!==t)d.removeAttribute("open");});placeMenu(t);}';
+    echo '},true);';
+    echo 'document.addEventListener("click",function(e){';
+    echo 'var open=document.querySelector("details.more-actions[open]");if(!open)return;';
+    echo 'if(open.contains(e.target))return;open.removeAttribute("open");';
+    echo '});';
+    echo 'window.addEventListener("resize",function(){var o=document.querySelector("details.more-actions[open]");if(o)placeMenu(o);});';
+    echo 'window.addEventListener("scroll",function(){var o=document.querySelector("details.more-actions[open]");if(o)placeMenu(o);},true);';
+    echo '})();</script>';
     echo '</body></html>';
 }
