@@ -31,28 +31,28 @@ render_header('Dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — manage the shared URL database.</p>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — country folders for browsing; each domain exists only once in the whole database.</p>
   </div>
-  <a class="btn" href="index.php?page=admin_prospect_add">Add URLs</a>
+  <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
 </div>
 
 <?php render_glossary('admin'); ?>
 <?= render_admin_panel_guide() ?>
 
 <div class="grid">
-  <div class="card stat"><span class="muted">URLs in database</span><strong><?= $prospectTotal ?></strong></div>
+  <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
   <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
 </div>
 
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=admin_prospect_add">
-    <h2>Add URLs</h2>
-    <p>Paste websites into Our database.</p>
+    <h2>Add sites</h2>
+    <p>Paste example.com into a country folder.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
-    <p>Browse and search all unique domains.</p>
+    <p>Open country folders — one database each.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches">
     <h2>Add history</h2>
@@ -79,7 +79,7 @@ render_header('Dashboard', 'admin');
   <?php else: ?>
     <div class="empty-state">
       <p>No sites added yet.</p>
-      <a class="btn" href="index.php?page=admin_prospect_add">Add the first URLs</a>
+      <a class="btn" href="index.php?page=admin_prospect_add">Add the first sites</a>
     </div>
   <?php endif; ?>
 </div>

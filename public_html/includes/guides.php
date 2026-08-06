@@ -29,12 +29,12 @@ function render_admin_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Admin works</h2>'
-        . '<p class="muted">One shared database of website URLs. You seed it; Team filters new lists against it and adds only unique sites. Every add is saved in history.</p>'
+        . '<p class="muted">Country folders are for browsing and saving. Each domain exists only once in the whole database. Team filters against all countries, then saves unique sites into the selected country.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Our database</h3>'
-        . '<p><strong>What:</strong> The master list of unique domains (URLs).</p>'
-        . '<p><strong>How:</strong> Paste URLs to add them. Team sees the same list when filtering.</p>'
+        . '<p><strong>What:</strong> Country folders for browsing sites.</p>'
+        . '<p><strong>How:</strong> Open a country and add sites into that folder (global uniqueness still applies).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Add history</h3>'
@@ -50,9 +50,9 @@ function render_admin_panel_guide(): string
         . '<div class="panel-guide-flow">'
         . '<h3>Flow</h3>'
         . '<ol>'
-        . '<li>Admin adds URLs into <strong>Our database</strong>.</li>'
-        . '<li>Team pastes a new list → system removes domains already in the database.</li>'
-        . '<li>Team adds the unique ones → they join the database and appear in <strong>Add history</strong>.</li>'
+        . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
+        . '<li>Team picks a country to save into → pastes a list → Filter removes domains already anywhere in the database.</li>'
+        . '<li>Team adds the unique ones → they join that country folder and <strong>Add history</strong>.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -62,17 +62,17 @@ function render_team_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Team works</h2>'
-        . '<p class="muted">You use the shared URL database. Paste new sites, remove ones we already have, then add only the unique ones. Your adds are saved in history.</p>'
+        . '<p class="muted">Pick a country to save into, paste new sites, Filter against the whole database, then add only globally unique sites into that country.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Filter &amp; add</h3>'
-        . '<p><strong>What:</strong> Compare your paste to Our database.</p>'
-        . '<p><strong>How:</strong> Paste domains → Filter → Add unique. New sites go into the database.</p>'
+        . '<p><strong>What:</strong> Compare your paste to the entire database.</p>'
+        . '<p><strong>How:</strong> Select country (save into) → Paste → Filter (all countries) → Add unique.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Our database</h3>'
-        . '<p><strong>What:</strong> Browse all unique domains already saved.</p>'
-        . '<p><strong>How:</strong> Search or filter the list Admin and Team have built together.</p>'
+        . '<p><strong>What:</strong> Country folders shared with Admin.</p>'
+        . '<p><strong>How:</strong> Open a country folder to browse that country’s URLs.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Add history</h3>'
@@ -83,9 +83,9 @@ function render_team_panel_guide(): string
         . '<div class="panel-guide-flow">'
         . '<h3>Flow</h3>'
         . '<ol>'
-        . '<li>Open <strong>Filter &amp; add</strong>.</li>'
-        . '<li>Paste new domains and run Filter (duplicates already in the database are removed).</li>'
-        . '<li>Add the unique sites — they join Our database and today’s history.</li>'
+        . '<li>Open <strong>Filter &amp; add</strong> and select the country to save into.</li>'
+        . '<li>Paste domains and Filter (duplicates already anywhere in the database are removed).</li>'
+        . '<li>Add the unique sites — they join that country folder and today’s history.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -94,13 +94,13 @@ function render_team_panel_guide(): string
 function guide_inventory(): string
 {
     return render_page_purpose(
-        'Our database — unique website URLs',
-        'The shared list of domains. Admin seeds it; Team adds more after filtering.',
-        'Search or browse domains here. New sites from Filter & add land in this same list.',
+        'Our database — country folders',
+        'Browse sites by country. Each domain exists only once in the whole database.',
+        'Pick a country folder. Download/view large lists; Admin can select & delete sites.',
         [
-            'Admin pastes URLs to grow the list.',
-            'Team filters new pastes against this list.',
-            'Only unique domains are kept.',
+            'Open a country folder.',
+            'Download all / View all names for 10k–100k site lists.',
+            'Admin: select checkboxes to delete, or remove by filter / .txt list.',
         ]
     );
 }
@@ -108,13 +108,13 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — keep only new sites',
-        'Compare a pasted list to Our database and save only domains we do not already have.',
-        'Paste → Filter → Add unique. Added sites join the database and today’s add history.',
+        'Filter & add — global uniqueness',
+        'Compare a pasted list to the entire database. Country only decides where new unique sites are saved.',
+        'Select country (save into) → Paste → Clean list → Filter (all countries) → Add unique.',
         [
-            'Paste domains (one per line).',
-            'Filter to drop ones already in Our database.',
-            'Add the remaining unique sites.',
+            'Select the country to save new sites into.',
+            'Paste sites; click Clean list if there are https://, www., paths, or duplicates.',
+            'Filter against all countries, then add the remaining unique sites into that country.',
         ]
     );
 }
@@ -132,13 +132,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add URLs — seed Our database',
-        'Paste URLs or domains into the shared database (no prices).',
-        'Check uniqueness first, then save. Skips domains already in the list.',
+        'Add sites — seed a country folder',
+        'Paste root domains into a country folder (example.com / example.co.uk). Each domain can exist only once globally.',
+        'Choose country, paste sites, Clean list if needed, then Save. Domains already anywhere in the database are skipped.',
         [
-            'Paste URLs or domains.',
-            'Check unique vs database.',
-            'Save new ones into Our database.',
+            'Select the country folder to save into.',
+            'Paste sites; use Clean list to fix errors and remove duplicates.',
+            'Save — then browse them under that country’s folder.',
         ]
     );
 }

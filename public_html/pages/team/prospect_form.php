@@ -20,13 +20,13 @@ if ($id) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $domain = normalize_domain((string) post('domain'));
+    $domainRaw = trim((string) post('domain'));
+    $domain = strtolower($domainRaw);
     $country = trim((string) post('country'));
     $language = trim((string) post('language'));
     $region = (string) post('region');
     $niche = trim((string) post('niche'));
     $notes = trim((string) post('notes'));
-    $url = trim((string) post('url'));
     $status = (string) post('status');
     if (!in_array($status, ['new', 'contacting', 'replied', 'skipped'], true)) {
         $status = 'new';
@@ -44,66 +44,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    if ($domain === '') {
-        flash('error', 'Domain is required.');
+    if ($domainRaw === '' || !is_plain_site_domain($domain)) {
+        flash('error', 'Root domain only (e.g. example.com or example.co.uk). No https://, www., subdomains, or paths.');
+    } elseif ($country === '' && !$id) {
+        flash('error', 'Select a country database.');
     } elseif (!$id) {
-        $exists = filter_domains_against_prospects([$domain]);
+        $exists = filter_domains_against_prospects([$domain], '');
         if ($exists['existing']) {
-            flash('error', 'Already in Our database. Filter first — do not add duplicates.');
-            redirect('index.php?page=team_prospect_check');
+            flash('error', 'Already in Our database (any country). Each domain exists only once — filter first.');
+            redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
         }
         // Writes inventory + today's add history batch for this teammate
         $added = add_prospect_domains([$domain], $user, $country, $language, $region, $niche, $notes);
         if ($added['inserted'] < 1) {
-            flash('error', 'Already in Our database. Filter first — do not add duplicates.');
-            redirect('index.php?page=team_prospect_check');
+            flash('error', 'Already in Our database (any country). Each domain exists only once — filter first.');
+            redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
         }
-        if ($url !== '' || $status !== 'new') {
+        if ($status !== 'new') {
             db()->prepare(
-                'UPDATE prospect_sites SET url=?, status=? WHERE domain=?'
-            )->execute([$url, $status, $domain]);
+                'UPDATE prospect_sites SET status=? WHERE TRIM(country)=? AND domain=?'
+            )->execute([$status, $country, $domain]);
         }
-        flash('ok', 'Prospect added (also saved in today’s add history).');
+        flash('ok', 'Site added to ' . $country . ' (also saved in today’s add history).');
         if (!empty($added['batch_id'])) {
             redirect('index.php?page=team_prospect_batch&id=' . (int) $added['batch_id']);
         }
-        redirect('index.php?page=team_prospects');
+        redirect('index.php?page=team_prospects&country=' . urlencode($country));
     } else {
         try {
             db()->prepare(
-                'UPDATE prospect_sites SET domain=?, url=?, country=?, language=?, region=?, niche=?, notes=?, status=? WHERE id=?'
-            )->execute([$domain, $url, $country, $language, $region, $niche, $notes, $status, $id]);
-            flash('ok', 'Prospect updated.');
-            redirect('index.php?page=team_prospects');
+                'UPDATE prospect_sites SET domain=?, url=\'\', country=?, language=?, region=?, niche=?, notes=?, status=? WHERE id=?'
+            )->execute([$domain, $country, $language, $region, $niche, $notes, $status, $id]);
+            flash('ok', 'Site updated.');
+            redirect('index.php?page=team_prospects&country=' . urlencode($country !== '' ? $country : '_none'));
         } catch (PDOException $e) {
-            flash('error', 'Domain already exists in Our database.');
+            flash('error', 'That domain already exists in Our database (any country).');
         }
     }
 }
 
-render_header($id ? $site['domain'] : 'Add prospect', 'team');
+render_header($id ? $site['domain'] : 'Add site', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add one prospect' ?></h1>
-    <p class="muted">Prospects only (no prices). Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
+    <h1><?= $id ? h($site['domain']) : 'Add one site' ?></h1>
+    <p class="muted">Root domain only: <strong>example.com</strong> or <strong>example.co.uk</strong>. Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
   </div>
   <a class="btn secondary" href="index.php?page=team_prospects">Back</a>
 </div>
 <div class="card">
 <form method="post">
   <div class="form-grid">
-    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
-    <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
-    <div><label>Country</label>
-      <select name="country">
-        <option value="">—</option>
+    <div>
+      <label>Site <span class="help">(root domain only)</span></label>
+      <input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com" title="Root domain only, e.g. example.com or example.co.uk">
+    </div>
+    <div><label>Country database <?= !$id ? '<span class="help">(required)</span>' : '' ?></label>
+      <select name="country" <?= !$id ? 'required' : '' ?>>
+        <option value="">— Select country —</option>
         <?php foreach ($countryOptions as $c): ?>
           <option value="<?= h($c['name']) ?>" <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
-    <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
+    <div>
+      <label>Language <span class="help">(optional)</span></label>
+      <?= render_language_select('language', (string) ($site['language'] ?? '')) ?>
+    </div>
     <div><label>Region</label>
       <select name="region">
         <option value="">—</option>

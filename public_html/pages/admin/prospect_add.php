@@ -1,95 +1,145 @@
 <?php
 $user = require_admin();
+ensure_prospect_schema();
+seed_countries_if_empty(db());
+
+$country = trim((string) (post('country') ?: get('country')));
+$language = trim((string) (post('language') ?: get('language')));
 $raw = '';
-$preview = null;
+$errorDetail = '';
+$needsClean = false;
+$countryGroups = countries_grouped();
+
+// Prefill language from country default
+if ($country !== '' && $language === '') {
+    foreach (list_countries(null, true) as $c) {
+        if (strcasecmp((string) $c['name'], $country) === 0) {
+            $language = (string) ($c['default_language'] ?? '');
+            break;
+        }
+    }
+}
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $action = (string) post('action');
-        $raw = (string) post('urls');
-        $domains = parse_domain_list($raw);
+        $action = (string) (post('action') ?: 'save');
+        $raw = (string) post('sites');
+        $country = trim((string) post('country'));
+        $language = trim((string) post('language'));
 
-        if (count($domains) > 100000) {
-            flash('error', 'Please paste at most 100,000 URLs/domains per run.');
-        } elseif (!$domains) {
-            flash('error', 'Paste at least one URL or domain.');
-        } elseif ($action === 'save') {
-            $added = add_prospect_domains($domains, $user);
-            $msg = "Added {$added['inserted']} unique site(s) to Our database.";
-            $msg .= " Skipped {$added['skipped']} already in the list.";
-            flash('ok', $msg);
-            redirect('index.php?page=admin_prospects');
+        if ($country === '') {
+            flash('error', 'Select a country folder first.');
+        } elseif (trim($raw) === '') {
+            flash('error', 'Paste at least one site (example.com).');
+        } elseif ($action === 'clean') {
+            $clean = clean_site_list($raw, $country, true);
+            $raw = $clean['text'];
+            if ($clean['kept'] <= 0) {
+                flash('error', clean_site_list_summary($clean) . ' Nothing left to save.');
+            } else {
+                flash('ok', clean_site_list_summary($clean) . ' Review the list, then Save sites.');
+            }
         } else {
-            // Preview uniqueness before save
-            $preview = filter_domains_against_prospects($domains);
+            // Save: auto-clean + add only unique sites (duplicates removed for you)
+            $result = admin_add_sites_to_database($raw, $user, $country, $language);
+            $raw = (string) ($result['text'] ?? $raw);
+            $c = $result['clean'] ?? [];
+            if ($result['inserted'] <= 0) {
+                $needsClean = ((int) ($c['dropped'] ?? 0) > 0);
+                flash('error', clean_site_list_summary($c) . ' No new sites to add (all duplicates or unusable).');
+            } else {
+                $msg = 'Added ' . (int) $result['inserted'] . ' new site(s) to ' . $result['country'] . '.';
+                if ((int) $result['skipped_existing'] > 0) {
+                    $msg .= ' Removed ' . (int) $result['skipped_existing'] . ' already in database.';
+                }
+                if ((int) ($c['fixed'] ?? 0) > 0 || (int) ($c['dropped'] ?? 0) > 0 || (int) ($c['dup_paste'] ?? 0) > 0) {
+                    $msg .= ' ' . clean_site_list_summary($c);
+                }
+                flash('ok', $msg);
+                redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+            }
         }
     }
 } catch (Throwable $e) {
-    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try again.');
+    $errorDetail = $e->getMessage();
+    flash('error', 'Could not save sites. ' . $errorDetail);
 }
 
-render_header('Add URLs', 'admin');
+render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => 'Add URLs'],
+    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add URLs to Our database</h1>
-    <p class="muted">Paste URLs or domains. Team will filter new lists against this same database.</p>
+    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste root domains: <strong>example.com</strong> / <strong>example.co.uk</strong>. Use <strong>Clean list</strong> to fix mistakes and remove duplicates.</p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospects">Back to database</a>
+  <div class="actions">
+    <?php if ($country !== ''): ?>
+      <a class="btn secondary" href="index.php?page=admin_prospects&amp;country=<?= urlencode($country) ?>">Open <?= h($country) ?></a>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
+  </div>
 </div>
-<?= guide_admin_add() ?>
 
-<form class="card" method="post">
-  <input type="hidden" name="action" value="preview">
-  <label for="urls">URLs / domains (one per line, or comma/space separated)</label>
-  <textarea id="urls" name="urls" rows="14" required
-    placeholder="https://www.site1.com&#10;site2.de&#10;https://site3.com/page"><?= h($raw) ?></textarea>
+<?= render_page_purpose(
+    'Add sites into a country folder',
+    'Sites are stored in country folders for browsing, but each domain exists only once in the whole database.',
+    'Select country (save destination) → Paste → Clean list → Save. Duplicates already anywhere in Our database are skipped.',
+    [
+        'Select the country folder to save into.',
+        'Paste sites (root domains). If there are errors, click Clean list.',
+        'Save — only globally unique sites are added into that country.',
+    ]
+) ?>
+
+<form class="card" method="post" id="add_sites_form">
+  <input type="hidden" name="action" id="form_action" value="save">
+  <div class="form-grid">
+    <div>
+      <label for="country">Country <span class="help">(required)</span></label>
+      <select id="country" name="country" required>
+        <option value="">— Select country —</option>
+        <?php foreach ($countryGroups as $regionCode => $block): ?>
+          <?php if (empty($block['countries'])) {
+              continue;
+          } ?>
+          <optgroup label="<?= h($block['label']) ?>">
+            <?php foreach ($block['countries'] as $c): ?>
+              <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>>
+                <?= h($c['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </optgroup>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div>
+      <label for="language">Language <span class="help">(optional)</span></label>
+      <?= render_language_select('language', $language, 'language') ?>
+      <p class="help" style="margin-top:0.35rem">Prefills from the country; leave blank if you don’t need it.</p>
+    </div>
+  </div>
+  <label for="sites" style="margin-top:0.9rem">Sites <span class="help">(root domain only)</span></label>
+  <textarea id="sites" name="sites" rows="14" required
+    placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
   <p class="help" style="margin-top:0.5rem">
-    <code>https://</code> and paths are stripped automatically → stored as domain names only.
+    Allowed: <code>example.com</code>, <code>my-site.com</code>, <code>example.co.uk</code>.
+    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in Our database (any country).
   </p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">1. Check unique vs database</button>
+    <button class="btn secondary" type="submit" onclick="document.getElementById('form_action').value='clean'">Clean list</button>
+    <button class="btn" type="submit" onclick="document.getElementById('form_action').value='save'">Save sites</button>
   </p>
+  <?php if ($needsClean): ?>
+    <p class="help" style="margin-top:0.6rem"><strong>Tip:</strong> Click <em>Clean list</em> first, then Save sites.</p>
+  <?php endif; ?>
 </form>
 
-<?php if ($preview): ?>
-<div class="card">
-  <h2>Preview</h2>
-  <p>
-    Parsed: <strong><?= (int) $preview['total_input'] ?></strong> ·
-    Already in Our database: <strong><?= count($preview['existing']) ?></strong> ·
-    New (unique): <strong><?= count($preview['new']) ?></strong>
-  </p>
-</div>
-<div class="grid two-box">
-  <div class="card">
-    <h2>Already in database (will skip)</h2>
-    <?php if ($preview['existing']): ?>
-      <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($preview['existing'], 0, 5000))) ?><?= count($preview['existing']) > 5000 ? "\n… +" . (count($preview['existing']) - 5000) . ' more' : '' ?></textarea>
-    <?php else: ?>
-      <p class="muted">None — all pasted domains are new.</p>
-    <?php endif; ?>
-  </div>
-  <div class="card">
-    <h2>Unique — ready to add</h2>
-    <?php if ($preview['new']): ?>
-      <form method="post">
-        <input type="hidden" name="action" value="save">
-        <input type="hidden" name="urls" value="<?= h($raw) ?>">
-        <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($preview['new'], 0, 5000))) ?><?= count($preview['new']) > 5000 ? "\n… +" . (count($preview['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">These domains join Our database. Teammates will see them in Filter Box 1 and cannot re-add them.</p>
-        <p class="actions" style="margin-top:0.8rem">
-          <button class="btn" type="submit">2. Add <?= count($preview['new']) ?> site(s) to database</button>
-        </p>
-      </form>
-    <?php else: ?>
-      <p class="muted">No unique domains left — everything is already in Our database.</p>
-    <?php endif; ?>
-  </div>
-</div>
+<?php if ($errorDetail !== ''): ?>
+  <div class="card"><p class="help">Technical detail: <?= h($errorDetail) ?></p></div>
 <?php endif; ?>
 <?php render_footer('admin'); ?>
