@@ -1,3 +1,6 @@
+-- TechxForm simple schema: users + Our database + add history only.
+-- Catalog / Emails / Orders / Published / Projects are not part of the app.
+
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(100) NOT NULL UNIQUE,
@@ -13,50 +16,19 @@ CREATE TABLE IF NOT EXISTS users (
   INDEX (full_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS countries (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(255) NOT NULL UNIQUE,
-  client_name VARCHAR(255) NOT NULL DEFAULT '',
-  contact_email VARCHAR(190) NOT NULL DEFAULT '',
-  status ENUM('active','paused','archived') NOT NULL DEFAULT 'active',
-  niche VARCHAR(255) NOT NULL DEFAULT '',
-  countries VARCHAR(500) NOT NULL DEFAULT '',
-  region_focus VARCHAR(255) NOT NULL DEFAULT '',
-  budget VARCHAR(100) NOT NULL DEFAULT '',
-  price_min DECIMAL(12,2) NULL,
-  price_max DECIMAL(12,2) NULL,
-  currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
-  min_dr INT NULL,
-  min_da INT NULL,
-  min_traffic INT NULL,
-  avoid_notes TEXT,
-  workflow_notes TEXT,
-  requirements_brief TEXT,
-  created_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX (status),
-  INDEX (niche),
-  CONSTRAINT fk_projects_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+  region VARCHAR(40) NOT NULL DEFAULT 'other',
+  code VARCHAR(10) NOT NULL DEFAULT '',
+  name VARCHAR(100) NOT NULL,
+  default_language VARCHAR(50) NOT NULL DEFAULT '',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  UNIQUE KEY uniq_country_name (name),
+  INDEX (region),
+  INDEX (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS project_members (
-  project_id INT NOT NULL,
-  user_id INT NOT NULL,
-  PRIMARY KEY (project_id, user_id),
-  CONSTRAINT fk_pm_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS project_admins (
-  project_id INT NOT NULL,
-  user_id INT NOT NULL,
-  PRIMARY KEY (project_id, user_id),
-  CONSTRAINT fk_pa_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Prospect inventory: sites to contact (no prices). Team adds here after uniqueness check.
+-- Our database: unique domains (no prices)
 CREATE TABLE IF NOT EXISTS prospect_sites (
   id INT AUTO_INCREMENT PRIMARY KEY,
   domain VARCHAR(255) NOT NULL,
@@ -78,7 +50,7 @@ CREATE TABLE IF NOT EXISTS prospect_sites (
   CONSTRAINT fk_prospect_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Dated add batches (teammate + day). Sites also go into prospect_sites (old inventory).
+-- Add history: who added what, by day
 CREATE TABLE IF NOT EXISTS prospect_batches (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
@@ -107,213 +79,4 @@ CREATE TABLE IF NOT EXISTS prospect_batch_items (
   INDEX (domain),
   CONSTRAINT fk_pbi_batch FOREIGN KEY (batch_id) REFERENCES prospect_batches(id) ON DELETE CASCADE,
   CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS sites (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  domain VARCHAR(255) NOT NULL,
-  url VARCHAR(500) NOT NULL DEFAULT '',
-  region VARCHAR(40) NOT NULL DEFAULT '',
-  country VARCHAR(100) NOT NULL DEFAULT '',
-  niche VARCHAR(255) NOT NULL DEFAULT '',
-  language VARCHAR(50) NOT NULL DEFAULT '',
-  dr INT NULL,
-  da INT NULL,
-  traffic INT NULL,
-  publisher_quote_price DECIMAL(12,2) NULL,
-  publisher_quote_date DATE NULL,
-  backlink_price DECIMAL(12,2) NULL,
-  banner_price_yearly DECIMAL(12,2) NULL,
-  currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
-  status ENUM('draft','negotiating','agreed','sent','rejected','processing','completed','blocked') NOT NULL DEFAULT 'draft',
-  publisher_email VARCHAR(190) NOT NULL DEFAULT '',
-  our_mailbox VARCHAR(190) NOT NULL DEFAULT '',
-  our_contact_name VARCHAR(150) NOT NULL DEFAULT '',
-  inventory_client_name VARCHAR(255) NOT NULL DEFAULT '',
-  order_status VARCHAR(40) NOT NULL DEFAULT '',
-  admin_comments TEXT,
-  outreach_notes TEXT,
-  warning_flags VARCHAR(500) NOT NULL DEFAULT '',
-  assigned_to INT NULL,
-  created_by INT NULL,
-  primary_project_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_project_domain (primary_project_id, domain),
-  INDEX (domain),
-  INDEX (status),
-  INDEX (country),
-  INDEX (niche),
-  INDEX (assigned_to),
-  INDEX (our_mailbox),
-  INDEX (order_status),
-  INDEX (inventory_client_name),
-  INDEX (dr),
-  INDEX (da),
-  INDEX (traffic),
-  CONSTRAINT fk_sites_assigned FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_sites_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_sites_project FOREIGN KEY (primary_project_id) REFERENCES projects(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS countries (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  region VARCHAR(40) NOT NULL DEFAULT 'other',
-  code VARCHAR(10) NOT NULL DEFAULT '',
-  name VARCHAR(100) NOT NULL,
-  default_language VARCHAR(50) NOT NULL DEFAULT '',
-  is_active TINYINT(1) NOT NULL DEFAULT 1,
-  UNIQUE KEY uniq_country_name (name),
-  INDEX (region),
-  INDEX (code)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS pitches (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  project_id INT NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  status ENUM('draft','sent','closed') NOT NULL DEFAULT 'draft',
-  notes TEXT,
-  sent_at DATETIME NULL,
-  created_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_pitches_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pitches_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS pitch_items (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  pitch_id INT NOT NULL,
-  site_id INT NOT NULL,
-  offered_price DECIMAL(12,2) NULL,
-  item_status ENUM('sent','rejected','processing','completed') NOT NULL DEFAULT 'sent',
-  reject_reason_code VARCHAR(40) NOT NULL DEFAULT '',
-  reject_comment TEXT,
-  client_notes TEXT,
-  live_link VARCHAR(500) NOT NULL DEFAULT '',
-  updated_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_pitch_site (pitch_id, site_id),
-  INDEX (item_status),
-  CONSTRAINT fk_pi_pitch FOREIGN KEY (pitch_id) REFERENCES pitches(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pi_site FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pi_user FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS published_placements (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  project_id INT NOT NULL,
-  site_id INT NOT NULL,
-  pitch_item_id INT NULL,
-  live_link VARCHAR(500) NOT NULL DEFAULT '',
-  notes TEXT,
-  created_by INT NULL,
-  published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX (project_id),
-  INDEX (site_id),
-  CONSTRAINT fk_pub_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pub_site FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pub_item FOREIGN KEY (pitch_item_id) REFERENCES pitch_items(id) ON DELETE SET NULL,
-  CONSTRAINT fk_pub_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS clients (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  project_id INT NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(190) NOT NULL,
-  notes TEXT,
-  created_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_project_email (project_id, email),
-  INDEX (email),
-  CONSTRAINT fk_clients_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-  CONSTRAINT fk_clients_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS publication_orders (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  client_id INT NOT NULL,
-  site_id INT NULL,
-  site_domain VARCHAR(255) NOT NULL DEFAULT '',
-  article_url VARCHAR(500) NOT NULL DEFAULT '',
-  sent_for_publication_at DATE NULL,
-  client_price DECIMAL(12,2) NULL,
-  currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
-  live_url VARCHAR(500) NOT NULL DEFAULT '',
-  status ENUM('processing','completed') NOT NULL DEFAULT 'processing',
-  admin_notes TEXT,
-  completed_at DATETIME NULL,
-  created_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX (status),
-  INDEX (sent_for_publication_at),
-  CONSTRAINT fk_po_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
-  CONSTRAINT fk_po_site FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
-  CONSTRAINT fk_po_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Email campaign inventory (per-country sheets: URL + email)
-CREATE TABLE IF NOT EXISTS email_campaign_contacts (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  country VARCHAR(100) NOT NULL DEFAULT '',
-  url VARCHAR(500) NOT NULL DEFAULT '',
-  domain VARCHAR(255) NOT NULL DEFAULT '',
-  email VARCHAR(190) NOT NULL,
-  status ENUM('ready','emailed','replied','dealing','do_not_email') NOT NULL DEFAULT 'ready',
-  campaign_wave VARCHAR(120) NOT NULL DEFAULT '',
-  notes TEXT,
-  last_emailed_at DATETIME NULL,
-  replied_at DATETIME NULL,
-  created_by INT NULL,
-  updated_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_email_campaign_email (email),
-  INDEX (country),
-  INDEX (status),
-  INDEX (domain),
-  INDEX (last_emailed_at),
-  CONSTRAINT fk_ecc_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_ecc_updated FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Global country catalog (company-wide country folders)
--- Prefer upgrade.php / ensure_country_catalog_schema(); this file is a reference.
-
-CREATE TABLE IF NOT EXISTS country_catalog_sites (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  domain VARCHAR(255) NOT NULL,
-  url VARCHAR(500) NOT NULL DEFAULT '',
-  country VARCHAR(100) NOT NULL DEFAULT '',
-  language VARCHAR(50) NOT NULL DEFAULT '',
-  region VARCHAR(40) NOT NULL DEFAULT '',
-  niche VARCHAR(255) NOT NULL DEFAULT '',
-  da INT NULL,
-  dr INT NULL,
-  traffic INT NULL,
-  publisher_quote_price DECIMAL(12,2) NULL,
-  backlink_price DECIMAL(12,2) NULL,
-  currency VARCHAR(10) NOT NULL DEFAULT 'EUR',
-  status VARCHAR(40) NOT NULL DEFAULT 'draft',
-  order_status VARCHAR(40) NOT NULL DEFAULT '',
-  inventory_client_name VARCHAR(255) NOT NULL DEFAULT '',
-  admin_comments TEXT NULL,
-  our_mailbox VARCHAR(190) NOT NULL DEFAULT '',
-  our_contact_name VARCHAR(150) NOT NULL DEFAULT '',
-  created_by INT NULL,
-  updated_by INT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_country_catalog_domain (country, domain),
-  INDEX (country),
-  INDEX (domain),
-  INDEX (status),
-  INDEX (order_status),
-  INDEX (region),
-  CONSTRAINT fk_ccs_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_ccs_updated FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

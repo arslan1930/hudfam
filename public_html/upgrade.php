@@ -1,10 +1,9 @@
 <?php
 /**
- * One-time upgrade runner for existing Hostinger installs.
+ * One-time upgrade for existing Hostinger installs.
+ * 1) Ensures Our database + Add history tables
+ * 2) DROPS Catalog / Emails / Orders / Published / Projects tables
  * Open once after uploading new files, then delete this file.
- *
- * Ensures Our database (prospect_sites) + add history tables exist.
- * Catalog / Email campaigns / Orders / Published are removed from the app.
  */
 session_start();
 require __DIR__ . '/includes/helpers.php';
@@ -40,43 +39,8 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK';
-
-        // Batches / add history (also created inside ensure_prospect_schema when present)
-        $pdo->exec(
-            "CREATE TABLE IF NOT EXISTS prospect_batches (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              user_id INT NOT NULL,
-              batch_date DATE NOT NULL,
-              site_count INT NOT NULL DEFAULT 0,
-              country VARCHAR(100) NOT NULL DEFAULT '',
-              language VARCHAR(50) NOT NULL DEFAULT '',
-              region VARCHAR(40) NOT NULL DEFAULT '',
-              niche VARCHAR(255) NOT NULL DEFAULT '',
-              notes TEXT,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-              UNIQUE KEY uniq_user_batch_date (user_id, batch_date),
-              INDEX (batch_date),
-              INDEX (user_id),
-              CONSTRAINT fk_pbatch_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
-        $pdo->exec(
-            "CREATE TABLE IF NOT EXISTS prospect_batch_items (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              batch_id INT NOT NULL,
-              domain VARCHAR(255) NOT NULL,
-              prospect_site_id INT NULL,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              UNIQUE KEY uniq_batch_domain (batch_id, domain),
-              INDEX (domain),
-              CONSTRAINT fk_pbi_batch FOREIGN KEY (batch_id) REFERENCES prospect_batches(id) ON DELETE CASCADE,
-              CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
         $notes[] = 'prospect_batches (Add history) OK';
 
-        // Optional user contact columns used by Admin → Users
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('phone', $userCols, true)) {
             $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(80) NOT NULL DEFAULT '' AFTER email");
@@ -86,6 +50,31 @@ if (!file_exists(__DIR__ . '/config.php')) {
             $pdo->exec("ALTER TABLE users ADD COLUMN contact_details TEXT NULL AFTER phone");
             $notes[] = 'added users.contact_details';
         }
+
+        // Remove Catalog / Emails / Orders / Published / Projects from the database
+        $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+        $legacy = [
+            'publication_orders',
+            'clients',
+            'published_placements',
+            'pitch_items',
+            'pitches',
+            'email_campaign_contacts',
+            'country_catalog_sites',
+            'sites',
+            'project_admins',
+            'project_members',
+            'projects',
+        ];
+        foreach ($legacy as $table) {
+            $exists = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table))->fetchColumn();
+            if ($exists) {
+                $pdo->exec('DROP TABLE IF EXISTS `' . str_replace('`', '``', $table) . '`');
+                $notes[] = 'dropped ' . $table;
+            }
+        }
+        $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        $notes[] = 'legacy Catalog/Emails/Orders/Published/Projects removed from DB';
 
         $done = true;
     } catch (Throwable $e) {
@@ -106,15 +95,21 @@ if (!file_exists(__DIR__ . '/config.php')) {
 <div class="login-wrap">
   <div class="login-card">
     <h1>Upgrade</h1>
-    <p class="muted">Ensures Our database + Add history tables. Catalog, Emails, Orders, and Published are removed from the app.</p>
+    <p class="muted">
+      Keeps <strong>Our database</strong> + <strong>Add history</strong>.
+      Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
+    </p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
     <?php if ($done): ?>
       <p>Upgrade complete.</p>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
       <p><a href="index.php?page=admin_dashboard">Open Admin dashboard</a></p>
-      <p class="help"><strong>Delete upgrade.php now.</strong></p>
+      <p class="help"><strong>Delete upgrade.php now.</strong> Also delete any old folders:
+        <code>pages/admin/sites.php</code>, email/project pages if still on the server.</p>
     <?php else: ?>
-      <form method="post"><button class="btn" type="submit">Run upgrade</button></form>
+      <form method="post">
+        <button class="btn" type="submit">Run upgrade (drop Catalog/Emails/Orders)</button>
+      </form>
     <?php endif; ?>
   </div>
 </div>
