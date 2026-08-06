@@ -10,6 +10,7 @@ $allowed = [
     'css/app.css' => 'text/css; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',
     'js/searchable-select.js' => 'application/javascript; charset=utf-8',
+    'js/live-clock.js' => 'application/javascript; charset=utf-8',
 ];
 
 $f = (string) ($_GET['f'] ?? '');
