@@ -6,10 +6,10 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 
 | Admin | Team |
 |-------|------|
-| Dashboard | Dashboard |
+| Dashboard | Dashboard (tasks on top) |
 | Our database | Filter & add |
-| Add sites | Our database |
-| Added sites | Added sites |
+| Add sites | Added sites |
+| Added sites | |
 | Users (includes Tasks) | |
 | Account | |
 

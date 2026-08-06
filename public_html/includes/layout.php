@@ -18,9 +18,9 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_prospect_batches' => ['admin_prospect_batch'],
         'admin_users' => ['admin_tasks'],
         'admin_account' => [],
-        'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'team_dashboard' => ['team_tasks'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -82,7 +82,6 @@ function render_header(string $title, string $panel = ''): void
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
                 'team_prospect_check' => ['Filter & add', 'Paste → add unique'],
-                'team_prospects' => ['Our database', 'Country folders'],
                 'team_prospect_batches' => ['Added sites', 'Your daily adds'],
             ],
         ];

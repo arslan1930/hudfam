@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS prospect_batches (
   region VARCHAR(40) NOT NULL DEFAULT '',
   niche VARCHAR(255) NOT NULL DEFAULT '',
   notes TEXT,
+  list_cleared_at DATETIME NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_user_batch_date (user_id, batch_date),
