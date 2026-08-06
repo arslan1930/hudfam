@@ -7,10 +7,19 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 | Admin | Team |
 |-------|------|
 | Dashboard | Dashboard |
-| Our database | Filter & add |
-| Add sites | Our database |
+| Our database | My tasks |
+| Add sites | Filter & add |
+| Tasks | Our database |
 | Add history | Add history |
 | Users | |
+| Account (email / password) | |
+
+## Admin email & password reset
+
+1. In `config.php` set `app_url` (https://your-domain.com) and `mail_from` (an address on your domain).
+2. Optional: Hostinger SMTP (`smtp.hostinger.com`, port 465, ssl) if `mail()` fails.
+3. Admin → **Account** → save email → **Send verification** → open link.
+4. Login → **Forgot password?** works only for verified Admin emails. Team passwords are set by Admin on Users.
 
 ## Deploy (important — wipe old files)
 
