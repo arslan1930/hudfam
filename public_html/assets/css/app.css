@@ -615,3 +615,127 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 0.15rem; }
   .panel-guide-grid { grid-template-columns: 1fr; }
 }
+
+/* Type-to-search selects */
+.ss-wrap {
+  position: relative;
+}
+.ss-native {
+  position: absolute !important;
+  left: 0;
+  top: 0;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.ss-input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+}
+.ss-wrap.ss-open .ss-input {
+  border-color: var(--brand-2);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.ss-list {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: 100%;
+  max-height: 260px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--brand-2);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  box-shadow: var(--shadow);
+}
+.ss-group {
+  padding: 0.35rem 0.65rem 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--bg);
+}
+.ss-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0.65rem;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+.ss-option:hover,
+.ss-option.is-active {
+  background: var(--brand-soft);
+}
+.ss-option.is-selected {
+  font-weight: 700;
+}
+.ss-empty {
+  padding: 0.6rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.usage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin: 0 0 1rem;
+}
+.usage-chips-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.usage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+.usage-chip:hover {
+  border-color: var(--brand-2);
+  text-decoration: none;
+  background: var(--brand-soft);
+}
+
+.folder-search-bar {
+  margin-bottom: 1rem;
+}
+.folder-search-bar input {
+  max-width: 420px;
+}
+
+.btn-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--brand-2);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.btn-link.danger { color: var(--bad); }

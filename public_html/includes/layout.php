@@ -118,5 +118,6 @@ function render_footer(string $panel = ''): void
     if (current_user() && $panel !== '') {
         echo '</main></div>';
     }
+    echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
     echo '</body></html>';
 }
