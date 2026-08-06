@@ -219,6 +219,71 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
     return $stmt->fetchAll();
 }
 
+/**
+ * Map a free-text / code / wrong-case country to the catalog name.
+ * Returns catalog name when known, otherwise the trimmed input (unchanged meaning).
+ */
+function canonicalize_country_name(string $input): string
+{
+    $input = trim($input);
+    if ($input === '' || $input === '_none') {
+        return $input;
+    }
+    static $byLower = null;
+    static $byCode = null;
+    if ($byLower === null) {
+        $byLower = [];
+        $byCode = [];
+        foreach (list_countries(null, false) as $c) {
+            $name = trim((string) ($c['name'] ?? ''));
+            $code = strtoupper(trim((string) ($c['code'] ?? '')));
+            if ($name === '') {
+                continue;
+            }
+            $byLower[strtolower($name)] = $name;
+            if ($code !== '') {
+                $byCode[$code] = $name;
+            }
+        }
+    }
+    $lower = strtolower($input);
+    if (isset($byLower[$lower])) {
+        return $byLower[$lower];
+    }
+    $code = strtoupper($input);
+    if (isset($byCode[$code])) {
+        return $byCode[$code];
+    }
+    return $input;
+}
+
+/**
+ * All label variants that should match a country folder (catalog name + ISO code + input).
+ *
+ * @return list<string>
+ */
+function country_name_match_values(string $countryKey): array
+{
+    $countryKey = trim($countryKey);
+    if ($countryKey === '' || $countryKey === '_none') {
+        return [''];
+    }
+    $canon = canonicalize_country_name($countryKey);
+    $out = [$canon, $countryKey];
+    foreach (list_countries(null, false) as $c) {
+        if (strcasecmp((string) $c['name'], $canon) === 0) {
+            $code = trim((string) ($c['code'] ?? ''));
+            if ($code !== '') {
+                $out[] = $code;
+            }
+            $out[] = (string) $c['name'];
+            break;
+        }
+    }
+    $out = array_values(array_unique(array_filter(array_map('trim', $out), static fn($v) => $v !== '')));
+    return $out !== [] ? $out : [$countryKey];
+}
+
 function countries_grouped(): array
 {
     $grouped = [];
@@ -250,6 +315,21 @@ function user_frequent_countries(int $userId, int $limit = 8): array
         if (function_exists('ensure_prospect_schema')) {
             ensure_prospect_schema();
         }
+        $liveByCanon = [];
+        try {
+            foreach (db()->query(
+                "SELECT TRIM(country) AS country, COUNT(*) AS total FROM prospect_sites GROUP BY TRIM(country)"
+            )->fetchAll() as $row) {
+                $raw = trim((string) ($row['country'] ?? ''));
+                if ($raw === '') {
+                    continue;
+                }
+                $canon = canonicalize_country_name($raw);
+                $liveByCanon[$canon] = ($liveByCanon[$canon] ?? 0) + (int) $row['total'];
+            }
+        } catch (Throwable $e) {
+            $liveByCanon = [];
+        }
         $stmt = db()->prepare(
             "SELECT TRIM(country) AS name,
                     SUM(site_count) AS sites,
@@ -267,21 +347,52 @@ function user_frequent_countries(int $userId, int $limit = 8): array
                AND TRIM(country) <> ''
              GROUP BY TRIM(country)
              ORDER BY score DESC, sites DESC, last_date DESC
-             LIMIT " . (int) $limit
+             LIMIT " . (int) max($limit * 3, $limit)
         );
         $stmt->execute([$userId]);
-        $out = [];
+        $merged = [];
         foreach ($stmt->fetchAll() as $row) {
-            $name = trim((string) ($row['name'] ?? ''));
-            if ($name === '') {
+            $raw = trim((string) ($row['name'] ?? ''));
+            if ($raw === '') {
                 continue;
             }
+            $name = canonicalize_country_name($raw);
+            if (!isset($merged[$name])) {
+                $merged[$name] = [
+                    'name' => $name,
+                    'sites' => 0,
+                    'days' => 0,
+                    'last_date' => null,
+                    'score' => 0.0,
+                    'in_database' => (int) ($liveByCanon[$name] ?? 0),
+                ];
+            }
+            $merged[$name]['sites'] += (int) ($row['sites'] ?? 0);
+            $merged[$name]['days'] += (int) ($row['days'] ?? 0);
+            $merged[$name]['score'] += (float) ($row['score'] ?? 0);
+            $ld = $row['last_date'] ?? null;
+            if ($ld && ($merged[$name]['last_date'] === null || (string) $ld > (string) $merged[$name]['last_date'])) {
+                $merged[$name]['last_date'] = $ld;
+            }
+        }
+        uasort($merged, static function ($a, $b) {
+            if ($a['score'] !== $b['score']) {
+                return $b['score'] <=> $a['score'];
+            }
+            if ($a['sites'] !== $b['sites']) {
+                return $b['sites'] <=> $a['sites'];
+            }
+            return strcmp((string) ($b['last_date'] ?? ''), (string) ($a['last_date'] ?? ''));
+        });
+        $out = [];
+        foreach (array_slice(array_values($merged), 0, $limit) as $row) {
             $out[] = [
-                'name' => $name,
+                'name' => (string) $row['name'],
                 'score' => (float) ($row['score'] ?? 0),
                 'sites' => (int) ($row['sites'] ?? 0),
                 'days' => (int) ($row['days'] ?? 0),
                 'last_date' => $row['last_date'] !== null ? (string) $row['last_date'] : null,
+                'in_database' => (int) ($row['in_database'] ?? 0),
             ];
         }
         return $out;
@@ -346,8 +457,8 @@ function render_country_select(
                 if ($n === '') {
                     continue;
                 }
-                $sites = (int) ($f['sites'] ?? 0);
-                $label = $n . ($sites > 0 ? ' · ' . $sites . ' added' : '');
+                $sites = (int) ($f['in_database'] ?? $f['sites'] ?? 0);
+                $label = $n . ($sites > 0 ? ' · ' . $sites . ' in DB' : '');
                 $html .= $optionHtml($n, $byName[$n] ?? [], $selected, $label);
             }
             $html .= '</optgroup>';
@@ -416,8 +527,9 @@ function render_region_select(string $name, string $selected = '', string $id = 
 
 /**
  * Shortcut chips for often-used countries (links).
+ * Number shown is sites currently in Our database for that country.
  *
- * @param list<array{name:string,sites?:int}> $frequent
+ * @param list<array{name:string,sites?:int,in_database?:int}> $frequent
  */
 function render_frequent_country_chips(array $frequent, string $hrefPrefix): string
 {
@@ -431,10 +543,13 @@ function render_frequent_country_chips(array $frequent, string $hrefPrefix): str
         if ($n === '') {
             continue;
         }
-        $sites = (int) ($f['sites'] ?? 0);
+        $n = canonicalize_country_name($n);
+        $inDb = array_key_exists('in_database', $f)
+            ? (int) $f['in_database']
+            : (int) ($f['sites'] ?? 0);
         $html .= '<a class="usage-chip" href="' . h($hrefPrefix . rawurlencode($n)) . '">'
             . h($n)
-            . ($sites > 0 ? ' <span class="muted">(' . $sites . ')</span>' : '')
+            . ' <span class="muted">(' . $inDb . ' in DB)</span>'
             . '</a>';
     }
     $html .= '</div>';

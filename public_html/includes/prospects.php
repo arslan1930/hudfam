@@ -404,6 +404,11 @@ function ensure_prospect_schema(): void
           INDEX (deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    try {
+        normalize_prospect_country_labels($pdo);
+    } catch (Throwable $e) {
+        // ignore — non-fatal repair
+    }
 }
 
 /**
@@ -440,6 +445,47 @@ function resolve_cross_country_domain_duplicates(PDO $pdo): int
 }
 
 /**
+ * Rewrite stored country labels to catalog names (fixes austria/AT → Austria).
+ */
+function normalize_prospect_country_labels(PDO $pdo): int
+{
+    if (!function_exists('canonicalize_country_name')) {
+        return 0;
+    }
+    static $ran = false;
+    if ($ran) {
+        return 0;
+    }
+    $ran = true;
+    $updated = 0;
+    foreach (['prospect_sites', 'prospect_batches', 'prospect_site_trash'] as $table) {
+        try {
+            $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
+            if (!$exists) {
+                continue;
+            }
+            $rows = $pdo->query("SELECT DISTINCT TRIM(country) AS c FROM $table WHERE TRIM(country) <> ''")->fetchAll(PDO::FETCH_COLUMN);
+            $upd = $pdo->prepare("UPDATE $table SET country=? WHERE TRIM(country)=?");
+            foreach ($rows as $raw) {
+                $raw = trim((string) $raw);
+                if ($raw === '') {
+                    continue;
+                }
+                $canon = canonicalize_country_name($raw);
+                if ($canon === '' || $canon === $raw) {
+                    continue;
+                }
+                $upd->execute([$canon, $raw]);
+                $updated += $upd->rowCount();
+            }
+        } catch (Throwable $e) {
+            // table may not exist yet
+        }
+    }
+    return $updated;
+}
+
+/**
  * Country folders for Admin: every active country + URL counts.
  *
  * @return list<array{country:string,region:string,region_label:string,total:int,language:string}>
@@ -460,7 +506,9 @@ function prospect_country_folders(): array
          FROM prospect_sites
          GROUP BY TRIM(country)"
     )->fetchAll() as $row) {
-        $counts[(string) $row['country']] = (int) $row['total'];
+        $raw = trim((string) $row['country']);
+        $key = $raw === '' ? '' : canonicalize_country_name($raw);
+        $counts[$key] = ($counts[$key] ?? 0) + (int) $row['total'];
     }
     $folders = [];
     foreach (list_countries(null, true) as $c) {
@@ -579,13 +627,15 @@ function list_prospect_domain_names(int $maxDisplay = 100000, string $country = 
     $country = trim($country);
     $maxDisplay = max(1, min(150000, $maxDisplay));
     if ($country !== '') {
-        $count = db()->prepare('SELECT COUNT(*) FROM prospect_sites WHERE TRIM(country)=?');
-        $count->execute([$country]);
+        $aliases = country_name_match_values($country);
+        $ph = implode(',', array_fill(0, count($aliases), '?'));
+        $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites WHERE TRIM(country) IN ($ph)");
+        $count->execute($aliases);
         $total = (int) $count->fetchColumn();
         $stmt = db()->prepare(
-            'SELECT domain FROM prospect_sites WHERE TRIM(country)=? ORDER BY domain ASC LIMIT ' . (int) $maxDisplay
+            "SELECT domain FROM prospect_sites WHERE TRIM(country) IN ($ph) ORDER BY domain ASC LIMIT " . (int) $maxDisplay
         );
-        $stmt->execute([$country]);
+        $stmt->execute($aliases);
     } else {
         $total = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
         $stmt = db()->query(
@@ -659,8 +709,10 @@ function add_prospect_domains(
     }
 
     if ($country !== '') {
+        $country = canonicalize_country_name($country);
         foreach (list_countries(null, true) as $c) {
             if (strcasecmp($c['name'], $country) === 0) {
+                $country = (string) $c['name'];
                 if ($region === '') {
                     $region = $c['region'];
                 }
@@ -746,6 +798,7 @@ function admin_add_sites_to_database(string $raw, array $user, string $country, 
     if ($country === '') {
         throw new InvalidArgumentException('Country is required.');
     }
+    $country = canonicalize_country_name($country);
 
     $region = '';
     $defaultLang = '';
@@ -1267,8 +1320,14 @@ function prospect_country_where(string $countryKey, string $q = '', string $stat
     if ($emptyCountry) {
         $where[] = "TRIM(p.country)=''";
     } else {
-        $where[] = 'TRIM(p.country)=?';
-        $params[] = $countryKey;
+        $aliases = function_exists('country_name_match_values')
+            ? country_name_match_values($countryKey)
+            : [canonicalize_country_name(trim($countryKey))];
+        $ph = implode(',', array_fill(0, count($aliases), '?'));
+        $where[] = "TRIM(p.country) IN ($ph)";
+        foreach ($aliases as $a) {
+            $params[] = $a;
+        }
     }
     $q = trim($q);
     if ($q !== '') {
@@ -1403,7 +1462,7 @@ function trash_and_delete_prospect_rows(array $rows, int $deletedBy = 0): array
                 $id,
                 (string) ($row['domain'] ?? ''),
                 (string) ($row['url'] ?? ''),
-                (string) ($row['country'] ?? ''),
+                canonicalize_country_name((string) ($row['country'] ?? '')),
                 (string) ($row['language'] ?? ''),
                 (string) ($row['region'] ?? ''),
                 (string) ($row['niche'] ?? ''),
@@ -1464,11 +1523,11 @@ function undo_prospect_delete(string $token): array
     try {
         foreach ($rows as $row) {
             $domain = (string) $row['domain'];
-            $country = (string) $row['country'];
+            $country = canonicalize_country_name((string) $row['country']);
             $exists = db()->prepare(
-                'SELECT id FROM prospect_sites WHERE TRIM(country)=? AND domain=? LIMIT 1'
+                'SELECT id FROM prospect_sites WHERE domain=? LIMIT 1'
             );
-            $exists->execute([$country, $domain]);
+            $exists->execute([$domain]);
             if ($exists->fetchColumn()) {
                 $skipped++;
                 $trashIds[] = (int) $row['trash_id'];
@@ -1488,6 +1547,12 @@ function undo_prospect_delete(string $token): array
                     $row['created_by'] !== null && $row['created_by'] !== '' ? (int) $row['created_by'] : null,
                     $createdAt,
                 ]);
+                $newId = (int) db()->lastInsertId();
+                if ($newId > 0) {
+                    db()->prepare(
+                        'UPDATE prospect_batch_items SET prospect_site_id=? WHERE domain=? AND prospect_site_id IS NULL'
+                    )->execute([$newId, $domain]);
+                }
                 $restored++;
             } catch (PDOException $e) {
                 $skipped++;
@@ -1525,11 +1590,13 @@ function list_prospect_trash_batches(string $countryKey, int $limit = 10): array
                 GROUP BY undo_token ORDER BY deleted_at DESC LIMIT $limit";
         $stmt = db()->query($sql);
     } else {
+        $aliases = country_name_match_values($countryKey);
+        $ph = implode(',', array_fill(0, count($aliases), '?'));
         $sql = "SELECT undo_token, MAX(deleted_at) AS deleted_at, COUNT(*) AS site_count
-                FROM prospect_site_trash WHERE TRIM(country)=?
+                FROM prospect_site_trash WHERE TRIM(country) IN ($ph)
                 GROUP BY undo_token ORDER BY deleted_at DESC LIMIT $limit";
         $stmt = db()->prepare($sql);
-        $stmt->execute([$countryKey]);
+        $stmt->execute($aliases);
     }
     return $stmt->fetchAll();
 }
@@ -1556,8 +1623,10 @@ function delete_prospect_sites_by_ids(array $ids, string $countryKey, int $delet
         $sql = "SELECT * FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=''";
         $params = $ids;
     } else {
-        $sql = "SELECT * FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country)=?";
-        $params = array_merge($ids, [$countryKey]);
+        $aliases = country_name_match_values($countryKey);
+        $aph = implode(',', array_fill(0, count($aliases), '?'));
+        $sql = "SELECT * FROM prospect_sites WHERE id IN ($placeholders) AND TRIM(country) IN ($aph)";
+        $params = array_merge($ids, $aliases);
     }
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
@@ -1598,8 +1667,10 @@ function delete_prospect_sites_by_domains(array $domains, string $countryKey, in
             $sql = "SELECT * FROM prospect_sites WHERE TRIM(country)='' AND domain IN ($placeholders)";
             $params = $chunk;
         } else {
-            $sql = "SELECT * FROM prospect_sites WHERE TRIM(country)=? AND domain IN ($placeholders)";
-            $params = array_merge([$countryKey], $chunk);
+            $aliases = country_name_match_values($countryKey);
+            $aph = implode(',', array_fill(0, count($aliases), '?'));
+            $sql = "SELECT * FROM prospect_sites WHERE TRIM(country) IN ($aph) AND domain IN ($placeholders)";
+            $params = array_merge($aliases, $chunk);
         }
         $stmt = db()->prepare($sql);
         $stmt->execute($params);
@@ -1623,8 +1694,12 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 1
         array_push($params, $like, $like, $like, $like);
     }
     if (!empty($filters['country'])) {
-        $where[] = 'p.country = ?';
-        $params[] = $filters['country'];
+        $aliases = country_name_match_values((string) $filters['country']);
+        $ph = implode(',', array_fill(0, count($aliases), '?'));
+        $where[] = "TRIM(p.country) IN ($ph)";
+        foreach ($aliases as $a) {
+            $params[] = $a;
+        }
     }
     if (!empty($filters['language'])) {
         $where[] = 'p.language = ?';

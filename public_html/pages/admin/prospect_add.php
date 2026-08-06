@@ -14,6 +14,9 @@ $needsClean = false;
 if ($country === '' && $frequent !== [] && $_SERVER['REQUEST_METHOD'] !== 'POST') {
     $country = (string) $frequent[0]['name'];
 }
+if ($country !== '') {
+    $country = canonicalize_country_name($country);
+}
 
 // Prefill language from country default
 if ($country !== '' && $language === '') {

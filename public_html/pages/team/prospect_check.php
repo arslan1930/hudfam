@@ -31,6 +31,9 @@ if ($country === '') {
         // ignore
     }
 }
+if ($country !== '') {
+    $country = canonicalize_country_name($country);
+}
 
 // Prefill language/region from country default
 if ($country !== '' && ($language === '' || $region === '')) {
@@ -79,7 +82,7 @@ try {
         }
 
         $raw = (string) post('domains');
-        $country = trim((string) post('country'));
+        $country = canonicalize_country_name(trim((string) post('country')));
         $language = trim((string) post('language'));
         $region = (string) post('region');
         $niche = trim((string) post('niche'));

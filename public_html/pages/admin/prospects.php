@@ -7,6 +7,9 @@ if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
 }
 $emptyCountry = ($sheet === '_none');
+if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
+    $sheet = canonicalize_country_name(trim($sheet));
+}
 $inCountry = ($sheet !== '' && $sheet !== 'all');
 
 // --- Country folders (default) ---
