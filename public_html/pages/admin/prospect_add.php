@@ -90,16 +90,6 @@ render_header('Add sites', 'admin');
   </div>
 </div>
 
-<?= render_page_purpose(
-    'Add sites into a country folder',
-    'Sites are stored in country folders for browsing, but each domain exists only once in the whole database.',
-    'Select country (save destination) → Paste → Clean list → Save. Duplicates already anywhere in Our database are skipped.',
-    [
-        'Select the country folder to save into (type to search).',
-        'Paste sites (root domains). If there are errors, click Clean list.',
-        'Save — only globally unique sites are added into that country.',
-    ]
-) ?>
 <?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
 
 <form class="card" method="post" id="add_sites_form">

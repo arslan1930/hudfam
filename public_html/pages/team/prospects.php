@@ -31,10 +31,9 @@ if (!$inCountry && !$emptyCountry) {
       </div>
       <div class="actions">
         <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
-        <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
+        <a class="btn secondary" href="index.php?page=team_prospect_batches">Added sites</a>
       </div>
     </div>
-    <?= guide_inventory() ?>
     <?php
       $freqTeam = user_frequent_countries((int) $user['id'], 8);
       echo render_frequent_country_chips($freqTeam, 'index.php?page=team_prospects&country=');

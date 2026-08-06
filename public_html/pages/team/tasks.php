@@ -51,7 +51,7 @@ render_header('My tasks', 'team');
 <div class="topbar">
   <div>
     <h1>My tasks</h1>
-    <p class="muted">Work assigned by Admin. Open Filter &amp; add for the country, then mark the task done.</p>
+    <p class="muted">Assigned by Admin.</p>
   </div>
   <div class="actions">
     <?php if ($showDone): ?>
@@ -61,13 +61,6 @@ render_header('My tasks', 'team');
     <?php endif; ?>
   </div>
 </div>
-
-<?= render_page_purpose(
-    'Tasks — what Admin asked you to do',
-    'Each task is a job (often a country + target).',
-    'Open the country in Filter & add, add unique sites, then mark In progress / Done.',
-    []
-) ?>
 
 <?php if (!$list): ?>
   <div class="card empty-state">

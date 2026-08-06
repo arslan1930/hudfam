@@ -7,12 +7,11 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 | Admin | Team |
 |-------|------|
 | Dashboard | Dashboard |
-| Our database | My tasks |
-| Add sites | Filter & add |
-| Tasks | Our database |
-| Add history | Add history |
-| Users | |
-| Account (email / password) | |
+| Our database | Filter & add |
+| Add sites | Our database |
+| Added sites | Added sites |
+| Users (includes Tasks) | |
+| Account | |
 
 ## Admin email & password reset
 
