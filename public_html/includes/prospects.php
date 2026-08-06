@@ -493,10 +493,14 @@ function normalize_prospect_country_labels(PDO $pdo): int
     }
     $ran = true;
     $updated = 0;
-    foreach (['prospect_sites', 'prospect_batches', 'prospect_site_trash'] as $table) {
+    foreach (['prospect_sites', 'prospect_batches', 'prospect_batch_items', 'prospect_site_trash', 'team_tasks'] as $table) {
         try {
             $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
             if (!$exists) {
+                continue;
+            }
+            $cols = $pdo->query('SHOW COLUMNS FROM ' . $table)->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('country', $cols, true)) {
                 continue;
             }
             $rows = $pdo->query("SELECT DISTINCT TRIM(country) AS c FROM $table WHERE TRIM(country) <> ''")->fetchAll(PDO::FETCH_COLUMN);

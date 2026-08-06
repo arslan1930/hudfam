@@ -316,7 +316,9 @@ function create_team_task(array $data, int $createdBy): array
     )->execute([
         $title,
         trim((string) ($data['notes'] ?? '')),
-        trim((string) ($data['country'] ?? '')),
+        function_exists('canonicalize_country_name')
+            ? canonicalize_country_name(trim((string) ($data['country'] ?? '')))
+            : trim((string) ($data['country'] ?? '')),
         trim((string) ($data['language'] ?? '')),
         trim((string) ($data['niche'] ?? '')),
         $target,
@@ -373,7 +375,9 @@ function update_team_task(int $id, array $data): void
     )->execute([
         $title,
         trim((string) ($data['notes'] ?? $task['notes'] ?? '')),
-        trim((string) ($data['country'] ?? $task['country'] ?? '')),
+        function_exists('canonicalize_country_name')
+            ? canonicalize_country_name(trim((string) ($data['country'] ?? $task['country'] ?? '')))
+            : trim((string) ($data['country'] ?? $task['country'] ?? '')),
         trim((string) ($data['language'] ?? $task['language'] ?? '')),
         trim((string) ($data['niche'] ?? $task['niche'] ?? '')),
         $target,

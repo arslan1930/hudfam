@@ -220,6 +220,86 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
 }
 
 /**
+ * Extra country labels people type (demonyms, native names, common mistakes).
+ * Keys must be lowercase. Values are catalog country names.
+ *
+ * @return array<string,string>
+ */
+function country_name_aliases(): array
+{
+    return [
+        // Germany
+        'german' => 'Germany',
+        'germany' => 'Germany',
+        'deutschland' => 'Germany',
+        'deutchland' => 'Germany',
+        'federal republic of germany' => 'Germany',
+        // Austria
+        'austrian' => 'Austria',
+        'österreich' => 'Austria',
+        'osterreich' => 'Austria',
+        // Switzerland
+        'swiss' => 'Switzerland',
+        'schweiz' => 'Switzerland',
+        'suisse' => 'Switzerland',
+        'svizzera' => 'Switzerland',
+        // France
+        'french' => 'France',
+        'frankreich' => 'France',
+        // Spain
+        'spanish' => 'Spain',
+        'españa' => 'Spain',
+        'espana' => 'Spain',
+        // Italy
+        'italian' => 'Italy',
+        'italia' => 'Italy',
+        // Netherlands
+        'dutch' => 'Netherlands',
+        'holland' => 'Netherlands',
+        'the netherlands' => 'Netherlands',
+        // United Kingdom / English markets
+        'uk' => 'United Kingdom',
+        'u.k.' => 'United Kingdom',
+        'great britain' => 'United Kingdom',
+        'britain' => 'United Kingdom',
+        'england' => 'United Kingdom',
+        'british' => 'United Kingdom',
+        // United States
+        'usa' => 'United States',
+        'u.s.' => 'United States',
+        'u.s.a.' => 'United States',
+        'us' => 'United States',
+        'america' => 'United States',
+        'american' => 'United States',
+        // Poland
+        'polish' => 'Poland',
+        'polska' => 'Poland',
+        // Czech
+        'czech' => 'Czech Republic',
+        'czechia' => 'Czech Republic',
+        // Others often mistyped
+        'belgian' => 'Belgium',
+        'swedish' => 'Sweden',
+        'norwegian' => 'Norway',
+        'danish' => 'Denmark',
+        'finnish' => 'Finland',
+        'portuguese' => 'Portugal',
+        'greek' => 'Greece',
+        'hungarian' => 'Hungary',
+        'romanian' => 'Romania',
+        'bulgarian' => 'Bulgaria',
+        'croatian' => 'Croatia',
+        'slovak' => 'Slovakia',
+        'slovenian' => 'Slovenia',
+        'irish' => 'Ireland',
+        'canadian' => 'Canada',
+        'australian' => 'Australia',
+        'new zealander' => 'New Zealand',
+        'nz' => 'New Zealand',
+    ];
+}
+
+/**
  * Map a free-text / code / wrong-case country to the catalog name.
  * Returns catalog name when known, otherwise the trimmed input (unchanged meaning).
  */
@@ -231,6 +311,7 @@ function canonicalize_country_name(string $input): string
     }
     static $byLower = null;
     static $byCode = null;
+    static $aliases = null;
     if ($byLower === null) {
         $byLower = [];
         $byCode = [];
@@ -245,10 +326,16 @@ function canonicalize_country_name(string $input): string
                 $byCode[$code] = $name;
             }
         }
+        $aliases = country_name_aliases();
     }
     $lower = strtolower($input);
     if (isset($byLower[$lower])) {
         return $byLower[$lower];
+    }
+    if (isset($aliases[$lower])) {
+        $mapped = $aliases[$lower];
+        // Prefer exact catalog casing
+        return $byLower[strtolower($mapped)] ?? $mapped;
     }
     $code = strtoupper($input);
     if (isset($byCode[$code])) {
@@ -278,6 +365,14 @@ function country_name_match_values(string $countryKey): array
             }
             $out[] = (string) $c['name'];
             break;
+        }
+    }
+    foreach (country_name_aliases() as $alias => $target) {
+        if (strcasecmp($target, $canon) === 0) {
+            $out[] = $alias;
+            // Preserve common casing variants
+            $out[] = ucfirst($alias);
+            $out[] = strtoupper($alias);
         }
     }
     $out = array_values(array_unique(array_filter(array_map('trim', $out), static fn($v) => $v !== '')));
