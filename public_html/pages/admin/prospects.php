@@ -87,7 +87,6 @@ if (!$inCountry && !$emptyCountry) {
     </form>
     <?php
       $freqAdmin = user_frequent_countries((int) $user['id'], 8);
-      $chipQs = $createdByFilter > 0 ? '&created_by=' . $createdByFilter : '';
       echo render_frequent_country_chips($freqAdmin, 'index.php?page=admin_prospects&country=');
     ?>
     <div data-folder-scope>
