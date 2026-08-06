@@ -492,6 +492,53 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   min-height: 280px;
   white-space: pre;
 }
+/* Team: tiny DB preview — not selectable / not copyable */
+.db-preview {
+  min-height: 180px;
+  max-height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 0.75rem 0.85rem;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: default;
+  position: relative;
+}
+.db-preview::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5rem;
+  background: linear-gradient(transparent, var(--bg));
+  pointer-events: none;
+}
+.db-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.db-preview-list li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  filter: blur(0.35px);
+  opacity: 0.85;
+}
+.db-preview-more {
+  margin: 0.55rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+}
 @media (max-width: 900px) {
   .grid.two-box { grid-template-columns: 1fr; }
 }

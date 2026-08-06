@@ -14,7 +14,8 @@ $notes = '';
 $result = null;
 $needsClean = false;
 $old = ['domains' => [], 'total' => 0, 'truncated' => false];
-$oldText = '';
+$oldPreview = [];
+$oldMore = 0;
 
 // Default to the country this teammate uses most / first open task
 if ($country === '' && $frequent !== []) {
@@ -48,12 +49,11 @@ if ($country !== '' && ($language === '' || $region === '')) {
 }
 
 try {
-    // Box 1 = full database (all countries) for global uniqueness filtering
-    $old = list_prospect_domain_names(100000, '');
-    $oldText = implode("\n", $old['domains']);
-    if ($old['truncated']) {
-        $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-    }
+    // Team only sees a tiny uncopyable preview — filter still checks the full DB server-side
+    $previewLimit = 8;
+    $old = list_prospect_domain_names($previewLimit, '');
+    $oldPreview = array_slice($old['domains'], 0, $previewLimit);
+    $oldMore = max(0, (int) $old['total'] - count($oldPreview));
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
@@ -127,11 +127,10 @@ try {
                     flash('ok', clean_site_list_summary($clean));
                 }
                 $result = filter_domains_against_prospects($domains, '');
-                $old = list_prospect_domain_names(100000, '');
-                $oldText = implode("\n", $old['domains']);
-                if ($old['truncated']) {
-                    $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-                }
+                // Keep tiny preview only (do not reload full inventory into the page)
+                $old = list_prospect_domain_names($previewLimit, '');
+                $oldPreview = array_slice($old['domains'], 0, $previewLimit);
+                $oldMore = max(0, (int) $old['total'] - count($oldPreview));
             }
         }
     }
@@ -194,11 +193,24 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel panel-muted">
-      <h2>① Already in database (all countries)</h2>
+      <h2>① Already in database</h2>
       <p class="help">
-        <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> total · used to remove duplicates globally
+        <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> total · preview only (not copyable). Filter still checks everything.
       </p>
-      <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="Loading…"><?= h($oldText) ?></textarea>
+      <div class="db-preview" aria-label="Database preview (not copyable)" oncopy="return false" oncut="return false" oncontextmenu="return false">
+        <?php if ($oldPreview === []): ?>
+          <p class="muted" style="margin:0">No sites in the database yet.</p>
+        <?php else: ?>
+          <ul class="db-preview-list">
+            <?php foreach ($oldPreview as $d): ?>
+              <li><?= h($d) ?></li>
+            <?php endforeach; ?>
+          </ul>
+          <?php if ($oldMore > 0): ?>
+            <p class="db-preview-more">… and <?= (int) $oldMore ?> more (hidden)</p>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
@@ -245,6 +257,10 @@ render_header('Filter & add', 'team');
   });
   syncButtons();
 })();
+document.querySelectorAll('.db-preview').forEach(function(el){
+  el.addEventListener('selectstart', function(e){ e.preventDefault(); });
+  el.addEventListener('dragstart', function(e){ e.preventDefault(); });
+});
 </script>
 
 <?php if ($result): ?>
@@ -262,8 +278,21 @@ render_header('Filter & add', 'team');
   <div class="card panel-muted">
     <h2>Already in database (skipped)</h2>
     <?php if ($result['existing']): ?>
-      <p class="help">Skip these — each domain is allowed only once.</p>
-      <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
+      <?php
+        $skipPreview = array_slice($result['existing'], 0, 8);
+        $skipMore = count($result['existing']) - count($skipPreview);
+      ?>
+      <p class="help"><?= count($result['existing']) ?> already known — preview only (not copyable).</p>
+      <div class="db-preview" aria-label="Skipped domains preview" oncopy="return false" oncut="return false" oncontextmenu="return false">
+        <ul class="db-preview-list">
+          <?php foreach ($skipPreview as $d): ?>
+            <li><?= h($d) ?></li>
+          <?php endforeach; ?>
+        </ul>
+        <?php if ($skipMore > 0): ?>
+          <p class="db-preview-more">… and <?= (int) $skipMore ?> more skipped (hidden)</p>
+        <?php endif; ?>
+      </div>
     <?php else: ?>
       <div class="empty-state"><p>Nothing skipped — none of these domains are in the database yet.</p></div>
     <?php endif; ?>
