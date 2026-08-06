@@ -257,6 +257,10 @@ render_header('Filter & add', 'team');
   });
   syncButtons();
 })();
+document.querySelectorAll('.db-preview').forEach(function(el){
+  el.addEventListener('selectstart', function(e){ e.preventDefault(); });
+  el.addEventListener('dragstart', function(e){ e.preventDefault(); });
+});
 </script>
 
 <?php if ($result): ?>
