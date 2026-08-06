@@ -12,7 +12,14 @@ $inCountry = ($sheet !== '' && $sheet !== 'all');
 
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
+    $langFilter = trim((string) get('language'));
     $folders = prospect_country_folders();
+    if ($langFilter !== '') {
+        $folders = array_values(array_filter(
+            $folders,
+            static fn($f) => strcasecmp((string) $f['language'], $langFilter) === 0
+        ));
+    }
     $byRegion = [];
     foreach ($folders as $f) {
         $byRegion[$f['region_label']][] = $f;
@@ -37,18 +44,37 @@ if (!$inCountry && !$emptyCountry) {
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
       </div>
     </div>
-    <?= render_page_purpose(
-        'Our database — one folder per country',
-        'URLs are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add URLs inside the folder to paste sites into that country only.',
-        [
-            'Open a country folder.',
-            'Add URLs into that country’s database.',
-            'Team Filter & add can check against the same country list.',
-        ]
-    ) ?>
+
+    <form class="card country-finder" method="get" action="index.php">
+      <input type="hidden" name="page" value="admin_prospects">
+      <div class="country-finder-grid">
+        <div>
+          <label for="finder_country">Country <span class="help">(type to search)</span></label>
+          <?= render_country_select('country', '', 'finder_country', false, 'Type a country…') ?>
+        </div>
+        <div>
+          <label for="finder_language">Language <span class="help">(optional — type to search)</span></label>
+          <?= render_language_select('language', $langFilter, 'finder_language', false) ?>
+        </div>
+        <button class="btn" type="submit">Open / filter</button>
+      </div>
+      <div style="margin-top:0.75rem">
+        <label for="folder_live_search">Or filter folders below by typing</label>
+        <input id="folder_live_search" type="search" data-folder-search placeholder="Type country or language…" autocomplete="off">
+        <p class="help" style="margin:0.4rem 0 0">
+          Showing <strong data-folder-count><?= count($folders) ?></strong> countries.
+          <?php if ($langFilter !== ''): ?>
+            Filtered by language “<?= h($langFilter) ?>” · <a href="index.php?page=admin_prospects">Clear</a>
+          <?php else: ?>
+            Pick a country to open it, or a language then Open to list matching countries.
+          <?php endif; ?>
+        </p>
+      </div>
+    </form>
+
+    <div data-folder-scope>
     <?php foreach ($byRegion as $regionLabel => $list): ?>
-      <div class="card">
+      <div class="card" data-folder-group>
         <h2><?= h($regionLabel) ?></h2>
         <div class="folders" style="margin-top:0.7rem">
           <?php foreach ($list as $f): ?>
@@ -56,7 +82,8 @@ if (!$inCountry && !$emptyCountry) {
               $href = $f['country'] !== '' ? $f['country'] : '_none';
               $label = $f['country'] !== '' ? $f['country'] : 'No country';
             ?>
-            <a class="folder" href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>">
+            <a class="folder" data-search="<?= h($label . ' ' . $f['language']) ?>"
+               href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>">
               <h3><?= h($label) ?></h3>
               <p class="muted"><?= (int) $f['total'] ?> URL<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
             </a>
@@ -64,8 +91,18 @@ if (!$inCountry && !$emptyCountry) {
         </div>
       </div>
     <?php endforeach; ?>
+    </div>
     <?php if (!$folders): ?>
-      <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
+      <div class="card empty-state">
+        <p>
+          <?= $langFilter !== ''
+              ? 'No countries use the language “' . h($langFilter) . '”.'
+              : 'No countries configured. Run upgrade.php once.' ?>
+        </p>
+        <?php if ($langFilter !== ''): ?>
+          <a class="btn secondary" href="index.php?page=admin_prospects">Show all countries</a>
+        <?php endif; ?>
+      </div>
     <?php endif; ?>
     <?php
     render_footer('admin');
@@ -76,12 +113,14 @@ if (!$inCountry && !$emptyCountry) {
 $countryName = $emptyCountry ? '' : $sheet;
 $q = trim((string) get('q'));
 $status = (string) get('status');
+$language = trim((string) get('language'));
 $pageNum = max(1, (int) get('p', 1));
 $inv = prospect_inventory_query([
     'q' => $q,
     'country' => $countryName,
+    'language' => $language,
     'status' => $status,
-] + ($emptyCountry ? [] : []), $pageNum, 50);
+], $pageNum, 50);
 
 // For empty country, prospect_inventory_query with country='' won't filter empty — need special case
 if ($emptyCountry) {
@@ -96,6 +135,10 @@ if ($emptyCountry) {
     if ($status !== '') {
         $where[] = 'p.status = ?';
         $params[] = $status;
+    }
+    if ($language !== '') {
+        $where[] = 'p.language = ?';
+        $params[] = $language;
     }
     $whereSql = implode(' AND ', $where);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
@@ -122,6 +165,7 @@ $qs = http_build_query(array_filter([
     'page' => 'admin_prospects',
     'country' => $emptyCountry ? '_none' : $countryName,
     'q' => $q,
+    'language' => $language,
     'status' => $status,
 ], static fn($v) => $v !== '' && $v !== null));
 
@@ -148,9 +192,13 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
   <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain or url…"></div>
-  <div><label>Status</label>
-    <select name="status">
+  <div><label for="q">Search</label><input id="q" name="q" value="<?= h($q) ?>" placeholder="domain or url…"></div>
+  <div>
+    <label for="language">Language <span class="help">(optional — type to search)</span></label>
+    <?= render_language_select('language', $language, 'language', false) ?>
+  </div>
+  <div><label for="status">Status</label>
+    <select id="status" name="status">
       <option value="">All</option>
       <?php foreach (prospect_statuses() as $code => $label): ?>
         <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>

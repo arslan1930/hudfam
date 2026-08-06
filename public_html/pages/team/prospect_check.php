@@ -4,7 +4,6 @@ ensure_prospect_schema();
 seed_countries_if_empty(db());
 
 $countryOptions = list_countries(null, true);
-$countryGroups = countries_grouped();
 $raw = '';
 $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
@@ -122,27 +121,15 @@ render_header('Filter & add', 'team');
   <div class="card" style="margin-bottom:1rem">
     <div class="form-grid">
       <div>
-        <label for="country_select">Country database <span class="help">(required)</span></label>
-        <select name="country" id="country_select" required>
-          <option value="">— Select country —</option>
-          <?php foreach ($countryGroups as $regionCode => $block): ?>
-            <?php if (empty($block['countries'])) {
-                continue;
-            } ?>
-            <optgroup label="<?= h($block['label']) ?>">
-              <?php foreach ($block['countries'] as $c): ?>
-                <option value="<?= h($c['name']) ?>"
-                  data-region="<?= h($c['region']) ?>"
-                  data-lang="<?= h($c['default_language']) ?>"
-                  <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-              <?php endforeach; ?>
-            </optgroup>
-          <?php endforeach; ?>
-        </select>
+        <label for="country_select">Country database <span class="help">(required — type to search)</span></label>
+        <?= render_country_select('country', $country, 'country_select', true, '— Select country —') ?>
       </div>
-      <div><label>Language</label><input name="language" id="language_input" value="<?= h($language) ?>"></div>
-      <div><label>Region</label>
-        <select name="region">
+      <div>
+        <label for="language_input">Language <span class="help">(optional — type to search)</span></label>
+        <?= render_language_select('language', $language, 'language_input') ?>
+      </div>
+      <div><label for="region_select">Region</label>
+        <select name="region" id="region_select">
           <option value="">—</option>
           <?php foreach (regions() as $k => $v): ?>
             <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
@@ -183,14 +170,17 @@ render_header('Filter & add', 'team');
 (function(){
   var sel = document.getElementById('country_select');
   var lang = document.getElementById('language_input');
-  var region = document.querySelector('select[name=region]');
+  var region = document.getElementById('region_select');
   var btn = document.querySelector('#filter_form button[type=submit]');
   if (!sel) return;
   sel.addEventListener('change', function(){
     var opt = sel.options[sel.selectedIndex];
     if (!opt) return;
     if (region && opt.dataset.region) region.value = opt.dataset.region;
-    if (lang && opt.dataset.lang && !lang.value) lang.value = opt.dataset.lang;
+    if (lang && opt.dataset.lang && !lang.value) {
+      lang.value = opt.dataset.lang;
+      lang.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     if (btn) btn.disabled = !sel.value;
     if (sel.value) {
       window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(sel.value);

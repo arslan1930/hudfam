@@ -380,6 +380,93 @@ td.col-actions {
   vertical-align: middle;
 }
 
+/* —— Type-to-search selects (country / language) —— */
+.ss-wrap { position: relative; }
+.ss-native {
+  position: absolute !important;
+  left: 0;
+  top: 0;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.ss-input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") no-repeat right 0.6rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2rem;
+  font: inherit;
+}
+.ss-wrap.ss-open .ss-input {
+  border-color: var(--brand-2);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.ss-list {
+  position: absolute;
+  z-index: 60;
+  left: 0;
+  right: 0;
+  top: 100%;
+  max-height: 280px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--brand-2);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  box-shadow: var(--shadow);
+}
+.ss-group {
+  padding: 0.35rem 0.65rem 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--bg);
+}
+.ss-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0.65rem;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+.ss-option:hover,
+.ss-option.is-active { background: var(--brand-soft); }
+.ss-option.is-selected { font-weight: 700; }
+.ss-empty {
+  padding: 0.6rem 0.65rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* —— Find a country bar above the folder grid —— */
+.country-finder { margin-bottom: 1rem; }
+.country-finder-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+.country-finder label { margin-top: 0; }
+.country-finder .btn { white-space: nowrap; }
+@media (max-width: 700px) {
+  .country-finder-grid { grid-template-columns: 1fr; }
+  .country-finder .btn { width: 100%; }
+}
+
 /* —— Users page (clear list + form) —— */
 .users-topbar { margin-bottom: 0.85rem; }
 .users-summary {

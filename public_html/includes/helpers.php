@@ -63,6 +63,18 @@ function stylesheet_url(): string
     return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
 }
 
+/**
+ * Script URL served through asset.php so it also works in subfolder installs.
+ * $relativePath is relative to assets/, e.g. "js/searchable-select.js".
+ */
+function script_url(string $relativePath): string
+{
+    $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+    $file = dirname(__DIR__) . '/assets/' . $relativePath;
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=' . rawurlencode($relativePath) . '&v=' . rawurlencode($v));
+}
+
 function redirect(string $path): void
 {
     header('Location: ' . $path);

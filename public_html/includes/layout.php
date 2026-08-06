@@ -118,6 +118,7 @@ function render_footer(string $panel = ''): void
     if (current_user() && $panel !== '') {
         echo '</main></div>';
     }
+    echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
     // Move Actions menus to <body> + position:fixed so table/card overflow cannot clip options.
     echo '<script>(function(){';
     echo 'function placeMenu(details){';
