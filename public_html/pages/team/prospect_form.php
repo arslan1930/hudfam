@@ -1,5 +1,9 @@
 <?php
 $user = require_team();
+if (($user['role'] ?? '') === 'team') {
+    flash('error', 'Our database is only available to Admin. Use Filter & add.');
+    redirect('index.php?page=team_prospect_check');
+}
 $id = (int) get('id');
 $frequent = user_frequent_countries((int) $user['id'], 8);
 $site = [

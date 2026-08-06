@@ -1,5 +1,9 @@
 <?php
 $user = require_team();
+if (($user['role'] ?? '') === 'team') {
+    flash('error', 'Our database is only available to Admin.');
+    redirect('index.php?page=team_dashboard');
+}
 ensure_prospect_schema();
 
 $sheet = (string) get('country');

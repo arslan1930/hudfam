@@ -350,6 +350,7 @@ function ensure_prospect_schema(): void
           region VARCHAR(40) NOT NULL DEFAULT '',
           niche VARCHAR(255) NOT NULL DEFAULT '',
           notes TEXT,
+          list_cleared_at DATETIME NULL DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_user_batch_date (user_id, batch_date),
@@ -358,6 +359,14 @@ function ensure_prospect_schema(): void
           CONSTRAINT fk_pbatch_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    try {
+        $batchCols = $pdo->query('SHOW COLUMNS FROM prospect_batches')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('list_cleared_at', $batchCols, true)) {
+            $pdo->exec('ALTER TABLE prospect_batches ADD COLUMN list_cleared_at DATETIME NULL DEFAULT NULL AFTER notes');
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS prospect_batch_items (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1004,6 +1013,130 @@ function get_prospect_batch_domains(int $batchId, int $limit = 50000): array
     );
     $stmt->execute([$batchId]);
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
+ * Today's batch for a user (or null).
+ */
+function get_today_prospect_batch(int $userId): ?array
+{
+    ensure_prospect_schema();
+    $stmt = db()->prepare(
+        'SELECT * FROM prospect_batches WHERE user_id=? AND batch_date=CURDATE() LIMIT 1'
+    );
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/**
+ * Domains the teammate added today since last Clear (for copy list on Filter & add).
+ *
+ * @return array{batch_id:int|null,domains:string[],total_today:int,cleared:bool,can_undo:bool}
+ */
+function team_today_new_sites_for_copy(int $userId): array
+{
+    ensure_prospect_schema();
+    $batch = get_today_prospect_batch($userId);
+    if (!$batch) {
+        return [
+            'batch_id' => null,
+            'domains' => [],
+            'total_today' => 0,
+            'cleared' => false,
+            'can_undo' => false,
+        ];
+    }
+    $batchId = (int) $batch['id'];
+    $clearedAt = $batch['list_cleared_at'] ?? null;
+    $totalStmt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+    $totalStmt->execute([$batchId]);
+    $totalToday = (int) $totalStmt->fetchColumn();
+
+    if ($clearedAt) {
+        $stmt = db()->prepare(
+            'SELECT domain FROM prospect_batch_items
+             WHERE batch_id=? AND created_at > ?
+             ORDER BY created_at ASC, domain ASC
+             LIMIT 50000'
+        );
+        $stmt->execute([$batchId, $clearedAt]);
+    } else {
+        $stmt = db()->prepare(
+            'SELECT domain FROM prospect_batch_items
+             WHERE batch_id=?
+             ORDER BY created_at ASC, domain ASC
+             LIMIT 50000'
+        );
+        $stmt->execute([$batchId]);
+    }
+    $domains = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $undo = $_SESSION['team_copy_clear_undo'] ?? null;
+    $canUndo = is_array($undo)
+        && (int) ($undo['user_id'] ?? 0) === $userId
+        && (int) ($undo['batch_id'] ?? 0) === $batchId;
+    return [
+        'batch_id' => $batchId,
+        'domains' => $domains,
+        'total_today' => $totalToday,
+        'cleared' => $clearedAt !== null && $clearedAt !== '',
+        'can_undo' => $canUndo,
+    ];
+}
+
+/**
+ * Clear the Filter & add copy list (sites stay in the database). Confirm in UI first.
+ * Stores previous cleared_at in session for undo.
+ */
+function clear_team_today_copy_list(int $userId): array
+{
+    ensure_prospect_schema();
+    $batch = get_today_prospect_batch($userId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'No sites added today to clear.'];
+    }
+    $copy = team_today_new_sites_for_copy($userId);
+    if ($copy['domains'] === []) {
+        return ['ok' => false, 'error' => 'The copy list is already empty.'];
+    }
+    $_SESSION['team_copy_clear_undo'] = [
+        'batch_id' => (int) $batch['id'],
+        'user_id' => $userId,
+        'prev_cleared_at' => $batch['list_cleared_at'] ?? null,
+        'cleared_at' => date('Y-m-d H:i:s'),
+        'count' => count($copy['domains']),
+    ];
+    db()->prepare('UPDATE prospect_batches SET list_cleared_at=NOW() WHERE id=? AND user_id=?')
+        ->execute([(int) $batch['id'], $userId]);
+    return ['ok' => true, 'error' => '', 'count' => count($copy['domains'])];
+}
+
+/**
+ * Undo the last clear of the copy list.
+ */
+function undo_team_today_copy_clear(int $userId): array
+{
+    ensure_prospect_schema();
+    $undo = $_SESSION['team_copy_clear_undo'] ?? null;
+    if (!is_array($undo) || (int) ($undo['user_id'] ?? 0) !== $userId) {
+        return ['ok' => false, 'error' => 'Nothing to undo.'];
+    }
+    $batchId = (int) ($undo['batch_id'] ?? 0);
+    $prev = $undo['prev_cleared_at'] ?? null;
+    if ($batchId <= 0) {
+        return ['ok' => false, 'error' => 'Nothing to undo.'];
+    }
+    $stmt = db()->prepare('SELECT id FROM prospect_batches WHERE id=? AND user_id=? LIMIT 1');
+    $stmt->execute([$batchId, $userId]);
+    if (!$stmt->fetchColumn()) {
+        unset($_SESSION['team_copy_clear_undo']);
+        return ['ok' => false, 'error' => 'Nothing to undo.'];
+    }
+    db()->prepare('UPDATE prospect_batches SET list_cleared_at=? WHERE id=? AND user_id=?')
+        ->execute([$prev, $batchId, $userId]);
+    $count = (int) ($undo['count'] ?? 0);
+    unset($_SESSION['team_copy_clear_undo']);
+    return ['ok' => true, 'error' => '', 'count' => $count];
 }
 
 /**
