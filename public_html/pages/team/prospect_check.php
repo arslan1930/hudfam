@@ -140,7 +140,10 @@ render_header('Filter & add', 'team');
           <?php endforeach; ?>
         </select>
       </div>
-      <div><label>Language</label><input name="language" id="language_input" value="<?= h($language) ?>"></div>
+      <div>
+        <label for="language_input">Language <span class="help">(optional)</span></label>
+        <?= render_language_select('language', $language, 'language_input') ?>
+      </div>
       <div><label>Region</label>
         <select name="region">
           <option value="">—</option>
@@ -190,7 +193,10 @@ render_header('Filter & add', 'team');
     var opt = sel.options[sel.selectedIndex];
     if (!opt) return;
     if (region && opt.dataset.region) region.value = opt.dataset.region;
-    if (lang && opt.dataset.lang && !lang.value) lang.value = opt.dataset.lang;
+    if (lang && opt.dataset.lang) {
+      // Prefill optional language from country default (user can clear / change)
+      lang.value = opt.dataset.lang || '';
+    }
     if (btn) btn.disabled = !sel.value;
     if (sel.value) {
       window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(sel.value);

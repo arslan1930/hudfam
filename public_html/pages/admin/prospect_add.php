@@ -100,8 +100,9 @@ render_header('Add URLs', 'admin');
       </select>
     </div>
     <div>
-      <label for="language">Language</label>
-      <input id="language" name="language" value="<?= h($language) ?>" placeholder="optional default">
+      <label for="language">Language <span class="help">(optional)</span></label>
+      <?= render_language_select('language', $language, 'language') ?>
+      <p class="help" style="margin-top:0.35rem">Prefills from the country; leave blank if you don’t need it.</p>
     </div>
   </div>
   <label for="urls" style="margin-top:0.9rem">URLs / domains</label>
