@@ -24,7 +24,7 @@ render_header('Dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Filter new sites against Our database, then add only the unique ones.</p>
+    <p class="muted">Pick a country database, filter new sites against it, then add only the unique ones.</p>
   </div>
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
@@ -35,11 +35,11 @@ render_header('Dashboard', 'team');
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=team_prospect_check">
     <h2>Filter &amp; add</h2>
-    <p>Paste domains, remove duplicates, save unique sites.</p>
+    <p>Select country → paste → remove duplicates for that country.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_prospects">
     <h2>Our database</h2>
-    <p><?= $prospectTotal ?> unique domains shared with Admin.</p>
+    <p><?= $prospectTotal ?> URLs across country folders.</p>
   </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Today’s history</h2>
