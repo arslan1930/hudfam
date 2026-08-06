@@ -236,12 +236,154 @@ function countries_grouped(): array
 }
 
 /**
- * Optional language <select>: blank first, then catalog languages (+ current value if custom).
+ * Countries this user adds most often (from Add history batches).
+ * Recent activity (last 30 days) is weighted higher.
+ *
+ * @return list<array{name:string,score:float,sites:int,days:int,last_date:?string}>
+ */
+function user_frequent_countries(int $userId, int $limit = 8): array
+{
+    if ($userId <= 0) {
+        return [];
+    }
+    try {
+        if (function_exists('ensure_prospect_schema')) {
+            ensure_prospect_schema();
+        }
+        $stmt = db()->prepare(
+            "SELECT TRIM(country) AS name,
+                    SUM(site_count) AS sites,
+                    COUNT(*) AS days,
+                    MAX(batch_date) AS last_date,
+                    SUM(
+                      CASE
+                        WHEN batch_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                          THEN site_count * 3
+                        ELSE site_count
+                      END
+                    ) AS score
+             FROM prospect_batches
+             WHERE user_id = ?
+               AND TRIM(country) <> ''
+             GROUP BY TRIM(country)
+             ORDER BY score DESC, sites DESC, last_date DESC
+             LIMIT " . (int) $limit
+        );
+        $stmt->execute([$userId]);
+        $out = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $out[] = [
+                'name' => $name,
+                'score' => (float) ($row['score'] ?? 0),
+                'sites' => (int) ($row['sites'] ?? 0),
+                'days' => (int) ($row['days'] ?? 0),
+                'last_date' => $row['last_date'] !== null ? (string) $row['last_date'] : null,
+            ];
+        }
+        return $out;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/** Top country name for a user, or '' if none. */
+function user_top_country(int $userId): string
+{
+    $list = user_frequent_countries($userId, 1);
+    return $list[0]['name'] ?? '';
+}
+
+/**
+ * Country <select> with type-to-search, optional “Often used” group first.
+ *
+ * @param list<array{name:string,...}>|null $frequent from user_frequent_countries()
+ */
+function render_country_select(
+    string $name,
+    string $selected = '',
+    string $id = '',
+    bool $required = false,
+    ?array $frequent = null,
+    string $placeholder = '— Select country —'
+): string {
+    $byName = [];
+    foreach (list_countries(null, true) as $c) {
+        $byName[(string) $c['name']] = $c;
+    }
+
+    $idAttr = $id !== '' ? ' id="' . h($id) . '"' : '';
+    $reqAttr = $required ? ' required' : '';
+    $html = '<select name="' . h($name) . '"' . $idAttr . $reqAttr . ' data-searchable="1">';
+    $html .= '<option value="">' . h($placeholder) . '</option>';
+
+    $optionHtml = static function (string $n, array $meta, string $selected, string $label = '') use (&$byName): string {
+        if ($label === '') {
+            $label = $n;
+        }
+        $region = (string) ($meta['region'] ?? ($byName[$n]['region'] ?? ''));
+        $lang = (string) ($meta['default_language'] ?? ($byName[$n]['default_language'] ?? ''));
+        $sel = strcasecmp($selected, $n) === 0 ? ' selected' : '';
+        return '<option value="' . h($n) . '" data-region="' . h($region) . '" data-lang="' . h($lang) . '"' . $sel . '>'
+            . h($label) . '</option>';
+    };
+
+    $frequentNames = [];
+    if ($frequent) {
+        foreach ($frequent as $f) {
+            $n = trim((string) ($f['name'] ?? ''));
+            if ($n !== '') {
+                $frequentNames[$n] = true;
+            }
+        }
+        if ($frequentNames !== []) {
+            $html .= '<optgroup label="Often used">';
+            foreach ($frequent as $f) {
+                $n = trim((string) ($f['name'] ?? ''));
+                if ($n === '') {
+                    continue;
+                }
+                $sites = (int) ($f['sites'] ?? 0);
+                $label = $n . ($sites > 0 ? ' · ' . $sites . ' added' : '');
+                $html .= $optionHtml($n, $byName[$n] ?? [], $selected, $label);
+            }
+            $html .= '</optgroup>';
+        }
+    }
+
+    foreach (countries_grouped() as $block) {
+        if (empty($block['countries'])) {
+            continue;
+        }
+        $html .= '<optgroup label="' . h((string) $block['label']) . '">';
+        foreach ($block['countries'] as $c) {
+            $n = (string) $c['name'];
+            if (isset($frequentNames[$n])) {
+                continue;
+            }
+            $html .= $optionHtml($n, $c, $selected);
+        }
+        $html .= '</optgroup>';
+    }
+
+    if ($selected !== '' && !isset($byName[$selected]) && !isset($frequentNames[$selected])) {
+        $html .= $optionHtml($selected, [], $selected);
+    }
+
+    $html .= '</select>';
+    return $html;
+}
+
+/**
+ * Optional language <select> with type-to-search.
  */
 function render_language_select(string $name, string $selected = '', string $id = ''): string
 {
     $idAttr = $id !== '' ? ' id="' . h($id) . '"' : '';
-    $html = '<select name="' . h($name) . '"' . $idAttr . '>';
+    $html = '<select name="' . h($name) . '"' . $idAttr . ' data-searchable="1">';
     $html .= '<option value="">— Optional —</option>';
     $seen = [];
     foreach (catalog_languages() as $lang) {
@@ -253,6 +395,49 @@ function render_language_select(string $name, string $selected = '', string $id 
         $html .= '<option value="' . h($selected) . '" selected>' . h($selected) . '</option>';
     }
     $html .= '</select>';
+    return $html;
+}
+
+/**
+ * Region <select> with type-to-search.
+ */
+function render_region_select(string $name, string $selected = '', string $id = ''): string
+{
+    $idAttr = $id !== '' ? ' id="' . h($id) . '"' : '';
+    $html = '<select name="' . h($name) . '"' . $idAttr . ' data-searchable="1">';
+    $html .= '<option value="">—</option>';
+    foreach (regions() as $k => $v) {
+        $sel = $selected === $k ? ' selected' : '';
+        $html .= '<option value="' . h($k) . '"' . $sel . '>' . h($v) . '</option>';
+    }
+    $html .= '</select>';
+    return $html;
+}
+
+/**
+ * Shortcut chips for often-used countries (links).
+ *
+ * @param list<array{name:string,sites?:int}> $frequent
+ */
+function render_frequent_country_chips(array $frequent, string $hrefPrefix): string
+{
+    if ($frequent === []) {
+        return '';
+    }
+    $html = '<div class="usage-chips" aria-label="Countries you use most">';
+    $html .= '<span class="usage-chips-label">Often used:</span>';
+    foreach ($frequent as $f) {
+        $n = trim((string) ($f['name'] ?? ''));
+        if ($n === '') {
+            continue;
+        }
+        $sites = (int) ($f['sites'] ?? 0);
+        $html .= '<a class="usage-chip" href="' . h($hrefPrefix . rawurlencode($n)) . '">'
+            . h($n)
+            . ($sites > 0 ? ' <span class="muted">(' . $sites . ')</span>' : '')
+            . '</a>';
+    }
+    $html .= '</div>';
     return $html;
 }
 

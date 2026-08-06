@@ -1,7 +1,7 @@
 <?php
 $user = require_team();
 $id = (int) get('id');
-$countryOptions = list_countries(null, true);
+$frequent = user_frequent_countries((int) $user['id'], 8);
 $site = [
     'domain' => '', 'url' => '', 'country' => trim((string) get('country')),
     'language' => trim((string) get('language')), 'region' => '', 'niche' => '',
@@ -19,6 +19,10 @@ if ($id) {
     $site = $found;
 }
 
+if (!$id && trim((string) $site['country']) === '' && $frequent !== []) {
+    $site['country'] = (string) $frequent[0]['name'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $domainRaw = trim((string) post('domain'));
     $domain = strtolower($domainRaw);
@@ -32,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = 'new';
     }
     if ($country !== '') {
-        foreach ($countryOptions as $c) {
+        foreach (list_countries(null, true) as $c) {
             if (strcasecmp($c['name'], $country) === 0) {
                 if ($region === '') {
                     $region = $c['region'];
@@ -99,29 +103,21 @@ render_header($id ? $site['domain'] : 'Add site', 'team');
       <label>Site <span class="help">(root domain only)</span></label>
       <input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com" title="Root domain only, e.g. example.com or example.co.uk">
     </div>
-    <div><label>Country database <?= !$id ? '<span class="help">(required)</span>' : '' ?></label>
-      <select name="country" <?= !$id ? 'required' : '' ?>>
-        <option value="">— Select country —</option>
-        <?php foreach ($countryOptions as $c): ?>
-          <option value="<?= h($c['name']) ?>" <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+    <div>
+      <label for="country_form">Country <?= !$id ? '<span class="help">(required · type to search)</span>' : '<span class="help">(type to search)</span>' ?></label>
+      <?= render_country_select('country', (string) ($site['country'] ?? ''), 'country_form', !$id, $frequent) ?>
     </div>
     <div>
-      <label>Language <span class="help">(optional)</span></label>
+      <label>Language <span class="help">(optional · type to search)</span></label>
       <?= render_language_select('language', (string) ($site['language'] ?? '')) ?>
     </div>
-    <div><label>Region</label>
-      <select name="region">
-        <option value="">—</option>
-        <?php foreach (regions() as $k => $v): ?>
-          <option value="<?= h($k) ?>" <?= ($site['region'] ?? '') === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-        <?php endforeach; ?>
-      </select>
+    <div>
+      <label>Region</label>
+      <?= render_region_select('region', (string) ($site['region'] ?? '')) ?>
     </div>
     <div><label>Niche</label><input name="niche" value="<?= h($site['niche']) ?>"></div>
     <div><label>Status</label>
-      <select name="status">
+      <select name="status" data-searchable="1">
         <?php foreach (['new','contacting','replied','skipped'] as $st): ?>
           <option value="<?= $st ?>" <?= ($site['status'] ?? '') === $st ? 'selected' : '' ?>><?= $st ?></option>
         <?php endforeach; ?>

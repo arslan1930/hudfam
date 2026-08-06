@@ -20,22 +20,25 @@ try {
 }
 
 render_header('Dashboard', 'team');
+$frequent = user_frequent_countries($uid, 6);
+$topCountry = $frequent[0]['name'] ?? '';
 ?>
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
     <p class="muted">Pick a country to save into, filter against all countries, then add only globally unique sites.</p>
   </div>
-  <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+  <a class="btn" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Filter &amp; add<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
 </div>
 
 <?php render_glossary('team'); ?>
 <?= render_team_panel_guide() ?>
+<?= render_frequent_country_chips($frequent, 'index.php?page=team_prospect_check&country=') ?>
 
 <div class="launch-cards">
-  <a class="launch-card" href="index.php?page=team_prospect_check">
+  <a class="launch-card" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
     <h2>Filter &amp; add</h2>
-    <p>Select country → paste → Filter (all countries) → add unique.</p>
+    <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . ' (your most-used).' : 'Select country → paste → Filter (all countries) → add unique.' ?></p>
   </a>
   <a class="launch-card" href="index.php?page=team_prospects">
     <h2>Our database</h2>

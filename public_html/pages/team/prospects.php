@@ -35,6 +35,15 @@ if (!$inCountry && !$emptyCountry) {
       </div>
     </div>
     <?= guide_inventory() ?>
+    <?php
+      $freqTeam = user_frequent_countries((int) $user['id'], 8);
+      echo render_frequent_country_chips($freqTeam, 'index.php?page=team_prospects&country=');
+    ?>
+    <div data-folder-scope>
+    <div class="card folder-search-bar">
+      <label for="folder_search_team">Find a country <span class="help">(type to filter folders)</span></label>
+      <input type="search" id="folder_search_team" data-folder-search placeholder="e.g. Germany, Austria…" autocomplete="off">
+    </div>
     <?php foreach ($byRegion as $regionLabel => $list): ?>
       <div class="card">
         <h2><?= h($regionLabel) ?></h2>
@@ -52,6 +61,7 @@ if (!$inCountry && !$emptyCountry) {
         </div>
       </div>
     <?php endforeach; ?>
+    </div>
     <?php if (!$folders): ?>
       <div class="card empty-state"><p>No countries configured. Ask Admin to run upgrade.php once.</p></div>
     <?php endif; ?>
@@ -201,7 +211,7 @@ render_header('Our database · ' . $sheetLabel, 'team');
   <input type="hidden" name="country" value="<?= h($countryKey) ?>">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
   <div><label>Status</label>
-    <select name="status">
+    <select name="status" data-searchable="1">
       <option value="">All</option>
       <?php foreach (prospect_statuses() as $code => $label): ?>
         <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
@@ -209,7 +219,7 @@ render_header('Our database · ' . $sheetLabel, 'team');
     </select>
   </div>
   <div><label>Per page</label>
-    <select name="per">
+    <select name="per" data-searchable="1">
       <?php foreach (prospect_per_page_choices() as $n): ?>
         <option value="<?= (int) $n ?>" <?= $per === $n ? 'selected' : '' ?>><?= (int) $n ?></option>
       <?php endforeach; ?>

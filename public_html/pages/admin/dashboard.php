@@ -27,17 +27,20 @@ try {
 }
 
 render_header('Dashboard', 'admin');
+$frequent = user_frequent_countries((int) $user['id'], 6);
+$topCountry = $frequent[0]['name'] ?? '';
 ?>
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
     <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — country folders for browsing; each domain exists only once in the whole database.</p>
   </div>
-  <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
+  <a class="btn" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Add sites<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
 </div>
 
 <?php render_glossary('admin'); ?>
 <?= render_admin_panel_guide() ?>
+<?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
 
 <div class="grid">
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
@@ -46,13 +49,17 @@ render_header('Dashboard', 'admin');
 </div>
 
 <div class="launch-cards">
-  <a class="launch-card" href="index.php?page=admin_prospect_add">
+  <a class="launch-card" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
     <h2>Add sites</h2>
-    <p>Paste example.com into a country folder.</p>
+    <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . ' (your most-used).' : 'Paste example.com into a country folder.' ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
-    <p>Open country folders — one database each.</p>
+    <p>Open country folders — browse by country.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_users">
+    <h2>Users</h2>
+    <p>Add, edit, or remove teammates and set passwords.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches">
     <h2>Add history</h2>

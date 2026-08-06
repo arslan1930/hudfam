@@ -63,6 +63,18 @@ function stylesheet_url(): string
     return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
 }
 
+/** Hostinger-safe JS URL via asset.php. */
+function script_url(string $assetPath = 'js/searchable-select.js'): string
+{
+    $assetPath = ltrim(str_replace('\\', '/', $assetPath), '/');
+    if (str_starts_with($assetPath, 'assets/')) {
+        $assetPath = substr($assetPath, strlen('assets/'));
+    }
+    $file = dirname(__DIR__) . '/assets/' . $assetPath;
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=' . rawurlencode($assetPath) . '&v=' . rawurlencode($v));
+}
+
 function redirect(string $path): void
 {
     header('Location: ' . $path);

@@ -3,8 +3,7 @@ $user = require_team();
 ensure_prospect_schema();
 seed_countries_if_empty(db());
 
-$countryOptions = list_countries(null, true);
-$countryGroups = countries_grouped();
+$frequent = user_frequent_countries((int) $user['id'], 8);
 $raw = '';
 $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
@@ -16,9 +15,14 @@ $needsClean = false;
 $old = ['domains' => [], 'total' => 0, 'truncated' => false];
 $oldText = '';
 
+// Default to the country this teammate uses most
+if ($country === '' && $frequent !== []) {
+    $country = (string) $frequent[0]['name'];
+}
+
 // Prefill language/region from country default
 if ($country !== '' && ($language === '' || $region === '')) {
-    foreach ($countryOptions as $c) {
+    foreach (list_countries(null, true) as $c) {
         if (strcasecmp((string) $c['name'], $country) === 0) {
             $country = (string) $c['name'];
             if ($region === '') {
@@ -124,7 +128,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Select country to <strong>save into</strong> → paste → Filter against <strong>all countries</strong> → add only globally unique sites.</p>
+    <p class="muted">Type to search a country → paste → Filter against <strong>all countries</strong> → add only globally unique sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
@@ -132,6 +136,7 @@ render_header('Filter & add', 'team');
   </div>
 </div>
 <?= guide_filter_add() ?>
+<?= render_frequent_country_chips($frequent, 'index.php?page=team_prospect_check&country=') ?>
 
 <ul class="steps">
   <li class="step <?= $stepPaste ?>"><span class="num">1</span> Country + paste</li>
@@ -145,36 +150,17 @@ render_header('Filter & add', 'team');
   <div class="card" style="margin-bottom:1rem">
     <div class="form-grid">
       <div>
-        <label for="country_select">Save new sites into country <span class="help">(required)</span></label>
-        <select name="country" id="country_select" required>
-          <option value="">— Select country —</option>
-          <?php foreach ($countryGroups as $regionCode => $block): ?>
-            <?php if (empty($block['countries'])) {
-                continue;
-            } ?>
-            <optgroup label="<?= h($block['label']) ?>">
-              <?php foreach ($block['countries'] as $c): ?>
-                <option value="<?= h($c['name']) ?>"
-                  data-region="<?= h($c['region']) ?>"
-                  data-lang="<?= h($c['default_language']) ?>"
-                  <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-              <?php endforeach; ?>
-            </optgroup>
-          <?php endforeach; ?>
-        </select>
-        <p class="help" style="margin-top:0.35rem">Filter checks the whole database. New unique sites are saved only into this country.</p>
+        <label for="country_select">Save new sites into country <span class="help">(required · type to search)</span></label>
+        <?= render_country_select('country', $country, 'country_select', true, $frequent) ?>
+        <p class="help" style="margin-top:0.35rem">Filter checks the whole database. New unique sites are saved only into this country. Often-used countries appear first.</p>
       </div>
       <div>
-        <label for="language_input">Language <span class="help">(optional)</span></label>
+        <label for="language_input">Language <span class="help">(optional · type to search)</span></label>
         <?= render_language_select('language', $language, 'language_input') ?>
       </div>
-      <div><label>Region</label>
-        <select name="region">
-          <option value="">—</option>
-          <?php foreach (regions() as $k => $v): ?>
-            <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-          <?php endforeach; ?>
-        </select>
+      <div>
+        <label for="region_select">Region</label>
+        <?= render_region_select('region', $region, 'region_select') ?>
       </div>
       <div><label>Niche</label><input name="niche" value="<?= h($niche) ?>"></div>
       <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
@@ -215,19 +201,28 @@ render_header('Filter & add', 'team');
 (function(){
   var sel = document.getElementById('country_select');
   var lang = document.getElementById('language_input');
-  var region = document.querySelector('select[name=region]');
+  var region = document.getElementById('region_select');
   var btns = document.querySelectorAll('#filter_form button[type=submit]');
   if (!sel) return;
+  function syncButtons(){
+    btns.forEach(function(b){ b.disabled = !sel.value; });
+  }
   sel.addEventListener('change', function(){
     var opt = sel.options[sel.selectedIndex];
     if (!opt) return;
     if (region && opt.dataset.region) region.value = opt.dataset.region;
     if (lang && opt.dataset.lang) lang.value = opt.dataset.lang || '';
-    btns.forEach(function(b){ b.disabled = !sel.value; });
+    // Refresh searchable UI labels after programmatic set
+    if (window.TechxSearchable) {
+      region && region.dispatchEvent(new Event('change', { bubbles: true }));
+      lang && lang.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    syncButtons();
     if (sel.value) {
       window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(sel.value);
     }
   });
+  syncButtons();
 })();
 </script>
 

@@ -3,12 +3,17 @@ $user = require_admin();
 ensure_prospect_schema();
 seed_countries_if_empty(db());
 
+$frequent = user_frequent_countries((int) $user['id'], 8);
 $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
 $needsClean = false;
-$countryGroups = countries_grouped();
+
+// Prefill from often-used country when opening blank Add sites
+if ($country === '' && $frequent !== [] && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $country = (string) $frequent[0]['name'];
+}
 
 // Prefill language from country default
 if ($country !== '' && $language === '') {
@@ -75,7 +80,7 @@ render_header('Add sites', 'admin');
 <div class="topbar">
   <div>
     <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste root domains: <strong>example.com</strong> / <strong>example.co.uk</strong>. Use <strong>Clean list</strong> to fix mistakes and remove duplicates.</p>
+    <p class="muted">Paste root domains: <strong>example.com</strong> / <strong>example.co.uk</strong>. Type to search country/language. Use <strong>Clean list</strong> to fix mistakes and remove duplicates.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -90,35 +95,22 @@ render_header('Add sites', 'admin');
     'Sites are stored in country folders for browsing, but each domain exists only once in the whole database.',
     'Select country (save destination) → Paste → Clean list → Save. Duplicates already anywhere in Our database are skipped.',
     [
-        'Select the country folder to save into.',
+        'Select the country folder to save into (type to search).',
         'Paste sites (root domains). If there are errors, click Clean list.',
         'Save — only globally unique sites are added into that country.',
     ]
 ) ?>
+<?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
 
 <form class="card" method="post" id="add_sites_form">
   <input type="hidden" name="action" id="form_action" value="save">
   <div class="form-grid">
     <div>
-      <label for="country">Country <span class="help">(required)</span></label>
-      <select id="country" name="country" required>
-        <option value="">— Select country —</option>
-        <?php foreach ($countryGroups as $regionCode => $block): ?>
-          <?php if (empty($block['countries'])) {
-              continue;
-          } ?>
-          <optgroup label="<?= h($block['label']) ?>">
-            <?php foreach ($block['countries'] as $c): ?>
-              <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>>
-                <?= h($c['name']) ?>
-              </option>
-            <?php endforeach; ?>
-          </optgroup>
-        <?php endforeach; ?>
-      </select>
+      <label for="country">Country <span class="help">(required · type to search)</span></label>
+      <?= render_country_select('country', $country, 'country', true, $frequent) ?>
     </div>
     <div>
-      <label for="language">Language <span class="help">(optional)</span></label>
+      <label for="language">Language <span class="help">(optional · type to search)</span></label>
       <?= render_language_select('language', $language, 'language') ?>
       <p class="help" style="margin-top:0.35rem">Prefills from the country; leave blank if you don’t need it.</p>
     </div>

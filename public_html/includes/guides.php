@@ -158,8 +158,12 @@ function guide_admin_users(): string
 {
     return render_page_purpose(
         'Users — who can log in',
-        'Create Admin and Team accounts.',
-        'Team users can open Filter & add and grow Our database. Admins can add URLs and view all history.',
-        []
+        'Admin adds, edits, or removes teammates and sets their passwords. Team cannot change passwords.',
+        'Create a team login, set a password, share it securely. Remove deletes the login; sites stay in Our database.',
+        [
+            'Create teammate with username + password.',
+            'Edit to change details or reset password (blank = keep).',
+            'Remove deletes the login; uncheck Active to disable without deleting.',
+        ]
     );
 }
