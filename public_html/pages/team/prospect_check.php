@@ -55,7 +55,7 @@ try {
             flash('error', 'Select a country database first.');
         } elseif ($parsed['invalid'] !== []) {
             $bad = array_slice($parsed['invalid'], 0, 8);
-            $msg = 'Only xyz.com format is allowed (no https://, www., or paths). Bad lines: ' . implode(', ', $bad);
+            $msg = 'Root domains only (example.com / example.co.uk). No https://, www., subdomains, or paths. Bad lines: ' . implode(', ', $bad);
             if (count($parsed['invalid']) > 8) {
                 $msg .= ' (+' . (count($parsed['invalid']) - 8) . ' more)';
             }
@@ -109,7 +109,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Pick a country → paste sites as <strong>example.com</strong> only → remove duplicates → add unique sites.</p>
+    <p class="muted">Pick a country → paste root domains (<strong>example.com</strong> / <strong>example.co.uk</strong>) → remove duplicates → add unique sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
@@ -179,9 +179,9 @@ render_header('Filter & add', 'team');
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
-      <p class="help">One per line. Only <code>example.com</code> — no https://, www., or paths.</p>
+      <p class="help">One per line. Root domains only: <code>example.com</code>, <code>example.co.uk</code> — no https://, www., subdomains, or paths.</p>
       <textarea class="inventory-box" id="domains" name="domains" rows="14" required
-        placeholder="site1.com&#10;site2.de&#10;blog.site3.com"><?= h($raw) ?></textarea>
+        placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
     </div>
   </div>
 

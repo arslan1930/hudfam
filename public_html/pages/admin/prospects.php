@@ -43,7 +43,7 @@ if (!$inCountry && !$emptyCountry) {
         'Click a country folder to open that country’s database. Use Add sites to paste example.com names into that country only.',
         [
             'Open a country folder.',
-            'Add sites (xyz.com only) into that country’s database.',
+            'Add root domains (example.com / example.co.uk) into that country’s database.',
             'Team Filter & add can check against the same country list.',
         ]
     ) ?>

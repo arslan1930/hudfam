@@ -96,10 +96,10 @@ function guide_inventory(): string
     return render_page_purpose(
         'Our database — country folders',
         'Each country has its own site database. Admin opens a country folder to view or add sites.',
-        'Pick a country folder, then browse or add sites (example.com only) for that country.',
+        'Pick a country folder, then browse or add root domains (example.com / example.co.uk) for that country.',
         [
             'Open a country folder.',
-            'Add sites (xyz.com only) into that country’s database.',
+            'Add root domains (example.com / example.co.uk) into that country’s database.',
             'Team can filter against the same country list.',
         ]
     );
@@ -110,10 +110,10 @@ function guide_filter_add(): string
     return render_page_purpose(
         'Filter & add — per country database',
         'Compare a pasted list to one country’s database and save only sites that country does not already have.',
-        'Select country → Paste example.com → Filter → Add unique into that country folder.',
+        'Select country → Paste root domains → Filter → Add unique into that country folder.',
         [
             'Select the country database.',
-            'Paste sites as xyz.com only (one per line) and Filter.',
+            'Paste root domains only (example.com / example.co.uk) and Filter.',
             'Add the remaining unique sites to that country.',
         ]
     );
@@ -133,11 +133,11 @@ function guide_admin_add(): string
 {
     return render_page_purpose(
         'Add sites — seed a country database',
-        'Paste site names into one country’s folder. Only xyz.com format is allowed.',
-        'Choose country, paste example.com lines, save. Sites live only in that country’s database for Team filtering later.',
+        'Paste root domains into one country’s folder (example.com / example.co.uk).',
+        'Choose country, paste root domains, save. Sites live only in that country’s database for Team filtering later.',
         [
             'Select the country folder.',
-            'Paste sites as xyz.com only (no https:// or www.).',
+            'Paste root domains only — no https://, www., subdomains, or paths.',
             'Browse them under that country’s folder.',
         ]
     );

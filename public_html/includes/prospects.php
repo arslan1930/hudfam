@@ -4,12 +4,55 @@
  * Our database helpers — unique domains (no prices).
  * Team Filter & add checks uniqueness against prospect_sites.
  * Admin Add sites saves directly (no uniqueness preview).
- * Site names must be bare domains only: example.com
+ * Site names must be root domains only: example.com / example.co.uk
  */
 
 /**
- * True only for bare domains like example.com / sub.example.co.uk.
- * Rejects https://, www., paths, ports, emails, spaces, etc.
+ * Multi-part public suffixes (so example.co.uk is a root domain,
+ * but blog.example.co.uk is a subdomain and rejected).
+ *
+ * @return list<string>
+ */
+function multi_part_public_suffixes(): array
+{
+    return [
+        // UK / IE
+        'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'ltd.uk', 'plc.uk', 'sch.uk',
+        // AU / NZ
+        'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au',
+        'co.nz', 'net.nz', 'org.nz', 'govt.nz', 'ac.nz', 'kiwi.nz',
+        // ZA
+        'co.za', 'org.za', 'net.za', 'web.za', 'gov.za', 'ac.za',
+        // India / Asia
+        'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in',
+        'com.sg', 'com.hk', 'com.my', 'com.ph', 'com.tw', 'co.jp', 'or.jp', 'ne.jp',
+        // Americas
+        'com.br', 'com.mx', 'com.ar', 'com.co', 'com.pe', 'com.ve', 'com.do', 'com.gt', 'com.pa',
+        'co.cr', 'com.ni', 'com.sv', 'com.hn', 'com.jm', 'com.tt', 'com.ag', 'com.bs', 'com.bb',
+        // Africa / others common in English markets
+        'com.ng', 'com.gh', 'co.ke', 'co.ug', 'co.tz', 'co.zw', 'co.bw', 'com.na', 'ac.mw',
+        // Europe extras
+        'com.pl', 'com.pt', 'co.at', 'com.tr', 'com.ua', 'com.ro',
+    ];
+}
+
+/**
+ * How many trailing labels are the public suffix? (1 for .com, 2 for .co.uk)
+ */
+function public_suffix_label_count(string $domain): int
+{
+    $domain = strtolower(trim($domain));
+    foreach (multi_part_public_suffixes() as $suffix) {
+        if ($domain === $suffix || str_ends_with($domain, '.' . $suffix)) {
+            return substr_count($suffix, '.') + 1;
+        }
+    }
+    return 1;
+}
+
+/**
+ * True only for root domains: example.com, my-site.com, example.co.uk.
+ * Rejects https://, //, www., subdomains (blog.example.com), paths, ports, emails.
  */
 function is_plain_site_domain(string $value): bool
 {
@@ -17,17 +60,23 @@ function is_plain_site_domain(string $value): bool
     if ($value === '' || strlen($value) > 253) {
         return false;
     }
+    // Must look like a hostname — no protocol, path, port, etc.
+    if (!preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $value)) {
+        return false;
+    }
+    // www. is a subdomain — root only
     if (str_starts_with($value, 'www.')) {
         return false;
     }
-    return (bool) preg_match(
-        '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/',
-        $value
-    );
+    $labels = explode('.', $value);
+    $n = count($labels);
+    $suffixLabels = public_suffix_label_count($value);
+    // Root domain = one name label + public suffix (example.com or example.co.uk)
+    return $n === ($suffixLabels + 1);
 }
 
 /**
- * Parse pasted site list. Only xyz.com format is accepted.
+ * Parse pasted site list. Root domains only (example.com / example.co.uk).
  *
  * @return array{domains:string[],invalid:string[]}
  */
@@ -449,7 +498,7 @@ function add_prospect_domains(
 }
 
 /**
- * Admin: paste sites (xyz.com only) into one country’s database.
+ * Admin: paste root domains into one country’s database.
  *
  * @return array{inserted:int,updated:int,total:int,batch_id:int|null,country:string,invalid:string[]}
  */

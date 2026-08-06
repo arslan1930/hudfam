@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     if ($domainRaw === '' || !is_plain_site_domain($domain)) {
-        flash('error', 'Site must be xyz.com only (e.g. example.com). No https://, www., or paths.');
+        flash('error', 'Root domain only (e.g. example.com or example.co.uk). No https://, www., subdomains, or paths.');
     } elseif ($country === '' && !$id) {
         flash('error', 'Select a country database.');
     } elseif (!$id) {
@@ -88,7 +88,7 @@ render_header($id ? $site['domain'] : 'Add site', 'team');
 <div class="topbar">
   <div>
     <h1><?= $id ? h($site['domain']) : 'Add one site' ?></h1>
-    <p class="muted">Site name only as <strong>example.com</strong>. Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
+    <p class="muted">Root domain only: <strong>example.com</strong> or <strong>example.co.uk</strong>. Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
   </div>
   <a class="btn secondary" href="index.php?page=team_prospects">Back</a>
 </div>
@@ -96,8 +96,8 @@ render_header($id ? $site['domain'] : 'Add site', 'team');
 <form method="post">
   <div class="form-grid">
     <div>
-      <label>Site <span class="help">(xyz.com only)</span></label>
-      <input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com" pattern="^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$">
+      <label>Site <span class="help">(root domain only)</span></label>
+      <input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com" title="Root domain only, e.g. example.com or example.co.uk">
     </div>
     <div><label>Country database <?= !$id ? '<span class="help">(required)</span>' : '' ?></label>
       <select name="country" <?= !$id ? 'required' : '' ?>>
