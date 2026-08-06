@@ -18,6 +18,10 @@ render_header('Added sites', 'team');
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
 
+<div class="date-legend" aria-label="Date highlights">
+  <span class="date-legend-item"><span class="date-legend-swatch holiday" aria-hidden="true"></span> Sunday · holiday</span>
+</div>
+
 <div class="card">
   <?php if ($batches): ?>
   <table>
@@ -31,9 +35,22 @@ render_header('Added sites', 'team');
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($batches as $b): ?>
-      <tr>
-        <td><strong><?= h($b['batch_date']) ?></strong></td>
+    <?php foreach ($batches as $b):
+        $ymd = (string) $b['batch_date'];
+        $isSunday = is_sunday_holiday_date($ymd);
+        $weekday = batch_weekday_label($ymd);
+        $rowClass = $isSunday ? 'row-holiday' : '';
+    ?>
+      <tr class="<?= h($rowClass) ?>">
+        <td>
+          <strong><?= h($ymd) ?></strong>
+          <?php if ($weekday !== ''): ?>
+            <span class="day-meta"><?= h($weekday) ?><?= $isSunday ? ' · holiday' : '' ?></span>
+          <?php endif; ?>
+          <?php if ($isSunday): ?>
+            <span class="badge holiday">Holiday</span>
+          <?php endif; ?>
+        </td>
         <td><?= h($b['full_name'] ?: $b['username']) ?></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
         <td><?= h($b['country'] ?: '—') ?> · <?= h($b['language'] ?: '—') ?></td>

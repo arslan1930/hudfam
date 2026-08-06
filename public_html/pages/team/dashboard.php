@@ -64,7 +64,10 @@ if ($topCountry === '' && $openTasks !== [] && trim((string) ($openTasks[0]['cou
     <h1>Team dashboard</h1>
     <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?>.</p>
   </div>
-  <a class="btn" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Filter &amp; add<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
+  <div class="actions" style="align-items:center;gap:0.75rem">
+    <time id="live-datetime" class="live-datetime" datetime="<?= h(date('c')) ?>"><?= h(date('l · d M Y · H:i:s')) ?></time>
+    <a class="btn" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Filter &amp; add<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
+  </div>
 </div>
 
 <section class="card" style="margin-bottom:1.25rem">

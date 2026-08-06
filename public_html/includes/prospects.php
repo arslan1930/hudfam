@@ -919,6 +919,94 @@ function list_team_users(bool $activeOnly = true): array
     return db()->query($sql)->fetchAll();
 }
 
+/** True when YYYY-MM-DD falls on Sunday (treated as holiday). */
+function is_sunday_holiday_date(string $ymd): bool
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) {
+        return false;
+    }
+    $ts = strtotime($ymd . ' 12:00:00');
+    return $ts !== false && (int) date('w', $ts) === 0;
+}
+
+/** Short weekday label for a YYYY-MM-DD date. */
+function batch_weekday_label(string $ymd): string
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $ymd)) {
+        return '';
+    }
+    $ts = strtotime($ymd . ' 12:00:00');
+    return $ts === false ? '' : date('l', $ts);
+}
+
+/**
+ * Active teammates who did not submit any sites on a workday (Mon–Sat).
+ * Sundays are holidays and are omitted here.
+ *
+ * @return list<array{user_id:int,username:string,full_name:string,miss_date:string,weekday:string}>
+ */
+function list_team_missed_work_days(int $daysBack = 21): array
+{
+    ensure_prospect_schema();
+    $daysBack = max(1, min(90, $daysBack));
+    $team = list_team_users(true);
+    if ($team === []) {
+        return [];
+    }
+
+    $start = date('Y-m-d', strtotime('-' . $daysBack . ' days'));
+    $end = date('Y-m-d');
+    $ids = array_map(static fn($u) => (int) $u['id'], $team);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare(
+        "SELECT user_id, batch_date, SUM(site_count) AS sites
+         FROM prospect_batches
+         WHERE user_id IN ($placeholders)
+           AND batch_date BETWEEN ? AND ?
+         GROUP BY user_id, batch_date"
+    );
+    $stmt->execute([...$ids, $start, $end]);
+    $worked = [];
+    foreach ($stmt->fetchAll() as $row) {
+        if ((int) ($row['sites'] ?? 0) > 0) {
+            $worked[(int) $row['user_id'] . '|' . $row['batch_date']] = true;
+        }
+    }
+
+    $missed = [];
+    $cursor = strtotime($start . ' 12:00:00');
+    $endTs = strtotime($end . ' 12:00:00');
+    while ($cursor !== false && $endTs !== false && $cursor <= $endTs) {
+        $ymd = date('Y-m-d', $cursor);
+        $dow = (int) date('w', $cursor);
+        if ($dow !== 0) {
+            foreach ($team as $u) {
+                $uid = (int) $u['id'];
+                if (!isset($worked[$uid . '|' . $ymd])) {
+                    $missed[] = [
+                        'user_id' => $uid,
+                        'username' => (string) $u['username'],
+                        'full_name' => (string) ($u['full_name'] ?? ''),
+                        'miss_date' => $ymd,
+                        'weekday' => date('l', $cursor),
+                    ];
+                }
+            }
+        }
+        $cursor = strtotime('+1 day', $cursor);
+    }
+
+    usort($missed, static function ($a, $b) {
+        $c = strcmp($b['miss_date'], $a['miss_date']);
+        if ($c !== 0) {
+            return $c;
+        }
+        return strcasecmp($a['full_name'] ?: $a['username'], $b['full_name'] ?: $b['username']);
+    });
+
+    return $missed;
+}
+
 /**
  * Backfill dated add history from inventory rows that never landed in a batch
  * (e.g. older single-add form saves). Idempotent.

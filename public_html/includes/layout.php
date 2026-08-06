@@ -121,5 +121,6 @@ function render_footer(string $panel = ''): void
         echo '</main></div>';
     }
     echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
+    echo '<script src="' . h(script_url('js/live-clock.js')) . '" defer></script>';
     echo '</body></html>';
 }

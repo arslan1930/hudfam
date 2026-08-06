@@ -44,7 +44,10 @@ $topCountry = $frequent[0]['name'] ?? '';
     <h1>Admin dashboard</h1>
     <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?>.</p>
   </div>
-  <a class="btn" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Add sites<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
+  <div class="actions" style="align-items:center;gap:0.75rem">
+    <time id="live-datetime" class="live-datetime" datetime="<?= h(date('c')) ?>"><?= h(date('l · d M Y · H:i:s')) ?></time>
+    <a class="btn" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Add sites<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
+  </div>
 </div>
 
 <?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
