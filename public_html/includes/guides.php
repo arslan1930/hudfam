@@ -134,11 +134,11 @@ function guide_admin_add(): string
     return render_page_purpose(
         'Add URLs — seed Our database',
         'Paste URLs or domains into the shared database (no prices).',
-        'Check uniqueness first, then save. Skips domains already in the list.',
+        'Paste and save in one step. No uniqueness preview — URLs are stored for Team filtering later.',
         [
             'Paste URLs or domains.',
-            'Check unique vs database.',
-            'Save new ones into Our database.',
+            'Click Save to Our database.',
+            'Browse them under Our database.',
         ]
     );
 }

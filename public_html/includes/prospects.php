@@ -2,8 +2,27 @@
 
 /**
  * Our database helpers — unique domains (no prices).
- * Filter & add checks uniqueness against prospect_sites only.
+ * Team Filter & add checks uniqueness against prospect_sites.
+ * Admin Add URLs saves directly (no uniqueness preview).
  */
+
+/** Strip protocol/path → bare domain for storage/lookup. */
+function normalize_domain(string $value): string
+{
+    $value = strtolower(trim($value));
+    if ($value === '') {
+        return '';
+    }
+    $value = preg_replace('#^https?://#i', '', $value) ?? $value;
+    $value = preg_replace('#^www\.#i', '', $value) ?? $value;
+    $host = explode('/', $value, 2)[0];
+    $host = explode('?', $host, 2)[0];
+    $host = explode('#', $host, 2)[0];
+    if (str_contains($host, ':') && !str_contains($host, ']')) {
+        $host = explode(':', $host, 2)[0];
+    }
+    return rtrim($host, '.');
+}
 
 /**
  * Ensure prospect tables exist (Hostinger safety net if upgrade.php was skipped).
@@ -264,6 +283,106 @@ function add_prospect_domains(
         throw $e;
     }
     return ['inserted' => $inserted, 'skipped' => $skipped, 'batch_id' => $batchId];
+}
+
+/**
+ * Admin: paste URLs and save into Our database in one step.
+ * No uniqueness preview — inserts new domains; existing domains keep/update URL.
+ *
+ * @return array{inserted:int,updated:int,total:int,batch_id:int|null}
+ */
+function admin_add_urls_to_database(string $raw, array $user): array
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
+    /** @var array<string,string> $rows domain => original url (or empty) */
+    $rows = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $domain = normalize_domain($part);
+        if ($domain === '' || !str_contains($domain, '.')) {
+            continue;
+        }
+        if (isset($rows[$domain])) {
+            continue;
+        }
+        $url = '';
+        if (preg_match('#^https?://#i', $part)) {
+            $url = trim($part);
+        }
+        $rows[$domain] = $url;
+    }
+
+    if ($rows === []) {
+        return ['inserted' => 0, 'updated' => 0, 'total' => 0, 'batch_id' => null];
+    }
+
+    $batchId = get_or_create_prospect_batch((int) $user['id'], '', '', '', '', 'Admin Add URLs');
+    $ins = db()->prepare(
+        'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
+         VALUES (?,?,\'\',\'\',\'\',\'\',\'\',\'new\',?)
+         ON DUPLICATE KEY UPDATE
+           url = IF(VALUES(url) <> \'\', VALUES(url), url),
+           updated_at = NOW()'
+    );
+    $insItem = db()->prepare(
+        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+    );
+    $findId = db()->prepare('SELECT id FROM prospect_sites WHERE domain=? LIMIT 1');
+
+    $inserted = 0;
+    $updated = 0;
+    db()->beginTransaction();
+    try {
+        $n = 0;
+        foreach ($rows as $domain => $url) {
+            $findId->execute([$domain]);
+            $beforeId = (int) $findId->fetchColumn();
+            $ins->execute([$domain, $url, $user['id']]);
+            if ($beforeId > 0) {
+                $updated++;
+                $siteId = $beforeId;
+            } else {
+                $inserted++;
+                $siteId = (int) db()->lastInsertId();
+                if ($siteId <= 0) {
+                    $findId->execute([$domain]);
+                    $siteId = (int) $findId->fetchColumn();
+                }
+            }
+            $insItem->execute([$batchId, $domain, $siteId ?: null]);
+            $n++;
+            if ($n % 250 === 0) {
+                db()->commit();
+                db()->beginTransaction();
+            }
+        }
+        $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+        $cnt->execute([$batchId]);
+        db()->prepare(
+            'UPDATE prospect_batches SET site_count=?, notes=?, updated_at=NOW() WHERE id=?'
+        )->execute([(int) $cnt->fetchColumn(), 'Admin Add URLs', $batchId]);
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'inserted' => $inserted,
+        'updated' => $updated,
+        'total' => count($rows),
+        'batch_id' => $batchId,
+    ];
 }
 
 function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = ''): array
