@@ -10,6 +10,8 @@ require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
+require __DIR__ . '/includes/mail.php';
+require __DIR__ . '/includes/account.php';
 
 $error = '';
 $done = false;
@@ -34,12 +36,17 @@ if (!file_exists(__DIR__ . '/config.php')) {
               INDEX (code)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
-        seed_countries_if_empty($pdo);
-        $notes[] = 'countries OK';
+        sync_countries($pdo, true);
+        $notes[] = 'countries OK (Europe + North America + English markets synced)';
 
         ensure_prospect_schema();
-        $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';
+        $notes[] = 'prospect_sites (Our database) OK — unique domain globally (one entry total)';
         $notes[] = 'prospect_batches (Add history) OK';
+
+        ensure_account_schema();
+        $notes[] = 'auth_tokens + users.email_verified_at OK (Admin email verify / password reset)';
+        ensure_tasks_schema();
+        $notes[] = 'team_tasks OK (Admin assigns tasks to teammates)';
 
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('phone', $userCols, true)) {
@@ -96,7 +103,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
   <div class="login-card">
     <h1>Upgrade</h1>
     <p class="muted">
-      Keeps <strong>Our database</strong> (one URL list per country) + <strong>Add history</strong>.
+      Keeps <strong>Our database</strong> (country folders; each domain unique globally) + <strong>Add history</strong> + Admin email/password reset + Tasks.
       Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
     </p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>

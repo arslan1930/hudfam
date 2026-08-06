@@ -3,18 +3,19 @@ require_admin();
 $id = (int) get('id');
 $batch = get_prospect_batch($id);
 if (!$batch) {
-    flash('error', 'Add history day not found.');
+    flash('error', 'Added sites day not found.');
     redirect('index.php?page=admin_prospect_batches');
 }
 $items = get_prospect_batch_items($id);
 $domains = array_column($items, 'domain');
 $person = $batch['full_name'] ?: $batch['username'];
 
-render_header('Add history · ' . $batch['batch_date'], 'admin');
+render_header('Added sites · ' . $batch['batch_date'], 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Add history', 'href' => 'index.php?page=admin_prospect_batches'],
+    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => 'Added sites', 'href' => 'index.php?page=admin_prospect_batches'],
     ['label' => $batch['batch_date'] . ' · ' . $person],
 ]); ?>
 <div class="topbar">
@@ -29,8 +30,15 @@ render_header('Add history · ' . $batch['batch_date'], 'admin');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $batch['user_id'] ?>">This teammate</a>
-    <a class="btn secondary" href="index.php?page=admin_prospect_batches">All history</a>
-    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Inventory by person</a>
+    <a class="btn secondary" href="index.php?page=admin_prospect_batches">All added sites</a>
+    <?php
+      $batchCountry = canonicalize_country_name(trim((string) ($batch['country'] ?? '')));
+      if ($batchCountry !== ''):
+    ?>
+      <a class="btn" href="index.php?page=admin_prospects&amp;country=<?= urlencode($batchCountry) ?>&amp;created_by=<?= (int) $batch['user_id'] ?>">Countries · <?= h($batchCountry) ?></a>
+    <?php else: ?>
+      <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Countries · this person</a>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -38,7 +46,7 @@ render_header('Add history · ' . $batch['batch_date'], 'admin');
   <?php if (!empty($batch['notes'])): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">Saved in Our database and in this teammate’s daily add history.</p>
+  <p class="help">Saved in Countries and in this teammate’s daily add history.</p>
   <?php if ($domains): ?>
     <textarea class="inventory-box" rows="16" readonly><?= h(implode("\n", $domains)) ?></textarea>
     <details style="margin-top:1rem">

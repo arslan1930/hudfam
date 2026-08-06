@@ -16,9 +16,17 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
-        'team_prospects' => ['team_prospect_form'],
+        'admin_extract_sites' => [],
+        'admin_extract_emails' => [],
+        'admin_users' => ['admin_tasks'],
+        'admin_account' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'team_dashboard' => ['team_tasks'],
+        'team_extract_submit' => [],
+        'team_extract_queue' => ['team_extract_work'],
+        'team_extract_final' => [],
+        'team_extract_emails' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -68,19 +76,33 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_prospects' => ['Our database', 'Country folders → URLs'],
-                'admin_prospect_add' => ['Add URLs', 'Paste into a country database'],
-                'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
-                'admin_users' => ['Users', 'Admin and Team logins'],
+            ],
+            'Sites Data' => [
+                'admin_prospects' => ['Countries', 'Browse country folders'],
+                'admin_prospect_add' => ['Sites add by admin', 'Paste into a country'],
+                'admin_prospect_batches' => ['Added sites', 'Who added what, by day'],
+            ],
+            'Extracting Sites with Emails' => [
+                'admin_extract_sites' => ['Extracted sites', 'Block 1 queue + Block 2 final'],
+                'admin_extract_emails' => ['Extracted sites with Emails', 'Emails under each site'],
+            ],
+            'People' => [
+                'admin_users' => ['Users', 'Accounts & assign tasks'],
+                'admin_account' => ['Account', 'Email & password'],
             ],
         ];
     } else {
         $groups = [
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
-                'team_prospects' => ['Our database', 'Country folders → URLs'],
-                'team_prospect_batches' => ['Add history', 'Your daily adds'],
+                'team_prospect_check' => ['Filter & add', 'Paste → add unique'],
+                'team_prospect_batches' => ['Added sites', 'Your daily adds'],
+            ],
+            'Extraction' => [
+                'team_extract_submit' => ['Submit for extraction', 'Block 1 · Team 1'],
+                'team_extract_queue' => ['Claim & extract', 'Open Block 1 batch'],
+                'team_extract_final' => ['Paste extracted', 'Block 2 · final list'],
+                'team_extract_emails' => ['Add emails', 'Emails per site'],
             ],
         ];
     }
@@ -118,5 +140,7 @@ function render_footer(string $panel = ''): void
     if (current_user() && $panel !== '') {
         echo '</main></div>';
     }
+    echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
+    echo '<script src="' . h(script_url('js/live-clock.js')) . '" defer></script>';
     echo '</body></html>';
 }
