@@ -86,13 +86,13 @@ render_header('Add sites', 'admin');
 </div>
 
 <?= render_page_purpose(
-    'Add sites into a country database',
-    'Each country folder has its own list of sites.',
-    'Paste sites → Clean list (fixes errors & removes duplicates) → Save.',
+    'Add sites into a country folder',
+    'Sites are stored in country folders for browsing, but each domain exists only once in the whole database.',
+    'Select country (save destination) → Paste → Clean list → Save. Duplicates already anywhere in Our database are skipped.',
     [
-        'Select country.',
+        'Select the country folder to save into.',
         'Paste sites (root domains). If there are errors, click Clean list.',
-        'Save — only new unique sites are added.',
+        'Save — only globally unique sites are added into that country.',
     ]
 ) ?>
 
@@ -128,7 +128,7 @@ render_header('Add sites', 'admin');
     placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
   <p class="help" style="margin-top:0.5rem">
     Allowed: <code>example.com</code>, <code>my-site.com</code>, <code>example.co.uk</code>.
-    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in this country.
+    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in Our database (any country).
   </p>
   <p class="actions" style="margin-top:1rem">
     <button class="btn secondary" type="submit" onclick="document.getElementById('form_action').value='clean'">Clean list</button>

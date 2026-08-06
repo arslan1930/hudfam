@@ -33,12 +33,11 @@ if ($country !== '' && ($language === '' || $region === '')) {
 }
 
 try {
-    if ($country !== '') {
-        $old = list_prospect_domain_names(100000, $country);
-        $oldText = implode("\n", $old['domains']);
-        if ($old['truncated']) {
-            $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-        }
+    // Box 1 = full database (all countries) for global uniqueness filtering
+    $old = list_prospect_domain_names(100000, '');
+    $oldText = implode("\n", $old['domains']);
+    if ($old['truncated']) {
+        $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -51,11 +50,11 @@ try {
         $notes = trim((string) post('notes'));
 
         if ($country === '') {
-            flash('error', 'Select a country database first.');
+            flash('error', 'Select a country first (new unique sites will be saved into that country).');
         } elseif (trim($raw) === '') {
             flash('error', 'Paste at least one site under “Paste new sites”.');
         } elseif ($action === 'clean') {
-            $clean = clean_site_list($raw, $country, true);
+            $clean = clean_site_list($raw, '', true);
             $raw = $clean['text'];
             if ($clean['kept'] <= 0) {
                 flash('error', clean_site_list_summary($clean) . ' Nothing left to filter.');
@@ -63,7 +62,7 @@ try {
                 flash('ok', clean_site_list_summary($clean) . ' Review box ②, then Filter.');
             }
         } elseif ($action === 'add_new') {
-            $clean = clean_site_list($raw, $country, true);
+            $clean = clean_site_list($raw, '', true);
             $raw = $clean['text'];
             $selected = $clean['domains'];
             if (!$selected) {
@@ -75,7 +74,7 @@ try {
                     $msg .= ' · saved in today’s history';
                 }
                 if ((int) $clean['dup_db'] > 0 || (int) $added['skipped'] > 0) {
-                    $msg .= ' · removed duplicates already in database';
+                    $msg .= ' · skipped duplicates already in Our database (any country)';
                 }
                 flash('ok', $msg . '.');
                 $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
@@ -85,8 +84,8 @@ try {
                 redirect($redir);
             }
         } else {
-            // Filter: auto-clean bad lines / paste dups, then compare to country DB
-            $clean = clean_site_list($raw, $country, false); // keep DB dups so Filter can show them
+            // Filter against the whole database; country is only the save destination
+            $clean = clean_site_list($raw, '', false);
             $raw = $clean['text'];
             $domains = $clean['domains'];
             if (count($domains) > 100000) {
@@ -98,8 +97,8 @@ try {
                 if ((int) $clean['dup_paste'] > 0 || (int) $clean['fixed'] > 0 || (int) $clean['dropped'] > 0) {
                     flash('ok', clean_site_list_summary($clean));
                 }
-                $result = filter_domains_against_prospects($domains, $country);
-                $old = list_prospect_domain_names(100000, $country);
+                $result = filter_domains_against_prospects($domains, '');
+                $old = list_prospect_domain_names(100000, '');
                 $oldText = implode("\n", $old['domains']);
                 if ($old['truncated']) {
                     $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
@@ -125,7 +124,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Clean list</strong> (fix errors &amp; drop duplicates) → Filter → Add unique.</p>
+    <p class="muted">Select country to <strong>save into</strong> → paste → Filter against <strong>all countries</strong> → add only globally unique sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
@@ -146,7 +145,7 @@ render_header('Filter & add', 'team');
   <div class="card" style="margin-bottom:1rem">
     <div class="form-grid">
       <div>
-        <label for="country_select">Country database <span class="help">(required)</span></label>
+        <label for="country_select">Save new sites into country <span class="help">(required)</span></label>
         <select name="country" id="country_select" required>
           <option value="">— Select country —</option>
           <?php foreach ($countryGroups as $regionCode => $block): ?>
@@ -163,6 +162,7 @@ render_header('Filter & add', 'team');
             </optgroup>
           <?php endforeach; ?>
         </select>
+        <p class="help" style="margin-top:0.35rem">Filter checks the whole database. New unique sites are saved only into this country.</p>
       </div>
       <div>
         <label for="language_input">Language <span class="help">(optional)</span></label>
@@ -183,23 +183,18 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel panel-muted">
-      <h2>① Already in this country</h2>
+      <h2>① Already in Our database (all countries)</h2>
       <p class="help">
-        <?php if ($country === ''): ?>
-          Select a country to load its database.
-        <?php else: ?>
-          <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> in <?= h($country) ?> · used to remove duplicates
-          <?php if ((int) $old['total'] > 0): ?>
-            · <a href="index.php?page=team_prospects&amp;country=<?= urlencode($country) ?>&amp;export=txt">Download all (.txt)</a>
-            · <a href="index.php?page=team_prospects&amp;country=<?= urlencode($country) ?>&amp;view=names">View all names</a>
-          <?php endif; ?>
+        <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> total · used to remove duplicates globally
+        <?php if ($country !== '' && (int) $old['total'] > 0): ?>
+          · <a href="index.php?page=team_prospects&amp;country=<?= urlencode($country) ?>&amp;export=txt">Download <?= h($country) ?> (.txt)</a>
         <?php endif; ?>
       </p>
-      <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="Select a country first"><?= h($oldText) ?></textarea>
+      <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="Loading…"><?= h($oldText) ?></textarea>
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
-      <p class="help">Root domains: <code>example.com</code>, <code>example.co.uk</code>. Use Clean list if you pasted https://, www., paths, or duplicates.</p>
+      <p class="help">Root domains only. Duplicates already in Germany/Austria/etc. are removed before add.</p>
       <textarea class="inventory-box" id="domains" name="domains" rows="14" required
         placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
     </div>
@@ -209,7 +204,7 @@ render_header('Filter & add', 'team');
     <button class="btn secondary large" type="submit" style="max-width:280px"
       onclick="document.getElementById('form_action').value='clean'" <?= $country === '' ? 'disabled' : '' ?>>Clean list</button>
     <button class="btn large" type="submit" style="max-width:320px"
-      onclick="document.getElementById('form_action').value='filter'" <?= $country === '' ? 'disabled' : '' ?>>Filter against country</button>
+      onclick="document.getElementById('form_action').value='filter'" <?= $country === '' ? 'disabled' : '' ?>>Filter (all countries)</button>
   </div>
   <?php if ($needsClean): ?>
     <p class="help" style="text-align:center;margin-top:0.6rem"><strong>Tip:</strong> Click <em>Clean list</em> first, then Filter.</p>
@@ -241,22 +236,24 @@ render_header('Filter & add', 'team');
   <h2>Results · <?= h($country) ?></h2>
   <p class="muted" style="margin:0">
     Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in this country <strong><?= count($result['existing']) ?></strong> ·
+    Already in database (any country) <strong><?= count($result['existing']) ?></strong> ·
     Unique <strong><?= count($result['new']) ?></strong>
+    · will save into <strong><?= h($country) ?></strong>
   </p>
 </div>
 
 <div class="grid two-box">
   <div class="card panel-muted">
-    <h2>Already known (skipped)</h2>
+    <h2>Already in database (skipped)</h2>
     <?php if ($result['existing']): ?>
+      <p class="help">These exist somewhere in Our database — each domain is allowed only once.</p>
       <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
     <?php else: ?>
-      <div class="empty-state"><p>Nothing skipped — all pasted domains are new for this country.</p></div>
+      <div class="empty-state"><p>Nothing skipped — none of these domains are in Our database yet.</p></div>
     <?php endif; ?>
   </div>
   <div class="card panel-ok">
-    <h2>Unique — add these</h2>
+    <h2>Unique — add into <?= h($country) ?></h2>
     <?php if ($result['new']): ?>
       <form method="post">
         <input type="hidden" name="action" value="add_new">
@@ -267,14 +264,14 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Saves to <?= h($country) ?> and today’s history for <?= h($user['full_name'] ?: $user['username']) ?>. Duplicates are removed automatically.</p>
+        <p class="help">Saves into <?= h($country) ?> and today’s history for <?= h($user['full_name'] ?: $user['username']) ?>. Already-known domains stay skipped.</p>
         <div class="actions-sticky">
           <button class="btn large block" type="submit">Add to <?= h($country) ?> (<?= count($result['new']) ?>)</button>
         </div>
       </form>
     <?php else: ?>
       <div class="empty-state">
-        <p>No unique domains left — everything was already in <?= h($country) ?>.</p>
+        <p>No unique domains left — everything was already in Our database (any country).</p>
         <a class="btn secondary" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Paste a new list</a>
       </div>
     <?php endif; ?>

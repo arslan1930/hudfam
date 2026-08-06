@@ -24,7 +24,7 @@ render_header('Dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Pick a country database, filter new sites against it, then add only the unique ones.</p>
+    <p class="muted">Pick a country to save into, filter against all countries, then add only globally unique sites.</p>
   </div>
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
@@ -35,7 +35,7 @@ render_header('Dashboard', 'team');
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=team_prospect_check">
     <h2>Filter &amp; add</h2>
-    <p>Select country → paste → remove duplicates for that country.</p>
+    <p>Select country → paste → Filter (all countries) → add unique.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_prospects">
     <h2>Our database</h2>

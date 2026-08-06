@@ -31,7 +31,7 @@ render_header('Dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — each country has its own URL database.</p>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — country folders for browsing; each domain exists only once in the whole database.</p>
   </div>
   <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
 </div>

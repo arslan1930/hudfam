@@ -29,12 +29,12 @@ function render_admin_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Admin works</h2>'
-        . '<p class="muted">Each country has its own URL database. You seed country folders; Team filters new lists against that country and adds only unique sites. Every add is saved in history.</p>'
+        . '<p class="muted">Country folders are for browsing and saving. Each domain exists only once in the whole database. Team filters against all countries, then saves unique sites into the selected country.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Our database</h3>'
-        . '<p><strong>What:</strong> Country folders — one URL list per country.</p>'
-        . '<p><strong>How:</strong> Open a country, paste URLs into that country’s database.</p>'
+        . '<p><strong>What:</strong> Country folders for browsing sites.</p>'
+        . '<p><strong>How:</strong> Open a country and add sites into that folder (global uniqueness still applies).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Add history</h3>'
@@ -51,8 +51,8 @@ function render_admin_panel_guide(): string
         . '<h3>Flow</h3>'
         . '<ol>'
         . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
-        . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
-        . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
+        . '<li>Team picks a country to save into → pastes a list → Filter removes domains already anywhere in the database.</li>'
+        . '<li>Team adds the unique ones → they join that country folder and <strong>Add history</strong>.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -62,12 +62,12 @@ function render_team_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Team works</h2>'
-        . '<p class="muted">Each country is its own URL database. Pick a country, paste new sites, remove ones already in that country, then add only the unique ones.</p>'
+        . '<p class="muted">Pick a country to save into, paste new sites, Filter against the whole database, then add only globally unique sites into that country.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Filter &amp; add</h3>'
-        . '<p><strong>What:</strong> Compare your paste to one country’s database.</p>'
-        . '<p><strong>How:</strong> Select country → Paste → Filter → Add unique into that country.</p>'
+        . '<p><strong>What:</strong> Compare your paste to the entire database.</p>'
+        . '<p><strong>How:</strong> Select country (save into) → Paste → Filter (all countries) → Add unique.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Our database</h3>'
@@ -83,9 +83,9 @@ function render_team_panel_guide(): string
         . '<div class="panel-guide-flow">'
         . '<h3>Flow</h3>'
         . '<ol>'
-        . '<li>Open <strong>Filter &amp; add</strong> and select a country.</li>'
-        . '<li>Paste domains and Filter (duplicates already in that country are removed).</li>'
-        . '<li>Add the unique sites — they join that country’s database and today’s history.</li>'
+        . '<li>Open <strong>Filter &amp; add</strong> and select the country to save into.</li>'
+        . '<li>Paste domains and Filter (duplicates already anywhere in the database are removed).</li>'
+        . '<li>Add the unique sites — they join that country folder and today’s history.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -95,7 +95,7 @@ function guide_inventory(): string
 {
     return render_page_purpose(
         'Our database — country folders',
-        'Each country has its own site database. Admin opens a country folder to view or add sites.',
+        'Browse sites by country. Each domain exists only once in the whole database.',
         'Pick a country folder. Download/view large lists; Admin can select & delete sites.',
         [
             'Open a country folder.',
@@ -108,13 +108,13 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — per country database',
-        'Compare a pasted list to one country’s database and save only sites that country does not already have.',
-        'Select country → Paste → Clean list (fixes errors & drops duplicates) → Filter → Add unique.',
+        'Filter & add — global uniqueness',
+        'Compare a pasted list to the entire database. Country only decides where new unique sites are saved.',
+        'Select country (save into) → Paste → Clean list → Filter (all countries) → Add unique.',
         [
-            'Select the country database.',
+            'Select the country to save new sites into.',
             'Paste sites; click Clean list if there are https://, www., paths, or duplicates.',
-            'Filter, then add the remaining unique sites.',
+            'Filter against all countries, then add the remaining unique sites into that country.',
         ]
     );
 }
@@ -132,11 +132,11 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add sites — seed a country database',
-        'Paste root domains into one country’s folder (example.com / example.co.uk).',
-        'Choose country, paste sites, Clean list if needed, then Save. Only new unique sites are added.',
+        'Add sites — seed a country folder',
+        'Paste root domains into a country folder (example.com / example.co.uk). Each domain can exist only once globally.',
+        'Choose country, paste sites, Clean list if needed, then Save. Domains already anywhere in the database are skipped.',
         [
-            'Select the country folder.',
+            'Select the country folder to save into.',
             'Paste sites; use Clean list to fix errors and remove duplicates.',
             'Save — then browse them under that country’s folder.',
         ]

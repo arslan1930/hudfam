@@ -38,7 +38,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
         $notes[] = 'countries OK (Europe + North America + English markets synced)';
 
         ensure_prospect_schema();
-        $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';
+        $notes[] = 'prospect_sites (Our database) OK — unique domain globally (one entry total)';
         $notes[] = 'prospect_batches (Add history) OK';
 
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
@@ -96,7 +96,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
   <div class="login-card">
     <h1>Upgrade</h1>
     <p class="muted">
-      Keeps <strong>Our database</strong> (one URL list per country) + <strong>Add history</strong>.
+      Keeps <strong>Our database</strong> (country folders; each domain unique globally) + <strong>Add history</strong>.
       Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
     </p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>

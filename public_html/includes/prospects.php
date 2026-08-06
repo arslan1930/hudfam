@@ -1,9 +1,11 @@
 <?php
 
 /**
- * Our database helpers — unique domains (no prices).
- * Team Filter & add checks uniqueness against prospect_sites.
- * Admin Add sites saves directly (no uniqueness preview).
+ * Our database helpers — globally unique domains (no prices).
+ * One domain exists only once across all countries.
+ * Country folders are for browsing / save destination.
+ * Team Filter & add checks uniqueness against the whole database.
+ * Admin Add sites saves into a country folder (global uniqueness still applies).
  * Site names must be root domains only: example.com / example.co.uk
  */
 
@@ -157,7 +159,7 @@ function extract_root_domain_candidate(string $raw): string
 
 /**
  * Clean a pasted list: fix/drop bad lines, remove paste duplicates,
- * and optionally remove sites already in a country’s database.
+ * and optionally remove sites already in Our database (global uniqueness).
  *
  * @return array{
  *   text:string,
@@ -206,9 +208,9 @@ function clean_site_list(string $raw, string $country = '', bool $removeDbDuplic
     }
 
     $dupDb = 0;
-    $country = trim($country);
-    if ($removeDbDuplicates && $country !== '' && $order !== []) {
-        $check = filter_domains_against_prospects($order, $country);
+    // Always check globally (one domain = one entry in the whole database)
+    if ($removeDbDuplicates && $order !== []) {
+        $check = filter_domains_against_prospects($order, '');
         $existing = array_fill_keys($check['existing'], true);
         $kept = [];
         foreach ($order as $d) {
@@ -278,7 +280,8 @@ function normalize_domain(string $value): string
 
 /**
  * Ensure prospect tables exist (Hostinger safety net if upgrade.php was skipped).
- * Each country is its own URL database: unique on (country, domain).
+ * Global uniqueness: one domain exists only once (any country).
+ * Country still decides which folder new sites are saved into.
  */
 function ensure_prospect_schema(): void
 {
@@ -302,8 +305,7 @@ function ensure_prospect_schema(): void
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_prospect_country_domain (country, domain),
-          INDEX (domain),
+          UNIQUE KEY uniq_prospect_domain (domain),
           INDEX (country),
           INDEX (language),
           INDEX (region),
@@ -311,25 +313,28 @@ function ensure_prospect_schema(): void
           CONSTRAINT fk_prospect_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
-    // Migrate older installs: global unique(domain) → unique(country, domain)
+    // Migrate to global unique(domain): resolve cross-country dupes, swap indexes
     try {
         $idx = $pdo->query('SHOW INDEX FROM prospect_sites')->fetchAll(PDO::FETCH_ASSOC);
-        $hasOld = false;
-        $hasNew = false;
+        $hasGlobal = false;
+        $hasPerCountry = false;
         foreach ($idx as $row) {
             $name = (string) ($row['Key_name'] ?? '');
             if ($name === 'uniq_prospect_domain') {
-                $hasOld = true;
+                $hasGlobal = true;
             }
             if ($name === 'uniq_prospect_country_domain') {
-                $hasNew = true;
+                $hasPerCountry = true;
             }
         }
-        if ($hasOld) {
-            $pdo->exec('ALTER TABLE prospect_sites DROP INDEX uniq_prospect_domain');
+        if ($hasPerCountry || !$hasGlobal) {
+            resolve_cross_country_domain_duplicates($pdo);
         }
-        if (!$hasNew) {
-            $pdo->exec('ALTER TABLE prospect_sites ADD UNIQUE KEY uniq_prospect_country_domain (country, domain)');
+        if ($hasPerCountry) {
+            $pdo->exec('ALTER TABLE prospect_sites DROP INDEX uniq_prospect_country_domain');
+        }
+        if (!$hasGlobal) {
+            $pdo->exec('ALTER TABLE prospect_sites ADD UNIQUE KEY uniq_prospect_domain (domain)');
         }
     } catch (Throwable $e) {
         // ignore — CREATE above already has the right key on new installs
@@ -390,6 +395,39 @@ function ensure_prospect_schema(): void
           INDEX (deleted_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+}
+
+/**
+ * Before enforcing global UNIQUE(domain), keep the oldest row per domain
+ * and remove later copies from other countries.
+ */
+function resolve_cross_country_domain_duplicates(PDO $pdo): int
+{
+    $domains = $pdo->query(
+        'SELECT domain FROM prospect_sites GROUP BY domain HAVING COUNT(*) > 1'
+    )->fetchAll(PDO::FETCH_COLUMN);
+    if (!$domains) {
+        return 0;
+    }
+    $removed = 0;
+    $sel = $pdo->prepare(
+        'SELECT id FROM prospect_sites WHERE domain=? ORDER BY created_at ASC, id ASC'
+    );
+    foreach ($domains as $domain) {
+        $sel->execute([(string) $domain]);
+        $ids = array_map('intval', $sel->fetchAll(PDO::FETCH_COLUMN));
+        if (count($ids) < 2) {
+            continue;
+        }
+        array_shift($ids); // keep oldest
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '?'));
+            $del = $pdo->prepare("DELETE FROM prospect_sites WHERE id IN ($ph)");
+            $del->execute($chunk);
+            $removed += $del->rowCount();
+        }
+    }
+    return $removed;
 }
 
 /**
@@ -465,8 +503,9 @@ function parse_domain_list(string $raw): array
 }
 
 /**
- * Check domains against Our database.
- * When $country is set, only that country’s database is checked.
+ * Check domains against Our database (global uniqueness).
+ * A domain exists only once across all countries.
+ * $country is ignored (kept for call-site compatibility).
  *
  * @return array{existing:string[],new:string[],invalid:int,total_input:int}
  */
@@ -474,8 +513,19 @@ function filter_domains_against_prospects(array $domains, string $country = ''):
 {
     ensure_prospect_schema();
     @set_time_limit(0);
-    $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
-    $country = trim($country);
+    $clean = [];
+    foreach ($domains as $d) {
+        $d = strtolower(trim((string) $d));
+        if (is_plain_site_domain($d)) {
+            $clean[$d] = true;
+        } else {
+            $n = normalize_domain((string) $d);
+            if ($n !== '' && is_plain_site_domain($n)) {
+                $clean[$n] = true;
+            }
+        }
+    }
+    $domains = array_keys($clean);
     $existing = [];
     $new = [];
     if (!$domains) {
@@ -487,15 +537,9 @@ function filter_domains_against_prospects(array $domains, string $country = ''):
     for ($i = 0, $n = count($domains); $i < $n; $i += $chunkSize) {
         $chunk = array_slice($domains, $i, $chunkSize);
         $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-        if ($country !== '') {
-            $sql = "SELECT domain FROM prospect_sites WHERE TRIM(country)=? AND domain IN ($placeholders)";
-            $params = array_merge([$country], $chunk);
-        } else {
-            $sql = "SELECT domain FROM prospect_sites WHERE domain IN ($placeholders)";
-            $params = $chunk;
-        }
+        $sql = "SELECT domain FROM prospect_sites WHERE domain IN ($placeholders)";
         $stmt = db()->prepare($sql);
-        $stmt->execute($params);
+        $stmt->execute($chunk);
         foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $d) {
             $found[$d] = true;
         }
@@ -598,7 +642,7 @@ function add_prospect_domains(
         }
     }
     $domains = array_keys($clean);
-    $check = filter_domains_against_prospects($domains, $country);
+    $check = filter_domains_against_prospects($domains, '');
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
     if (!$toAdd) {
@@ -672,8 +716,8 @@ function add_prospect_domains(
 }
 
 /**
- * Admin: paste sites into one country’s database.
- * Auto-cleans bad lines and skips sites already in that country.
+ * Admin: paste sites into a country folder.
+ * Auto-cleans bad lines and skips sites already in Our database (any country).
  *
  * @return array{
  *   inserted:int,

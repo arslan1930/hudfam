@@ -49,15 +49,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($country === '' && !$id) {
         flash('error', 'Select a country database.');
     } elseif (!$id) {
-        $exists = filter_domains_against_prospects([$domain], $country);
+        $exists = filter_domains_against_prospects([$domain], '');
         if ($exists['existing']) {
-            flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
+            flash('error', 'Already in Our database (any country). Each domain exists only once — filter first.');
             redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
         }
         // Writes inventory + today's add history batch for this teammate
         $added = add_prospect_domains([$domain], $user, $country, $language, $region, $niche, $notes);
         if ($added['inserted'] < 1) {
-            flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
+            flash('error', 'Already in Our database (any country). Each domain exists only once — filter first.');
             redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
         }
         if ($status !== 'new') {
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('ok', 'Site updated.');
             redirect('index.php?page=team_prospects&country=' . urlencode($country !== '' ? $country : '_none'));
         } catch (PDOException $e) {
-            flash('error', 'Site already exists in this country’s database.');
+            flash('error', 'That domain already exists in Our database (any country).');
         }
     }
 }

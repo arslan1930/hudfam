@@ -37,7 +37,7 @@ if (!$inCountry && !$emptyCountry) {
       </div>
     </div>
     <?= render_page_purpose(
-        'Our database — one folder per country',
+        'Our database — country folders',
         'Sites are stored separately for each country.',
         'Search by keyword → Select all → Delete. Use Undo if you delete by mistake.',
         [
