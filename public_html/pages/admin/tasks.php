@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'country' => post('country'),
                 'language' => post('language'),
                 'niche' => post('niche'),
+                'work_type' => post('work_type'),
                 'target_count' => post('target_count'),
                 'assigned_to' => post('assigned_to'),
                 'due_date' => post('due_date'),
@@ -39,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'country' => post('country'),
                 'language' => post('language'),
                 'niche' => post('niche'),
+                'work_type' => post('work_type'),
                 'target_count' => post('target_count'),
                 'assigned_to' => post('assigned_to'),
                 'due_date' => post('due_date'),
@@ -103,6 +105,16 @@ render_header('Tasks', 'admin');
       <?= render_language_select('language', (string) ($edit['language'] ?? ''), 'task_language') ?>
       <label>Niche</label>
       <input name="niche" value="<?= h((string) ($edit['niche'] ?? '')) ?>" placeholder="optional">
+      <label>Work type</label>
+      <select name="work_type" data-searchable="1">
+        <?php
+          $wt = (string) ($edit['work_type'] ?? 'sites');
+          foreach (extract_work_types() as $code => $label):
+        ?>
+          <option value="<?= h($code) ?>" <?= $wt === $code ? 'selected' : '' ?>><?= h($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <p class="help" style="margin-top:0.35rem">Controls which Team screen the task button opens.</p>
       <div class="form-grid">
         <div>
           <label>Target sites</label>

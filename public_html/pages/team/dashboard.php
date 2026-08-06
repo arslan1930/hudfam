@@ -91,11 +91,21 @@ if ($topCountry === '' && $openTasks !== [] && trim((string) ($openTasks[0]['cou
             <?php endif; ?>
           </div>
           <div class="actions">
-            <?php if ($t['country'] !== ''): ?>
-              <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode((string) $t['country']) ?>">Filter &amp; add</a>
-            <?php else: ?>
-              <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
-            <?php endif; ?>
+            <?php
+              $workType = (string) ($t['work_type'] ?? 'sites');
+              $taskCountry = trim((string) ($t['country'] ?? ''));
+              $workHref = function_exists('extract_team_page_for_work_type')
+                  ? extract_team_page_for_work_type($workType, $taskCountry)
+                  : ('index.php?page=team_prospect_check' . ($taskCountry !== '' ? '&country=' . urlencode($taskCountry) : ''));
+              $workLabel = match ($workType) {
+                  'extract_submit' => 'Submit for extraction',
+                  'extract_claim' => 'Claim & extract',
+                  'extract_final' => 'Paste extracted',
+                  'extract_emails' => 'Add emails',
+                  default => 'Filter & add',
+              };
+            ?>
+            <a class="btn" href="<?= h($workHref) ?>"><?= h($workLabel) ?></a>
           </div>
         </div>
         <form method="post" class="actions" style="margin-top:0.65rem">
@@ -123,6 +133,22 @@ if ($topCountry === '' && $openTasks !== [] && trim((string) ($openTasks[0]['cou
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Added sites</h2>
     <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' today' : 'None today' ?></p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_extract_submit<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
+    <h2>Submit for extraction</h2>
+    <p>Block 1 · sites that need extraction.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_extract_queue<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
+    <h2>Claim &amp; extract</h2>
+    <p>Open a Block 1 batch in a new tab.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_extract_final<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
+    <h2>Paste extracted</h2>
+    <p>Block 2 · final list after extraction.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_extract_emails<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
+    <h2>Add emails</h2>
+    <p>2–4 emails under each extracted site.</p>
   </a>
 </div>
 <?php render_footer('team'); ?>

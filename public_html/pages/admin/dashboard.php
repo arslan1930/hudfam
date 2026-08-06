@@ -78,6 +78,33 @@ $topCountry = $frequent[0]['name'] ?? '';
   </a>
 </div>
 
+<?php
+$extractTotals = ['queue' => 0, 'extracted' => 0, 'with_emails' => 0];
+try {
+    ensure_extract_schema();
+    $extractTotals = extract_totals();
+} catch (Throwable $e) {
+}
+?>
+<section style="margin:1.75rem 0 0.75rem">
+  <h2 style="margin:0 0 0.35rem">Extracting Sites with Emails</h2>
+  <p class="muted" style="margin:0">
+    Block 1 queue <?= (int) $extractTotals['queue'] ?> ·
+    Block 2 extracted <?= (int) $extractTotals['extracted'] ?> ·
+    with emails <?= (int) $extractTotals['with_emails'] ?>
+  </p>
+</section>
+<div class="launch-cards">
+  <a class="launch-card" href="index.php?page=admin_extract_sites">
+    <h2>Extracted sites</h2>
+    <p>Block 1 need extraction · Block 2 final lists (by country).</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_extract_emails">
+    <h2>Extracted sites with Emails</h2>
+    <p>Emails branched under each extracted site.</p>
+  </a>
+</div>
+
 <section style="margin:1.75rem 0 0.75rem">
   <h2 style="margin:0 0 0.35rem">People</h2>
   <p class="muted" style="margin:0">Accounts, tasks, and your admin login.</p>

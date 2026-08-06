@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS team_tasks (
   country VARCHAR(100) NOT NULL DEFAULT '',
   language VARCHAR(50) NOT NULL DEFAULT '',
   niche VARCHAR(255) NOT NULL DEFAULT '',
+  work_type VARCHAR(40) NOT NULL DEFAULT 'sites',
   target_count INT NULL,
   status ENUM('open','in_progress','done','cancelled') NOT NULL DEFAULT 'open',
   assigned_to INT NOT NULL,
@@ -121,4 +122,61 @@ CREATE TABLE IF NOT EXISTS team_tasks (
   INDEX (due_date),
   CONSTRAINT fk_task_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_task_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Extracting Sites with Emails pipeline
+CREATE TABLE IF NOT EXISTS extract_queue (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL,
+  country VARCHAR(100) NOT NULL DEFAULT '',
+  notes TEXT NULL,
+  submitted_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_extract_queue_country_domain (country, domain),
+  INDEX (country),
+  INDEX (submitted_by),
+  INDEX (created_at),
+  CONSTRAINT fk_eq_user FOREIGN KEY (submitted_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS extract_sites (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL,
+  country VARCHAR(100) NOT NULL DEFAULT '',
+  notes TEXT NULL,
+  added_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_extract_sites_country_domain (country, domain),
+  INDEX (country),
+  INDEX (added_by),
+  CONSTRAINT fk_es_user FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS extract_site_emails (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  extract_site_id INT NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_extract_email (extract_site_id, email),
+  INDEX (extract_site_id),
+  CONSTRAINT fk_ese_site FOREIGN KEY (extract_site_id) REFERENCES extract_sites(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ese_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS extract_claims (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  token CHAR(32) NOT NULL,
+  user_id INT NOT NULL,
+  country VARCHAR(100) NOT NULL DEFAULT '',
+  queue_ids_json TEXT NOT NULL,
+  domains_json TEXT NOT NULL,
+  status ENUM('pending','opened') NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  opened_at DATETIME NULL,
+  UNIQUE KEY uniq_extract_claim_token (token),
+  INDEX (user_id, status),
+  CONSTRAINT fk_ec_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

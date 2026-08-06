@@ -16,11 +16,17 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
+        'admin_extract_sites' => [],
+        'admin_extract_emails' => [],
         'admin_users' => ['admin_tasks'],
         'admin_account' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_dashboard' => ['team_tasks'],
+        'team_extract_submit' => [],
+        'team_extract_queue' => ['team_extract_work'],
+        'team_extract_final' => [],
+        'team_extract_emails' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -76,6 +82,10 @@ function render_header(string $title, string $panel = ''): void
                 'admin_prospect_add' => ['Sites add by admin', 'Paste into a country'],
                 'admin_prospect_batches' => ['Added sites', 'Who added what, by day'],
             ],
+            'Extracting Sites with Emails' => [
+                'admin_extract_sites' => ['Extracted sites', 'Block 1 queue + Block 2 final'],
+                'admin_extract_emails' => ['Extracted sites with Emails', 'Emails under each site'],
+            ],
             'People' => [
                 'admin_users' => ['Users', 'Accounts & assign tasks'],
                 'admin_account' => ['Account', 'Email & password'],
@@ -87,6 +97,12 @@ function render_header(string $title, string $panel = ''): void
                 'team_dashboard' => ['Dashboard', 'Overview'],
                 'team_prospect_check' => ['Filter & add', 'Paste → add unique'],
                 'team_prospect_batches' => ['Added sites', 'Your daily adds'],
+            ],
+            'Extraction' => [
+                'team_extract_submit' => ['Submit for extraction', 'Block 1 · Team 1'],
+                'team_extract_queue' => ['Claim & extract', 'Open Block 1 batch'],
+                'team_extract_final' => ['Paste extracted', 'Block 2 · final list'],
+                'team_extract_emails' => ['Add emails', 'Emails per site'],
             ],
         ];
     }

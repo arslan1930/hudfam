@@ -54,6 +54,7 @@ function ensure_tasks_schema(): void
           country VARCHAR(100) NOT NULL DEFAULT '',
           language VARCHAR(50) NOT NULL DEFAULT '',
           niche VARCHAR(255) NOT NULL DEFAULT '',
+          work_type VARCHAR(40) NOT NULL DEFAULT 'sites',
           target_count INT NULL,
           status ENUM('open','in_progress','done','cancelled') NOT NULL DEFAULT 'open',
           assigned_to INT NOT NULL,
@@ -70,6 +71,16 @@ function ensure_tasks_schema(): void
           CONSTRAINT fk_task_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    try {
+        $cols = db()->query('SHOW COLUMNS FROM team_tasks')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('work_type', $cols, true)) {
+            db()->exec(
+                "ALTER TABLE team_tasks ADD COLUMN work_type VARCHAR(40) NOT NULL DEFAULT 'sites' AFTER niche"
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
 }
 
 function load_user_by_id(int $id): ?array
@@ -310,9 +321,14 @@ function create_team_task(array $data, int $createdBy): array
     if ($due !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
         $due = '';
     }
+    $workType = trim((string) ($data['work_type'] ?? 'sites'));
+    $allowedTypes = ['sites', 'extract_submit', 'extract_claim', 'extract_final', 'extract_emails'];
+    if (!in_array($workType, $allowedTypes, true)) {
+        $workType = 'sites';
+    }
     db()->prepare(
-        'INSERT INTO team_tasks (title, notes, country, language, niche, target_count, status, assigned_to, created_by, due_date, completed_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+        'INSERT INTO team_tasks (title, notes, country, language, niche, work_type, target_count, status, assigned_to, created_by, due_date, completed_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
     )->execute([
         $title,
         trim((string) ($data['notes'] ?? '')),
@@ -321,6 +337,7 @@ function create_team_task(array $data, int $createdBy): array
             : trim((string) ($data['country'] ?? '')),
         trim((string) ($data['language'] ?? '')),
         trim((string) ($data['niche'] ?? '')),
+        $workType,
         $target,
         $status,
         $assignedTo,
@@ -370,7 +387,7 @@ function update_team_task(int $id, array $data): void
         $completedAt = null;
     }
     db()->prepare(
-        'UPDATE team_tasks SET title=?, notes=?, country=?, language=?, niche=?, target_count=?, status=?,
+        'UPDATE team_tasks SET title=?, notes=?, country=?, language=?, niche=?, work_type=?, target_count=?, status=?,
          assigned_to=?, due_date=?, completed_at=? WHERE id=?'
     )->execute([
         $title,
@@ -380,6 +397,11 @@ function update_team_task(int $id, array $data): void
             : trim((string) ($data['country'] ?? $task['country'] ?? '')),
         trim((string) ($data['language'] ?? $task['language'] ?? '')),
         trim((string) ($data['niche'] ?? $task['niche'] ?? '')),
+        (static function () use ($data, $task) {
+            $workType = trim((string) ($data['work_type'] ?? $task['work_type'] ?? 'sites'));
+            $allowed = ['sites', 'extract_submit', 'extract_claim', 'extract_final', 'extract_emails'];
+            return in_array($workType, $allowed, true) ? $workType : 'sites';
+        })(),
         $target,
         $status,
         $assignedTo,
