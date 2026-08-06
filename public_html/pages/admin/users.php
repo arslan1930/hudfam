@@ -96,11 +96,12 @@ render_header('Admins & users', 'admin');
   </table>
 </div>
 
-<div class="grid" style="grid-template-columns:1.2fr 1fr">
-<div class="card">
+<div class="users-layout">
+<div class="card table-card">
   <h2>All users</h2>
-  <table>
-    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Contact</th><th>Active</th><th></th></tr></thead>
+  <div class="table-scroll">
+  <table class="users-table">
+    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Contact</th><th>Active</th><th>Actions</th></tr></thead>
     <tbody>
     <?php foreach ($users as $u): ?>
       <tr>
@@ -109,16 +110,23 @@ render_header('Admins & users', 'admin');
         <td><span class="badge"><?= h($u['role']) ?></span></td>
         <td class="help"><?= h($u['email'] ?: '—') ?><?= !empty($u['phone']) ? ' · ' . h($u['phone']) : '' ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
-        <td class="actions">
-          <a href="index.php?page=admin_users&edit=<?= (int)$u['id'] ?>">Edit</a>
-          <?php if ($u['role'] === 'team'): ?>
-            <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Add history</a>
-          <?php endif; ?>
+        <td class="col-actions">
+          <details class="more-actions">
+            <summary class="btn secondary small" aria-label="Actions for <?= h($u['username']) ?>">Actions</summary>
+            <div class="more-actions-menu">
+              <a href="index.php?page=admin_users&amp;edit=<?= (int)$u['id'] ?>">Edit</a>
+              <?php if ($u['role'] === 'team'): ?>
+                <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Add history</a>
+              <?php endif; ?>
+            </div>
+          </details>
         </td>
       </tr>
     <?php endforeach; ?>
+    <?php if (!$users): ?><tr><td colspan="6" class="muted">No users yet.</td></tr><?php endif; ?>
     </tbody>
   </table>
+  </div>
 </div>
 <div class="card">
   <h2><?= $edit ? 'Edit user' : 'New admin / team user' ?></h2>
@@ -143,7 +151,9 @@ render_header('Admins & users', 'admin');
     <label>Password <?= $edit ? '(blank = keep)' : '' ?></label>
     <input type="password" name="password">
     <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !$edit || !empty($edit['is_active']) ? 'checked' : '' ?>> Active</label>
-    <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
+    <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button>
+      <?php if ($edit): ?><a class="btn secondary" href="index.php?page=admin_users">Cancel</a><?php endif; ?>
+    </p>
   </form>
 </div>
 </div>

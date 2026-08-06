@@ -118,5 +118,7 @@ function render_footer(string $panel = ''): void
     if (current_user() && $panel !== '') {
         echo '</main></div>';
     }
+    // One open Actions menu at a time; keeps options readable in tables
+    echo '<script>(function(){document.addEventListener("toggle",function(e){var t=e.target;if(!t||!t.classList||!t.classList.contains("more-actions")||!t.open)return;document.querySelectorAll("details.more-actions[open]").forEach(function(d){if(d!==t)d.removeAttribute("open");});},true);document.addEventListener("click",function(e){var open=document.querySelector("details.more-actions[open]");if(!open)return;if(open.contains(e.target))return;open.removeAttribute("open");});})();</script>';
     echo '</body></html>';
 }
