@@ -409,6 +409,11 @@ function ensure_prospect_schema(): void
     } catch (Throwable $e) {
         // ignore — non-fatal repair
     }
+    try {
+        repair_missing_prospect_sites_from_batches($pdo);
+    } catch (Throwable $e) {
+        // ignore — non-fatal repair
+    }
 }
 
 /**
@@ -486,11 +491,106 @@ function normalize_prospect_country_labels(PDO $pdo): int
 }
 
 /**
+ * Restore domains that exist in Added sites history but are missing from Our database.
+ * Skips domains that were deliberately deleted (still in trash).
+ * Also re-links batch items whose prospect_site_id was cleared.
+ */
+function repair_missing_prospect_sites_from_batches(PDO $pdo): int
+{
+    static $ran = false;
+    if ($ran) {
+        return 0;
+    }
+    $ran = true;
+    $fixed = 0;
+
+    // Re-link batch items to existing inventory rows
+    try {
+        $fixed += (int) $pdo->exec(
+            'UPDATE prospect_batch_items i
+             INNER JOIN prospect_sites p ON p.domain = i.domain
+             SET i.prospect_site_id = p.id
+             WHERE i.prospect_site_id IS NULL'
+        );
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    // Insert missing inventory rows from batch history (not in trash)
+    try {
+        $stmt = $pdo->query(
+            "SELECT i.id AS item_id, i.domain, i.batch_id,
+                    b.country, b.language, b.region, b.niche, b.notes, b.user_id
+             FROM prospect_batch_items i
+             INNER JOIN prospect_batches b ON b.id = i.batch_id
+             LEFT JOIN prospect_sites p ON p.domain = i.domain
+             LEFT JOIN prospect_site_trash t ON t.domain = i.domain
+             WHERE p.id IS NULL
+               AND t.trash_id IS NULL
+             ORDER BY i.id ASC
+             LIMIT 8000"
+        );
+        if (!$stmt) {
+            return $fixed;
+        }
+        $ins = $pdo->prepare(
+            "INSERT INTO prospect_sites
+               (domain, url, country, language, region, niche, notes, status, created_by)
+             VALUES (?, '', ?, ?, ?, ?, ?, 'new', ?)"
+        );
+        $link = $pdo->prepare(
+            'UPDATE prospect_batch_items SET prospect_site_id=? WHERE id=?'
+        );
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $domain = strtolower(trim((string) ($row['domain'] ?? '')));
+            if ($domain === '' || !is_plain_site_domain($domain)) {
+                continue;
+            }
+            $country = canonicalize_country_name(trim((string) ($row['country'] ?? '')));
+            $language = trim((string) ($row['language'] ?? ''));
+            $region = trim((string) ($row['region'] ?? ''));
+            $niche = trim((string) ($row['niche'] ?? ''));
+            $notes = (string) ($row['notes'] ?? '');
+            $uid = (int) ($row['user_id'] ?? 0);
+            try {
+                $ins->execute([
+                    $domain,
+                    $country,
+                    $language,
+                    $region,
+                    $niche,
+                    $notes,
+                    $uid > 0 ? $uid : null,
+                ]);
+                $siteId = (int) $pdo->lastInsertId();
+                if ($siteId > 0) {
+                    $link->execute([$siteId, (int) $row['item_id']]);
+                    $fixed++;
+                }
+            } catch (PDOException $e) {
+                // Race: another process inserted the domain — link to it
+                $find = $pdo->prepare('SELECT id FROM prospect_sites WHERE domain=? LIMIT 1');
+                $find->execute([$domain]);
+                $siteId = (int) $find->fetchColumn();
+                if ($siteId > 0) {
+                    $link->execute([$siteId, (int) $row['item_id']]);
+                    $fixed++;
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    return $fixed;
+}
+
+/**
  * Country folders for Admin: every active country + URL counts.
  *
  * @return list<array{country:string,region:string,region_label:string,total:int,language:string}>
  */
-function prospect_country_folders(): array
+function prospect_country_folders(?int $createdBy = null): array
 {
     ensure_prospect_schema();
     if (function_exists('seed_countries_if_empty')) {
@@ -501,11 +601,23 @@ function prospect_country_folders(): array
         }
     }
     $counts = [];
-    foreach (db()->query(
-        "SELECT TRIM(country) AS country, COUNT(*) AS total
-         FROM prospect_sites
-         GROUP BY TRIM(country)"
-    )->fetchAll() as $row) {
+    if ($createdBy && $createdBy > 0) {
+        $stmt = db()->prepare(
+            "SELECT TRIM(country) AS country, COUNT(*) AS total
+             FROM prospect_sites
+             WHERE created_by = ?
+             GROUP BY TRIM(country)"
+        );
+        $stmt->execute([$createdBy]);
+        $rows = $stmt->fetchAll();
+    } else {
+        $rows = db()->query(
+            "SELECT TRIM(country) AS country, COUNT(*) AS total
+             FROM prospect_sites
+             GROUP BY TRIM(country)"
+        )->fetchAll();
+    }
+    foreach ($rows as $row) {
         $raw = trim((string) $row['country']);
         $key = $raw === '' ? '' : canonicalize_country_name($raw);
         $counts[$key] = ($counts[$key] ?? 0) + (int) $row['total'];
@@ -734,8 +846,8 @@ function add_prospect_domains(
     );
 
     $ins = db()->prepare(
-        'INSERT INTO prospect_sites (domain, country, language, region, niche, notes, status, created_by)
-         VALUES (?,?,?,?,?,?,\'new\',?)'
+        'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
+         VALUES (?,\'\',?,?,?,?,?,\'new\',?)'
     );
     $insItem = db()->prepare(
         'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
@@ -1312,7 +1424,7 @@ function normalize_prospect_per_page(int $per): int
  *
  * @return array{0:string,1:list<mixed>}
  */
-function prospect_country_where(string $countryKey, string $q = '', string $status = ''): array
+function prospect_country_where(string $countryKey, string $q = '', string $status = '', ?int $createdBy = null): array
 {
     $emptyCountry = ($countryKey === '_none');
     $where = [];
@@ -1328,6 +1440,10 @@ function prospect_country_where(string $countryKey, string $q = '', string $stat
         foreach ($aliases as $a) {
             $params[] = $a;
         }
+    }
+    if ($createdBy !== null && $createdBy > 0) {
+        $where[] = 'p.created_by = ?';
+        $params[] = $createdBy;
     }
     $q = trim($q);
     if ($q !== '') {
@@ -1351,10 +1467,11 @@ function list_prospect_domains_plain(
     string $countryKey,
     string $q = '',
     string $status = '',
-    int $max = 150000
+    int $max = 150000,
+    ?int $createdBy = null
 ): array {
     ensure_prospect_schema();
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status, $createdBy);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
@@ -1374,11 +1491,11 @@ function list_prospect_domains_plain(
 /**
  * Download all matching domains as a .txt file (one per line). Best for 100k+ lists.
  */
-function stream_prospect_domains_export(string $countryKey, string $q = '', string $status = ''): void
+function stream_prospect_domains_export(string $countryKey, string $q = '', string $status = '', ?int $createdBy = null): void
 {
     ensure_prospect_schema();
     @set_time_limit(0);
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status, $createdBy);
 
     $label = $countryKey === '_none' ? 'no-country' : $countryKey;
     $safe = preg_replace('/[^a-zA-Z0-9._-]+/', '-', $label) ?: 'country';
@@ -1403,10 +1520,10 @@ function stream_prospect_domains_export(string $countryKey, string $q = '', stri
     exit;
 }
 
-function count_prospect_sites_filtered(string $countryKey, string $q = '', string $status = ''): int
+function count_prospect_sites_filtered(string $countryKey, string $q = '', string $status = '', ?int $createdBy = null): int
 {
     ensure_prospect_schema();
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status, $createdBy);
     $stmt = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $stmt->execute($params);
     return (int) $stmt->fetchColumn();
@@ -1417,11 +1534,11 @@ function count_prospect_sites_filtered(string $countryKey, string $q = '', strin
  *
  * @return list<int>
  */
-function list_prospect_ids_filtered(string $countryKey, string $q = '', string $status = '', int $limit = 1000): array
+function list_prospect_ids_filtered(string $countryKey, string $q = '', string $status = '', int $limit = 1000, ?int $createdBy = null): array
 {
     ensure_prospect_schema();
     $limit = max(1, min(1000, $limit));
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status, $createdBy);
     $stmt = db()->prepare(
         "SELECT p.id FROM prospect_sites p WHERE $whereSql ORDER BY p.domain ASC LIMIT " . (int) $limit
     );

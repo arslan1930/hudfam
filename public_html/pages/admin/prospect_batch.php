@@ -30,7 +30,14 @@ render_header('Added sites · ' . $batch['batch_date'], 'admin');
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $batch['user_id'] ?>">This teammate</a>
     <a class="btn secondary" href="index.php?page=admin_prospect_batches">All added sites</a>
-    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Inventory by person</a>
+    <?php
+      $batchCountry = canonicalize_country_name(trim((string) ($batch['country'] ?? '')));
+      if ($batchCountry !== ''):
+    ?>
+      <a class="btn" href="index.php?page=admin_prospects&amp;country=<?= urlencode($batchCountry) ?>&amp;created_by=<?= (int) $batch['user_id'] ?>">Our database · <?= h($batchCountry) ?></a>
+    <?php else: ?>
+      <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Our database · this person</a>
+    <?php endif; ?>
   </div>
 </div>
 

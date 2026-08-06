@@ -11,10 +11,31 @@ if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
     $sheet = canonicalize_country_name(trim($sheet));
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
+$createdByFilter = (int) (post('created_by') ?: get('created_by'));
+if ($createdByFilter < 0) {
+    $createdByFilter = 0;
+}
+$createdByUser = null;
+if ($createdByFilter > 0) {
+    try {
+        $stmt = db()->prepare('SELECT id, username, full_name, role FROM users WHERE id=? LIMIT 1');
+        $stmt->execute([$createdByFilter]);
+        $createdByUser = $stmt->fetch() ?: null;
+        if (!$createdByUser) {
+            $createdByFilter = 0;
+        }
+    } catch (Throwable $e) {
+        $createdByFilter = 0;
+        $createdByUser = null;
+    }
+}
+$personLabel = $createdByUser
+    ? trim((string) (($createdByUser['full_name'] ?: '') !== '' ? $createdByUser['full_name'] : $createdByUser['username']))
+    : '';
 
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
-    $folders = prospect_country_folders();
+    $folders = prospect_country_folders($createdByFilter > 0 ? $createdByFilter : null);
     $byRegion = [];
     foreach ($folders as $f) {
         $byRegion[$f['region_label']][] = $f;
@@ -23,6 +44,9 @@ if (!$inCountry && !$emptyCountry) {
     foreach ($folders as $f) {
         $grandTotal += (int) $f['total'];
     }
+    $teamUsers = list_team_users(false);
+    $adminUsers = list_admin_users(false);
+    $people = array_merge($teamUsers, $adminUsers);
 
     render_header('Our database', 'admin');
     ?>
@@ -33,14 +57,37 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1>Country databases</h1>
-        <p class="muted">Browse, download, add, or delete sites. Mistaken deletes can be undone. <?= (int) $grandTotal ?> sites total.</p>
+        <p class="muted">Browse, download, add, or delete sites. Mistaken deletes can be undone. <?= (int) $grandTotal ?> sites total<?= $personLabel !== '' ? ' · added by ' . h($personLabel) : '' ?>.</p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Added sites</a>
       </div>
     </div>
+    <?php if ($personLabel !== ''): ?>
+    <div class="card" style="border-color:var(--brand-2)">
+      <p style="margin:0">Showing only sites added by <strong><?= h($personLabel) ?></strong>.
+        <a href="index.php?page=admin_prospects">Show everyone</a>
+      </p>
+    </div>
+    <?php endif; ?>
+    <form class="card filters" method="get" style="margin-bottom:1rem">
+      <input type="hidden" name="page" value="admin_prospects">
+      <div>
+        <label>Added by</label>
+        <select name="created_by" data-searchable="1">
+          <option value="">Everyone</option>
+          <?php foreach ($people as $p): ?>
+            <option value="<?= (int) $p['id'] ?>" <?= $createdByFilter === (int) $p['id'] ? 'selected' : '' ?>>
+              <?= h(($p['full_name'] ?: $p['username']) . ' · ' . $p['role']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <button class="btn" type="submit">Filter</button>
+    </form>
     <?php
       $freqAdmin = user_frequent_countries((int) $user['id'], 8);
+      $chipQs = $createdByFilter > 0 ? '&created_by=' . $createdByFilter : '';
       echo render_frequent_country_chips($freqAdmin, 'index.php?page=admin_prospects&country=');
     ?>
     <div data-folder-scope>
@@ -56,8 +103,10 @@ if (!$inCountry && !$emptyCountry) {
             <?php
               $href = $f['country'] !== '' ? $f['country'] : '_none';
               $label = $f['country'] !== '' ? $f['country'] : 'No country';
+              $folderUrl = 'index.php?page=admin_prospects&country=' . urlencode($href)
+                . ($createdByFilter > 0 ? '&created_by=' . $createdByFilter : '');
             ?>
-            <a class="folder" href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>">
+            <a class="folder" href="<?= h($folderUrl) ?>">
               <h3><?= h($label) ?></h3>
               <p class="muted"><?= (int) $f['total'] ?> site<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
             </a>
@@ -84,6 +133,7 @@ $per = normalize_prospect_per_page((int) (post('per') ?: get('per', 100)));
 $view = (string) get('view');
 $export = (string) get('export');
 $autoselect = (string) get('autoselect') === '1';
+$createdByOpt = $createdByFilter > 0 ? $createdByFilter : null;
 
 $sheetLabel = $emptyCountry ? 'No country' : $countryName;
 $baseQs = array_filter([
@@ -92,6 +142,7 @@ $baseQs = array_filter([
     'q' => $q,
     'status' => $status,
     'per' => $per,
+    'created_by' => $createdByFilter > 0 ? $createdByFilter : '',
 ], static fn($v) => $v !== '' && $v !== null);
 $qs = http_build_query($baseQs);
 $exportUrl = 'index.php?' . http_build_query($baseQs + ['export' => 'txt']);
@@ -160,7 +211,7 @@ try {
         }
 
         if ($action === 'select_matching') {
-            $matchCount = count_prospect_sites_filtered($countryKey, $q, $status);
+            $matchCount = count_prospect_sites_filtered($countryKey, $q, $status, $createdByOpt);
             if ($matchCount <= 0) {
                 flash('error', 'No sites match your keyword search.');
                 redirect($tableUrl);
@@ -173,6 +224,7 @@ try {
                 'per' => 1000,
                 'p' => 1,
                 'autoselect' => 1,
+                'created_by' => $createdByFilter > 0 ? $createdByFilter : '',
             ], static fn($v) => $v !== '' && $v !== null));
             flash('ok', 'Showing up to 1000 matches for your search. Checkboxes are selected — review, then Delete selected.');
             redirect($redir);
@@ -236,12 +288,12 @@ try {
 }
 
 if ($export === 'txt') {
-    stream_prospect_domains_export($countryKey, $q, $status);
+    stream_prospect_domains_export($countryKey, $q, $status, $createdByOpt);
 }
 
 // Preselect IDs when autoselect=1 (after keyword search → select all matches)
 if ($autoselect) {
-    $preselectedIds = array_fill_keys(list_prospect_ids_filtered($countryKey, $q, $status, 1000), true);
+    $preselectedIds = array_fill_keys(list_prospect_ids_filtered($countryKey, $q, $status, 1000, $createdByOpt), true);
 }
 
 $lastUndo = null;
@@ -255,7 +307,7 @@ $trashBatches = list_prospect_trash_batches($countryKey, 8);
 
 // --- View all names ---
 if ($view === 'names') {
-    $plain = list_prospect_domains_plain($countryKey, $q, $status, 150000);
+    $plain = list_prospect_domains_plain($countryKey, $q, $status, 150000, $createdByOpt);
     $text = implode("\n", $plain['domains']);
     render_header('Our database · ' . $sheetLabel . ' · all names', 'admin');
     ?>
@@ -289,7 +341,7 @@ if ($view === 'names') {
 
 // --- Table view ---
 if ($emptyCountry) {
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status);
+    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status, $createdByOpt);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
@@ -308,25 +360,27 @@ if ($emptyCountry) {
         'q' => $q,
         'country' => $countryName,
         'status' => $status,
+        'created_by' => $createdByOpt,
     ], $pageNum, $per);
     $rows = $inv['rows'];
     $total = $inv['total'];
     $pages = $inv['pages'];
 }
 
-$filterMatchCount = count_prospect_sites_filtered($countryKey, $q, $status);
+$filterMatchCount = count_prospect_sites_filtered($countryKey, $q, $status, $createdByOpt);
+$peopleForFilter = array_merge(list_team_users(false), list_admin_users(false));
 
 render_header('Our database · ' . $sheetLabel, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects' . ($createdByFilter > 0 ? '&created_by=' . $createdByFilter : '')],
     ['label' => $sheetLabel],
 ]); ?>
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> · search keywords → select all → delete · Undo available</p>
+    <p class="muted"><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?><?= $personLabel !== '' ? ' · added by ' . h($personLabel) : '' ?> · search keywords → select all → delete · Undo available</p>
   </div>
   <div class="actions">
     <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
@@ -334,9 +388,17 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <?php if (!$emptyCountry): ?>
       <a class="btn secondary" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <?php endif; ?>
-    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
+    <a class="btn secondary" href="index.php?page=admin_prospects<?= $createdByFilter > 0 ? '&created_by=' . $createdByFilter : '' ?>">All countries</a>
   </div>
 </div>
+
+<?php if ($personLabel !== ''): ?>
+<div class="card" style="border-color:var(--brand-2)">
+  <p style="margin:0">Showing only sites added by <strong><?= h($personLabel) ?></strong>.
+    <a href="index.php?page=admin_prospects&amp;country=<?= urlencode($countryKey) ?>">Show everyone in <?= h($sheetLabel) ?></a>
+  </p>
+</div>
+<?php endif; ?>
 
 <?php if ($lastUndo): ?>
 <div class="card" style="border-color:#2a7">
@@ -370,6 +432,16 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <input type="hidden" name="page" value="admin_prospects">
   <input type="hidden" name="country" value="<?= h($countryKey) ?>">
   <div><label>Search by keywords</label><input name="q" value="<?= h($q) ?>" placeholder="e.g. shop, blog, .de…"></div>
+  <div><label>Added by</label>
+    <select name="created_by" data-searchable="1">
+      <option value="">Everyone</option>
+      <?php foreach ($peopleForFilter as $p): ?>
+        <option value="<?= (int) $p['id'] ?>" <?= $createdByFilter === (int) $p['id'] ? 'selected' : '' ?>>
+          <?= h(($p['full_name'] ?: $p['username']) . ' · ' . $p['role']) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </div>
   <div><label>Status</label>
     <select name="status" data-searchable="1">
       <option value="">All</option>
