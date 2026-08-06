@@ -34,8 +34,8 @@ if (!file_exists(__DIR__ . '/config.php')) {
               INDEX (code)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
-        seed_countries_if_empty($pdo);
-        $notes[] = 'countries OK';
+        sync_countries($pdo, true);
+        $notes[] = 'countries OK (Europe + North America + English markets synced)';
 
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';

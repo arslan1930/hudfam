@@ -105,7 +105,10 @@ render_header($id ? $site['domain'] : 'Add prospect', 'team');
         <?php endforeach; ?>
       </select>
     </div>
-    <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
+    <div>
+      <label>Language <span class="help">(optional)</span></label>
+      <?= render_language_select('language', (string) ($site['language'] ?? '')) ?>
+    </div>
     <div><label>Region</label>
       <select name="region">
         <option value="">—</option>
