@@ -1,89 +1,154 @@
 <?php
 require_admin();
-$q = trim((string) get('q'));
-$country = trim((string) get('country'));
-$language = trim((string) get('language'));
-$region = (string) get('region');
-$status = (string) get('status');
-$createdBy = (int) get('created_by');
-$pageNum = max(1, (int) get('p', 1));
-$rows = [];
-$total = 0;
-$pages = 1;
-$countryOptions = list_countries(null, true);
-$langs = [];
-$adders = [];
+ensure_prospect_schema();
 
-try {
-    $inv = prospect_inventory_query(
-        compact('q', 'country', 'language', 'region', 'status') + ['created_by' => $createdBy ?: null],
-        $pageNum,
-        50
+$sheet = (string) get('country');
+// Prefer ?country= for folder; also accept sheet=
+if ($sheet === '' && (string) get('sheet') !== '') {
+    $sheet = (string) get('sheet');
+}
+$emptyCountry = ($sheet === '_none');
+$inCountry = ($sheet !== '' && $sheet !== 'all');
+
+// --- Country folders (default) ---
+if (!$inCountry && !$emptyCountry) {
+    $folders = prospect_country_folders();
+    $byRegion = [];
+    foreach ($folders as $f) {
+        $byRegion[$f['region_label']][] = $f;
+    }
+    $grandTotal = 0;
+    foreach ($folders as $f) {
+        $grandTotal += (int) $f['total'];
+    }
+
+    render_header('Our database', 'admin');
+    ?>
+    <?php render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+        ['label' => 'Our database'],
+    ]); ?>
+    <div class="topbar">
+      <div>
+        <h1>Country databases</h1>
+        <p class="muted">Each country is its own URL database. Open a folder to view or add URLs. <?= (int) $grandTotal ?> URLs total.</p>
+      </div>
+      <div class="actions">
+        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
+      </div>
+    </div>
+    <?= render_page_purpose(
+        'Our database — one folder per country',
+        'URLs are stored separately for each country.',
+        'Click a country folder to open that country’s database. Use Add URLs inside the folder to paste sites into that country only.',
+        [
+            'Open a country folder.',
+            'Add URLs into that country’s database.',
+            'Team Filter & add can check against the same country list.',
+        ]
+    ) ?>
+    <?php foreach ($byRegion as $regionLabel => $list): ?>
+      <div class="card">
+        <h2><?= h($regionLabel) ?></h2>
+        <div class="folders" style="margin-top:0.7rem">
+          <?php foreach ($list as $f): ?>
+            <?php
+              $href = $f['country'] !== '' ? $f['country'] : '_none';
+              $label = $f['country'] !== '' ? $f['country'] : 'No country';
+            ?>
+            <a class="folder" href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>">
+              <h3><?= h($label) ?></h3>
+              <p class="muted"><?= (int) $f['total'] ?> URL<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endforeach; ?>
+    <?php if (!$folders): ?>
+      <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
+    <?php endif; ?>
+    <?php
+    render_footer('admin');
+    return;
+}
+
+// --- One country database ---
+$countryName = $emptyCountry ? '' : $sheet;
+$q = trim((string) get('q'));
+$status = (string) get('status');
+$pageNum = max(1, (int) get('p', 1));
+$inv = prospect_inventory_query([
+    'q' => $q,
+    'country' => $countryName,
+    'status' => $status,
+] + ($emptyCountry ? [] : []), $pageNum, 50);
+
+// For empty country, prospect_inventory_query with country='' won't filter empty — need special case
+if ($emptyCountry) {
+    $where = ["TRIM(p.country)=''"];
+    $params = [];
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
+        $params[] = $like;
+        $params[] = $like;
+    }
+    if ($status !== '') {
+        $where[] = 'p.status = ?';
+        $params[] = $status;
+    }
+    $whereSql = implode(' AND ', $where);
+    $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
+    $count->execute($params);
+    $total = (int) $count->fetchColumn();
+    $pages = max(1, (int) ceil($total / 50));
+    $offset = ($pageNum - 1) * 50;
+    $stmt = db()->prepare(
+        "SELECT p.*, u.username added_by_name, u.full_name added_by_full
+         FROM prospect_sites p
+         LEFT JOIN users u ON u.id = p.created_by
+         WHERE $whereSql ORDER BY p.created_at DESC LIMIT 50 OFFSET $offset"
     );
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
+} else {
     $rows = $inv['rows'];
     $total = $inv['total'];
     $pages = $inv['pages'];
-    $langs = distinct_prospect_languages();
-    $adders = db()->query(
-        "SELECT DISTINCT u.id, u.username, u.full_name
-         FROM prospect_sites p
-         JOIN users u ON u.id = p.created_by
-         ORDER BY u.full_name, u.username"
-    )->fetchAll();
-} catch (Throwable $e) {
-    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload.');
 }
 
+$sheetLabel = $emptyCountry ? 'No country' : $countryName;
 $qs = http_build_query(array_filter([
-    'page' => 'admin_prospects', 'q' => $q, 'country' => $country,
-    'language' => $language, 'region' => $region, 'status' => $status,
-    'created_by' => $createdBy ?: '',
-], fn($v) => $v !== '' && $v !== null));
+    'page' => 'admin_prospects',
+    'country' => $emptyCountry ? '_none' : $countryName,
+    'q' => $q,
+    'status' => $status,
+], static fn($v) => $v !== '' && $v !== null));
 
-render_header('Our database', 'admin');
+render_header('Our database · ' . $sheetLabel, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Our database'],
+    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => $sheetLabel],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Our database</h1>
-    <p class="muted"><?= $total ?> unique domains · shared with Team</p>
+    <h1><?= h($sheetLabel) ?></h1>
+    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_prospect_add">Add URLs</a>
-    <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
+    <?php if (!$emptyCountry): ?>
+      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add URLs</a>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
 </div>
-<?= guide_inventory() ?>
+
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
-  <div><label>Country</label>
-    <select name="country">
-      <option value="">All</option>
-      <?php foreach ($countryOptions as $c): ?>
-        <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <div><label>Language</label>
-    <select name="language">
-      <option value="">All</option>
-      <?php foreach ($langs as $lang): ?>
-        <option value="<?= h($lang) ?>" <?= $language === $lang ? 'selected' : '' ?>><?= h($lang) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <div><label>Region</label>
-    <select name="region">
-      <option value="">All</option>
-      <?php foreach (regions() as $k => $v): ?>
-        <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
+  <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
+  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain or url…"></div>
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
@@ -92,26 +157,18 @@ render_header('Our database', 'admin');
       <?php endforeach; ?>
     </select>
   </div>
-  <div><label>Added by</label>
-    <select name="created_by">
-      <option value="">Anyone</option>
-      <?php foreach ($adders as $adder): ?>
-        <option value="<?= (int) $adder['id'] ?>" <?= $createdBy === (int) $adder['id'] ? 'selected' : '' ?>>
-          <?= h($adder['full_name'] ?: $adder['username']) ?>
-        </option>
-      <?php endforeach; ?>
-    </select>
-  </div>
   <button class="btn" type="submit">Filter</button>
 </form>
+
 <div class="card">
   <table>
-    <thead><tr><th>Domain</th><th>Country / lang</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
+    <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
     <tbody>
     <?php foreach ($rows as $s): ?>
       <tr>
-        <td><?= h($s['domain']) ?></td>
-        <td><?= h($s['country'] ?: '—') ?> · <?= h($s['language'] ?: '—') ?></td>
+        <td><strong><?= h($s['domain']) ?></strong></td>
+        <td class="help"><?= h($s['url'] !== '' ? $s['url'] : '—') ?></td>
+        <td><?= h($s['language'] ?: '—') ?></td>
         <td><?= badge($s['status']) ?></td>
         <td><?= h($s['added_by_full'] ?: $s['added_by_name'] ?: '—') ?></td>
         <td><?= h(substr((string) $s['created_at'], 0, 10)) ?></td>
@@ -120,13 +177,18 @@ render_header('Our database', 'admin');
     </tbody>
   </table>
   <?php if (!$rows): ?>
-  <div class="empty-state"><p>Our database is empty. Use Add URLs, or ask Team to Filter &amp; add.</p></div>
+    <div class="empty-state">
+      <p>No URLs in this country yet.</p>
+      <?php if (!$emptyCountry): ?>
+        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add URLs</a>
+      <?php endif; ?>
+    </div>
   <?php else: ?>
-  <div class="actions" style="margin-top:0.8rem">
-    <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-    <span>Page <?= $pageNum ?> / <?= $pages ?></span>
-    <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
-  </div>
+    <div class="actions" style="margin-top:0.8rem">
+      <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
+      <span>Page <?= $pageNum ?> / <?= $pages ?></span>
+      <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+    </div>
   <?php endif; ?>
 </div>
 <?php render_footer('admin'); ?>

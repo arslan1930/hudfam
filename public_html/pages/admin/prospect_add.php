@@ -1,95 +1,121 @@
 <?php
 $user = require_admin();
+ensure_prospect_schema();
+seed_countries_if_empty(db());
+
+$country = trim((string) (post('country') ?: get('country')));
+$language = trim((string) (post('language') ?: get('language')));
 $raw = '';
-$preview = null;
+$errorDetail = '';
+$countryGroups = countries_grouped();
+
+// Prefill language from country default
+if ($country !== '' && $language === '') {
+    foreach (list_countries(null, true) as $c) {
+        if (strcasecmp((string) $c['name'], $country) === 0) {
+            $language = (string) ($c['default_language'] ?? '');
+            break;
+        }
+    }
+}
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $action = (string) post('action');
         $raw = (string) post('urls');
-        $domains = parse_domain_list($raw);
-
-        if (count($domains) > 100000) {
-            flash('error', 'Please paste at most 100,000 URLs/domains per run.');
-        } elseif (!$domains) {
+        $country = trim((string) post('country'));
+        $language = trim((string) post('language'));
+        if ($country === '') {
+            flash('error', 'Select a country folder first.');
+        } elseif (trim($raw) === '') {
             flash('error', 'Paste at least one URL or domain.');
-        } elseif ($action === 'save') {
-            $added = add_prospect_domains($domains, $user);
-            $msg = "Added {$added['inserted']} unique site(s) to Our database.";
-            $msg .= " Skipped {$added['skipped']} already in the list.";
-            flash('ok', $msg);
-            redirect('index.php?page=admin_prospects');
         } else {
-            // Preview uniqueness before save
-            $preview = filter_domains_against_prospects($domains);
+            $result = admin_add_urls_to_database($raw, $user, $country, $language);
+            if ($result['total'] <= 0) {
+                flash('error', 'No valid URLs/domains found. Example: https://example.com or example.com');
+            } else {
+                $msg = 'Saved ' . (int) $result['total'] . ' URL(s) to ' . $result['country'] . '.';
+                $msg .= ' New: ' . (int) $result['inserted'] . '.';
+                if ((int) $result['updated'] > 0) {
+                    $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+                }
+                flash('ok', $msg);
+                redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+            }
         }
     }
 } catch (Throwable $e) {
-    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try again.');
+    $errorDetail = $e->getMessage();
+    flash('error', 'Could not save URLs. ' . $errorDetail);
 }
 
 render_header('Add URLs', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => $country !== '' ? $country : 'Add URLs', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
     ['label' => 'Add URLs'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add URLs to Our database</h1>
-    <p class="muted">Paste URLs or domains. Team will filter new lists against this same database.</p>
+    <h1>Add URLs<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste URLs into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospects">Back to database</a>
+  <div class="actions">
+    <?php if ($country !== ''): ?>
+      <a class="btn secondary" href="index.php?page=admin_prospects&amp;country=<?= urlencode($country) ?>">Open <?= h($country) ?></a>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
+  </div>
 </div>
-<?= guide_admin_add() ?>
+
+<?= render_page_purpose(
+    'Add URLs into a country database',
+    'Each country folder has its own list of URLs.',
+    'Choose the country, paste URLs, click Save. They appear only in that country’s folder.',
+    [
+        'Select country.',
+        'Paste URLs (one per line).',
+        'Save — then open that country folder to review.',
+    ]
+) ?>
 
 <form class="card" method="post">
-  <input type="hidden" name="action" value="preview">
-  <label for="urls">URLs / domains (one per line, or comma/space separated)</label>
+  <div class="form-grid">
+    <div>
+      <label for="country">Country <span class="help">(required)</span></label>
+      <select id="country" name="country" required>
+        <option value="">— Select country —</option>
+        <?php foreach ($countryGroups as $regionCode => $block): ?>
+          <?php if (empty($block['countries'])) {
+              continue;
+          } ?>
+          <optgroup label="<?= h($block['label']) ?>">
+            <?php foreach ($block['countries'] as $c): ?>
+              <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>>
+                <?= h($c['name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </optgroup>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div>
+      <label for="language">Language</label>
+      <input id="language" name="language" value="<?= h($language) ?>" placeholder="optional default">
+    </div>
+  </div>
+  <label for="urls" style="margin-top:0.9rem">URLs / domains</label>
   <textarea id="urls" name="urls" rows="14" required
-    placeholder="https://www.site1.com&#10;site2.de&#10;https://site3.com/page"><?= h($raw) ?></textarea>
+    placeholder="https://www.site1.com&#10;site2.de&#10;https://site3.com/blog"><?= h($raw) ?></textarea>
   <p class="help" style="margin-top:0.5rem">
-    <code>https://</code> and paths are stripped automatically → stored as domain names only.
+    One per line. Saved into the selected country’s database only.
   </p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">1. Check unique vs database</button>
+    <button class="btn" type="submit">Save to country database</button>
   </p>
 </form>
 
-<?php if ($preview): ?>
-<div class="card">
-  <h2>Preview</h2>
-  <p>
-    Parsed: <strong><?= (int) $preview['total_input'] ?></strong> ·
-    Already in Our database: <strong><?= count($preview['existing']) ?></strong> ·
-    New (unique): <strong><?= count($preview['new']) ?></strong>
-  </p>
-</div>
-<div class="grid two-box">
-  <div class="card">
-    <h2>Already in database (will skip)</h2>
-    <?php if ($preview['existing']): ?>
-      <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($preview['existing'], 0, 5000))) ?><?= count($preview['existing']) > 5000 ? "\n… +" . (count($preview['existing']) - 5000) . ' more' : '' ?></textarea>
-    <?php else: ?>
-      <p class="muted">None — all pasted domains are new.</p>
-    <?php endif; ?>
-  </div>
-  <div class="card">
-    <h2>Unique — ready to add</h2>
-    <?php if ($preview['new']): ?>
-      <form method="post">
-        <input type="hidden" name="action" value="save">
-        <input type="hidden" name="urls" value="<?= h($raw) ?>">
-        <textarea class="inventory-box" rows="12" readonly><?= h(implode("\n", array_slice($preview['new'], 0, 5000))) ?><?= count($preview['new']) > 5000 ? "\n… +" . (count($preview['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">These domains join Our database. Teammates will see them in Filter Box 1 and cannot re-add them.</p>
-        <p class="actions" style="margin-top:0.8rem">
-          <button class="btn" type="submit">2. Add <?= count($preview['new']) ?> site(s) to database</button>
-        </p>
-      </form>
-    <?php else: ?>
-      <p class="muted">No unique domains left — everything is already in Our database.</p>
-    <?php endif; ?>
-  </div>
-</div>
+<?php if ($errorDetail !== ''): ?>
+  <div class="card"><p class="help">Technical detail: <?= h($errorDetail) ?></p></div>
 <?php endif; ?>
 <?php render_footer('admin'); ?>

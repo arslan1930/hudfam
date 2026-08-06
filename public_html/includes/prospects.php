@@ -2,11 +2,31 @@
 
 /**
  * Our database helpers — unique domains (no prices).
- * Filter & add checks uniqueness against prospect_sites only.
+ * Team Filter & add checks uniqueness against prospect_sites.
+ * Admin Add URLs saves directly (no uniqueness preview).
  */
+
+/** Strip protocol/path → bare domain for storage/lookup. */
+function normalize_domain(string $value): string
+{
+    $value = strtolower(trim($value));
+    if ($value === '') {
+        return '';
+    }
+    $value = preg_replace('#^https?://#i', '', $value) ?? $value;
+    $value = preg_replace('#^www\.#i', '', $value) ?? $value;
+    $host = explode('/', $value, 2)[0];
+    $host = explode('?', $host, 2)[0];
+    $host = explode('#', $host, 2)[0];
+    if (str_contains($host, ':') && !str_contains($host, ']')) {
+        $host = explode(':', $host, 2)[0];
+    }
+    return rtrim($host, '.');
+}
 
 /**
  * Ensure prospect tables exist (Hostinger safety net if upgrade.php was skipped).
+ * Each country is its own URL database: unique on (country, domain).
  */
 function ensure_prospect_schema(): void
 {
@@ -30,7 +50,8 @@ function ensure_prospect_schema(): void
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_prospect_domain (domain),
+          UNIQUE KEY uniq_prospect_country_domain (country, domain),
+          INDEX (domain),
           INDEX (country),
           INDEX (language),
           INDEX (region),
@@ -38,6 +59,29 @@ function ensure_prospect_schema(): void
           CONSTRAINT fk_prospect_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Migrate older installs: global unique(domain) → unique(country, domain)
+    try {
+        $idx = $pdo->query('SHOW INDEX FROM prospect_sites')->fetchAll(PDO::FETCH_ASSOC);
+        $hasOld = false;
+        $hasNew = false;
+        foreach ($idx as $row) {
+            $name = (string) ($row['Key_name'] ?? '');
+            if ($name === 'uniq_prospect_domain') {
+                $hasOld = true;
+            }
+            if ($name === 'uniq_prospect_country_domain') {
+                $hasNew = true;
+            }
+        }
+        if ($hasOld) {
+            $pdo->exec('ALTER TABLE prospect_sites DROP INDEX uniq_prospect_domain');
+        }
+        if (!$hasNew) {
+            $pdo->exec('ALTER TABLE prospect_sites ADD UNIQUE KEY uniq_prospect_country_domain (country, domain)');
+        }
+    } catch (Throwable $e) {
+        // ignore — CREATE above already has the right key on new installs
+    }
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS prospect_batches (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -72,6 +116,73 @@ function ensure_prospect_schema(): void
     );
 }
 
+/**
+ * Country folders for Admin: every active country + URL counts.
+ *
+ * @return list<array{country:string,region:string,region_label:string,total:int,language:string}>
+ */
+function prospect_country_folders(): array
+{
+    ensure_prospect_schema();
+    if (function_exists('seed_countries_if_empty')) {
+        try {
+            seed_countries_if_empty(db());
+        } catch (Throwable $e) {
+            // countries table may be created by upgrade/install
+        }
+    }
+    $counts = [];
+    foreach (db()->query(
+        "SELECT TRIM(country) AS country, COUNT(*) AS total
+         FROM prospect_sites
+         GROUP BY TRIM(country)"
+    )->fetchAll() as $row) {
+        $counts[(string) $row['country']] = (int) $row['total'];
+    }
+    $folders = [];
+    foreach (list_countries(null, true) as $c) {
+        $name = (string) $c['name'];
+        $region = (string) $c['region'];
+        $folders[] = [
+            'country' => $name,
+            'region' => $region,
+            'region_label' => regions()[$region] ?? $region,
+            'total' => $counts[$name] ?? 0,
+            'language' => (string) ($c['default_language'] ?? ''),
+        ];
+        unset($counts[$name]);
+    }
+    // Leftover country names in data that are not in countries table
+    foreach ($counts as $name => $total) {
+        if ($name === '') {
+            $folders[] = [
+                'country' => '',
+                'region' => 'other',
+                'region_label' => 'Other',
+                'total' => $total,
+                'language' => '',
+            ];
+            continue;
+        }
+        $folders[] = [
+            'country' => $name,
+            'region' => 'other',
+            'region_label' => 'Other',
+            'total' => $total,
+            'language' => '',
+        ];
+    }
+    usort($folders, static function ($a, $b) {
+        $ra = (string) $a['region_label'];
+        $rb = (string) $b['region_label'];
+        if ($ra !== $rb) {
+            return $ra <=> $rb;
+        }
+        return strcasecmp((string) $a['country'], (string) $b['country']);
+    });
+    return $folders;
+}
+
 function parse_domain_list(string $raw): array
 {
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
@@ -87,29 +198,37 @@ function parse_domain_list(string $raw): array
 }
 
 /**
- * Check domains against prospect inventory only.
+ * Check domains against Our database.
+ * When $country is set, only that country’s database is checked.
  *
  * @return array{existing:string[],new:string[],invalid:int,total_input:int}
  */
-function filter_domains_against_prospects(array $domains): array
+function filter_domains_against_prospects(array $domains, string $country = ''): array
 {
     ensure_prospect_schema();
     @set_time_limit(0);
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    $country = trim($country);
     $existing = [];
     $new = [];
     if (!$domains) {
         return ['existing' => [], 'new' => [], 'invalid' => 0, 'total_input' => 0];
     }
 
-    // Chunk IN queries for large pastes
     $chunkSize = 500;
     $found = [];
     for ($i = 0, $n = count($domains); $i < $n; $i += $chunkSize) {
         $chunk = array_slice($domains, $i, $chunkSize);
         $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-        $stmt = db()->prepare("SELECT domain FROM prospect_sites WHERE domain IN ($placeholders)");
-        $stmt->execute($chunk);
+        if ($country !== '') {
+            $sql = "SELECT domain FROM prospect_sites WHERE TRIM(country)=? AND domain IN ($placeholders)";
+            $params = array_merge([$country], $chunk);
+        } else {
+            $sql = "SELECT domain FROM prospect_sites WHERE domain IN ($placeholders)";
+            $params = $chunk;
+        }
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
         foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $d) {
             $found[$d] = true;
         }
@@ -130,17 +249,28 @@ function filter_domains_against_prospects(array $domains): array
 }
 
 /**
- * Plain domain names for Box 1 (old inventory). No https.
+ * Plain domain names for Filter Box 1. Optionally scoped to one country database.
  *
  * @return array{domains:string[],total:int,truncated:bool}
  */
-function list_prospect_domain_names(int $maxDisplay = 25000): array
+function list_prospect_domain_names(int $maxDisplay = 25000, string $country = ''): array
 {
     ensure_prospect_schema();
-    $total = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
-    $stmt = db()->query(
-        'SELECT domain FROM prospect_sites ORDER BY domain ASC LIMIT ' . (int) $maxDisplay
-    );
+    $country = trim($country);
+    if ($country !== '') {
+        $count = db()->prepare('SELECT COUNT(*) FROM prospect_sites WHERE TRIM(country)=?');
+        $count->execute([$country]);
+        $total = (int) $count->fetchColumn();
+        $stmt = db()->prepare(
+            'SELECT domain FROM prospect_sites WHERE TRIM(country)=? ORDER BY domain ASC LIMIT ' . (int) $maxDisplay
+        );
+        $stmt->execute([$country]);
+    } else {
+        $total = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
+        $stmt = db()->query(
+            'SELECT domain FROM prospect_sites ORDER BY domain ASC LIMIT ' . (int) $maxDisplay
+        );
+    }
     $domains = $stmt->fetchAll(PDO::FETCH_COLUMN);
     return [
         'domains' => $domains,
@@ -193,7 +323,7 @@ function add_prospect_domains(
     ensure_prospect_schema();
     @set_time_limit(0);
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
-    $check = filter_domains_against_prospects($domains);
+    $check = filter_domains_against_prospects($domains, $country);
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
     if (!$toAdd) {
@@ -264,6 +394,142 @@ function add_prospect_domains(
         throw $e;
     }
     return ['inserted' => $inserted, 'skipped' => $skipped, 'batch_id' => $batchId];
+}
+
+/**
+ * Admin: paste URLs into one country’s database (no uniqueness preview).
+ *
+ * @return array{inserted:int,updated:int,total:int,batch_id:int|null,country:string}
+ */
+function admin_add_urls_to_database(string $raw, array $user, string $country, string $language = ''): array
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    $country = trim($country);
+    if ($country === '') {
+        throw new InvalidArgumentException('Country is required.');
+    }
+
+    $region = '';
+    $defaultLang = '';
+    foreach (list_countries(null, true) as $c) {
+        if (strcasecmp((string) $c['name'], $country) === 0) {
+            $country = (string) $c['name'];
+            $region = (string) $c['region'];
+            $defaultLang = (string) ($c['default_language'] ?? '');
+            break;
+        }
+    }
+    if ($language === '') {
+        $language = $defaultLang;
+    }
+
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
+    /** @var array<string,string> $rows domain => original url (or empty) */
+    $rows = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $domain = normalize_domain($part);
+        if ($domain === '' || !str_contains($domain, '.')) {
+            continue;
+        }
+        if (isset($rows[$domain])) {
+            continue;
+        }
+        $url = '';
+        if (preg_match('#^https?://#i', $part)) {
+            $url = trim($part);
+        }
+        $rows[$domain] = $url;
+    }
+
+    if ($rows === []) {
+        return ['inserted' => 0, 'updated' => 0, 'total' => 0, 'batch_id' => null, 'country' => $country];
+    }
+
+    $batchId = get_or_create_prospect_batch(
+        (int) $user['id'],
+        $country,
+        $language,
+        $region,
+        '',
+        'Admin Add URLs · ' . $country
+    );
+    $ins = db()->prepare(
+        'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
+         VALUES (?,?,?,?,?,\'\',\'\',\'new\',?)
+         ON DUPLICATE KEY UPDATE
+           url = IF(VALUES(url) <> \'\', VALUES(url), url),
+           language = IF(VALUES(language) <> \'\', VALUES(language), language),
+           region = IF(VALUES(region) <> \'\', VALUES(region), region),
+           updated_at = NOW()'
+    );
+    $insItem = db()->prepare(
+        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+    );
+    $findId = db()->prepare(
+        'SELECT id FROM prospect_sites WHERE TRIM(country)=? AND domain=? LIMIT 1'
+    );
+
+    $inserted = 0;
+    $updated = 0;
+    db()->beginTransaction();
+    try {
+        $n = 0;
+        foreach ($rows as $domain => $url) {
+            $findId->execute([$country, $domain]);
+            $beforeId = (int) $findId->fetchColumn();
+            $ins->execute([$domain, $url, $country, $language, $region, $user['id']]);
+            if ($beforeId > 0) {
+                $updated++;
+                $siteId = $beforeId;
+            } else {
+                $inserted++;
+                $siteId = (int) db()->lastInsertId();
+                if ($siteId <= 0) {
+                    $findId->execute([$country, $domain]);
+                    $siteId = (int) $findId->fetchColumn();
+                }
+            }
+            $insItem->execute([$batchId, $domain, $siteId ?: null]);
+            $n++;
+            if ($n % 250 === 0) {
+                db()->commit();
+                db()->beginTransaction();
+            }
+        }
+        $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+        $cnt->execute([$batchId]);
+        db()->prepare(
+            'UPDATE prospect_batches SET site_count=?, country=?, language=?, region=?, notes=?, updated_at=NOW() WHERE id=?'
+        )->execute([
+            (int) $cnt->fetchColumn(),
+            $country,
+            $language,
+            $region,
+            'Admin Add URLs · ' . $country,
+            $batchId,
+        ]);
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'inserted' => $inserted,
+        'updated' => $updated,
+        'total' => count($rows),
+        'batch_id' => $batchId,
+        'country' => $country,
+    ];
 }
 
 function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = ''): array

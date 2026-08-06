@@ -31,7 +31,7 @@ render_header('Dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1>Admin dashboard</h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — manage the shared URL database.</p>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — each country has its own URL database.</p>
   </div>
   <a class="btn" href="index.php?page=admin_prospect_add">Add URLs</a>
 </div>
@@ -40,7 +40,7 @@ render_header('Dashboard', 'admin');
 <?= render_admin_panel_guide() ?>
 
 <div class="grid">
-  <div class="card stat"><span class="muted">URLs in database</span><strong><?= $prospectTotal ?></strong></div>
+  <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
   <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
 </div>
@@ -48,11 +48,11 @@ render_header('Dashboard', 'admin');
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=admin_prospect_add">
     <h2>Add URLs</h2>
-    <p>Paste websites into Our database.</p>
+    <p>Paste websites into a country folder.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
-    <p>Browse and search all unique domains.</p>
+    <p>Open country folders — one database each.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches">
     <h2>Add history</h2>

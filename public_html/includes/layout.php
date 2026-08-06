@@ -68,8 +68,8 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_prospects' => ['Our database', 'All unique URLs'],
-                'admin_prospect_add' => ['Add URLs', 'Paste sites into the database'],
+                'admin_prospects' => ['Our database', 'Country folders → URLs'],
+                'admin_prospect_add' => ['Add URLs', 'Paste into a country database'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
             ],
@@ -78,8 +78,8 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_prospect_check' => ['Filter & add', 'Paste → filter → add unique'],
-                'team_prospects' => ['Our database', 'Browse all unique URLs'],
+                'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
+                'team_prospects' => ['Our database', 'Country folders → URLs'],
                 'team_prospect_batches' => ['Add history', 'Your daily adds'],
             ],
         ];

@@ -1,21 +1,76 @@
 <?php
 $user = require_team();
+ensure_prospect_schema();
+
+$sheet = (string) get('country');
+$emptyCountry = ($sheet === '_none');
+$inCountry = ($sheet !== '' && $sheet !== 'all');
+
+// --- Country folders (default) ---
+if (!$inCountry && !$emptyCountry) {
+    $folders = prospect_country_folders();
+    $byRegion = [];
+    foreach ($folders as $f) {
+        $byRegion[$f['region_label']][] = $f;
+    }
+    $grandTotal = 0;
+    foreach ($folders as $f) {
+        $grandTotal += (int) $f['total'];
+    }
+
+    render_header('Our database', 'team');
+    ?>
+    <?php render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+        ['label' => 'Our database'],
+    ]); ?>
+    <div class="topbar">
+      <div>
+        <h1>Country databases</h1>
+        <p class="muted">Same folders as Admin — each country is its own URL list. <?= (int) $grandTotal ?> URLs total.</p>
+      </div>
+      <div class="actions">
+        <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+        <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
+      </div>
+    </div>
+    <?= guide_inventory() ?>
+    <?php foreach ($byRegion as $regionLabel => $list): ?>
+      <div class="card">
+        <h2><?= h($regionLabel) ?></h2>
+        <div class="folders" style="margin-top:0.7rem">
+          <?php foreach ($list as $f): ?>
+            <?php
+              $href = $f['country'] !== '' ? $f['country'] : '_none';
+              $label = $f['country'] !== '' ? $f['country'] : 'No country';
+            ?>
+            <a class="folder" href="index.php?page=team_prospects&amp;country=<?= urlencode($href) ?>">
+              <h3><?= h($label) ?></h3>
+              <p class="muted"><?= (int) $f['total'] ?> URL<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endforeach; ?>
+    <?php if (!$folders): ?>
+      <div class="card empty-state"><p>No countries configured. Ask Admin to run upgrade.php once.</p></div>
+    <?php endif; ?>
+    <?php
+    render_footer('team');
+    return;
+}
+
+// --- One country database ---
+$countryName = $emptyCountry ? '' : $sheet;
 $q = trim((string) get('q'));
-$country = trim((string) get('country'));
-$language = trim((string) get('language'));
-$region = (string) get('region');
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
 $rows = [];
 $total = 0;
 $pages = 1;
-$countryOptions = list_countries(null, true);
-$langs = [];
-$countriesUsed = [];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'update_status') {
-        ensure_prospect_schema();
         $id = (int) post('id');
         $st = (string) post('status');
         if (in_array($st, ['new', 'contacting', 'replied', 'skipped'], true)) {
@@ -23,73 +78,87 @@ try {
             flash('ok', 'Prospect status updated.');
         }
         redirect('index.php?page=team_prospects&' . http_build_query(array_filter([
-            'q' => $q, 'country' => $country, 'language' => $language, 'region' => $region, 'status' => $status, 'p' => $pageNum,
+            'country' => $emptyCountry ? '_none' : $countryName,
+            'q' => $q,
+            'status' => $status,
+            'p' => $pageNum,
         ])));
     }
 
-    $inv = prospect_inventory_query(compact('q', 'country', 'language', 'region', 'status'), $pageNum, 50);
-    $rows = $inv['rows'];
-    $total = $inv['total'];
-    $pages = $inv['pages'];
-    $langs = distinct_prospect_languages();
-    $countriesUsed = distinct_prospect_countries();
+    if ($emptyCountry) {
+        $where = ["TRIM(p.country)=''"];
+        $params = [];
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        if ($status !== '') {
+            $where[] = 'p.status = ?';
+            $params[] = $status;
+        }
+        $whereSql = implode(' AND ', $where);
+        $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
+        $count->execute($params);
+        $total = (int) $count->fetchColumn();
+        $pages = max(1, (int) ceil($total / 50));
+        $offset = ($pageNum - 1) * 50;
+        $stmt = db()->prepare(
+            "SELECT p.*, u.username added_by_name, u.full_name added_by_full
+             FROM prospect_sites p
+             LEFT JOIN users u ON u.id = p.created_by
+             WHERE $whereSql ORDER BY p.created_at DESC LIMIT 50 OFFSET $offset"
+        );
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+    } else {
+        $inv = prospect_inventory_query([
+            'q' => $q,
+            'country' => $countryName,
+            'status' => $status,
+        ], $pageNum, 50);
+        $rows = $inv['rows'];
+        $total = $inv['total'];
+        $pages = $inv['pages'];
+    }
 } catch (Throwable $e) {
-    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Prospects.');
+    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload.');
 }
 
+$sheetLabel = $emptyCountry ? 'No country' : $countryName;
 $qs = http_build_query(array_filter([
-    'page' => 'team_prospects', 'q' => $q, 'country' => $country,
-    'language' => $language, 'region' => $region, 'status' => $status,
-], fn($v) => $v !== '' && $v !== null));
+    'page' => 'team_prospects',
+    'country' => $emptyCountry ? '_none' : $countryName,
+    'q' => $q,
+    'status' => $status,
+], static fn($v) => $v !== '' && $v !== null));
 
-render_header('All sites', 'team');
+render_header('Our database · ' . $sheetLabel, 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Our database'],
+    ['label' => 'Our database', 'href' => 'index.php?page=team_prospects'],
+    ['label' => $sheetLabel],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Our database</h1>
-    <p class="muted"><?= $total ?> unique domains · shared with Admin</p>
+    <h1><?= h($sheetLabel) ?></h1>
+    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
-    <a class="btn secondary" href="index.php?page=team_prospect_form">Add one</a>
+    <?php if (!$emptyCountry): ?>
+      <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($countryName) ?>">Filter &amp; add</a>
+      <a class="btn secondary" href="index.php?page=team_prospect_form&amp;country=<?= urlencode($countryName) ?>">Add one</a>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=team_prospects">All countries</a>
   </div>
 </div>
-<?= guide_inventory() ?>
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="team_prospects">
+  <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
-  <div><label>Country</label>
-    <select name="country">
-      <option value="">All</option>
-      <?php foreach ($countryOptions as $c): ?>
-        <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-      <?php endforeach; ?>
-      <?php foreach ($countriesUsed as $cu): if (!in_array($cu, array_column($countryOptions, 'name'), true)): ?>
-        <option value="<?= h($cu) ?>" <?= $country === $cu ? 'selected' : '' ?>><?= h($cu) ?></option>
-      <?php endif; endforeach; ?>
-    </select>
-  </div>
-  <div><label>Language</label>
-    <select name="language">
-      <option value="">All</option>
-      <?php foreach ($langs as $lang): ?>
-        <option value="<?= h($lang) ?>" <?= $language === $lang ? 'selected' : '' ?>><?= h($lang) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <div><label>Region</label>
-    <select name="region">
-      <option value="">All</option>
-      <?php foreach (regions() as $k => $v): ?>
-        <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
   <div><label>Status</label>
     <select name="status">
       <option value="">All</option>
@@ -105,7 +174,7 @@ render_header('All sites', 'team');
   <table>
     <thead>
       <tr>
-        <th>Domain</th><th>Country</th><th>Language</th><th>Status</th>
+        <th>Domain</th><th>Language</th><th>Status</th>
         <th>Added by</th><th>When</th><th></th>
       </tr>
     </thead>
@@ -113,7 +182,6 @@ render_header('All sites', 'team');
     <?php foreach ($rows as $s): ?>
       <tr>
         <td><a href="index.php?page=team_prospect_form&id=<?= (int) $s['id'] ?>"><?= h($s['domain']) ?></a></td>
-        <td><?= h($s['country'] ?: '—') ?></td>
         <td><?= h($s['language'] ?: '—') ?></td>
         <td><?= badge($s['status']) ?></td>
         <td><?= h($s['added_by_full'] ?: $s['added_by_name'] ?: '—') ?></td>
@@ -135,14 +203,16 @@ render_header('All sites', 'team');
   </table>
   <?php if (!$rows): ?>
   <div class="empty-state">
-    <p>No sites yet.</p>
-    <a class="btn" href="index.php?page=team_prospect_check">Filter & add sites</a>
+    <p>No URLs in this country yet.</p>
+    <?php if (!$emptyCountry): ?>
+      <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($countryName) ?>">Filter &amp; add</a>
+    <?php endif; ?>
   </div>
   <?php else: ?>
   <div class="actions" style="margin-top:0.8rem">
-    <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
+    <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
     <span>Page <?= $pageNum ?> / <?= $pages ?></span>
-    <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+    <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
   </div>
   <?php endif; ?>
 </div>
