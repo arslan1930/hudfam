@@ -539,6 +539,23 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-weight: 600;
   color: var(--ink);
 }
+.tld-warn {
+  border: 1px solid #e8c27a;
+  background: #fff8e8;
+  margin-bottom: 1rem;
+}
+.tld-confirm {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-weight: 600;
+  margin: 0.85rem 0 0.4rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed #e8c27a;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+.tld-confirm input { width: auto; margin-top: 0.2rem; }
 @media (max-width: 900px) {
   .grid.two-box { grid-template-columns: 1fr; }
 }
