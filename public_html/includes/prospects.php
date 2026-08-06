@@ -104,6 +104,155 @@ function parse_plain_site_list(string $raw): array
     ];
 }
 
+/**
+ * Try to salvage a root domain from a messy line.
+ * https://www.blog.example.com/main → example.com
+ * example.co.uk/path → example.co.uk
+ */
+function extract_root_domain_candidate(string $raw): string
+{
+    $value = strtolower(trim($raw));
+    if ($value === '') {
+        return '';
+    }
+    if (is_plain_site_domain($value)) {
+        return $value;
+    }
+
+    $value = preg_replace('#^https?://#i', '', $value) ?? $value;
+    $value = preg_replace('#^//+#', '', $value) ?? $value;
+    // drop credentials / leftover
+    if (str_contains($value, '@')) {
+        $value = explode('@', $value);
+        $value = (string) end($value);
+    }
+    $host = explode('/', $value, 2)[0];
+    $host = explode('?', $host, 2)[0];
+    $host = explode('#', $host, 2)[0];
+    if (str_contains($host, ':') && !str_contains($host, ']')) {
+        $host = explode(':', $host, 2)[0];
+    }
+    $host = rtrim($host, '.');
+    $host = preg_replace('#^www\.#i', '', $host) ?? $host;
+
+    if ($host === '' || !preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $host)) {
+        return '';
+    }
+    if (is_plain_site_domain($host)) {
+        return $host;
+    }
+
+    // Subdomain → registrable root (blog.example.com → example.com)
+    $suffixLabels = public_suffix_label_count($host);
+    $labels = explode('.', $host);
+    $need = $suffixLabels + 1;
+    if (count($labels) > $need) {
+        $root = implode('.', array_slice($labels, -$need));
+        if (is_plain_site_domain($root)) {
+            return $root;
+        }
+    }
+    return '';
+}
+
+/**
+ * Clean a pasted list: fix/drop bad lines, remove paste duplicates,
+ * and optionally remove sites already in a country’s database.
+ *
+ * @return array{
+ *   text:string,
+ *   domains:string[],
+ *   input_lines:int,
+ *   fixed:int,
+ *   dropped:int,
+ *   dup_paste:int,
+ *   dup_db:int,
+ *   kept:int
+ * }
+ */
+function clean_site_list(string $raw, string $country = '', bool $removeDbDuplicates = true): array
+{
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
+    $inputLines = 0;
+    $fixed = 0;
+    $dropped = 0;
+    $dupPaste = 0;
+    $seen = [];
+    /** @var list<string> $order */
+    $order = [];
+
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $inputLines++;
+        $wasPlain = is_plain_site_domain(strtolower($part));
+        $domain = extract_root_domain_candidate($part);
+        if ($domain === '') {
+            $dropped++;
+            continue;
+        }
+        if (!$wasPlain) {
+            $fixed++;
+        }
+        if (isset($seen[$domain])) {
+            $dupPaste++;
+            continue;
+        }
+        $seen[$domain] = true;
+        $order[] = $domain;
+    }
+
+    $dupDb = 0;
+    $country = trim($country);
+    if ($removeDbDuplicates && $country !== '' && $order !== []) {
+        $check = filter_domains_against_prospects($order, $country);
+        $existing = array_fill_keys($check['existing'], true);
+        $kept = [];
+        foreach ($order as $d) {
+            if (isset($existing[$d])) {
+                $dupDb++;
+                continue;
+            }
+            $kept[] = $d;
+        }
+        $order = $kept;
+    }
+
+    return [
+        'text' => implode("\n", $order),
+        'domains' => $order,
+        'input_lines' => $inputLines,
+        'fixed' => $fixed,
+        'dropped' => $dropped,
+        'dup_paste' => $dupPaste,
+        'dup_db' => $dupDb,
+        'kept' => count($order),
+    ];
+}
+
+/** Human-readable summary of a clean_site_list() result. */
+function clean_site_list_summary(array $clean): string
+{
+    $bits = [];
+    $bits[] = (int) $clean['kept'] . ' ready';
+    if ((int) $clean['fixed'] > 0) {
+        $bits[] = 'fixed ' . (int) $clean['fixed'];
+    }
+    if ((int) $clean['dropped'] > 0) {
+        $bits[] = 'dropped ' . (int) $clean['dropped'] . ' unusable';
+    }
+    if ((int) $clean['dup_paste'] > 0) {
+        $bits[] = 'removed ' . (int) $clean['dup_paste'] . ' paste duplicates';
+    }
+    if ((int) $clean['dup_db'] > 0) {
+        $bits[] = 'removed ' . (int) $clean['dup_db'] . ' already in database';
+    }
+    return 'Clean list: ' . implode(' · ', $bits) . '.';
+}
+
 /** @deprecated Prefer is_plain_site_domain / parse_plain_site_list for new input. */
 function normalize_domain(string $value): string
 {
@@ -498,9 +647,18 @@ function add_prospect_domains(
 }
 
 /**
- * Admin: paste root domains into one country’s database.
+ * Admin: paste sites into one country’s database.
+ * Auto-cleans bad lines and skips sites already in that country.
  *
- * @return array{inserted:int,updated:int,total:int,batch_id:int|null,country:string,invalid:string[]}
+ * @return array{
+ *   inserted:int,
+ *   skipped_existing:int,
+ *   total:int,
+ *   batch_id:int|null,
+ *   country:string,
+ *   clean:array,
+ *   text:string
+ * }
  */
 function admin_add_sites_to_database(string $raw, array $user, string $country, string $language = ''): array
 {
@@ -525,26 +683,18 @@ function admin_add_sites_to_database(string $raw, array $user, string $country, 
         $language = $defaultLang;
     }
 
-    $parsed = parse_plain_site_list($raw);
-    if ($parsed['invalid'] !== []) {
-        return [
-            'inserted' => 0,
-            'updated' => 0,
-            'total' => 0,
-            'batch_id' => null,
-            'country' => $country,
-            'invalid' => $parsed['invalid'],
-        ];
-    }
-    $domains = $parsed['domains'];
+    // Fix/drop bad lines + remove paste & DB duplicates
+    $clean = clean_site_list($raw, $country, true);
+    $domains = $clean['domains'];
     if ($domains === []) {
         return [
             'inserted' => 0,
-            'updated' => 0,
+            'skipped_existing' => (int) $clean['dup_db'],
             'total' => 0,
             'batch_id' => null,
             'country' => $country,
-            'invalid' => [],
+            'clean' => $clean,
+            'text' => $clean['text'],
         ];
     }
 
@@ -558,41 +708,26 @@ function admin_add_sites_to_database(string $raw, array $user, string $country, 
     );
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
-         VALUES (?,\'\',?,?,?,\'\',\'\',\'new\',?)
-         ON DUPLICATE KEY UPDATE
-           language = IF(VALUES(language) <> \'\', VALUES(language), language),
-           region = IF(VALUES(region) <> \'\', VALUES(region), region),
-           updated_at = NOW()'
+         VALUES (?,\'\',?,?,?,\'\',\'\',\'new\',?)'
     );
     $insItem = db()->prepare(
         'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
     );
-    $findId = db()->prepare(
-        'SELECT id FROM prospect_sites WHERE TRIM(country)=? AND domain=? LIMIT 1'
-    );
 
     $inserted = 0;
-    $updated = 0;
     db()->beginTransaction();
     try {
         $n = 0;
         foreach ($domains as $domain) {
-            $findId->execute([$country, $domain]);
-            $beforeId = (int) $findId->fetchColumn();
-            $ins->execute([$domain, $country, $language, $region, $user['id']]);
-            if ($beforeId > 0) {
-                $updated++;
-                $siteId = $beforeId;
-            } else {
-                $inserted++;
+            try {
+                $ins->execute([$domain, $country, $language, $region, $user['id']]);
                 $siteId = (int) db()->lastInsertId();
-                if ($siteId <= 0) {
-                    $findId->execute([$country, $domain]);
-                    $siteId = (int) $findId->fetchColumn();
-                }
+                $insItem->execute([$batchId, $domain, $siteId ?: null]);
+                $inserted++;
+            } catch (PDOException $e) {
+                // race / already exists — skip
             }
-            $insItem->execute([$batchId, $domain, $siteId ?: null]);
             $n++;
             if ($n % 250 === 0) {
                 db()->commit();
@@ -621,11 +756,12 @@ function admin_add_sites_to_database(string $raw, array $user, string $country, 
 
     return [
         'inserted' => $inserted,
-        'updated' => $updated,
-        'total' => count($domains),
+        'skipped_existing' => (int) $clean['dup_db'],
+        'total' => $inserted,
         'batch_id' => $batchId,
         'country' => $country,
-        'invalid' => [],
+        'clean' => $clean,
+        'text' => $clean['text'],
     ];
 }
 

@@ -110,11 +110,11 @@ function guide_filter_add(): string
     return render_page_purpose(
         'Filter & add — per country database',
         'Compare a pasted list to one country’s database and save only sites that country does not already have.',
-        'Select country → Paste root domains → Filter → Add unique into that country folder.',
+        'Select country → Paste → Clean list (fixes errors & drops duplicates) → Filter → Add unique.',
         [
             'Select the country database.',
-            'Paste root domains only (example.com / example.co.uk) and Filter.',
-            'Add the remaining unique sites to that country.',
+            'Paste sites; click Clean list if there are https://, www., paths, or duplicates.',
+            'Filter, then add the remaining unique sites.',
         ]
     );
 }
@@ -134,11 +134,11 @@ function guide_admin_add(): string
     return render_page_purpose(
         'Add sites — seed a country database',
         'Paste root domains into one country’s folder (example.com / example.co.uk).',
-        'Choose country, paste root domains, save. Sites live only in that country’s database for Team filtering later.',
+        'Choose country, paste sites, Clean list if needed, then Save. Only new unique sites are added.',
         [
             'Select the country folder.',
-            'Paste root domains only — no https://, www., subdomains, or paths.',
-            'Browse them under that country’s folder.',
+            'Paste sites; use Clean list to fix errors and remove duplicates.',
+            'Save — then browse them under that country’s folder.',
         ]
     );
 }

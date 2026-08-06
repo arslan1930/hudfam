@@ -7,7 +7,7 @@ $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
-$invalidSamples = [];
+$needsClean = false;
 $countryGroups = countries_grouped();
 
 // Prefill language from country default
@@ -22,30 +22,38 @@ if ($country !== '' && $language === '') {
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $action = (string) (post('action') ?: 'save');
         $raw = (string) post('sites');
         $country = trim((string) post('country'));
         $language = trim((string) post('language'));
+
         if ($country === '') {
             flash('error', 'Select a country folder first.');
         } elseif (trim($raw) === '') {
             flash('error', 'Paste at least one site (example.com).');
-        } else {
-            $result = admin_add_sites_to_database($raw, $user, $country, $language);
-            if ($result['invalid'] !== []) {
-                $invalidSamples = array_slice($result['invalid'], 0, 8);
-                $msg = 'Root domains only (example.com or example.co.uk). Not allowed: https://, www., subdomains, paths.';
-                $msg .= ' Bad lines: ' . implode(', ', $invalidSamples);
-                if (count($result['invalid']) > 8) {
-                    $msg .= ' (+' . (count($result['invalid']) - 8) . ' more)';
-                }
-                flash('error', $msg);
-            } elseif ($result['total'] <= 0) {
-                flash('error', 'No valid sites found. Use root domains only: example.com or example.co.uk');
+        } elseif ($action === 'clean') {
+            $clean = clean_site_list($raw, $country, true);
+            $raw = $clean['text'];
+            if ($clean['kept'] <= 0) {
+                flash('error', clean_site_list_summary($clean) . ' Nothing left to save.');
             } else {
-                $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
-                $msg .= ' New: ' . (int) $result['inserted'] . '.';
-                if ((int) $result['updated'] > 0) {
-                    $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+                flash('ok', clean_site_list_summary($clean) . ' Review the list, then Save sites.');
+            }
+        } else {
+            // Save: auto-clean + add only unique sites (duplicates removed for you)
+            $result = admin_add_sites_to_database($raw, $user, $country, $language);
+            $raw = (string) ($result['text'] ?? $raw);
+            $c = $result['clean'] ?? [];
+            if ($result['inserted'] <= 0) {
+                $needsClean = ((int) ($c['dropped'] ?? 0) > 0);
+                flash('error', clean_site_list_summary($c) . ' No new sites to add (all duplicates or unusable).');
+            } else {
+                $msg = 'Added ' . (int) $result['inserted'] . ' new site(s) to ' . $result['country'] . '.';
+                if ((int) $result['skipped_existing'] > 0) {
+                    $msg .= ' Removed ' . (int) $result['skipped_existing'] . ' already in database.';
+                }
+                if ((int) ($c['fixed'] ?? 0) > 0 || (int) ($c['dropped'] ?? 0) > 0 || (int) ($c['dup_paste'] ?? 0) > 0) {
+                    $msg .= ' ' . clean_site_list_summary($c);
                 }
                 flash('ok', $msg);
                 redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
@@ -67,7 +75,7 @@ render_header('Add sites', 'admin');
 <div class="topbar">
   <div>
     <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste root domains only: <strong>example.com</strong> or <strong>example.co.uk</strong> (hyphens OK).</p>
+    <p class="muted">Paste root domains: <strong>example.com</strong> / <strong>example.co.uk</strong>. Use <strong>Clean list</strong> to fix mistakes and remove duplicates.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -80,15 +88,16 @@ render_header('Add sites', 'admin');
 <?= render_page_purpose(
     'Add sites into a country database',
     'Each country folder has its own list of sites.',
-    'Choose the country, paste root domains, click Save.',
+    'Paste sites → Clean list (fixes errors & removes duplicates) → Save.',
     [
         'Select country.',
-        'Paste root domains only (example.com / example.co.uk).',
-        'Save — then open that country folder to review.',
+        'Paste sites (root domains). If there are errors, click Clean list.',
+        'Save — only new unique sites are added.',
     ]
 ) ?>
 
-<form class="card" method="post">
+<form class="card" method="post" id="add_sites_form">
+  <input type="hidden" name="action" id="form_action" value="save">
   <div class="form-grid">
     <div>
       <label for="country">Country <span class="help">(required)</span></label>
@@ -118,12 +127,16 @@ render_header('Add sites', 'admin');
   <textarea id="sites" name="sites" rows="14" required
     placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
   <p class="help" style="margin-top:0.5rem">
-    One per line. Allowed: <code>example.com</code>, <code>my-site.com</code>, <code>example.co.uk</code>.
-    Not allowed: <code>https://…</code>, <code>www.…</code>, <code>blog.example.com</code>, <code>example.com/main</code>.
+    Allowed: <code>example.com</code>, <code>my-site.com</code>, <code>example.co.uk</code>.
+    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in this country.
   </p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">Save sites</button>
+    <button class="btn secondary" type="submit" onclick="document.getElementById('form_action').value='clean'">Clean list</button>
+    <button class="btn" type="submit" onclick="document.getElementById('form_action').value='save'">Save sites</button>
   </p>
+  <?php if ($needsClean): ?>
+    <p class="help" style="margin-top:0.6rem"><strong>Tip:</strong> Click <em>Clean list</em> first, then Save sites.</p>
+  <?php endif; ?>
 </form>
 
 <?php if ($errorDetail !== ''): ?>
