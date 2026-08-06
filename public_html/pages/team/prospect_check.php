@@ -104,13 +104,29 @@ try {
             if (!$selected) {
                 flash('error', clean_site_list_summary($clean) . ' No new unique sites to add.');
             } else {
-                $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-                $msg = 'Added ' . (int) $added['inserted'] . ' sites to ' . $country;
-                if ((int) $clean['dup_db'] > 0 || (int) $added['skipped'] > 0) {
-                    $msg .= ' · skipped duplicates already in database';
+                $tldGate = analyze_country_tld_match($selected, $country);
+                $acked = post('confirm_tld_mismatch') === '1';
+                if ($tldGate['warn'] && !$acked) {
+                    flash('error', 'Country/TLD mismatch warning: confirm the checkbox before adding, or change the country.');
+                    $result = [
+                        'existing' => [],
+                        'new' => $selected,
+                        'invalid' => 0,
+                        'total_input' => count($selected),
+                    ];
+                    $tldCheck = $tldGate;
+                } else {
+                    $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
+                    $msg = 'Added ' . (int) $added['inserted'] . ' sites to ' . $country;
+                    if ((int) $clean['dup_db'] > 0 || (int) $added['skipped'] > 0) {
+                        $msg .= ' · skipped duplicates already in database';
+                    }
+                    if ($tldGate['warn']) {
+                        $msg .= ' · saved despite TLD mismatch warning';
+                    }
+                    flash('ok', $msg . '. Copy list updated below.');
+                    redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
                 }
-                flash('ok', $msg . '. Copy list updated below.');
-                redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
         } else {
             // Filter against the whole database; country is only the save destination
@@ -140,6 +156,20 @@ try {
 
 $todayCopy = team_today_new_sites_for_copy($uid);
 $todayText = implode("\n", $todayCopy['domains']);
+
+$tldCheck = [
+    'warn' => false,
+    'message' => '',
+    'match_pct' => 100.0,
+    'signal' => 0,
+    'matched' => 0,
+    'expected' => [],
+    'top_tlds' => [],
+    'dominant_tld' => '',
+];
+if ($result && !empty($result['new'])) {
+    $tldCheck = analyze_country_tld_match($result['new'], $country);
+}
 
 $stepPaste = !$result ? 'active' : 'done';
 $stepFilter = $result ? 'active' : '';
@@ -274,6 +304,23 @@ document.querySelectorAll('.db-preview').forEach(function(el){
   </p>
 </div>
 
+<?php if (!empty($tldCheck['warn'])): ?>
+<div class="card tld-warn" role="alert">
+  <h2 style="margin:0 0 0.4rem;color:var(--warn)">Possible wrong country</h2>
+  <p style="margin:0"><?= h($tldCheck['message']) ?></p>
+  <p class="help" style="margin:0.55rem 0 0">
+    Soft check only — .com/.net/.org/.eu are ignored.
+    Expected for <?= h($country) ?>:
+    <?php
+      $exp = array_slice($tldCheck['expected'] ?? [], 0, 6);
+      echo h(implode(', ', array_map(static fn($t) => '.' . $t, $exp)));
+    ?>.
+    Match on country-specific TLDs: <strong><?= (int) $tldCheck['match_pct'] ?>%</strong>
+    (<?= (int) $tldCheck['matched'] ?>/<?= (int) $tldCheck['signal'] ?>).
+  </p>
+</div>
+<?php endif; ?>
+
 <div class="grid two-box">
   <div class="card panel-muted">
     <h2>Already in database (skipped)</h2>
@@ -300,7 +347,7 @@ document.querySelectorAll('.db-preview').forEach(function(el){
   <div class="card panel-ok">
     <h2>Unique — add into <?= h($country) ?></h2>
     <?php if ($result['new']): ?>
-      <form method="post">
+      <form method="post" id="add_unique_form">
         <input type="hidden" name="action" value="add_new">
         <input type="hidden" name="domains" value="<?= h(implode("\n", $result['new'])) ?>">
         <input type="hidden" name="country" value="<?= h($country) ?>">
@@ -310,10 +357,37 @@ document.querySelectorAll('.db-preview').forEach(function(el){
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
         <p class="help">Saves into <?= h($country) ?>. They also appear in your copy list below.</p>
+        <?php if (!empty($tldCheck['warn'])): ?>
+          <label class="tld-confirm">
+            <input type="checkbox" name="confirm_tld_mismatch" value="1" required>
+            I confirm these sites belong in <strong><?= h($country) ?></strong> (or I accept saving them there anyway).
+          </label>
+        <?php endif; ?>
         <div class="actions-sticky">
-          <button class="btn large block" type="submit">Add to <?= h($country) ?> (<?= count($result['new']) ?>)</button>
+          <button class="btn large block" type="submit" id="add_unique_btn">
+            Add to <?= h($country) ?> (<?= count($result['new']) ?>)
+          </button>
         </div>
       </form>
+      <?php if (!empty($tldCheck['warn'])): ?>
+      <script>
+      (function(){
+        var form = document.getElementById('add_unique_form');
+        if (!form) return;
+        form.addEventListener('submit', function(e){
+          var box = form.querySelector('input[name=confirm_tld_mismatch]');
+          if (box && !box.checked) {
+            e.preventDefault();
+            alert('Please confirm the country/TLD warning checkbox first, or change the country.');
+            return;
+          }
+          if (!confirm(<?= json_encode('Save ' . count($result['new']) . ' site(s) into ' . $country . ' despite the TLD mismatch warning?', JSON_UNESCAPED_UNICODE) ?>)) {
+            e.preventDefault();
+          }
+        });
+      })();
+      </script>
+      <?php endif; ?>
     <?php else: ?>
       <div class="empty-state">
         <p>No unique domains left — everything was already in the database.</p>
