@@ -164,7 +164,7 @@ function render_glossary(string $panel): void
     echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
     echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
     if ($panel === 'admin') {
-        echo '<div><dt>Your job</dt><dd>Add URLs to the database and manage Team users.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Add sites (example.com) to country databases and manage Team users.</dd></div>';
     } else {
         echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
     }

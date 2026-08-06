@@ -31,7 +31,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1>Country databases</h1>
-        <p class="muted">Each country is its own URL database. Open a folder to view or add URLs. <?= (int) $grandTotal ?> URLs total.</p>
+        <p class="muted">Each country is its own site database. Open a folder to view or add sites (example.com). <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
@@ -40,10 +40,10 @@ if (!$inCountry && !$emptyCountry) {
     <?= render_page_purpose(
         'Our database — one folder per country',
         'URLs are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add URLs inside the folder to paste sites into that country only.',
+        'Click a country folder to open that country’s database. Use Add sites to paste example.com names into that country only.',
         [
             'Open a country folder.',
-            'Add URLs into that country’s database.',
+            'Add sites (xyz.com only) into that country’s database.',
             'Team Filter & add can check against the same country list.',
         ]
     ) ?>
@@ -58,7 +58,7 @@ if (!$inCountry && !$emptyCountry) {
             ?>
             <a class="folder" href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>">
               <h3><?= h($label) ?></h3>
-              <p class="muted"><?= (int) $f['total'] ?> URL<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
+              <p class="muted"><?= (int) $f['total'] ?> site<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
             </a>
           <?php endforeach; ?>
         </div>
@@ -135,11 +135,11 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
+    <p class="muted"><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add URLs</a>
+      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
@@ -162,12 +162,11 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 
 <div class="card">
   <table>
-    <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
+    <thead><tr><th>Site</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
     <tbody>
     <?php foreach ($rows as $s): ?>
       <tr>
         <td><strong><?= h($s['domain']) ?></strong></td>
-        <td class="help"><?= h($s['url'] !== '' ? $s['url'] : '—') ?></td>
         <td><?= h($s['language'] ?: '—') ?></td>
         <td><?= badge($s['status']) ?></td>
         <td><?= h($s['added_by_full'] ?: $s['added_by_name'] ?: '—') ?></td>
@@ -178,9 +177,9 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </table>
   <?php if (!$rows): ?>
     <div class="empty-state">
-      <p>No URLs in this country yet.</p>
+      <p>No sites in this country yet.</p>
       <?php if (!$emptyCountry): ?>
-        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add URLs</a>
+        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
       <?php endif; ?>
     </div>
   <?php else: ?>

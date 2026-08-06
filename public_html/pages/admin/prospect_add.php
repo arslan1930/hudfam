@@ -7,6 +7,7 @@ $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
+$invalidSamples = [];
 $countryGroups = countries_grouped();
 
 // Prefill language from country default
@@ -21,19 +22,27 @@ if ($country !== '' && $language === '') {
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $raw = (string) post('urls');
+        $raw = (string) post('sites');
         $country = trim((string) post('country'));
         $language = trim((string) post('language'));
         if ($country === '') {
             flash('error', 'Select a country folder first.');
         } elseif (trim($raw) === '') {
-            flash('error', 'Paste at least one URL or domain.');
+            flash('error', 'Paste at least one site (example.com).');
         } else {
-            $result = admin_add_urls_to_database($raw, $user, $country, $language);
-            if ($result['total'] <= 0) {
-                flash('error', 'No valid URLs/domains found. Example: https://example.com or example.com');
+            $result = admin_add_sites_to_database($raw, $user, $country, $language);
+            if ($result['invalid'] !== []) {
+                $invalidSamples = array_slice($result['invalid'], 0, 8);
+                $msg = 'Only xyz.com format is allowed. Not allowed: https://, www., paths.';
+                $msg .= ' Bad lines: ' . implode(', ', $invalidSamples);
+                if (count($result['invalid']) > 8) {
+                    $msg .= ' (+' . (count($result['invalid']) - 8) . ' more)';
+                }
+                flash('error', $msg);
+            } elseif ($result['total'] <= 0) {
+                flash('error', 'No valid sites found. Use only: example.com');
             } else {
-                $msg = 'Saved ' . (int) $result['total'] . ' URL(s) to ' . $result['country'] . '.';
+                $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
                 $msg .= ' New: ' . (int) $result['inserted'] . '.';
                 if ((int) $result['updated'] > 0) {
                     $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
@@ -45,20 +54,20 @@ try {
     }
 } catch (Throwable $e) {
     $errorDetail = $e->getMessage();
-    flash('error', 'Could not save URLs. ' . $errorDetail);
+    flash('error', 'Could not save sites. ' . $errorDetail);
 }
 
-render_header('Add URLs', 'admin');
+render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Add URLs', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
-    ['label' => 'Add URLs'],
+    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add URLs<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste URLs into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
+    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste site names into one country’s database. Format only: <strong>example.com</strong></p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -69,12 +78,12 @@ render_header('Add URLs', 'admin');
 </div>
 
 <?= render_page_purpose(
-    'Add URLs into a country database',
-    'Each country folder has its own list of URLs.',
-    'Choose the country, paste URLs, click Save. They appear only in that country’s folder.',
+    'Add sites into a country database',
+    'Each country folder has its own list of sites.',
+    'Choose the country, paste sites as example.com only, click Save.',
     [
         'Select country.',
-        'Paste URLs (one per line).',
+        'Paste sites — only xyz.com (no https://, no www.).',
         'Save — then open that country folder to review.',
     ]
 ) ?>
@@ -105,14 +114,14 @@ render_header('Add URLs', 'admin');
       <p class="help" style="margin-top:0.35rem">Prefills from the country; leave blank if you don’t need it.</p>
     </div>
   </div>
-  <label for="urls" style="margin-top:0.9rem">URLs / domains</label>
-  <textarea id="urls" name="urls" rows="14" required
-    placeholder="https://www.site1.com&#10;site2.de&#10;https://site3.com/blog"><?= h($raw) ?></textarea>
+  <label for="sites" style="margin-top:0.9rem">Sites <span class="help">(xyz.com only)</span></label>
+  <textarea id="sites" name="sites" rows="14" required
+    placeholder="site1.com&#10;site2.de&#10;blog.site3.com"><?= h($raw) ?></textarea>
   <p class="help" style="margin-top:0.5rem">
-    One per line. Saved into the selected country’s database only.
+    One per line. Allowed: <code>example.com</code>. Not allowed: <code>https://…</code>, <code>www.…</code>, paths, or emails.
   </p>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">Save to country database</button>
+    <button class="btn" type="submit">Save sites</button>
   </p>
 </form>
 

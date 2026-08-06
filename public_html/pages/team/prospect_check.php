@@ -48,10 +48,18 @@ try {
         $region = (string) post('region');
         $niche = trim((string) post('niche'));
         $notes = trim((string) post('notes'));
-        $domains = parse_domain_list($raw);
+        $parsed = parse_plain_site_list($raw);
+        $domains = $parsed['domains'];
 
         if ($country === '') {
             flash('error', 'Select a country database first.');
+        } elseif ($parsed['invalid'] !== []) {
+            $bad = array_slice($parsed['invalid'], 0, 8);
+            $msg = 'Only xyz.com format is allowed (no https://, www., or paths). Bad lines: ' . implode(', ', $bad);
+            if (count($parsed['invalid']) > 8) {
+                $msg .= ' (+' . (count($parsed['invalid']) - 8) . ' more)';
+            }
+            flash('error', $msg);
         } elseif ($action === 'add_new') {
             $filter = filter_domains_against_prospects($domains, $country);
             $selected = $filter['new'];
@@ -70,9 +78,9 @@ try {
             }
             redirect($redir);
         } elseif (count($domains) > 100000) {
-            flash('error', 'Paste at most 100,000 domains per run (split into batches).');
+            flash('error', 'Paste at most 100,000 sites per run (split into batches).');
         } elseif (!$domains) {
-            flash('error', 'Paste at least one domain under “Paste new sites”.');
+            flash('error', 'Paste at least one site as example.com under “Paste new sites”.');
         } else {
             $result = filter_domains_against_prospects($domains, $country);
             // refresh box 1 after filter
@@ -101,7 +109,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Pick a country database → paste domains → remove ones already in that country → add only unique sites.</p>
+    <p class="muted">Pick a country → paste sites as <strong>example.com</strong> only → remove duplicates → add unique sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
@@ -171,9 +179,9 @@ render_header('Filter & add', 'team');
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
-      <p class="help">One per line (or commas). https:// is removed automatically.</p>
+      <p class="help">One per line. Only <code>example.com</code> — no https://, www., or paths.</p>
       <textarea class="inventory-box" id="domains" name="domains" rows="14" required
-        placeholder="site1.com&#10;site2.de&#10;https://www.site3.com"><?= h($raw) ?></textarea>
+        placeholder="site1.com&#10;site2.de&#10;blog.site3.com"><?= h($raw) ?></textarea>
     </div>
   </div>
 

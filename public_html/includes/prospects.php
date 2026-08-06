@@ -3,16 +3,69 @@
 /**
  * Our database helpers — unique domains (no prices).
  * Team Filter & add checks uniqueness against prospect_sites.
- * Admin Add URLs saves directly (no uniqueness preview).
+ * Admin Add sites saves directly (no uniqueness preview).
+ * Site names must be bare domains only: example.com
  */
 
-/** Strip protocol/path → bare domain for storage/lookup. */
+/**
+ * True only for bare domains like example.com / sub.example.co.uk.
+ * Rejects https://, www., paths, ports, emails, spaces, etc.
+ */
+function is_plain_site_domain(string $value): bool
+{
+    $value = strtolower(trim($value));
+    if ($value === '' || strlen($value) > 253) {
+        return false;
+    }
+    if (str_starts_with($value, 'www.')) {
+        return false;
+    }
+    return (bool) preg_match(
+        '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/',
+        $value
+    );
+}
+
+/**
+ * Parse pasted site list. Only xyz.com format is accepted.
+ *
+ * @return array{domains:string[],invalid:string[]}
+ */
+function parse_plain_site_list(string $raw): array
+{
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
+    $domains = [];
+    $invalid = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $domain = strtolower($part);
+        if (!is_plain_site_domain($domain)) {
+            $invalid[] = $part;
+            continue;
+        }
+        $domains[$domain] = true;
+    }
+    return [
+        'domains' => array_keys($domains),
+        'invalid' => $invalid,
+    ];
+}
+
+/** @deprecated Prefer is_plain_site_domain / parse_plain_site_list for new input. */
 function normalize_domain(string $value): string
 {
     $value = strtolower(trim($value));
     if ($value === '') {
         return '';
     }
+    if (is_plain_site_domain($value)) {
+        return $value;
+    }
+    // Legacy cleanup for old stored/imported values only
     $value = preg_replace('#^https?://#i', '', $value) ?? $value;
     $value = preg_replace('#^www\.#i', '', $value) ?? $value;
     $host = explode('/', $value, 2)[0];
@@ -21,7 +74,8 @@ function normalize_domain(string $value): string
     if (str_contains($host, ':') && !str_contains($host, ']')) {
         $host = explode(':', $host, 2)[0];
     }
-    return rtrim($host, '.');
+    $host = rtrim($host, '.');
+    return is_plain_site_domain($host) ? $host : '';
 }
 
 /**
@@ -185,16 +239,7 @@ function prospect_country_folders(): array
 
 function parse_domain_list(string $raw): array
 {
-    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-    $parts = preg_split('/[\n,\t; ]+/', $raw) ?: [];
-    $out = [];
-    foreach ($parts as $p) {
-        $d = normalize_domain($p);
-        if ($d !== '') {
-            $out[$d] = true;
-        }
-    }
-    return array_keys($out);
+    return parse_plain_site_list($raw)['domains'];
 }
 
 /**
@@ -322,7 +367,14 @@ function add_prospect_domains(
 ): array {
     ensure_prospect_schema();
     @set_time_limit(0);
-    $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    $clean = [];
+    foreach ($domains as $d) {
+        $d = strtolower(trim((string) $d));
+        if (is_plain_site_domain($d)) {
+            $clean[$d] = true;
+        }
+    }
+    $domains = array_keys($clean);
     $check = filter_domains_against_prospects($domains, $country);
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
@@ -397,11 +449,11 @@ function add_prospect_domains(
 }
 
 /**
- * Admin: paste URLs into one country’s database (no uniqueness preview).
+ * Admin: paste sites (xyz.com only) into one country’s database.
  *
- * @return array{inserted:int,updated:int,total:int,batch_id:int|null,country:string}
+ * @return array{inserted:int,updated:int,total:int,batch_id:int|null,country:string,invalid:string[]}
  */
-function admin_add_urls_to_database(string $raw, array $user, string $country, string $language = ''): array
+function admin_add_sites_to_database(string $raw, array $user, string $country, string $language = ''): array
 {
     ensure_prospect_schema();
     @set_time_limit(0);
@@ -424,31 +476,27 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         $language = $defaultLang;
     }
 
-    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
-    /** @var array<string,string> $rows domain => original url (or empty) */
-    $rows = [];
-    foreach ($parts as $part) {
-        $part = trim($part);
-        if ($part === '') {
-            continue;
-        }
-        $domain = normalize_domain($part);
-        if ($domain === '' || !str_contains($domain, '.')) {
-            continue;
-        }
-        if (isset($rows[$domain])) {
-            continue;
-        }
-        $url = '';
-        if (preg_match('#^https?://#i', $part)) {
-            $url = trim($part);
-        }
-        $rows[$domain] = $url;
+    $parsed = parse_plain_site_list($raw);
+    if ($parsed['invalid'] !== []) {
+        return [
+            'inserted' => 0,
+            'updated' => 0,
+            'total' => 0,
+            'batch_id' => null,
+            'country' => $country,
+            'invalid' => $parsed['invalid'],
+        ];
     }
-
-    if ($rows === []) {
-        return ['inserted' => 0, 'updated' => 0, 'total' => 0, 'batch_id' => null, 'country' => $country];
+    $domains = $parsed['domains'];
+    if ($domains === []) {
+        return [
+            'inserted' => 0,
+            'updated' => 0,
+            'total' => 0,
+            'batch_id' => null,
+            'country' => $country,
+            'invalid' => [],
+        ];
     }
 
     $batchId = get_or_create_prospect_batch(
@@ -457,13 +505,12 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         $language,
         $region,
         '',
-        'Admin Add URLs · ' . $country
+        'Admin Add sites · ' . $country
     );
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
-         VALUES (?,?,?,?,?,\'\',\'\',\'new\',?)
+         VALUES (?,\'\',?,?,?,\'\',\'\',\'new\',?)
          ON DUPLICATE KEY UPDATE
-           url = IF(VALUES(url) <> \'\', VALUES(url), url),
            language = IF(VALUES(language) <> \'\', VALUES(language), language),
            region = IF(VALUES(region) <> \'\', VALUES(region), region),
            updated_at = NOW()'
@@ -481,10 +528,10 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     db()->beginTransaction();
     try {
         $n = 0;
-        foreach ($rows as $domain => $url) {
+        foreach ($domains as $domain) {
             $findId->execute([$country, $domain]);
             $beforeId = (int) $findId->fetchColumn();
-            $ins->execute([$domain, $url, $country, $language, $region, $user['id']]);
+            $ins->execute([$domain, $country, $language, $region, $user['id']]);
             if ($beforeId > 0) {
                 $updated++;
                 $siteId = $beforeId;
@@ -512,7 +559,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
             $country,
             $language,
             $region,
-            'Admin Add URLs · ' . $country,
+            'Admin Add sites · ' . $country,
             $batchId,
         ]);
         db()->commit();
@@ -526,10 +573,17 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     return [
         'inserted' => $inserted,
         'updated' => $updated,
-        'total' => count($rows),
+        'total' => count($domains),
         'batch_id' => $batchId,
         'country' => $country,
+        'invalid' => [],
     ];
+}
+
+/** @deprecated use admin_add_sites_to_database */
+function admin_add_urls_to_database(string $raw, array $user, string $country, string $language = ''): array
+{
+    return admin_add_sites_to_database($raw, $user, $country, $language);
 }
 
 function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = ''): array

@@ -8,7 +8,7 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 |-------|------|
 | Dashboard | Dashboard |
 | Our database | Filter & add |
-| Add URLs | Our database |
+| Add sites | Our database |
 | Add history | Add history |
 | Users | |
 

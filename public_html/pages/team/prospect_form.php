@@ -20,13 +20,13 @@ if ($id) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $domain = normalize_domain((string) post('domain'));
+    $domainRaw = trim((string) post('domain'));
+    $domain = strtolower($domainRaw);
     $country = trim((string) post('country'));
     $language = trim((string) post('language'));
     $region = (string) post('region');
     $niche = trim((string) post('niche'));
     $notes = trim((string) post('notes'));
-    $url = trim((string) post('url'));
     $status = (string) post('status');
     if (!in_array($status, ['new', 'contacting', 'replied', 'skipped'], true)) {
         $status = 'new';
@@ -44,8 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    if ($domain === '') {
-        flash('error', 'Domain is required.');
+    if ($domainRaw === '' || !is_plain_site_domain($domain)) {
+        flash('error', 'Site must be xyz.com only (e.g. example.com). No https://, www., or paths.');
     } elseif ($country === '' && !$id) {
         flash('error', 'Select a country database.');
     } elseif (!$id) {
@@ -60,12 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
             redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
         }
-        if ($url !== '' || $status !== 'new') {
+        if ($status !== 'new') {
             db()->prepare(
-                'UPDATE prospect_sites SET url=?, status=? WHERE TRIM(country)=? AND domain=?'
-            )->execute([$url, $status, $country, $domain]);
+                'UPDATE prospect_sites SET status=? WHERE TRIM(country)=? AND domain=?'
+            )->execute([$status, $country, $domain]);
         }
-        flash('ok', 'Prospect added to ' . $country . ' (also saved in today’s add history).');
+        flash('ok', 'Site added to ' . $country . ' (also saved in today’s add history).');
         if (!empty($added['batch_id'])) {
             redirect('index.php?page=team_prospect_batch&id=' . (int) $added['batch_id']);
         }
@@ -73,30 +73,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             db()->prepare(
-                'UPDATE prospect_sites SET domain=?, url=?, country=?, language=?, region=?, niche=?, notes=?, status=? WHERE id=?'
-            )->execute([$domain, $url, $country, $language, $region, $niche, $notes, $status, $id]);
-            flash('ok', 'Prospect updated.');
+                'UPDATE prospect_sites SET domain=?, url=\'\', country=?, language=?, region=?, niche=?, notes=?, status=? WHERE id=?'
+            )->execute([$domain, $country, $language, $region, $niche, $notes, $status, $id]);
+            flash('ok', 'Site updated.');
             redirect('index.php?page=team_prospects&country=' . urlencode($country !== '' ? $country : '_none'));
         } catch (PDOException $e) {
-            flash('error', 'Domain already exists in this country’s database.');
+            flash('error', 'Site already exists in this country’s database.');
         }
     }
 }
 
-render_header($id ? $site['domain'] : 'Add prospect', 'team');
+render_header($id ? $site['domain'] : 'Add site', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add one prospect' ?></h1>
-    <p class="muted">Prospects only (no prices). Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
+    <h1><?= $id ? h($site['domain']) : 'Add one site' ?></h1>
+    <p class="muted">Site name only as <strong>example.com</strong>. Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
   </div>
   <a class="btn secondary" href="index.php?page=team_prospects">Back</a>
 </div>
 <div class="card">
 <form method="post">
   <div class="form-grid">
-    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
-    <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
+    <div>
+      <label>Site <span class="help">(xyz.com only)</span></label>
+      <input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com" pattern="^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$">
+    </div>
     <div><label>Country database <?= !$id ? '<span class="help">(required)</span>' : '' ?></label>
       <select name="country" <?= !$id ? 'required' : '' ?>>
         <option value="">— Select country —</option>

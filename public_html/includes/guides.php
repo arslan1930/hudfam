@@ -95,11 +95,11 @@ function guide_inventory(): string
 {
     return render_page_purpose(
         'Our database — country folders',
-        'Each country has its own URL database. Admin opens a country folder to view or add URLs.',
-        'Pick a country folder, then browse or add URLs for that country only.',
+        'Each country has its own site database. Admin opens a country folder to view or add sites.',
+        'Pick a country folder, then browse or add sites (example.com only) for that country.',
         [
             'Open a country folder.',
-            'Add URLs into that country’s database.',
+            'Add sites (xyz.com only) into that country’s database.',
             'Team can filter against the same country list.',
         ]
     );
@@ -109,11 +109,11 @@ function guide_filter_add(): string
 {
     return render_page_purpose(
         'Filter & add — per country database',
-        'Compare a pasted list to one country’s URL database and save only domains that country does not already have.',
-        'Select country → Paste → Filter → Add unique into that country folder.',
+        'Compare a pasted list to one country’s database and save only sites that country does not already have.',
+        'Select country → Paste example.com → Filter → Add unique into that country folder.',
         [
             'Select the country database.',
-            'Paste domains (one per line) and Filter.',
+            'Paste sites as xyz.com only (one per line) and Filter.',
             'Add the remaining unique sites to that country.',
         ]
     );
@@ -132,12 +132,12 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add URLs — seed a country database',
-        'Paste URLs or domains into one country’s folder (no prices).',
-        'Choose country, paste, save. URLs live only in that country’s database for Team filtering later.',
+        'Add sites — seed a country database',
+        'Paste site names into one country’s folder. Only xyz.com format is allowed.',
+        'Choose country, paste example.com lines, save. Sites live only in that country’s database for Team filtering later.',
         [
             'Select the country folder.',
-            'Paste URLs or domains and Save.',
+            'Paste sites as xyz.com only (no https:// or www.).',
             'Browse them under that country’s folder.',
         ]
     );
