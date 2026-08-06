@@ -7,9 +7,9 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 | Admin | Team |
 |-------|------|
 | Dashboard | Dashboard (tasks on top) |
-| Our database | Filter & add |
-| Add sites | Added sites |
-| Added sites | |
+| **Sites Data** → Countries | Filter & add |
+| **Sites Data** → Sites add by admin | Added sites |
+| **Sites Data** → Added sites | |
 | Users (includes Tasks) | |
 | Account | |
 

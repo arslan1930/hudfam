@@ -14,6 +14,7 @@ render_header('Added sites · ' . $batch['batch_date'], 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
     ['label' => 'Added sites', 'href' => 'index.php?page=admin_prospect_batches'],
     ['label' => $batch['batch_date'] . ' · ' . $person],
 ]); ?>
@@ -34,9 +35,9 @@ render_header('Added sites · ' . $batch['batch_date'], 'admin');
       $batchCountry = canonicalize_country_name(trim((string) ($batch['country'] ?? '')));
       if ($batchCountry !== ''):
     ?>
-      <a class="btn" href="index.php?page=admin_prospects&amp;country=<?= urlencode($batchCountry) ?>&amp;created_by=<?= (int) $batch['user_id'] ?>">Our database · <?= h($batchCountry) ?></a>
+      <a class="btn" href="index.php?page=admin_prospects&amp;country=<?= urlencode($batchCountry) ?>&amp;created_by=<?= (int) $batch['user_id'] ?>">Countries · <?= h($batchCountry) ?></a>
     <?php else: ?>
-      <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Our database · this person</a>
+      <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Countries · this person</a>
     <?php endif; ?>
   </div>
 </div>
@@ -45,7 +46,7 @@ render_header('Added sites · ' . $batch['batch_date'], 'admin');
   <?php if (!empty($batch['notes'])): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">Saved in Our database and in this teammate’s daily add history.</p>
+  <p class="help">Saved in Countries and in this teammate’s daily add history.</p>
   <?php if ($domains): ?>
     <textarea class="inventory-box" rows="16" readonly><?= h(implode("\n", $domains)) ?></textarea>
     <details style="margin-top:1rem">

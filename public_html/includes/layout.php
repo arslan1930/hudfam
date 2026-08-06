@@ -70,9 +70,13 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_prospects' => ['Our database', 'Country folders'],
-                'admin_prospect_add' => ['Add sites', 'Paste into a country'],
+            ],
+            'Sites Data' => [
+                'admin_prospects' => ['Countries', 'Browse country folders'],
+                'admin_prospect_add' => ['Sites add by admin', 'Paste into a country'],
                 'admin_prospect_batches' => ['Added sites', 'Who added what, by day'],
+            ],
+            'People' => [
                 'admin_users' => ['Users', 'Accounts & assign tasks'],
                 'admin_account' => ['Account', 'Email & password'],
             ],

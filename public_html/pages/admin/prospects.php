@@ -48,18 +48,20 @@ if (!$inCountry && !$emptyCountry) {
     $adminUsers = list_admin_users(false);
     $people = array_merge($teamUsers, $adminUsers);
 
-    render_header('Our database', 'admin');
+    render_header('Countries', 'admin');
     ?>
     <?php render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Our database'],
+        ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
+        ['label' => 'Countries'],
     ]); ?>
     <div class="topbar">
       <div>
-        <h1>Country databases</h1>
+        <h1>Countries</h1>
         <p class="muted">Browse, download, add, or delete sites. Mistaken deletes can be undone. <?= (int) $grandTotal ?> sites total<?= $personLabel !== '' ? ' · added by ' . h($personLabel) : '' ?>.</p>
       </div>
       <div class="actions">
+        <a class="btn" href="index.php?page=admin_prospect_add">Sites add by admin</a>
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Added sites</a>
       </div>
     </div>
@@ -308,11 +310,11 @@ $trashBatches = list_prospect_trash_batches($countryKey, 8);
 if ($view === 'names') {
     $plain = list_prospect_domains_plain($countryKey, $q, $status, 150000, $createdByOpt);
     $text = implode("\n", $plain['domains']);
-    render_header('Our database · ' . $sheetLabel . ' · all names', 'admin');
+    render_header('Countries · ' . $sheetLabel . ' · all names', 'admin');
     ?>
     <?php render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+        ['label' => 'Countries', 'href' => 'index.php?page=admin_prospects'],
         ['label' => $sheetLabel, 'href' => $tableUrl],
         ['label' => 'All names'],
     ]); ?>
@@ -369,11 +371,11 @@ if ($emptyCountry) {
 $filterMatchCount = count_prospect_sites_filtered($countryKey, $q, $status, $createdByOpt);
 $peopleForFilter = array_merge(list_team_users(false), list_admin_users(false));
 
-render_header('Our database · ' . $sheetLabel, 'admin');
+render_header('Countries · ' . $sheetLabel, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects' . ($createdByFilter > 0 ? '&created_by=' . $createdByFilter : '')],
+    ['label' => 'Countries', 'href' => 'index.php?page=admin_prospects' . ($createdByFilter > 0 ? '&created_by=' . $createdByFilter : '')],
     ['label' => $sheetLabel],
 ]); ?>
 <div class="topbar">
@@ -385,7 +387,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
     <a class="btn secondary" href="<?= h($namesUrl) ?>">View all names</a>
     <?php if (!$emptyCountry): ?>
-      <a class="btn secondary" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+      <a class="btn secondary" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Sites add by admin</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects<?= $createdByFilter > 0 ? '&created_by=' . $createdByFilter : '' ?>">All countries</a>
   </div>

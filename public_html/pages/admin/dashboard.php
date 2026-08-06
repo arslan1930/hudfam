@@ -46,39 +46,50 @@ $topCountry = $frequent[0]['name'] ?? '';
   </div>
   <div class="actions" style="align-items:center;gap:0.75rem">
     <time id="live-datetime" class="live-datetime" datetime="<?= h(date('c')) ?>"><?= h(date('l · d M Y · H:i:s')) ?></time>
-    <a class="btn" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Add sites<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
+    <a class="btn" href="index.php?page=admin_prospects">Countries</a>
   </div>
 </div>
 
-<?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
+<?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospects&country=') ?>
 
 <div class="grid">
-  <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
+  <div class="card stat"><span class="muted">Sites (all countries)</span><strong><?= $prospectTotal ?></strong></div>
   <div class="card stat"><span class="muted">Added sites (days)</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Open tasks</span><strong><?= $openTasks ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
 </div>
 
+<section style="margin:1.5rem 0 0.75rem">
+  <h2 style="margin:0 0 0.35rem">Sites Data</h2>
+  <p class="muted" style="margin:0">Country folders, admin adds, and daily added-sites history.</p>
+</section>
 <div class="launch-cards">
+  <a class="launch-card" href="index.php?page=admin_prospects">
+    <h2>Countries</h2>
+    <p>Browse and manage sites by country folder.</p>
+  </a>
   <a class="launch-card" href="index.php?page=admin_prospect_add<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
-    <h2>Add sites</h2>
+    <h2>Sites add by admin</h2>
     <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . '.' : 'Paste domains into a country folder.' ?></p>
   </a>
+  <a class="launch-card" href="index.php?page=admin_prospect_batches">
+    <h2>Added sites</h2>
+    <p>Who added sites, by day (admin + team).</p>
+  </a>
+</div>
+
+<section style="margin:1.75rem 0 0.75rem">
+  <h2 style="margin:0 0 0.35rem">People</h2>
+  <p class="muted" style="margin:0">Accounts, tasks, and your admin login.</p>
+</section>
+<div class="launch-cards">
   <a class="launch-card" href="index.php?page=admin_users">
     <h2>Users &amp; tasks</h2>
     <p><?= $openTasks ?> open tasks · manage teammates.</p>
   </a>
-  <a class="launch-card" href="index.php?page=admin_prospects">
-    <h2>Our database</h2>
-    <p>Browse by country.</p>
-  </a>
   <a class="launch-card" href="index.php?page=admin_account">
     <h2>Account</h2>
     <p>Email &amp; password.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=admin_prospect_batches">
-    <h2>Added sites</h2>
-    <p>Who added sites, by day.</p>
   </a>
 </div>
 
@@ -101,7 +112,7 @@ $topCountry = $frequent[0]['name'] ?? '';
   <?php else: ?>
     <div class="empty-state">
       <p>No sites added yet.</p>
-      <a class="btn" href="index.php?page=admin_prospect_add">Add the first sites</a>
+      <a class="btn" href="index.php?page=admin_prospect_add">Sites add by admin</a>
     </div>
   <?php endif; ?>
 </div>

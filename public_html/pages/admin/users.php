@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'delete') {
     }
     try {
         db()->prepare('DELETE FROM users WHERE id=?')->execute([$id]);
-        flash('ok', 'Removed user “' . $target['username'] . '”. Their added sites stay in Our database.');
+        flash('ok', 'Removed user “' . $target['username'] . '”. Their added sites stay in Countries.');
     } catch (PDOException $e) {
         flash('error', 'Could not delete user.');
     }
@@ -185,7 +185,7 @@ render_header('Admins & users', 'admin');
           <a href="index.php?page=admin_users&edit=<?= (int)$u['id'] ?>">Edit</a>
           <a href="index.php?page=admin_tasks&amp;user=<?= (int) $u['id'] ?>">Assign task</a>
           <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Added sites</a>
-          <form method="post" style="display:inline" onsubmit="return confirm(<?= h(json_encode('Remove teammate ' . $u['username'] . '? Their sites stay in Our database.', JSON_UNESCAPED_UNICODE)) ?>);">
+          <form method="post" style="display:inline" onsubmit="return confirm(<?= h(json_encode('Remove teammate ' . $u['username'] . '? Their sites stay in Countries.', JSON_UNESCAPED_UNICODE)) ?>);">
             <input type="hidden" name="action" value="delete">
             <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
             <button class="btn-link danger" type="submit">Remove</button>

@@ -73,16 +73,18 @@ try {
     flash('error', 'Could not save sites. ' . $errorDetail);
 }
 
-render_header('Add sites', 'admin');
+render_header('Sites add by admin', 'admin');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
-    ['label' => 'Add sites'],
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => 'Countries', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => $country !== '' ? $country : 'Sites add by admin', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Sites add by admin'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <h1>Sites add by admin<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
     <p class="muted">Paste root domains: <strong>example.com</strong> / <strong>example.co.uk</strong>. Type to search country/language. Use <strong>Clean list</strong> to fix mistakes and remove duplicates.</p>
   </div>
   <div class="actions">
@@ -113,7 +115,7 @@ render_header('Add sites', 'admin');
     placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
   <p class="help" style="margin-top:0.5rem">
     Allowed: <code>example.com</code>, <code>my-site.com</code>, <code>example.co.uk</code>.
-    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in Our database (any country).
+    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in Countries (any country).
   </p>
   <p class="actions" style="margin-top:1rem">
     <button class="btn secondary" type="submit" onclick="document.getElementById('form_action').value='clean'">Clean list</button>

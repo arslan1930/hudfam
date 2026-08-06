@@ -28,6 +28,7 @@ render_header('Added sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
     ['label' => 'Added sites'],
 ]); ?>
 <div class="topbar">
@@ -35,7 +36,7 @@ render_header('Added sites', 'admin');
     <h1>Added sites</h1>
     <p class="muted">Who added how many sites each day<?= $personLabel !== '' ? ' · ' . h($personLabel) : '' ?>.</p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
+  <a class="btn secondary" href="index.php?page=admin_prospects">Countries</a>
 </div>
 
 <div class="date-legend" aria-label="Date highlights">
@@ -59,7 +60,7 @@ render_header('Added sites', 'admin');
   <button class="btn" type="submit">Filter</button>
   <?php if ($userFilter > 0): ?>
     <a class="btn secondary" href="index.php?page=admin_prospect_batches">Clear</a>
-    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $userFilter ?>">Our database · <?= h($personLabel) ?></a>
+    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $userFilter ?>">Countries · <?= h($personLabel) ?></a>
   <?php endif; ?>
 </form>
 
