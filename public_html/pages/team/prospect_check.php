@@ -12,7 +12,6 @@ $niche = '';
 $notes = '';
 $result = null;
 $old = ['domains' => [], 'total' => 0, 'truncated' => false];
-$oldText = '';
 
 // Always use the existing country folder name (Germany, Spain, …) — never a free-text variant.
 if ($country !== '') {
@@ -31,12 +30,10 @@ if ($country !== '') {
 }
 
 try {
+    // Count only — never load/expose the existing country domain list to teammates.
     if ($country !== '') {
-        $old = list_prospect_domain_names(25000, $country);
-        $oldText = implode("\n", $old['domains']);
-        if ($old['truncated']) {
-            $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-        }
+        $old = list_prospect_domain_names(1, $country);
+        $old['domains'] = [];
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -105,12 +102,9 @@ try {
         } else {
             $result = filter_domains_against_prospects($domains, $country);
             $raw = implode("\n", $domains);
-            // refresh box 1 after filter
-            $old = list_prospect_domain_names(25000, $country);
-            $oldText = implode("\n", $old['domains']);
-            if ($old['truncated']) {
-                $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-            }
+            // refresh private count after filter (domains stay hidden from teammates)
+            $old = list_prospect_domain_names(1, $country);
+            $old['domains'] = [];
         }
     }
 } catch (Throwable $e) {
@@ -172,15 +166,21 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel panel-muted">
-      <h2>① Already in this country</h2>
+      <h2>① Country database (private)</h2>
       <p class="help">
         <?php if ($country === ''): ?>
-          Select a country to load its database.
+          Select a country first. The existing site list stays hidden for privacy.
         <?php else: ?>
-          <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> in <?= h($country) ?> · used to remove duplicates
+          Filtering still uses the full <?= h($country) ?> database to remove duplicates.
+          The existing site list is hidden from Team for privacy.
         <?php endif; ?>
       </p>
-      <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="Select a country first"><?= h($oldText) ?></textarea>
+      <div class="empty-state" style="min-height:12rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
+        <p class="muted" style="margin:0;max-width:18rem">
+          Existing country sites are not shown here.<br>
+          Paste your list on the right, then Filter — only <strong>new unique</strong> sites will appear.
+        </p>
+      </div>
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
@@ -234,7 +234,13 @@ render_header('Filter & add', 'team');
   <div class="card panel-muted">
     <h2>Already known (skipped)</h2>
     <?php if ($result['existing']): ?>
-      <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
+      <div class="empty-state" style="min-height:10rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
+        <p class="muted" style="margin:0;max-width:18rem">
+          <strong><?= count($result['existing']) ?></strong> site<?= count($result['existing']) === 1 ? '' : 's' ?>
+          from your paste already exist in <?= h($country) ?> and were skipped.<br>
+          Existing country URLs stay hidden for privacy.
+        </p>
+      </div>
     <?php else: ?>
       <div class="empty-state"><p>Nothing skipped — all pasted domains are new for this country.</p></div>
     <?php endif; ?>
