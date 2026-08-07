@@ -198,7 +198,7 @@ render_header('Order · ' . $client['name'], 'admin');
       <label class="sheet-search" for="sheet-search">
         <span class="visually-hidden">Search sheet</span>
         <input id="sheet-search" type="search" placeholder="Search sheet…"
-               autocomplete="off" spellcheck="false">
+               autocomplete="off" spellcheck="false" data-no-draft>
         <span class="sheet-search-meta muted" data-sheet-search-meta hidden></span>
       </label>
     </div>

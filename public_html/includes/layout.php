@@ -58,6 +58,14 @@ function render_header(string $title, string $panel = ''): void
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
     $current = current_route_page();
     $roleLabel = $panel === 'admin' ? 'Admin' : 'Team';
+    $flashes = get_flashes();
+    $clearDraft = false;
+    foreach ($flashes as $flash) {
+        if (($flash['type'] ?? '') === 'ok') {
+            $clearDraft = true;
+            break;
+        }
+    }
 
     echo '<div class="shell"><aside class="sidebar">';
     echo '<a class="brand" href="' . h($home) . '">';
@@ -110,8 +118,8 @@ function render_header(string $title, string $panel = ''): void
     echo '<div class="nav-group nav-group-end">';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
-    echo '</nav></aside><main class="main">';
-    foreach (get_flashes() as $flash) {
+    echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    foreach ($flashes as $flash) {
         render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }
 }
@@ -120,6 +128,22 @@ function render_footer(string $panel = ''): void
 {
     if (current_user() && $panel !== '') {
         render_project_credit();
+        if ($panel === 'admin') {
+            $user = current_user();
+            $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
+            $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
+            $jsFile = asset_url('assets/js/draft-autosave.js');
+            echo '<script>';
+            echo 'window.TXF_DRAFT=' . json_encode([
+                'panel' => 'admin',
+                'userId' => (int) ($user['id'] ?? 0),
+                'clearDraft' => false,
+            ], JSON_UNESCAPED_UNICODE) . ';';
+            echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
+            echo '</script>';
+            echo '<script src="' . h($jsPhp) . '" defer></script>';
+            echo '<script src="' . h($jsFile) . '" defer></script>';
+        }
         echo '</main></div>';
     }
     echo '</body></html>';
