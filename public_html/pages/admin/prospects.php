@@ -148,8 +148,22 @@ if (is_array($draft)) {
 if (!$inCountry && !$emptyCountry) {
     $folders = prospect_country_folders();
     $byRegion = [];
+    // Preserve region order from regions()
+    foreach (regions() as $regionKey => $regionLabel) {
+        $byRegion[$regionLabel] = [];
+    }
     foreach ($folders as $f) {
-        $byRegion[$f['region_label']][] = $f;
+        $label = (string) ($f['region_label'] ?? 'Other');
+        if (!isset($byRegion[$label])) {
+            $byRegion[$label] = [];
+        }
+        $byRegion[$label][] = $f;
+    }
+    // Drop empty market groups
+    foreach ($byRegion as $k => $list) {
+        if ($list === []) {
+            unset($byRegion[$k]);
+        }
     }
     $grandTotal = 0;
     foreach ($folders as $f) {
@@ -211,24 +225,194 @@ if (!$inCountry && !$emptyCountry) {
     </div>
     <?= sites_form_script_tag() ?>
 
-    <?php foreach ($byRegion as $regionLabel => $list): ?>
-      <div class="card">
-        <h2><?= h($regionLabel) ?></h2>
-        <div class="folders" style="margin-top:0.7rem">
-          <?php foreach ($list as $f): ?>
-            <?php
-              $href = $f['country'] !== '' ? $f['country'] : '_none';
-              $label = $f['country'] !== '' ? $f['country'] : 'No country';
-            ?>
-            <a class="folder" href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>">
-              <h3><?= h($label) ?></h3>
-              <p class="muted"><?= (int) $f['total'] ?> URL<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
-            </a>
-          <?php endforeach; ?>
+    <?php if ($folders): ?>
+    <div class="card prospect-markets-toolbar">
+      <div class="invoice-list-toolbar" style="margin-bottom:0">
+        <h2 style="margin:0">Markets</h2>
+        <label class="sheet-search" for="prospect-country-search">
+          <span class="visually-hidden">Search countries</span>
+          <input id="prospect-country-search" type="search" placeholder="Search country or .de…"
+                 autocomplete="off" spellcheck="false" data-no-draft
+                 title="Type to filter · Enter = next match">
+          <span class="sheet-search-meta muted" data-prospect-country-search-meta hidden></span>
+        </label>
+      </div>
+      <p class="help" style="margin:0.45rem 0 0">
+        Europe first · English markets second. Click a market to expand/collapse.
+        Europe &amp; North America show TLDs (.de, .us). Sorted by no. of sites.
+      </p>
+    </div>
+
+    <div id="prospect-markets">
+    <?php
+    $marketIndex = 0;
+    foreach ($byRegion as $regionLabel => $list):
+        $marketIndex++;
+        $marketId = 'market-' . preg_replace('/[^a-z0-9]+/i', '-', strtolower($regionLabel));
+        $openByDefault = $marketIndex <= 2; // Europe + English open
+        $marketTotal = 0;
+        foreach ($list as $f) {
+            $marketTotal += (int) $f['total'];
+        }
+        ?>
+      <div class="card prospect-market<?= $openByDefault ? ' is-open' : '' ?>"
+           data-prospect-market
+           data-market-label="<?= h(mb_strtolower($regionLabel)) ?>">
+        <button type="button" class="prospect-market-toggle" data-prospect-market-toggle
+                aria-expanded="<?= $openByDefault ? 'true' : 'false' ?>"
+                aria-controls="<?= h($marketId) ?>">
+          <span class="prospect-market-title"><?= h($regionLabel) ?></span>
+          <span class="prospect-market-meta muted">
+            <?= count($list) ?> countr<?= count($list) === 1 ? 'y' : 'ies' ?>
+            · <?= (int) $marketTotal ?> site<?= (int) $marketTotal === 1 ? '' : 's' ?>
+          </span>
+          <span class="prospect-market-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="prospect-market-body" id="<?= h($marketId) ?>" <?= $openByDefault ? '' : 'hidden' ?>>
+          <div class="folders" style="margin-top:0.7rem">
+            <?php foreach ($list as $f):
+                $href = $f['country'] !== '' ? $f['country'] : '_none';
+                $label = (string) ($f['display_label'] ?? ($f['country'] !== '' ? $f['country'] : 'No country'));
+                $searchHay = mb_strtolower(trim(
+                    $label . ' '
+                    . (string) ($f['country'] ?? '') . ' '
+                    . (string) ($f['code'] ?? '') . ' '
+                    . (string) ($f['language'] ?? '') . ' '
+                    . (string) $regionLabel . ' '
+                    . (int) $f['total'] . ' sites'
+                ));
+                ?>
+              <a class="folder"
+                 href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>"
+                 data-prospect-country
+                 data-search="<?= h($searchHay) ?>"
+                 title="<?= h((string) ($f['country'] !== '' ? $f['country'] : 'No country')) ?>">
+                <h3>
+                  <span class="prospect-folder-count"><?= (int) $f['total'] ?></span>
+                  <span class="prospect-folder-label"><?= h($label) ?></span>
+                </h3>
+                <p class="muted">
+                  no. of sites<?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?>
+                </p>
+              </a>
+            <?php endforeach; ?>
+          </div>
+          <p class="help sheet-search-empty" data-prospect-country-empty hidden>No countries in this market match.</p>
         </div>
       </div>
     <?php endforeach; ?>
-    <?php if (!$folders): ?>
+    </div>
+    <p class="help sheet-search-empty" data-prospect-country-search-empty hidden style="margin-top:0.75rem">
+      No countries match your search.
+    </p>
+    <script>
+    (function () {
+      var searchInput = document.getElementById('prospect-country-search');
+      var matchCards = [];
+      var matchIndex = -1;
+      var meta = document.querySelector('[data-prospect-country-search-meta]');
+      var emptyAll = document.querySelector('[data-prospect-country-search-empty]');
+
+      function clearHits() {
+        document.querySelectorAll('[data-prospect-country].sheet-search-hit').forEach(function (el) {
+          el.classList.remove('sheet-search-hit');
+        });
+      }
+
+      function setMarketOpen(market, open) {
+        if (!market) return;
+        market.classList.toggle('is-open', !!open);
+        var body = market.querySelector('.prospect-market-body');
+        var btn = market.querySelector('[data-prospect-market-toggle]');
+        if (body) body.hidden = !open;
+        if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      document.querySelectorAll('[data-prospect-market-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var market = btn.closest('[data-prospect-market]');
+          if (!market) return;
+          setMarketOpen(market, !market.classList.contains('is-open'));
+        });
+      });
+
+      function filterCountries() {
+        if (!searchInput) return;
+        var q = String(searchInput.value || '').trim().toLowerCase();
+        matchCards = [];
+        clearHits();
+        var anyShown = 0;
+
+        document.querySelectorAll('[data-prospect-market]').forEach(function (market) {
+          var shownInMarket = 0;
+          market.querySelectorAll('[data-prospect-country]').forEach(function (card) {
+            var hay = String(card.getAttribute('data-search') || '');
+            var hit = !q || hay.indexOf(q) !== -1;
+            card.hidden = !hit;
+            if (hit) {
+              shownInMarket++;
+              anyShown++;
+              if (q) matchCards.push(card);
+            }
+          });
+          var empty = market.querySelector('[data-prospect-country-empty]');
+          if (empty) empty.hidden = !(q && shownInMarket === 0);
+          if (q) {
+            if (shownInMarket > 0) setMarketOpen(market, true);
+            market.hidden = shownInMarket === 0;
+          } else {
+            market.hidden = false;
+          }
+        });
+
+        if (emptyAll) emptyAll.hidden = !(q && anyShown === 0);
+        if (meta) {
+          if (!q) {
+            meta.hidden = true;
+            meta.textContent = '';
+            matchIndex = -1;
+            return;
+          }
+          meta.hidden = false;
+          meta.textContent = !matchCards.length
+            ? '0 · Enter = next'
+            : (matchIndex >= 0
+              ? (matchIndex + 1) + ' of ' + matchCards.length + ' · Enter = next'
+              : matchCards.length + ' matches · Enter = next');
+        }
+      }
+
+      function jump(dir) {
+        if (!searchInput || !String(searchInput.value || '').trim()) return;
+        filterCountries();
+        if (!matchCards.length) return;
+        matchIndex = matchIndex < 0
+          ? (dir > 0 ? 0 : matchCards.length - 1)
+          : (matchIndex + dir + matchCards.length) % matchCards.length;
+        var card = matchCards[matchIndex];
+        clearHits();
+        card.classList.add('sheet-search-hit');
+        var market = card.closest('[data-prospect-market]');
+        setMarketOpen(market, true);
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (meta) meta.textContent = (matchIndex + 1) + ' of ' + matchCards.length + ' · Enter = next';
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          matchIndex = -1;
+          filterCountries();
+        });
+        searchInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            jump(e.shiftKey ? -1 : 1);
+          }
+        });
+      }
+    })();
+    </script>
+    <?php else: ?>
       <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
     <?php endif; ?>
     <?php

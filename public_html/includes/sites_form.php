@@ -35,13 +35,23 @@ function render_typeahead_field(
     $reqMark = $required ? ' <span class="help">(required)</span>' : ($optional ? ' <span class="help">(optional)</span>' : '');
     $reqAttr = $required ? ' data-required="1"' : '';
 
+    $displayValue = $value;
+    if ($value !== '') {
+        foreach ($jsonItems as $it) {
+            if (strcasecmp((string) $it['value'], $value) === 0) {
+                $displayValue = (string) $it['label'];
+                break;
+            }
+        }
+    }
+
     $html = '<div class="typeahead' . ($extraClass !== '' ? ' ' . h($extraClass) : '') . '" data-typeahead'
         . $reqAttr . ' data-name="' . h($name) . '" ' . $attrs . '>';
     $html .= '<label for="' . h($id) . '_q">' . h($label) . $reqMark . '</label>';
     $html .= '<input type="hidden" name="' . h($name) . '" id="' . h($id) . '" value="' . h($value) . '" data-typeahead-value'
         . ($required ? ' required' : '') . '>';
     $html .= '<div class="typeahead-control">';
-    $html .= '<input type="text" id="' . h($id) . '_q" class="typeahead-input" value="' . h($value) . '"'
+    $html .= '<input type="text" id="' . h($id) . '_q" class="typeahead-input" value="' . h($displayValue) . '"'
         . ' placeholder="' . h($placeholder) . '" autocomplete="off" spellcheck="false" data-typeahead-input>';
     $html .= '<ul class="typeahead-list" hidden data-typeahead-list></ul>';
     $html .= '</div>';
@@ -58,15 +68,42 @@ function render_typeahead_field(
 
 function render_country_typeahead(string $value = '', array $opts = []): string
 {
+    $counts = [];
+    if (function_exists('prospect_country_folders')) {
+        try {
+            foreach (prospect_country_folders() as $f) {
+                $counts[(string) ($f['country'] ?? '')] = (int) ($f['total'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            $counts = [];
+        }
+    }
     $items = [];
-    foreach (list_country_typeahead_items() as $c) {
+    foreach (list_countries(null, true) as $c) {
+        $name = (string) ($c['name'] ?? '');
+        $region = (string) ($c['region'] ?? '');
+        $code = strtoupper(trim((string) ($c['code'] ?? '')));
+        $display = function_exists('prospect_folder_display_label')
+            ? prospect_folder_display_label($name, $region, $code)
+            : $name;
+        $n = (int) ($counts[$name] ?? 0);
         $items[] = [
-            'value' => $c['name'],
-            'label' => $c['name'],
-            'lang' => $c['language'],
-            'region' => $c['region'],
+            'value' => $name,
+            // no. of sites in front — Europe/NA show TLD (.de), others show country name
+            'label' => $n . ' · ' . $display,
+            'lang' => (string) ($c['default_language'] ?? ''),
+            'region' => $region,
         ];
     }
+    // Sort suggestions: most sites first
+    usort($items, static function ($a, $b) {
+        $na = (int) explode(' · ', (string) $a['label'], 2)[0];
+        $nb = (int) explode(' · ', (string) $b['label'], 2)[0];
+        if ($na !== $nb) {
+            return $nb <=> $na;
+        }
+        return strcasecmp((string) $a['label'], (string) $b['label']);
+    });
     return render_typeahead_field(
         (string) ($opts['name'] ?? 'country'),
         (string) ($opts['label'] ?? 'Country'),
@@ -75,7 +112,7 @@ function render_country_typeahead(string $value = '', array $opts = []): string
         array_merge([
             'id' => 'country',
             'required' => true,
-            'help' => 'Type to search all countries, then press Enter to select.',
+            'help' => 'Type to search (shows no. of sites). Europe/North America use .de / .us style labels.',
             'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]"',
         ], $opts)
     );

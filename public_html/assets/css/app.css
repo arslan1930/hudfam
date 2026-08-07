@@ -1037,6 +1037,73 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   box-shadow: 0 8px 22px rgba(31, 41, 55, 0.1);
   text-decoration: none;
 }
+
+/* Our database — expandable markets */
+.prospect-markets-toolbar { margin-bottom: 0.85rem; }
+.prospect-market { padding: 0; overflow: hidden; }
+.prospect-market-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0.95rem 1.1rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.prospect-market.is-open .prospect-market-toggle {
+  border-bottom-color: var(--line);
+}
+.prospect-market-toggle:hover { background: #f8fafc; }
+.prospect-market-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  flex: 1 1 auto;
+}
+.prospect-market-meta {
+  font-size: 0.9rem;
+}
+.prospect-market-chevron {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  opacity: 0.65;
+  margin-left: 0.25rem;
+}
+.prospect-market.is-open .prospect-market-chevron {
+  transform: rotate(45deg);
+}
+.prospect-market-body {
+  padding: 0 1.1rem 1.1rem;
+}
+.prospect-folder-count {
+  display: inline-block;
+  min-width: 1.75rem;
+  margin-right: 0.35rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-2, #eef2ff);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.prospect-folder-label {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.folder.sheet-search-hit {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  background: #eff6ff;
+}
 .tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.9rem 0; }
 .tabs a {
   padding: 0.35rem 0.7rem;

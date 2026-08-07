@@ -620,16 +620,22 @@ function prospect_country_folders(): array
         $counts[$folderKey] = ($counts[$folderKey] ?? 0) + (int) $row['total'];
     }
 
+    $regionOrder = array_flip(array_keys(regions()));
     $folders = [];
     foreach (list_countries(null, true) as $c) {
         $name = (string) $c['name'];
         $region = (string) $c['region'];
+        $code = strtoupper(trim((string) ($c['code'] ?? '')));
         $folders[] = [
             'country' => $name,
+            'code' => $code,
             'region' => $region,
             'region_label' => regions()[$region] ?? $region,
             'total' => $counts[$name] ?? 0,
             'language' => (string) ($c['default_language'] ?? ''),
+            'display_label' => function_exists('prospect_folder_display_label')
+                ? prospect_folder_display_label($name, $region, $code)
+                : $name,
         ];
         unset($counts[$name]);
     }
@@ -637,19 +643,28 @@ function prospect_country_folders(): array
     if (!empty($counts[''])) {
         $folders[] = [
             'country' => '',
+            'code' => '',
             'region' => 'other',
             'region_label' => 'Other',
             'total' => (int) $counts[''],
             'language' => '',
+            'display_label' => 'No country',
         ];
     }
-    usort($folders, static function ($a, $b) {
-        $ra = (string) $a['region_label'];
-        $rb = (string) $b['region_label'];
-        if ($ra !== $rb) {
-            return $ra <=> $rb;
+    usort($folders, static function ($a, $b) use ($regionOrder) {
+        $ra = (string) ($a['region'] ?? '');
+        $rb = (string) ($b['region'] ?? '');
+        $oa = $regionOrder[$ra] ?? 99;
+        $ob = $regionOrder[$rb] ?? 99;
+        if ($oa !== $ob) {
+            return $oa <=> $ob;
         }
-        return strcasecmp((string) $a['country'], (string) $b['country']);
+        $ta = (int) ($a['total'] ?? 0);
+        $tb = (int) ($b['total'] ?? 0);
+        if ($ta !== $tb) {
+            return $tb <=> $ta; // most sites first
+        }
+        return strcasecmp((string) ($a['display_label'] ?? $a['country']), (string) ($b['display_label'] ?? $b['country']));
     });
     return $folders;
 }

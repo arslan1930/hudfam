@@ -2,12 +2,40 @@
 
 function regions(): array
 {
+    // Display order for Our database markets
     return [
         'europe' => 'Europe',
-        'north_america' => 'North America',
         'english' => 'English markets',
+        'north_america' => 'North America',
         'other' => 'Other',
     ];
+}
+
+/**
+ * Folder label for Our database: Europe / North America use TLDs (.de, .us).
+ */
+function prospect_folder_display_label(string $countryName, string $region = '', string $code = ''): string
+{
+    $countryName = trim($countryName);
+    if ($countryName === '') {
+        return 'No country';
+    }
+    $code = strtoupper(trim($code));
+    if ($code === '' && function_exists('list_countries')) {
+        foreach (list_countries(null, true) as $c) {
+            if (strcasecmp(trim((string) ($c['name'] ?? '')), $countryName) === 0) {
+                $code = strtoupper(trim((string) ($c['code'] ?? '')));
+                if ($region === '') {
+                    $region = (string) ($c['region'] ?? '');
+                }
+                break;
+            }
+        }
+    }
+    if (in_array($region, ['europe', 'north_america'], true) && $code !== '') {
+        return '.' . strtolower($code);
+    }
+    return $countryName;
 }
 
 function seed_countries_if_empty(PDO $pdo): void

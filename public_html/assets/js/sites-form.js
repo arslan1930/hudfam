@@ -403,8 +403,11 @@
     var contains = [];
     items.forEach(function (it) {
       var label = norm(it.label || it.value);
-      if (label.indexOf(q) === 0) starts.push(it);
-      else if (label.indexOf(q) !== -1) contains.push(it);
+      var value = norm(it.value || '');
+      var region = norm(it.region || '');
+      var hay = label + ' ' + value + ' ' + region;
+      if (label.indexOf(q) === 0 || value.indexOf(q) === 0) starts.push(it);
+      else if (hay.indexOf(q) !== -1) contains.push(it);
     });
     return starts.concat(contains).slice(0, 40);
   }
