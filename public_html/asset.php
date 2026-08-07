@@ -43,13 +43,21 @@ if (!is_file($path)) {
 $mtime = filemtime($path) ?: time();
 $etag = '"' . md5($path . $mtime . filesize($path)) . '"';
 header('Content-Type: ' . $allowed[$f]);
-header('Cache-Control: public, max-age=86400');
+// Always revalidate — max-age=86400 kept teammates on broken JS after deploys.
+header('Cache-Control: no-cache, must-revalidate');
 header('ETag: ' . $etag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 
 if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim((string) $_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
     http_response_code(304);
     exit;
+}
+if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+    $since = strtotime((string) $_SERVER['HTTP_IF_MODIFIED_SINCE']);
+    if ($since !== false && $since >= $mtime) {
+        http_response_code(304);
+        exit;
+    }
 }
 
 readfile($path);

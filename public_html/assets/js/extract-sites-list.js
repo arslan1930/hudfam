@@ -17,6 +17,8 @@
   var statusEl = document.getElementById('sites_list_status');
   var countLabel = document.getElementById('sites_count_label');
   var footerCount = document.getElementById('sites_footer_count');
+  var openPanel = document.getElementById('sites_open_panel');
+  var openPanelList = document.getElementById('sites_open_panel_list');
 
   var selected = new Set();
   var lastIndex = -1;
@@ -78,7 +80,6 @@
   function syncSelectionUi() {
     var list = rows();
     var existing = new Set(list.map(function (r) { return r.getAttribute('data-domain') || ''; }));
-    // Drop selection for domains no longer in the list
     Array.from(selected).forEach(function (d) {
       if (!existing.has(d)) selected.delete(d);
     });
@@ -96,6 +97,7 @@
     saveSelected();
     updateCounts(list.length);
     ensureEmptyState(list.length === 0);
+    if (n === 0) hideOpenPanel();
   }
 
   function updateCounts(n) {
@@ -154,7 +156,6 @@
       }
       lastIndex = index;
     } else {
-      // Plain left-click toggles — build a multi-selection without Ctrl
       if (selected.has(domain)) selected.delete(domain);
       else selected.add(domain);
       lastIndex = index;
@@ -163,7 +164,7 @@
   }
 
   box.addEventListener('mousedown', function (e) {
-    if (e.button !== 0) return; // left click only
+    if (e.button !== 0) return;
     var row = e.target.closest('.sites-list-row');
     if (!row || !box.contains(row)) return;
     e.preventDefault();
@@ -174,7 +175,6 @@
   });
 
   function selectedDomains() {
-    // Preserve list order for predictable open order
     return rows()
       .map(function (r) { return r.getAttribute('data-domain') || ''; })
       .filter(function (d) { return d && selected.has(d); });
@@ -186,82 +186,146 @@
     return d ? 'https://' + d : '';
   }
 
+  function hideOpenPanel() {
+    if (!openPanel) return;
+    openPanel.hidden = true;
+    if (openPanelList) openPanelList.innerHTML = '';
+  }
+
+  function showOpenPanel(items) {
+    if (!openPanel || !openPanelList) return;
+    openPanelList.innerHTML = '';
+    items.forEach(function (it) {
+      var a = document.createElement('a');
+      a.href = it.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.className = 'sites-open-link';
+      a.textContent = it.domain;
+      openPanelList.appendChild(a);
+    });
+    openPanel.hidden = false;
+  }
+
+  function tryOpenUrl(url) {
+    var w = null;
+    try {
+      w = window.open(url, '_blank');
+    } catch (err) {
+      w = null;
+    }
+    if (!w || w.closed) return false;
+    try { w.opener = null; } catch (err2) { /* ignore */ }
+    return true;
+  }
+
   /**
-   * Open selected site names as https://… in new tabs.
-   * Must stay synchronous inside the click handler — setTimeout loses the
-   * user gesture and browsers block the pop-ups.
+   * Open selected sites. Browsers usually allow only one window.open per click,
+   * so for 2+ sites we open a helper tab with an “Open all” button (second click).
+   * Inline links are always shown as a no-popup fallback.
    */
   function openSelected() {
     var domains = selectedDomains();
     if (!domains.length) return;
 
-    var maxOpen = 30;
-    if (domains.length > maxOpen) {
-      if (!window.confirm(
-        'Open the first ' + maxOpen + ' of ' + domains.length +
-        ' selected sites in new tabs?\n\n(Browsers may block very large batches.)'
-      )) {
-        return;
-      }
-      domains = domains.slice(0, maxOpen);
-    }
-
-    var opened = 0;
-    var blocked = 0;
-
+    var items = [];
     for (var i = 0; i < domains.length; i++) {
       var url = toHttpsUrl(domains[i]);
-      if (!url) {
-        blocked++;
-        continue;
-      }
-
-      var w = null;
-      try {
-        w = window.open(url, '_blank');
-      } catch (err) {
-        w = null;
-      }
-
-      if (w) {
-        try { w.opener = null; } catch (err2) { /* ignore */ }
-        opened++;
-        continue;
-      }
-
-      // Fallback: synthetic <a> click (still sync, same user gesture)
-      try {
-        var a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        opened++;
-      } catch (err3) {
-        blocked++;
-      }
+      if (!url) continue;
+      items.push({ domain: domains[i], url: url });
+    }
+    if (!items.length) {
+      setStatus('No valid site names to open.', true);
+      return;
     }
 
-    if (blocked > 0 && opened === 0) {
-      setStatus(
-        'Browser blocked opening tabs. Allow pop-ups for this site, then try Open URLs again.',
-        true
-      );
-    } else if (blocked > 0) {
-      setStatus(
-        'Opened ' + opened + ' tab' + (opened === 1 ? '' : 's') +
-        ', but ' + blocked + ' were blocked. Allow pop-ups or open fewer at a time.',
-        true
-      );
-    } else {
-      setStatus(
-        'Opened ' + opened + ' URL' + (opened === 1 ? '' : 's') +
-        ' in new tabs. Selection kept.'
-      );
+    showOpenPanel(items);
+
+    // One site: open directly (almost always allowed).
+    if (items.length === 1) {
+      if (tryOpenUrl(items[0].url)) {
+        setStatus('Opened ' + items[0].domain + '. Selection kept.');
+      } else {
+        setStatus('Pop-up blocked — click the link below to open.', true);
+      }
+      return;
     }
+
+    // Multiple: open a helper tab (single pop-up) with Open-all + individual links.
+    var helperHtml = buildHelperHtml(items);
+    var blob = new Blob([helperHtml], { type: 'text/html' });
+    var helperUrl = URL.createObjectURL(blob);
+    var helperWin = null;
+    try {
+      helperWin = window.open(helperUrl, '_blank');
+    } catch (err) {
+      helperWin = null;
+    }
+
+    if (helperWin) {
+      try { helperWin.opener = null; } catch (err2) { /* ignore */ }
+      setStatus(
+        'Helper tab opened — click “Open all ' + items.length +
+        ' tabs” there. Links are also listed below.'
+      );
+      window.setTimeout(function () {
+        try { URL.revokeObjectURL(helperUrl); } catch (e) { /* ignore */ }
+      }, 60000);
+      return;
+    }
+
+    // Pop-ups fully blocked: inline links still work.
+    setStatus(
+      'Pop-ups blocked. Click each site link below (or allow pop-ups and press Open URLs again).',
+      true
+    );
+    try { URL.revokeObjectURL(helperUrl); } catch (e2) { /* ignore */ }
+  }
+
+  function buildHelperHtml(items) {
+    var safeItems = items.map(function (it) {
+      return { domain: String(it.domain), url: String(it.url) };
+    });
+    return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+      + '<title>Open ' + safeItems.length + ' sites</title>'
+      + '<style>'
+      + 'body{font:15px/1.45 system-ui,sans-serif;margin:0;padding:1.5rem;background:#f8fafc;color:#0f172a}'
+      + 'h1{font-size:1.15rem;margin:0 0 0.5rem}'
+      + 'p{margin:0 0 1rem;color:#475569}'
+      + 'button{font:inherit;font-weight:650;padding:0.7rem 1.1rem;border:0;border-radius:8px;'
+      + 'background:#1e3a5f;color:#fff;cursor:pointer}'
+      + 'button:hover{filter:brightness(1.08)}'
+      + '.list{margin-top:1.25rem;display:flex;flex-direction:column;gap:0.35rem}'
+      + 'a{color:#1d4ed8;word-break:break-all}'
+      + '#msg{margin-top:0.85rem;font-size:0.92rem;color:#475569}'
+      + '</style></head><body>'
+      + '<h1>Open ' + safeItems.length + ' selected sites</h1>'
+      + '<p>Your browser blocks opening many tabs at once from the list. '
+      + 'Click once below (allow pop-ups if asked).</p>'
+      + '<button type="button" id="go">Open all ' + safeItems.length + ' tabs</button>'
+      + '<p id="msg"></p>'
+      + '<div class="list" id="list"></div>'
+      + '<script>(function(){'
+      + 'var items=' + JSON.stringify(safeItems) + ';'
+      + 'var list=document.getElementById("list");'
+      + 'items.forEach(function(it){'
+      + 'var a=document.createElement("a");a.href=it.url;a.target="_blank";'
+      + 'a.rel="noopener noreferrer";a.textContent=it.domain;list.appendChild(a);'
+      + '});'
+      + 'document.getElementById("go").onclick=function(){'
+      + 'var opened=0,blocked=0;'
+      + 'for(var i=0;i<items.length;i++){'
+      + 'var w=null;try{w=window.open(items[i].url,"_blank");}catch(e){w=null;}'
+      + 'if(w&&!w.closed){try{w.opener=null;}catch(e2){} opened++;}else{blocked++;}'
+      + '}'
+      + 'var msg=document.getElementById("msg");'
+      + 'if(blocked===0){msg.textContent="Opened "+opened+" tabs. You can close this page.";}'
+      + 'else if(opened===0){msg.textContent="Still blocked — allow pop-ups for this site, or click each link below.";}'
+      + 'else{msg.textContent="Opened "+opened+", blocked "+blocked+". Click remaining links below.";}'
+      + '};'
+      + '})();<\/script>'
+      + '</body></html>';
   }
 
   function postAction(action, fields) {
@@ -417,6 +481,7 @@
       if (selected.size === 0) return;
       e.preventDefault();
       selected.clear();
+      hideOpenPanel();
       syncSelectionUi();
       return;
     }
@@ -455,12 +520,21 @@
     if (!shell.contains(e.target)) shell.classList.remove('is-active');
   });
 
-  if (openBtn) openBtn.addEventListener('click', function (e) {
-    e.preventDefault();
-    openSelected();
-  });
+  if (openBtn) {
+    openBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      openSelected();
+    });
+  }
   if (undoBtn) undoBtn.addEventListener('click', undo);
   if (redoBtn) redoBtn.addEventListener('click', redo);
+
+  var closePanelBtn = document.getElementById('sites_open_panel_close');
+  if (closePanelBtn) {
+    closePanelBtn.addEventListener('click', function () {
+      hideOpenPanel();
+    });
+  }
 
   loadSelected();
   syncSelectionUi();

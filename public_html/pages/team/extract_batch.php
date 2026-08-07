@@ -125,14 +125,7 @@ render_header('Extracting · ' . $country, 'team');
 <div class="grid two-box">
   <div class="card box-panel">
     <h2>① Sites list</h2>
-    <p class="help">
-      Site names only. Left-click to select / deselect (stays after refresh).
-      <strong>Open URLs</strong> opens selected sites ·
-      <kbd>Shift</kbd>+click range ·
-      <kbd>Esc</kbd> clear ·
-      <kbd>Backspace</kbd> delete ·
-      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Z</kbd> undo.
-    </p>
+    <p class="help">Click a site name to select. Selection stays after refresh.</p>
 
     <div
       class="sites-list-shell"
@@ -147,7 +140,7 @@ render_header('Extracting · ' . $country, 'team');
       <div class="sites-list-toolbar">
         <span class="muted" id="sites_selected_label">0 selected</span>
         <div class="sites-list-actions">
-          <button type="button" class="btn small" id="sites_open_btn" disabled title="Open selected site names in new tabs">Open URLs</button>
+          <button type="button" class="btn small" id="sites_open_btn" disabled title="Open selected sites">Open URLs</button>
           <button type="button" class="btn secondary small" id="sites_undo_btn" disabled>Undo</button>
           <button type="button" class="btn secondary small" id="sites_redo_btn" disabled>Redo</button>
         </div>
@@ -168,6 +161,17 @@ render_header('Extracting · ' . $country, 'team');
         <?php else: ?>
           <div class="sites-list-empty" id="sites_list_empty">Waiting for sites from the team mate</div>
         <?php endif; ?>
+      </div>
+
+      <div class="sites-open-panel" id="sites_open_panel" hidden>
+        <div class="sites-open-panel-head">
+          <strong>Open these sites</strong>
+          <button type="button" class="btn secondary small" id="sites_open_panel_close">Hide</button>
+        </div>
+        <p class="help" style="margin:0.35rem 0 0.5rem">
+          If tabs did not open, click a name below (or allow pop-ups).
+        </p>
+        <div class="sites-open-panel-list" id="sites_open_panel_list"></div>
       </div>
 
       <p class="muted" style="margin:0.5rem 0 0" id="sites_footer_count">
