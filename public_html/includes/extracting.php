@@ -166,10 +166,11 @@ function list_extract_batches(int $limit = 200): array
 {
     ensure_extract_schema();
     $limit = max(1, min(500, $limit));
-    // Include emptied batches so teammates can reopen and Undo after a full clear.
+    // Hide empty country rows until Filter & add puts sites back in Sites list.
     $sql = "SELECT b.*, u.username, u.full_name
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
+            WHERE b.site_count > 0
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
     return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -239,6 +240,69 @@ function refresh_extract_batch_site_count(int $batchId): int
         'UPDATE extract_batches SET site_count=?, updated_at=NOW() WHERE id=?'
     )->execute([$siteCount, $batchId]);
     return $siteCount;
+}
+
+/**
+ * Replace Sites list domains from the editable text box (autosave).
+ * Admin Our database is not touched. Empty list hides this country row.
+ *
+ * @return array{site_count:int,domains:list<string>,removed:int,added:int}
+ */
+function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $addedBy = null): array
+{
+    ensure_extract_schema();
+    $parsed = parse_domain_list_strict($raw);
+    $wanted = [];
+    foreach ($parsed['valid'] as $d) {
+        $wanted[$d] = true;
+    }
+    // Keep any plain root-looking lines Clean would keep (already in valid).
+    // Also accept already-normalized apex hosts that parse_domain_list_strict kept.
+    $newDomains = array_keys($wanted);
+
+    $existing = get_extract_batch_domains($batchId);
+    $oldSet = array_fill_keys($existing, true);
+    $newSet = array_fill_keys($newDomains, true);
+
+    $toRemove = [];
+    foreach ($existing as $d) {
+        if (!isset($newSet[$d])) {
+            $toRemove[] = $d;
+        }
+    }
+    $toAdd = [];
+    foreach ($newDomains as $d) {
+        if (!isset($oldSet[$d])) {
+            $toAdd[] = $d;
+        }
+    }
+
+    if ($toRemove !== []) {
+        remove_extract_batch_domains($batchId, $toRemove);
+    }
+
+    if ($toAdd !== []) {
+        $ins = db()->prepare(
+            'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
+             VALUES (?,?,NULL,?)
+             ON DUPLICATE KEY UPDATE domain = VALUES(domain)'
+        );
+        foreach ($toAdd as $d) {
+            try {
+                $ins->execute([$batchId, $d, $addedBy]);
+            } catch (PDOException $e) {
+                // skip
+            }
+        }
+    }
+
+    $siteCount = refresh_extract_batch_site_count($batchId);
+    return [
+        'site_count' => $siteCount,
+        'domains' => get_extract_batch_domains($batchId),
+        'removed' => count($toRemove),
+        'added' => count($toAdd),
+    ];
 }
 
 /**

@@ -16,6 +16,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $wantsJson = extract_request_wants_json();
 
+    if ($action === 'autosave_sites') {
+        $raw = (string) post('sites_text');
+        try {
+            $synced = set_extract_batch_domains_from_text(
+                $id,
+                $raw,
+                (int) ($user['id'] ?? 0) ?: null
+            );
+        } catch (Throwable $e) {
+            if ($wantsJson) {
+                extract_json_response(['ok' => false, 'error' => $e->getMessage()], 400);
+            }
+            flash('error', $e->getMessage());
+            redirect('index.php?page=team_extract_batch&id=' . $id);
+        }
+        $siteCount = (int) $synced['site_count'];
+        if ($wantsJson) {
+            $payload = [
+                'ok' => true,
+                'site_count' => $siteCount,
+                'removed' => (int) $synced['removed'],
+                'added' => (int) $synced['added'],
+                'domains' => $synced['domains'],
+            ];
+            if ($siteCount < 1) {
+                $payload['redirect'] = 'index.php?page=team_extracting';
+                $payload['message'] = $country . ' removed from Extracting sites (no sites left). It will return when new sites are added.';
+            }
+            extract_json_response($payload);
+        }
+        if ($siteCount < 1) {
+            flash('ok', $country . ' removed from Extracting sites (no sites left). It will return when new sites are added.');
+            redirect('index.php?page=team_extracting');
+        }
+        flash('ok', 'Sites list updated (' . $siteCount . ').');
+        redirect('index.php?page=team_extract_batch&id=' . $id);
+    }
+
     if ($action === 'push_results') {
         $resultsText = (string) post('results_text');
         // Keep draft text on the batch while validating / if push fails partially.
@@ -100,6 +138,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $siteRows = get_extract_batch_site_rows($id);
 $domains = array_column($siteRows, 'domain');
 
+// Empty Sites list → hide this country from Extracting sites until new sites are added.
+if (count($domains) < 1) {
+    refresh_extract_batch_site_count($id);
+    flash('ok', $country . ' has no sites in the list. It will show again when new sites are added.');
+    redirect('index.php?page=team_extracting');
+}
+
 render_header('Extracting · ' . $country, 'team');
 ?>
 <?php render_breadcrumbs([
@@ -127,8 +172,9 @@ render_header('Extracting · ' . $country, 'team');
     <h2>① Sites list</h2>
     <p class="help">
       Sites waiting to extract for <strong><?= h($country) ?></strong>.
-      Edit freely — <kbd>Backspace</kbd> removes text, <strong>Undo</strong>/<strong>Redo</strong> restore it.
-      Your working list and selection are kept after refresh (temporary history on this browser).
+      <kbd>Backspace</kbd> removes sites — changes <strong>autosave</strong> to this country row in real time.
+      <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page. Refresh shows the saved server list.
+      If the list becomes empty, this country disappears from Extracting sites until new sites are added.
     </p>
 
     <?php
@@ -138,17 +184,14 @@ render_header('Extracting · ' . $country, 'team');
       class="domains-paste"
       id="sites_list_shell"
       data-batch-id="<?= (int) $id ?>"
+      data-post-url="index.php?page=team_extract_batch&amp;id=<?= (int) $id ?>"
     >
-      <script type="application/json" id="sites_list_server_json"><?= json_encode(
-          $serverSitesText,
-          JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-      ) ?></script>
       <div class="domains-paste-head">
         <label for="sites_list_text">Sites (root domains)</label>
         <div class="sites-list-actions">
           <button type="button" class="btn secondary small" id="sites_undo_btn" disabled>Undo</button>
           <button type="button" class="btn secondary small" id="sites_redo_btn" disabled>Redo</button>
-          <button type="button" class="btn secondary small" id="sites_copy_all" <?= $domains ? '' : 'disabled' ?>>Copy all</button>
+          <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
         </div>
       </div>
       <textarea
@@ -165,8 +208,9 @@ render_header('Extracting · ' . $country, 'team');
         One per line (or commas). Use <strong>Clean errors</strong> to correct
         <code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).
       </p>
-      <p class="muted" style="margin:0.35rem 0 0" id="sites_footer_count">
-        <?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?>
+      <p class="muted" style="margin:0.35rem 0 0">
+        <span id="sites_footer_count"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
+        <span id="sites_autosave_label" class="help" style="margin-left:0.5rem"></span>
       </p>
       <p class="help sites-list-status" id="sites_list_status" hidden></p>
     </div>

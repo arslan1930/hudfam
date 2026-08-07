@@ -18,7 +18,7 @@ render_header('Extracting sites', 'team');
 <div class="topbar">
   <div>
     <h1>Extracting sites</h1>
-    <p class="muted">Each country gets its own batch with <strong>Sites list</strong> and <strong>Extracting Results</strong>. Batches appear only after a teammate adds new unique sites via Filter &amp; add.</p>
+    <p class="muted">Each country with sites in its <strong>Sites list</strong> appears here. Empty countries hide until a teammate adds new unique sites via Filter &amp; add.</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
