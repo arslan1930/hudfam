@@ -16,6 +16,7 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
+        'admin_extracted' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'team_prospect_check' => [],
@@ -81,6 +82,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_prospects' => ['Our database', 'Country folders → URLs'],
                 'admin_prospect_add' => ['Add sites', 'Paste into a country database'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
+                'admin_extracted' => ['Extracted URLs', 'Country folders → extracted sites'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],

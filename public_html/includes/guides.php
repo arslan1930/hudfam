@@ -37,12 +37,17 @@ function render_admin_panel_guide(): string
         . '<p><strong>How:</strong> Open a country, paste URLs into that country’s database.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Add history</h3>'
+        . '<h3>2. Extracted URLs</h3>'
+        . '<p><strong>What:</strong> Extracted sites pushed by Team, one folder per country.</p>'
+        . '<p><strong>How:</strong> Open a country to see sites pushed from that country’s Extracting Results.</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>3. Add history</h3>'
         . '<p><strong>What:</strong> Who added which sites, by day.</p>'
         . '<p><strong>How:</strong> Open a day to see the domains that person added.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>3. Users</h3>'
+        . '<h3>4. Users</h3>'
         . '<p><strong>What:</strong> Admin and Team logins.</p>'
         . '<p><strong>How:</strong> Create Team accounts so they can filter and add sites.</p>'
         . '</article>'
@@ -53,6 +58,7 @@ function render_admin_panel_guide(): string
         . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
         . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
         . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
+        . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted URLs</strong> for that same country.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -72,7 +78,7 @@ function render_team_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracting sites</h3>'
         . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
-        . '<p><strong>How:</strong> Batches appear only after teammates add sites. Until then the page waits.</p>'
+        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> into Admin Extracted URLs for that country.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Add history</h3>'
@@ -85,7 +91,8 @@ function render_team_panel_guide(): string
         . '<ol>'
         . '<li>Open <strong>Filter &amp; add</strong> and select a country.</li>'
         . '<li>Paste domains and Filter (duplicates already in that country are removed privately).</li>'
-        . '<li>Add the unique sites — they join that country’s database, <strong>Extracting sites → Sites list</strong>, and today’s history.</li>'
+        . '<li>Add the unique sites — they join that country’s database and <strong>Extracting sites → Sites list</strong>.</li>'
+        . '<li>Paste into <strong>Extracting Results</strong> and <strong>Push</strong> → Admin <strong>Extracted URLs</strong> for that country.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -129,7 +136,7 @@ function guide_extracting(): string
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country.',
             'Select sites (kept after refresh) · Ctrl/Cmd+C copy · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
-            'Use Extracting Results to store output for the same country batch.',
+            'Paste sites into Extracting Results and Push — they go to Admin → Extracted URLs for that same country.',
         ]
     );
 }

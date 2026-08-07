@@ -16,10 +16,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $wantsJson = extract_request_wants_json();
 
-    if ($action === 'save_results') {
+    if ($action === 'push_results') {
         $resultsText = (string) post('results_text');
+        // Keep draft text on the batch while validating / if push fails partially.
         save_extract_batch_results($id, $resultsText);
-        flash('ok', 'Extracting Results saved for ' . $country . '.');
+        try {
+            $pushed = push_extract_results_to_extracted(
+                $resultsText,
+                $country,
+                $user,
+                (string) ($batch['language'] ?? ''),
+                (string) ($batch['region'] ?? ''),
+                $id
+            );
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect('index.php?page=team_extract_batch&id=' . $id);
+        }
+        if ($pushed['inserted'] < 1 && $pushed['skipped'] < 1) {
+            flash(
+                'error',
+                $pushed['invalid'] > 0
+                    ? 'Could not push — fix invalid lines first (root domains only, or use Clean-style https URLs).'
+                    : 'Paste at least one site into Extracting Results before Push.'
+            );
+            redirect('index.php?page=team_extract_batch&id=' . $id);
+        }
+        // Clear the box after a successful push into admin Extracted URLs.
+        save_extract_batch_results($id, '');
+        $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted URLs · ' . $pushed['country'];
+        if ((int) $pushed['skipped'] > 0) {
+            $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
+        }
+        if ((int) $pushed['invalid'] > 0) {
+            $msg .= ' · ' . (int) $pushed['invalid'] . ' invalid line(s) skipped';
+        }
+        flash('ok', $msg . '.');
         redirect('index.php?page=team_extract_batch&id=' . $id);
     }
 
@@ -146,12 +178,15 @@ render_header('Extracting · ' . $country, 'team');
 
   <div class="card box-panel">
     <h2>② Extracting Results</h2>
-    <p class="help">Store extraction output for this country batch here.</p>
+    <p class="help">
+      Paste extracted sites for <strong><?= h($country) ?></strong>, then <strong>Push</strong>
+      to send them into Admin → Extracted URLs → <?= h($country) ?>.
+    </p>
     <form method="post">
-      <input type="hidden" name="action" value="save_results">
-      <textarea class="inventory-box" name="results_text" rows="16" placeholder="Paste or type extracting results for <?= h($country) ?>…"><?= h($resultsText) ?></textarea>
+      <input type="hidden" name="action" value="push_results">
+      <textarea class="inventory-box" name="results_text" rows="16" placeholder="Paste sites for <?= h($country) ?>…&#10;example.com&#10;another-site.de"><?= h($resultsText) ?></textarea>
       <div class="actions-sticky" style="margin-top:0.75rem">
-        <button class="btn" type="submit">Save results</button>
+        <button class="btn large" type="submit">Push</button>
       </div>
     </form>
   </div>

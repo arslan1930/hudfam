@@ -27,6 +27,7 @@ try {
 }
 $orderClientCount = 0;
 $invoiceCount = 0;
+$extractedCount = 0;
 try {
     ensure_order_schema();
     $orderClientCount = (int) db()->query('SELECT COUNT(*) FROM order_clients')->fetchColumn();
@@ -38,6 +39,11 @@ try {
     $invoiceCount = (int) db()->query('SELECT COUNT(*) FROM invoices')->fetchColumn();
 } catch (Throwable $e) {
     $invoiceCount = 0;
+}
+try {
+    $extractedCount = count_extracted_sites();
+} catch (Throwable $e) {
+    $extractedCount = 0;
 }
 
 render_header('Dashboard', 'admin');
@@ -66,6 +72,7 @@ render_header('Dashboard', 'admin');
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
   <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
+  <div class="card stat"><span class="muted">Extracted sites</span><strong><?= $extractedCount ?></strong></div>
   <div class="card stat"><span class="muted">Client sheets</span><strong><?= $orderClientCount ?></strong></div>
   <div class="card stat"><span class="muted">Invoices</span><strong><?= $invoiceCount ?></strong></div>
 </div>
@@ -80,6 +87,11 @@ render_header('Dashboard', 'admin');
      data-search="our database country folders sites urls">
     <h2>Our database</h2>
     <p>Open country folders — one database each.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
+     data-search="extracted urls extracted sites country folders push extracting results">
+    <h2>Extracted URLs</h2>
+    <p>Extracted sites pushed by Team, by country.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
      data-search="order management client sheets sites prices profit live url">
