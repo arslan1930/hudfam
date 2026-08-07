@@ -90,7 +90,7 @@ function render_team_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>3. Sites with emails - Team</h3>'
         . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each.</p>'
-        . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong> for the final archive.</p>'
+        . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong> — they move to the Admin archive and clear from Team.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>4. Add history</h3>'
