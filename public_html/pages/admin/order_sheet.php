@@ -178,7 +178,15 @@ render_header('Order · ' . $client['name'], 'admin');
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <div class="order-sheet-toolbar">
-    <h2 style="margin:0">Sheet</h2>
+    <div class="order-sheet-toolbar-left">
+      <h2 style="margin:0">Sheet</h2>
+      <label class="sheet-search" for="sheet-search">
+        <span class="visually-hidden">Search sheet</span>
+        <input id="sheet-search" type="search" placeholder="Search sheet…"
+               autocomplete="off" spellcheck="false">
+        <span class="sheet-search-meta muted" data-sheet-search-meta hidden></span>
+      </label>
+    </div>
     <div class="actions">
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add site</button>
       <button class="btn secondary" type="submit"
@@ -218,6 +226,9 @@ render_header('Order · ' . $client['name'], 'admin');
           <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">No rows yet — click “Add site”.</td>
         </tr>
       <?php endif; ?>
+        <tr class="sheet-search-empty" data-sheet-search-empty hidden>
+          <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">No rows match your search.</td>
+        </tr>
       <?php
       $siteIndex = 0;
       foreach ($display as $block):
@@ -422,9 +433,71 @@ render_header('Order · ' . $client['name'], 'admin');
     setText('[data-summary-decided]', money(decidedTotal));
     setMoney('[data-summary-profit]', profitTotal);
   }
+
+  function rowSearchText(row) {
+    var parts = [];
+    row.querySelectorAll('input, select, textarea, [data-profit]').forEach(function (el) {
+      if (el.tagName === 'SELECT') {
+        var opt = el.options[el.selectedIndex];
+        parts.push(opt ? opt.text : '');
+        parts.push(el.value || '');
+      } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        parts.push(el.value || '');
+      } else {
+        parts.push(el.textContent || '');
+      }
+    });
+    return parts.join(' ').toLowerCase();
+  }
+
+  function filterSheet() {
+    var input = document.getElementById('sheet-search');
+    if (!input) return;
+    var q = String(input.value || '').trim().toLowerCase();
+    var rows = document.querySelectorAll('[data-row]');
+    var yearRows = document.querySelectorAll('.order-year-end-row');
+    var empty = document.querySelector('[data-sheet-search-empty]');
+    var meta = document.querySelector('[data-sheet-search-meta]');
+    var visible = 0;
+    var total = rows.length;
+
+    rows.forEach(function (row) {
+      var show = !q || rowSearchText(row).indexOf(q) !== -1;
+      row.hidden = !show;
+      if (show) visible++;
+    });
+    yearRows.forEach(function (row) {
+      // Hide year-end bands while filtering so matches stay easy to scan.
+      row.hidden = !!q;
+    });
+    if (empty) empty.hidden = !(q && visible === 0 && total > 0);
+    if (meta) {
+      if (q) {
+        meta.hidden = false;
+        meta.textContent = visible + ' of ' + total;
+      } else {
+        meta.hidden = true;
+        meta.textContent = '';
+      }
+    }
+  }
+
   var form = document.getElementById('order-sheet-form');
-  form.addEventListener('input', refresh);
+  form.addEventListener('input', function (e) {
+    refresh();
+    if (e.target && e.target.id === 'sheet-search') {
+      filterSheet();
+    }
+  });
   form.addEventListener('change', refresh);
+  var search = document.getElementById('sheet-search');
+  if (search) {
+    search.addEventListener('search', filterSheet);
+    // Keep Enter from submitting the whole sheet form.
+    search.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  }
 })();
 </script>
 <?php render_footer('admin'); ?>
