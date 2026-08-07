@@ -101,7 +101,7 @@
   function updateCounts(n) {
     if (countLabel) countLabel.textContent = String(n);
     if (footerCount) {
-      footerCount.textContent = n + ' domain' + (n === 1 ? '' : 's');
+      footerCount.textContent = n + ' site' + (n === 1 ? '' : 's');
     }
   }
 
@@ -118,16 +118,6 @@
     } else if (emptyEl) {
       emptyEl.remove();
     }
-  }
-
-  function rowPayload(row) {
-    var ps = row.getAttribute('data-prospect-site-id');
-    var ab = row.getAttribute('data-added-by');
-    return {
-      domain: row.getAttribute('data-domain') || '',
-      prospect_site_id: ps ? parseInt(ps, 10) : null,
-      added_by: ab ? parseInt(ab, 10) : null
-    };
   }
 
   function createRow(payload) {
@@ -159,48 +149,53 @@
     if (opts.range && lastIndex >= 0) {
       var a = Math.min(lastIndex, index);
       var b = Math.max(lastIndex, index);
-      if (!opts.toggle) selected.clear();
       for (var i = a; i <= b; i++) {
         selected.add(list[i].getAttribute('data-domain') || '');
       }
-    } else if (opts.toggle) {
-      if (selected.has(domain)) selected.delete(domain);
-      else selected.add(domain);
       lastIndex = index;
     } else {
-      selected.clear();
-      selected.add(domain);
+      // Plain left-click toggles — build a multi-selection without Ctrl
+      if (selected.has(domain)) selected.delete(domain);
+      else selected.add(domain);
       lastIndex = index;
     }
     syncSelectionUi();
   }
 
   box.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return; // left click only
     var row = e.target.closest('.sites-list-row');
     if (!row || !box.contains(row)) return;
     e.preventDefault();
     shell.focus();
     var list = rows();
     var index = list.indexOf(row);
-    selectAt(index, {
-      toggle: e.metaKey || e.ctrlKey,
-      range: e.shiftKey
-    });
+    selectAt(index, { range: e.shiftKey });
   });
 
   function selectedDomains() {
-    return Array.from(selected);
+    // Preserve list order for predictable open order
+    return rows()
+      .map(function (r) { return r.getAttribute('data-domain') || ''; })
+      .filter(function (d) { return d && selected.has(d); });
+  }
+
+  function toHttpsUrl(domain) {
+    var d = String(domain || '').trim().replace(/^https?:\/\//i, '');
+    d = d.replace(/\/.*$/, '');
+    return d ? 'https://' + d : '';
   }
 
   /**
-   * Open selected domains as https://… in new tabs (user-gesture click).
-   * Selection stays in place (including after refresh via localStorage).
+   * Open selected site names as https://… in new tabs.
+   * Must stay synchronous inside the click handler — setTimeout loses the
+   * user gesture and browsers block the pop-ups.
    */
   function openSelected() {
     var domains = selectedDomains();
     if (!domains.length) return;
 
-    var maxOpen = 25;
+    var maxOpen = 30;
     if (domains.length > maxOpen) {
       if (!window.confirm(
         'Open the first ' + maxOpen + ' of ' + domains.length +
@@ -209,34 +204,64 @@
         return;
       }
       domains = domains.slice(0, maxOpen);
-    } else if (domains.length > 8) {
-      if (!window.confirm('Open ' + domains.length + ' sites in new browser tabs?')) {
-        return;
+    }
+
+    var opened = 0;
+    var blocked = 0;
+
+    for (var i = 0; i < domains.length; i++) {
+      var url = toHttpsUrl(domains[i]);
+      if (!url) {
+        blocked++;
+        continue;
+      }
+
+      var w = null;
+      try {
+        w = window.open(url, '_blank');
+      } catch (err) {
+        w = null;
+      }
+
+      if (w) {
+        try { w.opener = null; } catch (err2) { /* ignore */ }
+        opened++;
+        continue;
+      }
+
+      // Fallback: synthetic <a> click (still sync, same user gesture)
+      try {
+        var a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        opened++;
+      } catch (err3) {
+        blocked++;
       }
     }
 
-    var blocked = 0;
-    domains.forEach(function (domain, i) {
-      var url = 'https://' + String(domain).replace(/^https?:\/\//i, '');
-      window.setTimeout(function () {
-        var w = window.open(url, '_blank');
-        if (!w) blocked++;
-        if (i === domains.length - 1) {
-          if (blocked > 0) {
-            setStatus(
-              'Opened some tabs, but the browser blocked ' + blocked +
-              '. Allow pop-ups for this site, or open fewer at a time.',
-              true
-            );
-          } else {
-            setStatus(
-              'Opened ' + domains.length + ' link' +
-              (domains.length === 1 ? '' : 's') + ' in new tabs.'
-            );
-          }
-        }
-      }, i * 80);
-    });
+    if (blocked > 0 && opened === 0) {
+      setStatus(
+        'Browser blocked opening tabs. Allow pop-ups for this site, then try Open URLs again.',
+        true
+      );
+    } else if (blocked > 0) {
+      setStatus(
+        'Opened ' + opened + ' tab' + (opened === 1 ? '' : 's') +
+        ', but ' + blocked + ' were blocked. Allow pop-ups or open fewer at a time.',
+        true
+      );
+    } else {
+      setStatus(
+        'Opened ' + opened + ' URL' + (opened === 1 ? '' : 's') +
+        ' in new tabs. Selection kept.'
+      );
+    }
   }
 
   function postAction(action, fields) {
@@ -305,7 +330,6 @@
       .then(function (data) {
         history.redo.push(rowsData);
         saveHistory();
-        // Re-render from server domain list when provided, else insert payloads
         var domains = Array.isArray(data.domains) ? data.domains : null;
         if (domains) {
           var meta = {};
@@ -322,7 +346,6 @@
           });
           sortRowsInPlace();
         }
-        // Keep them selected after undo
         rowsData.forEach(function (r) { selected.add(r.domain); });
         setStatus('Undo restored ' + rowsData.length + ' site' + (rowsData.length === 1 ? '' : 's') + '.');
       })
@@ -390,6 +413,13 @@
     var mod = e.metaKey || e.ctrlKey;
     var key = e.key;
 
+    if (key === 'Escape') {
+      if (selected.size === 0) return;
+      e.preventDefault();
+      selected.clear();
+      syncSelectionUi();
+      return;
+    }
     if (mod && key.toLowerCase() === 'a') {
       e.preventDefault();
       rows().forEach(function (r) {
@@ -425,7 +455,10 @@
     if (!shell.contains(e.target)) shell.classList.remove('is-active');
   });
 
-  if (openBtn) openBtn.addEventListener('click', openSelected);
+  if (openBtn) openBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    openSelected();
+  });
   if (undoBtn) undoBtn.addEventListener('click', undo);
   if (redoBtn) redoBtn.addEventListener('click', redo);
 

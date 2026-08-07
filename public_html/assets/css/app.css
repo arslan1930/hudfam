@@ -614,11 +614,12 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   border-radius: var(--radius);
   background: #fff;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
+  line-height: 1.35;
   user-select: none;
 }
 .sites-list-row {
-  padding: 0.4rem 0.65rem;
+  padding: 0.38rem 0.7rem;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   word-break: break-all;
@@ -628,6 +629,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .sites-list-row.is-selected {
   background: var(--brand-soft, #dbe7fb);
   color: var(--brand-deep, #1e3a5f);
+  font-weight: 600;
 }
 .sites-list-empty {
   padding: 2rem 1rem;

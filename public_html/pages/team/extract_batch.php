@@ -126,11 +126,12 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>① Sites list</h2>
     <p class="help">
-      Click to select (selection is remembered after refresh).
-      Use <strong>Open links</strong> to open selected sites in new tabs ·
+      Site names only. Left-click to select / deselect (stays after refresh).
+      <strong>Open URLs</strong> opens selected sites ·
+      <kbd>Shift</kbd>+click range ·
+      <kbd>Esc</kbd> clear ·
       <kbd>Backspace</kbd> delete ·
-      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Z</kbd> undo ·
-      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Y</kbd> redo.
+      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Z</kbd> undo.
     </p>
 
     <div
@@ -146,7 +147,7 @@ render_header('Extracting · ' . $country, 'team');
       <div class="sites-list-toolbar">
         <span class="muted" id="sites_selected_label">0 selected</span>
         <div class="sites-list-actions">
-          <button type="button" class="btn secondary small" id="sites_open_btn" disabled>Open links</button>
+          <button type="button" class="btn small" id="sites_open_btn" disabled title="Open selected site names in new tabs">Open URLs</button>
           <button type="button" class="btn secondary small" id="sites_undo_btn" disabled>Undo</button>
           <button type="button" class="btn secondary small" id="sites_redo_btn" disabled>Redo</button>
         </div>
@@ -170,7 +171,7 @@ render_header('Extracting · ' . $country, 'team');
       </div>
 
       <p class="muted" style="margin:0.5rem 0 0" id="sites_footer_count">
-        <?= count($domains) ?> domain<?= count($domains) === 1 ? '' : 's' ?>
+        <?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?>
       </p>
       <p class="help sites-list-status" id="sites_list_status" hidden></p>
     </div>
