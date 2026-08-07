@@ -41,6 +41,10 @@ if (!file_exists(__DIR__ . '/config.php')) {
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';
         $notes[] = 'prospect_batches (Add history) OK';
 
+        require_once __DIR__ . '/includes/orders.php';
+        ensure_order_schema();
+        $notes[] = 'order_clients / order_items (Order management) OK';
+
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('phone', $userCols, true)) {
             $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(80) NOT NULL DEFAULT '' AFTER email");
@@ -99,9 +103,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
       Keeps <strong>Our database</strong> (one URL list per country) + <strong>Add history</strong>.
       Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
     </p>
-    <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
+    <?php if ($error): render_alert_box('error', $error); endif; ?>
     <?php if ($done): ?>
-      <p>Upgrade complete.</p>
+      <?php render_alert_box('ok', 'Upgrade complete.'); ?>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
       <p><a href="index.php?page=admin_dashboard">Open Admin dashboard</a></p>
       <p class="help"><strong>Delete upgrade.php now.</strong> Also delete any old folders:

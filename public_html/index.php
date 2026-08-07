@@ -6,6 +6,7 @@ require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
+require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/guides.php';
 require __DIR__ . '/includes/layout.php';
 
@@ -32,6 +33,8 @@ $routes = [
     'admin_prospect_add' => 'pages/admin/prospect_add.php',
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
     'admin_prospect_batch' => 'pages/admin/prospect_batch.php',
+    'admin_orders' => 'pages/admin/orders.php',
+    'admin_order_sheet' => 'pages/admin/order_sheet.php',
     'admin_users' => 'pages/admin/users.php',
 
     'team_dashboard' => 'pages/team/dashboard.php',

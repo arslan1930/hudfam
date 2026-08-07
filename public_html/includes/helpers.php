@@ -81,6 +81,20 @@ function get_flashes(): array
     return $flashes;
 }
 
+/** Pretty alert / flash message box used across the app. */
+function render_alert_box(string $type, string $message): void
+{
+    $isError = $type === 'error';
+    $cls = $isError ? 'alert-error' : 'alert-ok';
+    $alertTitle = $isError ? 'Error' : 'Success';
+    echo '<div class="alert-box ' . h($cls) . '" role="alert">';
+    echo '<div class="alert-icon" aria-hidden="true">' . ($isError ? '!' : '✓') . '</div>';
+    echo '<div class="alert-body">';
+    echo '<strong class="alert-title">' . h($alertTitle) . '</strong>';
+    echo '<p class="alert-text">' . h($message) . '</p>';
+    echo '</div></div>';
+}
+
 function post(string $key, $default = '')
 {
     return $_POST[$key] ?? $default;
