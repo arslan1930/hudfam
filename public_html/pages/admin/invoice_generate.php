@@ -89,7 +89,7 @@ render_header('Generate invoice', 'admin');
     <p class="muted">Pick a client, tick unpaid completed articles (LIVE URL), fill bill-to details — layout matches your sample.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_invoice_manual">Manual invoice</a>
+    <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
   </div>
 </div>

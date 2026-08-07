@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
 
         $id = create_invoice($header, $lines, (int) ($user['id'] ?? 0));
         $created = get_invoice($id);
-        flash('ok', 'Manual invoice ' . ($created['invoice_number'] ?? '') . ' generated.');
+        flash('ok', 'Blank invoice ' . ($created['invoice_number'] ?? '') . ' generated.');
         redirect('index.php?page=admin_invoice_view&id=' . $id);
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
@@ -63,22 +63,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
     }
 }
 
-render_header('Manual invoice', 'admin');
+render_header('Blank invoice', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
     ['label' => 'Invoices', 'href' => 'index.php?page=admin_invoices'],
-    ['label' => 'Manual'],
+    ['label' => 'Blank invoice'],
 ]); ?>
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Manual invoice', 'Standalone bill — not linked to Order management. Appears in All invoices as (manual). Can still be marked Paid.') ?></h1>
+    <h1><?= label_with_info('Blank invoice', 'Standalone bill — not linked to Order management. Appears in All invoices as (blank). Can still be marked Paid.') ?></h1>
     <p class="muted">Create a printable invoice with your own line items. Not connected to client sheets or LIVE URL rows.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
-    <a class="btn secondary" href="index.php?page=admin_invoice_generate">From sheet</a>
+    <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
 </div>
 
@@ -202,7 +202,7 @@ render_header('Manual invoice', 'admin');
       </table>
     </div>
     <p class="actions" style="margin-top:1.1rem">
-      <button class="btn" type="submit">Generate manual invoice</button>
+      <button class="btn" type="submit">Generate blank invoice</button>
       <a class="btn secondary" href="index.php?page=admin_invoices">Cancel</a>
     </p>
   </section>

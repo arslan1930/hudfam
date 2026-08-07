@@ -64,7 +64,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <h1>
       Invoice <?= h($invoice['invoice_number']) ?>
       <?php if ($isManual): ?>
-        <span class="invoice-manual-tag">(manual)</span>
+        <span class="invoice-manual-tag">(blank)</span>
       <?php endif; ?>
     </h1>
     <p class="muted">
@@ -84,7 +84,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
     <?php if ($isManual): ?>
-      <a class="btn secondary" href="index.php?page=admin_invoice_manual">New manual invoice</a>
+      <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <?php else: ?>
       <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
     <?php endif; ?>
@@ -92,7 +92,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
             onsubmit="return confirm(<?= h(json_encode(
                 $isManual
-                    ? 'Mark this manual invoice as payment received?'
+                    ? 'Mark this blank invoice as payment received?'
                     : 'Mark this invoice as payment received? Linked unpaid sheet rows will be marked Paid.',
                 JSON_UNESCAPED_UNICODE
             )) ?>);">

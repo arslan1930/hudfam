@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 mark_invoice_payment_received($id);
                 if (invoice_is_manual($inv)) {
-                    flash('ok', 'Manual invoice ' . $inv['invoice_number'] . ' marked paid.');
+                    flash('ok', 'Blank invoice ' . $inv['invoice_number'] . ' marked paid.');
                 } else {
                     flash('ok', 'Invoice ' . $inv['invoice_number'] . ' marked paid — linked sheet rows set to Paid.');
                 }
@@ -49,10 +49,10 @@ render_header('Invoices', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or create a standalone manual invoice. Mark payment received when paid.</p>
+    <p class="muted">Generate from unpaid LIVE sheet rows, or create a standalone blank invoice. Mark payment received when paid.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_invoice_manual">Manual invoice</a>
+    <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
 </div>
@@ -73,7 +73,7 @@ render_header('Invoices', 'admin');
   <?php if (!$invoices): ?>
     <div class="empty-state">
       <p>No invoices yet. Generate one from unpaid completed articles on a client sheet.</p>
-      <a class="btn secondary" href="index.php?page=admin_invoice_manual">Manual invoice</a>
+      <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
     </div>
   <?php else: ?>
@@ -101,7 +101,7 @@ render_header('Invoices', 'admin');
           <tr data-invoice-row
               data-search="<?= h(mb_strtolower(trim(
                   (string) $inv['invoice_number'] . ' '
-                  . ($manual ? 'manual ' : '')
+                  . ($manual ? 'blank manual ' : '')
                   . format_invoice_date((string) $inv['invoice_date']) . ' '
                   . (string) $clientLabel . ' '
                   . (string) $inv['item_count'] . ' '
@@ -112,7 +112,7 @@ render_header('Invoices', 'admin');
             <td data-invoice-cell>
               <strong><?= h($inv['invoice_number']) ?></strong>
               <?php if ($manual): ?>
-                <span class="invoice-manual-tag">(manual)</span>
+                <span class="invoice-manual-tag">(blank)</span>
               <?php endif; ?>
               <?php if ($note !== ''): ?>
                 <div class="invoice-list-note muted"><?= h($note) ?></div>
@@ -131,9 +131,9 @@ render_header('Invoices', 'admin');
                 <form method="post" class="inline" action="index.php?page=admin_invoices"
                       onsubmit="return confirm(<?= h(json_encode(
                           'Confirm this invoice is paid?' . "\n\n"
-                          . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (manual)' : '') . "\n"
+                          . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
                           . ($manual
-                              ? 'This will mark the manual invoice as Paid.'
+                              ? 'This will mark the blank invoice as Paid.'
                               : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
                           JSON_UNESCAPED_UNICODE
                       )) ?>);">

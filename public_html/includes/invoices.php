@@ -464,7 +464,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
         );
     }
 
-    // Manual invoices are never linked to order-management clients / sheet rows.
+    // Blank invoices are never linked to order-management clients / sheet rows.
     $clientId = $isManual ? null : (int) ($header['client_id'] ?? 0);
     if ($clientId !== null && $clientId <= 0) {
         $clientId = null;
@@ -582,7 +582,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
 
 /**
  * Mark invoice payment received. Sheet invoices also mark linked order rows paid;
- * manual invoices only update the invoice (not linked to order management).
+ * Blank (manual) invoices only update the invoice (not linked to order management).
  */
 function mark_invoice_payment_received(int $invoiceId): void
 {
