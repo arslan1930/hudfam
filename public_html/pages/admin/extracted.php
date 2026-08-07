@@ -52,6 +52,41 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $countryName = $sheet;
 
+    if ($action === 'remove_list') {
+        $raw = (string) post('remove_text');
+        try {
+            $fromFile = read_extracted_sites_upload($_FILES['remove_csv'] ?? null);
+            if ($fromFile !== '') {
+                $raw = trim($raw) !== '' ? ($raw . "\n" . $fromFile) : $fromFile;
+            }
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($sitesListUrl . '&country=' . urlencode($countryName) . '#remove-by-list');
+        }
+        $result = remove_extracted_sites_by_list($countryName, $raw);
+        if ($result['removed'] < 1) {
+            flash(
+                'error',
+                $result['invalid'] > 0
+                    ? 'No matching sites removed. Check the list (root domains) and try again.'
+                    : 'No sites from that list were found in ' . $countryName . '.'
+            );
+            redirect($sitesListUrl . '&country=' . urlencode($countryName) . '#remove-by-list');
+        }
+        $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from ' . $countryName;
+        if ((int) $result['not_found'] > 0) {
+            $msg .= ' · ' . (int) $result['not_found'] . ' not found';
+        }
+        if ((int) $result['invalid'] > 0) {
+            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
+        }
+        flash('ok', $msg . '.');
+        if (count_extracted_sites_for_country($countryName) < 1) {
+            redirect($sitesListUrl);
+        }
+        redirect($sitesListUrl . '&country=' . urlencode($countryName));
+    }
+
     if ($action === 'remove_search') {
         $qRemove = trim((string) post('q'));
         $matchCount = count_extracted_sites_matching($countryName, $qRemove);
@@ -63,23 +98,6 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('ok', 'Removed ' . $n . ' site(s) matching “' . $qRemove . '”.');
         if (count_extracted_sites_for_country($countryName) < 1) {
             redirect($sitesListUrl);
-        }
-        redirect($sitesListUrl . '&country=' . urlencode($countryName));
-    }
-
-    if ($action === 'edit_site') {
-        $siteId = (int) post('site_id');
-        $newDomain = (string) post('domain');
-        $site = get_extracted_site($siteId);
-        if (!$site || (string) $site['country'] !== $countryName) {
-            flash('error', 'Site not found in this country.');
-            redirect($sitesListUrl . '&country=' . urlencode($countryName));
-        }
-        $result = update_extracted_site_domain($siteId, $newDomain);
-        if (!$result['ok']) {
-            flash('error', (string) ($result['error'] ?? 'Could not update site.'));
-        } else {
-            flash('ok', 'Updated site to ' . (string) $result['domain'] . '.');
         }
         redirect($sitesListUrl . '&country=' . urlencode($countryName));
     }
@@ -365,14 +383,15 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     return;
 }
 
-// --- Extracted Sites → one country detail ---
+// --- Extracted Sites → one country detail (plain numbered list) ---
 $countryName = $sheet;
 $q = trim((string) get('q'));
 $pageNum = max(1, (int) get('p', 1));
+$perPage = 250;
 $inv = extracted_inventory_query([
     'q' => $q,
     'country' => $countryName,
-], $pageNum, 100);
+], $pageNum, $perPage);
 $rows = $inv['rows'];
 $total = $inv['total'];
 $pages = $inv['pages'];
@@ -380,6 +399,7 @@ $countryTotal = count_extracted_sites_for_country($countryName);
 $searchMatchCount = $q !== '' ? count_extracted_sites_matching($countryName, $q) : 0;
 $exportUrl = $sitesListUrl . '&country=' . rawurlencode($countryName) . '&export=domains';
 $downloadUrl = $sitesListUrl . '&country=' . rawurlencode($countryName) . '&export=download';
+$listBase = $sitesListUrl . '&country=' . rawurlencode($countryName);
 
 $qs = http_build_query(array_filter([
     'page' => 'admin_extracted',
@@ -399,7 +419,10 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($countryName) ?></h1>
-    <p class="muted"><?= (int) $countryTotal ?> site<?= (int) $countryTotal === 1 ? '' : 's' ?><?= $q !== '' ? ' · showing ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?></p>
+    <p class="muted">
+      <span id="extracted_total_label"><?= (int) $countryTotal ?></span> URL<?= (int) $countryTotal === 1 ? '' : 's' ?>
+      <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
+    </p>
   </div>
   <div class="actions">
     <button
@@ -409,92 +432,109 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       data-export-url="<?= h($exportUrl) ?>"
       data-count="<?= (int) $countryTotal ?>"
       <?= $countryTotal > 0 ? '' : 'disabled' ?>
-    >Copy all sites</button>
+    >Copy all</button>
     <a class="btn secondary" href="<?= h($downloadUrl) ?>">Download .txt</a>
     <a class="btn secondary" href="<?= h($sitesListUrl) ?>">All countries</a>
   </div>
 </div>
 <p class="help" id="extracted_copy_status" hidden></p>
 
-<form class="card filters" method="get">
-  <input type="hidden" name="page" value="admin_extracted">
-  <input type="hidden" name="folder" value="extracted_sites">
-  <input type="hidden" name="country" value="<?= h($countryName) ?>">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
-  <button class="btn" type="submit">Filter</button>
-</form>
-<?php if ($q !== '' && $searchMatchCount > 0): ?>
-<form
-  class="card"
-  method="post"
-  action="<?= h($sitesListUrl . '&country=' . rawurlencode($countryName)) ?>"
-  onsubmit="return confirm('Remove <?= (int) $searchMatchCount ?> site(s) matching “<?= h($q) ?>”?');"
-  style="margin-top:0.75rem"
->
-  <input type="hidden" name="action" value="remove_search">
-  <input type="hidden" name="q" value="<?= h($q) ?>">
-  <p class="help" style="margin:0 0 0.6rem">
-    Search “<?= h($q) ?>” matches <strong><?= (int) $searchMatchCount ?></strong> site<?= (int) $searchMatchCount === 1 ? '' : 's' ?>.
-  </p>
-  <button class="btn danger" type="submit">Remove <?= (int) $searchMatchCount ?> matching</button>
-</form>
-<?php endif; ?>
-
 <div class="card">
+  <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+    <h2 style="margin:0">URLs</h2>
+    <?php if ($countryTotal > 0): ?>
+    <label class="sheet-search extracted-url-search" for="extracted-url-search">
+      <span class="visually-hidden">Search URLs</span>
+      <input id="extracted-url-search" type="search" placeholder="Search…"
+             value="<?= h($q) ?>"
+             autocomplete="off" spellcheck="false" data-no-draft
+             title="Type to filter this page · Enter = next match · Shift+Enter = previous">
+      <span class="sheet-search-meta muted" data-extracted-url-search-meta hidden></span>
+    </label>
+    <?php endif; ?>
+  </div>
+
+  <?php if ($q !== '' && $searchMatchCount > 0): ?>
+  <form
+    method="post"
+    action="<?= h($listBase) ?>"
+    onsubmit="return confirm('Remove <?= (int) $searchMatchCount ?> site(s) matching “<?= h($q) ?>”?');"
+    style="margin-bottom:0.85rem"
+  >
+    <input type="hidden" name="action" value="remove_search">
+    <input type="hidden" name="q" value="<?= h($q) ?>">
+    <p class="help" style="margin:0 0 0.55rem">
+      Server search “<?= h($q) ?>” matches <strong><?= (int) $searchMatchCount ?></strong> URL<?= (int) $searchMatchCount === 1 ? '' : 's' ?> in this country.
+    </p>
+    <button class="btn danger small" type="submit">Remove <?= (int) $searchMatchCount ?> matching</button>
+  </form>
+  <?php endif; ?>
+
   <?php if ($rows): ?>
-  <table class="extracted-sites-table">
-    <thead>
-      <tr>
-        <th>Site</th>
-        <th>Pushed by</th>
-        <th>When</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-    <?php foreach ($rows as $s): ?>
-      <tr>
-        <td>
-          <form method="post" class="extracted-edit-form">
-            <input type="hidden" name="action" value="edit_site">
-            <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
-            <div class="extracted-edit-row">
-              <input name="domain" value="<?= h((string) $s['domain']) ?>" required>
-              <button class="btn secondary small" type="submit">Save</button>
-            </div>
-          </form>
-        </td>
-        <td><?= h((string) ($s['pushed_by_full'] ?: $s['pushed_by_name'] ?: '—')) ?></td>
-        <td class="muted"><?= h(substr((string) $s['created_at'], 0, 16)) ?></td>
-        <td>
-          <form method="post" onsubmit="return confirm('Remove <?= h((string) $s['domain']) ?> from <?= h($countryName) ?>?');">
-            <input type="hidden" name="action" value="remove_site">
-            <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
-            <button class="btn small danger" type="submit">Remove</button>
-          </form>
-        </td>
-      </tr>
+  <ol class="extracted-plain-list" id="extracted-plain-list" start="<?= (int) (($pageNum - 1) * $perPage + 1) ?>">
+    <?php foreach ($rows as $s):
+        $domain = (string) $s['domain'];
+        ?>
+      <li
+        class="extracted-plain-item"
+        data-extracted-url-row
+        data-search="<?= h(mb_strtolower($domain)) ?>"
+      >
+        <span class="extracted-plain-domain"><?= h($domain) ?></span>
+        <form method="post" class="extracted-plain-remove" action="<?= h($listBase) ?>"
+              onsubmit="return confirm('Remove <?= h($domain) ?>?');">
+          <input type="hidden" name="action" value="remove_site">
+          <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+          <button class="btn secondary small" type="submit">Remove</button>
+        </form>
+      </li>
     <?php endforeach; ?>
-    </tbody>
-  </table>
-  <div class="actions" style="margin-top:0.8rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+  </ol>
+  <p class="help sheet-search-empty" data-extracted-url-search-empty hidden>No URLs on this page match your search.</p>
+  <div class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
     <div>
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span class="muted">Page <?= $pageNum ?> / <?= $pages ?></span>
+      <span class="muted">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
     </div>
-    <form method="post" onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> sites from <?= h($countryName) ?>?');">
+    <form method="post" action="<?= h($listBase) ?>"
+          onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> URLs from <?= h($countryName) ?>?');">
       <input type="hidden" name="action" value="remove_all">
       <button class="btn secondary small danger" type="submit">Remove all</button>
     </form>
   </div>
   <?php else: ?>
   <div class="empty-state">
-    <p>No extracted sites<?= $q !== '' ? ' match this search' : ' in this country yet' ?>.</p>
+    <p>No URLs<?= $q !== '' ? ' match this search' : ' in this country yet' ?>.</p>
     <a class="btn secondary" href="<?= h($sitesListUrl) ?>">Back to countries</a>
   </div>
   <?php endif; ?>
 </div>
+
+<?php if ($countryTotal > 0): ?>
+<div class="card" id="remove-by-list" style="margin-top:1rem">
+  <h2>Remove by list</h2>
+  <p class="help">
+    Paste site names (or upload a 1-column CSV) to remove those exact URLs from
+    <strong><?= h($countryName) ?></strong>.
+  </p>
+  <form
+    method="post"
+    action="<?= h($listBase) ?>#remove-by-list"
+    enctype="multipart/form-data"
+    onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?>?');"
+  >
+    <input type="hidden" name="action" value="remove_list">
+    <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
+    <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
+    <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
+    <p class="help">One site name per row. Only domains already in this country are removed.</p>
+    <div class="actions" style="margin-top:0.75rem">
+      <button class="btn danger" type="submit">Remove listed sites</button>
+    </div>
+  </form>
+</div>
+<?php endif; ?>
 
 <script src="<?= h(script_asset_url('js/extracted-admin.js')) ?>" defer></script>
 <?php render_footer('admin'); ?>
