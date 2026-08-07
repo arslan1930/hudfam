@@ -17,9 +17,11 @@ $sweScope = ($swePanel === 'admin') ? 'admin' : 'team';
 $sweLabel = swe_label($sweScope);
 $sweBase = $sweBase ?? (
     $sweScope === 'admin'
-        ? 'index.php?page=admin_extracted&folder=sites_with_emails'
+        ? 'index.php?page=admin_emails_data&folder=sites_with_emails'
         : 'index.php?page=team_sites_emails'
 );
+$sweAdminHub = $sweAdminHub ?? 'index.php?page=admin_emails_data';
+$sweAdminHubLabel = $sweAdminHubLabel ?? 'Emails DATA';
 $isAdmin = ($sweScope === 'admin');
 $isTeam = ($sweScope === 'team');
 
@@ -196,7 +198,7 @@ if (!$inCountry) {
     $crumbs = $isAdmin
         ? [
             ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-            ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+            ['label' => $sweAdminHubLabel, 'href' => $sweAdminHub],
             ['label' => $sweLabel],
         ]
         : [
@@ -222,7 +224,7 @@ if (!$inCountry) {
       </div>
       <div class="actions">
         <?php if ($isAdmin): ?>
-          <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
+          <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
           <a class="btn" href="index.php?page=team_admin_emails_delete">Delete Admin emails</a>
           <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
@@ -372,7 +374,7 @@ $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
 $qs = http_build_query(array_filter([
-    'page' => $isAdmin ? 'admin_extracted' : 'team_sites_emails',
+    'page' => $isAdmin ? 'admin_emails_data' : 'team_sites_emails',
     'folder' => $isAdmin ? 'sites_with_emails' : null,
     'country' => $countryName,
     'q' => $q,
@@ -382,7 +384,7 @@ render_header($sweLabel . ' · ' . $countryName, $swePanel);
 $crumbs = $isAdmin
     ? [
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+        ['label' => $sweAdminHubLabel, 'href' => $sweAdminHub],
         ['label' => $sweLabel, 'href' => $sweBase],
         ['label' => $countryName],
     ]

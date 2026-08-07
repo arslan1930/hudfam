@@ -8,7 +8,25 @@ $folder = (string) get('folder');
 if ($folder === '' && (string) get('country') !== '') {
     $folder = 'extracted_sites';
 }
-$allowedFolders = ['extracted_sites', 'sites_with_emails'];
+// Sites with emails - Admin moved to Emails DATA panel
+if ($folder === 'sites_with_emails') {
+    $qs = 'index.php?page=admin_emails_data&folder=sites_with_emails';
+    if ((string) get('country') !== '') {
+        $qs .= '&country=' . urlencode((string) get('country'));
+    }
+    if ((string) get('export') !== '') {
+        $qs .= '&export=' . urlencode((string) get('export'));
+    }
+    if ((string) get('q') !== '') {
+        $qs .= '&q=' . urlencode((string) get('q'));
+    }
+    if ((string) get('p') !== '') {
+        $qs .= '&p=' . urlencode((string) get('p'));
+    }
+    redirect($qs);
+}
+
+$allowedFolders = ['extracted_sites'];
 if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect('index.php?page=admin_extracted');
@@ -161,7 +179,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// --- Hub: two folders ---
+// --- Hub: Extracted Sites only (emails live under Emails DATA) ---
 if ($folder === '') {
     $countryRows = list_extracted_country_rows();
     $extractedTotal = 0;
@@ -169,15 +187,6 @@ if ($folder === '') {
         $extractedTotal += (int) $r['total'];
     }
     $countryCount = count($countryRows);
-
-    $sweCountryRows = list_sites_with_emails_country_rows('admin');
-    $sweTotal = 0;
-    $sweWithEmails = 0;
-    foreach ($sweCountryRows as $r) {
-        $sweTotal += (int) $r['total'];
-        $sweWithEmails += (int) $r['with_emails'];
-    }
-    $sweCountryCount = count($sweCountryRows);
 
     render_header('Extracted URLs', 'admin');
     ?>
@@ -188,7 +197,10 @@ if ($folder === '') {
     <div class="topbar">
       <div>
         <h1>Extracted URLs</h1>
-        <p class="muted">Open a folder to work with extracted sites or sites with emails.</p>
+        <p class="muted">
+          New URLs from Team Push.
+          Email archives are under <a href="index.php?page=admin_emails_data">Emails DATA</a>.
+        </p>
       </div>
     </div>
 
@@ -201,29 +213,10 @@ if ($folder === '') {
             · <?= (int) $extractedTotal ?> new URL<?= (int) $extractedTotal === 1 ? '' : 's' ?>
           </p>
         </a>
-        <a class="folder" href="index.php?page=admin_extracted&amp;folder=sites_with_emails">
-          <h3>Sites with emails - Admin</h3>
-          <p class="muted">
-            Final list from Team Push ·
-            <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
-            · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
-            · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
-          </p>
-        </a>
       </div>
     </div>
     <?php
     render_footer('admin');
-    return;
-}
-
-// --- Folder: Sites with emails ---
-if ($folder === 'sites_with_emails') {
-    // Allow ?country= on this folder (same pattern as Extracted Sites).
-    $sweUser = $user;
-    $swePanel = 'admin';
-    $sweBase = 'index.php?page=admin_extracted&folder=sites_with_emails';
-    require __DIR__ . '/../sites_with_emails_app.php';
     return;
 }
 

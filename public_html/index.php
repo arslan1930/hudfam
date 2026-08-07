@@ -49,6 +49,7 @@ $routes = [
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
     'admin_prospect_batch' => 'pages/admin/prospect_batch.php',
     'admin_extracted' => 'pages/admin/extracted.php',
+    'admin_emails_data' => 'pages/admin/emails_data.php',
     'admin_orders' => 'pages/admin/orders.php',
     'admin_order_sheet' => 'pages/admin/order_sheet.php',
     'admin_invoices' => 'pages/admin/invoices.php',

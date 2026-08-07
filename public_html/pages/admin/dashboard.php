@@ -89,9 +89,14 @@ render_header('Dashboard', 'admin');
     <p>Site Finding · Site Extracting · Email Extracting · Communication Team.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
-     data-search="extracted urls extracted sites sites with emails admin countries copy edit remove push">
+     data-search="extracted urls extracted sites countries copy edit remove push">
     <h2>Extracted URLs</h2>
-    <p>Extracted Sites and Sites with emails - Admin folders.</p>
+    <p>Extracted Sites from Team Push.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_emails_data" data-dashboard-item
+     data-search="emails data sites with emails admin archive push">
+    <h2>Emails DATA</h2>
+    <p>Sites with emails - Admin final archive.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
      data-search="order management client sheets sites prices profit live url">
