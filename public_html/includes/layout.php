@@ -16,6 +16,8 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
+        'admin_orders' => ['admin_order_sheet'],
+        'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
@@ -56,6 +58,14 @@ function render_header(string $title, string $panel = ''): void
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
     $current = current_route_page();
     $roleLabel = $panel === 'admin' ? 'Admin' : 'Team';
+    $flashes = get_flashes();
+    $clearDraft = false;
+    foreach ($flashes as $flash) {
+        if (($flash['type'] ?? '') === 'ok') {
+            $clearDraft = true;
+            break;
+        }
+    }
 
     echo '<div class="shell"><aside class="sidebar">';
     echo '<a class="brand" href="' . h($home) . '">';
@@ -71,6 +81,8 @@ function render_header(string $title, string $panel = ''): void
                 'admin_prospects' => ['Our database', 'Country folders → URLs'],
                 'admin_prospect_add' => ['Add URLs', 'Paste into a country database'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
+                'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
+                'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
             ],
         ];
@@ -106,17 +118,56 @@ function render_header(string $title, string $panel = ''): void
     echo '<div class="nav-group nav-group-end">';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
-    echo '</nav></aside><main class="main">';
-    foreach (get_flashes() as $flash) {
-        $cls = $flash['type'] === 'error' ? 'error' : '';
-        echo '<ul class="messages"><li class="' . h($cls) . '">' . h($flash['message']) . '</li></ul>';
+    echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    foreach ($flashes as $flash) {
+        render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }
 }
 
 function render_footer(string $panel = ''): void
 {
     if (current_user() && $panel !== '') {
+        render_project_credit();
+        if ($panel === 'admin' || $panel === 'team') {
+            $user = current_user();
+            $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
+            $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
+            $jsFile = asset_url('assets/js/draft-autosave.js');
+            $tipVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/info-tips.js') ?: time());
+            $tipPhp = app_url('asset.php?f=js/info-tips.js&v=' . rawurlencode($tipVersion));
+            $tipFile = asset_url('assets/js/info-tips.js');
+            echo '<script>';
+            echo 'window.TXF_DRAFT=' . json_encode([
+                'panel' => $panel,
+                'userId' => (int) ($user['id'] ?? 0),
+                'clearDraft' => false,
+            ], JSON_UNESCAPED_UNICODE) . ';';
+            echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
+            echo '</script>';
+            echo '<script src="' . h($jsPhp) . '" defer></script>';
+            echo '<script src="' . h($jsFile) . '" defer></script>';
+            echo '<script src="' . h($tipPhp) . '" defer></script>';
+            echo '<script src="' . h($tipFile) . '" defer></script>';
+        }
         echo '</main></div>';
     }
     echo '</body></html>';
+}
+
+/** Footer credit: TechxForm is a project of Teqnowebs. */
+function render_project_credit(): void
+{
+    $app = 'TechxForm';
+    try {
+        $app = (string) (app_config()['app_name'] ?? 'TechxForm');
+    } catch (Throwable $e) {
+        $app = 'TechxForm';
+    }
+    if ($app === '') {
+        $app = 'TechxForm';
+    }
+    echo '<p class="project-credit">';
+    echo h($app) . ' is a project of ';
+    echo '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
+    echo '</p>';
 }

@@ -25,6 +25,20 @@ try {
 } catch (Throwable $e) {
     $recent = [];
 }
+$orderClientCount = 0;
+$invoiceCount = 0;
+try {
+    ensure_order_schema();
+    $orderClientCount = (int) db()->query('SELECT COUNT(*) FROM order_clients')->fetchColumn();
+} catch (Throwable $e) {
+    $orderClientCount = 0;
+}
+try {
+    ensure_invoice_schema();
+    $invoiceCount = (int) db()->query('SELECT COUNT(*) FROM invoices')->fetchColumn();
+} catch (Throwable $e) {
+    $invoiceCount = 0;
+}
 
 render_header('Dashboard', 'admin');
 ?>
@@ -43,6 +57,8 @@ render_header('Dashboard', 'admin');
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
   <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
+  <div class="card stat"><span class="muted">Client sheets</span><strong><?= $orderClientCount ?></strong></div>
+  <div class="card stat"><span class="muted">Invoices</span><strong><?= $invoiceCount ?></strong></div>
 </div>
 
 <div class="launch-cards">
@@ -53,6 +69,14 @@ render_header('Dashboard', 'admin');
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
     <p>Open country folders — one database each.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_orders">
+    <h2>Order management</h2>
+    <p>Client sheets — sites, prices, profit, live URL.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_invoices">
+    <h2>Invoices</h2>
+    <p>Generate printable invoices from completed articles.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches">
     <h2>Add history</h2>
