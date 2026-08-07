@@ -962,6 +962,13 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   color: #1f4d35;
   border-color: #b7dcc8;
 }
+.invoice-list-pay-btn {
+  min-width: 3.6rem;
+}
+.invoice-list-table .invoice-pay-badge,
+.invoice-list-table .invoice-list-pay-btn {
+  vertical-align: middle;
+}
 .visually-hidden {
   position: absolute;
   width: 1px;

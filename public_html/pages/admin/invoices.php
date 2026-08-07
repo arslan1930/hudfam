@@ -16,6 +16,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             redirect('index.php?page=admin_invoices');
         }
+        if ($action === 'mark_paid') {
+            $id = (int) post('id');
+            $inv = get_invoice($id);
+            if (!$inv) {
+                flash('error', 'Invoice not found.');
+            } else {
+                mark_invoice_payment_received($id);
+                flash('ok', 'Invoice ' . $inv['invoice_number'] . ' marked paid — linked sheet rows set to Paid.');
+            }
+            redirect('index.php?page=admin_invoices');
+        }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect('index.php?page=admin_invoices');
