@@ -1220,6 +1220,15 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-weight: 700;
   white-space: nowrap;
 }
+.invoice-number-auto {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: default;
+}
+
 .invoice-subhead {
   margin: 1.1rem 0 0.5rem;
   font-size: 1rem;

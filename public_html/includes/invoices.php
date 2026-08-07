@@ -393,8 +393,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
     }
 
     $company = invoice_company_defaults();
-    // Always auto-generate a unique number — never trust a posted / manual value.
-    $invoiceNumber = allocate_unique_invoice_number();
+    // Invoice number is allocated inside the insert retry loop (never from POST).
     $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
     if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
         $invoiceDate = date('Y-m-d');
@@ -456,70 +455,88 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
     }
 
     $pdo = db();
-    $pdo->beginTransaction();
-    try {
-        $stmt = $pdo->prepare(
-            'INSERT INTO invoices (
-                invoice_number, invoice_date, client_id, client_name,
-                bill_to_name, bill_to_address, bill_to_hrb, bill_to_vat,
-                supplier_number, cost_center, orderer,
-                company_name, company_bic, company_iban, company_phone,
-                company_address, company_reg_no, vat_note,
-                currency, total_amount, payment_status, created_by
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-        );
-        $stmt->execute([
-            $invoiceNumber,
-            $invoiceDate,
-            $clientId,
-            trim((string) ($header['client_name'] ?? '')),
-            trim((string) ($header['bill_to_name'] ?? '')),
-            trim((string) ($header['bill_to_address'] ?? '')),
-            trim((string) ($header['bill_to_hrb'] ?? '')),
-            trim((string) ($header['bill_to_vat'] ?? '')),
-            trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
-            trim((string) ($header['cost_center'] ?? '')),
-            trim((string) ($header['orderer'] ?? '')),
-            trim((string) ($header['company_name'] ?? $company['company_name'])),
-            trim((string) ($header['company_bic'] ?? $company['company_bic'])),
-            trim((string) ($header['company_iban'] ?? $company['company_iban'])),
-            trim((string) ($header['company_phone'] ?? $company['company_phone'])),
-            trim((string) ($header['company_address'] ?? $company['company_address'])),
-            trim((string) ($header['company_reg_no'] ?? $company['company_reg_no'])),
-            trim((string) ($header['vat_note'] ?? $company['vat_note'])),
-            'EUR',
-            round($total, 2),
-            'unpaid',
-            $createdBy,
-        ]);
-        $invoiceId = (int) $pdo->lastInsertId();
+    $maxAttempts = 8;
+    $lastError = null;
 
-        $itemStmt = $pdo->prepare(
-            'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, order_item_ids, sort_order)
-             VALUES (?,?,?,?,?,?,?)'
-        );
-        foreach ($normalized as $line) {
-            $itemStmt->execute([
-                $invoiceId,
-                $line['description'],
-                $line['amount'],
-                $line['qty'],
-                $line['line_total'],
-                implode(',', $line['order_item_ids']),
-                $line['sort_order'],
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        // Re-allocate each attempt so concurrent creates never collide.
+        $invoiceNumber = allocate_unique_invoice_number();
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO invoices (
+                    invoice_number, invoice_date, client_id, client_name,
+                    bill_to_name, bill_to_address, bill_to_hrb, bill_to_vat,
+                    supplier_number, cost_center, orderer,
+                    company_name, company_bic, company_iban, company_phone,
+                    company_address, company_reg_no, vat_note,
+                    currency, total_amount, payment_status, created_by
+                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            );
+            $stmt->execute([
+                $invoiceNumber,
+                $invoiceDate,
+                $clientId,
+                trim((string) ($header['client_name'] ?? '')),
+                trim((string) ($header['bill_to_name'] ?? '')),
+                trim((string) ($header['bill_to_address'] ?? '')),
+                trim((string) ($header['bill_to_hrb'] ?? '')),
+                trim((string) ($header['bill_to_vat'] ?? '')),
+                trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
+                trim((string) ($header['cost_center'] ?? '')),
+                trim((string) ($header['orderer'] ?? '')),
+                trim((string) ($header['company_name'] ?? $company['company_name'])),
+                trim((string) ($header['company_bic'] ?? $company['company_bic'])),
+                trim((string) ($header['company_iban'] ?? $company['company_iban'])),
+                trim((string) ($header['company_phone'] ?? $company['company_phone'])),
+                trim((string) ($header['company_address'] ?? $company['company_address'])),
+                trim((string) ($header['company_reg_no'] ?? $company['company_reg_no'])),
+                trim((string) ($header['vat_note'] ?? $company['vat_note'])),
+                'EUR',
+                round($total, 2),
+                'unpaid',
+                $createdBy,
             ]);
-        }
+            $invoiceId = (int) $pdo->lastInsertId();
 
-        if ($clientId) {
-            save_invoice_client_profile($clientId, $header);
-        }
+            $itemStmt = $pdo->prepare(
+                'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, order_item_ids, sort_order)
+                 VALUES (?,?,?,?,?,?,?)'
+            );
+            foreach ($normalized as $line) {
+                $itemStmt->execute([
+                    $invoiceId,
+                    $line['description'],
+                    $line['amount'],
+                    $line['qty'],
+                    $line['line_total'],
+                    implode(',', $line['order_item_ids']),
+                    $line['sort_order'],
+                ]);
+            }
 
-        $pdo->commit();
-        return $invoiceId;
-    } catch (Throwable $e) {
-        $pdo->rollBack();
-        throw $e;
+            if ($clientId) {
+                save_invoice_client_profile($clientId, $header);
+            }
+
+            $pdo->commit();
+            return $invoiceId;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $lastError = $e;
+            $message = strtolower($e->getMessage());
+            $isDuplicateNumber = str_contains($message, 'invoice_number')
+                || str_contains($message, 'duplicate')
+                || (isset($e->errorInfo[1]) && (int) $e->errorInfo[1] === 1062);
+            if (!$isDuplicateNumber || $attempt === $maxAttempts) {
+                throw $e;
+            }
+        }
     }
+
+    throw $lastError ?? new RuntimeException('Could not allocate a unique invoice number.');
 }
 
 /**
