@@ -239,7 +239,7 @@ function render_glossary(string $panel, bool $showTitle = true): void
         echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
         echo '<div><dt>New badge</dt><dd>Reminder when Team adds Our database sites, Extracted Sites, or Admin emails — clears when you open that section.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
-        echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
+        echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';
     } else {
         echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
@@ -247,7 +247,7 @@ function render_glossary(string $panel, bool $showTitle = true): void
         echo '<div><dt>Sites with emails - Team</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
         echo '<div><dt>Admin emails search</dt><dd>Super search Sites with emails - Admin across all countries.</dd></div>';
         echo '<div><dt>Campaign search</dt><dd>Super search Email campaign sheets across all countries.</dd></div>';
-        echo '<div><dt>Add history</dt><dd>Sites you added, saved by day.</dd></div>';
+        echo '<div><dt>Site adding history</dt><dd>Sites you added, saved by day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }
     echo '</dl></div>';

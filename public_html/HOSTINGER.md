@@ -9,7 +9,7 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 | Dashboard | Dashboard |
 | Our database | Filter & add |
 | Add sites | Our database |
-| Add history | Add history |
+| Site adding history | Site adding history |
 | Users | |
 
 ## Deploy (important — wipe old files)

@@ -121,7 +121,7 @@ render_header('Admins & users', 'admin');
         <td class="actions">
           <a href="index.php?page=admin_users&edit=<?= (int)$u['id'] ?>">Edit</a>
           <?php if ($u['role'] === 'team'): ?>
-            <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Add history</a>
+            <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Site adding history</a>
           <?php endif; ?>
         </td>
       </tr>

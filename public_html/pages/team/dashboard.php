@@ -73,7 +73,7 @@ if ($deptScoped) {
     $toolCards = [];
     if (!empty($toolSet['team_prospect_check'])) {
         $toolCards[] = ['team_prospect_check', 'Filter & add', 'Paste → filter → add unique sites'];
-        $toolCards[] = ['team_prospect_batches', 'Add history', 'Your daily adds'];
+        $toolCards[] = ['team_prospect_batches', 'Site adding history', 'Your daily adds'];
     }
     if (!empty($toolSet['team_extracting'])) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
@@ -181,7 +181,7 @@ render_header('Dashboard', 'team');
     <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' sites added today' : 'No adds yet today' ?></p>
   </a>
   <a class="launch-card" href="index.php?page=team_prospect_batches">
-    <h2>Add history</h2>
+    <h2>Site adding history</h2>
     <p>Sites you added, saved by day.</p>
   </a>
 </div>

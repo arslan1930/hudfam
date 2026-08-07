@@ -134,7 +134,7 @@ render_header('Filter & add', 'team');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Site adding history</a>
   </div>
 </div>
 <?= guide_filter_add() ?>

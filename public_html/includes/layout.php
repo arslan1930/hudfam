@@ -93,7 +93,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
-                'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
+                'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
                 'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
@@ -141,7 +141,7 @@ function render_header(string $title, string $panel = ''): void
                         'Paste → filter → add new unique only',
                     ];
                     $groups['Main']['team_prospect_batches'] = [
-                        'Add history',
+                        'Site adding history',
                         'Your daily adds',
                     ];
                 }
@@ -180,7 +180,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
-                    'team_prospect_batches' => ['Add history', 'Your daily adds'],
+                    'team_prospect_batches' => ['Site adding history', 'Your daily adds'],
                 ],
             ];
         }

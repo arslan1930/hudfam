@@ -4,15 +4,15 @@ if (function_exists('clear_admin_new_data')) {
     clear_admin_new_data('our_database', $user);
 }
 $batches = list_prospect_batches(null, 150);
-render_header('Add history', 'admin');
+render_header('Site adding history', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Add history'],
+    ['label' => 'Site adding history'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add history</h1>
+    <h1>Site adding history</h1>
     <p class="muted">Who added how many sites each day.</p>
   </div>
   <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>

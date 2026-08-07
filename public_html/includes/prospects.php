@@ -1143,7 +1143,7 @@ function list_prospect_batches(?int $userId = null, int $limit = 60, string $rol
 }
 
 /**
- * Per-user totals for admin Add history (sites + days with adds).
+ * Per-user totals for admin Site adding history (sites + days with adds).
  *
  * @return list<array{user_id:int,username:string,full_name:string,role:string,batch_days:int,site_count:int,last_batch_date:?string}>
  */
@@ -1188,7 +1188,7 @@ function list_team_users(bool $activeOnly = true): array
 }
 
 /**
- * Backfill dated add history from inventory rows that never landed in a batch
+ * Backfill dated site adding history from inventory rows that never landed in a batch
  * (e.g. older single-add form saves). Idempotent.
  *
  * @return int number of domains attached to history

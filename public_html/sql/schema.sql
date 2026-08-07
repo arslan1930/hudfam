@@ -1,4 +1,4 @@
--- TechxForm schema: users + Our database + add history + Order management.
+-- TechxForm schema: users + Our database + site adding history + Order management.
 -- Legacy Catalog / Emails / Published / Projects are not part of the app.
 
 CREATE TABLE IF NOT EXISTS users (
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS prospect_sites (
   CONSTRAINT fk_prospect_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Add history: who added what, by day
+-- Site adding history: who added what, by day
 CREATE TABLE IF NOT EXISTS prospect_batches (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,

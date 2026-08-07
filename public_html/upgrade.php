@@ -63,7 +63,7 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';
-        $notes[] = 'prospect_batches (Add history) OK';
+        $notes[] = 'prospect_batches (Site adding history) OK';
 
         ensure_extract_schema();
         $notes[] = 'extract_batches / extract_batch_sites (Extracting sites) OK';

@@ -226,7 +226,7 @@ if (!$inCountry && !$emptyCountry) {
       <div class="actions">
         <a class="btn" href="#super-search">Super search</a>
         <a class="btn secondary" href="#add-sites">Add sites</a>
-        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
+        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Site adding history</a>
       </div>
     </div>
 

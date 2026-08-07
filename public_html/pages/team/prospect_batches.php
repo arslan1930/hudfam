@@ -8,11 +8,11 @@ try {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Dated batches.');
 }
 
-render_header('Add history', 'team');
+render_header('Site adding history', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Add history</h1>
+    <h1>Site adding history</h1>
     <p class="muted">Sites you added, saved by day.</p>
   </div>
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>

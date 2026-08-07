@@ -192,7 +192,7 @@ function department_tool_pages_for_user(array $user): array
 function department_tools_help(string $slug): string
 {
     return match ($slug) {
-        'site_finding' => 'Members also get Filter & add and Add history (not only tasks).',
+        'site_finding' => 'Members also get Filter & add and Site adding history (not only tasks).',
         'site_extracting' => 'Members also get Extracting sites / Results + Push (not only tasks).',
         'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
         'communication' => 'Members also get Sites with emails – Admin search and Email campaign search.',

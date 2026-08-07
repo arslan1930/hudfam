@@ -47,7 +47,7 @@ function render_admin_panel_guide(): string
         . '<p><strong>How:</strong> Archives fill from Team Push. Create a country Email Sheet with site names + emails → Communication Team uses Admin emails search / Campaign search.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>4. Add history</h3>'
+        . '<h3>4. Site adding history</h3>'
         . '<p><strong>What:</strong> Who added which sites, by day.</p>'
         . '<p><strong>How:</strong> Open a day to see the domains that person added.</p>'
         . '</article>'
@@ -62,7 +62,7 @@ function render_admin_panel_guide(): string
         . '<ol>'
         . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
         . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
-        . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
+        . '<li>Team adds the unique ones → they join that country’s database and <strong>Site adding history</strong>.</li>'
         . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
         . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails data → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Final</strong>). Pushed rows leave the Team working copy.</li>'
         . '<li>Admin creates a <strong>country Email Sheet</strong> under Email campaign data; Communication Team uses <strong>Admin emails search</strong> / <strong>Campaign search</strong> and updates the matching country row.</li>'
@@ -93,7 +93,7 @@ function render_team_panel_guide(): string
         . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong> — they move to the Admin archive and clear from Team.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>4. Add history</h3>'
+        . '<h3>4. Site adding history</h3>'
         . '<p><strong>What:</strong> Your daily batches of new sites.</p>'
         . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
         . '</article>'
@@ -158,7 +158,7 @@ function guide_extracting(): string
 function guide_add_history(): string
 {
     return render_page_purpose(
-        'Add history — who added what',
+        'Site adding history — who added what',
         'Daily record of domains added by each person.',
         'Open a date/person to see the exact domains saved that day.',
         []

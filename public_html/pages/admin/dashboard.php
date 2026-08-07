@@ -69,7 +69,7 @@ render_header('Dashboard', 'admin');
 
 <div class="grid">
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
-  <div class="card stat"><span class="muted">Add history days</span><strong><?= $batchCount ?></strong></div>
+  <div class="card stat"><span class="muted">Site adding history days</span><strong><?= $batchCount ?></strong></div>
   <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
   <div class="card stat"><span class="muted">Extracted sites</span><strong><?= $extractedCount ?></strong></div>
   <div class="card stat"><span class="muted">Client sheets</span><strong><?= $orderClientCount ?></strong></div>
@@ -116,8 +116,8 @@ $badge = static function (bool $on): string {
     <p>Generate printable invoices from completed articles.</p>
   </a>
   <a class="launch-card<?= $newOur ? ' has-admin-new' : '' ?>" href="index.php?page=admin_prospect_batches" data-dashboard-item
-     data-search="add history who added sites by day batches new">
-    <h2>Add history<?= $badge($newOur) ?></h2>
+     data-search="site adding history who added sites by day batches new">
+    <h2>Site adding history<?= $badge($newOur) ?></h2>
     <p>See who added sites, by day.</p>
   </a>
 </div>
@@ -137,7 +137,7 @@ $badge = static function (bool $on): string {
                 (string) $b['batch_date'] . ' '
                 . (string) ($b['full_name'] ?: $b['username']) . ' '
                 . (string) ($b['username'] ?? '') . ' '
-                . (int) $b['site_count'] . ' sites add history'
+                . (int) $b['site_count'] . ' sites site adding history'
             ))) ?>">
           <td><?= h($b['batch_date']) ?></td>
           <td><?= h($b['full_name'] ?: $b['username']) ?></td>
