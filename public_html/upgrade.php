@@ -103,9 +103,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
       Keeps <strong>Our database</strong> (one URL list per country) + <strong>Add history</strong>.
       Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
     </p>
-    <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
+    <?php if ($error): render_alert_box('error', $error); endif; ?>
     <?php if ($done): ?>
-      <p>Upgrade complete.</p>
+      <?php render_alert_box('ok', 'Upgrade complete.'); ?>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
       <p><a href="index.php?page=admin_dashboard">Open Admin dashboard</a></p>
       <p class="help"><strong>Delete upgrade.php now.</strong> Also delete any old folders:

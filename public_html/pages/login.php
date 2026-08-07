@@ -19,7 +19,7 @@ render_header('Login');
       <h1><?= h($app) ?></h1>
     </div>
     <p class="muted">Shared URL database — Admin adds sites, Team filters and adds unique ones.</p>
-    <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
+    <?php if ($error): render_alert_box('error', $error); endif; ?>
     <form method="post">
       <label>Username</label>
       <input type="text" name="username" required autofocus>

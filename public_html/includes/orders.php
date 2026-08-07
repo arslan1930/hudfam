@@ -462,17 +462,17 @@ function order_sheet_download_csv(array $client, array $rows): void
     fputcsv($out, ['Client', (string) $client['name']]);
     fputcsv($out, ['Exported', date('Y-m-d H:i')]);
     fputcsv($out, []);
-    fputcsv($out, ['Month', 'Year', 'Country', 'Site name', 'Owner price', 'Decided price', 'Profit', 'LIVE URL', 'Status']);
+    fputcsv($out, ['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Profit', 'Month', 'Year', 'Status']);
     foreach ($rows as $r) {
         fputcsv($out, [
-            $r['month'],
-            $r['year'],
-            $r['country'],
             $r['site'],
+            $r['country'],
             $r['owner'],
             $r['decided'],
-            $r['profit'],
             $r['live_url'],
+            $r['profit'],
+            $r['month'],
+            $r['year'],
             $r['status'],
         ]);
     }
@@ -495,14 +495,14 @@ function order_sheet_download_xls(array $client, array $rows): void
     echo '<tr><th colspan="9">Order sheet — ' . h((string) $client['name']) . '</th></tr>';
     echo '<tr><td colspan="9">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
     echo '<tr>';
-    foreach (['Month', 'Year', 'Country', 'Site name', 'Owner price', 'Decided price', 'Profit', 'LIVE URL', 'Status'] as $h) {
+    foreach (['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Profit', 'Month', 'Year', 'Status'] as $h) {
         echo '<th>' . h($h) . '</th>';
     }
     echo '</tr>';
     foreach ($rows as $r) {
         $isYear = ($r['month'] === 'YEAR END');
         echo '<tr' . ($isYear ? ' style="background:#e8eaed;font-weight:bold"' : '') . '>';
-        foreach (['month', 'year', 'country', 'site', 'owner', 'decided', 'profit', 'live_url', 'status'] as $key) {
+        foreach (['site', 'country', 'owner', 'decided', 'live_url', 'profit', 'month', 'year', 'status'] as $key) {
             echo '<td>' . h((string) $r[$key]) . '</td>';
         }
         echo '</tr>';

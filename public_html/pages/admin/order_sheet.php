@@ -22,7 +22,7 @@ if ($download === 'csv' || $download === 'xls' || $download === 'excel') {
 }
 
 $months = order_month_names();
-$yearOptions = range((int) date('Y') - 2, (int) date('Y') + 3);
+$yearOptions = range(2018, 2030);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
@@ -201,14 +201,14 @@ render_header('Order · ' . $client['name'], 'admin');
       <thead>
         <tr>
           <th class="col-num">#</th>
-          <th class="col-month">Month</th>
-          <th class="col-country">Country</th>
           <th class="col-site">Site name</th>
+          <th class="col-country">Country</th>
           <th class="col-price">Owner price</th>
           <th class="col-price">Decided price</th>
-          <th class="col-profit">Profit</th>
-          <th class="col-del">Remove</th>
           <th class="col-live">LIVE URL</th>
+          <th class="col-profit">Profit</th>
+          <th class="col-month">Month</th>
+          <th class="col-del">Remove</th>
         </tr>
       </thead>
       <tbody>
@@ -232,7 +232,7 @@ render_header('Order · ' . $client['name'], 'admin');
               <span class="order-year-end-sep" aria-hidden="true">·</span>
               <span><?= (int) $to ?> months started</span>
               <?php if ($markerId > 0): ?>
-                <button class="btn-link danger order-year-end-remove" type="submit"
+                <button class="btn-link order-year-end-remove" type="submit"
                         onclick="document.getElementById('delete-item-id').value='<?= $markerId ?>'; document.getElementById('sheet-action').value='delete_row'; return confirm(<?= h(json_encode('Delete this year-end marker for ' . $from . '? This cannot be undone.', JSON_UNESCAPED_UNICODE)) ?>);">
                   Remove marker
                 </button>
@@ -251,9 +251,44 @@ render_header('Order · ' . $client['name'], 'admin');
           $done = order_is_completed($row);
           $monthVal = (int) ($row['order_month'] ?? 0);
           $yearVal = (int) ($row['order_year'] ?: date('Y'));
+          if ($yearVal < 2018) {
+              $yearVal = 2018;
+          }
+          if ($yearVal > 2030) {
+              $yearVal = 2030;
+          }
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?>" data-row>
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
+          <td class="col-site">
+            <input class="cell-input" type="text" name="site_name[<?= $id ?>]"
+                   value="<?= h($row['site_name']) ?>" placeholder="site.com" autocomplete="off">
+          </td>
+          <td class="col-country">
+            <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
+                   value="<?= h((string) ($row['country'] ?? '')) ?>"
+                   placeholder=".de .nl .com …" autocomplete="off">
+          </td>
+          <td class="col-price">
+            <input class="cell-input cell-money" type="text" inputmode="decimal"
+                   name="owner_price[<?= $id ?>]" value="<?= h(format_money($row['owner_price'])) ?>"
+                   data-owner placeholder="0.00" autocomplete="off">
+          </td>
+          <td class="col-price">
+            <input class="cell-input cell-money" type="text" inputmode="decimal"
+                   name="decided_price[<?= $id ?>]" value="<?= h(format_money($row['decided_price'])) ?>"
+                   data-decided placeholder="0.00" autocomplete="off">
+          </td>
+          <td class="col-live">
+            <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
+                   value="<?= h($row['live_url']) ?>" placeholder="(empty until live)"
+                   data-live autocomplete="off">
+          </td>
+          <td class="col-profit">
+            <span class="profit-cell <?= $profit >= 0 ? 'profit-pos' : 'profit-neg' ?>" data-profit>
+              <?= h(format_money($profit)) ?>
+            </span>
+          </td>
           <td class="col-month">
             <div class="month-year-cell">
               <select class="cell-input cell-select" name="order_month[<?= $id ?>]" aria-label="Month">
@@ -269,30 +304,6 @@ render_header('Order · ' . $client['name'], 'admin');
               </select>
             </div>
           </td>
-          <td class="col-country">
-            <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
-                   value="<?= h((string) ($row['country'] ?? '')) ?>"
-                   placeholder=".de .nl .com …" autocomplete="off">
-          </td>
-          <td class="col-site">
-            <input class="cell-input" type="text" name="site_name[<?= $id ?>]"
-                   value="<?= h($row['site_name']) ?>" placeholder="site.com" autocomplete="off">
-          </td>
-          <td class="col-price">
-            <input class="cell-input cell-money" type="text" inputmode="decimal"
-                   name="owner_price[<?= $id ?>]" value="<?= h(format_money($row['owner_price'])) ?>"
-                   data-owner placeholder="0.00" autocomplete="off">
-          </td>
-          <td class="col-price">
-            <input class="cell-input cell-money" type="text" inputmode="decimal"
-                   name="decided_price[<?= $id ?>]" value="<?= h(format_money($row['decided_price'])) ?>"
-                   data-decided placeholder="0.00" autocomplete="off">
-          </td>
-          <td class="col-profit">
-            <span class="profit-cell <?= $profit >= 0 ? 'profit-pos' : 'profit-neg' ?>" data-profit>
-              <?= h(format_money($profit)) ?>
-            </span>
-          </td>
           <td class="col-del">
             <?php
               $siteLabel = trim((string) $row['site_name']);
@@ -305,11 +316,6 @@ render_header('Order · ' . $client['name'], 'admin');
               Remove
             </button>
           </td>
-          <td class="col-live">
-            <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
-                   value="<?= h($row['live_url']) ?>" placeholder="(empty until live)"
-                   data-live autocomplete="off">
-          </td>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -318,17 +324,16 @@ render_header('Order · ' . $client['name'], 'admin');
         <tr>
           <td></td>
           <td colspan="2"><strong>Totals</strong></td>
-          <td></td>
           <td><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
           <td><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
-          <td><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
-          <td></td>
           <td>
             <span class="muted">Completed </span>
             <strong data-total-completed><?= (int) $completedCount ?></strong>
             <span class="muted"> · profit </span>
             <strong data-total-completed-profit class="<?= $completedProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($completedProfit)) ?></strong>
           </td>
+          <td><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
+          <td colspan="2"></td>
         </tr>
       </tfoot>
       <?php endif; ?>

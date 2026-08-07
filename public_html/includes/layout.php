@@ -110,8 +110,7 @@ function render_header(string $title, string $panel = ''): void
     echo '</div>';
     echo '</nav></aside><main class="main">';
     foreach (get_flashes() as $flash) {
-        $cls = $flash['type'] === 'error' ? 'error' : '';
-        echo '<ul class="messages"><li class="' . h($cls) . '">' . h($flash['message']) . '</li></ul>';
+        render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }
 }
 
