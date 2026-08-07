@@ -1384,13 +1384,34 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 
 /* Invoices */
+.invoice-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
 .invoice-list-table .num { text-align: right; white-space: nowrap; }
+.invoice-list-table th,
+.invoice-list-table td {
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+.invoice-list-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+.invoice-list-table form {
+  margin: 0;
+}
 .invoice-list-actions {
-  display: flex;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.invoice-list-actions-row {
+  display: inline-flex;
   gap: 0.45rem;
   justify-content: flex-end;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .invoice-list-actions form.inline { display: inline; margin: 0; }
 .invoice-pick-client .invoice-pick-row {
@@ -1483,10 +1504,6 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   background: #fff;
   border: 0;
   box-shadow: none;
-}
-.invoice-list-table th,
-.invoice-list-table td {
-  vertical-align: middle;
 }
 .invoice-list-table thead th {
   position: relative;

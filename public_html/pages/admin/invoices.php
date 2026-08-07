@@ -158,13 +158,15 @@ render_header('Invoices', 'admin');
               <?php endif; ?>
             </td>
             <td class="invoice-list-actions">
-              <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
-              <form method="post" class="inline" action="index.php?page=admin_invoices"
-                    onsubmit="return confirm(<?= h(json_encode('Delete invoice ' . $inv['invoice_number'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                <button class="btn secondary small" type="submit">Delete</button>
-              </form>
+              <div class="invoice-list-actions-row">
+                <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
+                <form method="post" class="inline" action="index.php?page=admin_invoices"
+                      onsubmit="return confirm(<?= h(json_encode('Delete invoice ' . $inv['invoice_number'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
+                  <button class="btn secondary small" type="submit">Delete</button>
+                </form>
+              </div>
             </td>
           </tr>
         <?php endforeach; ?>
