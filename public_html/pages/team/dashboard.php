@@ -41,6 +41,10 @@ render_header('Dashboard', 'team');
     <h2>Extracting sites</h2>
     <p><?= $extractCount > 0 ? $extractCount . ' country batch' . ($extractCount === 1 ? '' : 'es') . ' ready' : 'Waiting for sites from the team mate' ?></p>
   </a>
+  <a class="launch-card" href="index.php?page=team_sites_emails">
+    <h2>Sites with emails - Team</h2>
+    <p>Add emails after Extracting Results Push, then Push to Admin.</p>
+  </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Today’s history</h2>
     <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' sites added today' : 'No adds yet today' ?></p>
