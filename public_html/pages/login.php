@@ -28,5 +28,6 @@ render_header('Login');
       <p style="margin-top:1.1rem"><button class="btn" type="submit">Sign in</button></p>
     </form>
   </div>
+  <?php render_project_credit(); ?>
 </div>
 <?php render_footer(); ?>

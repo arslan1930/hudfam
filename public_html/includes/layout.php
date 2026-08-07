@@ -119,7 +119,26 @@ function render_header(string $title, string $panel = ''): void
 function render_footer(string $panel = ''): void
 {
     if (current_user() && $panel !== '') {
+        render_project_credit();
         echo '</main></div>';
     }
     echo '</body></html>';
+}
+
+/** Footer credit: TechxForm is a project of Teqnowebs. */
+function render_project_credit(): void
+{
+    $app = 'TechxForm';
+    try {
+        $app = (string) (app_config()['app_name'] ?? 'TechxForm');
+    } catch (Throwable $e) {
+        $app = 'TechxForm';
+    }
+    if ($app === '') {
+        $app = 'TechxForm';
+    }
+    echo '<p class="project-credit">';
+    echo h($app) . ' is a project of ';
+    echo '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
+    echo '</p>';
 }
