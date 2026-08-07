@@ -93,6 +93,7 @@ function render_header(string $title, string $panel = ''): void
                 'team_dashboard' => ['Dashboard', 'Overview'],
                 'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                 'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
+                'team_sites_emails' => ['Sites with emails', 'Add emails to pushed sites by country'],
                 'team_prospect_batches' => ['Add history', 'Your daily adds'],
             ],
         ];

@@ -218,6 +218,17 @@ function push_extract_results_to_extracted(
         'Pushed from Extracting Results · ' . trim($country),
         $extractBatchId
     );
+    // Duplicate site names into Sites with emails (emails filled manually later).
+    if ($parsed['valid'] !== [] && function_exists('add_sites_with_emails_domains')) {
+        add_sites_with_emails_domains(
+            $parsed['valid'],
+            $country,
+            $user,
+            $language,
+            $region,
+            $extractBatchId
+        );
+    }
     return [
         'inserted' => (int) $added['inserted'],
         'skipped' => (int) $added['skipped'],

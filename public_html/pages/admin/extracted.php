@@ -170,6 +170,15 @@ if ($folder === '') {
     }
     $countryCount = count($countryRows);
 
+    $sweCountryRows = list_sites_with_emails_country_rows();
+    $sweTotal = 0;
+    $sweWithEmails = 0;
+    foreach ($sweCountryRows as $r) {
+        $sweTotal += (int) $r['total'];
+        $sweWithEmails += (int) $r['with_emails'];
+    }
+    $sweCountryCount = count($sweCountryRows);
+
     render_header('Extracted URLs', 'admin');
     ?>
     <?php render_breadcrumbs([
@@ -194,7 +203,12 @@ if ($folder === '') {
         </a>
         <a class="folder" href="index.php?page=admin_extracted&amp;folder=sites_with_emails">
           <h3>Sites with emails</h3>
-          <p class="muted">Sites that include email contacts</p>
+          <p class="muted">
+            Same Push as Extracted Sites ·
+            <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
+            · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
+            · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
+          </p>
         </a>
       </div>
     </div>
@@ -205,30 +219,11 @@ if ($folder === '') {
 
 // --- Folder: Sites with emails ---
 if ($folder === 'sites_with_emails') {
-    render_header('Sites with emails', 'admin');
-    ?>
-    <?php render_breadcrumbs([
-        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
-        ['label' => 'Sites with emails'],
-    ]); ?>
-    <div class="topbar">
-      <div>
-        <h1>Sites with emails</h1>
-        <p class="muted">Sites that include email contacts.</p>
-      </div>
-      <div class="actions">
-        <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
-      </div>
-    </div>
-    <div class="card">
-      <div class="empty-state">
-        <p>This folder is ready.</p>
-        <p class="muted">No sites with emails have been added yet.</p>
-      </div>
-    </div>
-    <?php
-    render_footer('admin');
+    // Allow ?country= on this folder (same pattern as Extracted Sites).
+    $sweUser = $user;
+    $swePanel = 'admin';
+    $sweBase = 'index.php?page=admin_extracted&folder=sites_with_emails';
+    require __DIR__ . '/../sites_with_emails_app.php';
     return;
 }
 

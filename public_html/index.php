@@ -8,6 +8,7 @@ require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
+require __DIR__ . '/includes/sites_with_emails.php';
 require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
@@ -54,6 +55,7 @@ $routes = [
     'team_prospect_batch' => 'pages/team/prospect_batch.php',
     'team_extracting' => 'pages/team/extracting.php',
     'team_extract_batch' => 'pages/team/extract_batch.php',
+    'team_sites_emails' => 'pages/team/sites_emails.php',
 ];
 
 if (!isset($routes[$page])) {

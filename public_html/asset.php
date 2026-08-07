@@ -11,6 +11,7 @@ $allowed = [
     'js/sites-form.js' => 'application/javascript; charset=utf-8',
     'js/extract-sites-list.js' => 'application/javascript; charset=utf-8',
     'js/extracted-admin.js' => 'application/javascript; charset=utf-8',
+    'js/sites-with-emails.js' => 'application/javascript; charset=utf-8',
     'js/draft-autosave.js' => 'application/javascript; charset=utf-8',
     'js/info-tips.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',

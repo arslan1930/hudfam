@@ -12,6 +12,7 @@ require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
+require __DIR__ . '/includes/sites_with_emails.php';
 
 $error = '';
 $done = false;
@@ -48,6 +49,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
         ensure_extracted_schema();
         $notes[] = 'extracted_sites (Extracted URLs) OK';
+
+        ensure_sites_with_emails_schema();
+        $notes[] = 'sites_with_emails (Sites with emails) OK';
 
         require_once __DIR__ . '/includes/orders.php';
         ensure_order_schema();
