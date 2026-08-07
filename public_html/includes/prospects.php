@@ -926,6 +926,10 @@ function add_prospect_domains(
         }
     }
 
+    if ($inserted > 0 && function_exists('mark_admin_new_data')) {
+        mark_admin_new_data('our_database', $inserted, $country);
+    }
+
     return [
         'inserted' => $inserted,
         'skipped' => $skipped,

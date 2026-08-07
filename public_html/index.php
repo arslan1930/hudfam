@@ -10,6 +10,7 @@ require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
 require __DIR__ . '/includes/sites_with_emails.php';
 require __DIR__ . '/includes/email_campaigns.php';
+require __DIR__ . '/includes/admin_new_data.php';
 require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';

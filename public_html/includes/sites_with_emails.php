@@ -435,6 +435,10 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
         }
     }
 
+    if (($pushed + $updated) > 0 && function_exists('mark_admin_new_data')) {
+        mark_admin_new_data('emails_admin', $pushed + $updated, $country);
+    }
+
     return [
         'pushed' => $pushed,
         'updated' => $updated,

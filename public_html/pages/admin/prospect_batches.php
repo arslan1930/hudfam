@@ -1,5 +1,8 @@
 <?php
-require_admin();
+$user = require_admin();
+if (function_exists('clear_admin_new_data')) {
+    clear_admin_new_data('our_database', $user);
+}
 $batches = list_prospect_batches(null, 150);
 render_header('Add history', 'admin');
 ?>

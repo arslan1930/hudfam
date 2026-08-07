@@ -14,6 +14,10 @@ if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect($base);
 }
+// Clear New reminder when Admin opens Emails DATA.
+if (function_exists('clear_admin_new_data')) {
+    clear_admin_new_data('emails_admin', $user);
+}
 
 // --- Hub ---
 if ($folder === '') {
@@ -63,8 +67,9 @@ if ($folder === '') {
 
     <div class="card">
       <div class="folders">
-        <a class="folder" href="<?= h($base) ?>&amp;folder=sites_with_emails">
-          <h3>Sites with emails - Admin</h3>
+        <a class="folder<?= (function_exists('admin_has_new_data') && admin_has_new_data('emails_admin', $user)) ? ' has-admin-new' : '' ?>"
+           href="<?= h($base) ?>&amp;folder=sites_with_emails">
+          <h3>Sites with emails - Admin<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h3>
           <p class="muted">
             Final list from Team Push ·
             <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>

@@ -1,6 +1,9 @@
 <?php
 $user = require_admin();
 ensure_prospect_schema();
+if (function_exists('clear_admin_new_data')) {
+    clear_admin_new_data('our_database', $user);
+}
 seed_countries_if_empty(db());
 if (function_exists('dedupe_countries_catalog')) {
     try {

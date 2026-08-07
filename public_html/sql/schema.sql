@@ -201,6 +201,23 @@ CREATE TABLE IF NOT EXISTS sites_with_emails_admin_all (
   CONSTRAINT fk_swe_admin_all_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Admin "New data" reminders (cleared when Admin opens that section)
+CREATE TABLE IF NOT EXISTS admin_data_signals (
+  section VARCHAR(60) NOT NULL PRIMARY KEY,
+  last_new_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_count INT NOT NULL DEFAULT 0,
+  note VARCHAR(255) NOT NULL DEFAULT ''
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS admin_data_seen (
+  user_id INT NOT NULL,
+  section VARCHAR(60) NOT NULL,
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, section),
+  CONSTRAINT fk_admin_data_seen_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Email campaign sheets (Emails DATA → Communication Team search)
 CREATE TABLE IF NOT EXISTS email_campaign_sheets (
   id INT AUTO_INCREMENT PRIMARY KEY,

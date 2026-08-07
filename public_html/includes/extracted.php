@@ -121,6 +121,10 @@ function add_extracted_domains_to_country(
         }
     }
 
+    if ($inserted > 0 && function_exists('mark_admin_new_data')) {
+        mark_admin_new_data('extracted_sites', $inserted, $country);
+    }
+
     return [
         'inserted' => $inserted,
         'skipped' => $skipped,

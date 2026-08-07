@@ -14,6 +14,7 @@ require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
 require __DIR__ . '/includes/sites_with_emails.php';
 require __DIR__ . '/includes/email_campaigns.php';
+require __DIR__ . '/includes/admin_new_data.php';
 require __DIR__ . '/includes/departments.php';
 
 $error = '';
@@ -64,6 +65,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
         ensure_email_campaign_schema();
         $notes[] = 'email_campaign_sheets / email_campaign_rows (Email campaign data) OK';
+
+        ensure_admin_new_data_schema();
+        $notes[] = 'admin_data_signals / admin_data_seen (New data reminders) OK';
 
         ensure_departments_schema();
         $notes[] = 'departments / department_members / department_tasks OK';

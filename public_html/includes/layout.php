@@ -93,7 +93,14 @@ function render_header(string $title, string $panel = ''): void
                 'admin_users' => ['Users', 'Admin and Team logins'],
             ],
         ];
+        $adminNewByPage = [
+            'admin_prospects' => 'our_database',
+            'admin_prospect_batches' => 'our_database',
+            'admin_extracted' => 'extracted_sites',
+            'admin_emails_data' => 'emails_admin',
+        ];
     } else {
+        $adminNewByPage = [];
         $deptScoped = function_exists('user_is_department_scoped') && user_is_department_scoped($user);
         if ($deptScoped) {
             // Department members only see their assigned work.
@@ -182,7 +189,11 @@ function render_header(string $title, string $panel = ''): void
             }
             $titleAttr = $hint !== '' ? ' title="' . h($hint) . '"' : '';
             echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $titleAttr . '>';
-            echo '<span class="nav-label">' . h($label) . '</span>';
+            echo '<span class="nav-label">' . h($label);
+            if ($panel === 'admin' && isset($adminNewByPage[$activePage]) && function_exists('admin_new_badge_html')) {
+                echo admin_new_badge_html($adminNewByPage[$activePage], $user);
+            }
+            echo '</span>';
             if ($hint !== '') {
                 echo '<span class="nav-hint">' . h($hint) . '</span>';
             }

@@ -78,6 +78,28 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
 }
 .sidebar .nav-label { display: block; font-size: 0.95rem; line-height: 1.2; }
+.admin-new-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: #9a3412;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+}
+.launch-card.has-admin-new,
+.folder.has-admin-new {
+  border-color: #fdba74;
+}
+.launch-card .admin-new-badge,
+.folder .admin-new-badge {
+  margin-left: 0.4rem;
+}
 .sidebar .nav-hint {
   display: block;
   font-size: 0.72rem;
