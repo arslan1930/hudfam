@@ -1060,6 +1060,15 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   width: 9.5rem;
   max-width: 38vw;
 }
+.dashboard-search input[type="search"] {
+  width: 11rem;
+  max-width: 40vw;
+}
+.launch-card.sheet-search-hit {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  background: #eff6ff;
+}
 .invoice-list-table tr.sheet-search-hit td {
   background: #eff6ff !important;
 }
