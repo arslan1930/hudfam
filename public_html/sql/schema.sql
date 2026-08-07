@@ -1,5 +1,5 @@
--- TechxForm simple schema: users + Our database + add history only.
--- Catalog / Emails / Orders / Published / Projects are not part of the app.
+-- TechxForm schema: users + Our database + add history + Order management.
+-- Legacy Catalog / Emails / Published / Projects are not part of the app.
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -80,4 +80,31 @@ CREATE TABLE IF NOT EXISTS prospect_batch_items (
   INDEX (domain),
   CONSTRAINT fk_pbi_batch FOREIGN KEY (batch_id) REFERENCES prospect_batches(id) ON DELETE CASCADE,
   CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Order management: one sheet per client
+CREATE TABLE IF NOT EXISTS order_clients (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  notes TEXT NULL,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_order_client_name (name),
+  INDEX (created_by),
+  CONSTRAINT fk_oc_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NOT NULL,
+  site_name VARCHAR(255) NOT NULL DEFAULT '',
+  owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  live_url VARCHAR(500) NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (client_id, sort_order),
+  CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

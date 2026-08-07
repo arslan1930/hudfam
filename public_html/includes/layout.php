@@ -16,6 +16,7 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
+        'admin_orders' => ['admin_order_sheet'],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
@@ -71,6 +72,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_prospects' => ['Our database', 'Country folders → URLs'],
                 'admin_prospect_add' => ['Add URLs', 'Paste into a country database'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
+                'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
             ],
         ];
