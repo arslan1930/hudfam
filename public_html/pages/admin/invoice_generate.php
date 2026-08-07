@@ -34,7 +34,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
         $lines = build_invoice_lines_from_orders($picked, $group);
 
         $header = [
-            'invoice_number' => (string) post('invoice_number'),
             'invoice_date' => (string) post('invoice_date'),
             'client_id' => $clientId,
             'client_name' => (string) $client['name'],
@@ -160,11 +159,14 @@ render_header('Generate invoice', 'admin');
     </section>
 
     <section class="card">
-      <h2><?= label_with_info('Invoice details', 'Invoice number, date, and bill-to fields appear on the printable bill. Bank details default to Topurlz Ltd.') ?></h2>
+      <h2><?= label_with_info('Invoice details', 'Invoice number is assigned automatically and is always unique. Date and bill-to fields appear on the printable bill. Bank details default to Topurlz Ltd.') ?></h2>
       <div class="form-grid">
         <div>
-          <label for="invoice_number">Invoice No.</label>
-          <input id="invoice_number" name="invoice_number" value="<?= h($nextNumber) ?>" required>
+          <label for="invoice_number"><?= label_with_info('Invoice No.', 'Generated automatically from the last invoice number. You cannot reuse or edit it.') ?></label>
+          <input id="invoice_number" type="text" value="<?= h($nextNumber) ?>" readonly
+                 class="invoice-number-auto" data-no-draft
+                 title="Assigned automatically when you generate">
+          <p class="help" style="margin:0.35rem 0 0">Next number — locked &amp; unique. Final number is confirmed when you generate.</p>
         </div>
         <div>
           <label for="invoice_date">Date</label>

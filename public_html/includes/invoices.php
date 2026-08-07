@@ -150,6 +150,35 @@ function next_invoice_number(): string
     return str_pad((string) ($max + 1), 8, '0', STR_PAD_LEFT);
 }
 
+function invoice_number_exists(string $number): bool
+{
+    ensure_invoice_schema();
+    $number = trim($number);
+    if ($number === '') {
+        return false;
+    }
+    $stmt = db()->prepare('SELECT 1 FROM invoices WHERE invoice_number=? LIMIT 1');
+    $stmt->execute([$number]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Always returns a new unique 8-digit invoice number (never reuses an existing one).
+ */
+function allocate_unique_invoice_number(): string
+{
+    ensure_invoice_schema();
+    $candidate = next_invoice_number();
+    // Skip any collisions (manual past numbers, races, non-sequential gaps).
+    for ($i = 0; $i < 100; $i++) {
+        if (!invoice_number_exists($candidate)) {
+            return $candidate;
+        }
+        $candidate = str_pad((string) ((int) $candidate + 1), 8, '0', STR_PAD_LEFT);
+    }
+    throw new RuntimeException('Could not allocate a unique invoice number. Try again.');
+}
+
 /**
  * @return list<array<string,mixed>>
  */
@@ -364,10 +393,8 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
     }
 
     $company = invoice_company_defaults();
-    $invoiceNumber = trim((string) ($header['invoice_number'] ?? ''));
-    if ($invoiceNumber === '') {
-        $invoiceNumber = next_invoice_number();
-    }
+    // Always auto-generate a unique number — never trust a posted / manual value.
+    $invoiceNumber = allocate_unique_invoice_number();
     $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
     if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
         $invoiceDate = date('Y-m-d');
