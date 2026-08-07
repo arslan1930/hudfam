@@ -393,3 +393,119 @@ function order_sheet_display_rows(array $items): array
     }
     return $out;
 }
+
+/**
+ * Flat export rows for CSV / Excel (includes year-end marker lines).
+ *
+ * @return list<array{month:string,year:string,country:string,site:string,owner:string,decided:string,profit:string,live_url:string,status:string}>
+ */
+function order_sheet_export_rows(int $clientId): array
+{
+    $items = list_order_items($clientId);
+    $display = order_sheet_display_rows($items);
+    $out = [];
+    foreach ($display as $block) {
+        if ($block['kind'] === 'year_end' || $block['kind'] === 'year_end_auto') {
+            $from = (int) ($block['from_year'] ?? 0);
+            $to = (int) ($block['to_year'] ?? ($from + 1));
+            $out[] = [
+                'month' => 'YEAR END',
+                'year' => (string) $from,
+                'country' => '',
+                'site' => 'Year ' . $from . ' ended · ' . $to . ' months started',
+                'owner' => '',
+                'decided' => '',
+                'profit' => '',
+                'live_url' => '',
+                'status' => 'Year end',
+            ];
+            continue;
+        }
+        $row = $block['row'];
+        $profit = order_profit($row['owner_price'], $row['decided_price']);
+        $out[] = [
+            'month' => order_month_label((int) ($row['order_month'] ?? 0)),
+            'year' => (string) ((int) ($row['order_year'] ?: 0) ?: ''),
+            'country' => (string) ($row['country'] ?? ''),
+            'site' => (string) ($row['site_name'] ?? ''),
+            'owner' => format_money($row['owner_price']),
+            'decided' => format_money($row['decided_price']),
+            'profit' => format_money($profit),
+            'live_url' => (string) ($row['live_url'] ?? ''),
+            'status' => order_is_completed($row) ? 'Completed' : 'Open',
+        ];
+    }
+    return $out;
+}
+
+function order_sheet_download_filename(string $clientName, string $ext): string
+{
+    $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', trim($clientName)) ?: 'client';
+    $safe = trim($safe, '-') ?: 'client';
+    return 'order-sheet-' . $safe . '-' . date('Y-m-d') . '.' . ltrim($ext, '.');
+}
+
+/** Stream CSV (Excel-friendly UTF-8 BOM). */
+function order_sheet_download_csv(array $client, array $rows): void
+{
+    $filename = order_sheet_download_filename((string) $client['name'], 'csv');
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    $out = fopen('php://output', 'w');
+    if ($out === false) {
+        return;
+    }
+    // BOM so Excel opens UTF-8 correctly
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Client', (string) $client['name']]);
+    fputcsv($out, ['Exported', date('Y-m-d H:i')]);
+    fputcsv($out, []);
+    fputcsv($out, ['Month', 'Year', 'Country', 'Site name', 'Owner price', 'Decided price', 'Profit', 'LIVE URL', 'Status']);
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            $r['month'],
+            $r['year'],
+            $r['country'],
+            $r['site'],
+            $r['owner'],
+            $r['decided'],
+            $r['profit'],
+            $r['live_url'],
+            $r['status'],
+        ]);
+    }
+    fclose($out);
+}
+
+/**
+ * Stream an Excel-compatible .xls file (HTML table — opens in Excel / LibreOffice).
+ * No external library required (Hostinger-safe).
+ */
+function order_sheet_download_xls(array $client, array $rows): void
+{
+    $filename = order_sheet_download_filename((string) $client['name'], 'xls');
+    header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    echo '<html><head><meta charset="utf-8"></head><body>';
+    echo '<table border="1" cellpadding="4" cellspacing="0">';
+    echo '<tr><th colspan="9">Order sheet — ' . h((string) $client['name']) . '</th></tr>';
+    echo '<tr><td colspan="9">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
+    echo '<tr>';
+    foreach (['Month', 'Year', 'Country', 'Site name', 'Owner price', 'Decided price', 'Profit', 'LIVE URL', 'Status'] as $h) {
+        echo '<th>' . h($h) . '</th>';
+    }
+    echo '</tr>';
+    foreach ($rows as $r) {
+        $isYear = ($r['month'] === 'YEAR END');
+        echo '<tr' . ($isYear ? ' style="background:#e8eaed;font-weight:bold"' : '') . '>';
+        foreach (['month', 'year', 'country', 'site', 'owner', 'decided', 'profit', 'live_url', 'status'] as $key) {
+            echo '<td>' . h((string) $r[$key]) . '</td>';
+        }
+        echo '</tr>';
+    }
+    echo '</table></body></html>';
+}

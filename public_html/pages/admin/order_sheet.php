@@ -9,6 +9,18 @@ if (!$client) {
     redirect('index.php?page=admin_orders');
 }
 
+// Download whole sheet (CSV or Excel) before any HTML
+$download = strtolower((string) get('download'));
+if ($download === 'csv' || $download === 'xls' || $download === 'excel') {
+    $exportRows = order_sheet_export_rows($clientId);
+    if ($download === 'csv') {
+        order_sheet_download_csv($client, $exportRows);
+    } else {
+        order_sheet_download_xls($client, $exportRows);
+    }
+    exit;
+}
+
 $months = order_month_names();
 $yearOptions = range((int) date('Y') - 2, (int) date('Y') + 3);
 
@@ -195,8 +207,8 @@ render_header('Order · ' . $client['name'], 'admin');
           <th class="col-price">Owner price</th>
           <th class="col-price">Decided price</th>
           <th class="col-profit">Profit</th>
+          <th class="col-del">Remove</th>
           <th class="col-live">LIVE URL</th>
-          <th class="col-del"></th>
         </tr>
       </thead>
       <tbody>
@@ -281,16 +293,22 @@ render_header('Order · ' . $client['name'], 'admin');
               <?= h(format_money($profit)) ?>
             </span>
           </td>
+          <td class="col-del">
+            <?php
+              $siteLabel = trim((string) $row['site_name']);
+              $confirmMsg = $siteLabel !== ''
+                  ? 'Delete this row for “' . $siteLabel . '”? This cannot be undone.'
+                  : 'Delete this empty row? This cannot be undone.';
+            ?>
+            <button class="btn-link danger" type="submit"
+                    onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='delete_row'; return confirm(<?= h(json_encode($confirmMsg, JSON_UNESCAPED_UNICODE)) ?>);">
+              Remove
+            </button>
+          </td>
           <td class="col-live">
             <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
                    value="<?= h($row['live_url']) ?>" placeholder="(empty until live)"
                    data-live autocomplete="off">
-          </td>
-          <td class="col-del">
-            <button class="btn-link danger" type="submit"
-                    onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='delete_row'; return confirm('Remove this row?');">
-              Remove
-            </button>
           </td>
         </tr>
       <?php endforeach; ?>
@@ -304,7 +322,8 @@ render_header('Order · ' . $client['name'], 'admin');
           <td><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
           <td><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
           <td><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
-          <td colspan="2">
+          <td></td>
+          <td>
             <span class="muted">Completed </span>
             <strong data-total-completed><?= (int) $completedCount ?></strong>
             <span class="muted"> · profit </span>
@@ -319,12 +338,24 @@ render_header('Order · ' . $client['name'], 'admin');
     Country boxes stay empty for you to type (placeholder reminder: .de .nl …).
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
     An order counts as <strong>completed</strong> only when LIVE URL is filled.
+    Remove asks for confirmation before deleting a row.
   </p>
   <div class="actions-sticky">
     <button class="btn large" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add site</button>
   </div>
 </form>
+
+<div class="card order-download-bar" id="sheet-download">
+  <div>
+    <strong>Download this sheet</strong>
+    <p class="muted" style="margin:0.25rem 0 0">Export every row (including year-end markers) for Excel or spreadsheets.</p>
+  </div>
+  <div class="actions">
+    <a class="btn secondary small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>&amp;download=csv">Download CSV</a>
+    <a class="btn secondary small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>&amp;download=xls">Download Excel</a>
+  </div>
+</div>
 
 <script>
 (function () {

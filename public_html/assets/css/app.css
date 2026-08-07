@@ -739,8 +739,15 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .order-sheet .col-site { min-width: 150px; }
 .order-sheet .col-price { width: 7.5rem; }
 .order-sheet .col-profit { width: 6.5rem; text-align: right; }
+.order-sheet .col-del { width: 4.8rem; text-align: center; }
 .order-sheet .col-live { min-width: 160px; }
-.order-sheet .col-del { width: 4.5rem; text-align: right; }
+.order-download-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  justify-content: space-between;
+  align-items: center;
+}
 .month-year-cell {
   display: grid;
   grid-template-columns: 1fr auto;
