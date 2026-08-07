@@ -33,22 +33,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $siteCount = (int) $synced['site_count'];
         if ($wantsJson) {
-            $payload = [
+            extract_json_response([
                 'ok' => true,
                 'site_count' => $siteCount,
                 'removed' => (int) $synced['removed'],
                 'added' => (int) $synced['added'],
                 'domains' => $synced['domains'],
-            ];
-            if ($siteCount < 1) {
-                $payload['redirect'] = 'index.php?page=team_extracting';
-                $payload['message'] = $country . ' removed from Extracting sites (no sites left). It will return when new sites are added.';
-            }
-            extract_json_response($payload);
-        }
-        if ($siteCount < 1) {
-            flash('ok', $country . ' removed from Extracting sites (no sites left). It will return when new sites are added.');
-            redirect('index.php?page=team_extracting');
+                'empty' => $siteCount < 1,
+                'message' => $siteCount < 1
+                    ? 'Sites list empty — this country stays open here; it hides on Extracting sites and is removed after 1 hour unless new sites are added.'
+                    : null,
+            ]);
         }
         flash('ok', 'Sites list updated (' . $siteCount . ').');
         redirect('index.php?page=team_extract_batch&id=' . $id);
@@ -137,12 +132,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $siteRows = get_extract_batch_site_rows($id);
 $domains = array_column($siteRows, 'domain');
-
-// Empty Sites list → hide this country from Extracting sites until new sites are added.
 if (count($domains) < 1) {
     refresh_extract_batch_site_count($id);
-    flash('ok', $country . ' has no sites in the list. It will show again when new sites are added.');
-    redirect('index.php?page=team_extracting');
 }
 
 render_header('Extracting · ' . $country, 'team');
@@ -172,9 +163,10 @@ render_header('Extracting · ' . $country, 'team');
     <h2>① Sites list</h2>
     <p class="help">
       Sites waiting to extract for <strong><?= h($country) ?></strong>.
-      <kbd>Backspace</kbd> removes sites — changes <strong>autosave</strong> to this country row in real time.
-      <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page. Refresh shows the saved server list.
-      If the list becomes empty, this country disappears from Extracting sites until new sites are added.
+      <kbd>Backspace</kbd> removes sites — changes <strong>autosave</strong> in real time.
+      <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page.
+      If emptied, this page stays open; the country hides when you return to Extracting sites,
+      and the row is removed after <strong>1 hour</strong> unless new sites are added (new sites appear at the top).
     </p>
 
     <?php

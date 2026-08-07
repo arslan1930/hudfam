@@ -18,7 +18,7 @@ render_header('Extracting sites', 'team');
 <div class="topbar">
   <div>
     <h1>Extracting sites</h1>
-    <p class="muted">Each country with sites in its <strong>Sites list</strong> appears here. Empty countries hide until a teammate adds new unique sites via Filter &amp; add.</p>
+    <p class="muted">Countries with sites in their <strong>Sites list</strong> appear here. Empty countries hide when you open this page (and are removed after 1 hour) until Filter &amp; add brings them back.</p>
   </div>
   <div class="actions">
     <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>

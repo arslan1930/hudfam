@@ -50,6 +50,61 @@
     sc: 1, govt: 1
   };
 
+  // Valid TLDs (ccTLDs + common gTLDs). Rejects fakes like .comz
+  var VALID_TLDS = {};
+  (function buildValidTlds() {
+    var cc = 'ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi '
+      + 'bl bm bn bo bq br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr '
+      + 'cu cv cw cx cy cz de dj dk dm do dz ec ee eg eh er es et eu fi fj fk fm fo '
+      + 'fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht '
+      + 'hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky '
+      + 'kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg mh mk ml mm mn mo mp mq '
+      + 'mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf '
+      + 'pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si '
+      + 'sj sk sl sm sn so sr ss st su sv sx sy sz tc td tf tg th tj tk tl tm tn to '
+      + 'tr tt tv tw tz ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw';
+    var gtld = 'com net org info biz name pro edu gov mil int aero asia cat coop jobs '
+      + 'mobi museum post tel travel xxx app dev page site online store shop blog '
+      + 'cloud digital email agency studio media news world club live life today '
+      + 'space tech website company solutions services systems network global '
+      + 'international group ltd limited llc inc corp center centre design art '
+      + 'photography video game games software support help care health clinic '
+      + 'dental legal law accountant finance bank money insurance realestate '
+      + 'properties homes house hotel travel vacations tours cricket football '
+      + 'soccer tennis golf sports fitness gym yoga music band film movie tv '
+      + 'radio podcast books education school university college kids family '
+      + 'baby wedding dating singles church faith bible charity ngo foundation '
+      + 'community social link click download host hosting server domain domains '
+      + 'mail web webs websites xyz top win bid loan work works expert review '
+      + 'reviews report reports press spot zip mov new old cool fun wow one two '
+      + 'red blue green black white gold vip rich luxury boutique fashion watch '
+      + 'jewelry diamonds cafe bar pub beer wine vodka restaurant menu kitchen '
+      + 'food pizza sushi burger chicken vegan organic farm garden flowers plants '
+      + 'pet dog cat auto cars car motor motors bike boats yachts build builder '
+      + 'construction engineer engineering energy solar power green earth eco bio '
+      + 'science academy institute training coaching consulting management '
+      + 'marketing advertising seo brand brands sale sales deal deals discount '
+      + 'coupon market marketplace auction trade trading exchange crypto bitcoin '
+      + 'nft token wallet cash pay payment credit card ai io co tv me cc ws';
+    (cc + ' ' + gtld).split(/\s+/).forEach(function (t) {
+      if (t) VALID_TLDS[t] = 1;
+    });
+  })();
+
+  function isKnownTld(tld) {
+    return !!(tld && VALID_TLDS[String(tld).toLowerCase()]);
+  }
+
+  function isKnownPublicSuffix(suffix) {
+    suffix = String(suffix || '').toLowerCase();
+    if (!suffix) return false;
+    if (MULTI_TLDS[suffix]) return true;
+    if (suffix.indexOf('.') === -1) return isKnownTld(suffix);
+    var parts = suffix.split('.').filter(Boolean);
+    if (parts.length !== 2) return false;
+    return isKnownTld(parts[1]) && !!COUNTRY_SLD[parts[0]];
+  }
+
   function publicSuffix(host) {
     var parts = host.split('.').filter(Boolean);
     if (parts.length < 2) return '';
@@ -58,7 +113,7 @@
     // Heuristic: keep multi-part country suffixes (com.pl, com.pk, co.uk, …)
     var sld = parts[parts.length - 2];
     var cc = parts[parts.length - 1];
-    if (cc.length === 2 && /^[a-z]{2}$/.test(cc) && COUNTRY_SLD[sld]) {
+    if (cc.length === 2 && isKnownTld(cc) && COUNTRY_SLD[sld]) {
       return two;
     }
     return parts[parts.length - 1];
@@ -76,7 +131,7 @@
       if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) return false;
     }
     var suffix = publicSuffix(host);
-    if (!suffix) return false;
+    if (!suffix || !isKnownPublicSuffix(suffix)) return false;
     var suffixParts = suffix.split('.').length;
     return (parts.length - suffixParts) === 1;
   }

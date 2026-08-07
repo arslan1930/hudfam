@@ -23,11 +23,13 @@ function ensure_extract_schema(): void
           region VARCHAR(40) NOT NULL DEFAULT '',
           site_count INT NOT NULL DEFAULT 0,
           results_text MEDIUMTEXT NULL,
+          emptied_at TIMESTAMP NULL DEFAULT NULL,
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_extract_country (country),
           INDEX (updated_at),
+          INDEX (emptied_at),
           CONSTRAINT fk_extract_batch_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
@@ -47,6 +49,34 @@ function ensure_extract_schema(): void
           CONSTRAINT fk_ebs_user FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Existing installs: add emptied_at for 1-hour empty-row cleanup.
+    try {
+        $col = $pdo->query("SHOW COLUMNS FROM extract_batches LIKE 'emptied_at'")->fetch(PDO::FETCH_ASSOC);
+        if (!$col) {
+            $pdo->exec('ALTER TABLE extract_batches ADD COLUMN emptied_at TIMESTAMP NULL DEFAULT NULL AFTER results_text');
+            $pdo->exec('ALTER TABLE extract_batches ADD INDEX idx_extract_emptied_at (emptied_at)');
+        }
+    } catch (Throwable $e) {
+        // ignore if permissions/table differ
+    }
+}
+
+/**
+ * Permanently remove country rows that stayed empty for 1+ hour.
+ */
+function purge_expired_empty_extract_batches(): void
+{
+    ensure_extract_schema();
+    try {
+        db()->exec(
+            'DELETE FROM extract_batches
+             WHERE site_count < 1
+               AND emptied_at IS NOT NULL
+               AND emptied_at < (NOW() - INTERVAL 1 HOUR)'
+        );
+    } catch (Throwable $e) {
+        // ignore
+    }
 }
 
 /**
@@ -102,8 +132,9 @@ function add_domains_to_extract_sites(
     $rows = [];
     foreach ($domains as $item) {
         if (is_string($item)) {
-            $d = normalize_domain($item);
-            if ($d !== '') {
+            $host = extract_host_candidate($item);
+            $d = to_root_domain($host);
+            if ($d !== '' && is_root_domain($d)) {
                 $rows[] = ['domain' => $d, 'prospect_site_id' => null];
             }
             continue;
@@ -111,8 +142,9 @@ function add_domains_to_extract_sites(
         if (!is_array($item)) {
             continue;
         }
-        $d = normalize_domain((string) ($item['domain'] ?? ''));
-        if ($d === '') {
+        $host = extract_host_candidate((string) ($item['domain'] ?? ''));
+        $d = to_root_domain($host);
+        if ($d === '' || !is_root_domain($d)) {
             continue;
         }
         $rows[] = [
@@ -133,7 +165,8 @@ function add_domains_to_extract_sites(
     );
     $added = 0;
     $uid = (int) ($user['id'] ?? 0) ?: null;
-    foreach ($rows as $row) {
+    // Insert newest-first among this batch so ORDER BY id DESC shows paste order at top.
+    foreach (array_reverse($rows) as $row) {
         try {
             $ins->execute([
                 $batchId,
@@ -149,12 +182,7 @@ function add_domains_to_extract_sites(
             // skip bad row
         }
     }
-    $cnt = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
-    $cnt->execute([$batchId]);
-    $siteCount = (int) $cnt->fetchColumn();
-    db()->prepare(
-        'UPDATE extract_batches SET site_count=?, updated_at=NOW() WHERE id=?'
-    )->execute([$siteCount, $batchId]);
+    refresh_extract_batch_site_count($batchId);
 
     return ['batch_id' => $batchId, 'added' => $added];
 }
@@ -165,8 +193,9 @@ function add_domains_to_extract_sites(
 function list_extract_batches(int $limit = 200): array
 {
     ensure_extract_schema();
+    purge_expired_empty_extract_batches();
     $limit = max(1, min(500, $limit));
-    // Hide empty country rows until Filter & add puts sites back in Sites list.
+    // Hide empty countries here; they may still be open on the batch page until leave / 1 hour.
     $sql = "SELECT b.*, u.username, u.full_name
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
@@ -197,8 +226,9 @@ function get_extract_batch_domains(int $batchId, int $limit = 50000): array
 {
     ensure_extract_schema();
     $limit = max(1, min(100000, $limit));
+    // Newest sites first — does not reshuffle older rows relative to each other.
     $stmt = db()->prepare(
-        'SELECT domain FROM extract_batch_sites WHERE batch_id=? ORDER BY domain ASC LIMIT ' . (int) $limit
+        'SELECT domain FROM extract_batch_sites WHERE batch_id=? ORDER BY id DESC LIMIT ' . (int) $limit
     );
     $stmt->execute([$batchId]);
     return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
@@ -215,7 +245,7 @@ function get_extract_batch_site_rows(int $batchId, int $limit = 50000): array
         'SELECT id, domain, prospect_site_id, added_by
          FROM extract_batch_sites
          WHERE batch_id=?
-         ORDER BY domain ASC
+         ORDER BY id DESC
          LIMIT ' . (int) $limit
     );
     $stmt->execute([$batchId]);
@@ -236,15 +266,29 @@ function refresh_extract_batch_site_count(int $batchId): int
     $cnt = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
     $cnt->execute([$batchId]);
     $siteCount = (int) $cnt->fetchColumn();
+    if ($siteCount < 1) {
+        // Keep emptied_at on first clear so the 1-hour timer does not reset on later saves.
+        db()->prepare(
+            'UPDATE extract_batches
+             SET site_count=0,
+                 emptied_at=COALESCE(emptied_at, NOW()),
+                 updated_at=NOW()
+             WHERE id=?'
+        )->execute([$batchId]);
+        return 0;
+    }
     db()->prepare(
-        'UPDATE extract_batches SET site_count=?, updated_at=NOW() WHERE id=?'
+        'UPDATE extract_batches
+         SET site_count=?, emptied_at=NULL, updated_at=NOW()
+         WHERE id=?'
     )->execute([$siteCount, $batchId]);
     return $siteCount;
 }
 
 /**
  * Replace Sites list domains from the editable text box (autosave).
- * Admin Our database is not touched. Empty list hides this country row.
+ * Admin Our database is not touched. Empty list stays open on this page;
+ * the country is hidden on the Extracting sites index (and purged after 1 hour).
  *
  * @return array{site_count:int,domains:list<string>,removed:int,added:int}
  */
@@ -256,8 +300,6 @@ function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $ad
     foreach ($parsed['valid'] as $d) {
         $wanted[$d] = true;
     }
-    // Keep any plain root-looking lines Clean would keep (already in valid).
-    // Also accept already-normalized apex hosts that parse_domain_list_strict kept.
     $newDomains = array_keys($wanted);
 
     $existing = get_extract_batch_domains($batchId);
@@ -287,7 +329,8 @@ function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $ad
              VALUES (?,?,NULL,?)
              ON DUPLICATE KEY UPDATE domain = VALUES(domain)'
         );
-        foreach ($toAdd as $d) {
+        // Reverse so paste/list order appears at the top (ORDER BY id DESC).
+        foreach (array_reverse($toAdd) as $d) {
             try {
                 $ins->execute([$batchId, $d, $addedBy]);
             } catch (PDOException $e) {
@@ -371,9 +414,10 @@ function restore_extract_batch_domains(int $batchId, array $rows): int
            added_by = COALESCE(VALUES(added_by), added_by)'
     );
     $restored = 0;
-    foreach ($rows as $row) {
-        $domain = normalize_domain((string) ($row['domain'] ?? ''));
-        if ($domain === '') {
+    foreach (array_reverse($rows) as $row) {
+        $host = extract_host_candidate((string) ($row['domain'] ?? ''));
+        $domain = to_root_domain($host);
+        if ($domain === '' || !is_root_domain($domain)) {
             continue;
         }
         try {

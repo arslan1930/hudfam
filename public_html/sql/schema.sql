@@ -90,11 +90,13 @@ CREATE TABLE IF NOT EXISTS extract_batches (
   region VARCHAR(40) NOT NULL DEFAULT '',
   site_count INT NOT NULL DEFAULT 0,
   results_text MEDIUMTEXT NULL,
+  emptied_at TIMESTAMP NULL DEFAULT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_extract_country (country),
   INDEX (updated_at),
+  INDEX (emptied_at),
   CONSTRAINT fk_extract_batch_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

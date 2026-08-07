@@ -187,11 +187,11 @@
         var n = typeof data.site_count === 'number' ? data.site_count : linesOf(text).length;
         updateCounts(n);
         setAutosaveLabel('Saved');
-        if (data.redirect) {
-          setStatus(data.message || 'No sites left — returning to Extracting sites…');
-          window.setTimeout(function () {
-            window.location.href = data.redirect;
-          }, 350);
+        if (data.empty) {
+          setStatus(
+            data.message ||
+            'Sites list empty — stays open here; hides on Extracting sites; removed after 1 hour unless new sites are added.'
+          );
           return;
         }
         if (data.removed > 0 || data.added > 0) {
