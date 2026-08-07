@@ -98,7 +98,11 @@ CREATE TABLE IF NOT EXISTS order_clients (
 CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   client_id INT NOT NULL,
+  row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
   site_name VARCHAR(255) NOT NULL DEFAULT '',
+  country VARCHAR(100) NOT NULL DEFAULT '',
+  order_month TINYINT NULL,
+  order_year SMALLINT NOT NULL DEFAULT 0,
   owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   live_url VARCHAR(500) NOT NULL DEFAULT '',
@@ -106,5 +110,6 @@ CREATE TABLE IF NOT EXISTS order_items (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX (client_id, sort_order),
+  INDEX (client_id, order_year, order_month),
   CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

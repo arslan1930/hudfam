@@ -41,7 +41,7 @@ render_header('Order management', 'admin');
 <div class="topbar">
   <div>
     <h1>Order management</h1>
-    <p class="muted">One sheet per client — sites, owner price, decided price, profit, and live URL.</p>
+    <p class="muted">One sheet per client — country, month, sites, prices, profit, live URL. Completed = LIVE URL filled.</p>
   </div>
 </div>
 
@@ -62,7 +62,8 @@ render_header('Order management', 'admin');
               </a>
               <div class="order-client-meta muted">
                 <span><?= (int) $c['item_count'] ?> site<?= (int) $c['item_count'] === 1 ? '' : 's' ?></span>
-                <span>Profit <?= h(format_money($c['total_profit'])) ?></span>
+                <span class="order-meta-done"><?= (int) $c['completed_count'] ?> completed</span>
+                <span class="order-meta-done">Completed profit <?= h(format_money($c['completed_profit'])) ?></span>
               </div>
             </div>
             <div class="order-client-actions">
