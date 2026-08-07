@@ -69,7 +69,7 @@ function render_header(string $title, string $panel = ''): void
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_prospects' => ['Our database', 'Country folders → URLs'],
-                'admin_prospect_add' => ['Add URLs', 'Paste into a country database'],
+                'admin_prospect_add' => ['Add sites', 'Paste into a country database'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
             ],

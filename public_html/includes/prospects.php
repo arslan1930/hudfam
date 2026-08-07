@@ -3,10 +3,10 @@
 /**
  * Our database helpers — unique domains (no prices).
  * Team Filter & add checks uniqueness against prospect_sites.
- * Admin Add URLs saves directly (no uniqueness preview).
+ * Admin Add sites saves directly (no uniqueness preview).
  */
 
-/** Strip protocol/path → bare domain for storage/lookup. */
+/** Strip protocol/path → bare host for storage/lookup (does not validate apex-only). */
 function normalize_domain(string $value): string
 {
     $value = strtolower(trim($value));
@@ -14,6 +14,7 @@ function normalize_domain(string $value): string
         return '';
     }
     $value = preg_replace('#^https?://#i', '', $value) ?? $value;
+    $value = preg_replace('#^//#', '', $value) ?? $value;
     $value = preg_replace('#^www\.#i', '', $value) ?? $value;
     $host = explode('/', $value, 2)[0];
     $host = explode('?', $host, 2)[0];
@@ -22,6 +23,164 @@ function normalize_domain(string $value): string
         $host = explode(':', $host, 2)[0];
     }
     return rtrim($host, '.');
+}
+
+/**
+ * Common multi-part public suffixes (e.g. example.co.uk is a root domain).
+ *
+ * @return list<string>
+ */
+function known_multi_part_tlds(): array
+{
+    return [
+        'co.uk', 'org.uk', 'me.uk', 'ac.uk', 'gov.uk', 'ltd.uk', 'plc.uk', 'net.uk',
+        'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au',
+        'co.nz', 'org.nz', 'net.nz', 'govt.nz', 'ac.nz',
+        'co.za', 'org.za', 'web.za', 'net.za',
+        'com.br', 'net.br', 'org.br', 'gov.br',
+        'co.jp', 'or.jp', 'ne.jp', 'ac.jp', 'go.jp',
+        'com.mx', 'org.mx', 'gob.mx',
+        'com.sg', 'com.hk', 'com.tw', 'com.tr', 'com.my', 'com.ph',
+        'co.in', 'firm.in', 'gen.in', 'ind.in', 'net.in', 'org.in',
+        'com.ar', 'com.co', 'com.pe', 'com.ve', 'com.ec',
+        'co.kr', 'co.th', 'co.il', 'org.il', 'ac.il',
+        'com.cn', 'net.cn', 'org.cn',
+        'co.id', 'or.id', 'web.id',
+    ];
+}
+
+function domain_public_suffix(string $host): string
+{
+    $host = strtolower(trim($host));
+    $parts = array_values(array_filter(explode('.', $host), static fn ($p) => $p !== ''));
+    $n = count($parts);
+    if ($n < 2) {
+        return '';
+    }
+    $two = $parts[$n - 2] . '.' . $parts[$n - 1];
+    if (in_array($two, known_multi_part_tlds(), true)) {
+        return $two;
+    }
+    return $parts[$n - 1];
+}
+
+/**
+ * True when $host is an apex/root domain (no subdomain), allowing multi-part TLDs like .co.uk.
+ */
+function is_root_domain(string $host): bool
+{
+    $host = strtolower(trim($host));
+    if ($host === '' || !str_contains($host, '.')) {
+        return false;
+    }
+    if (!preg_match('/^[a-z0-9.-]+$/', $host)) {
+        return false;
+    }
+    if (str_starts_with($host, '-') || str_ends_with($host, '-') || str_contains($host, '..')) {
+        return false;
+    }
+    $parts = array_values(array_filter(explode('.', $host), static fn ($p) => $p !== ''));
+    if (count($parts) < 2) {
+        return false;
+    }
+    foreach ($parts as $label) {
+        if ($label === '' || strlen($label) > 63) {
+            return false;
+        }
+        if (!preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/', $label)) {
+            return false;
+        }
+    }
+    $suffix = domain_public_suffix($host);
+    if ($suffix === '') {
+        return false;
+    }
+    $suffixParts = substr_count($suffix, '.') + 1;
+    $nameParts = count($parts) - $suffixParts;
+    return $nameParts === 1;
+}
+
+/**
+ * Classify one pasted line for root-domain-only input.
+ *
+ * @return array{ok:bool,domain:string,reason:string,raw:string}
+ */
+function analyze_pasted_domain_line(string $line): array
+{
+    $raw = trim($line);
+    if ($raw === '') {
+        return ['ok' => false, 'domain' => '', 'reason' => 'empty', 'raw' => $raw];
+    }
+    if (preg_match('#https?://#i', $raw) || str_starts_with($raw, '//') || str_contains($raw, '://')) {
+        return ['ok' => false, 'domain' => '', 'reason' => 'has_scheme', 'raw' => $raw];
+    }
+    if (str_contains($raw, '/') || str_contains($raw, '?') || str_contains($raw, '#')) {
+        return ['ok' => false, 'domain' => '', 'reason' => 'has_path', 'raw' => $raw];
+    }
+    if (str_contains($raw, ' ') || str_contains($raw, "\t")) {
+        return ['ok' => false, 'domain' => '', 'reason' => 'has_spaces', 'raw' => $raw];
+    }
+
+    $host = strtolower($raw);
+    $host = preg_replace('#^www\.#i', '', $host) ?? $host;
+    if (str_contains($host, ':') && !str_contains($host, ']')) {
+        $host = explode(':', $host, 2)[0];
+    }
+    $host = rtrim($host, '.');
+
+    if ($host === '' || !str_contains($host, '.')) {
+        return ['ok' => false, 'domain' => '', 'reason' => 'invalid', 'raw' => $raw];
+    }
+    if (!is_root_domain($host)) {
+        $suffix = domain_public_suffix($host);
+        $suffixParts = $suffix !== '' ? substr_count($suffix, '.') + 1 : 1;
+        $parts = array_values(array_filter(explode('.', $host)));
+        if (count($parts) - $suffixParts > 1) {
+            return ['ok' => false, 'domain' => '', 'reason' => 'subdomain', 'raw' => $raw];
+        }
+        return ['ok' => false, 'domain' => '', 'reason' => 'invalid', 'raw' => $raw];
+    }
+
+    return ['ok' => true, 'domain' => $host, 'reason' => '', 'raw' => $raw];
+}
+
+/**
+ * Parse pasted sites: only apex/root domains (no https, paths, or subdomains).
+ *
+ * @return array{valid:list<string>,invalid:list<array{raw:string,reason:string}>,valid_text:string,invalid_count:int}
+ */
+function parse_domain_list_strict(string $raw): array
+{
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $lines = preg_split('/\n+/', $raw) ?: [];
+    $valid = [];
+    $invalid = [];
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        $chunks = preg_split('/\s*,\s*/', $line) ?: [$line];
+        foreach ($chunks as $chunk) {
+            $chunk = trim($chunk);
+            if ($chunk === '') {
+                continue;
+            }
+            $a = analyze_pasted_domain_line($chunk);
+            if ($a['ok']) {
+                $valid[$a['domain']] = true;
+            } else {
+                $invalid[] = ['raw' => $a['raw'], 'reason' => $a['reason']];
+            }
+        }
+    }
+    $validList = array_keys($valid);
+    return [
+        'valid' => $validList,
+        'invalid' => $invalid,
+        'valid_text' => implode("\n", $validList),
+        'invalid_count' => count($invalid),
+    ];
 }
 
 /**
@@ -185,16 +344,7 @@ function prospect_country_folders(): array
 
 function parse_domain_list(string $raw): array
 {
-    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-    $parts = preg_split('/[\n,\t; ]+/', $raw) ?: [];
-    $out = [];
-    foreach ($parts as $p) {
-        $d = normalize_domain($p);
-        if ($d !== '') {
-            $out[$d] = true;
-        }
-    }
-    return array_keys($out);
+    return parse_domain_list_strict($raw)['valid'];
 }
 
 /**
@@ -425,26 +575,16 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
-    /** @var array<string,string> $rows domain => original url (or empty) */
+    $parsed = parse_domain_list_strict($raw);
+    if ($parsed['invalid_count'] > 0) {
+        throw new InvalidArgumentException(
+            'Remove invalid lines first (use Clean errors). Paste root domains only, e.g. example.com or my-site.co.uk — no https, paths, or subdomains.'
+        );
+    }
+    /** @var array<string,string> $rows domain => url (empty for root-domain paste) */
     $rows = [];
-    foreach ($parts as $part) {
-        $part = trim($part);
-        if ($part === '') {
-            continue;
-        }
-        $domain = normalize_domain($part);
-        if ($domain === '' || !str_contains($domain, '.')) {
-            continue;
-        }
-        if (isset($rows[$domain])) {
-            continue;
-        }
-        $url = '';
-        if (preg_match('#^https?://#i', $part)) {
-            $url = trim($part);
-        }
-        $rows[$domain] = $url;
+    foreach ($parsed['valid'] as $domain) {
+        $rows[$domain] = '';
     }
 
     if ($rows === []) {
@@ -457,7 +597,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         $language,
         $region,
         '',
-        'Admin Add URLs · ' . $country
+        'Admin Add sites · ' . $country
     );
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
@@ -512,7 +652,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
             $country,
             $language,
             $region,
-            'Admin Add URLs · ' . $country,
+            'Admin Add sites · ' . $country,
             $batchId,
         ]);
         db()->commit();

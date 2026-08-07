@@ -63,6 +63,18 @@ function stylesheet_url(): string
     return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
 }
 
+/** Hostinger-safe JS URL via asset.php allowlist. */
+function script_asset_url(string $f): string
+{
+    $f = ltrim(str_replace('\\', '/', $f), '/');
+    if (str_starts_with($f, 'assets/')) {
+        $f = substr($f, strlen('assets/'));
+    }
+    $file = dirname(__DIR__) . '/assets/' . $f;
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=' . rawurlencode($f) . '&v=' . rawurlencode($v));
+}
+
 function redirect(string $path): void
 {
     header('Location: ' . $path);
@@ -164,7 +176,7 @@ function render_glossary(string $panel): void
     echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
     echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
     if ($panel === 'admin') {
-        echo '<div><dt>Your job</dt><dd>Add URLs to the database and manage Team users.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Add sites to the database and manage Team users.</dd></div>';
     } else {
         echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
     }

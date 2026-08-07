@@ -33,7 +33,7 @@ render_header('Dashboard', 'admin');
     <h1>Admin dashboard</h1>
     <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — each country has its own URL database.</p>
   </div>
-  <a class="btn" href="index.php?page=admin_prospect_add">Add URLs</a>
+  <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
 </div>
 
 <?php render_glossary('admin'); ?>
@@ -47,8 +47,8 @@ render_header('Dashboard', 'admin');
 
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=admin_prospect_add">
-    <h2>Add URLs</h2>
-    <p>Paste websites into a country folder.</p>
+    <h2>Add sites</h2>
+    <p>Paste root domains into a country folder.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Our database</h2>
@@ -79,7 +79,7 @@ render_header('Dashboard', 'admin');
   <?php else: ?>
     <div class="empty-state">
       <p>No sites added yet.</p>
-      <a class="btn" href="index.php?page=admin_prospect_add">Add the first URLs</a>
+      <a class="btn" href="index.php?page=admin_prospect_add">Add the first sites</a>
     </div>
   <?php endif; ?>
 </div>

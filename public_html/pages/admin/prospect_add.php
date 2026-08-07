@@ -7,7 +7,6 @@ $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
-$countryGroups = countries_grouped();
 
 // Prefill language from country default
 if ($country !== '' && $language === '') {
@@ -25,40 +24,46 @@ try {
         $country = trim((string) post('country'));
         $language = trim((string) post('language'));
         if ($country === '') {
-            flash('error', 'Select a country folder first.');
+            flash('error', 'Select a country folder first (type to search, then Enter).');
         } elseif (trim($raw) === '') {
-            flash('error', 'Paste at least one URL or domain.');
+            flash('error', 'Paste at least one root domain.');
         } else {
-            $result = admin_add_urls_to_database($raw, $user, $country, $language);
-            if ($result['total'] <= 0) {
-                flash('error', 'No valid URLs/domains found. Example: https://example.com or example.com');
+            $parsed = parse_domain_list_strict($raw);
+            if ($parsed['invalid_count'] > 0) {
+                flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+                $raw = $parsed['valid_text'] !== '' ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw')) : $raw;
             } else {
-                $msg = 'Saved ' . (int) $result['total'] . ' URL(s) to ' . $result['country'] . '.';
-                $msg .= ' New: ' . (int) $result['inserted'] . '.';
-                if ((int) $result['updated'] > 0) {
-                    $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+                $result = admin_add_urls_to_database($raw, $user, $country, $language);
+                if ($result['total'] <= 0) {
+                    flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
+                } else {
+                    $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
+                    $msg .= ' New: ' . (int) $result['inserted'] . '.';
+                    if ((int) $result['updated'] > 0) {
+                        $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+                    }
+                    flash('ok', $msg);
+                    redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
                 }
-                flash('ok', $msg);
-                redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
             }
         }
     }
 } catch (Throwable $e) {
     $errorDetail = $e->getMessage();
-    flash('error', 'Could not save URLs. ' . $errorDetail);
+    flash('error', 'Could not save sites. ' . $errorDetail);
 }
 
-render_header('Add URLs', 'admin');
+render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Add URLs', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
-    ['label' => 'Add URLs'],
+    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add URLs<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste URLs into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
+    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste root domains into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -68,48 +73,21 @@ render_header('Add URLs', 'admin');
   </div>
 </div>
 
-<?= render_page_purpose(
-    'Add URLs into a country database',
-    'Each country folder has its own list of URLs.',
-    'Choose the country, paste URLs, click Save. They appear only in that country’s folder.',
-    [
-        'Select country.',
-        'Paste URLs (one per line).',
-        'Save — then open that country folder to review.',
-    ]
-) ?>
+<?= guide_admin_add() ?>
 
 <form class="card" method="post">
   <div class="form-grid">
-    <div>
-      <label for="country">Country <span class="help">(required)</span></label>
-      <select id="country" name="country" required>
-        <option value="">— Select country —</option>
-        <?php foreach ($countryGroups as $regionCode => $block): ?>
-          <?php if (empty($block['countries'])) {
-              continue;
-          } ?>
-          <optgroup label="<?= h($block['label']) ?>">
-            <?php foreach ($block['countries'] as $c): ?>
-              <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>>
-                <?= h($c['name']) ?>
-              </option>
-            <?php endforeach; ?>
-          </optgroup>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div>
-      <label for="language">Language</label>
-      <input id="language" name="language" value="<?= h($language) ?>" placeholder="optional default">
-    </div>
+    <?= render_country_typeahead($country) ?>
+    <?= render_language_typeahead($language) ?>
   </div>
-  <label for="urls" style="margin-top:0.9rem">URLs / domains</label>
-  <textarea id="urls" name="urls" rows="14" required
-    placeholder="https://www.site1.com&#10;site2.de&#10;https://site3.com/blog"><?= h($raw) ?></textarea>
-  <p class="help" style="margin-top:0.5rem">
-    One per line. Saved into the selected country’s database only.
-  </p>
+  <div style="margin-top:0.9rem">
+    <?= render_domains_paste_field('urls', $raw, [
+        'id' => 'urls',
+        'label' => 'Sites (root domains)',
+        'required' => true,
+        'rows' => 14,
+    ]) ?>
+  </div>
   <p class="actions" style="margin-top:1rem">
     <button class="btn" type="submit">Save to country database</button>
   </p>
@@ -118,4 +96,5 @@ render_header('Add URLs', 'admin');
 <?php if ($errorDetail !== ''): ?>
   <div class="card"><p class="help">Technical detail: <?= h($errorDetail) ?></p></div>
 <?php endif; ?>
+<?= sites_form_script_tag() ?>
 <?php render_footer('admin'); ?>
