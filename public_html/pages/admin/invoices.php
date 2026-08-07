@@ -53,7 +53,18 @@ render_header('Invoices', 'admin');
 </div>
 
 <section class="card">
-  <h2><?= label_with_info('All invoices', 'Open an invoice to print it or mark payment received.') ?></h2>
+  <div class="invoice-list-toolbar">
+    <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open an invoice to print it or mark payment received. Use search to find by number, client, date, or total — Enter jumps to the next match.') ?></h2>
+    <?php if ($invoices): ?>
+      <label class="sheet-search invoice-list-search" for="invoice-search">
+        <span class="visually-hidden">Search invoices</span>
+        <input id="invoice-search" type="search" placeholder="Search…"
+               autocomplete="off" spellcheck="false" data-no-draft
+               title="Type to filter · Enter = next match · Shift+Enter = previous">
+        <span class="sheet-search-meta muted" data-invoice-search-meta hidden></span>
+      </label>
+    <?php endif; ?>
+  </div>
   <?php if (!$invoices): ?>
     <div class="empty-state">
       <p>No invoices yet. Generate one from unpaid completed articles on a client sheet.</p>
@@ -61,7 +72,7 @@ render_header('Invoices', 'admin');
     </div>
   <?php else: ?>
     <div class="table-wrap">
-      <table class="invoice-list-table">
+      <table class="invoice-list-table" id="invoice-list-table">
         <thead>
           <tr>
             <th>Invoice No.</th>
@@ -76,15 +87,23 @@ render_header('Invoices', 'admin');
         <tbody>
         <?php foreach ($invoices as $inv): ?>
           <?php $paid = invoice_is_paid($inv); ?>
-          <tr>
-            <td><strong><?= h($inv['invoice_number']) ?></strong></td>
-            <td><?= h(format_invoice_date((string) $inv['invoice_date'])) ?></td>
-            <td>
+          <tr data-invoice-row
+              data-search="<?= h(mb_strtolower(trim(
+                  (string) $inv['invoice_number'] . ' '
+                  . format_invoice_date((string) $inv['invoice_date']) . ' '
+                  . (string) ($inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name']) . ' '
+                  . (string) $inv['item_count'] . ' '
+                  . format_euro($inv['total_amount']) . ' '
+                  . ($paid ? 'paid payment received' : 'unpaid open')
+              ))) ?>">
+            <td data-invoice-cell><strong><?= h($inv['invoice_number']) ?></strong></td>
+            <td data-invoice-cell><?= h(format_invoice_date((string) $inv['invoice_date'])) ?></td>
+            <td data-invoice-cell>
               <?= h($inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name']) ?>
             </td>
-            <td><?= (int) $inv['item_count'] ?></td>
-            <td class="num"><?= h(format_euro($inv['total_amount'])) ?></td>
-            <td>
+            <td data-invoice-cell><?= (int) $inv['item_count'] ?></td>
+            <td class="num" data-invoice-cell><?= h(format_euro($inv['total_amount'])) ?></td>
+            <td data-invoice-cell>
               <?php if ($paid): ?>
                 <span class="invoice-pay-badge is-paid" title="Payment already received">Paid</span>
               <?php else: ?>
@@ -114,9 +133,108 @@ render_header('Invoices', 'admin');
             </td>
           </tr>
         <?php endforeach; ?>
+          <tr class="sheet-search-empty" data-invoice-search-empty hidden>
+            <td colspan="7" class="muted">No invoices match your search.</td>
+          </tr>
         </tbody>
       </table>
     </div>
+    <script>
+    (function () {
+      var input = document.getElementById('invoice-search');
+      if (!input) return;
+      var matchRows = [];
+      var matchIndex = -1;
+      var meta = document.querySelector('[data-invoice-search-meta]');
+      var empty = document.querySelector('[data-invoice-search-empty]');
+
+      function clearHits() {
+        document.querySelectorAll('.sheet-search-hit').forEach(function (el) {
+          el.classList.remove('sheet-search-hit');
+        });
+      }
+
+      function filterInvoices() {
+        var q = String(input.value || '').trim().toLowerCase();
+        var rows = document.querySelectorAll('[data-invoice-row]');
+        var shown = 0;
+        matchRows = [];
+        clearHits();
+        rows.forEach(function (row) {
+          var hay = String(row.getAttribute('data-search') || '');
+          var hit = !q || hay.indexOf(q) !== -1;
+          row.hidden = !hit;
+          if (hit) {
+            shown++;
+            if (q) matchRows.push(row);
+          }
+        });
+        if (empty) empty.hidden = !(q && shown === 0);
+        if (matchIndex >= matchRows.length) matchIndex = matchRows.length ? 0 : -1;
+        if (meta) {
+          if (q) {
+            meta.hidden = false;
+            if (!matchRows.length) {
+              meta.textContent = '0 · Enter = next';
+            } else if (matchIndex >= 0) {
+              meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+            } else {
+              meta.textContent = matchRows.length + (matchRows.length === 1 ? ' match' : ' matches')
+                + ' · Enter = next';
+            }
+          } else {
+            meta.hidden = true;
+            meta.textContent = '';
+            matchIndex = -1;
+          }
+        }
+      }
+
+      function jumpToMatch(dir) {
+        var q = String(input.value || '').trim();
+        if (!q) return;
+        filterInvoices();
+        if (!matchRows.length) return;
+        if (matchIndex < 0) {
+          matchIndex = dir > 0 ? 0 : matchRows.length - 1;
+        } else {
+          matchIndex = (matchIndex + dir + matchRows.length) % matchRows.length;
+        }
+        var row = matchRows[matchIndex];
+        if (!row) return;
+        clearHits();
+        row.hidden = false;
+        row.classList.add('sheet-search-hit');
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (meta) {
+          meta.hidden = false;
+          meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+        }
+        window.setTimeout(function () {
+          try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
+          try {
+            var len = String(input.value || '').length;
+            input.setSelectionRange(len, len);
+          } catch (err2) {}
+        }, 0);
+      }
+
+      input.addEventListener('input', function () {
+        matchIndex = -1;
+        filterInvoices();
+      });
+      input.addEventListener('search', function () {
+        matchIndex = -1;
+        filterInvoices();
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          jumpToMatch(e.shiftKey ? -1 : 1);
+        }
+      });
+    })();
+    </script>
   <?php endif; ?>
 </section>
 <?php render_footer('admin'); ?>
