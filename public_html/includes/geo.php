@@ -277,3 +277,254 @@ function apply_site_geo_filters(array &$where, array &$params, array $filters): 
         $params[] = $filters['language'];
     }
 }
+
+/**
+ * Generic / global TLDs — ignored when scoring country mismatch
+ * (a German .com list should not look "wrong").
+ *
+ * @return list<string>
+ */
+function generic_tlds(): array
+{
+    return [
+        'com', 'net', 'org', 'info', 'biz', 'io', 'co', 'app', 'dev', 'xyz',
+        'online', 'site', 'website', 'store', 'shop', 'blog', 'cloud', 'tech',
+        'eu', 'intl', 'name', 'pro', 'tv', 'me', 'cc', 'ws',
+    ];
+}
+
+/**
+ * Expected country-code / regional TLDs for soft mismatch warnings.
+ * Neighbors included where markets overlap (e.g. DACH for Germany).
+ *
+ * @return array<string, list<string>> country name (lowercase) => tld suffixes
+ */
+function country_expected_tlds_map(): array
+{
+    return [
+        // DACH
+        'germany' => ['de', 'at', 'ch', 'co.at'],
+        'austria' => ['at', 'co.at', 'de', 'ch'],
+        'switzerland' => ['ch', 'de', 'at', 'li', 'co.at'],
+        'liechtenstein' => ['li', 'ch', 'de', 'at'],
+        // Romance / Iberia
+        'france' => ['fr', 're', 'pm', 'yt', 'tf', 'wf', 'nc', 'pf'],
+        'spain' => ['es', 'cat', 'gal', 'eus', 'com.es'],
+        'portugal' => ['pt', 'com.pt'],
+        'italy' => ['it'],
+        'belgium' => ['be'],
+        'luxembourg' => ['lu'],
+        'monaco' => ['mc'],
+        'andorra' => ['ad'],
+        'san marino' => ['sm'],
+        'vatican city' => ['va'],
+        // British Isles
+        'united kingdom' => ['uk', 'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'scot', 'wales', 'cymru'],
+        'ireland' => ['ie'],
+        'malta' => ['mt', 'com.mt'],
+        // Nordics / Baltics
+        'sweden' => ['se'],
+        'norway' => ['no'],
+        'denmark' => ['dk'],
+        'finland' => ['fi', 'ax'],
+        'iceland' => ['is'],
+        'estonia' => ['ee'],
+        'latvia' => ['lv'],
+        'lithuania' => ['lt'],
+        // Central / East Europe
+        'netherlands' => ['nl'],
+        'poland' => ['pl', 'com.pl'],
+        'czech republic' => ['cz'],
+        'slovakia' => ['sk'],
+        'hungary' => ['hu'],
+        'romania' => ['ro', 'com.ro'],
+        'bulgaria' => ['bg'],
+        'greece' => ['gr', 'com.gr'],
+        'cyprus' => ['cy', 'com.cy'],
+        'croatia' => ['hr', 'com.hr'],
+        'slovenia' => ['si'],
+        'serbia' => ['rs'],
+        'bosnia and herzegovina' => ['ba', 'com.ba'],
+        'montenegro' => ['me'],
+        'albania' => ['al'],
+        'north macedonia' => ['mk'],
+        'kosovo' => ['xk'],
+        'moldova' => ['md'],
+        'ukraine' => ['ua', 'com.ua'],
+        'belarus' => ['by'],
+        'russia' => ['ru', 'su'],
+        // North America
+        'united states' => ['us', 'edu', 'gov', 'mil'],
+        'canada' => ['ca'],
+        'mexico' => ['mx', 'com.mx'],
+        // English markets
+        'australia' => ['au', 'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au'],
+        'new zealand' => ['nz', 'co.nz', 'net.nz', 'org.nz', 'govt.nz'],
+        'south africa' => ['za', 'co.za', 'org.za', 'net.za', 'web.za'],
+        'india' => ['in', 'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in'],
+        'pakistan' => ['pk', 'com.pk'],
+        'singapore' => ['sg', 'com.sg'],
+        'malaysia' => ['my', 'com.my'],
+        'philippines' => ['ph', 'com.ph'],
+        'hong kong' => ['hk', 'com.hk'],
+        'nigeria' => ['ng', 'com.ng'],
+        'kenya' => ['ke', 'co.ke'],
+        // Other
+        'brazil' => ['br', 'com.br'],
+        'japan' => ['jp', 'co.jp', 'or.jp', 'ne.jp'],
+        'south korea' => ['kr', 'co.kr'],
+        'united arab emirates' => ['ae'],
+    ];
+}
+
+/**
+ * @return list<string>
+ */
+function country_expected_tlds(string $countryName): array
+{
+    $key = strtolower(trim($countryName));
+    $map = country_expected_tlds_map();
+    if (isset($map[$key])) {
+        return $map[$key];
+    }
+    // Fallback: ISO code from countries table → lowercase ccTLD
+    foreach (list_countries(null, false) as $row) {
+        if (strcasecmp(trim((string) ($row['name'] ?? '')), $countryName) === 0) {
+            $code = strtolower(trim((string) ($row['code'] ?? '')));
+            return $code !== '' ? [$code] : [];
+        }
+    }
+    return [];
+}
+
+/**
+ * Public suffix / TLD of a domain (e.g. example.co.uk → co.uk, shop.de → de).
+ */
+function domain_tld_suffix(string $domain): string
+{
+    $domain = strtolower(trim($domain));
+    $domain = preg_replace('#^https?://#i', '', $domain) ?? $domain;
+    $domain = preg_replace('#^www\.#i', '', $domain) ?? $domain;
+    $domain = explode('/', $domain, 2)[0];
+    $domain = explode('?', $domain, 2)[0];
+    if ($domain === '' || !str_contains($domain, '.')) {
+        return '';
+    }
+    if (function_exists('domain_public_suffix')) {
+        $suffix = domain_public_suffix($domain);
+        if ($suffix !== '') {
+            return $suffix;
+        }
+    }
+    $parts = explode('.', $domain);
+    return (string) end($parts);
+}
+
+/**
+ * Soft check: do these domains look like they belong to $country?
+ * Generic TLDs (.com etc.) are ignored. Never hard-blocks — UI warns + confirm.
+ * Warns when match on country-specific TLDs is under 70% (and enough signal).
+ *
+ * @param list<string> $domains
+ * @return array{
+ *   warn:bool,
+ *   message:string,
+ *   match_pct:float,
+ *   signal:int,
+ *   matched:int,
+ *   expected:list<string>,
+ *   top_tlds:array<string,int>,
+ *   dominant_tld:string
+ * }
+ */
+function analyze_country_tld_match(array $domains, string $country): array
+{
+    $expected = country_expected_tlds($country);
+    $expectedSet = array_fill_keys($expected, true);
+    $generic = array_fill_keys(generic_tlds(), true);
+
+    $tldCounts = [];
+    $signal = 0;
+    $matched = 0;
+
+    foreach ($domains as $d) {
+        $d = strtolower(trim((string) $d));
+        if ($d === '') {
+            continue;
+        }
+        $tld = domain_tld_suffix($d);
+        if ($tld === '') {
+            continue;
+        }
+        $tldCounts[$tld] = ($tldCounts[$tld] ?? 0) + 1;
+        if (isset($generic[$tld])) {
+            continue; // ignore global TLDs in the score
+        }
+        $signal++;
+        if (isset($expectedSet[$tld])) {
+            $matched++;
+        }
+    }
+
+    arsort($tldCounts);
+    $dominant = $tldCounts !== [] ? (string) array_key_first($tldCounts) : '';
+    $matchPct = $signal > 0 ? round(100 * $matched / $signal, 1) : 100.0;
+
+    $empty = [
+        'warn' => false,
+        'message' => '',
+        'match_pct' => $matchPct,
+        'signal' => $signal,
+        'matched' => $matched,
+        'expected' => $expected,
+        'top_tlds' => $tldCounts,
+        'dominant_tld' => $dominant,
+    ];
+
+    // Not enough country-specific TLDs to judge (mostly .com etc.)
+    if ($expected === [] || $signal < 5) {
+        return $empty;
+    }
+
+    // Soft threshold: under 70% of signal TLDs match the selected country
+    if ($matchPct >= 70) {
+        return $empty;
+    }
+
+    $topBits = [];
+    $i = 0;
+    foreach ($tldCounts as $tld => $n) {
+        if (isset($generic[$tld])) {
+            continue;
+        }
+        $topBits[] = '.' . $tld . ' (' . $n . ')';
+        if (++$i >= 4) {
+            break;
+        }
+    }
+    $expectLabel = implode(', ', array_map(static fn ($t) => '.' . $t, array_slice($expected, 0, 4)));
+    $foundLabel = $topBits !== [] ? implode(', ', $topBits) : ('.' . $dominant);
+
+    $message = 'This list may not match '
+        . $country
+        . '. For '
+        . $country
+        . ' we expect domains like '
+        . $expectLabel
+        . ', but most country-specific domains look like '
+        . $foundLabel
+        . ' ('
+        . (int) $matchPct
+        . '% match). Continue anyway?';
+
+    return [
+        'warn' => true,
+        'message' => $message,
+        'match_pct' => $matchPct,
+        'signal' => $signal,
+        'matched' => $matched,
+        'expected' => $expected,
+        'top_tlds' => $tldCounts,
+        'dominant_tld' => $dominant,
+    ];
+}

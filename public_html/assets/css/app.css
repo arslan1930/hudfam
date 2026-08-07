@@ -542,6 +542,23 @@ summary:focus-visible {
   font-size: 0.85rem;
   color: var(--muted);
 }
+.tld-warn {
+  border: 1px solid #e8c27a;
+  background: #fff8e8;
+  margin-bottom: 1rem;
+}
+.tld-confirm {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-weight: 600;
+  margin: 0.85rem 0 0.4rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px dashed #e8c27a;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+.tld-confirm input { width: auto; margin-top: 0.2rem; }
 .badge.new, .badge.contacting { background: var(--brand-soft); color: var(--brand-deep); }
 .badge.replied { background: #d9efe3; color: var(--ok); }
 .badge.skipped, .badge.paused, .badge.archived, .badge.on_hold, .badge.cancelled { background: #e4e6eb; color: var(--muted); }
