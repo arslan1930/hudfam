@@ -1,13 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" role="img" aria-label="Topurlz Ltd">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" role="img" aria-label="topUrlz">
   <defs>
-    <linearGradient id="tuMark" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1e3a5f"/>
-      <stop offset="100%" stop-color="#0f2744"/>
+    <linearGradient id="tuBg" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#FF7E00"/>
+      <stop offset="50%" stop-color="#FF4B2B"/>
+      <stop offset="100%" stop-color="#FF2D55"/>
+    </linearGradient>
+    <linearGradient id="tuArrow" x1="0%" y1="100%" x2="80%" y2="0%">
+      <stop offset="0%" stop-color="#00A800"/>
+      <stop offset="100%" stop-color="#00D000"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="8" width="56" height="56" rx="12" fill="url(#tuMark)"/>
-  <path d="M14 24h28v6H35v26h-8V30H14v-6z" fill="#ffffff"/>
-  <circle cx="44" cy="20" r="5" fill="#c9a227"/>
-  <text x="72" y="36" font-family="Georgia, 'Times New Roman', Times, serif" font-size="28" font-weight="700" fill="#0f2744">Topurlz</text>
-  <text x="72" y="56" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600" letter-spacing="0.22em" fill="#6b7280">LTD</text>
+  <rect x="0" y="0" width="520" height="140" rx="28" ry="28" fill="url(#tuBg)"/>
+  <!-- green growth arrow from the t -->
+  <path fill="url(#tuArrow)" d="M92 52
+    C102 36 118 24 142 18
+    L148 14 L150 28
+    C128 32 114 42 104 56 Z"/>
+  <path fill="#00A800" d="M142 18 L162 10 L154 30 Z"/>
+  <!-- wordmark -->
+  <text x="48" y="96"
+        font-family="Arial Black, Impact, Arial, Helvetica, sans-serif"
+        font-size="68"
+        font-weight="900"
+        fill="#FFFFFF"
+        letter-spacing="-1.5">topUrl</text>
+  <!-- stylized z with globe -->
+  <g transform="translate(390 42)">
+    <text x="0" y="54"
+          font-family="Arial Black, Impact, Arial, Helvetica, sans-serif"
+          font-size="68"
+          font-weight="900"
+          fill="#FFFFFF">z</text>
+    <g transform="translate(8 10)" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round">
+      <circle cx="22" cy="22" r="16"/>
+      <ellipse cx="22" cy="22" rx="7.5" ry="16"/>
+      <path d="M7 22h30M9 13h26M9 31h26"/>
+    </g>
+  </g>
 </svg>

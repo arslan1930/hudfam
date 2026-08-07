@@ -235,7 +235,7 @@ render_header('Order · ' . $client['name'], 'admin');
           <th class="col-country"><?= label_with_info('Country', 'Optional country or TLD reminder (e.g. .de .nl .com). Stays empty unless you type something.') ?></th>
           <th class="col-price"><?= label_with_info('Owner price', 'What you pay the site owner / publisher.') ?></th>
           <th class="col-price"><?= label_with_info('Decided price', 'What the client pays you. Profit = Decided − Owner.') ?></th>
-          <th class="col-live"><?= label_with_info('LIVE URL', 'For articles: fill when the piece is live (marks the order completed). For Banner/Textlink: required like the site name.') ?></th>
+          <th class="col-live"><?= label_with_info('LIVE URL', 'For articles: fill when the piece is live (marks the order completed). For Banner/Textlink: required like the site name. When filled, Owner and Decided prices cannot be empty, and Decided must be greater than 0.') ?></th>
           <th class="col-paid"><?= label_with_info('Paid', 'Click Paid when this row is paid. Paid rows cannot be added to a new invoice.') ?></th>
           <th class="col-profit"><?= label_with_info('Profit', 'Auto-calculated: Decided price − Owner price.') ?></th>
           <th class="col-month"><?= label_with_info('Month', 'Article month, or for Banner/Textlink the start month plus end month for the yearly period.') ?></th>
@@ -422,7 +422,7 @@ render_header('Order · ' . $client['name'], 'admin');
     Under each site name you can leave a short <strong>note…</strong> reminder, or leave it empty.
     <strong>Banner / Textlink</strong> stays empty by default; choose only when needed. For those rows, LIVE URL must be filled like the site name, and set start + end months (invoice text uses that period).
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
-    An order counts as <strong>completed</strong> only when LIVE URL is filled.
+    An order counts as <strong>completed</strong> only when LIVE URL is filled — then Owner and Decided prices cannot be empty (Decided must be &gt; 0).
     Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (click again to undo).
     Remove asks for confirmation before deleting a row.
   </p>
@@ -666,6 +666,31 @@ render_header('Order · ' . $client['name'], 'admin');
   }
 
   var form = document.getElementById('order-sheet-form');
+  form.addEventListener('submit', function (e) {
+    var bad = null;
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      if (bad) return;
+      var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
+      if (!live) return;
+      var ownerEl = row.querySelector('[data-owner]');
+      var decidedEl = row.querySelector('[data-decided]');
+      var oRaw = String((ownerEl && ownerEl.value) || '').trim();
+      var dRaw = String((decidedEl && decidedEl.value) || '').trim();
+      var d = num(dRaw);
+      if (oRaw === '' || dRaw === '' || d <= 0) {
+        bad = row.querySelector('[name^="site_name"]');
+        var site = bad ? String(bad.value || '').trim() : '';
+        alert('When LIVE URL is filled, Owner and Decided prices cannot be empty, and Decided must be greater than 0'
+          + (site ? ' (' + site + ').' : '.'));
+        if (ownerEl && oRaw === '') ownerEl.focus();
+        else if (decidedEl) decidedEl.focus();
+      }
+    });
+    if (bad) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
   form.addEventListener('input', function (e) {
     refresh();
     if (e.target && e.target.id === 'sheet-search') {

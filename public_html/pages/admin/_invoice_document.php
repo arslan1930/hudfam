@@ -6,39 +6,24 @@ if (!isset($invoice) || !is_array($invoice)) {
 $items = $items ?? [];
 $logo = topurlz_logo_url();
 $logoFile = asset_url('assets/img/topurlz-logo.svg');
-$isPaid = function_exists('invoice_is_paid') ? invoice_is_paid($invoice) : (($invoice['payment_status'] ?? '') === 'paid');
 $lineNo = 0;
 ?>
 <article class="invoice-doc" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
-  <header class="invoice-doc-masthead">
-    <div class="invoice-doc-brand">
-      <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="Topurlz Ltd"
-           onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';">
-      <div class="invoice-doc-brand-text">
-        <strong><?= h($invoice['company_name'] !== '' ? $invoice['company_name'] : 'Topurlz Ltd') ?></strong>
-        <span>Professional link building invoices</span>
-      </div>
-    </div>
-    <div class="invoice-doc-heading">
-      <div class="invoice-doc-title">INVOICE</div>
-      <div class="invoice-doc-meta-grid">
-        <div>
-          <span class="invoice-k">Invoice No.</span>
-          <strong><?= h($invoice['invoice_number']) ?></strong>
-        </div>
-        <div>
-          <span class="invoice-k">Date</span>
-          <strong><?= h(format_invoice_date((string) $invoice['invoice_date'])) ?></strong>
-        </div>
-        <div>
-          <span class="invoice-k">Status</span>
-          <strong class="<?= $isPaid ? 'invoice-status-paid' : 'invoice-status-open' ?>">
-            <?= $isPaid ? 'Payment received' : 'Unpaid' ?>
-          </strong>
-        </div>
-      </div>
-    </div>
+  <header class="invoice-doc-brandbar">
+    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz"
+         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';">
   </header>
+
+  <section class="invoice-doc-ids">
+    <div>
+      <span class="invoice-k">Invoice No.</span>
+      <strong><?= h($invoice['invoice_number']) ?></strong>
+    </div>
+    <div>
+      <span class="invoice-k">Date</span>
+      <strong><?= h(format_invoice_date((string) $invoice['invoice_date'])) ?></strong>
+    </div>
+  </section>
 
   <section class="invoice-doc-parties">
     <div class="invoice-party invoice-party-from">

@@ -159,6 +159,7 @@ function order_invoice_description(array $row): string
 {
     if (order_is_placement($row)) {
         $label = order_placement_label($row);
+        $site = trim((string) ($row['site_name'] ?? ''));
         $start = order_month_label((int) ($row['order_month'] ?? 0));
         $end = order_month_label((int) ($row['period_end_month'] ?? 0));
         if ($start === '') {
@@ -167,7 +168,8 @@ function order_invoice_description(array $row): string
         if ($end === '') {
             $end = '—';
         }
-        return $label . ' per year starting ' . $start . ' ending ' . $end;
+        $sitePart = $site !== '' ? ' (' . $site . ')' : '';
+        return $label . ' per year' . $sitePart . ' starting ' . $start . ' ending ' . $end;
     }
     $url = trim((string) ($row['live_url'] ?? ''));
     return 'Article Published -' . "\n" . $url;
@@ -387,6 +389,32 @@ function update_order_item(int $itemId, int $clientId, array $data): void
     if (mb_strlen($note) > 255) {
         $note = mb_substr($note, 0, 255);
     }
+    $siteName = trim((string) ($data['site_name'] ?? ''));
+    $liveUrl = trim((string) ($data['live_url'] ?? ''));
+    $ownerPrice = parse_money($data['owner_price'] ?? 0);
+    $decidedPrice = parse_money($data['decided_price'] ?? 0);
+
+    // LIVE URL means the order is complete — price fields must not be empty.
+    if ($liveUrl !== '') {
+        $ownerRaw = trim((string) ($data['owner_price'] ?? ''));
+        $decidedRaw = trim((string) ($data['decided_price'] ?? ''));
+        if ($ownerRaw === '' || $decidedRaw === '') {
+            $label = $siteName !== '' ? $siteName : ('row #' . $itemId);
+            throw new InvalidArgumentException(
+                'When LIVE URL is filled, Owner price and Decided price cannot be empty — check ' . $label . '.'
+            );
+        }
+        if ($decidedPrice <= 0) {
+            $label = $siteName !== '' ? $siteName : ('row #' . $itemId);
+            throw new InvalidArgumentException(
+                'When LIVE URL is filled, Decided price must be greater than 0 — check ' . $label . '.'
+            );
+        }
+        if ($placement !== '' && $siteName === '') {
+            throw new InvalidArgumentException('Banner / Textlink rows need a site name when LIVE URL is filled.');
+        }
+    }
+
     db()->prepare(
         'UPDATE order_items
          SET site_name=?, site_note=?, placement_type=?, country=?,
@@ -394,16 +422,16 @@ function update_order_item(int $itemId, int $clientId, array $data): void
              owner_price=?, decided_price=?, live_url=?, updated_at=NOW()
          WHERE id=? AND client_id=? AND row_type=\'site\''
     )->execute([
-        trim((string) ($data['site_name'] ?? '')),
+        $siteName,
         $note,
         $placement,
         trim((string) ($data['country'] ?? '')),
         $month,
         $endMonth,
         $year,
-        parse_money($data['owner_price'] ?? 0),
-        parse_money($data['decided_price'] ?? 0),
-        trim((string) ($data['live_url'] ?? '')),
+        $ownerPrice,
+        $decidedPrice,
+        $liveUrl,
         $itemId,
         $clientId,
     ]);
