@@ -1,5 +1,5 @@
 /**
- * Admin draft autosave — keeps typed form values in localStorage so refresh
+ * Sitewide draft autosave — keeps typed form values in localStorage so refresh
  * does not lose work. Cleared after a successful server save (ok flash).
  */
 (function () {
@@ -8,7 +8,8 @@
   if (!window.localStorage) return;
 
   var cfg = window.TXF_DRAFT || {};
-  if (cfg.panel !== 'admin') return;
+  var panel = String(cfg.panel || '');
+  if (panel !== 'admin' && panel !== 'team') return;
 
   var PREFIX = 'txf-draft:v1:';
   var userId = String(cfg.userId || '0');
@@ -20,13 +21,17 @@
     var params = new URLSearchParams(window.location.search);
     return (
       PREFIX +
+      panel +
+      ':' +
       userId +
       ':' +
       (params.get('page') || '') +
       ':' +
       (params.get('id') || '') +
       ':' +
-      (params.get('client_id') || '')
+      (params.get('client_id') || '') +
+      ':' +
+      (params.get('country') || '')
     );
   }
 

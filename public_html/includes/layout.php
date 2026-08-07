@@ -128,14 +128,14 @@ function render_footer(string $panel = ''): void
 {
     if (current_user() && $panel !== '') {
         render_project_credit();
-        if ($panel === 'admin') {
+        if ($panel === 'admin' || $panel === 'team') {
             $user = current_user();
             $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
             $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
             $jsFile = asset_url('assets/js/draft-autosave.js');
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
-                'panel' => 'admin',
+                'panel' => $panel,
                 'userId' => (int) ($user['id'] ?? 0),
                 'clearDraft' => false,
             ], JSON_UNESCAPED_UNICODE) . ';';
