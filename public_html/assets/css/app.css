@@ -436,6 +436,13 @@ h1 { color: var(--brand-deep); }
   box-shadow: 0 3px 10px rgba(55, 65, 81, 0.22);
 }
 .btn:hover { filter: brightness(1.05); }
+.btn:disabled,
+button.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  pointer-events: none;
+}
 .btn.secondary {
   background: linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
   color: var(--brand-2) !important;
