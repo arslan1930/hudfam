@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   client_id INT NOT NULL,
   row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
   site_name VARCHAR(255) NOT NULL DEFAULT '',
+  site_note VARCHAR(255) NOT NULL DEFAULT '',
   country VARCHAR(100) NOT NULL DEFAULT '',
   order_month TINYINT NULL,
   order_year SMALLINT NOT NULL DEFAULT 0,

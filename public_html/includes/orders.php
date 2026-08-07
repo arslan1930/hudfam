@@ -32,6 +32,7 @@ function ensure_order_schema(): void
           client_id INT NOT NULL,
           row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
           site_name VARCHAR(255) NOT NULL DEFAULT '',
+          site_note VARCHAR(255) NOT NULL DEFAULT '',
           country VARCHAR(100) NOT NULL DEFAULT '',
           order_month TINYINT NULL,
           order_year SMALLINT NOT NULL DEFAULT 0,
@@ -57,6 +58,9 @@ function ensure_order_schema(): void
         }
         if (!in_array('country', $cols, true)) {
             $alters[] = "ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT '' AFTER site_name";
+        }
+        if (!in_array('site_note', $cols, true)) {
+            $alters[] = "ADD COLUMN site_note VARCHAR(255) NOT NULL DEFAULT '' AFTER site_name";
         }
         if (!in_array('order_month', $cols, true)) {
             $alters[] = 'ADD COLUMN order_month TINYINT NULL AFTER country';
@@ -298,7 +302,7 @@ function add_order_year_end(int $clientId, int $endingYear): int
 }
 
 /**
- * @param array{site_name?:string,country?:string,order_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string} $data
+ * @param array{site_name?:string,site_note?:string,country?:string,order_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string} $data
  */
 function update_order_item(int $itemId, int $clientId, array $data): void
 {
@@ -311,13 +315,18 @@ function update_order_item(int $itemId, int $clientId, array $data): void
     if ($year < 2000 || $year > 2100) {
         $year = (int) date('Y');
     }
+    $note = trim((string) ($data['site_note'] ?? ''));
+    if (mb_strlen($note) > 255) {
+        $note = mb_substr($note, 0, 255);
+    }
     db()->prepare(
         'UPDATE order_items
-         SET site_name=?, country=?, order_month=?, order_year=?,
+         SET site_name=?, site_note=?, country=?, order_month=?, order_year=?,
              owner_price=?, decided_price=?, live_url=?, updated_at=NOW()
          WHERE id=? AND client_id=? AND row_type=\'site\''
     )->execute([
         trim((string) ($data['site_name'] ?? '')),
+        $note,
         trim((string) ($data['country'] ?? '')),
         $month,
         $year,
@@ -332,6 +341,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
 
 /**
  * @param array<int|string,string> $sites
+ * @param array<int|string,string> $notes
  * @param array<int|string,string> $countries
  * @param array<int|string,mixed> $months
  * @param array<int|string,mixed> $years
@@ -342,6 +352,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
 function save_order_sheet_rows(
     int $clientId,
     array $sites,
+    array $notes,
     array $countries,
     array $months,
     array $years,
@@ -358,6 +369,7 @@ function save_order_sheet_rows(
         }
         update_order_item($itemId, $clientId, [
             'site_name' => $siteName,
+            'site_note' => $notes[$id] ?? '',
             'country' => $countries[$id] ?? '',
             'order_month' => $months[$id] ?? null,
             'order_year' => $years[$id] ?? date('Y'),
@@ -435,6 +447,7 @@ function order_sheet_export_rows(int $clientId): array
                 'year' => (string) $from,
                 'country' => '',
                 'site' => 'Year ' . $from . ' ended · ' . $to . ' months started',
+                'note' => '',
                 'owner' => '',
                 'decided' => '',
                 'profit' => '',
@@ -451,6 +464,7 @@ function order_sheet_export_rows(int $clientId): array
             'year' => (string) ((int) ($row['order_year'] ?: 0) ?: ''),
             'country' => (string) ($row['country'] ?? ''),
             'site' => (string) ($row['site_name'] ?? ''),
+            'note' => (string) ($row['site_note'] ?? ''),
             'owner' => format_money($row['owner_price']),
             'decided' => format_money($row['decided_price']),
             'profit' => format_money($profit),

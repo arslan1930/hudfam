@@ -852,7 +852,26 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .order-sheet .col-num { width: 2.2rem; text-align: center; }
 .order-sheet .col-month { min-width: 150px; width: 150px; }
 .order-sheet .col-country { min-width: 110px; width: 120px; }
-.order-sheet .col-site { min-width: 150px; }
+.order-sheet .col-site { min-width: 160px; }
+.site-cell {
+  display: grid;
+  gap: 0.28rem;
+}
+.site-cell .cell-note {
+  font-size: 0.8rem;
+  padding: 0.28rem 0.45rem;
+  color: #4b5563;
+  background: #f9fafb;
+  border-style: dashed;
+}
+.site-cell .cell-note::placeholder {
+  color: #9ca3af;
+  font-style: italic;
+}
+.site-cell .cell-note:focus {
+  background: #fff;
+  border-style: solid;
+}
 .order-sheet .col-price { width: 7.5rem; }
 .order-sheet .col-profit { width: 6.5rem; text-align: right; }
 .order-sheet .col-del { width: 4.8rem; text-align: center; }

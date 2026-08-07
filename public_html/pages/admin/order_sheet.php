@@ -35,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Always persist current site-row edits before structural changes
         $sites = (array) ($_POST['site_name'] ?? []);
+        $notes = (array) ($_POST['site_note'] ?? []);
         $countries = (array) ($_POST['country'] ?? []);
         $orderMonths = (array) ($_POST['order_month'] ?? []);
         $orderYears = (array) ($_POST['order_year'] ?? []);
@@ -43,13 +44,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $urls = (array) ($_POST['live_url'] ?? []);
 
         if ($action === 'add_row') {
-            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
             add_order_item($clientId);
             flash('ok', 'New site row added.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#sheet-bottom');
         }
         if ($action === 'year_end') {
-            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
             $endingYear = (int) post('ending_year');
             if ($endingYear <= 0) {
                 $endingYear = (int) date('Y');
@@ -59,25 +60,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#sheet-bottom');
         }
         if ($action === 'save_sheet') {
-            $n = save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            $n = save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
             flash('ok', 'Saved ' . $n . ' row' . ($n === 1 ? '' : 's') . '.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId);
         }
         if ($action === 'delete_row') {
-            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
             delete_order_item((int) post('item_id'), $clientId);
             flash('ok', 'Row removed.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId);
         }
         if ($action === 'mark_paid') {
-            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
             $itemId = (int) post('item_id');
             set_order_item_paid($itemId, $clientId, true);
             flash('ok', 'Row marked as paid.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#row-' . $itemId);
         }
         if ($action === 'unmark_paid') {
-            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
             $itemId = (int) post('item_id');
             set_order_item_paid($itemId, $clientId, false);
             flash('ok', 'Paid mark removed.');
@@ -289,8 +290,14 @@ render_header('Order · ' . $client['name'], 'admin');
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?>" data-row id="row-<?= $id ?>">
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
           <td class="col-site">
-            <input class="cell-input" type="text" name="site_name[<?= $id ?>]"
-                   value="<?= h($row['site_name']) ?>" placeholder="site.com" autocomplete="off">
+            <div class="site-cell">
+              <input class="cell-input" type="text" name="site_name[<?= $id ?>]"
+                     value="<?= h($row['site_name']) ?>" placeholder="site.com" autocomplete="off">
+              <input class="cell-input cell-note" type="text" name="site_note[<?= $id ?>]"
+                     value="<?= h((string) ($row['site_note'] ?? '')) ?>"
+                     placeholder="note…" maxlength="255" autocomplete="off"
+                     aria-label="Note for <?= h($row['site_name'] !== '' ? $row['site_name'] : 'site') ?>">
+            </div>
           </td>
           <td class="col-country">
             <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
@@ -386,6 +393,7 @@ render_header('Order · ' . $client['name'], 'admin');
   </div>
   <p class="help" style="margin:0.75rem 0 0" id="sheet-bottom">
     Country boxes stay empty for you to type (placeholder reminder: .de .nl …).
+    Under each site name you can leave a short <strong>note…</strong> reminder, or leave it empty.
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
     An order counts as <strong>completed</strong> only when LIVE URL is filled.
     Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (click again to undo).
