@@ -2,13 +2,7 @@
 $user = require_team();
 $uid = (int) $user['id'];
 
-$prospectTotal = 0;
 $todayBatch = null;
-try {
-    $prospectTotal = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
-} catch (Throwable $e) {
-    $prospectTotal = 0;
-}
 try {
     $tb = db()->prepare(
         'SELECT * FROM prospect_batches WHERE user_id=? AND batch_date=CURDATE() LIMIT 1'
@@ -24,7 +18,7 @@ render_header('Dashboard', 'team');
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Pick a country database, filter new sites against it, then add only the unique ones.</p>
+    <p class="muted">Filter new sites against a country database, then add only the unique ones. Existing country lists stay private.</p>
   </div>
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
@@ -37,13 +31,13 @@ render_header('Dashboard', 'team');
     <h2>Filter &amp; add</h2>
     <p>Filter against the country database, then add only new unique sites.</p>
   </a>
-  <a class="launch-card" href="index.php?page=team_prospects">
-    <h2>Our database</h2>
-    <p><?= $prospectTotal ?> URLs across country folders.</p>
-  </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Today’s history</h2>
     <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' sites added today' : 'No adds yet today' ?></p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_prospect_batches">
+    <h2>Add history</h2>
+    <p>Sites you added, saved by day.</p>
   </a>
 </div>
 <?php render_footer('team'); ?>

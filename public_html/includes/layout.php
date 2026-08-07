@@ -18,7 +18,6 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_prospect_batches' => ['admin_prospect_batch'],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
-        'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
     ];
@@ -90,8 +89,7 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
-                'team_prospects' => ['Our database', 'Country folders → URLs'],
+                'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                 'team_prospect_batches' => ['Add history', 'Your daily adds'],
             ],
         ];

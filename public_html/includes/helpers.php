@@ -210,13 +210,15 @@ function render_glossary(string $panel): void
     echo '<div class="glossary card" role="note">';
     echo '<h2 class="glossary-title">How this works</h2>';
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Our database</dt><dd>One shared list of unique website domains (URLs).</dd></div>';
-    echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
-    echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
     if ($panel === 'admin') {
+        echo '<div><dt>Our database</dt><dd>Country folders of unique website domains (Admin only).</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
+        echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Add sites to the database and manage Team users.</dd></div>';
     } else {
-        echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
+        echo '<div><dt>Add history</dt><dd>Sites you added, saved by day.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }
     echo '</dl></div>';
 }

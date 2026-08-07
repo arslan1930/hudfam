@@ -119,7 +119,6 @@ render_header('Filter & add', 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Our database', 'href' => 'index.php?page=team_prospects'],
     ['label' => 'Filter & add'],
 ]); ?>
 <div class="topbar">
@@ -129,7 +128,6 @@ render_header('Filter & add', 'team');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Country folders</a>
   </div>
 </div>
 <?= guide_filter_add() ?>
