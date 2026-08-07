@@ -113,3 +113,61 @@ CREATE TABLE IF NOT EXISTS order_items (
   INDEX (client_id, order_year, order_month),
   CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Invoices (generated from completed order-sheet articles)
+CREATE TABLE IF NOT EXISTS invoice_client_profiles (
+  client_id INT NOT NULL PRIMARY KEY,
+  bill_to_name VARCHAR(200) NOT NULL DEFAULT '',
+  bill_to_address TEXT NULL,
+  bill_to_hrb VARCHAR(120) NOT NULL DEFAULT '',
+  bill_to_vat VARCHAR(120) NOT NULL DEFAULT '',
+  supplier_number VARCHAR(120) NOT NULL DEFAULT 'NEW',
+  cost_center VARCHAR(200) NOT NULL DEFAULT '',
+  orderer VARCHAR(200) NOT NULL DEFAULT '',
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_icp_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  invoice_number VARCHAR(32) NOT NULL,
+  invoice_date DATE NOT NULL,
+  client_id INT NULL,
+  client_name VARCHAR(200) NOT NULL DEFAULT '',
+  bill_to_name VARCHAR(200) NOT NULL DEFAULT '',
+  bill_to_address TEXT NULL,
+  bill_to_hrb VARCHAR(120) NOT NULL DEFAULT '',
+  bill_to_vat VARCHAR(120) NOT NULL DEFAULT '',
+  supplier_number VARCHAR(120) NOT NULL DEFAULT 'NEW',
+  cost_center VARCHAR(200) NOT NULL DEFAULT '',
+  orderer VARCHAR(200) NOT NULL DEFAULT '',
+  company_name VARCHAR(200) NOT NULL DEFAULT '',
+  company_bic VARCHAR(80) NOT NULL DEFAULT '',
+  company_iban VARCHAR(80) NOT NULL DEFAULT '',
+  company_phone VARCHAR(80) NOT NULL DEFAULT '',
+  company_address TEXT NULL,
+  company_reg_no VARCHAR(80) NOT NULL DEFAULT '',
+  vat_note VARCHAR(255) NOT NULL DEFAULT 'Not VAT registered – no VAT charged.',
+  currency CHAR(3) NOT NULL DEFAULT 'EUR',
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_invoice_number (invoice_number),
+  INDEX (client_id),
+  INDEX (invoice_date),
+  CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_inv_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS invoice_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  invoice_id INT NOT NULL,
+  description TEXT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  qty INT NOT NULL DEFAULT 1,
+  line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  sort_order INT NOT NULL DEFAULT 0,
+  INDEX (invoice_id, sort_order),
+  CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

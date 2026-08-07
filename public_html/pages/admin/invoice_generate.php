@@ -1,0 +1,248 @@
+<?php
+$user = require_admin();
+ensure_invoice_schema();
+
+$clients = list_order_clients();
+$clientId = (int) (get('client_id') ?: post('client_id'));
+$client = $clientId > 0 ? get_order_client($clientId) : null;
+$profile = $client ? get_invoice_client_profile($clientId) : null;
+$invoiceable = $client ? list_invoiceable_order_items($clientId) : [];
+$company = invoice_company_defaults();
+$nextNumber = next_invoice_number();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
+    try {
+        if (!$client) {
+            throw new InvalidArgumentException('Select a client sheet first.');
+        }
+        $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
+        $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
+        if (!$selectedIds) {
+            throw new InvalidArgumentException('Tick at least one completed article.');
+        }
+        $byId = [];
+        foreach ($invoiceable as $row) {
+            $byId[(int) $row['id']] = $row;
+        }
+        $picked = [];
+        foreach ($selectedIds as $id) {
+            if (isset($byId[$id])) {
+                $picked[] = $byId[$id];
+            }
+        }
+        $group = (string) post('group_same_amount') === '1';
+        $lines = build_invoice_lines_from_orders($picked, $group);
+
+        $header = [
+            'invoice_number' => (string) post('invoice_number'),
+            'invoice_date' => (string) post('invoice_date'),
+            'client_id' => $clientId,
+            'client_name' => (string) $client['name'],
+            'bill_to_name' => (string) post('bill_to_name'),
+            'bill_to_address' => (string) post('bill_to_address'),
+            'bill_to_hrb' => (string) post('bill_to_hrb'),
+            'bill_to_vat' => (string) post('bill_to_vat'),
+            'supplier_number' => (string) post('supplier_number'),
+            'cost_center' => (string) post('cost_center'),
+            'orderer' => (string) post('orderer'),
+            'company_name' => (string) post('company_name'),
+            'company_bic' => (string) post('company_bic'),
+            'company_iban' => (string) post('company_iban'),
+            'company_phone' => (string) post('company_phone'),
+            'company_address' => (string) post('company_address'),
+            'company_reg_no' => (string) post('company_reg_no'),
+            'vat_note' => (string) post('vat_note'),
+        ];
+        if (trim($header['bill_to_name']) === '') {
+            $header['bill_to_name'] = (string) $client['name'];
+        }
+
+        $id = create_invoice($header, $lines, (int) ($user['id'] ?? 0));
+        $created = get_invoice($id);
+        flash('ok', 'Invoice ' . ($created['invoice_number'] ?? '') . ' generated.');
+        redirect('index.php?page=admin_invoice_view&id=' . $id);
+    } catch (Throwable $e) {
+        flash('error', $e->getMessage());
+        redirect('index.php?page=admin_invoice_generate&client_id=' . $clientId);
+    }
+}
+
+$billName = (string) ($profile['bill_to_name'] ?? ($client['name'] ?? ''));
+$billAddress = (string) ($profile['bill_to_address'] ?? '');
+$billHrb = (string) ($profile['bill_to_hrb'] ?? '');
+$billVat = (string) ($profile['bill_to_vat'] ?? '');
+$supplier = (string) ($profile['supplier_number'] ?? 'NEW');
+$costCenter = (string) ($profile['cost_center'] ?? '');
+$orderer = (string) ($profile['orderer'] ?? '');
+
+render_header('Generate invoice', 'admin');
+?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Invoices', 'href' => 'index.php?page=admin_invoices'],
+    ['label' => 'Generate'],
+]); ?>
+
+<div class="topbar">
+  <div>
+    <h1>Generate invoice</h1>
+    <p class="muted">Pick a client, tick completed articles (LIVE URL), fill bill-to details — layout matches your sample.</p>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
+  </div>
+</div>
+
+<form method="get" class="card invoice-pick-client" action="index.php">
+  <input type="hidden" name="page" value="admin_invoice_generate">
+  <label for="client_id">Client sheet</label>
+  <div class="invoice-pick-row">
+    <select id="client_id" name="client_id" required onchange="this.form.submit()">
+      <option value="">Select client…</option>
+      <?php foreach ($clients as $c): ?>
+        <option value="<?= (int) $c['id'] ?>" <?= $clientId === (int) $c['id'] ? 'selected' : '' ?>>
+          <?= h($c['name']) ?> (<?= (int) $c['completed_count'] ?> completed)
+        </option>
+      <?php endforeach; ?>
+    </select>
+    <noscript><button class="btn secondary" type="submit">Load</button></noscript>
+  </div>
+  <?php if (!$clients): ?>
+    <p class="help">No client sheets yet — create one under <a href="index.php?page=admin_orders">Order management</a> first.</p>
+  <?php endif; ?>
+</form>
+
+<?php if ($client): ?>
+<form method="post" class="invoice-generate-form">
+  <input type="hidden" name="action" value="generate">
+  <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
+
+  <div class="orders-layout">
+    <section class="card">
+      <h2>Articles to invoice</h2>
+      <p class="muted" style="margin-top:0">Only rows with a LIVE URL from <strong><?= h($client['name']) ?></strong> can be invoiced.</p>
+      <?php if (!$invoiceable): ?>
+        <div class="empty-state">
+          <p>No completed articles yet. Open the sheet and fill LIVE URL on published rows.</p>
+          <a class="btn secondary" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">Open sheet</a>
+        </div>
+      <?php else: ?>
+        <label class="invoice-check-all">
+          <input type="checkbox" id="toggle-all-items" checked>
+          Select all (<?= count($invoiceable) ?>)
+        </label>
+        <ul class="invoice-item-pick">
+          <?php foreach ($invoiceable as $row): ?>
+            <li>
+              <label>
+                <input type="checkbox" name="item_ids[]" value="<?= (int) $row['id'] ?>" checked>
+                <span class="invoice-pick-main">
+                  <strong><?= h($row['site_name'] !== '' ? $row['site_name'] : 'Site') ?></strong>
+                  <span class="muted invoice-pick-url"><?= h($row['live_url']) ?></span>
+                </span>
+                <span class="invoice-pick-price"><?= h(format_euro($row['decided_price'])) ?></span>
+              </label>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+        <label class="invoice-group-opt">
+          <input type="checkbox" name="group_same_amount" value="1" checked>
+          Group lines that share the same amount (qty &gt; 1), like the sample
+        </label>
+      <?php endif; ?>
+    </section>
+
+    <section class="card">
+      <h2>Invoice details</h2>
+      <div class="form-grid">
+        <div>
+          <label for="invoice_number">Invoice No.</label>
+          <input id="invoice_number" name="invoice_number" value="<?= h($nextNumber) ?>" required>
+        </div>
+        <div>
+          <label for="invoice_date">Date</label>
+          <input id="invoice_date" name="invoice_date" type="date" value="<?= h(date('Y-m-d')) ?>" required>
+        </div>
+      </div>
+
+      <h3 class="invoice-subhead">Bill to</h3>
+      <label for="bill_to_name">Client / company name</label>
+      <input id="bill_to_name" name="bill_to_name" value="<?= h($billName) ?>" required placeholder="e.g. Autodoc SE">
+
+      <label for="bill_to_address">Address</label>
+      <textarea id="bill_to_address" name="bill_to_address" rows="2" placeholder="Street, postcode City"><?= h($billAddress) ?></textarea>
+
+      <div class="form-grid">
+        <div>
+          <label for="bill_to_hrb">Company reg / HRB</label>
+          <input id="bill_to_hrb" name="bill_to_hrb" value="<?= h($billHrb) ?>" placeholder="HRB 247677 B">
+        </div>
+        <div>
+          <label for="bill_to_vat">VAT / Ust-IdNr</label>
+          <input id="bill_to_vat" name="bill_to_vat" value="<?= h($billVat) ?>" placeholder="DE260634589">
+        </div>
+        <div>
+          <label for="supplier_number">Supplier number</label>
+          <input id="supplier_number" name="supplier_number" value="<?= h($supplier !== '' ? $supplier : 'NEW') ?>">
+        </div>
+        <div>
+          <label for="cost_center">Cost center number</label>
+          <input id="cost_center" name="cost_center" value="<?= h($costCenter) ?>" placeholder="1000600403-Linkbuilding">
+        </div>
+      </div>
+      <label for="orderer">Orderer</label>
+      <input id="orderer" name="orderer" value="<?= h($orderer) ?>" placeholder="m.walz@autodoc.eu">
+
+      <details class="invoice-company-details">
+        <summary>Bank / supplier details (Topurlz)</summary>
+        <div class="form-grid" style="margin-top:0.75rem">
+          <div>
+            <label for="company_name">Company</label>
+            <input id="company_name" name="company_name" value="<?= h($company['company_name']) ?>">
+          </div>
+          <div>
+            <label for="company_reg_no">Registration No.</label>
+            <input id="company_reg_no" name="company_reg_no" value="<?= h($company['company_reg_no']) ?>">
+          </div>
+          <div>
+            <label for="company_bic">BIC (SWIFT)</label>
+            <input id="company_bic" name="company_bic" value="<?= h($company['company_bic']) ?>">
+          </div>
+          <div>
+            <label for="company_iban">IBAN</label>
+            <input id="company_iban" name="company_iban" value="<?= h($company['company_iban']) ?>">
+          </div>
+          <div>
+            <label for="company_phone">Phone</label>
+            <input id="company_phone" name="company_phone" value="<?= h($company['company_phone']) ?>">
+          </div>
+          <div class="full">
+            <label for="company_address">Address</label>
+            <input id="company_address" name="company_address" value="<?= h($company['company_address']) ?>">
+          </div>
+          <div class="full">
+            <label for="vat_note">VAT note</label>
+            <input id="vat_note" name="vat_note" value="<?= h($company['vat_note']) ?>">
+          </div>
+        </div>
+      </details>
+
+      <p class="actions" style="margin-top:1.1rem">
+        <button class="btn large" type="submit" <?= !$invoiceable ? 'disabled' : '' ?>>Generate invoice</button>
+      </p>
+    </section>
+  </div>
+</form>
+<script>
+(function () {
+  var all = document.getElementById('toggle-all-items');
+  if (!all) return;
+  all.addEventListener('change', function () {
+    document.querySelectorAll('input[name="item_ids[]"]').forEach(function (cb) {
+      cb.checked = all.checked;
+    });
+  });
+})();
+</script>
+<?php endif; ?>
+<?php render_footer('admin'); ?>

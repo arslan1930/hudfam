@@ -123,6 +123,7 @@ render_header('Order · ' . $client['name'], 'admin');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders">All clients</a>
+    <a class="btn" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $clientId ?>">Generate invoice</a>
   </div>
 </div>
 

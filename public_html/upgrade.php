@@ -45,6 +45,10 @@ if (!file_exists(__DIR__ . '/config.php')) {
         ensure_order_schema();
         $notes[] = 'order_clients / order_items (Order management) OK';
 
+        require_once __DIR__ . '/includes/invoices.php';
+        ensure_invoice_schema();
+        $notes[] = 'invoices / invoice_items (Invoices panel) OK';
+
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('phone', $userCols, true)) {
             $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(80) NOT NULL DEFAULT '' AFTER email");
