@@ -43,7 +43,7 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Emails DATA</h3>'
-        . '<p><strong>What:</strong> Sites with emails - Admin, plus All sites with emails - Admin (Admin-only synced mirror).</p>'
+        . '<p><strong>What:</strong> Sites with emails - Admin, plus All sites with emails - Final (Admin-only synced mirror).</p>'
         . '<p><strong>How:</strong> Filled when Team pushes from Sites with emails - Team after adding emails; All stays in sync automatically.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
@@ -64,7 +64,7 @@ function render_admin_panel_guide(): string
         . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
         . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
         . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
-        . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails DATA → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Admin</strong>).</li>'
+        . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails DATA → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Final</strong>).</li>'
         . '</ol>'
         . '</div>'
         . '</section>';

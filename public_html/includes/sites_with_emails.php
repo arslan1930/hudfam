@@ -3,7 +3,7 @@
  * Sites with emails stores:
  *   team       → working copy from Extracting Results Push; team adds emails, then Push to admin
  *   admin      → Sites with emails - Admin (from Team Push)
- *   admin_all  → All sites with emails - Admin (Admin-only mirror of admin; no Team access)
+ *   admin_all  → All sites with emails - Final (Admin-only mirror of admin; no Team access)
  */
 
 function swe_normalize_scope(string $scope): string
@@ -30,7 +30,7 @@ function swe_label(string $scope): string
 {
     return match (swe_normalize_scope($scope)) {
         'admin' => 'Sites with emails - Admin',
-        'admin_all' => 'All sites with emails - Admin',
+        'admin_all' => 'All sites with emails - Final',
         default => 'Sites with emails - Team',
     };
 }
@@ -111,7 +111,7 @@ function ensure_sites_with_emails_schema(): void
 }
 
 /**
- * Upsert one Admin row into All sites with emails - Admin (by country + domain).
+ * Upsert one Admin row into All sites with emails - Final (by country + domain).
  */
 function sync_sites_with_emails_admin_row_to_all(array $row): void
 {
@@ -154,7 +154,7 @@ function sync_sites_with_emails_admin_row_to_all(array $row): void
 }
 
 /**
- * Full mirror: Sites with emails - Admin → All sites with emails - Admin.
+ * Full mirror: Sites with emails - Admin → All sites with emails - Final.
  * Also removes All rows that no longer exist in Admin (same country+domain).
  *
  * @return array{upserted:int,removed:int}
@@ -575,7 +575,7 @@ function save_site_with_emails_row(
 ): array {
     ensure_sites_with_emails_schema();
     $origScope = swe_normalize_scope($scope);
-    // All sites with emails - Admin is a mirror: edits write to Admin then sync.
+    // All sites with emails - Final is a mirror: edits write to Admin then sync.
     if ($origScope === 'admin_all') {
         if ($id !== null && $id > 0) {
             $fromAll = get_site_with_emails($id, 'admin_all');

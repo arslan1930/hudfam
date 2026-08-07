@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS sites_with_emails_admin (
   CONSTRAINT fk_swe_admin_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- All sites with emails - Admin (Admin-only mirror of sites_with_emails_admin)
+-- All sites with emails - Final (Admin-only mirror of sites_with_emails_admin)
 CREATE TABLE IF NOT EXISTS sites_with_emails_admin_all (
   id INT AUTO_INCREMENT PRIMARY KEY,
   domain VARCHAR(255) NOT NULL,

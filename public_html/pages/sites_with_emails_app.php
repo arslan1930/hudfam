@@ -229,7 +229,7 @@ if (!$inCountry) {
           <?php elseif ($isAdminAll): ?>
             Admin-only duplicate of Sites with emails - Admin (synced automatically; not linked to Team) ·
           <?php else: ?>
-            Final site + email list from Team Push. Also synced to All sites with emails - Admin ·
+            Final site + email list from Team Push. Also synced to All sites with emails - Final ·
           <?php endif; ?>
           <?= count($countryRows) ?> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?> ·
           <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> ·
@@ -470,7 +470,7 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Final archive. Search finds a <strong>site + its emails</strong> together.
   Clear an email with Backspace (autosaves) · Remove deletes the whole row.
-  Changes sync to All sites with emails - Admin.
+  Changes sync to All sites with emails - Final.
 </p>
 <?php endif; ?>
 

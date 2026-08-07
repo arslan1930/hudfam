@@ -1,7 +1,7 @@
 <?php
 /**
  * Admin · Emails DATA — panel for email archives
- * (Sites with emails - Admin + All sites with emails - Admin mirror).
+ * (Sites with emails - Admin + All sites with emails - Final mirror).
  */
 $user = require_admin();
 ensure_sites_with_emails_schema();
@@ -67,7 +67,7 @@ if ($folder === '') {
           </p>
         </a>
         <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
-          <h3>All sites with emails - Admin</h3>
+          <h3>All sites with emails - Final</h3>
           <p class="muted">
             Admin-only mirror of Sites with emails - Admin (not linked to Team) ·
             <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
@@ -94,7 +94,7 @@ if ($folder === 'sites_with_emails') {
     return;
 }
 
-// --- Folder: All sites with emails - Admin (synced mirror) ---
+// --- Folder: All sites with emails - Final (synced mirror) ---
 if ($folder === 'all_sites_with_emails') {
     $sweUser = $user;
     $swePanel = 'admin';
