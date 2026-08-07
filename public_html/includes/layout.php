@@ -17,11 +17,13 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
         'admin_extracted' => [],
+        'admin_departments' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_extracting' => ['team_extract_batch'],
+        'team_departments' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -79,6 +81,7 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
+                'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
                 'admin_extracted' => ['Extracted URLs', 'Extracted Sites · Sites with emails - Admin'],
@@ -88,15 +91,42 @@ function render_header(string $title, string $panel = ''): void
             ],
         ];
     } else {
-        $groups = [
-            'Main' => [
-                'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
-                'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
-                'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
-                'team_prospect_batches' => ['Add history', 'Your daily adds'],
-            ],
-        ];
+        $deptScoped = function_exists('user_is_department_scoped') && user_is_department_scoped($user);
+        if ($deptScoped) {
+            // Department members only see their assigned work.
+            $groups = [
+                'Main' => [
+                    'team_dashboard' => ['Dashboard', 'Your assigned tasks'],
+                    'team_departments' => ['My departments', 'Only departments you belong to'],
+                ],
+            ];
+            if (function_exists('list_departments_for_user')) {
+                $mine = list_departments_for_user((int) ($user['id'] ?? 0));
+                if ($mine) {
+                    $deptLinks = [];
+                    foreach ($mine as $d) {
+                        $slug = (string) $d['slug'];
+                        $deptLinks['team_departments&folder=' . rawurlencode($slug)] = [
+                            (string) $d['name'],
+                            'Tasks for this department',
+                        ];
+                    }
+                    // Rendered specially below — store for second group
+                    $groups['Departments'] = $deptLinks;
+                }
+            }
+        } else {
+            $groups = [
+                'Main' => [
+                    'team_dashboard' => ['Dashboard', 'Overview'],
+                    'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
+                    'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
+                    'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
+                    'team_departments' => ['My departments', 'If Admin assigns you to a department'],
+                    'team_prospect_batches' => ['Add history', 'Your daily adds'],
+                ],
+            ];
+        }
     }
 
     foreach ($groups as $groupLabel => $links) {
@@ -105,9 +135,25 @@ function render_header(string $title, string $panel = ''): void
         foreach ($links as $page => $meta) {
             $label = is_array($meta) ? (string) $meta[0] : (string) $meta;
             $hint = is_array($meta) ? (string) ($meta[1] ?? '') : '';
-            $active = nav_is_active($page, $current) ? ' active' : '';
+            // Support "page&folder=slug" keys for department shortcuts
+            $hrefPage = $page;
+            $activePage = $page;
+            if (str_contains($page, '&')) {
+                $parts = explode('&', $page, 2);
+                $activePage = $parts[0];
+                $hrefPage = $page;
+            }
+            $active = '';
+            if ($current === $activePage) {
+                if (str_contains($page, 'folder=')) {
+                    parse_str(substr($page, strpos($page, '&') + 1), $qs);
+                    $active = ((string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')) ? ' active' : '';
+                } else {
+                    $active = nav_is_active($activePage, $current) ? ' active' : '';
+                }
+            }
             $titleAttr = $hint !== '' ? ' title="' . h($hint) . '"' : '';
-            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($page) . '"' . $titleAttr . '>';
+            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $titleAttr . '>';
             echo '<span class="nav-label">' . h($label) . '</span>';
             if ($hint !== '') {
                 echo '<span class="nav-hint">' . h($hint) . '</span>';

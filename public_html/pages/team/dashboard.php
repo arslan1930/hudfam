@@ -1,6 +1,91 @@
 <?php
 $user = require_team();
 $uid = (int) $user['id'];
+ensure_departments_schema();
+
+$deptScoped = user_is_department_scoped($user);
+$myDepartments = $deptScoped ? list_departments_for_user($uid) : [];
+$myTasks = $deptScoped ? list_open_tasks_for_user($uid, 40) : [];
+
+if ($deptScoped) {
+    render_header('Dashboard', 'team');
+    ?>
+    <div class="topbar">
+      <div>
+        <h1>Your work</h1>
+        <p class="muted">
+          You are assigned to
+          <?= count($myDepartments) ?> department<?= count($myDepartments) === 1 ? '' : 's' ?>.
+          Only those tasks are shown on your login.
+        </p>
+      </div>
+      <a class="btn" href="index.php?page=team_departments">My departments</a>
+    </div>
+
+    <div class="card">
+      <h2>Open tasks</h2>
+      <?php if (!$myTasks): ?>
+        <div class="empty-state">
+          <p>No open tasks right now.</p>
+          <p class="muted">When Admin assigns work to your department, it appears here.</p>
+        </div>
+      <?php else: ?>
+        <div class="table-wrap">
+          <table class="dept-task-table">
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Task</th>
+                <th>Status</th>
+                <th>Due</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($myTasks as $t):
+                $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
+                ?>
+              <tr class="<?= $mine ? 'dept-task-mine' : '' ?>">
+                <td><?= h((string) $t['department_name']) ?></td>
+                <td>
+                  <strong><?= h((string) $t['title']) ?></strong>
+                  <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+                  <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
+                    <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
+                  <?php endif; ?>
+                </td>
+                <td><?= h(department_task_status_label((string) $t['status'])) ?></td>
+                <td class="muted"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+                <td>
+                  <a href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </div>
+
+    <?php if ($myDepartments): ?>
+    <div class="card" style="margin-top:1rem">
+      <h2>Your departments</h2>
+      <div class="folders">
+        <?php foreach ($myDepartments as $d):
+            $stats = department_stats((int) $d['id']);
+            ?>
+          <a class="folder" href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $d['slug']) ?>">
+            <h3><?= h((string) $d['name']) ?></h3>
+            <p class="muted"><?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?></p>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+    <?php
+    render_footer('team');
+    return;
+}
 
 $todayBatch = null;
 $extractCount = 0;
@@ -44,6 +129,10 @@ render_header('Dashboard', 'team');
   <a class="launch-card" href="index.php?page=team_sites_emails">
     <h2>Sites with emails - Team</h2>
     <p>Add emails after Extracting Results Push, then Push to Admin.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_departments">
+    <h2>My departments</h2>
+    <p>If Admin assigns you to a department, your tasks appear here.</p>
   </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Today’s history</h2>

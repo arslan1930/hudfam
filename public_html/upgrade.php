@@ -13,6 +13,7 @@ require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
 require __DIR__ . '/includes/sites_with_emails.php';
+require __DIR__ . '/includes/departments.php';
 
 $error = '';
 $done = false;
@@ -52,6 +53,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
         ensure_sites_with_emails_schema();
         $notes[] = 'sites_with_emails_team / sites_with_emails_admin OK';
+
+        ensure_departments_schema();
+        $notes[] = 'departments / department_members / department_tasks OK';
 
         require_once __DIR__ . '/includes/orders.php';
         ensure_order_schema();

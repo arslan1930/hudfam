@@ -1,11 +1,27 @@
 <?php
 if (current_user()) {
-    redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
+    if (is_admin()) {
+        redirect('index.php?page=admin_dashboard');
+    }
+    $u = current_user();
+    redirect(
+        user_is_department_scoped($u)
+            ? 'index.php?page=team_departments'
+            : 'index.php?page=team_dashboard'
+    );
 }
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (attempt_login(trim(post('username')), (string) post('password'))) {
-        redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
+        if (is_admin()) {
+            redirect('index.php?page=admin_dashboard');
+        }
+        $u = current_user();
+        redirect(
+            user_is_department_scoped($u)
+                ? 'index.php?page=team_departments'
+                : 'index.php?page=team_dashboard'
+        );
     }
     $error = 'Invalid username or password.';
 }

@@ -83,6 +83,11 @@ render_header('Dashboard', 'admin');
     <h2>Our database</h2>
     <p>Country folders — browse and add sites.</p>
   </a>
+  <a class="launch-card" href="index.php?page=admin_departments" data-dashboard-item
+     data-search="departments site finding extracting email communication team assign tasks office">
+    <h2>Departments</h2>
+    <p>Site Finding · Site Extracting · Email Extracting · Communication Team.</p>
+  </a>
   <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
      data-search="extracted urls extracted sites sites with emails admin countries copy edit remove push">
     <h2>Extracted URLs</h2>

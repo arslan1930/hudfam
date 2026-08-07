@@ -179,6 +179,52 @@ CREATE TABLE IF NOT EXISTS sites_with_emails_admin (
   CONSTRAINT fk_swe_admin_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Office departments (Admin assigns members + tasks)
+CREATE TABLE IF NOT EXISTS departments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(60) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_department_slug (slug),
+  UNIQUE KEY uniq_department_name (name),
+  INDEX (sort_order),
+  INDEX (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS department_members (
+  department_id INT NOT NULL,
+  user_id INT NOT NULL,
+  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  assigned_by INT NULL,
+  PRIMARY KEY (department_id, user_id),
+  INDEX (user_id),
+  CONSTRAINT fk_dm_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE,
+  CONSTRAINT fk_dm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_dm_assigned_by FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS department_tasks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  department_id INT NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  notes TEXT NULL,
+  status ENUM('open','in_progress','done') NOT NULL DEFAULT 'open',
+  assigned_to INT NULL,
+  created_by INT NULL,
+  due_date DATE NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (department_id),
+  INDEX (status),
+  INDEX (assigned_to),
+  INDEX (created_by),
+  CONSTRAINT fk_dt_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE,
+  CONSTRAINT fk_dt_assigned_to FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_dt_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Order management: one sheet per client
 CREATE TABLE IF NOT EXISTS order_clients (
   id INT AUTO_INCREMENT PRIMARY KEY,

@@ -9,6 +9,7 @@ require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
 require __DIR__ . '/includes/sites_with_emails.php';
+require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
@@ -22,7 +23,15 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $page = (string) ($_GET['page'] ?? '');
 if ($page === '' && current_user()) {
-    redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
+    $u = current_user();
+    if (is_admin()) {
+        redirect('index.php?page=admin_dashboard');
+    }
+    redirect(
+        user_is_department_scoped($u)
+            ? 'index.php?page=team_departments'
+            : 'index.php?page=team_dashboard'
+    );
 }
 if ($page === '') {
     redirect('index.php?page=login');
@@ -34,6 +43,7 @@ $routes = [
     'logout' => 'pages/logout.php',
 
     'admin_dashboard' => 'pages/admin/dashboard.php',
+    'admin_departments' => 'pages/admin/departments.php',
     'admin_prospects' => 'pages/admin/prospects.php',
     'admin_prospect_add' => 'pages/admin/prospect_add.php',
     'admin_prospect_batches' => 'pages/admin/prospect_batches.php',
@@ -48,6 +58,7 @@ $routes = [
     'admin_users' => 'pages/admin/users.php',
 
     'team_dashboard' => 'pages/team/dashboard.php',
+    'team_departments' => 'pages/team/departments.php',
     'team_prospect_check' => 'pages/team/prospect_check.php',
     'team_prospects' => 'pages/team/prospects.php',
     'team_prospect_form' => 'pages/team/prospect_form.php',
@@ -62,6 +73,24 @@ if (!isset($routes[$page])) {
     http_response_code(404);
     echo 'Page not found.';
     exit;
+}
+
+// Department members only see their assigned department work.
+$deptOnlyAllowed = [
+    'login',
+    'logout',
+    'team_dashboard',
+    'team_departments',
+];
+$cu = current_user();
+if (
+    $cu
+    && ($cu['role'] ?? '') === 'team'
+    && user_is_department_scoped($cu)
+    && !in_array($page, $deptOnlyAllowed, true)
+) {
+    flash('error', 'Your login only shows tasks for your department.');
+    redirect('index.php?page=team_departments');
 }
 
 require __DIR__ . '/' . $routes[$page];
