@@ -434,20 +434,32 @@ render_header('Order · ' . $client['name'], 'admin');
     setMoney('[data-summary-profit]', profitTotal);
   }
 
-  function rowSearchText(row) {
+  function rowSearchParts(row) {
     var parts = [];
     row.querySelectorAll('input, select, textarea, [data-profit]').forEach(function (el) {
       if (el.tagName === 'SELECT') {
         var opt = el.options[el.selectedIndex];
-        parts.push(opt ? opt.text : '');
-        parts.push(el.value || '');
+        parts.push(opt ? String(opt.text || '') : '');
       } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
         parts.push(el.value || '');
       } else {
         parts.push(el.textContent || '');
       }
     });
-    return parts.join(' ').toLowerCase();
+    return parts;
+  }
+
+  function countInText(haystack, needle) {
+    if (!needle) return 0;
+    var count = 0;
+    var pos = 0;
+    var h = String(haystack).toLowerCase();
+    var n = String(needle).toLowerCase();
+    while ((pos = h.indexOf(n, pos)) !== -1) {
+      count++;
+      pos += n.length;
+    }
+    return count;
   }
 
   function filterSheet() {
@@ -458,23 +470,37 @@ render_header('Order · ' . $client['name'], 'admin');
     var yearRows = document.querySelectorAll('.order-year-end-row');
     var empty = document.querySelector('[data-sheet-search-empty]');
     var meta = document.querySelector('[data-sheet-search-meta]');
-    var visible = 0;
+    var matchingRows = 0;
+    var times = 0;
     var total = rows.length;
 
     rows.forEach(function (row) {
-      var show = !q || rowSearchText(row).indexOf(q) !== -1;
+      var parts = rowSearchParts(row);
+      var hitCount = 0;
+      parts.forEach(function (part) {
+        hitCount += countInText(part, q);
+      });
+      var show = !q || hitCount > 0;
       row.hidden = !show;
-      if (show) visible++;
+      if (show && q) {
+        matchingRows++;
+        times += hitCount;
+      }
     });
     yearRows.forEach(function (row) {
       // Hide year-end bands while filtering so matches stay easy to scan.
       row.hidden = !!q;
     });
-    if (empty) empty.hidden = !(q && visible === 0 && total > 0);
+    if (empty) empty.hidden = !(q && matchingRows === 0 && total > 0);
     if (meta) {
       if (q) {
         meta.hidden = false;
-        meta.textContent = visible + ' of ' + total;
+        if (times === 0) {
+          meta.textContent = '0 times';
+        } else {
+          meta.textContent = times + (times === 1 ? ' time' : ' times')
+            + (matchingRows !== times ? ' · ' + matchingRows + (matchingRows === 1 ? ' row' : ' rows') : '');
+        }
       } else {
         meta.hidden = true;
         meta.textContent = '';
@@ -485,11 +511,12 @@ render_header('Order · ' . $client['name'], 'admin');
   var form = document.getElementById('order-sheet-form');
   form.addEventListener('input', function (e) {
     refresh();
-    if (e.target && e.target.id === 'sheet-search') {
-      filterSheet();
-    }
+    filterSheet();
   });
-  form.addEventListener('change', refresh);
+  form.addEventListener('change', function () {
+    refresh();
+    filterSheet();
+  });
   var search = document.getElementById('sheet-search');
   if (search) {
     search.addEventListener('search', filterSheet);
