@@ -1037,6 +1037,26 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   max-width: 16rem;
   line-height: 1.3;
 }
+.invoice-list-note-form {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.35rem;
+  max-width: 18rem;
+}
+.invoice-list-note-form input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.82rem;
+  border-radius: 8px;
+}
+.invoice-list-note-form .btn {
+  flex: 0 0 auto;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.78rem;
+}
 .invoice-note-field-label {
   display: block;
   margin-top: 0.55rem;
@@ -1066,81 +1086,6 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .invoice-manual-items th.num,
 .invoice-manual-items td.num {
   width: 6.5rem;
-}
-.invoice-doc-editable .invoice-edit-note,
-.invoice-doc-editable .invoice-edit-date,
-.invoice-doc-editable .invoice-edit-input,
-.invoice-doc-editable .invoice-edit-textarea,
-.invoice-doc-editable .invoice-edit-party-lines input,
-.invoice-doc-editable .invoice-edit-desc,
-.invoice-doc-editable .invoice-edit-amount,
-.invoice-doc-editable .invoice-edit-qty {
-  width: 100%;
-  margin: 0.2rem 0 0;
-  font: inherit;
-  border: 1px dashed #cbd5e1;
-  border-radius: 6px;
-  background: #fffef8;
-  padding: 0.35rem 0.45rem;
-  box-sizing: border-box;
-}
-.invoice-doc-editable .invoice-edit-note {
-  margin-top: 0.35rem;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 0.82rem;
-  color: #4b5563;
-}
-.invoice-doc-editable .invoice-edit-date {
-  display: block;
-  width: auto;
-  min-width: 10rem;
-  font-family: Arial, Helvetica, sans-serif;
-  font-weight: 700;
-}
-.invoice-doc-editable .invoice-edit-strong {
-  font-weight: 700;
-  font-size: 1.05rem;
-  margin-bottom: 0.35rem;
-}
-.invoice-doc-editable .invoice-edit-textarea {
-  min-height: 3rem;
-  resize: vertical;
-  margin-bottom: 0.4rem;
-}
-.invoice-doc-editable .invoice-edit-party-lines div {
-  display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
-  gap: 0.35rem;
-  align-items: center;
-  margin-bottom: 0.35rem;
-}
-.invoice-doc-editable .invoice-edit-party-lines span {
-  font-size: 0.78rem;
-  color: #6b7280;
-}
-.invoice-doc-editable .invoice-edit-vat {
-  margin-top: 0.45rem;
-  font-size: 0.85rem;
-}
-.invoice-edit-table .invoice-edit-amount,
-.invoice-edit-table .invoice-edit-qty {
-  text-align: right;
-  max-width: 6.5rem;
-  margin-left: auto;
-}
-.invoice-edit-table .invoice-edit-desc {
-  min-height: 2.6rem;
-  resize: vertical;
-}
-.invoice-edit-table .col-edit-actions {
-  width: 2.5rem;
-  text-align: center;
-}
-.invoice-edit-add-row {
-  padding: 0.55rem 1.25rem 0.15rem;
-}
-.invoice-blank-edit-form {
-  margin: 0;
 }
 .invoice-pay-badge {
   display: inline-flex;
@@ -1654,11 +1599,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   .orders-summary,
   .orders-summary-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .month-year-cell { grid-template-columns: 1fr; }
-  .invoice-doc-brandbar,
+  .invoice-doc-logohead,
   .invoice-doc-parties,
   .invoice-doc-summary { grid-template-columns: 1fr; }
   .invoice-party-from { border-right: none; border-bottom: 1px solid #dbe3ec; }
   .invoice-doc-ids { flex-direction: column; gap: 0.65rem; }
   .invoice-doc-table { table-layout: auto; }
-  .invoice-doc-logo { height: 36px; max-width: 180px; }
+  .invoice-doc-logo { height: 40px; max-width: 200px; }
 }
