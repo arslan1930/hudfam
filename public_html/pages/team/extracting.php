@@ -9,6 +9,15 @@ try {
     flash('error', 'Extracting sites tables are missing. Open upgrade.php once, then reload.');
 }
 
+$undo = get_extract_sites_undo();
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'undo_remove' && $undo) {
+    $batchId = (int) $undo['batch_id'];
+    $restored = restore_extract_batch_domains($batchId, $undo['rows']);
+    clear_extract_sites_undo();
+    flash('ok', 'Undo complete — restored ' . $restored . ' site' . ($restored === 1 ? '' : 's') . ' to the Sites list.');
+    redirect('index.php?page=team_extract_batch&id=' . $batchId);
+}
+
 render_header('Extracting sites', 'team');
 ?>
 <?php render_breadcrumbs([
@@ -25,6 +34,21 @@ render_header('Extracting sites', 'team');
   </div>
 </div>
 <?= guide_extracting() ?>
+
+<?php if ($undo): ?>
+<div class="card" style="margin-bottom:1rem">
+  <form method="post" class="sites-list-undo">
+    <input type="hidden" name="action" value="undo_remove">
+    <p class="help" style="margin:0">
+      Last remove can be undone (<?= count($undo['rows']) ?> site<?= count($undo['rows']) === 1 ? '' : 's' ?>).
+      <button class="btn secondary small" type="submit">Undo remove</button>
+      <?php if (!empty($undo['batch_id'])): ?>
+        <a class="btn small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $undo['batch_id'] ?>">Open that batch</a>
+      <?php endif; ?>
+    </p>
+  </form>
+</div>
+<?php endif; ?>
 
 <?php if ($batches): ?>
 <div class="card">

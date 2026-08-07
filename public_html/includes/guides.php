@@ -128,6 +128,7 @@ function guide_extracting(): string
         [
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country.',
+            'Select sites → Open in browser (Chrome if default) to check them → Remove from the list (Undo available).',
             'Use Extracting Results to store output for the same country batch.',
         ]
     );
