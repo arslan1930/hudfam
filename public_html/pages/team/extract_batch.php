@@ -125,60 +125,42 @@ render_header('Extracting · ' . $country, 'team');
 <div class="grid two-box">
   <div class="card box-panel">
     <h2>① Sites list</h2>
-    <p class="help">Click a site name to select. Selection stays after refresh.</p>
+    <p class="help">
+      Sites waiting to extract for <strong><?= h($country) ?></strong>.
+      Select text in the box to copy, or use <strong>Copy all</strong>.
+    </p>
 
-    <div
-      class="sites-list-shell"
-      id="sites_list_shell"
-      data-batch-id="<?= (int) $id ?>"
-      data-post-url="index.php?page=team_extract_batch&amp;id=<?= (int) $id ?>"
-      tabindex="0"
-      role="listbox"
-      aria-label="Sites list"
-      aria-multiselectable="true"
-    >
-      <div class="sites-list-toolbar">
-        <span class="muted" id="sites_selected_label">0 selected</span>
-        <div class="sites-list-actions">
-          <button type="button" class="btn small" id="sites_open_btn" disabled title="Open selected sites">Open URLs</button>
-          <button type="button" class="btn secondary small" id="sites_undo_btn" disabled>Undo</button>
-          <button type="button" class="btn secondary small" id="sites_redo_btn" disabled>Redo</button>
+    <?php if ($domains): ?>
+      <div class="domains-paste" id="sites_list_shell" data-batch-id="<?= (int) $id ?>">
+        <div class="domains-paste-head">
+          <label for="sites_list_text">Sites (root domains)</label>
+          <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
         </div>
-      </div>
-
-      <div class="sites-list-box" id="sites_list_box">
-        <?php if ($domains): ?>
-          <?php foreach ($siteRows as $row): ?>
-            <div
-              class="sites-list-row"
-              role="option"
-              aria-selected="false"
-              data-domain="<?= h($row['domain']) ?>"
-              data-prospect-site-id="<?= $row['prospect_site_id'] !== null ? (int) $row['prospect_site_id'] : '' ?>"
-              data-added-by="<?= $row['added_by'] !== null ? (int) $row['added_by'] : '' ?>"
-            ><?= h($row['domain']) ?></div>
-          <?php endforeach; ?>
-        <?php else: ?>
-          <div class="sites-list-empty" id="sites_list_empty">Waiting for sites from the team mate</div>
-        <?php endif; ?>
-      </div>
-
-      <div class="sites-open-panel" id="sites_open_panel" hidden>
-        <div class="sites-open-panel-head">
-          <strong>Open these sites</strong>
-          <button type="button" class="btn secondary small" id="sites_open_panel_close">Hide</button>
-        </div>
-        <p class="help" style="margin:0.35rem 0 0.5rem">
-          If tabs did not open, click a name below (or allow pop-ups).
+        <textarea
+          id="sites_list_text"
+          class="inventory-box"
+          rows="16"
+          readonly
+          spellcheck="false"
+          aria-label="Sites list"
+        ><?= h(implode("\n", $domains)) ?></textarea>
+        <p class="help" style="margin-top:0.5rem">
+          Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>.
+          Hyphens and multi-part TLDs are OK.
+          One per line (or commas). Use <strong>Clean errors</strong> to correct
+          <code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).
         </p>
-        <div class="sites-open-panel-list" id="sites_open_panel_list"></div>
+        <p class="muted" style="margin:0.35rem 0 0" id="sites_footer_count">
+          <?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?>
+        </p>
+        <p class="help sites-list-status" id="sites_list_status" hidden></p>
       </div>
-
-      <p class="muted" style="margin:0.5rem 0 0" id="sites_footer_count">
-        <?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?>
-      </p>
-      <p class="help sites-list-status" id="sites_list_status" hidden></p>
-    </div>
+    <?php else: ?>
+      <div class="empty-state">
+        <p>Waiting for sites from the team mate</p>
+        <p class="muted">New unique sites from Filter &amp; add appear here as a text list you can copy.</p>
+      </div>
+    <?php endif; ?>
   </div>
 
   <div class="card box-panel">
