@@ -651,6 +651,42 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .extracted-sites-table td form { margin: 0; }
 .extracted-country-table td { vertical-align: middle; }
+.extracted-country-table th.num,
+.extracted-country-table td.num {
+  text-align: right;
+  width: 5.5rem;
+  white-space: nowrap;
+}
+.extracted-country-link {
+  font-weight: 650;
+  color: inherit;
+  text-decoration: none;
+}
+.extracted-country-link:hover { text-decoration: underline; }
+.extracted-country-count {
+  display: inline-block;
+  min-width: 2rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--bg-2, #eef2ff);
+  color: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-decoration: none;
+}
+.extracted-country-count:hover { filter: brightness(0.97); }
+.extracted-country-search input[type="search"] {
+  width: 9.5rem;
+  max-width: 38vw;
+}
+.extracted-country-table tr.sheet-search-hit td {
+  background: #eff6ff !important;
+}
+.extracted-country-table tr.sheet-search-hit {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
 .extracted-tools-form .inventory-box { min-height: 160px; }
 #extracted_copy_status.is-error { color: var(--bad); }
 .btn.danger {

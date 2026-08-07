@@ -135,7 +135,7 @@ if ($folder === '') {
           <h3>Extracted Sites</h3>
           <p class="muted">
             <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
-            · <?= (int) $extractedTotal ?> site<?= (int) $extractedTotal === 1 ? '' : 's' ?>
+            · <?= (int) $extractedTotal ?> new URL<?= (int) $extractedTotal === 1 ? '' : 's' ?>
           </p>
         </a>
         <a class="folder" href="index.php?page=admin_extracted&amp;folder=sites_with_emails">
@@ -185,6 +185,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     foreach ($countryRows as $r) {
         $grandTotal += (int) $r['total'];
     }
+    $countryCount = count($countryRows);
 
     render_header('Extracted Sites', 'admin');
     ?>
@@ -196,7 +197,11 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     <div class="topbar">
       <div>
         <h1>Extracted Sites</h1>
-        <p class="muted">Countries with extracted sites. <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> total.</p>
+        <p class="muted">
+          New URLs from Team Push ·
+          <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?> ·
+          <?= (int) $grandTotal ?> URL<?= (int) $grandTotal === 1 ? '' : 's' ?>
+        </p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
@@ -205,33 +210,152 @@ if ($folder === 'extracted_sites' && !$inCountry) {
 
     <div class="card">
       <?php if ($countryRows): ?>
-      <table class="extracted-country-table">
+      <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+        <h2 style="margin:0">By country</h2>
+        <label class="sheet-search extracted-country-search" for="extracted-country-search">
+          <span class="visually-hidden">Search countries</span>
+          <input id="extracted-country-search" type="search" placeholder="Search…"
+                 autocomplete="off" spellcheck="false" data-no-draft
+                 title="Type to filter · Enter = next match · Shift+Enter = previous">
+          <span class="sheet-search-meta muted" data-extracted-country-search-meta hidden></span>
+        </label>
+      </div>
+      <table class="extracted-country-table" id="extracted-country-table">
         <thead>
           <tr>
             <th>Country</th>
-            <th>Sites</th>
-            <th>Language</th>
-            <th>Last pushed</th>
-            <th></th>
+            <th class="num">URLs</th>
           </tr>
         </thead>
         <tbody>
-        <?php foreach ($countryRows as $r): ?>
-          <tr>
-            <td><strong><?= h($r['country']) ?></strong></td>
-            <td><span class="badge agreed"><?= (int) $r['total'] ?></span></td>
-            <td><?= h($r['language'] !== '' ? $r['language'] : '—') ?></td>
-            <td class="muted"><?= h($r['last_pushed_at'] ? substr($r['last_pushed_at'], 0, 16) : '—') ?></td>
+        <?php foreach ($countryRows as $r):
+            $cName = (string) $r['country'];
+            $cTotal = (int) $r['total'];
+            $searchHay = mb_strtolower(trim(
+                $cName . ' '
+                . (string) ($r['language'] ?? '') . ' '
+                . (string) ($r['region'] ?? '') . ' '
+                . $cTotal . ' urls'
+            ));
+            ?>
+          <tr data-extracted-country-row data-search="<?= h($searchHay) ?>">
             <td>
-              <a class="btn small" href="<?= h($sitesListUrl) ?>&amp;country=<?= urlencode($r['country']) ?>">Open</a>
+              <a class="extracted-country-link" href="<?= h($sitesListUrl) ?>&amp;country=<?= urlencode($cName) ?>">
+                <?= h($cName) ?>
+              </a>
+            </td>
+            <td class="num">
+              <a class="extracted-country-count" href="<?= h($sitesListUrl) ?>&amp;country=<?= urlencode($cName) ?>"
+                 title="Open <?= h($cName) ?>">
+                <?= $cTotal ?>
+              </a>
             </td>
           </tr>
         <?php endforeach; ?>
+          <tr class="sheet-search-empty" data-extracted-country-search-empty hidden>
+            <td colspan="2" class="muted">No countries match your search.</td>
+          </tr>
         </tbody>
       </table>
+      <script>
+      (function () {
+        var input = document.getElementById('extracted-country-search');
+        if (!input) return;
+        var matchRows = [];
+        var matchIndex = -1;
+        var meta = document.querySelector('[data-extracted-country-search-meta]');
+        var empty = document.querySelector('[data-extracted-country-search-empty]');
+
+        function clearHits() {
+          document.querySelectorAll('#extracted-country-table .sheet-search-hit').forEach(function (el) {
+            el.classList.remove('sheet-search-hit');
+          });
+        }
+
+        function filterCountries() {
+          var q = String(input.value || '').trim().toLowerCase();
+          var rows = document.querySelectorAll('[data-extracted-country-row]');
+          var shown = 0;
+          matchRows = [];
+          clearHits();
+          rows.forEach(function (row) {
+            var hay = String(row.getAttribute('data-search') || '');
+            var hit = !q || hay.indexOf(q) !== -1;
+            row.hidden = !hit;
+            if (hit) {
+              shown++;
+              if (q) matchRows.push(row);
+            }
+          });
+          if (empty) empty.hidden = !(q && shown === 0);
+          if (matchIndex >= matchRows.length) matchIndex = matchRows.length ? 0 : -1;
+          if (meta) {
+            if (q) {
+              meta.hidden = false;
+              if (!matchRows.length) {
+                meta.textContent = '0 · Enter = next';
+              } else if (matchIndex >= 0) {
+                meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+              } else {
+                meta.textContent = matchRows.length + (matchRows.length === 1 ? ' match' : ' matches')
+                  + ' · Enter = next';
+              }
+            } else {
+              meta.hidden = true;
+              meta.textContent = '';
+              matchIndex = -1;
+            }
+          }
+        }
+
+        function jumpToMatch(dir) {
+          var q = String(input.value || '').trim();
+          if (!q) return;
+          filterCountries();
+          if (!matchRows.length) return;
+          if (matchIndex < 0) {
+            matchIndex = dir > 0 ? 0 : matchRows.length - 1;
+          } else {
+            matchIndex = (matchIndex + dir + matchRows.length) % matchRows.length;
+          }
+          var row = matchRows[matchIndex];
+          if (!row) return;
+          clearHits();
+          row.hidden = false;
+          row.classList.add('sheet-search-hit');
+          row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          if (meta) {
+            meta.hidden = false;
+            meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+          }
+          window.setTimeout(function () {
+            try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
+            try {
+              var len = String(input.value || '').length;
+              input.setSelectionRange(len, len);
+            } catch (err2) {}
+          }, 0);
+        }
+
+        input.addEventListener('input', function () {
+          matchIndex = -1;
+          filterCountries();
+        });
+        input.addEventListener('search', function () {
+          matchIndex = -1;
+          filterCountries();
+        });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            jumpToMatch(e.shiftKey ? -1 : 1);
+          }
+        });
+      })();
+      </script>
       <?php else: ?>
       <div class="empty-state">
-        <p>No extracted sites yet.</p>
+        <p>No new URLs yet.</p>
         <p class="muted">They appear only when Team clicks Push in Extracting Results.</p>
       </div>
       <?php endif; ?>
