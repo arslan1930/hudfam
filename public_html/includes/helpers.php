@@ -213,7 +213,7 @@ function render_glossary(string $panel): void
     if ($panel === 'admin') {
         echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
         echo '<div><dt>Extracted URLs</dt><dd>Extracted Sites from Team Push.</dd></div>';
-        echo '<div><dt>Emails DATA</dt><dd>Sites with emails - Admin (final site + email archive).</dd></div>';
+        echo '<div><dt>Emails DATA</dt><dd>Sites with emails - Admin + All sites with emails - Admin (synced Admin-only mirror).</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';

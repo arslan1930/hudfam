@@ -179,6 +179,28 @@ CREATE TABLE IF NOT EXISTS sites_with_emails_admin (
   CONSTRAINT fk_swe_admin_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- All sites with emails - Admin: Admin-only mirror synced from sites_with_emails_admin
+CREATE TABLE IF NOT EXISTS sites_with_emails_admin_all (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL,
+  country VARCHAR(100) NOT NULL,
+  language VARCHAR(50) NOT NULL DEFAULT '',
+  region VARCHAR(40) NOT NULL DEFAULT '',
+  email1 VARCHAR(255) NOT NULL DEFAULT '',
+  email2 VARCHAR(255) NOT NULL DEFAULT '',
+  email3 VARCHAR(255) NOT NULL DEFAULT '',
+  email4 VARCHAR(255) NOT NULL DEFAULT '',
+  extract_batch_id INT NULL,
+  pushed_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_swe_admin_all_country_domain (country, domain),
+  INDEX (country),
+  INDEX (domain),
+  INDEX (pushed_by),
+  CONSTRAINT fk_swe_admin_all_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Office departments (Admin assigns members + tasks)
 CREATE TABLE IF NOT EXISTS departments (
   id INT AUTO_INCREMENT PRIMARY KEY,

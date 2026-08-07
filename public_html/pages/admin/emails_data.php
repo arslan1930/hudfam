@@ -1,6 +1,7 @@
 <?php
 /**
- * Admin · Emails DATA — panel for email archives (Sites with emails - Admin).
+ * Admin · Emails DATA — panel for email archives
+ * (Sites with emails - Admin + All sites with emails - Admin mirror).
  */
 $user = require_admin();
 ensure_sites_with_emails_schema();
@@ -8,7 +9,7 @@ seed_countries_if_empty(db());
 
 $base = 'index.php?page=admin_emails_data';
 $folder = (string) get('folder');
-$allowedFolders = ['sites_with_emails'];
+$allowedFolders = ['sites_with_emails', 'all_sites_with_emails'];
 if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect($base);
@@ -24,6 +25,22 @@ if ($folder === '') {
         $sweWithEmails += (int) $r['with_emails'];
     }
     $sweCountryCount = count($sweCountryRows);
+
+    // Keep mirror in sync when opening the hub (covers older data / missed hooks).
+    if ($sweTotal > 0) {
+        $allCount = count_sites_with_emails('admin_all');
+        if ($allCount !== $sweTotal) {
+            sync_sites_with_emails_admin_to_all();
+        }
+    }
+    $allCountryRows = list_sites_with_emails_country_rows('admin_all');
+    $allTotal = 0;
+    $allWithEmails = 0;
+    foreach ($allCountryRows as $r) {
+        $allTotal += (int) $r['total'];
+        $allWithEmails += (int) $r['with_emails'];
+    }
+    $allCountryCount = count($allCountryRows);
 
     render_header('Emails DATA', 'admin');
     render_breadcrumbs([
@@ -49,6 +66,15 @@ if ($folder === '') {
             · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
           </p>
         </a>
+        <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
+          <h3>All sites with emails - Admin</h3>
+          <p class="muted">
+            Admin-only mirror of Sites with emails - Admin (not linked to Team) ·
+            <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
+            · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
+            · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
+          </p>
+        </a>
       </div>
     </div>
     <?php
@@ -60,7 +86,20 @@ if ($folder === '') {
 if ($folder === 'sites_with_emails') {
     $sweUser = $user;
     $swePanel = 'admin';
+    $sweScope = 'admin';
     $sweBase = $base . '&folder=sites_with_emails';
+    $sweAdminHub = $base;
+    $sweAdminHubLabel = 'Emails DATA';
+    require __DIR__ . '/../sites_with_emails_app.php';
+    return;
+}
+
+// --- Folder: All sites with emails - Admin (synced mirror) ---
+if ($folder === 'all_sites_with_emails') {
+    $sweUser = $user;
+    $swePanel = 'admin';
+    $sweScope = 'admin_all';
+    $sweBase = $base . '&folder=all_sites_with_emails';
     $sweAdminHub = $base;
     $sweAdminHubLabel = 'Emails DATA';
     require __DIR__ . '/../sites_with_emails_app.php';

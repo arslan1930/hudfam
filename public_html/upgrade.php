@@ -59,7 +59,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
         $notes[] = 'extracted_sites (Extracted URLs) OK';
 
         ensure_sites_with_emails_schema();
-        $notes[] = 'sites_with_emails_team / sites_with_emails_admin OK';
+        $notes[] = 'sites_with_emails_team / sites_with_emails_admin / sites_with_emails_admin_all OK';
 
         ensure_departments_schema();
         $notes[] = 'departments / department_members / department_tasks OK';

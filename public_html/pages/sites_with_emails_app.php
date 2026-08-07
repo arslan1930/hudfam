@@ -5,24 +5,36 @@
  * Expects:
  *   $sweUser (array), $swePanel ('admin'|'team'),
  *   $sweBase (page URL without country)
+ * Optional:
+ *   $sweScope ('team'|'admin'|'admin_all') — overrides panel default
  *
- * Team  → working copy from Extracting Results; Push final rows to Admin
- * Admin → final archive (no push out)
+ * Team       → working copy from Extracting Results; Push final rows to Admin
+ * Admin      → final archive (no push out)
+ * Admin all  → Admin-only mirror synced from Sites with emails - Admin
  */
 ensure_sites_with_emails_schema();
 
 $swePanel = $swePanel ?? 'admin';
 $sweUser = $sweUser ?? require_admin();
-$sweScope = ($swePanel === 'admin') ? 'admin' : 'team';
+if (!isset($sweScope) || $sweScope === '') {
+    $sweScope = ($swePanel === 'admin') ? 'admin' : 'team';
+}
+$sweScope = swe_normalize_scope((string) $sweScope);
 $sweLabel = swe_label($sweScope);
+$sweFolder = match ($sweScope) {
+    'admin_all' => 'all_sites_with_emails',
+    'admin' => 'sites_with_emails',
+    default => null,
+};
 $sweBase = $sweBase ?? (
-    $sweScope === 'admin'
-        ? 'index.php?page=admin_emails_data&folder=sites_with_emails'
-        : 'index.php?page=team_sites_emails'
+    $sweScope === 'team'
+        ? 'index.php?page=team_sites_emails'
+        : 'index.php?page=admin_emails_data&folder=' . $sweFolder
 );
 $sweAdminHub = $sweAdminHub ?? 'index.php?page=admin_emails_data';
 $sweAdminHubLabel = $sweAdminHubLabel ?? 'Emails DATA';
-$isAdmin = ($sweScope === 'admin');
+$isAdmin = ($swePanel === 'admin' || $sweScope === 'admin' || $sweScope === 'admin_all');
+$isAdminAll = ($sweScope === 'admin_all');
 $isTeam = ($sweScope === 'team');
 
 $sheet = (string) get('country');
@@ -214,8 +226,10 @@ if (!$inCountry) {
           <?php if ($isTeam): ?>
             Site names arrive from Extracting Results → Push.
             Add emails, then Push again to Sites with emails - Admin ·
+          <?php elseif ($isAdminAll): ?>
+            Admin-only duplicate of Sites with emails - Admin (synced automatically; not linked to Team) ·
           <?php else: ?>
-            Final site + email list from Team Push. Data stays here ·
+            Final site + email list from Team Push. Also synced to All sites with emails - Admin ·
           <?php endif; ?>
           <?= count($countryRows) ?> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?> ·
           <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> ·
@@ -295,6 +309,9 @@ if (!$inCountry) {
         <?php if ($isTeam): ?>
           <p>No sites yet.</p>
           <p class="muted">They appear here when you click Push in Extracting Results.</p>
+        <?php elseif ($isAdminAll): ?>
+          <p>No mirrored sites yet.</p>
+          <p class="muted">They sync here whenever Sites with emails - Admin receives data.</p>
         <?php else: ?>
           <p>No final sites yet.</p>
           <p class="muted">They appear when Team pushes from Sites with emails - Team (after adding emails).</p>
@@ -375,7 +392,7 @@ $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
 $qs = http_build_query(array_filter([
     'page' => $isAdmin ? 'admin_emails_data' : 'team_sites_emails',
-    'folder' => $isAdmin ? 'sites_with_emails' : null,
+    'folder' => $sweFolder,
     'country' => $countryName,
     'q' => $q,
 ], static fn ($v) => $v !== '' && $v !== null));
@@ -444,10 +461,16 @@ render_breadcrumbs($crumbs);
     Add emails below, then <strong>Push to Admin</strong> for the final list in Sites with emails - Admin.
   </p>
   <?php endif; ?>
+<?php elseif ($isAdminAll): ?>
+<p class="help">
+  Synced Admin mirror. Search finds a <strong>site + its emails</strong> together.
+  Edits stay in sync with Sites with emails - Admin · Clear an email with Backspace (autosaves) · Remove deletes the whole row.
+</p>
 <?php else: ?>
 <p class="help">
   Final archive. Search finds a <strong>site + its emails</strong> together.
   Clear an email with Backspace (autosaves) · Remove deletes the whole row.
+  Changes sync to All sites with emails - Admin.
 </p>
 <?php endif; ?>
 
@@ -549,6 +572,9 @@ render_breadcrumbs($crumbs);
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
       <p class="muted">Push from Extracting Results to fill site names here.</p>
+    <?php elseif ($isAdminAll): ?>
+      <p>No mirrored sites in this country yet.</p>
+      <p class="muted">They sync here from Sites with emails - Admin.</p>
     <?php else: ?>
       <p>No final sites in this country yet.</p>
       <p class="muted">Waiting for Team to Push from Sites with emails - Team.</p>
