@@ -274,11 +274,7 @@ if (!$inCountry && !$emptyCountry) {
               <?php foreach ($superResults as $hit):
                   $hitCountry = trim((string) ($hit['country'] ?? ''));
                   $countryHref = $hitCountry !== '' ? $hitCountry : '_none';
-                  $countryLabel = $hitCountry !== ''
-                      ? (function_exists('prospect_folder_display_label')
-                          ? prospect_folder_display_label($hitCountry, (string) ($hit['region'] ?? ''))
-                          : $hitCountry)
-                      : 'No country';
+                  $countryLabel = $hitCountry !== '' ? $hitCountry : 'No country';
                   $openUrl = 'index.php?page=admin_prospects&country=' . rawurlencode($countryHref)
                       . '&q=' . rawurlencode((string) $hit['domain']);
                   ?>
@@ -286,9 +282,6 @@ if (!$inCountry && !$emptyCountry) {
                   <td><strong><?= h((string) $hit['domain']) ?></strong></td>
                   <td>
                     <?= h($countryLabel) ?>
-                    <?php if ($countryLabel !== $hitCountry && $hitCountry !== ''): ?>
-                      <span class="muted"> · <?= h($hitCountry) ?></span>
-                    <?php endif; ?>
                   </td>
                   <td><?= h((string) ($hit['language'] ?: '—')) ?></td>
                   <td class="muted"><?= h(substr((string) ($hit['created_at'] ?? ''), 0, 10)) ?></td>
@@ -355,15 +348,15 @@ if (!$inCountry && !$emptyCountry) {
         <h2 style="margin:0">Markets</h2>
         <label class="sheet-search" for="prospect-country-search">
           <span class="visually-hidden">Search countries</span>
-          <input id="prospect-country-search" type="search" placeholder="Search country or .de…"
+          <input id="prospect-country-search" type="search" placeholder="Search country name…"
                  autocomplete="off" spellcheck="false" data-no-draft
-                 title="Type to filter · Enter = next match">
+                 title="Type a country name · Enter = next match">
           <span class="sheet-search-meta muted" data-prospect-country-search-meta hidden></span>
         </label>
       </div>
       <p class="help" style="margin:0.45rem 0 0">
         Europe first · English markets second. Click a market to expand/collapse.
-        Europe &amp; North America show TLDs (.de, .us). Sorted by no. of sites.
+        Folders show country name and site count. Sorted by no. of sites.
       </p>
     </div>
 
@@ -396,26 +389,25 @@ if (!$inCountry && !$emptyCountry) {
           <div class="folders" style="margin-top:0.7rem">
             <?php foreach ($list as $f):
                 $href = $f['country'] !== '' ? $f['country'] : '_none';
-                $label = (string) ($f['display_label'] ?? ($f['country'] !== '' ? $f['country'] : 'No country'));
+                $label = (string) ($f['country'] !== '' ? $f['country'] : 'No country');
+                $siteCount = (int) $f['total'];
                 $searchHay = mb_strtolower(trim(
                     $label . ' '
-                    . (string) ($f['country'] ?? '') . ' '
-                    . (string) ($f['code'] ?? '') . ' '
                     . (string) ($f['language'] ?? '') . ' '
                     . (string) $regionLabel . ' '
-                    . (int) $f['total'] . ' sites'
+                    . $siteCount . ' sites'
                 ));
                 ?>
               <a class="folder"
                  href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>"
                  data-prospect-country
                  data-search="<?= h($searchHay) ?>"
-                 title="<?= h((string) ($f['country'] !== '' ? $f['country'] : 'No country')) ?>">
+                 title="<?= h($label) ?>">
                 <h3>
-                  <span class="prospect-folder-count"><?= (int) $f['total'] ?></span>
                   <span class="prospect-folder-label"><?= h($label) ?></span>
                 </h3>
                 <p class="muted">
+                  <span class="prospect-folder-count"><?= $siteCount ?></span>
                   no. of sites<?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?>
                 </p>
               </a>

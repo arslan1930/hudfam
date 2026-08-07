@@ -365,7 +365,7 @@ render_breadcrumbs([
       <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
         <label class="sheet-search" for="camp-country-search">
           <span class="visually-hidden">Search countries</span>
-          <input id="camp-country-search" type="search" placeholder="Search countries…"
+          <input id="camp-country-search" type="search" placeholder="Search country name…"
                  autocomplete="off" spellcheck="false" data-no-draft>
         </label>
       </div>

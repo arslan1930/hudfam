@@ -465,6 +465,7 @@
     function selectItem(it) {
       if (!it) return;
       hidden.value = it.value;
+      // Show "count · Country name" when available (never TLD-only labels).
       input.value = it.label || it.value;
       closeList();
       if (fillLangSel) {

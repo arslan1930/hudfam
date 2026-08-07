@@ -258,9 +258,9 @@ if ($folder === 'extracted_sites' && !$inCountry) {
         <h2 style="margin:0">By country</h2>
         <label class="sheet-search extracted-country-search" for="extracted-country-search">
           <span class="visually-hidden">Search countries</span>
-          <input id="extracted-country-search" type="search" placeholder="Search…"
+          <input id="extracted-country-search" type="search" placeholder="Search country name…"
                  autocomplete="off" spellcheck="false" data-no-draft
-                 title="Type to filter · Enter = next match · Shift+Enter = previous">
+                 title="Type a country name · Enter = next match · Shift+Enter = previous">
           <span class="sheet-search-meta muted" data-extracted-country-search-meta hidden></span>
         </label>
       </div>

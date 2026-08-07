@@ -278,9 +278,9 @@ if (!$inCountry) {
         <h2 style="margin:0"><?= label_with_info('By country', 'Open a country to see its sites and emails. Counts show how many sites have at least one email.') ?></h2>
         <label class="sheet-search" for="swe-country-search">
           <span class="visually-hidden">Search countries</span>
-          <input id="swe-country-search" type="search" placeholder="Search…"
+          <input id="swe-country-search" type="search" placeholder="Search country name…"
                  autocomplete="off" spellcheck="false" data-no-draft
-                 title="Type to filter · Enter = next match">
+                 title="Type a country name · Enter = next match">
           <span class="sheet-search-meta muted" data-swe-country-search-meta hidden></span>
         </label>
       </div>

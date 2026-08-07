@@ -12,30 +12,13 @@ function regions(): array
 }
 
 /**
- * Folder label for Our database: Europe / North America use TLDs (.de, .us).
+ * Folder / search label for a country — always the country name (never TLD like .de).
  */
 function prospect_folder_display_label(string $countryName, string $region = '', string $code = ''): string
 {
+    unset($region, $code); // kept in signature for callers; display is name-only
     $countryName = trim($countryName);
-    if ($countryName === '') {
-        return 'No country';
-    }
-    $code = strtoupper(trim($code));
-    if ($code === '' && function_exists('list_countries')) {
-        foreach (list_countries(null, true) as $c) {
-            if (strcasecmp(trim((string) ($c['name'] ?? '')), $countryName) === 0) {
-                $code = strtoupper(trim((string) ($c['code'] ?? '')));
-                if ($region === '') {
-                    $region = (string) ($c['region'] ?? '');
-                }
-                break;
-            }
-        }
-    }
-    if (in_array($region, ['europe', 'north_america'], true) && $code !== '') {
-        return '.' . strtolower($code);
-    }
-    return $countryName;
+    return $countryName !== '' ? $countryName : 'No country';
 }
 
 function seed_countries_if_empty(PDO $pdo): void

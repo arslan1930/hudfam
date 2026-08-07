@@ -98,7 +98,7 @@ function render_country_typeahead(string $value = '', array $opts = []): string
         $n = (int) ($counts[$name] ?? 0);
         $items[] = [
             'value' => $name,
-            // no. of sites in front — Europe/NA show TLD (.de), others show country name
+            // Site count in front, then country name (never TLD)
             'label' => $n . ' · ' . $display,
             'lang' => (string) ($c['default_language'] ?? ''),
             'region' => $region,
@@ -121,7 +121,8 @@ function render_country_typeahead(string $value = '', array $opts = []): string
         array_merge([
             'id' => 'country',
             'required' => true,
-            'help' => 'Type to search (shows no. of sites). Europe/North America use .de / .us style labels.',
+            'placeholder' => (string) ($opts['placeholder'] ?? 'Search country name…'),
+            'help' => (string) ($opts['help'] ?? 'Type a country name. Suggestions show site count · country name.'),
             'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]"',
         ], $opts)
     );
