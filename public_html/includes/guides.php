@@ -34,7 +34,7 @@ function render_admin_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>1. Our database</h3>'
         . '<p><strong>What:</strong> Country folders — one URL list per country.</p>'
-        . '<p><strong>How:</strong> Open a country, paste URLs into that country’s database.</p>'
+        . '<p><strong>How:</strong> Open Our database → Add sites (or open a country and paste there).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracted URLs</h3>'
@@ -154,13 +154,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add sites — Our database only',
+        'Add sites — inside Our database',
         'Paste root domains into one country’s folder in Our database. Extracted Sites are filled only when Team clicks Push.',
-        'Choose country (type + Enter), paste root domains, Clean errors if needed, save.',
+        'In Our database: choose country, paste root domains, Clean errors if needed, save.',
         [
-            'Select the country folder (type to search, Enter to select).',
-            'Paste root domains only — use Clean errors for https/paths/subdomains.',
-            'Save into Our database. Extracted Sites come from Team Push only.',
+            'Open Our database (sidebar).',
+            'Use Add sites — select country, paste domains, Clean errors, save.',
+            'Or open a country folder and add sites there.',
         ]
     );
 }

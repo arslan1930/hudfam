@@ -61,7 +61,7 @@ render_header('Dashboard', 'admin');
              title="Type to filter · Enter = next match · Shift+Enter = previous">
       <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
     </label>
-    <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
+    <a class="btn" href="index.php?page=admin_prospects#add-sites">Our database</a>
   </div>
 </div>
 
@@ -78,15 +78,10 @@ render_header('Dashboard', 'admin');
 </div>
 
 <div class="launch-cards" id="dashboard-launch-cards">
-  <a class="launch-card" href="index.php?page=admin_prospect_add" data-dashboard-item
-     data-search="add sites paste root domains country folder our database">
-    <h2>Add sites</h2>
-    <p>Paste root domains into Our database country folders.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=admin_prospects" data-dashboard-item
-     data-search="our database country folders sites urls">
+  <a class="launch-card" href="index.php?page=admin_prospects#add-sites" data-dashboard-item
+     data-search="our database add sites paste root domains country folders urls">
     <h2>Our database</h2>
-    <p>Open country folders — one database each.</p>
+    <p>Country folders — browse and add sites.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
      data-search="extracted urls extracted sites sites with emails countries copy edit remove push">
@@ -141,7 +136,7 @@ render_header('Dashboard', 'admin');
   <?php else: ?>
     <div class="empty-state">
       <p>No sites added yet.</p>
-      <a class="btn" href="index.php?page=admin_prospect_add">Add the first sites</a>
+      <a class="btn" href="index.php?page=admin_prospects#add-sites">Add the first sites</a>
     </div>
   <?php endif; ?>
 </div>

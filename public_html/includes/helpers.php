@@ -211,11 +211,11 @@ function render_glossary(string $panel): void
     echo '<h2 class="glossary-title">How this works</h2>';
     echo '<dl class="glossary-list">';
     if ($panel === 'admin') {
-        echo '<div><dt>Our database</dt><dd>Country folders of unique website domains (Admin only).</dd></div>';
+        echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
         echo '<div><dt>Extracted URLs</dt><dd>Extracted Sites (Team Push only) and Sites with emails.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
-        echo '<div><dt>Your job</dt><dd>Add sites to the database and manage Team users.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';
     } else {
         echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
         echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';

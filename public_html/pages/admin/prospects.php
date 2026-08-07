@@ -1,9 +1,9 @@
 <?php
-require_admin();
+$user = require_admin();
 ensure_prospect_schema();
+seed_countries_if_empty(db());
 
 $sheet = (string) get('country');
-// Prefer ?country= for folder; also accept sheet=
 if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
 }
@@ -20,6 +20,85 @@ if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
     $sheet = $canonSheet['name'];
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
+
+$addRaw = '';
+$addCountry = $inCountry && !$emptyCountry ? $sheet : trim((string) (post('country') ?: get('add_country')));
+$addLanguage = trim((string) (post('language') ?: get('language')));
+if ($addCountry !== '') {
+    $canonAdd = resolve_canonical_country($addCountry);
+    if ($canonAdd !== null) {
+        $addCountry = $canonAdd['name'];
+        if ($addLanguage === '') {
+            $addLanguage = $canonAdd['language'];
+        }
+    }
+}
+
+// --- Add sites into Our database (same panel) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_sites') {
+    $addRaw = (string) post('urls');
+    $addCountry = trim((string) post('country'));
+    $addLanguage = trim((string) post('language'));
+    try {
+        if ($addCountry === '' || resolve_canonical_country($addCountry) === null) {
+            flash('error', 'Select a country folder first (type to search, then Enter).');
+            redirect('index.php?page=admin_prospects');
+        }
+        $canon = require_canonical_country($addCountry);
+        $addCountry = $canon['name'];
+        if (trim($addRaw) === '') {
+            flash('error', 'Paste at least one root domain.');
+            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+        }
+        $parsed = parse_domain_list_strict($addRaw);
+        if ($parsed['invalid_count'] > 0) {
+            flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+            $_SESSION['admin_prospects_add_draft'] = [
+                'country' => $addCountry,
+                'language' => $addLanguage,
+                'urls' => $parsed['valid_text'] !== ''
+                    ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
+                    : $addRaw,
+            ];
+            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+        }
+        $result = admin_add_urls_to_database($addRaw, $user, $addCountry, $addLanguage);
+        if ($result['total'] <= 0) {
+            flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
+            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+        }
+        $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
+        $msg .= ' New: ' . (int) $result['inserted'] . '.';
+        if ((int) $result['updated'] > 0) {
+            $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+        }
+        flash('ok', $msg);
+        unset($_SESSION['admin_prospects_add_draft']);
+        redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+    } catch (Throwable $e) {
+        flash('error', 'Could not save sites. ' . $e->getMessage());
+        redirect(
+            $addCountry !== ''
+                ? 'index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'
+                : 'index.php?page=admin_prospects#add-sites'
+        );
+    }
+}
+
+// Restore draft after Clean-errors style validation failure
+$draft = $_SESSION['admin_prospects_add_draft'] ?? null;
+if (is_array($draft)) {
+    if ($addRaw === '' && !empty($draft['urls'])) {
+        $addRaw = (string) $draft['urls'];
+    }
+    if ($addCountry === '' && !empty($draft['country'])) {
+        $addCountry = (string) $draft['country'];
+    }
+    if ($addLanguage === '' && !empty($draft['language'])) {
+        $addLanguage = (string) $draft['language'];
+    }
+    unset($_SESSION['admin_prospects_add_draft']);
+}
 
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
@@ -41,23 +120,53 @@ if (!$inCountry && !$emptyCountry) {
     ]); ?>
     <div class="topbar">
       <div>
-        <h1>Country databases</h1>
+        <h1>Our database</h1>
         <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
+        <a class="btn" href="#add-sites">Add sites</a>
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
       </div>
     </div>
     <?= render_page_purpose(
         'Our database — one folder per country',
         'Sites are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add sites to paste domains into that country only.',
+        'Open a country folder to browse, or use Add sites below to paste into a country database.',
         [
-            'Open a country folder.',
-            'Add sites into that country’s database (Our database only).',
-            'Team Filter & add can check against the same country list.',
+            'Add sites with the form below (Our database only).',
+            'Or open a country folder to browse and add more there.',
+            'Team Filter & add checks against the same country lists.',
         ]
     ) ?>
+
+    <div class="card" id="add-sites">
+      <h2>Add sites</h2>
+      <p class="help">Paste root domains into one country’s database. Use Clean errors for https/paths/subdomains.</p>
+      <form method="post" action="index.php?page=admin_prospects#add-sites">
+        <input type="hidden" name="action" value="add_sites">
+        <div class="form-grid">
+          <?= render_country_typeahead($addCountry, [
+              'id' => 'add_country',
+              'label' => 'Country',
+              'required' => true,
+          ]) ?>
+          <?= render_language_typeahead($addLanguage, ['id' => 'add_language']) ?>
+        </div>
+        <div style="margin-top:0.9rem">
+          <?= render_domains_paste_field('urls', $addRaw, [
+              'id' => 'urls',
+              'label' => 'Sites (root domains)',
+              'required' => true,
+              'rows' => 12,
+          ]) ?>
+        </div>
+        <p class="actions" style="margin-top:1rem">
+          <button class="btn" type="submit">Save to country database</button>
+        </p>
+      </form>
+    </div>
+    <?= sites_form_script_tag() ?>
+
     <?php foreach ($byRegion as $regionLabel => $list): ?>
       <div class="card">
         <h2><?= h($regionLabel) ?></h2>
@@ -94,7 +203,6 @@ $inv = prospect_inventory_query([
     'status' => $status,
 ] + ($emptyCountry ? [] : []), $pageNum, 50);
 
-// For empty country, prospect_inventory_query with country='' won't filter empty — need special case
 if ($emptyCountry) {
     $where = ["TRIM(p.country)=''"];
     $params = [];
@@ -134,7 +242,15 @@ $qs = http_build_query(array_filter([
     'country' => $emptyCountry ? '_none' : $countryName,
     'q' => $q,
     'status' => $status,
-], static fn($v) => $v !== '' && $v !== null));
+], static fn ($v) => $v !== '' && $v !== null));
+
+if (!$emptyCountry && $addCountry === '') {
+    $addCountry = $countryName;
+}
+if (!$emptyCountry && $addLanguage === '') {
+    $canonLang = resolve_canonical_country($countryName);
+    $addLanguage = $canonLang ? $canonLang['language'] : '';
+}
 
 render_header('Our database · ' . $sheetLabel, 'admin');
 ?>
@@ -150,11 +266,37 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+      <a class="btn" href="#add-sites">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
 </div>
+
+<?php if (!$emptyCountry): ?>
+<div class="card" id="add-sites">
+  <h2>Add sites to <?= h($countryName) ?></h2>
+  <p class="help">Paste root domains into this country’s Our database folder. Use Clean errors for https/paths/subdomains.</p>
+  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
+    <input type="hidden" name="action" value="add_sites">
+    <input type="hidden" name="country" value="<?= h($countryName) ?>">
+    <div class="form-grid">
+      <?= render_language_typeahead($addLanguage, ['id' => 'add_language']) ?>
+    </div>
+    <div style="margin-top:0.9rem">
+      <?= render_domains_paste_field('urls', $addRaw, [
+          'id' => 'urls',
+          'label' => 'Sites (root domains)',
+          'required' => true,
+          'rows' => 10,
+      ]) ?>
+    </div>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save to <?= h($countryName) ?></button>
+    </p>
+  </form>
+</div>
+<?= sites_form_script_tag() ?>
+<?php endif; ?>
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
@@ -191,7 +333,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <div class="empty-state">
       <p>No sites in this country yet.</p>
       <?php if (!$emptyCountry): ?>
-        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+        <a class="btn" href="#add-sites">Add sites above</a>
       <?php endif; ?>
     </div>
   <?php else: ?>
