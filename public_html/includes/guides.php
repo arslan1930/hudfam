@@ -65,7 +65,7 @@ function render_admin_panel_guide(): string
         . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
         . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
         . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails DATA → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Final</strong>).</li>'
-        . '<li>Admin creates an <strong>Email Sheet</strong> under Email campaign data, imports contacts, and Communication Team searches/updates that sheet.</li>'
+        . '<li>Admin creates a <strong>country Email Sheet</strong> under Email campaign data; Communication Team uses one <strong>super search</strong> across all countries and updates the matching country row.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
