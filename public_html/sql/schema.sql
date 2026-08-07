@@ -135,8 +135,8 @@ CREATE TABLE IF NOT EXISTS extracted_sites (
   CONSTRAINT fk_extracted_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Sites with emails: duplicate site names from Team Push + up to 4 manual emails
-CREATE TABLE IF NOT EXISTS sites_with_emails (
+-- Sites with emails - Team: site names from Extracting Results Push; emails added here
+CREATE TABLE IF NOT EXISTS sites_with_emails_team (
   id INT AUTO_INCREMENT PRIMARY KEY,
   domain VARCHAR(255) NOT NULL,
   country VARCHAR(100) NOT NULL,
@@ -150,11 +150,33 @@ CREATE TABLE IF NOT EXISTS sites_with_emails (
   pushed_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_swe_country_domain (country, domain),
+  UNIQUE KEY uniq_swe_team_country_domain (country, domain),
   INDEX (country),
   INDEX (domain),
   INDEX (pushed_by),
-  CONSTRAINT fk_swe_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
+  CONSTRAINT fk_swe_team_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Sites with emails - Admin: final archive from Team Push (data stays here)
+CREATE TABLE IF NOT EXISTS sites_with_emails_admin (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL,
+  country VARCHAR(100) NOT NULL,
+  language VARCHAR(50) NOT NULL DEFAULT '',
+  region VARCHAR(40) NOT NULL DEFAULT '',
+  email1 VARCHAR(255) NOT NULL DEFAULT '',
+  email2 VARCHAR(255) NOT NULL DEFAULT '',
+  email3 VARCHAR(255) NOT NULL DEFAULT '',
+  email4 VARCHAR(255) NOT NULL DEFAULT '',
+  extract_batch_id INT NULL,
+  pushed_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_swe_admin_country_domain (country, domain),
+  INDEX (country),
+  INDEX (domain),
+  INDEX (pushed_by),
+  CONSTRAINT fk_swe_admin_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Order management: one sheet per client

@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // Clear the box after a successful push into admin Extracted URLs.
         save_extract_batch_results($id, '');
-        $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted Sites and Sites with emails · ' . $pushed['country'];
+        $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted Sites and Sites with emails - Team · ' . $pushed['country'];
         if ((int) $pushed['skipped'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
         }

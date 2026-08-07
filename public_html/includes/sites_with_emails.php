@@ -1,18 +1,34 @@
 <?php
 /**
- * Sites with emails — duplicate of Extracted Sites names (from Team Push),
- * plus up to 4 manually entered emails per site, by country.
+ * Sites with emails — two stores:
+ *   team  → working copy from Extracting Results Push; team adds emails, then Push to admin
+ *   admin → final archive; data stays here (no further push)
  */
 
-function ensure_sites_with_emails_schema(): void
+function swe_normalize_scope(string $scope): string
 {
-    static $done = false;
-    if ($done) {
-        return;
-    }
-    $done = true;
-    db()->exec(
-        "CREATE TABLE IF NOT EXISTS sites_with_emails (
+    return $scope === 'admin' ? 'admin' : 'team';
+}
+
+function swe_table(string $scope): string
+{
+    return swe_normalize_scope($scope) === 'admin'
+        ? 'sites_with_emails_admin'
+        : 'sites_with_emails_team';
+}
+
+function swe_label(string $scope): string
+{
+    return swe_normalize_scope($scope) === 'admin'
+        ? 'Sites with emails - Admin'
+        : 'Sites with emails - Team';
+}
+
+function swe_create_table_sql(string $table): string
+{
+    $fk = $table === 'sites_with_emails_admin' ? 'fk_swe_admin_pushed_by' : 'fk_swe_team_pushed_by';
+    $uniq = $table === 'sites_with_emails_admin' ? 'uniq_swe_admin_country_domain' : 'uniq_swe_team_country_domain';
+    return "CREATE TABLE IF NOT EXISTS {$table} (
           id INT AUTO_INCREMENT PRIMARY KEY,
           domain VARCHAR(255) NOT NULL,
           country VARCHAR(100) NOT NULL,
@@ -26,13 +42,45 @@ function ensure_sites_with_emails_schema(): void
           pushed_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_swe_country_domain (country, domain),
+          UNIQUE KEY {$uniq} (country, domain),
           INDEX (country),
           INDEX (domain),
           INDEX (pushed_by),
-          CONSTRAINT fk_swe_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
+          CONSTRAINT {$fk} FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+}
+
+function ensure_sites_with_emails_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $pdo = db();
+    $pdo->exec(swe_create_table_sql('sites_with_emails_team'));
+    $pdo->exec(swe_create_table_sql('sites_with_emails_admin'));
+
+    // Legacy single table → migrate into Team working copy once.
+    try {
+        $legacy = $pdo->query("SHOW TABLES LIKE 'sites_with_emails'")->fetchColumn();
+        if ($legacy) {
+            $countTeam = (int) $pdo->query('SELECT COUNT(*) FROM sites_with_emails_team')->fetchColumn();
+            $countLegacy = (int) $pdo->query('SELECT COUNT(*) FROM sites_with_emails')->fetchColumn();
+            if ($countLegacy > 0 && $countTeam === 0) {
+                $pdo->exec(
+                    'INSERT IGNORE INTO sites_with_emails_team
+                       (domain, country, language, region, email1, email2, email3, email4,
+                        extract_batch_id, pushed_by, created_at, updated_at)
+                     SELECT domain, country, language, region, email1, email2, email3, email4,
+                            extract_batch_id, pushed_by, created_at, updated_at
+                     FROM sites_with_emails'
+                );
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore migration hiccups; tables above are enough
+    }
 }
 
 function normalize_email_value(string $email): string
@@ -84,7 +132,7 @@ function normalize_email_slots(array $emails): array
 }
 
 /**
- * Insert site names (no emails yet) from Team Push / Extracting Results.
+ * Insert site names into Team working copy (from Extracting Results Push).
  *
  * @param list<string> $domains
  * @return array{inserted:int,skipped:int,country:string}
@@ -97,8 +145,33 @@ function add_sites_with_emails_domains(
     string $region = '',
     ?int $extractBatchId = null
 ): array {
+    return add_sites_with_emails_domains_to_scope(
+        'team',
+        $domains,
+        $country,
+        $user,
+        $language,
+        $region,
+        $extractBatchId
+    );
+}
+
+/**
+ * @param list<string> $domains
+ * @return array{inserted:int,skipped:int,country:string}
+ */
+function add_sites_with_emails_domains_to_scope(
+    string $scope,
+    array $domains,
+    string $country,
+    array $user,
+    string $language = '',
+    string $region = '',
+    ?int $extractBatchId = null
+): array {
     ensure_sites_with_emails_schema();
     @set_time_limit(0);
+    $table = swe_table($scope);
     $canon = require_canonical_country($country);
     $country = $canon['name'];
     if ($region === '') {
@@ -122,16 +195,16 @@ function add_sites_with_emails_domains(
     }
 
     $ins = db()->prepare(
-        'INSERT INTO sites_with_emails
+        "INSERT INTO {$table}
            (domain, country, language, region, email1, email2, email3, email4, extract_batch_id, pushed_by)
-         VALUES (?,?,?,?,\'\',\'\',\'\',\'\',?,?)
+         VALUES (?,?,?,?, '', '', '', '', ?,?)
          ON DUPLICATE KEY UPDATE
            updated_at = NOW(),
-           language = IF(VALUES(language) <> \'\', VALUES(language), language),
-           region = IF(VALUES(region) <> \'\', VALUES(region), region)'
+           language = IF(VALUES(language) <> '', VALUES(language), language),
+           region = IF(VALUES(region) <> '', VALUES(region), region)"
     );
     $find = db()->prepare(
-        'SELECT id FROM sites_with_emails WHERE country=? AND domain=? LIMIT 1'
+        "SELECT id FROM {$table} WHERE country=? AND domain=? LIMIT 1"
     );
     $inserted = 0;
     $skipped = 0;
@@ -154,11 +227,96 @@ function add_sites_with_emails_domains(
 }
 
 /**
- * @return list<array{country:string,region:string,language:string,total:int,with_emails:int,last_pushed_at:?string}>
+ * Team → Admin: copy rows that have at least one email into the admin archive.
+ *
+ * @return array{pushed:int,updated:int,skipped_empty:int,country:string}
  */
-function list_sites_with_emails_country_rows(): array
+function push_sites_with_emails_team_to_admin(string $country, array $user): array
 {
     ensure_sites_with_emails_schema();
+    @set_time_limit(0);
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    $team = swe_table('team');
+    $admin = swe_table('admin');
+    $uid = (int) ($user['id'] ?? 0) ?: null;
+
+    $sel = db()->prepare(
+        "SELECT domain, country, language, region, email1, email2, email3, email4, extract_batch_id
+         FROM {$team}
+         WHERE country=?
+         ORDER BY id ASC"
+    );
+    $sel->execute([$country]);
+
+    $ins = db()->prepare(
+        "INSERT INTO {$admin}
+           (domain, country, language, region, email1, email2, email3, email4, extract_batch_id, pushed_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           email1 = VALUES(email1),
+           email2 = VALUES(email2),
+           email3 = VALUES(email3),
+           email4 = VALUES(email4),
+           language = IF(VALUES(language) <> '', VALUES(language), language),
+           region = IF(VALUES(region) <> '', VALUES(region), region),
+           extract_batch_id = COALESCE(VALUES(extract_batch_id), extract_batch_id),
+           pushed_by = VALUES(pushed_by),
+           updated_at = NOW()"
+    );
+    $exists = db()->prepare(
+        "SELECT id FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
+    );
+
+    $pushed = 0;
+    $updated = 0;
+    $skippedEmpty = 0;
+    while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
+        $hasEmail = trim((string) ($row['email1'] ?? '')) !== ''
+            || trim((string) ($row['email2'] ?? '')) !== ''
+            || trim((string) ($row['email3'] ?? '')) !== ''
+            || trim((string) ($row['email4'] ?? '')) !== '';
+        if (!$hasEmail) {
+            $skippedEmpty++;
+            continue;
+        }
+        $domain = (string) $row['domain'];
+        $exists->execute([$country, $domain]);
+        $already = (int) $exists->fetchColumn() > 0;
+        $ins->execute([
+            $domain,
+            $country,
+            (string) ($row['language'] ?? ''),
+            (string) ($row['region'] ?? ''),
+            (string) ($row['email1'] ?? ''),
+            (string) ($row['email2'] ?? ''),
+            (string) ($row['email3'] ?? ''),
+            (string) ($row['email4'] ?? ''),
+            $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
+            $uid,
+        ]);
+        if ($already) {
+            $updated++;
+        } else {
+            $pushed++;
+        }
+    }
+
+    return [
+        'pushed' => $pushed,
+        'updated' => $updated,
+        'skipped_empty' => $skippedEmpty,
+        'country' => $country,
+    ];
+}
+
+/**
+ * @return list<array{country:string,region:string,language:string,total:int,with_emails:int,last_pushed_at:?string}>
+ */
+function list_sites_with_emails_country_rows(string $scope = 'team'): array
+{
+    ensure_sites_with_emails_schema();
+    $table = swe_table($scope);
     $sql = "SELECT TRIM(country) AS country,
                    MAX(region) AS region,
                    MAX(language) AS language,
@@ -166,8 +324,8 @@ function list_sites_with_emails_country_rows(): array
                    SUM(
                      CASE WHEN email1<>'' OR email2<>'' OR email3<>'' OR email4<>'' THEN 1 ELSE 0 END
                    ) AS with_emails,
-                   MAX(created_at) AS last_pushed_at
-            FROM sites_with_emails
+                   MAX(updated_at) AS last_pushed_at
+            FROM {$table}
             WHERE TRIM(country) <> ''
             GROUP BY TRIM(country)
             ORDER BY last_pushed_at DESC, country ASC";
@@ -188,16 +346,30 @@ function list_sites_with_emails_country_rows(): array
     return $out;
 }
 
-function count_sites_with_emails(): int
+function count_sites_with_emails(string $scope = 'team'): int
 {
     ensure_sites_with_emails_schema();
-    return (int) db()->query('SELECT COUNT(*) FROM sites_with_emails')->fetchColumn();
+    $table = swe_table($scope);
+    return (int) db()->query("SELECT COUNT(*) FROM {$table}")->fetchColumn();
 }
 
-function count_sites_with_emails_for_country(string $country): int
+function count_sites_with_emails_for_country(string $country, string $scope = 'team'): int
 {
     ensure_sites_with_emails_schema();
-    $stmt = db()->prepare('SELECT COUNT(*) FROM sites_with_emails WHERE country=?');
+    $table = swe_table($scope);
+    $stmt = db()->prepare("SELECT COUNT(*) FROM {$table} WHERE country=?");
+    $stmt->execute([$country]);
+    return (int) $stmt->fetchColumn();
+}
+
+function count_sites_with_emails_ready_to_push(string $country): int
+{
+    ensure_sites_with_emails_schema();
+    $table = swe_table('team');
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM {$table}
+         WHERE country=? AND (email1<>'' OR email2<>'' OR email3<>'' OR email4<>'')"
+    );
     $stmt->execute([$country]);
     return (int) $stmt->fetchColumn();
 }
@@ -205,9 +377,14 @@ function count_sites_with_emails_for_country(string $country): int
 /**
  * @return array{rows:list<array<string,mixed>>,total:int,pages:int}
  */
-function sites_with_emails_inventory_query(array $filters, int $page = 1, int $perPage = 100): array
-{
+function sites_with_emails_inventory_query(
+    array $filters,
+    int $page = 1,
+    int $perPage = 100,
+    string $scope = 'team'
+): array {
     ensure_sites_with_emails_schema();
+    $table = swe_table($scope);
     $page = max(1, $page);
     $perPage = max(1, min(500, $perPage));
     $country = trim((string) ($filters['country'] ?? ''));
@@ -222,7 +399,7 @@ function sites_with_emails_inventory_query(array $filters, int $page = 1, int $p
     }
     $whereSql = implode(' AND ', $where);
 
-    $count = db()->prepare("SELECT COUNT(*) FROM sites_with_emails WHERE {$whereSql}");
+    $count = db()->prepare("SELECT COUNT(*) FROM {$table} WHERE {$whereSql}");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     $pages = max(1, (int) ceil($total / $perPage));
@@ -232,7 +409,7 @@ function sites_with_emails_inventory_query(array $filters, int $page = 1, int $p
     $offset = ($page - 1) * $perPage;
 
     $stmt = db()->prepare(
-        "SELECT * FROM sites_with_emails
+        "SELECT * FROM {$table}
          WHERE {$whereSql}
          ORDER BY id DESC
          LIMIT {$perPage} OFFSET {$offset}"
@@ -242,10 +419,11 @@ function sites_with_emails_inventory_query(array $filters, int $page = 1, int $p
     return ['rows' => $rows, 'total' => $total, 'pages' => $pages];
 }
 
-function get_site_with_emails(int $id): ?array
+function get_site_with_emails(int $id, string $scope = 'team'): ?array
 {
     ensure_sites_with_emails_schema();
-    $stmt = db()->prepare('SELECT * FROM sites_with_emails WHERE id=? LIMIT 1');
+    $table = swe_table($scope);
+    $stmt = db()->prepare("SELECT * FROM {$table} WHERE id=? LIMIT 1");
     $stmt->execute([$id]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row ?: null;
@@ -259,9 +437,11 @@ function save_site_with_emails_row(
     string $domainRaw,
     array $emails,
     array $user,
-    ?int $id = null
+    ?int $id = null,
+    string $scope = 'team'
 ): array {
     ensure_sites_with_emails_schema();
+    $table = swe_table($scope);
     $canon = require_canonical_country($country);
     $country = $canon['name'];
     $host = extract_host_candidate($domainRaw);
@@ -277,21 +457,21 @@ function save_site_with_emails_row(
     $slots = $norm['slots'] ?? ['', '', '', ''];
 
     if ($id !== null && $id > 0) {
-        $existing = get_site_with_emails($id);
+        $existing = get_site_with_emails($id, $scope);
         if (!$existing || (string) $existing['country'] !== $country) {
             return ['ok' => false, 'error' => 'Row not found in this country.'];
         }
         $dup = db()->prepare(
-            'SELECT id FROM sites_with_emails WHERE country=? AND domain=? AND id<>? LIMIT 1'
+            "SELECT id FROM {$table} WHERE country=? AND domain=? AND id<>? LIMIT 1"
         );
         $dup->execute([$country, $domain, $id]);
         if ((int) $dup->fetchColumn() > 0) {
             return ['ok' => false, 'error' => $domain . ' already exists in ' . $country . '.'];
         }
         db()->prepare(
-            'UPDATE sites_with_emails
+            "UPDATE {$table}
              SET domain=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
-             WHERE id=?'
+             WHERE id=?"
         )->execute([$domain, $slots[0], $slots[1], $slots[2], $slots[3], $id]);
         return ['ok' => true, 'id' => $id];
     }
@@ -299,9 +479,9 @@ function save_site_with_emails_row(
     $uid = (int) ($user['id'] ?? 0) ?: null;
     try {
         db()->prepare(
-            'INSERT INTO sites_with_emails
+            "INSERT INTO {$table}
                (domain, country, language, region, email1, email2, email3, email4, pushed_by)
-             VALUES (?,?,?,?,?,?,?,?,?)'
+             VALUES (?,?,?,?,?,?,?,?,?)"
         )->execute([
             $domain,
             $country,
@@ -319,18 +499,20 @@ function save_site_with_emails_row(
     }
 }
 
-function delete_site_with_emails(int $id): bool
+function delete_site_with_emails(int $id, string $scope = 'team'): bool
 {
     ensure_sites_with_emails_schema();
-    $stmt = db()->prepare('DELETE FROM sites_with_emails WHERE id=?');
+    $table = swe_table($scope);
+    $stmt = db()->prepare("DELETE FROM {$table} WHERE id=?");
     $stmt->execute([$id]);
     return $stmt->rowCount() > 0;
 }
 
-function delete_sites_with_emails_for_country(string $country): int
+function delete_sites_with_emails_for_country(string $country, string $scope = 'team'): int
 {
     ensure_sites_with_emails_schema();
-    $stmt = db()->prepare('DELETE FROM sites_with_emails WHERE country=?');
+    $table = swe_table($scope);
+    $stmt = db()->prepare("DELETE FROM {$table} WHERE country=?");
     $stmt->execute([$country]);
     return $stmt->rowCount();
 }
@@ -338,9 +520,10 @@ function delete_sites_with_emails_for_country(string $country): int
 /**
  * @return array{removed:int,not_found:int,invalid:int}
  */
-function remove_sites_with_emails_by_list(string $country, string $raw): array
+function remove_sites_with_emails_by_list(string $country, string $raw, string $scope = 'team'): array
 {
     ensure_sites_with_emails_schema();
+    $table = swe_table($scope);
     $canon = require_canonical_country($country);
     $country = $canon['name'];
     $parsed = parse_domain_list_strict($raw);
@@ -354,7 +537,7 @@ function remove_sites_with_emails_by_list(string $country, string $raw): array
         $ph = implode(',', array_fill(0, count($chunk), '?'));
         $params = array_merge([$country], $chunk);
         $sel = db()->prepare(
-            "SELECT domain FROM sites_with_emails WHERE country=? AND domain IN ({$ph})"
+            "SELECT domain FROM {$table} WHERE country=? AND domain IN ({$ph})"
         );
         $sel->execute($params);
         $found = $sel->fetchAll(PDO::FETCH_COLUMN) ?: [];
@@ -369,7 +552,7 @@ function remove_sites_with_emails_by_list(string $country, string $raw): array
         }
         $dph = implode(',', array_fill(0, count($found), '?'));
         $del = db()->prepare(
-            "DELETE FROM sites_with_emails WHERE country=? AND domain IN ({$dph})"
+            "DELETE FROM {$table} WHERE country=? AND domain IN ({$dph})"
         );
         $del->execute(array_merge([$country], $found));
         $removed += $del->rowCount();
@@ -384,12 +567,13 @@ function remove_sites_with_emails_by_list(string $country, string $raw): array
 /**
  * @return list<string>
  */
-function collect_sites_with_emails_all_emails(string $country): array
+function collect_sites_with_emails_all_emails(string $country, string $scope = 'team'): array
 {
     ensure_sites_with_emails_schema();
+    $table = swe_table($scope);
     $stmt = db()->prepare(
-        'SELECT email1, email2, email3, email4
-         FROM sites_with_emails WHERE country=? ORDER BY id DESC'
+        "SELECT email1, email2, email3, email4
+         FROM {$table} WHERE country=? ORDER BY id DESC"
     );
     $stmt->execute([$country]);
     $out = [];
@@ -407,30 +591,31 @@ function collect_sites_with_emails_all_emails(string $country): array
     return $out;
 }
 
-function stream_sites_with_emails_csv(string $country): void
+function stream_sites_with_emails_csv(string $country, string $scope = 'team'): void
 {
     ensure_sites_with_emails_schema();
     @set_time_limit(0);
+    $table = swe_table($scope);
     $canon = resolve_canonical_country($country);
     $country = $canon ? $canon['name'] : trim($country);
     $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $country) ?: 'sites';
+    $suffix = swe_normalize_scope($scope) === 'admin' ? 'admin' : 'team';
 
     header('Content-Type: text/csv; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
-    header('Content-Disposition: attachment; filename="' . $safe . '-sites-with-emails.csv"');
+    header('Content-Disposition: attachment; filename="' . $safe . '-sites-with-emails-' . $suffix . '.csv"');
 
     $out = fopen('php://output', 'wb');
     if ($out === false) {
         exit;
     }
-    // Excel-friendly UTF-8 BOM
     fwrite($out, "\xEF\xBB\xBF");
     fputcsv($out, ['Site name', 'Email 1', 'Email 2', 'Email 3', 'Email 4']);
 
     $stmt = db()->prepare(
-        'SELECT domain, email1, email2, email3, email4
-         FROM sites_with_emails WHERE country=? ORDER BY id DESC'
+        "SELECT domain, email1, email2, email3, email4
+         FROM {$table} WHERE country=? ORDER BY id DESC"
     );
     $stmt->execute([$country]);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -446,12 +631,12 @@ function stream_sites_with_emails_csv(string $country): void
     exit;
 }
 
-function stream_sites_with_emails_emails_plain(string $country): void
+function stream_sites_with_emails_emails_plain(string $country, string $scope = 'team'): void
 {
     ensure_sites_with_emails_schema();
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');
-    foreach (collect_sites_with_emails_all_emails($country) as $email) {
+    foreach (collect_sites_with_emails_all_emails($country, $scope) as $email) {
         echo $email, "\n";
     }
     exit;

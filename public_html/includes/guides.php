@@ -38,8 +38,8 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracted URLs</h3>'
-        . '<p><strong>What:</strong> Folders: Extracted Sites (Team Push only) and Sites with emails.</p>'
-        . '<p><strong>How:</strong> Open Extracted Sites → country row → copy, edit, or remove. Admin Add sites does not fill this.</p>'
+        . '<p><strong>What:</strong> Folders: Extracted Sites (Team Push) and Sites with emails - Admin (final emails from Team).</p>'
+        . '<p><strong>How:</strong> Open Extracted Sites → country row → copy or remove. Sites with emails - Admin is filled when Team pushes after adding emails.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Add history</h3>'
@@ -58,7 +58,8 @@ function render_admin_panel_guide(): string
         . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
         . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
         . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
-        . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted URLs</strong> for that same country.</li>'
+        . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
+        . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Sites with emails - Admin</strong> (final archive).</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -78,10 +79,15 @@ function render_team_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracting sites</h3>'
         . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
-        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> into Admin Extracted URLs for that country.</p>'
+        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> → Extracted Sites + Sites with emails - Team.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>3. Add history</h3>'
+        . '<h3>3. Sites with emails - Team</h3>'
+        . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each.</p>'
+        . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong> for the final archive.</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>4. Add history</h3>'
         . '<p><strong>What:</strong> Your daily batches of new sites.</p>'
         . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
         . '</article>'
@@ -92,7 +98,8 @@ function render_team_panel_guide(): string
         . '<li>Open <strong>Filter &amp; add</strong> and select a country.</li>'
         . '<li>Paste domains and Filter (duplicates already in that country are removed privately).</li>'
         . '<li>Add the unique sites — they join that country’s database and <strong>Extracting sites → Sites list</strong>.</li>'
-        . '<li>Paste into <strong>Extracting Results</strong> and <strong>Push</strong> → Admin <strong>Extracted URLs</strong> for that country.</li>'
+        . '<li>Paste into <strong>Extracting Results</strong> and <strong>Push</strong> → Extracted Sites + Sites with emails - Team.</li>'
+        . '<li>Add emails in <strong>Sites with emails - Team</strong>, then <strong>Push to Admin</strong>.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -136,7 +143,8 @@ function guide_extracting(): string
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country.',
             'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
-            'Paste sites into Extracting Results and Push — they go to Admin → Extracted URLs → Extracted Sites for that country.',
+            'Paste sites into Extracting Results and Push — they go to Extracted Sites and Sites with emails - Team for that country.',
+            'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
         ]
     );
 }

@@ -170,7 +170,7 @@ if ($folder === '') {
     }
     $countryCount = count($countryRows);
 
-    $sweCountryRows = list_sites_with_emails_country_rows();
+    $sweCountryRows = list_sites_with_emails_country_rows('admin');
     $sweTotal = 0;
     $sweWithEmails = 0;
     foreach ($sweCountryRows as $r) {
@@ -202,9 +202,9 @@ if ($folder === '') {
           </p>
         </a>
         <a class="folder" href="index.php?page=admin_extracted&amp;folder=sites_with_emails">
-          <h3>Sites with emails</h3>
+          <h3>Sites with emails - Admin</h3>
           <p class="muted">
-            Same Push as Extracted Sites ·
+            Final list from Team Push ·
             <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
             · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
             · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>

@@ -51,7 +51,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
         $notes[] = 'extracted_sites (Extracted URLs) OK';
 
         ensure_sites_with_emails_schema();
-        $notes[] = 'sites_with_emails (Sites with emails) OK';
+        $notes[] = 'sites_with_emails_team / sites_with_emails_admin OK';
 
         require_once __DIR__ . '/includes/orders.php';
         ensure_order_schema();

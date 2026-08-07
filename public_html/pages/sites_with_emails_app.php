@@ -1,17 +1,27 @@
 <?php
 /**
- * Shared Sites with emails UI (admin Extracted URLs folder + team sidebar).
+ * Shared Sites with emails UI.
  *
  * Expects:
  *   $sweUser (array), $swePanel ('admin'|'team'),
- *   $sweBase ('index.php?page=admin_extracted&folder=sites_with_emails' or team page)
+ *   $sweBase (page URL without country)
+ *
+ * Team  → working copy from Extracting Results; Push final rows to Admin
+ * Admin → final archive (no push out)
  */
 ensure_sites_with_emails_schema();
 
 $swePanel = $swePanel ?? 'admin';
 $sweUser = $sweUser ?? require_admin();
-$sweBase = $sweBase ?? 'index.php?page=admin_extracted&folder=sites_with_emails';
-$isAdmin = ($swePanel === 'admin');
+$sweScope = ($swePanel === 'admin') ? 'admin' : 'team';
+$sweLabel = swe_label($sweScope);
+$sweBase = $sweBase ?? (
+    $sweScope === 'admin'
+        ? 'index.php?page=admin_extracted&folder=sites_with_emails'
+        : 'index.php?page=team_sites_emails'
+);
+$isAdmin = ($sweScope === 'admin');
+$isTeam = ($sweScope === 'team');
 
 $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
@@ -34,10 +44,10 @@ $inCountry = ($sheet !== '' && $sheet !== 'all');
 if ($inCountry && (string) get('export') !== '') {
     $mode = (string) get('export');
     if ($mode === 'csv') {
-        stream_sites_with_emails_csv($sheet);
+        stream_sites_with_emails_csv($sheet, $sweScope);
     }
     if ($mode === 'emails') {
-        stream_sites_with_emails_emails_plain($sheet);
+        stream_sites_with_emails_emails_plain($sheet, $sweScope);
     }
 }
 
@@ -70,11 +80,12 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $domain,
             $emails,
             $sweUser,
-            $id > 0 ? $id : null
+            $id > 0 ? $id : null,
+            $sweScope
         );
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode($result + ['site_count' => count_sites_with_emails_for_country($countryName)]);
+            echo json_encode($result + ['site_count' => count_sites_with_emails_for_country($countryName, $sweScope)]);
             exit;
         }
         if (!$result['ok']) {
@@ -87,7 +98,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'remove_site') {
         $siteId = (int) post('site_id');
-        $site = get_site_with_emails($siteId);
+        $site = get_site_with_emails($siteId, $sweScope);
         if (!$site || (string) $site['country'] !== $countryName) {
             if ($wantsJson) {
                 header('Content-Type: application/json; charset=utf-8');
@@ -99,8 +110,8 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect($back);
         }
         $domain = (string) $site['domain'];
-        delete_site_with_emails($siteId);
-        $left = count_sites_with_emails_for_country($countryName);
+        delete_site_with_emails($siteId, $sweScope);
+        $left = count_sites_with_emails_for_country($countryName, $sweScope);
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
@@ -129,28 +140,51 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', $e->getMessage());
             redirect($back . '#remove-by-list');
         }
-        $result = remove_sites_with_emails_by_list($countryName, $raw);
+        $result = remove_sites_with_emails_by_list($countryName, $raw, $sweScope);
         if ($result['removed'] < 1) {
             flash('error', 'No matching sites removed from the list.');
             redirect($back . '#remove-by-list');
         }
         flash('ok', 'Removed ' . (int) $result['removed'] . ' site(s).');
-        if (count_sites_with_emails_for_country($countryName) < 1) {
+        if (count_sites_with_emails_for_country($countryName, $sweScope) < 1) {
             redirect($sweBase);
         }
         redirect($back);
     }
 
-    if ($action === 'remove_all' && $isAdmin) {
-        $n = delete_sites_with_emails_for_country($countryName);
+    if ($action === 'remove_all') {
+        $n = delete_sites_with_emails_for_country($countryName, $sweScope);
         flash('ok', 'Removed ' . $n . ' site' . ($n === 1 ? '' : 's') . ' from ' . $countryName . '.');
         redirect($sweBase);
+    }
+
+    if ($action === 'push_to_admin' && $isTeam) {
+        $ready = count_sites_with_emails_ready_to_push($countryName);
+        if ($ready < 1) {
+            flash('error', 'Add at least one email before Push to Sites with emails - Admin.');
+            redirect($back);
+        }
+        $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser);
+        $msg = 'Pushed ' . ((int) $pushed['pushed'] + (int) $pushed['updated'])
+            . ' site(s) with emails to Sites with emails - Admin · ' . $pushed['country'];
+        if ((int) $pushed['pushed'] > 0 || (int) $pushed['updated'] > 0) {
+            $msg .= ' (' . (int) $pushed['pushed'] . ' new';
+            if ((int) $pushed['updated'] > 0) {
+                $msg .= ', ' . (int) $pushed['updated'] . ' updated';
+            }
+            $msg .= ')';
+        }
+        if ((int) $pushed['skipped_empty'] > 0) {
+            $msg .= ' · ' . (int) $pushed['skipped_empty'] . ' without emails skipped';
+        }
+        flash('ok', $msg . '.');
+        redirect($back);
     }
 }
 
 // --- Country list ---
 if (!$inCountry) {
-    $countryRows = list_sites_with_emails_country_rows();
+    $countryRows = list_sites_with_emails_country_rows($sweScope);
     $grandTotal = 0;
     $emailSites = 0;
     foreach ($countryRows as $r) {
@@ -158,25 +192,29 @@ if (!$inCountry) {
         $emailSites += (int) $r['with_emails'];
     }
 
-    render_header('Sites with emails', $swePanel);
+    render_header($sweLabel, $swePanel);
     $crumbs = $isAdmin
         ? [
             ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
             ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
-            ['label' => 'Sites with emails'],
+            ['label' => $sweLabel],
         ]
         : [
             ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-            ['label' => 'Sites with emails'],
+            ['label' => $sweLabel],
         ];
     render_breadcrumbs($crumbs);
     ?>
     <div class="topbar">
       <div>
-        <h1>Sites with emails</h1>
+        <h1><?= h($sweLabel) ?></h1>
         <p class="muted">
-          Site names arrive from Team Push (same as Extracted Sites).
-          Add up to 4 emails per site ·
+          <?php if ($isTeam): ?>
+            Site names arrive from Extracting Results → Push.
+            Add emails, then Push again to Sites with emails - Admin ·
+          <?php else: ?>
+            Final site + email list from Team Push. Data stays here ·
+          <?php endif; ?>
           <?= count($countryRows) ?> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?> ·
           <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> ·
           <?= (int) $emailSites ?> with email<?= (int) $emailSites === 1 ? '' : 's' ?>
@@ -237,8 +275,13 @@ if (!$inCountry) {
       </table>
       <?php else: ?>
       <div class="empty-state">
-        <p>No sites yet.</p>
-        <p class="muted">They appear here when Team clicks Push in Extracting Results (same sites as Extracted Sites).</p>
+        <?php if ($isTeam): ?>
+          <p>No sites yet.</p>
+          <p class="muted">They appear here when you click Push in Extracting Results.</p>
+        <?php else: ?>
+          <p>No final sites yet.</p>
+          <p class="muted">They appear when Team pushes from Sites with emails - Team (after adding emails).</p>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
     </div>
@@ -303,11 +346,12 @@ $perPage = 100;
 $inv = sites_with_emails_inventory_query([
     'country' => $countryName,
     'q' => $q,
-], $pageNum, $perPage);
+], $pageNum, $perPage, $sweScope);
 $rows = $inv['rows'];
 $total = $inv['total'];
 $pages = $inv['pages'];
-$countryTotal = count_sites_with_emails_for_country($countryName);
+$countryTotal = count_sites_with_emails_for_country($countryName, $sweScope);
+$readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0;
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
@@ -318,17 +362,17 @@ $qs = http_build_query(array_filter([
     'q' => $q,
 ], static fn ($v) => $v !== '' && $v !== null));
 
-render_header('Sites with emails · ' . $countryName, $swePanel);
+render_header($sweLabel . ' · ' . $countryName, $swePanel);
 $crumbs = $isAdmin
     ? [
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
         ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
-        ['label' => 'Sites with emails', 'href' => $sweBase],
+        ['label' => $sweLabel, 'href' => $sweBase],
         ['label' => $countryName],
     ]
     : [
         ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-        ['label' => 'Sites with emails', 'href' => $sweBase],
+        ['label' => $sweLabel, 'href' => $sweBase],
         ['label' => $countryName],
     ];
 render_breadcrumbs($crumbs);
@@ -340,10 +384,22 @@ render_breadcrumbs($crumbs);
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
       <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
       · up to 4 emails each
+      <?php if ($isTeam): ?>
+        · <?= (int) $readyToPush ?> ready to Push
+      <?php endif; ?>
     </p>
   </div>
   <div class="actions">
-    <button type="button" class="btn" id="swe_copy_emails"
+    <?php if ($isTeam): ?>
+    <form method="post" action="<?= h($listBase) ?>" style="display:inline"
+          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?');">
+      <input type="hidden" name="action" value="push_to_admin">
+      <button class="btn" type="submit" <?= $readyToPush > 0 ? '' : 'disabled' ?>>
+        Push to Admin
+      </button>
+    </form>
+    <?php endif; ?>
+    <button type="button" class="btn secondary" id="swe_copy_emails"
             data-export-url="<?= h($emailsExportUrl) ?>"
             <?= $countryTotal > 0 ? '' : 'disabled' ?>>Copy all emails</button>
     <a class="btn secondary" href="<?= h($csvUrl) ?>">Download CSV / Excel</a>
@@ -351,6 +407,16 @@ render_breadcrumbs($crumbs);
   </div>
 </div>
 <p class="help" id="swe_status" hidden></p>
+<?php if ($isTeam): ?>
+<p class="help">
+  Add emails below, then <strong>Push to Admin</strong> to send the final list to
+  Sites with emails - Admin. Sites without emails are skipped.
+</p>
+<?php else: ?>
+<p class="help">
+  Final archive for this country. Team Push updates rows here; nothing is pushed further.
+</p>
+<?php endif; ?>
 
 <div class="card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
@@ -428,8 +494,13 @@ render_breadcrumbs($crumbs);
 
   <?php if (!$rows && $q === ''): ?>
   <div class="empty-state">
-    <p>No sites in this country yet.</p>
-    <p class="muted">Push from Extracting Results to fill site names here.</p>
+    <?php if ($isTeam): ?>
+      <p>No sites in this country yet.</p>
+      <p class="muted">Push from Extracting Results to fill site names here.</p>
+    <?php else: ?>
+      <p>No final sites in this country yet.</p>
+      <p class="muted">Waiting for Team to Push from Sites with emails - Team.</p>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 
@@ -441,7 +512,7 @@ render_breadcrumbs($crumbs);
       <?php endif; ?>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
     </div>
-    <?php if ($isAdmin && $countryTotal > 0): ?>
+    <?php if ($countryTotal > 0): ?>
     <form method="post" action="<?= h($listBase) ?>"
           onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> sites from <?= h($countryName) ?>?');">
       <input type="hidden" name="action" value="remove_all">
@@ -451,9 +522,10 @@ render_breadcrumbs($crumbs);
   </div>
 </div>
 
+<?php if ($isTeam): ?>
 <div class="card" style="margin-top:1rem">
   <h2>Add site row</h2>
-  <p class="help">Add a site manually, then fill up to 4 emails. Pushed sites already appear above.</p>
+  <p class="help">Optional manual add. Most sites arrive from Extracting Results → Push.</p>
   <form method="post" action="<?= h($listBase) ?>" class="swe-add-form">
     <input type="hidden" name="action" value="save_row">
     <input type="hidden" name="site_id" value="0">
@@ -484,6 +556,7 @@ render_breadcrumbs($crumbs);
     </p>
   </form>
 </div>
+<?php endif; ?>
 
 <?php if ($countryTotal > 0): ?>
 <div class="card" id="remove-by-list" style="margin-top:1rem">

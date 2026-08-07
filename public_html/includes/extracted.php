@@ -218,7 +218,7 @@ function push_extract_results_to_extracted(
         'Pushed from Extracting Results · ' . trim($country),
         $extractBatchId
     );
-    // Duplicate site names into Sites with emails (emails filled manually later).
+    // Site names also go to Sites with emails - Team (emails filled there, then Team Push → Admin).
     if ($parsed['valid'] !== [] && function_exists('add_sites_with_emails_domains')) {
         add_sites_with_emails_domains(
             $parsed['valid'],

@@ -212,13 +212,14 @@ function render_glossary(string $panel): void
     echo '<dl class="glossary-list">';
     if ($panel === 'admin') {
         echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
-        echo '<div><dt>Extracted URLs</dt><dd>Extracted Sites (Team Push only) and Sites with emails.</dd></div>';
+        echo '<div><dt>Extracted URLs</dt><dd>Extracted Sites (Team Push) and Sites with emails - Admin (final list).</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';
     } else {
         echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
         echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';
+        echo '<div><dt>Sites with emails - Team</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Sites you added, saved by day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }

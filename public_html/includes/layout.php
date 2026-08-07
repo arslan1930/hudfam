@@ -81,7 +81,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
-                'admin_extracted' => ['Extracted URLs', 'Extracted Sites · Sites with emails'],
+                'admin_extracted' => ['Extracted URLs', 'Extracted Sites · Sites with emails - Admin'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
@@ -93,7 +93,7 @@ function render_header(string $title, string $panel = ''): void
                 'team_dashboard' => ['Dashboard', 'Overview'],
                 'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                 'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
-                'team_sites_emails' => ['Sites with emails', 'Add emails to pushed sites by country'],
+                'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
                 'team_prospect_batches' => ['Add history', 'Your daily adds'],
             ],
         ];
