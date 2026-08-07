@@ -1,95 +1,110 @@
 <?php
+/**
+ * Admin Add sites — paste text list or 1-column CSV into Extracted URLs → Extracted Sites.
+ */
 $user = require_admin();
-ensure_prospect_schema();
+ensure_extracted_schema();
 seed_countries_if_empty(db());
 
 $country = trim((string) (post('country') ?: get('country')));
-$language = trim((string) (post('language') ?: get('language')));
-$raw = '';
+$raw = (string) post('sites_text');
 $errorDetail = '';
 
 if ($country !== '') {
     $canonCountry = resolve_canonical_country($country);
     if ($canonCountry !== null) {
         $country = $canonCountry['name'];
-        if ($language === '') {
-            $language = $canonCountry['language'];
-        }
     }
 }
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $raw = (string) post('urls');
         $country = trim((string) post('country'));
-        $language = trim((string) post('language'));
-        if ($country === '') {
-            flash('error', 'Select a country folder first (type to search, then Enter).');
-        } elseif (trim($raw) === '') {
-            flash('error', 'Paste at least one root domain.');
+        $raw = (string) post('sites_text');
+        if ($country === '' || resolve_canonical_country($country) === null) {
+            flash('error', 'Select a country first (type to search, then Enter).');
         } else {
-            $parsed = parse_domain_list_strict($raw);
-            if ($parsed['invalid_count'] > 0) {
-                flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
-                $raw = $parsed['valid_text'] !== '' ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw')) : $raw;
+            $result = admin_add_extracted_sites(
+                $country,
+                $user,
+                $raw,
+                $_FILES['sites_csv'] ?? null
+            );
+            if ($result['inserted'] < 1 && $result['skipped'] < 1) {
+                flash(
+                    'error',
+                    $result['invalid'] > 0
+                        ? 'No valid sites to add. Use root domains, or a 1-column CSV of site names.'
+                        : 'Paste a site list or upload a CSV first.'
+                );
             } else {
-                $result = admin_add_urls_to_database($raw, $user, $country, $language);
-                if ($result['total'] <= 0) {
-                    flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
-                } else {
-                    $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
-                    $msg .= ' New: ' . (int) $result['inserted'] . '.';
-                    if ((int) $result['updated'] > 0) {
-                        $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
-                    }
-                    flash('ok', $msg);
-                    redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+                $msg = 'Added ' . (int) $result['inserted'] . ' site(s) to Extracted Sites · ' . $result['country'];
+                if ((int) $result['skipped'] > 0) {
+                    $msg .= ' · ' . (int) $result['skipped'] . ' already there';
                 }
+                if ((int) $result['invalid'] > 0) {
+                    $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
+                }
+                flash('ok', $msg . '.');
+                redirect(
+                    'index.php?page=admin_extracted&folder=extracted_sites&country='
+                    . urlencode($result['country'])
+                );
             }
         }
     }
 } catch (Throwable $e) {
     $errorDetail = $e->getMessage();
-    flash('error', 'Could not save sites. ' . $errorDetail);
+    flash('error', 'Could not add sites. ' . $errorDetail);
 }
 
 render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+    ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted&folder=extracted_sites'],
     ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
     <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste root domains into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
+    <p class="muted">Paste a text list or upload a 1-column CSV into <strong>Extracted URLs → Extracted Sites</strong> for one country.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
-      <a class="btn secondary" href="index.php?page=admin_prospects&amp;country=<?= urlencode($country) ?>">Open <?= h($country) ?></a>
+      <a class="btn secondary" href="index.php?page=admin_extracted&amp;folder=extracted_sites&amp;country=<?= urlencode($country) ?>">Open <?= h($country) ?></a>
     <?php endif; ?>
-    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
+    <a class="btn secondary" href="index.php?page=admin_extracted&amp;folder=extracted_sites">Extracted Sites</a>
   </div>
 </div>
 
 <?= guide_admin_add() ?>
 
-<form class="card" method="post" action="index.php?page=admin_prospect_add">
+<form class="card" method="post" action="index.php?page=admin_prospect_add" enctype="multipart/form-data">
   <div class="form-grid">
-    <?= render_country_typeahead($country) ?>
-    <?= render_language_typeahead($language) ?>
-  </div>
-  <div style="margin-top:0.9rem">
-    <?= render_domains_paste_field('urls', $raw, [
-        'id' => 'urls',
-        'label' => 'Sites (root domains)',
+    <?= render_country_typeahead($country, [
+        'id' => 'country',
+        'label' => 'Country',
         'required' => true,
-        'rows' => 14,
+        'attrs' => '',
     ]) ?>
+    <div class="full">
+      <?= render_domains_paste_field('sites_text', $raw, [
+          'id' => 'sites_text',
+          'label' => 'Site list (text)',
+          'required' => false,
+          'rows' => 14,
+      ]) ?>
+    </div>
+    <div class="full">
+      <label for="sites_csv">Or upload CSV (1 column)</label>
+      <input id="sites_csv" type="file" name="sites_csv" accept=".csv,text/csv,text/plain,.txt">
+      <p class="help">One site name per row in the first column. Optional header: site / domain.</p>
+    </div>
   </div>
   <p class="actions" style="margin-top:1rem">
-    <button class="btn" type="submit">Save to country database</button>
+    <button class="btn" type="submit">Add sites</button>
   </p>
 </form>
 

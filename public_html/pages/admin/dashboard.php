@@ -79,9 +79,9 @@ render_header('Dashboard', 'admin');
 
 <div class="launch-cards" id="dashboard-launch-cards">
   <a class="launch-card" href="index.php?page=admin_prospect_add" data-dashboard-item
-     data-search="add sites paste root domains country folder">
+     data-search="add sites paste csv text list extracted sites country">
     <h2>Add sites</h2>
-    <p>Paste root domains into a country folder.</p>
+    <p>Paste a list or CSV into Extracted Sites.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospects" data-dashboard-item
      data-search="our database country folders sites urls">

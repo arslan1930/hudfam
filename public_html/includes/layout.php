@@ -14,9 +14,9 @@ function nav_is_active(string $navPage, string $current): bool
         return true;
     }
     $aliases = [
-        'admin_prospects' => ['admin_prospect_add'],
+        'admin_prospects' => [],
         'admin_prospect_batches' => ['admin_prospect_batch'],
-        'admin_extracted' => [],
+        'admin_extracted' => ['admin_prospect_add'],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'team_prospect_check' => [],
@@ -80,7 +80,7 @@ function render_header(string $title, string $panel = ''): void
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_prospects' => ['Our database', 'Country folders → URLs'],
-                'admin_prospect_add' => ['Add sites', 'Paste into a country database'],
+                'admin_prospect_add' => ['Add sites', 'Text list or CSV → Extracted Sites'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
                 'admin_extracted' => ['Extracted URLs', 'Extracted Sites · Sites with emails'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],

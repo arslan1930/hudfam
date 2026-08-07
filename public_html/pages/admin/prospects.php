@@ -51,11 +51,11 @@ if (!$inCountry && !$emptyCountry) {
     <?= render_page_purpose(
         'Our database — one folder per country',
         'Sites are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add sites inside the folder to paste domains into that country only.',
+        'Click a country folder to open that country’s database. Team Filter & add merges new unique sites into these folders.',
         [
-            'Open a country folder.',
-            'Add sites into that country’s database.',
-            'Team Filter & add can check against the same country list.',
+            'Open a country folder to browse sites.',
+            'Team Filter & add checks against the same country list.',
+            'Admin Add sites goes to Extracted URLs → Extracted Sites.',
         ]
     ) ?>
     <?php foreach ($byRegion as $regionLabel => $list): ?>
@@ -149,9 +149,6 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
   </div>
   <div class="actions">
-    <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
-    <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
 </div>
@@ -190,9 +187,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <?php if (!$rows): ?>
     <div class="empty-state">
       <p>No sites in this country yet.</p>
-      <?php if (!$emptyCountry): ?>
-        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
-      <?php endif; ?>
+      <p class="muted">Team Filter &amp; add merges new unique sites into this folder.</p>
     </div>
   <?php else: ?>
     <div class="actions" style="margin-top:0.8rem">

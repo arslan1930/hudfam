@@ -47,79 +47,10 @@ if ($inCountry && (string) get('export') !== '') {
     }
 }
 
-// --- Mutations: add on folder list (pick country) ---
-if ($folder === 'extracted_sites' && !$inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = (string) post('action');
-    if ($action === 'add_sites') {
-        $countryIn = trim((string) post('country'));
-        try {
-            $result = admin_add_extracted_sites(
-                $countryIn,
-                $user,
-                (string) post('sites_text'),
-                $_FILES['sites_csv'] ?? null
-            );
-        } catch (Throwable $e) {
-            flash('error', $e->getMessage());
-            redirect($sitesListUrl);
-        }
-        if ($result['inserted'] < 1 && $result['skipped'] < 1) {
-            flash(
-                'error',
-                $result['invalid'] > 0
-                    ? 'No valid sites to add. Use root domains (or a 1-column CSV of site names).'
-                    : 'Paste a site list or upload a CSV first.'
-            );
-            redirect($sitesListUrl);
-        }
-        $msg = 'Added ' . (int) $result['inserted'] . ' site(s) to Extracted Sites · ' . $result['country'];
-        if ((int) $result['skipped'] > 0) {
-            $msg .= ' · ' . (int) $result['skipped'] . ' already there';
-        }
-        if ((int) $result['invalid'] > 0) {
-            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
-        }
-        flash('ok', $msg . '.');
-        redirect($sitesListUrl . '&country=' . urlencode($result['country']));
-    }
-}
-
 // --- Mutations on country detail ---
 if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $countryName = $sheet;
-
-    if ($action === 'add_sites') {
-        try {
-            $result = admin_add_extracted_sites(
-                $countryName,
-                $user,
-                (string) post('sites_text'),
-                $_FILES['sites_csv'] ?? null
-            );
-        } catch (Throwable $e) {
-            flash('error', $e->getMessage());
-            redirect($sitesListUrl . '&country=' . urlencode($countryName));
-        }
-        if ($result['inserted'] < 1 && $result['skipped'] < 1) {
-            flash(
-                'error',
-                $result['invalid'] > 0
-                    ? 'No valid sites to add. Use root domains (or a 1-column CSV of site names).'
-                    : 'Paste a site list or upload a CSV first.'
-            );
-            redirect($sitesListUrl . '&country=' . urlencode($countryName));
-        }
-        $msg = 'Added ' . (int) $result['inserted'] . ' site(s)';
-        if ((int) $result['skipped'] > 0) {
-            $msg .= ' · ' . (int) $result['skipped'] . ' already there';
-        }
-        if ((int) $result['invalid'] > 0) {
-            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
-        }
-        flash('ok', $msg . '.');
-        redirect($sitesListUrl . '&country=' . urlencode($countryName));
-    }
 
     if ($action === 'remove_list') {
         $raw = (string) post('remove_text');
@@ -279,7 +210,7 @@ if ($folder === 'sites_with_emails') {
     return;
 }
 
-// --- Folder: Extracted Sites → country rows + add ---
+// --- Folder: Extracted Sites → country rows ---
 if ($folder === 'extracted_sites' && !$inCountry) {
     $countryRows = list_extracted_country_rows();
     $grandTotal = 0;
@@ -300,37 +231,10 @@ if ($folder === 'extracted_sites' && !$inCountry) {
         <p class="muted">Countries with extracted sites. <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> total.</p>
       </div>
       <div class="actions">
+        <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
         <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
       </div>
     </div>
-
-    <div class="card">
-      <h2>Add sites</h2>
-      <p class="help">Paste a text list and/or upload a 1-column CSV of site names into a country.</p>
-      <form method="post" enctype="multipart/form-data" class="extracted-tools-form">
-        <input type="hidden" name="action" value="add_sites">
-        <div class="form-grid">
-          <?= render_country_typeahead('', [
-              'id' => 'add_country',
-              'label' => 'Country',
-              'required' => true,
-          ]) ?>
-          <div class="full">
-            <label for="sites_text">Site list (text)</label>
-            <textarea id="sites_text" name="sites_text" class="inventory-box" rows="8" placeholder="example.com&#10;another-site.de"></textarea>
-          </div>
-          <div class="full">
-            <label for="sites_csv">Or upload CSV (1 column)</label>
-            <input id="sites_csv" type="file" name="sites_csv" accept=".csv,text/csv,text/plain,.txt">
-            <p class="help">One site name per row in the first column. Optional header: site / domain.</p>
-          </div>
-        </div>
-        <div class="actions" style="margin-top:0.75rem">
-          <button class="btn" type="submit">Add sites</button>
-        </div>
-      </form>
-    </div>
-    <?= sites_form_script_tag() ?>
 
     <div class="card">
       <?php if ($countryRows): ?>
@@ -361,7 +265,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
       <?php else: ?>
       <div class="empty-state">
         <p>No extracted sites yet.</p>
-        <p class="muted">Add a list above, or wait for Team to Push from Extracting Results.</p>
+        <p class="muted">Use <a href="index.php?page=admin_prospect_add">Add sites</a>, or wait for Team to Push from Extracting Results.</p>
       </div>
       <?php endif; ?>
     </div>
@@ -407,9 +311,10 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     <p class="muted"><?= (int) $countryTotal ?> site<?= (int) $countryTotal === 1 ? '' : 's' ?><?= $q !== '' ? ' · showing ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?></p>
   </div>
   <div class="actions">
+    <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <button
       type="button"
-      class="btn"
+      class="btn secondary"
       id="extracted_copy_all"
       data-export-url="<?= h($exportUrl) ?>"
       data-count="<?= (int) $countryTotal ?>"
@@ -421,34 +326,18 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 </div>
 <p class="help" id="extracted_copy_status" hidden></p>
 
-<div class="grid two-box" style="margin-bottom:1rem">
-  <div class="card box-panel">
-    <h2>Add sites</h2>
-    <p class="help">Paste a text list and/or upload a 1-column CSV.</p>
-    <form method="post" enctype="multipart/form-data">
-      <input type="hidden" name="action" value="add_sites">
-      <textarea name="sites_text" class="inventory-box" rows="8" placeholder="example.com&#10;another-site.de"></textarea>
-      <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
-      <input type="file" name="sites_csv" accept=".csv,text/csv,text/plain,.txt">
-      <div class="actions" style="margin-top:0.75rem">
-        <button class="btn" type="submit">Add sites</button>
-      </div>
-    </form>
-  </div>
-
-  <div class="card box-panel">
-    <h2>Remove by list</h2>
-    <p class="help">Paste site names (or upload a 1-column CSV) to remove those exact sites from <?= h($countryName) ?>.</p>
-    <form method="post" enctype="multipart/form-data" onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?>?');">
-      <input type="hidden" name="action" value="remove_list">
-      <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
-      <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
-      <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
-      <div class="actions" style="margin-top:0.75rem">
-        <button class="btn danger" type="submit">Remove listed sites</button>
-      </div>
-    </form>
-  </div>
+<div class="card" style="margin-bottom:1rem">
+  <h2>Remove by list</h2>
+  <p class="help">Paste site names (or upload a 1-column CSV) to remove those exact sites from <?= h($countryName) ?>.</p>
+  <form method="post" enctype="multipart/form-data" onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?>?');">
+    <input type="hidden" name="action" value="remove_list">
+    <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
+    <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
+    <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
+    <div class="actions" style="margin-top:0.75rem">
+      <button class="btn danger" type="submit">Remove listed sites</button>
+    </div>
+  </form>
 </div>
 
 <form class="card filters" method="get">

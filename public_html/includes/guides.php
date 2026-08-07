@@ -154,13 +154,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add sites — seed a country database',
-        'Paste root domains into one country’s folder (no prices). Optional language via search + Enter.',
-        'Choose country (type + Enter), paste root domains, Clean errors if needed, save.',
+        'Add sites — Extracted Sites',
+        'Paste a text list or upload a 1-column CSV into Extracted URLs → Extracted Sites for one country.',
+        'Choose country → paste and/or upload CSV → Add sites.',
         [
-            'Select the country folder (type to search, Enter to select).',
-            'Paste root domains only — no https, paths, or subdomains.',
-            'Use Clean errors to correct https/paths/subdomains, then Save. Browse them under that country’s folder.',
+            'Select the country (type to search, Enter to select).',
+            'Paste site names and/or upload a 1-column CSV.',
+            'Open Extracted URLs → Extracted Sites → that country to copy, edit, or remove.',
         ]
     );
 }
