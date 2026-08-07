@@ -152,7 +152,7 @@ function guide_admin_add(): string
         [
             'Select the country folder (type to search, Enter to select).',
             'Paste root domains only — no https, paths, or subdomains.',
-            'Use Clean errors, then Save. Browse them under that country’s folder.',
+            'Use Clean errors to correct https/paths/subdomains, then Save. Browse them under that country’s folder.',
         ]
     );
 }

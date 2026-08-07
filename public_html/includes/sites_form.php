@@ -128,9 +128,10 @@ function render_domains_paste_field(
         . ' placeholder="' . h($placeholder) . '" data-domains-input spellcheck="false">'
         . h($value) . '</textarea>';
     $html .= '<p class="help" style="margin-top:0.5rem">'
-        . 'Root domain only — no <code>https</code>, <code>//</code>, paths, or subdomains. '
-        . 'Hyphens and multi-part TLDs like <code>.co.uk</code> are OK. '
-        . 'One per line (or commas). Use <strong>Clean errors</strong> to remove invalid lines.'
+        . 'Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>. '
+        . 'Hyphens and multi-part TLDs are OK. '
+        . 'One per line (or commas). Use <strong>Clean errors</strong> to correct '
+        . '<code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).'
         . '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
     $html .= '</div>';

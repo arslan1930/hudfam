@@ -101,47 +101,121 @@ function is_root_domain(string $host): bool
 }
 
 /**
+ * Extract a hostname candidate from a messy paste (https, path, port, www).
+ */
+function extract_host_candidate(string $raw): string
+{
+    $s = trim($raw);
+    if ($s === '') {
+        return '';
+    }
+    $s = preg_replace('/^[\s\'"\[<\(]+/', '', $s) ?? $s;
+    $s = preg_replace('/[\s\'"\]>\)]+$/', '', $s) ?? $s;
+    $s = preg_replace('#^[a-z][a-z0-9+.-]*://#i', '', $s) ?? $s;
+    if (str_starts_with($s, '//')) {
+        $s = substr($s, 2);
+    }
+    $s = explode('/', $s, 2)[0];
+    $s = explode('?', $s, 2)[0];
+    $s = explode('#', $s, 2)[0];
+    if (str_contains($s, '@')) {
+        $parts = explode('@', $s);
+        $s = (string) end($parts);
+    }
+    $s = strtolower($s);
+    if (str_contains($s, ':') && !str_contains($s, ']')) {
+        $s = explode(':', $s, 2)[0];
+    }
+    $s = preg_replace('#^www\.#i', '', $s) ?? $s;
+    return rtrim($s, '.');
+}
+
+/**
+ * Reduce a host to apex/root domain (eTLD+1), e.g. blog.example.co.uk → example.co.uk
+ */
+function to_root_domain(string $host): string
+{
+    $host = strtolower(trim($host));
+    $host = preg_replace('#^www\.#i', '', $host) ?? $host;
+    $host = rtrim($host, '.');
+    if ($host === '' || !str_contains($host, '.')) {
+        return '';
+    }
+    if (!preg_match('/^[a-z0-9.-]+$/', $host)) {
+        return '';
+    }
+    if (str_starts_with($host, '-') || str_ends_with($host, '-') || str_contains($host, '..')) {
+        return '';
+    }
+    $parts = array_values(array_filter(explode('.', $host), static fn ($p) => $p !== ''));
+    if (count($parts) < 2) {
+        return '';
+    }
+    foreach ($parts as $label) {
+        if ($label === '' || strlen($label) > 63) {
+            return '';
+        }
+        if (!preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/', $label)) {
+            return '';
+        }
+    }
+    $suffix = domain_public_suffix($host);
+    if ($suffix === '') {
+        return '';
+    }
+    $suffixParts = substr_count($suffix, '.') + 1;
+    $need = $suffixParts + 1;
+    if (count($parts) < $need) {
+        return '';
+    }
+    $root = implode('.', array_slice($parts, -$need));
+    return is_root_domain($root) ? $root : '';
+}
+
+/**
  * Classify one pasted line for root-domain-only input.
+ * Prefers correcting (https / path / subdomain → root domain) over rejecting.
  *
- * @return array{ok:bool,domain:string,reason:string,raw:string}
+ * @return array{ok:bool,domain:string,reason:string,raw:string,fixed?:bool}
  */
 function analyze_pasted_domain_line(string $line): array
 {
     $raw = trim($line);
     if ($raw === '') {
-        return ['ok' => false, 'domain' => '', 'reason' => 'empty', 'raw' => $raw];
+        return ['ok' => false, 'domain' => '', 'reason' => 'empty', 'raw' => $raw, 'fixed' => false];
     }
+
+    $host = extract_host_candidate($raw);
+    $root = to_root_domain($host);
+    if ($root !== '') {
+        return [
+            'ok' => true,
+            'domain' => $root,
+            'reason' => '',
+            'raw' => $raw,
+            'fixed' => strtolower($raw) !== $root,
+        ];
+    }
+
     if (preg_match('#https?://#i', $raw) || str_starts_with($raw, '//') || str_contains($raw, '://')) {
-        return ['ok' => false, 'domain' => '', 'reason' => 'has_scheme', 'raw' => $raw];
+        return ['ok' => false, 'domain' => '', 'reason' => 'has_scheme', 'raw' => $raw, 'fixed' => false];
     }
     if (str_contains($raw, '/') || str_contains($raw, '?') || str_contains($raw, '#')) {
-        return ['ok' => false, 'domain' => '', 'reason' => 'has_path', 'raw' => $raw];
+        return ['ok' => false, 'domain' => '', 'reason' => 'has_path', 'raw' => $raw, 'fixed' => false];
     }
     if (str_contains($raw, ' ') || str_contains($raw, "\t")) {
-        return ['ok' => false, 'domain' => '', 'reason' => 'has_spaces', 'raw' => $raw];
+        return ['ok' => false, 'domain' => '', 'reason' => 'has_spaces', 'raw' => $raw, 'fixed' => false];
     }
-
-    $host = strtolower($raw);
-    $host = preg_replace('#^www\.#i', '', $host) ?? $host;
-    if (str_contains($host, ':') && !str_contains($host, ']')) {
-        $host = explode(':', $host, 2)[0];
-    }
-    $host = rtrim($host, '.');
-
-    if ($host === '' || !str_contains($host, '.')) {
-        return ['ok' => false, 'domain' => '', 'reason' => 'invalid', 'raw' => $raw];
-    }
-    if (!is_root_domain($host)) {
+    if ($host !== '' && str_contains($host, '.')) {
         $suffix = domain_public_suffix($host);
         $suffixParts = $suffix !== '' ? substr_count($suffix, '.') + 1 : 1;
         $parts = array_values(array_filter(explode('.', $host)));
         if (count($parts) - $suffixParts > 1) {
-            return ['ok' => false, 'domain' => '', 'reason' => 'subdomain', 'raw' => $raw];
+            return ['ok' => false, 'domain' => '', 'reason' => 'subdomain', 'raw' => $raw, 'fixed' => false];
         }
-        return ['ok' => false, 'domain' => '', 'reason' => 'invalid', 'raw' => $raw];
     }
 
-    return ['ok' => true, 'domain' => $host, 'reason' => '', 'raw' => $raw];
+    return ['ok' => false, 'domain' => '', 'reason' => 'invalid', 'raw' => $raw, 'fixed' => false];
 }
 
 /**
