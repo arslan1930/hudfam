@@ -1,33 +1,44 @@
 <?php
 /**
  * Admin · Emails DATA · Email campaign data
- * Create/edit sheets of site names + emails; always connected to Communication Team search.
+ * One editable sheet per country (site names + emails).
+ * Always connected to Communication Team super search.
  *
  * Expects: $user, $base (Emails DATA hub URL)
  */
 ensure_email_campaign_schema();
 ensure_sites_with_emails_schema();
+seed_countries_if_empty(db());
 
 $campBase = $base . '&folder=email_campaigns';
 $sheetId = isset($sheetId) ? (int) $sheetId : (int) get('sheet');
+$countryParam = (string) get('country');
 
-// --- Sheet detail (editable grid) ---
+// Open by country name shortcut
+if ($sheetId < 1 && $countryParam !== '') {
+    $byCountry = get_email_campaign_sheet_by_country($countryParam);
+    if ($byCountry) {
+        redirect($campBase . '&sheet=' . (int) $byCountry['id']);
+    }
+}
+
+// --- Sheet detail (editable grid for one country) ---
 if ($sheetId > 0) {
     $sheet = get_email_campaign_sheet($sheetId);
     if (!$sheet) {
         flash('error', 'Email sheet not found.');
         redirect($campBase);
     }
+    $sheetCountry = email_campaign_sheet_country($sheet);
+    $canon = resolve_canonical_country($sheetCountry);
+    if ($canon) {
+        $sheetCountry = $canon['name'];
+    }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
         $back = $campBase . '&sheet=' . $sheetId;
         try {
-            if ($action === 'rename') {
-                rename_email_campaign_sheet($sheetId, (string) post('name'));
-                flash('ok', 'Sheet name updated. Communication Team search bar uses this name.');
-                redirect($back);
-            }
             if ($action === 'save_sheet') {
                 $result = save_email_campaign_sheet_grid(
                     $sheetId,
@@ -38,12 +49,13 @@ if ($sheetId > 0) {
                     (array) ($_POST['email3'] ?? []),
                     (array) ($_POST['email4'] ?? [])
                 );
-                $msg = 'Saved ' . (int) $result['saved'] . ' row' . ((int) $result['saved'] === 1 ? '' : 's') . '.';
+                $msg = 'Saved ' . (int) $result['saved'] . ' row' . ((int) $result['saved'] === 1 ? '' : 's')
+                    . ' for ' . $sheetCountry . '.';
                 if ($result['errors'] !== []) {
                     $msg .= ' Some rows skipped: ' . implode('; ', array_slice($result['errors'], 0, 5));
                     flash('error', $msg);
                 } else {
-                    flash('ok', $msg . ' Communication Team can search this sheet now.');
+                    flash('ok', $msg . ' Available in Communication Team super search.');
                 }
                 redirect($back);
             }
@@ -58,7 +70,7 @@ if ($sheetId > 0) {
                     (array) ($_POST['email4'] ?? [])
                 );
                 add_blank_email_campaign_rows($sheetId, 1);
-                flash('ok', 'Row(s) added.');
+                flash('ok', 'Row added.');
                 redirect($back . '#sheet-bottom');
             }
             if ($action === 'delete_row') {
@@ -81,7 +93,8 @@ if ($sheetId > 0) {
             }
             if ($action === 'paste') {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
-                $msg = 'Pasted: ' . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated.';
+                $msg = 'Pasted into ' . $sheetCountry . ': '
+                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated.';
                 if ($result['errors'] !== []) {
                     $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 5));
                     flash('error', $msg);
@@ -92,20 +105,19 @@ if ($sheetId > 0) {
             }
             if ($action === 'import') {
                 $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
-                $result = import_email_campaign_sheet_from_swe($sheetId, $source);
+                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry);
                 $label = $source === 'admin' ? 'Sites with emails - Admin' : 'All sites with emails - Final';
                 flash(
                     'ok',
-                    'Imported from ' . $label . ': '
+                    'Imported ' . $sheetCountry . ' from ' . $label . ': '
                     . (int) $result['imported'] . ' new, '
                     . (int) $result['updated'] . ' updated.'
                 );
                 redirect($back);
             }
             if ($action === 'delete_sheet') {
-                $name = (string) $sheet['name'];
                 delete_email_campaign_sheet($sheetId);
-                flash('ok', 'Deleted email sheet “' . $name . '”.');
+                flash('ok', 'Deleted email sheet for ' . $sheetCountry . '.');
                 redirect($campBase);
             }
         } catch (Throwable $e) {
@@ -125,49 +137,40 @@ if ($sheetId > 0) {
             $filledCount++;
         }
     }
-    $sheetName = (string) $sheet['name'];
     $formAction = $campBase . '&sheet=' . $sheetId;
 
-    render_header('Email sheet · ' . $sheetName, 'admin');
+    render_header('Email sheet · ' . $sheetCountry, 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
         ['label' => 'Emails DATA', 'href' => $base],
         ['label' => 'Email campaign data', 'href' => $campBase],
-        ['label' => $sheetName],
+        ['label' => $sheetCountry],
     ]);
     ?>
     <div class="topbar">
       <div>
-        <h1><?= h($sheetName) ?></h1>
+        <h1><?= h($sheetCountry) ?></h1>
         <p class="muted">
-          Site names + emails · always connected to <strong>Communication Team</strong> search ·
+          Country email sheet · site names + emails ·
+          Communication Team super search ·
           <?= (int) $filledCount ?> site<?= (int) $filledCount === 1 ? '' : 's' ?>
+          <?php if ($canon): ?>
+            · <?= h((string) $canon['language']) ?> · <?= h((string) $canon['region']) ?>
+          <?php endif; ?>
         </p>
       </div>
       <div class="actions">
-        <a class="btn secondary" href="<?= h($campBase) ?>">All sheets</a>
+        <a class="btn secondary" href="<?= h($campBase) ?>">All countries</a>
       </div>
     </div>
 
     <div class="card">
-      <form method="post" action="<?= h($formAction) ?>" autocomplete="off" class="camp-rename-form">
-        <input type="hidden" name="action" value="rename">
-        <label for="camp_sheet_name">Sheet name</label>
-        <div class="camp-rename-row">
-          <input id="camp_sheet_name" name="name" required maxlength="180"
-                 value="<?= h($sheetName) ?>" autocomplete="off">
-          <button class="btn secondary" type="submit">Save name</button>
-        </div>
-        <p class="help">This name is the Communication Team search bar label.</p>
-      </form>
-    </div>
-
-    <div class="card" style="margin-top:1rem">
       <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
         <div>
           <h2 style="margin:0">Sites · Emails</h2>
           <p class="help" style="margin:0.25rem 0 0">
-            Enter a site name with emails next to it. Save the sheet — Communication Team can search it immediately.
+            Enter site names with emails next to them for <strong><?= h($sheetCountry) ?></strong>.
+            Save — Communication Team can find them in the all-countries super search.
           </p>
         </div>
       </div>
@@ -235,11 +238,11 @@ if ($sheetId > 0) {
 
     <div class="card" style="margin-top:1rem">
       <h2>Paste site + emails</h2>
-      <p class="help">One line per site: <code>site.com, email1@x.com, email2@x.com</code> (or spaces/tabs).</p>
+      <p class="help">One line per site for <strong><?= h($sheetCountry) ?></strong>: <code>site.com, email1@x.com</code></p>
       <form method="post" action="<?= h($formAction) ?>">
         <input type="hidden" name="action" value="paste">
         <textarea name="paste_text" class="inventory-box" rows="6"
-                  placeholder="example.com, hello@example.com&#10;other.org contact@other.org info@other.org"></textarea>
+                  placeholder="example.com, hello@example.com&#10;other.org contact@other.org"></textarea>
         <p class="actions" style="margin-top:0.75rem">
           <button class="btn" type="submit">Add pasted rows</button>
         </p>
@@ -247,10 +250,10 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2>Import from archive (optional)</h2>
-      <p class="help">Copy from Final / Admin archives into this sheet. Does not change the archives.</p>
+      <h2>Import <?= h($sheetCountry) ?> from archive (optional)</h2>
+      <p class="help">Copies only this country’s rows from Final / Admin into this sheet.</p>
       <form method="post" action="<?= h($formAction) ?>"
-            onsubmit="return confirm('Import into “<?= h($sheetName) ?>”? Matching site names will be updated.');">
+            onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
@@ -258,7 +261,7 @@ if ($sheetId > 0) {
           <option value="admin">Sites with emails - Admin</option>
         </select>
         <p class="actions" style="margin-top:0.75rem">
-          <button class="btn secondary" type="submit">Import into sheet</button>
+          <button class="btn secondary" type="submit">Import country into sheet</button>
         </p>
       </form>
     </div>
@@ -266,18 +269,17 @@ if ($sheetId > 0) {
     <div class="card" style="margin-top:1rem">
       <h2>Communication Team</h2>
       <p class="help">
-        This sheet is <strong>always connected</strong> to the Communication department.
-        Members see a live search bar named <strong><?= h($sheetName) ?></strong> on their login panel.
-        They search site or email, see both together, then delete both or remove only an email (confirm first).
+        This country sheet is included in the <strong>Communication Team super search</strong>
+        (all countries). Their remove/update actions change rows in <strong><?= h($sheetCountry) ?></strong>.
       </p>
     </div>
 
     <div class="card" style="margin-top:1rem">
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
-            onsubmit="return confirm('Delete email sheet “<?= h($sheetName) ?>” and all its rows?');">
+            onsubmit="return confirm('Delete the <?= h($sheetCountry) ?> email sheet and all its rows?');">
         <input type="hidden" name="action" value="delete_sheet">
-        <button class="btn danger" type="submit">Delete sheet</button>
+        <button class="btn danger" type="submit">Delete country sheet</button>
       </form>
     </div>
     <?php
@@ -285,14 +287,18 @@ if ($sheetId > 0) {
     return;
 }
 
-// --- List + create ---
+// --- List + create by country ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     try {
         if ($action === 'create') {
-            $id = create_email_campaign_sheet((string) post('name'), (int) ($user['id'] ?? 0));
-            add_blank_email_campaign_rows($id, 8);
-            flash('ok', 'Email sheet created and connected to Communication Team. Add site names + emails below.');
+            $id = create_email_campaign_sheet((string) post('country'), (int) ($user['id'] ?? 0));
+            $sheet = get_email_campaign_sheet($id);
+            $countryName = $sheet ? email_campaign_sheet_country($sheet) : (string) post('country');
+            if (count_email_campaign_rows($id) < 1) {
+                add_blank_email_campaign_rows($id, 8);
+            }
+            flash('ok', 'Email sheet ready for ' . $countryName . '. Connected to Communication Team super search.');
             redirect($campBase . '&sheet=' . $id);
         }
         if ($action === 'delete') {
@@ -301,8 +307,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$sheet) {
                 flash('error', 'Sheet not found.');
             } else {
+                $countryName = email_campaign_sheet_country($sheet);
                 delete_email_campaign_sheet($id);
-                flash('ok', 'Deleted email sheet “' . (string) $sheet['name'] . '”.');
+                flash('ok', 'Deleted email sheet for ' . $countryName . '.');
             }
             redirect($campBase);
         }
@@ -313,6 +320,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $sheets = list_email_campaign_sheets();
+$existingCountries = [];
+foreach ($sheets as $s) {
+    $existingCountries[mb_strtolower((string) $s['country'])] = true;
+}
+$allCountries = list_countries(null, true);
+$availableCountries = [];
+foreach ($allCountries as $c) {
+    $name = (string) $c['name'];
+    if (!isset($existingCountries[mb_strtolower($name)])) {
+        $availableCountries[] = $c;
+    }
+}
 
 render_header('Email campaign data', 'admin');
 render_breadcrumbs([
@@ -325,7 +344,8 @@ render_breadcrumbs([
   <div>
     <h1>Email campaign data</h1>
     <p class="muted">
-      Create a sheet of site names + emails. It always connects to Communication Team for live search.
+      One Email Sheet per country (site names + emails).
+      Communication Team searches all countries in one super search bar.
     </p>
   </div>
   <div class="actions">
@@ -335,56 +355,100 @@ render_breadcrumbs([
 
 <div class="orders-layout">
   <section class="card">
-    <h2>Email sheets</h2>
+    <h2>Country sheets</h2>
     <?php if (!$sheets): ?>
       <div class="empty-state">
-        <p>No email sheets yet.</p>
-        <p class="muted">Create one on the right, fill site names + emails, and Communication Team gets the search bar.</p>
+        <p>No country sheets yet.</p>
+        <p class="muted">Create an Email Sheet for a country on the right, then fill site names + emails.</p>
       </div>
     <?php else: ?>
-      <ul class="order-client-list">
-        <?php foreach ($sheets as $s): ?>
-          <li class="order-client-row">
-            <div class="order-client-main">
-              <a class="order-client-name" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">
-                <?= h($s['name']) ?>
+      <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+        <label class="sheet-search" for="camp-country-search">
+          <span class="visually-hidden">Search countries</span>
+          <input id="camp-country-search" type="search" placeholder="Search countries…"
+                 autocomplete="off" spellcheck="false" data-no-draft>
+        </label>
+      </div>
+      <table class="extracted-country-table" id="camp-country-table">
+        <thead>
+          <tr>
+            <th>Country</th>
+            <th class="num">Sites</th>
+            <th class="num">With emails</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($sheets as $s):
+            $cName = (string) $s['country'];
+            $hay = mb_strtolower($cName . ' ' . (string) $s['language'] . ' ' . (string) $s['region']);
+            ?>
+          <tr data-camp-country-row data-search="<?= h($hay) ?>">
+            <td>
+              <a class="extracted-country-link" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">
+                <?= h($cName) ?>
               </a>
-              <div class="order-client-meta muted">
-                <span><?= (int) $s['row_count'] ?> site<?= (int) $s['row_count'] === 1 ? '' : 's' ?></span>
-                <span><?= (int) $s['with_emails'] ?> with email<?= (int) $s['with_emails'] === 1 ? '' : 's' ?></span>
-                <span>Communication Team</span>
-              </div>
-            </div>
-            <div class="order-client-actions">
-              <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open sheet</a>
-              <form method="post" action="<?= h($campBase) ?>"
-                    onsubmit="return confirm(<?= h(json_encode('Delete sheet “' . $s['name'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+            </td>
+            <td class="num"><?= (int) $s['row_count'] ?></td>
+            <td class="num muted"><?= (int) $s['with_emails'] ?></td>
+            <td class="num">
+              <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
+              <form method="post" action="<?= h($campBase) ?>" style="display:inline"
+                    onsubmit="return confirm(<?= h(json_encode('Delete sheet for ' . $cName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
                 <button class="btn secondary small" type="submit">Delete</button>
               </form>
-            </div>
-          </li>
+            </td>
+          </tr>
         <?php endforeach; ?>
-      </ul>
+        </tbody>
+      </table>
+      <script>
+      (function () {
+        var input = document.getElementById('camp-country-search');
+        if (!input) return;
+        input.addEventListener('input', function () {
+          var q = String(input.value || '').trim().toLowerCase();
+          document.querySelectorAll('[data-camp-country-row]').forEach(function (row) {
+            row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+          });
+        });
+      })();
+      </script>
     <?php endif; ?>
   </section>
 
   <section class="card" id="create-email-sheet">
     <h2>Create an Email Sheet</h2>
     <p class="muted" style="margin-top:0">
-      Name it, then fill site names with emails next to them.
-      The sheet is automatically connected to the Communication department search panel.
+      Pick a country. That country gets its own sheet of site names + emails,
+      and joins the Communication Team all-countries super search.
     </p>
+    <?php if (!$availableCountries): ?>
+      <div class="empty-state">
+        <p>Every country already has a sheet.</p>
+      </div>
+    <?php else: ?>
     <form method="post" action="<?= h($campBase) ?>" autocomplete="off">
       <input type="hidden" name="action" value="create">
-      <label for="new_camp_name">Sheet name</label>
-      <input id="new_camp_name" name="name" required maxlength="180"
-             placeholder="e.g. March outreach" autocomplete="off">
+      <label for="new_camp_country">Country</label>
+      <select id="new_camp_country" name="country" required>
+        <option value="">Select country…</option>
+        <?php foreach ($availableCountries as $c): ?>
+          <option value="<?= h((string) $c['name']) ?>">
+            <?= h((string) $c['name']) ?>
+            <?php if (trim((string) ($c['default_language'] ?? '')) !== ''): ?>
+              · <?= h((string) $c['default_language']) ?>
+            <?php endif; ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
       <p class="actions" style="margin-top:1rem">
         <button class="btn" type="submit">Create an Email Sheet</button>
       </p>
     </form>
+    <?php endif; ?>
   </section>
 </div>
 <?php

@@ -1,6 +1,6 @@
 <?php
 /**
- * Communication Team · live search on Admin-created email campaign sheets.
+ * Communication Team · super search across all country email campaign sheets.
  */
 $user = require_team();
 ensure_email_campaign_schema();
@@ -11,19 +11,16 @@ if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
 }
 
 $base = 'index.php?page=team_email_campaigns';
-$sheetId = (int) get('sheet');
 
-// JSON suggest
+// JSON suggest — all countries
 if ((string) get('ajax') === 'suggest') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
-    $sid = (int) get('sheet');
     $q = (string) get('q');
     echo json_encode([
         'ok' => true,
         'q' => $q,
-        'sheet' => $sid,
-        'suggestions' => search_email_campaign_suggestions($sid, $q, 20),
+        'suggestions' => search_email_campaign_suggestions_all($q, 25),
     ]);
     exit;
 }
@@ -31,10 +28,11 @@ if ((string) get('ajax') === 'suggest') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $sid = (int) post('sheet_id');
+    $rowId = (int) post('row_id');
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
 
-    $json = static function (array $payload, int $code = 200) use ($wantsJson, $base, $sid): void {
+    $json = static function (array $payload, int $code = 200) use ($wantsJson, $base): void {
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
             http_response_code($code);
@@ -46,42 +44,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             flash('error', (string) ($payload['error'] ?? 'Could not complete.'));
         }
-        redirect($base . ($sid > 0 ? '&sheet=' . $sid : ''));
+        redirect($base);
     };
 
-    if (!get_email_campaign_sheet($sid)) {
-        $json(['ok' => false, 'error' => 'Email sheet not found.'], 404);
+    // Resolve sheet from row when sheet_id missing (super search safety).
+    if ($sid < 1 && $rowId > 0) {
+        $row = get_email_campaign_row($rowId);
+        if ($row) {
+            $sid = (int) $row['sheet_id'];
+        }
     }
 
+    $sheet = $sid > 0 ? get_email_campaign_sheet($sid) : null;
+    if (!$sheet) {
+        $json(['ok' => false, 'error' => 'Country email sheet not found.'], 404);
+    }
+    $countryName = email_campaign_sheet_country($sheet);
+
     if ($action === 'delete_row') {
-        $result = delete_email_campaign_row($sid, (int) post('row_id'));
+        $result = delete_email_campaign_row($sid, $rowId);
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Delete failed.')], 404);
         }
         $json([
             'ok' => true,
-            'message' => 'Deleted site + emails for ' . (string) $result['domain'] . '.',
+            'message' => 'Deleted ' . (string) $result['domain'] . ' from ' . $countryName . ' sheet.',
             'domain' => (string) $result['domain'],
+            'country' => $countryName,
             'mode' => 'row',
         ]);
     }
 
     if ($action === 'delete_email') {
-        $result = remove_email_from_email_campaign_row(
-            $sid,
-            (int) post('row_id'),
-            (string) post('email')
-        );
+        $result = remove_email_from_email_campaign_row($sid, $rowId, (string) post('email'));
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
         }
         $json([
             'ok' => true,
-            'message' => 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain'] . '. Site name kept.',
+            'message' => 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
+                . ' (' . $countryName . '). Site name kept.',
             'domain' => (string) $result['domain'],
+            'country' => $countryName,
             'emails' => $result['emails'] ?? [],
             'removed' => (string) ($result['removed'] ?? ''),
-            'row_id' => (int) post('row_id'),
+            'row_id' => $rowId,
+            'sheet_id' => $sid,
             'mode' => 'email',
         ]);
     }
@@ -89,30 +97,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
-if ($sheetId > 0 && !get_email_campaign_sheet($sheetId)) {
-    flash('error', 'Email sheet not found.');
-    redirect($base);
-}
-
-render_header('Email campaign sheets', 'team');
+render_header('Email campaign search', 'team');
 render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Email campaign sheets'],
+    ['label' => 'Email campaign search'],
 ]);
 ?>
 <div class="topbar">
   <div>
-    <h1>Email campaign sheets</h1>
+    <h1>Email campaign search</h1>
     <p class="muted">
-      Searchbars come from Admin → Emails DATA → Email campaign data.
-      Results always show <strong>site name + email</strong> together.
-      Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
+      One super search across <strong>all country sheets</strong> from Admin → Emails DATA → Email campaign data.
+      Results show <strong>site name + email + country</strong>. Choose delete both or remove only email, then press
+      <strong>Enter</strong> (confirm first) — the matching country sheet row updates.
     </p>
   </div>
 </div>
 <?php
-render_email_campaign_search_panels($sheetId > 0 ? $sheetId : null, $base);
-if ($sheetId > 0) {
-    echo '<p class="actions"><a class="btn secondary" href="' . h($base) . '">Show all sheets</a></p>';
-}
+render_email_campaign_super_search($base);
 render_footer('team');

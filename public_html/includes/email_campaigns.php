@@ -1,7 +1,8 @@
 <?php
 /**
  * Email campaign sheets (Emails DATA → Email campaign data).
- * Admin creates named sheets; Communication Team searches/updates them.
+ * One sheet per country. Communication Team uses one super search across all countries;
+ * updates apply to the matching country sheet row.
  */
 
 function ensure_email_campaign_schema(): void
@@ -49,20 +50,16 @@ function ensure_email_campaign_schema(): void
     );
 }
 
-function normalize_email_campaign_sheet_name(string $name): string
+/**
+ * Sheet "name" is always the canonical country name.
+ */
+function email_campaign_sheet_country(array $sheet): string
 {
-    $name = trim(preg_replace('/\s+/u', ' ', $name) ?? '');
-    if ($name === '') {
-        throw new InvalidArgumentException('Sheet name is required.');
-    }
-    if (mb_strlen($name) > 180) {
-        throw new InvalidArgumentException('Sheet name is too long (max 180 characters).');
-    }
-    return $name;
+    return (string) ($sheet['name'] ?? '');
 }
 
 /**
- * @return list<array{id:int,name:string,row_count:int,with_emails:int,created_at:?string,updated_at:?string}>
+ * @return list<array{id:int,name:string,country:string,region:string,language:string,row_count:int,with_emails:int,created_at:?string,updated_at:?string}>
  */
 function list_email_campaign_sheets(): array
 {
@@ -77,13 +74,18 @@ function list_email_campaign_sheets(): array
             FROM email_campaign_sheets s
             LEFT JOIN email_campaign_rows r ON r.sheet_id = s.id
             GROUP BY s.id, s.name, s.created_at, s.updated_at
-            ORDER BY s.updated_at DESC, s.name ASC";
+            ORDER BY s.name ASC";
     $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
     $out = [];
     foreach ($rows as $row) {
+        $country = (string) $row['name'];
+        $canon = resolve_canonical_country($country);
         $out[] = [
             'id' => (int) $row['id'],
-            'name' => (string) $row['name'],
+            'name' => $canon ? $canon['name'] : $country,
+            'country' => $canon ? $canon['name'] : $country,
+            'region' => $canon ? (string) $canon['region'] : '',
+            'language' => $canon ? (string) $canon['language'] : '',
             'row_count' => (int) $row['row_count'],
             'with_emails' => (int) $row['with_emails'],
             'created_at' => $row['created_at'] !== null ? (string) $row['created_at'] : null,
@@ -102,35 +104,47 @@ function get_email_campaign_sheet(int $id): ?array
     return $row ?: null;
 }
 
-function create_email_campaign_sheet(string $name, int $actorId = 0): int
+function get_email_campaign_sheet_by_country(string $country): ?array
 {
     ensure_email_campaign_schema();
-    $name = normalize_email_campaign_sheet_name($name);
+    $canon = require_canonical_country($country);
+    $stmt = db()->prepare('SELECT * FROM email_campaign_sheets WHERE name=? LIMIT 1');
+    $stmt->execute([$canon['name']]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * Create (or return existing) country sheet. One sheet per country.
+ */
+function create_email_campaign_sheet(string $country, int $actorId = 0): int
+{
+    ensure_email_campaign_schema();
+    $canon = require_canonical_country($country);
+    $name = $canon['name'];
+    $existing = get_email_campaign_sheet_by_country($name);
+    if ($existing) {
+        return (int) $existing['id'];
+    }
     try {
         db()->prepare(
             'INSERT INTO email_campaign_sheets (name, created_by) VALUES (?, ?)'
         )->execute([$name, $actorId > 0 ? $actorId : null]);
     } catch (PDOException $e) {
-        throw new InvalidArgumentException('A sheet named “' . $name . '” already exists.');
+        $again = get_email_campaign_sheet_by_country($name);
+        if ($again) {
+            return (int) $again['id'];
+        }
+        throw new InvalidArgumentException('Could not create sheet for “' . $name . '”.');
     }
     return (int) db()->lastInsertId();
 }
 
+/** @deprecated Sheets are country-named; renaming is not used. */
 function rename_email_campaign_sheet(int $id, string $name): void
 {
-    ensure_email_campaign_schema();
-    $name = normalize_email_campaign_sheet_name($name);
-    $sheet = get_email_campaign_sheet($id);
-    if (!$sheet) {
-        throw new InvalidArgumentException('Sheet not found.');
-    }
-    try {
-        db()->prepare(
-            'UPDATE email_campaign_sheets SET name=?, updated_at=NOW() WHERE id=?'
-        )->execute([$name, $id]);
-    } catch (PDOException $e) {
-        throw new InvalidArgumentException('A sheet named “' . $name . '” already exists.');
-    }
+    // no-op kept for safety — country sheets keep canonical country names
+    unset($id, $name);
 }
 
 function delete_email_campaign_sheet(int $id): bool
@@ -209,6 +223,8 @@ function save_email_campaign_row(
     if (!$existing) {
         return ['ok' => false, 'error' => 'Row not found.'];
     }
+    $sheet = get_email_campaign_sheet($sheetId);
+    $sheetCountry = $sheet ? email_campaign_sheet_country($sheet) : '';
 
     $domainRaw = trim($domainRaw);
     // Empty site on a blank placeholder → leave as blank (no error).
@@ -223,9 +239,9 @@ function save_email_campaign_row(
             $slots = $norm['slots'] ?? ['', '', '', ''];
             db()->prepare(
                 'UPDATE email_campaign_rows
-                 SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+                 SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
                  WHERE id=? AND sheet_id=?'
-            )->execute([$slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
+            )->execute([$sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
             touch_email_campaign_sheet($sheetId);
             return ['ok' => true, 'id' => $rowId, 'domain' => (string) $existing['domain']];
         }
@@ -257,9 +273,9 @@ function save_email_campaign_row(
 
     db()->prepare(
         'UPDATE email_campaign_rows
-         SET domain=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         SET domain=?, country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
-    )->execute([$domain, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
+    )->execute([$domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
     touch_email_campaign_sheet($sheetId);
     return ['ok' => true, 'id' => $rowId, 'domain' => $domain];
 }
@@ -272,9 +288,11 @@ function save_email_campaign_row(
 function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $emails): array
 {
     ensure_email_campaign_schema();
-    if (!get_email_campaign_sheet($sheetId)) {
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
         return ['ok' => false, 'error' => 'Sheet not found.'];
     }
+    $sheetCountry = email_campaign_sheet_country($sheet);
     $host = extract_host_candidate($domainRaw);
     $domain = to_root_domain($host);
     if ($domain === '' || (function_exists('is_root_domain') && !is_root_domain($domain))) {
@@ -297,9 +315,9 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
     if ($existingId > 0) {
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+             SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
              WHERE id=? AND sheet_id=?'
-        )->execute([$slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
+        )->execute([$sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
         touch_email_campaign_sheet($sheetId);
         return ['ok' => true, 'id' => $existingId, 'domain' => $domain];
     }
@@ -308,7 +326,7 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
         'INSERT INTO email_campaign_rows
            (sheet_id, domain, country, email1, email2, email3, email4)
          VALUES (?,?,?,?,?,?,?)'
-    )->execute([$sheetId, $domain, '', $slots[0], $slots[1], $slots[2], $slots[3]]);
+    )->execute([$sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3]]);
     $id = (int) db()->lastInsertId();
     touch_email_campaign_sheet($sheetId);
     return ['ok' => true, 'id' => $id, 'domain' => $domain];
@@ -531,48 +549,86 @@ function get_email_campaign_row(int $rowId, ?int $sheetId = null): ?array
  *   match_type:string,matched_value:string,label:string
  * }>
  */
+/**
+ * Live suggestions within one country sheet.
+ *
+ * @return list<array{
+ *   id:int,sheet_id:int,domain:string,country:string,emails:list<string>,
+ *   match_type:string,matched_value:string,label:string
+ * }>
+ */
 function search_email_campaign_suggestions(int $sheetId, string $q, int $limit = 20): array
+{
+    return search_email_campaign_suggestions_scoped($q, $limit, $sheetId);
+}
+
+/**
+ * Super search across all country campaign sheets.
+ * Results always include site name + emails + country; actions update that sheet row.
+ *
+ * @return list<array{
+ *   id:int,sheet_id:int,domain:string,country:string,emails:list<string>,
+ *   match_type:string,matched_value:string,label:string
+ * }>
+ */
+function search_email_campaign_suggestions_all(string $q, int $limit = 20): array
+{
+    return search_email_campaign_suggestions_scoped($q, $limit, null);
+}
+
+/**
+ * @return list<array{
+ *   id:int,sheet_id:int,domain:string,country:string,emails:list<string>,
+ *   match_type:string,matched_value:string,label:string
+ * }>
+ */
+function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?int $sheetId = null): array
 {
     ensure_email_campaign_schema();
     $q = trim(mb_strtolower($q));
     if ($q === '' || mb_strlen($q) < 2) {
         return [];
     }
-    if (!get_email_campaign_sheet($sheetId)) {
+    if ($sheetId !== null && !get_email_campaign_sheet($sheetId)) {
         return [];
     }
     $limit = max(1, min(40, $limit));
     $like = '%' . $q . '%';
-    $stmt = db()->prepare(
-        "SELECT id, domain, country, email1, email2, email3, email4
-         FROM email_campaign_rows
-         WHERE sheet_id=?
-           AND LEFT(domain, 8) <> '__blank_'
-           AND (
-             domain LIKE ?
-             OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
-           )
-         ORDER BY
+    $sql = "SELECT r.id, r.sheet_id, r.domain, r.country, r.email1, r.email2, r.email3, r.email4,
+                   s.name AS sheet_country
+            FROM email_campaign_rows r
+            INNER JOIN email_campaign_sheets s ON s.id = r.sheet_id
+            WHERE LEFT(r.domain, 8) <> '__blank_'
+              AND (
+                r.domain LIKE ?
+                OR r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?
+                OR s.name LIKE ?
+              )";
+    $params = [$like, $like, $like, $like, $like, $like];
+    if ($sheetId !== null) {
+        $sql .= ' AND r.sheet_id = ?';
+        $params[] = $sheetId;
+    }
+    $sql .= " ORDER BY
            CASE
-             WHEN domain = ? THEN 0
-             WHEN domain LIKE ? THEN 1
-             WHEN email1 = ? OR email2 = ? OR email3 = ? OR email4 = ? THEN 2
+             WHEN r.domain = ? THEN 0
+             WHEN r.domain LIKE ? THEN 1
+             WHEN r.email1 = ? OR r.email2 = ? OR r.email3 = ? OR r.email4 = ? THEN 2
              ELSE 3
            END,
-           domain ASC
-         LIMIT {$limit}"
-    );
-    $stmt->execute([
-        $sheetId,
-        $like, $like, $like, $like, $like,
-        $q,
-        $q . '%',
-        $q, $q, $q, $q,
-    ]);
+           s.name ASC, r.domain ASC
+         LIMIT {$limit}";
+    $params = array_merge($params, [$q, $q . '%', $q, $q, $q, $q]);
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
 
     $out = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $domain = (string) $row['domain'];
+        $country = trim((string) ($row['country'] ?? ''));
+        if ($country === '') {
+            $country = (string) ($row['sheet_country'] ?? '');
+        }
         $emails = [];
         foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
             $e = trim((string) ($row[$k] ?? ''));
@@ -591,24 +647,26 @@ function search_email_campaign_suggestions(int $sheetId, string $q, int $limit =
                     break;
                 }
             }
+            if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
+                $matchType = 'country';
+                $matched = $country;
+            }
         }
         $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
         $out[] = [
             'id' => (int) $row['id'],
+            'sheet_id' => (int) $row['sheet_id'],
             'domain' => $domain,
-            'country' => (string) $row['country'],
+            'country' => $country,
             'emails' => $emails,
             'match_type' => $matchType,
             'matched_value' => $matched,
-            'label' => $domain . ' · ' . $emailPreview,
+            'label' => $domain . ' · ' . $emailPreview . ' · ' . $country,
         ];
     }
     return $out;
 }
 
-/**
- * @return array{ok:bool,error?:string,domain?:string}
- */
 function delete_email_campaign_row(int $sheetId, int $rowId): array
 {
     ensure_email_campaign_schema();
@@ -699,53 +757,56 @@ function user_in_communication_team(array $user): bool
 
 
 /**
- * Render Communication Team live-search panels for all (or one) campaign sheets.
+ * Render Communication Team super search across all country campaign sheets.
  */
 function render_email_campaign_search_panels(?int $onlySheetId = null, string $postBase = 'index.php?page=team_email_campaigns'): void
 {
+    // $onlySheetId kept for BC; super search always covers all countries (or one if set).
+    unset($onlySheetId);
+    render_email_campaign_super_search($postBase);
+}
+
+function render_email_campaign_super_search(string $postBase = 'index.php?page=team_email_campaigns'): void
+{
     ensure_email_campaign_schema();
     $sheets = list_email_campaign_sheets();
-    if ($onlySheetId !== null && $onlySheetId > 0) {
-        $sheets = array_values(array_filter(
-            $sheets,
-            static fn ($s) => (int) $s['id'] === $onlySheetId
-        ));
+    $totalSites = 0;
+    foreach ($sheets as $s) {
+        $totalSites += (int) $s['row_count'];
     }
+    $uid = 'camp-super-' . substr(md5($postBase), 0, 6);
     if ($sheets === []) {
         echo '<div class="card"><div class="empty-state">';
-        echo '<p>No email sheets yet.</p>';
-        echo '<p class="muted">When Admin creates an Email Sheet under Emails DATA → Email campaign data, its search bar appears here.</p>';
+        echo '<p>No country email sheets yet.</p>';
+        echo '<p class="muted">When Admin creates an Email Sheet for a country under Emails DATA → Email campaign data, you can search it here.</p>';
         echo '</div></div>';
         return;
     }
-    foreach ($sheets as $s) {
-        $sid = (int) $s['id'];
-        $name = (string) $s['name'];
-        $uid = 'camp-search-' . $sid . '-' . substr(md5($postBase . $sid), 0, 6);
-        ?>
+    ?>
   <div class="card camp-search-card" style="margin-bottom:1rem"
        data-camp-search
-       data-sheet-id="<?= $sid ?>"
-       data-sheet-name="<?= h($name) ?>"
-       data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest&amp;sheet=<?= $sid ?>"
+       data-sheet-id="0"
+       data-sheet-name="All countries"
+       data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0"><?= h($name) ?></h2>
+    <h2 style="margin-top:0">Super search · all countries</h2>
     <p class="help muted" style="margin-top:0">
-      <?= (int) $s['row_count'] ?> site<?= (int) $s['row_count'] === 1 ? '' : 's' ?> in sheet ·
-      live search · site + email together · Enter confirms
+      <?= count($sheets) ?> countr<?= count($sheets) === 1 ? 'y' : 'ies' ?> ·
+      <?= (int) $totalSites ?> site<?= (int) $totalSites === 1 ? '' : 's' ?> ·
+      search site or email across every country sheet · updates that country’s row
     </p>
     <label class="swe-admin-delete-label" for="<?= h($uid) ?>">Search site name or email</label>
     <div class="swe-admin-delete-search">
       <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-camp-q
-             placeholder="Type site or email…"
+             placeholder="Type site or email (all countries)…"
              autocomplete="off" spellcheck="false" data-no-draft
-             title="Type to search · Arrow keys · Enter to select / confirm">
+             title="Type to search all countries · Arrow keys · Enter to select / confirm">
       <ul class="swe-admin-delete-suggest" data-camp-suggest hidden></ul>
     </div>
     <p class="help camp-status" data-camp-status hidden></p>
     <div class="swe-admin-delete-selected" data-camp-selected hidden>
       <h3 style="margin-top:1rem">Selected</h3>
-      <p class="help">Site name and emails stay together. Pick an action, then press Enter (confirm first).</p>
+      <p class="help">Site name and emails stay together. Action updates the matching country sheet.</p>
       <div class="swe-admin-delete-panel">
         <div>
           <div class="muted" style="font-size:0.82rem">Site name</div>
@@ -779,7 +840,6 @@ function render_email_campaign_search_panels(?int $onlySheetId = null, string $p
       </div>
     </div>
   </div>
-        <?php
-    }
+    <?php
     echo '<script src="' . h(script_asset_url('js/email-campaign-search.js')) . '" defer></script>';
 }

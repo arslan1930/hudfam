@@ -66,20 +66,20 @@ if (!$dept) {
         </p>
       </div>
       <?php if ($inCommunication): ?>
-        <a class="btn" href="index.php?page=team_email_campaigns">Email campaign sheets</a>
+        <a class="btn" href="index.php?page=team_email_campaigns">Email campaign search</a>
       <?php endif; ?>
     </div>
 
     <?php if ($inCommunication): ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0">Email campaign search</h2>
+      <h2 style="margin-top:0">Email campaign · super search</h2>
       <p class="help muted">
-        Live search bars from Admin → Emails DATA → Email campaign data.
-        Site name + email always appear together. Choose delete both or remove only email, then press Enter (confirm first).
+        Search all country sheets from Admin → Emails DATA → Email campaign data.
+        Site + email + country stay together. Updates apply to that country’s sheet row.
       </p>
     </div>
     <?php
-    render_email_campaign_search_panels(null, 'index.php?page=team_email_campaigns');
+    render_email_campaign_super_search('index.php?page=team_email_campaigns');
     endif;
     ?>
 
@@ -132,7 +132,7 @@ render_breadcrumbs([
   </div>
   <div class="actions">
     <?php if ((string) $dept['slug'] === 'communication'): ?>
-      <a class="btn" href="index.php?page=team_email_campaigns">Email campaign sheets</a>
+      <a class="btn" href="index.php?page=team_email_campaigns">Email campaign search</a>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All my departments</a>
   </div>
@@ -140,13 +140,13 @@ render_breadcrumbs([
 
 <?php if ((string) $dept['slug'] === 'communication'): ?>
 <div class="card" style="margin-bottom:1rem">
-  <h2 style="margin-top:0">Email campaign search</h2>
+  <h2 style="margin-top:0">Email campaign · super search</h2>
   <p class="help muted">
-    Searchbars created by Admin under Emails DATA → Email campaign data.
+    All country sheets · site + email together · updates the matching country row.
   </p>
 </div>
 <?php
-render_email_campaign_search_panels(null, 'index.php?page=team_email_campaigns');
+render_email_campaign_super_search('index.php?page=team_email_campaigns');
 endif;
 ?>
 

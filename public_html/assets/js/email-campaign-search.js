@@ -89,14 +89,15 @@
         main.className = 'swe-admin-delete-item-main';
         main.textContent = item.domain;
 
-        var meta = document.createElement('div');
-        meta.className = 'swe-admin-delete-item-meta';
-        var emails = (item.emails || []).join(', ') || '(no emails)';
-        meta.textContent = emails + (item.country ? ' · ' + item.country : '');
+      var meta = document.createElement('div');
+      meta.className = 'swe-admin-delete-item-meta';
+      var emails = (item.emails || []).join(', ') || '(no emails)';
+      meta.textContent = emails + (item.country ? ' · ' + item.country : '');
 
-        var tag = document.createElement('span');
-        tag.className = 'swe-admin-delete-match';
-        tag.textContent = item.match_type === 'email' ? 'email' : 'site';
+      var tag = document.createElement('span');
+      tag.className = 'swe-admin-delete-match';
+      tag.textContent = item.match_type === 'email' ? 'email'
+        : (item.match_type === 'country' ? 'country' : 'site');
 
         li.appendChild(main);
         li.appendChild(meta);
@@ -149,6 +150,7 @@
       if (!item) return;
       selected = {
         id: item.id,
+        sheetId: item.sheet_id || sheetId,
         domain: item.domain,
         country: item.country,
         emails: (item.emails || []).slice(),
@@ -230,16 +232,18 @@
           setStatus('Pick an email to remove, or choose Delete both.', true);
           return;
         }
+        var sid = String(selected.sheetId || sheetId || '');
+        var countryLabel = selected.country || sheetName;
         if (!window.confirm(
-          'Remove only this email from “' + sheetName + '”?\n\n' +
-          'Site: ' + selected.domain + '\nEmail: ' + email + '\n\nSite name will stay in the sheet.'
+          'Remove only this email from ' + countryLabel + ' sheet?\n\n' +
+          'Site: ' + selected.domain + '\nEmail: ' + email + '\n\nSite name will stay in that country sheet.'
         )) {
           return;
         }
         postAction({
           ajax: '1',
           action: 'delete_email',
-          sheet_id: String(sheetId),
+          sheet_id: sid,
           row_id: String(selected.id),
           email: email
         })
@@ -262,8 +266,10 @@
         return;
       }
 
+      var sid = String(selected.sheetId || sheetId || '');
+      var countryLabel = selected.country || sheetName;
       if (!window.confirm(
-        'Delete BOTH site name and all emails from “' + sheetName + '”?\n\n' +
+        'Delete BOTH site name and all emails from ' + countryLabel + ' sheet?\n\n' +
         'Site: ' + selected.domain + '\nEmails: ' +
         ((selected.emails || []).join(', ') || '(none)')
       )) {
@@ -272,7 +278,7 @@
       postAction({
         ajax: '1',
         action: 'delete_row',
-        sheet_id: String(sheetId),
+        sheet_id: sid,
         row_id: String(selected.id)
       })
         .then(function (data) {

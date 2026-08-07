@@ -136,8 +136,8 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if ($inCommunication) {
                     $groups['Main']['team_email_campaigns'] = [
-                        'Email campaign sheets',
-                        'Live search · site + email · update sheet',
+                        'Email campaign search',
+                        'Super search all countries · site + email',
                     ];
                 }
             }
@@ -149,7 +149,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
                     'team_admin_emails_delete' => ['Delete Admin emails', 'Search site/email · remove from Admin'],
-                    'team_email_campaigns' => ['Email campaign sheets', 'Communication Team live search'],
+                    'team_email_campaigns' => ['Email campaign search', 'Super search all country sheets'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Add history', 'Your daily adds'],
                 ],

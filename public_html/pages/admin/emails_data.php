@@ -84,8 +84,8 @@ if ($folder === '') {
         <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
           <h3>Email campaign data</h3>
           <p class="muted">
-            Create Email Sheets for Communication Team search ·
-            <?= (int) $campaignSheetCount ?> sheet<?= (int) $campaignSheetCount === 1 ? '' : 's' ?>
+            One sheet per country · Communication Team super search ·
+            <?= (int) $campaignSheetCount ?> countr<?= (int) $campaignSheetCount === 1 ? 'y' : 'ies' ?>
             · <?= (int) $campaignRowTotal ?> site<?= (int) $campaignRowTotal === 1 ? '' : 's' ?>
           </p>
         </a>
