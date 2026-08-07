@@ -49,7 +49,7 @@ render_header('Invoices', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate printable invoices from unpaid completed articles (LIVE URL filled). Mark payment received to set those sheet rows Paid.</p>
+    <p class="muted">Generate from unpaid LIVE sheet rows, or create a standalone manual invoice. Mark payment received when paid.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_invoice_manual">Manual invoice</a>
