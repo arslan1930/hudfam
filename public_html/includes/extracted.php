@@ -244,3 +244,115 @@ function count_extracted_sites(): int
     ensure_extracted_schema();
     return (int) db()->query('SELECT COUNT(*) FROM extracted_sites')->fetchColumn();
 }
+
+/**
+ * Countries that already have extracted sites — simple row list (no empty folders).
+ *
+ * @return list<array{country:string,region:string,language:string,total:int,last_pushed_at:?string}>
+ */
+function list_extracted_country_rows(): array
+{
+    ensure_extracted_schema();
+    $sql = "SELECT TRIM(e.country) AS country,
+                   MAX(e.region) AS region,
+                   MAX(e.language) AS language,
+                   COUNT(*) AS total,
+                   MAX(e.created_at) AS last_pushed_at
+            FROM extracted_sites e
+            WHERE TRIM(e.country) <> ''
+            GROUP BY TRIM(e.country)
+            ORDER BY last_pushed_at DESC, country ASC";
+    $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+        $name = (string) $row['country'];
+        $canon = resolve_canonical_country($name);
+        $out[] = [
+            'country' => $canon ? $canon['name'] : $name,
+            'region' => $canon ? $canon['region'] : (string) ($row['region'] ?? ''),
+            'language' => $canon ? $canon['language'] : (string) ($row['language'] ?? ''),
+            'total' => (int) $row['total'],
+            'last_pushed_at' => $row['last_pushed_at'] !== null ? (string) $row['last_pushed_at'] : null,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * @return list<string>
+ */
+function get_extracted_domains_for_country(string $country, int $limit = 100000): array
+{
+    ensure_extracted_schema();
+    $limit = max(1, min(100000, $limit));
+    $stmt = db()->prepare(
+        'SELECT domain FROM extracted_sites WHERE country=? ORDER BY domain ASC LIMIT ' . (int) $limit
+    );
+    $stmt->execute([$country]);
+    return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+}
+
+function get_extracted_site(int $id): ?array
+{
+    ensure_extracted_schema();
+    $stmt = db()->prepare(
+        'SELECT e.*, u.username pushed_by_name, u.full_name pushed_by_full
+         FROM extracted_sites e
+         LEFT JOIN users u ON u.id = e.pushed_by
+         WHERE e.id=? LIMIT 1'
+    );
+    $stmt->execute([$id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * Rename an extracted site domain within its country.
+ *
+ * @return array{ok:bool,error?:string,domain?:string}
+ */
+function update_extracted_site_domain(int $id, string $newDomain): array
+{
+    ensure_extracted_schema();
+    $site = get_extracted_site($id);
+    if (!$site) {
+        return ['ok' => false, 'error' => 'Site not found.'];
+    }
+    $host = function_exists('extract_host_candidate') ? extract_host_candidate($newDomain) : normalize_domain($newDomain);
+    $root = function_exists('to_root_domain') ? to_root_domain($host) : normalize_domain($host);
+    if ($root === '') {
+        return ['ok' => false, 'error' => 'Enter a valid root domain (e.g. example.com).'];
+    }
+    $country = (string) $site['country'];
+    if ($root === (string) $site['domain']) {
+        return ['ok' => true, 'domain' => $root];
+    }
+    $dup = db()->prepare('SELECT id FROM extracted_sites WHERE country=? AND domain=? AND id<>? LIMIT 1');
+    $dup->execute([$country, $root, $id]);
+    if ((int) $dup->fetchColumn() > 0) {
+        return ['ok' => false, 'error' => $root . ' already exists in ' . $country . '.'];
+    }
+    db()->prepare(
+        'UPDATE extracted_sites SET domain=?, updated_at=NOW() WHERE id=?'
+    )->execute([$root, $id]);
+    return ['ok' => true, 'domain' => $root];
+}
+
+function delete_extracted_site(int $id): bool
+{
+    ensure_extracted_schema();
+    $stmt = db()->prepare('DELETE FROM extracted_sites WHERE id=?');
+    $stmt->execute([$id]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Delete every extracted site for a country.
+ */
+function delete_extracted_sites_for_country(string $country): int
+{
+    ensure_extracted_schema();
+    $stmt = db()->prepare('DELETE FROM extracted_sites WHERE country=?');
+    $stmt->execute([$country]);
+    return $stmt->rowCount();
+}

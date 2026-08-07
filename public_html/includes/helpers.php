@@ -212,7 +212,7 @@ function render_glossary(string $panel): void
     echo '<dl class="glossary-list">';
     if ($panel === 'admin') {
         echo '<div><dt>Our database</dt><dd>Country folders of unique website domains (Admin only).</dd></div>';
-        echo '<div><dt>Extracted URLs</dt><dd>Extracted sites Team pushes from Extracting Results, stored per country.</dd></div>';
+        echo '<div><dt>Extracted URLs</dt><dd>Country rows of sites Team pushes — copy, edit, or remove.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Add sites to the database and manage Team users.</dd></div>';

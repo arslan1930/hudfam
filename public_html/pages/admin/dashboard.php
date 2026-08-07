@@ -89,9 +89,9 @@ render_header('Dashboard', 'admin');
     <p>Open country folders — one database each.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
-     data-search="extracted urls extracted sites country folders push extracting results">
+     data-search="extracted urls extracted sites countries copy edit remove push extracting results">
     <h2>Extracted URLs</h2>
-    <p>Extracted sites pushed by Team, by country.</p>
+    <p>Country rows of extracted sites — copy, edit, remove.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
      data-search="order management client sheets sites prices profit live url">

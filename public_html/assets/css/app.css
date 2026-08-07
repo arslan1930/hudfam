@@ -636,6 +636,21 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .sites-list-status { margin: 0.5rem 0 0; }
 .sites-list-status.is-error { color: var(--bad); }
+.extracted-edit-form { margin: 0; }
+.extracted-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.extracted-edit-row input {
+  flex: 1 1 180px;
+  min-width: 140px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.9rem;
+}
+.extracted-sites-table td form { margin: 0; }
+.extracted-country-table td { vertical-align: middle; }
 .sites-list-shell kbd,
 .box-panel kbd {
   display: inline-block;
