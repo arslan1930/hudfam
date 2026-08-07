@@ -1020,7 +1020,7 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
        data-swe-admin-delete
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0"><?= label_with_info('Super search · Sites with emails - Admin', 'Type a site or email across all countries in the Admin archive. Choose delete both or remove only email, then Enter + confirm. Updates that country’s Admin row (and Final mirror).') ?></h2>
+    <h2 style="margin-top:0"><?= label_with_info('Admin emails search', 'Type a site or email across all countries in Sites with emails - Admin. Choose delete both or remove only email, then Enter + confirm. Updates that country’s Admin row (and Final mirror).') ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= (int) $countries ?> countr<?= (int) $countries === 1 ? 'y' : 'ies' ?> ·
       <?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> ·

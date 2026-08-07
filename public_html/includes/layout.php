@@ -72,7 +72,15 @@ function render_header(string $title, string $panel = ''): void
         }
     }
 
-    echo '<div class="shell"><aside class="sidebar">';
+    echo '<div class="shell">';
+    echo '<div class="mobile-bar">';
+    echo '<button type="button" class="nav-toggle" data-nav-toggle aria-controls="app-sidebar" aria-expanded="false">Menu</button>';
+    echo '<a class="mobile-brand" href="' . h($home) . '">';
+    echo '<img class="brand-logo" src="' . h($logo) . '" alt="">';
+    echo '<span>' . h($app) . '</span></a>';
+    echo '</div>';
+    echo '<div class="sidebar-backdrop" data-nav-backdrop hidden></div>';
+    echo '<aside class="sidebar" id="app-sidebar">';
     echo '<a class="brand" href="' . h($home) . '">';
     echo '<img class="brand-logo" src="' . h($logo) . '" alt="' . h($app) . '">';
     echo '<span>' . h($app) . '</span></a>';
@@ -86,8 +94,8 @@ function render_header(string $title, string $panel = ''): void
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
-                'admin_extracted' => ['Extracted URLs', 'Extracted Sites from Team Push'],
-                'admin_emails_data' => ['Emails DATA', 'Archives · Email campaign sheets'],
+                'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
+                'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
@@ -151,14 +159,14 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if (!empty($toolSet['team_admin_emails_delete'])) {
                     $groups['Main']['team_admin_emails_delete'] = [
-                        'Sites with emails - Admin',
-                        'Super search all countries · site + email',
+                        'Admin emails search',
+                        'Sites with emails - Admin · all countries',
                     ];
                 }
                 if (!empty($toolSet['team_email_campaigns'])) {
                     $groups['Main']['team_email_campaigns'] = [
-                        'Email campaign search',
-                        'Super search campaign sheets · site + email',
+                        'Campaign search',
+                        'Email campaign sheets · all countries',
                     ];
                 }
             }
@@ -169,8 +177,8 @@ function render_header(string $title, string $panel = ''): void
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
-                    'team_admin_emails_delete' => ['Sites with emails - Admin', 'Super search all countries · update Admin'],
-                    'team_email_campaigns' => ['Email campaign search', 'Super search all country sheets'],
+                    'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
+                    'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Add history', 'Your daily adds'],
                 ],
@@ -202,7 +210,8 @@ function render_header(string $title, string $panel = ''): void
                 }
             }
             $titleAttr = $hint !== '' ? ' title="' . h($hint) . '"' : '';
-            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $titleAttr . '>';
+            $ariaCurrent = trim($active) !== '' ? ' aria-current="page"' : '';
+            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $titleAttr . $ariaCurrent . '>';
             echo '<span class="nav-label">' . h($label);
             if ($panel === 'admin' && isset($adminNewByPage[$activePage]) && function_exists('admin_new_badge_html')) {
                 echo admin_new_badge_html($adminNewByPage[$activePage], $user);
@@ -238,6 +247,9 @@ function render_footer(string $panel = ''): void
             $tipVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/info-tips.js') ?: time());
             $tipPhp = app_url('asset.php?f=js/info-tips.js&v=' . rawurlencode($tipVersion));
             $tipFile = asset_url('assets/js/info-tips.js');
+            $navVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/nav-shell.js') ?: time());
+            $navPhp = app_url('asset.php?f=js/nav-shell.js&v=' . rawurlencode($navVersion));
+            $navFile = asset_url('assets/js/nav-shell.js');
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
                 'panel' => $panel,
@@ -250,6 +262,8 @@ function render_footer(string $panel = ''): void
             echo '<script src="' . h($jsFile) . '" defer></script>';
             echo '<script src="' . h($tipPhp) . '" defer></script>';
             echo '<script src="' . h($tipFile) . '" defer></script>';
+            echo '<script src="' . h($navPhp) . '" defer></script>';
+            echo '<script src="' . h($navFile) . '" defer></script>';
         }
         echo '</main></div>';
     }

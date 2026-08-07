@@ -1,10 +1,10 @@
 <?php
 /**
- * Admin · Emails DATA · Email campaign data
+ * Admin · Emails data · Email campaign data
  * One editable sheet per country (site names + emails).
  * Always connected to Communication Team super search.
  *
- * Expects: $user, $base (Emails DATA hub URL)
+ * Expects: $user, $base (Emails data hub URL)
  */
 ensure_email_campaign_schema();
 ensure_sites_with_emails_schema();
@@ -142,7 +142,7 @@ if ($sheetId > 0) {
     render_header('Email sheet · ' . $sheetCountry, 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Emails DATA', 'href' => $base],
+        ['label' => 'Emails data', 'href' => $base],
         ['label' => 'Email campaign data', 'href' => $campBase],
         ['label' => $sheetCountry],
     ]);
@@ -336,7 +336,7 @@ foreach ($allCountries as $c) {
 render_header('Email campaign data', 'admin');
 render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Emails DATA', 'href' => $base],
+    ['label' => 'Emails data', 'href' => $base],
     ['label' => 'Email campaign data'],
 ]);
 ?>

@@ -204,16 +204,19 @@ function render_breadcrumbs(array $crumbs): void
 /**
  * Short glossary for the simple inventory panel.
  * $panel: 'admin' | 'team'
+ * $showTitle: false when nested inside a collapsible help block.
  */
-function render_glossary(string $panel): void
+function render_glossary(string $panel, bool $showTitle = true): void
 {
     echo '<div class="glossary card" role="note">';
-    echo '<h2 class="glossary-title">How this works</h2>';
+    if ($showTitle) {
+        echo '<h2 class="glossary-title">How this works</h2>';
+    }
     echo '<dl class="glossary-list">';
     if ($panel === 'admin') {
         echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
-        echo '<div><dt>Extracted URLs</dt><dd>Extracted Sites from Team Push.</dd></div>';
-        echo '<div><dt>Emails DATA</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
+        echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
+        echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
         echo '<div><dt>New badge</dt><dd>Reminder when Team adds Our database sites, Extracted Sites, or Admin emails — clears when you open that section.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
@@ -222,10 +225,23 @@ function render_glossary(string $panel): void
         echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
         echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';
         echo '<div><dt>Sites with emails - Team</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
+        echo '<div><dt>Admin emails search</dt><dd>Super search Sites with emails - Admin across all countries.</dd></div>';
+        echo '<div><dt>Campaign search</dt><dd>Super search Email campaign sheets across all countries.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Sites you added, saved by day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }
     echo '</dl></div>';
+}
+
+/** Dashboard help collapsed by default so work cards stay above the fold. */
+function render_dashboard_help(string $panel): void
+{
+    echo '<details class="help-details">';
+    echo '<summary>How this works</summary>';
+    echo '<div class="help-details-body">';
+    render_glossary($panel, false);
+    echo $panel === 'admin' ? render_admin_panel_guide() : render_team_panel_guide();
+    echo '</div></details>';
 }
 
 /**

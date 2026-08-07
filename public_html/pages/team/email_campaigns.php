@@ -97,17 +97,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
-render_header('Email campaign search', 'team');
+render_header('Campaign search', 'team');
 render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Email campaign search'],
+    ['label' => 'Campaign search'],
 ]);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Email campaign search', 'Searches all country Email Sheets created by Admin. Results show site + email + country. Enter confirms your chosen action on that country sheet row.') ?></h1>
+    <h1><?= label_with_info('Campaign search', 'Searches all country Email Sheets created by Admin. Results show site + email + country. Enter confirms your chosen action on that country sheet row.') ?></h1>
     <p class="muted">
-      One super search across <strong>all country sheets</strong> from Admin → Emails DATA → Email campaign data.
+      One super search across <strong>all country sheets</strong> from Admin → Emails data → Email campaign data.
       Results show <strong>site name + email + country</strong>. Choose delete both or remove only email, then press
       <strong>Enter</strong> (confirm first) — the matching country sheet row updates.
     </p>

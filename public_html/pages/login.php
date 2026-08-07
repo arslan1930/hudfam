@@ -41,10 +41,13 @@ render_header('Login');
     <p class="muted">Shared URL database — Admin adds sites, Team filters and adds unique ones.</p>
     <?php if ($error): render_alert_box('error', $error); endif; ?>
     <form method="post">
-      <label>Username</label>
-      <input type="text" name="username" required autofocus>
-      <label>Password</label>
-      <input type="password" name="password" required>
+      <label for="login_username">Username</label>
+      <input id="login_username" type="text" name="username" required autofocus autocomplete="username"
+             <?= $error ? 'aria-invalid="true" aria-describedby="login_error"' : '' ?>>
+      <label for="login_password">Password</label>
+      <input id="login_password" type="password" name="password" required autocomplete="current-password"
+             <?= $error ? 'aria-invalid="true" aria-describedby="login_error"' : '' ?>>
+      <?php if ($error): ?><p id="login_error" class="visually-hidden"><?= h($error) ?></p><?php endif; ?>
       <p style="margin-top:1.1rem"><button class="btn" type="submit">Sign in</button></p>
     </form>
   </div>

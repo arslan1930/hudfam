@@ -32,7 +32,7 @@ $sweBase = $sweBase ?? (
         : 'index.php?page=admin_emails_data&folder=' . $sweFolder
 );
 $sweAdminHub = $sweAdminHub ?? 'index.php?page=admin_emails_data';
-$sweAdminHubLabel = $sweAdminHubLabel ?? 'Emails DATA';
+$sweAdminHubLabel = $sweAdminHubLabel ?? 'Emails data';
 $isAdmin = ($swePanel === 'admin' || $sweScope === 'admin' || $sweScope === 'admin_all');
 $isAdminAll = ($sweScope === 'admin_all');
 $isTeam = ($sweScope === 'team');
@@ -260,7 +260,7 @@ if (!$inCountry) {
 
     <?php if ($isTeam): ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2><?= label_with_info('Delete Site name or Email (from Admin)', 'Live search across Sites with emails - Admin. Delete the whole site row, or remove one email only and keep the site name.') ?></h2>
+      <h2><?= label_with_info('Admin emails search', 'Live search across Sites with emails - Admin. Delete the whole site row, or remove one email only and keep the site name.') ?></h2>
       <p class="help">
         Type a site or email — live suggestions come from
         <strong>Sites with emails - Admin</strong>.
@@ -459,7 +459,7 @@ render_breadcrumbs($crumbs);
     <a class="btn secondary" href="<?= h($sweBase) ?>">All countries</a>
   </div>
 </div>
-<p class="help" id="swe_status" hidden></p>
+<p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 <?php if ($isTeam): ?>
   <?php if ($countryTotal > 0 && $readyToPush < 1): ?>
   <p class="help swe-push-note swe-push-blocked" role="status">

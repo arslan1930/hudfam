@@ -11,7 +11,7 @@ $folder = (string) get('folder');
 if ($folder === '' && (string) get('country') !== '') {
     $folder = 'extracted_sites';
 }
-// Sites with emails - Admin moved to Emails DATA panel
+// Sites with emails - Admin moved to Emails data panel
 if ($folder === 'sites_with_emails') {
     $qs = 'index.php?page=admin_emails_data&folder=sites_with_emails';
     if ((string) get('country') !== '') {
@@ -181,7 +181,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// --- Hub: Extracted Sites only (emails live under Emails DATA) ---
+// --- Hub: Extracted Sites only (emails live under Emails data) ---
 if ($folder === '') {
     $countryRows = list_extracted_country_rows();
     $extractedTotal = 0;
@@ -190,18 +190,18 @@ if ($folder === '') {
     }
     $countryCount = count($countryRows);
 
-    render_header('Extracted URLs', 'admin');
+    render_header('Extracted Sites', 'admin');
     ?>
     <?php render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Extracted URLs'],
+        ['label' => 'Extracted Sites'],
     ]); ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info('Extracted URLs', 'Filled when Team pushes Extracting Results. A New badge appears on Admin until you open this section.') ?></h1>
+        <h1><?= label_with_info('Extracted Sites', 'Filled when Team pushes Extracting Results. A New badge appears on Admin until you open this section.') ?></h1>
         <p class="muted">
           New URLs from Team Push.
-          Email archives are under <a href="index.php?page=admin_emails_data">Emails DATA</a>.
+          Email archives are under <a href="index.php?page=admin_emails_data">Emails data</a>.
         </p>
       </div>
     </div>
@@ -235,7 +235,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     ?>
     <?php render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+        ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted'],
         ['label' => 'Extracted Sites'],
     ]); ?>
     <div class="topbar">
@@ -438,7 +438,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+    ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted'],
     ['label' => 'Extracted Sites', 'href' => $sitesListUrl],
     ['label' => $countryName],
 ]); ?>

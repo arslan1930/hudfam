@@ -82,10 +82,10 @@ if ($deptScoped) {
         $toolCards[] = ['team_sites_emails', 'Sites with emails - Team', 'Add emails · Push to Admin'];
     }
     if (!empty($toolSet['team_admin_emails_delete'])) {
-        $toolCards[] = ['team_admin_emails_delete', 'Sites with emails - Admin', 'Super search · update Admin'];
+        $toolCards[] = ['team_admin_emails_delete', 'Admin emails search', 'Sites with emails - Admin · all countries'];
     }
     if (!empty($toolSet['team_email_campaigns'])) {
-        $toolCards[] = ['team_email_campaigns', 'Email campaign search', 'Super search country sheets'];
+        $toolCards[] = ['team_email_campaigns', 'Campaign search', 'Email campaign sheets · all countries'];
     }
     ?>
     <?php if ($toolCards): ?>
@@ -149,8 +149,7 @@ render_header('Dashboard', 'team');
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
 
-<?php render_glossary('team'); ?>
-<?= render_team_panel_guide() ?>
+<?php render_dashboard_help('team'); ?>
 
 <div class="launch-cards">
   <a class="launch-card" href="index.php?page=team_prospect_check">
@@ -166,8 +165,12 @@ render_header('Dashboard', 'team');
     <p>Add emails after Extracting Results Push, then Push to Admin.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_admin_emails_delete">
-    <h2>Delete Admin emails</h2>
-    <p>Search site/email in Sites with emails - Admin and remove.</p>
+    <h2>Admin emails search</h2>
+    <p>Super search Sites with emails - Admin · update or remove.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_email_campaigns">
+    <h2>Campaign search</h2>
+    <p>Super search Email campaign sheets across all countries.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_departments">
     <h2>My departments</h2>

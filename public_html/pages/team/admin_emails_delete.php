@@ -108,25 +108,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $inCommunication = function_exists('user_in_communication_team') && user_in_communication_team($user);
 
-render_header('Sites with emails - Admin · search', 'team');
+render_header('Admin emails search', 'team');
 render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Sites with emails - Admin search'],
+    ['label' => 'Admin emails search'],
 ]);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Sites with emails - Admin', 'Super search across every country in the Admin archive. Results always show site + email + country. Enter confirms delete-both or remove-email-only on that country’s row.') ?></h1>
+    <h1><?= label_with_info('Admin emails search', 'Super search across every country in Sites with emails - Admin. Results always show site + email + country. Enter confirms delete-both or remove-email-only on that country’s row.') ?></h1>
     <p class="muted">
-      One <strong>super search</strong> across <strong>all countries</strong>.
+      Search <strong>Sites with emails - Admin</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.
-      Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first) —
-      the matching country row in Sites with emails - Admin updates.
+      Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
     </p>
   </div>
   <div class="actions">
     <?php if ($inCommunication): ?>
-      <a class="btn secondary" href="index.php?page=team_email_campaigns">Email campaign search</a>
+      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
     <?php else: ?>
       <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
     <?php endif; ?>

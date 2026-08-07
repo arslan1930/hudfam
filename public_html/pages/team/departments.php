@@ -66,33 +66,31 @@ if (!$dept) {
         </p>
       </div>
       <?php if ($inCommunication): ?>
-        <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
-        <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
+        <div class="actions">
+          <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+          <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
+        </div>
       <?php endif; ?>
     </div>
 
     <?php if ($inCommunication): ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0"><?= label_with_info('Sites with emails - Admin · super search', 'Archive search for Communication Team. Same rules as campaign search: site + email + country, Enter confirms, updates the Admin country row.') ?></h2>
-      <p class="help muted">
-        Search all countries in Admin → Emails DATA → Sites with emails - Admin.
-        Site + email + country stay together. Updates that country’s Admin row.
+      <h2 style="margin-top:0">Communication tools</h2>
+      <p class="help muted" style="margin-bottom:0.85rem">
+        Open a dedicated search page — keeps this departments view focused on tasks.
       </p>
+      <div class="folders">
+        <a class="folder" href="index.php?page=team_admin_emails_delete">
+          <h3>Admin emails search</h3>
+          <p class="muted">Sites with emails - Admin · all countries</p>
+        </a>
+        <a class="folder" href="index.php?page=team_email_campaigns">
+          <h3>Campaign search</h3>
+          <p class="muted">Email campaign sheets · all countries</p>
+        </a>
+      </div>
     </div>
-    <?php
-    render_sites_with_emails_admin_super_search('index.php?page=team_admin_emails_delete');
-    ?>
-    <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0"><?= label_with_info('Email campaign · super search', 'Searches country Email Sheets created under Emails DATA → Email campaign data. Updates apply to that sheet only.') ?></h2>
-      <p class="help muted">
-        Search all country sheets from Admin → Emails DATA → Email campaign data.
-        Site + email + country stay together. Updates apply to that country’s sheet row.
-      </p>
-    </div>
-    <?php
-    render_email_campaign_super_search('index.php?page=team_email_campaigns');
-    endif;
-    ?>
+    <?php endif; ?>
 
     <div class="card">
       <?php if ($myDepartments): ?>
@@ -125,6 +123,7 @@ $deptId = (int) $dept['id'];
 $statusFilter = (string) get('status');
 $tasks = list_department_tasks($deptId, $statusFilter);
 $stats = department_stats($deptId);
+$isCommunicationDept = (string) $dept['slug'] === 'communication';
 
 render_header((string) $dept['name'], 'team');
 render_breadcrumbs([
@@ -142,7 +141,7 @@ render_breadcrumbs([
     </p>
   </div>
   <div class="actions">
-    <?php if ((string) $dept['slug'] === 'communication'): ?>
+    <?php if ($isCommunicationDept): ?>
       <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
       <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
     <?php endif; ?>
@@ -150,35 +149,45 @@ render_breadcrumbs([
   </div>
 </div>
 
-<?php if ((string) $dept['slug'] === 'communication'): ?>
+<?php if ($isCommunicationDept): ?>
 <div class="card" style="margin-bottom:1rem">
-  <h2 style="margin-top:0"><?= label_with_info('Sites with emails - Admin · super search', 'Archive search for Communication Team. Site + email + country; Enter confirms; updates the Admin country row.') ?></h2>
-  <p class="help muted">
-    All countries · site + email + country · updates the matching Admin row.
+  <h2 style="margin-top:0">Communication tools</h2>
+  <p class="help muted" style="margin-bottom:0.85rem">
+    Use the dedicated search pages for Admin emails and campaign sheets.
   </p>
+  <div class="folders">
+    <a class="folder" href="index.php?page=team_admin_emails_delete">
+      <h3>Admin emails search</h3>
+      <p class="muted">Sites with emails - Admin · all countries</p>
+    </a>
+    <a class="folder" href="index.php?page=team_email_campaigns">
+      <h3>Campaign search</h3>
+      <p class="muted">Email campaign sheets · all countries</p>
+    </a>
+  </div>
 </div>
-<?php
-render_sites_with_emails_admin_super_search('index.php?page=team_admin_emails_delete');
-?>
-<div class="card" style="margin-bottom:1rem">
-  <h2 style="margin-top:0"><?= label_with_info('Email campaign · super search', 'Searches country Email Sheets. Updates apply to that sheet only.') ?></h2>
-  <p class="help muted">
-    All country sheets · site + email together · updates the matching country row.
-  </p>
-</div>
-<?php
-render_email_campaign_super_search('index.php?page=team_email_campaigns');
-endif;
-?>
+<?php endif; ?>
 
 <div class="card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
     <h2 style="margin:0">Tasks</h2>
     <div class="actions">
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>">All</a>
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;status=open">Open</a>
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;status=in_progress">In progress</a>
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;status=done">Done</a>
+      <?php
+      $statusLinks = [
+          '' => 'All',
+          'open' => 'Open',
+          'in_progress' => 'In progress',
+          'done' => 'Done',
+      ];
+      foreach ($statusLinks as $val => $lab):
+          $href = $base . '&folder=' . rawurlencode((string) $dept['slug']);
+          if ($val !== '') {
+              $href .= '&status=' . rawurlencode($val);
+          }
+          $active = $statusFilter === $val ? ' active-soft' : '';
+          ?>
+        <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
+      <?php endforeach; ?>
     </div>
   </div>
 

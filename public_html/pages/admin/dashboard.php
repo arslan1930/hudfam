@@ -65,8 +65,7 @@ render_header('Dashboard', 'admin');
   </div>
 </div>
 
-<?php render_glossary('admin'); ?>
-<?= render_admin_panel_guide() ?>
+<?php render_dashboard_help('admin'); ?>
 
 <div class="grid">
   <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
@@ -98,13 +97,13 @@ $badge = static function (bool $on): string {
   </a>
   <a class="launch-card<?= $newExtracted ? ' has-admin-new' : '' ?>" href="index.php?page=admin_extracted" data-dashboard-item
      data-search="extracted urls extracted sites countries copy edit remove push new">
-    <h2>Extracted URLs<?= $badge($newExtracted) ?></h2>
-    <p>Extracted Sites from Team Push.</p>
+    <h2>Extracted Sites<?= $badge($newExtracted) ?></h2>
+    <p>From Team Extracting Results Push.</p>
   </a>
   <a class="launch-card<?= $newEmails ? ' has-admin-new' : '' ?>" href="index.php?page=admin_emails_data" data-dashboard-item
      data-search="emails data sites with emails admin archive push new">
-    <h2>Emails DATA<?= $badge($newEmails) ?></h2>
-    <p>Sites with emails - Admin final archive.</p>
+    <h2>Emails data<?= $badge($newEmails) ?></h2>
+    <p>Admin archive, Final mirror, and campaign sheets.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
      data-search="order management client sheets sites prices profit live url">

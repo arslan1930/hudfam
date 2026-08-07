@@ -12,12 +12,13 @@
     if (!msg) {
       statusEl.hidden = true;
       statusEl.textContent = '';
-      statusEl.classList.remove('is-error');
+      statusEl.classList.remove('is-error', 'is-ok');
       return;
     }
     statusEl.hidden = false;
     statusEl.textContent = msg;
     statusEl.classList.toggle('is-error', !!isError);
+    statusEl.classList.toggle('is-ok', !isError);
   }
 
   function copyText(text) {

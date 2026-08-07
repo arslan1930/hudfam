@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin · Emails DATA — email archives + Email campaign data sheets.
+ * Admin · Emails data — email archives + Email campaign data sheets.
  */
 $user = require_admin();
 ensure_sites_with_emails_schema();
@@ -14,7 +14,7 @@ if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect($base);
 }
-// Clear New reminder when Admin opens Emails DATA.
+// Clear New reminder when Admin opens Emails data.
 if (function_exists('clear_admin_new_data')) {
     clear_admin_new_data('emails_admin', $user);
 }
@@ -52,18 +52,30 @@ if ($folder === '') {
         $campaignRowTotal += (int) $cs['row_count'];
     }
 
-    render_header('Emails DATA', 'admin');
+    render_header('Emails data', 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Emails DATA'],
+        ['label' => 'Emails data'],
     ]);
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info('Emails DATA', 'Final email archives from Team Push, plus country Email Sheets for Communication Team search.') ?></h1>
+        <h1><?= label_with_info('Emails data', 'Final email archives from Team Push, plus country Email Sheets for Communication Team search.') ?></h1>
         <p class="muted">Email archives and campaign sheets for Communication Team.</p>
       </div>
     </div>
+
+    <?php if ($sweTotal < 1 && $allTotal < 1 && $campaignSheetCount < 1): ?>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="empty-state">
+        <p>No email data yet.</p>
+        <p class="muted">
+          Team fills <strong>Sites with emails - Admin</strong> via Push.
+          You create country sheets under <strong>Email campaign data</strong>.
+        </p>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <div class="card">
       <div class="folders emails-data-folders">
@@ -116,7 +128,7 @@ if ($folder === 'sites_with_emails') {
     $sweScope = 'admin';
     $sweBase = $base . '&folder=sites_with_emails';
     $sweAdminHub = $base;
-    $sweAdminHubLabel = 'Emails DATA';
+    $sweAdminHubLabel = 'Emails data';
     require __DIR__ . '/../sites_with_emails_app.php';
     return;
 }
@@ -128,7 +140,7 @@ if ($folder === 'all_sites_with_emails') {
     $sweScope = 'admin_all';
     $sweBase = $base . '&folder=all_sites_with_emails';
     $sweAdminHub = $base;
-    $sweAdminHubLabel = 'Emails DATA';
+    $sweAdminHubLabel = 'Emails data';
     require __DIR__ . '/../sites_with_emails_app.php';
     return;
 }
