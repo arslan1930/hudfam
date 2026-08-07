@@ -505,6 +505,13 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines): void
         $total += $lineTotal;
     }
 
+    $total = round($total, 2);
+    if ($total <= 0) {
+        throw new InvalidArgumentException(
+            'Cannot save a blank invoice with a zero total. Add line amounts first, or leave without saving — Print / PDF still works with a zero total.'
+        );
+    }
+
     $billName = trim((string) ($header['bill_to_name'] ?? ''));
     $pdo = db();
     $pdo->beginTransaction();
@@ -536,7 +543,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines): void
             trim((string) ($header['company_address'] ?? $company['company_address'])),
             trim((string) ($header['company_reg_no'] ?? $company['company_reg_no'])),
             trim((string) ($header['vat_note'] ?? $company['vat_note'])),
-            round($total, 2),
+            $total,
             $invoiceId,
         ]);
 

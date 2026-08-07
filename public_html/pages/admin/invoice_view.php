@@ -119,7 +119,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <span class="invoice-pay-badge">Unpaid</span>
       <?php endif; ?>
       <?php if ($editable): ?>
-        · Edit fields on the invoice, then Save
+        · Edit on the bill — Save needs a total above €0. Leave or Print / PDF anytime (even at €0).
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
@@ -133,7 +133,8 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
     <?php endif; ?>
     <?php if ($editable): ?>
-      <button class="btn" type="submit" form="blank-invoice-form">Save invoice</button>
+      <button class="btn" type="submit" form="blank-invoice-form" id="blank-invoice-save"
+              title="Requires a bill total greater than zero">Save invoice</button>
     <?php endif; ?>
     <?php if (!$isPaid): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
@@ -147,8 +148,14 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <button class="btn<?= $editable ? ' secondary' : '' ?>" type="submit">Mark payment received</button>
       </form>
     <?php endif; ?>
-    <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener">Print / PDF</a>
+    <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener"
+       title="Download or print even with a zero total">Print / PDF</a>
   </div>
+  <?php if ($editable): ?>
+    <p class="help no-print" id="blank-invoice-save-hint" style="margin:0.35rem 0 0;text-align:right" hidden>
+      Add line amounts so the total is above €0 to save. You can still leave or use Print / PDF with a zero total.
+    </p>
+  <?php endif; ?>
 </div>
 
 <?php if ($editable): ?>
@@ -165,6 +172,8 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   if (!form) return;
   var tbody = document.getElementById('invoice-edit-items');
   var addBtn = document.getElementById('invoice-edit-add');
+  var saveBtn = document.getElementById('blank-invoice-save');
+  var saveHint = document.getElementById('blank-invoice-save-hint');
 
   function money(n) {
     return '€' + (Math.round(n * 100) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -192,6 +201,14 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     el = form.querySelector('.invoice-pay-vat'); if (el) el.textContent = vat;
     el = form.querySelector('.invoice-footer-company'); if (el) el.textContent = name || 'Topurlz Ltd';
   }
+  function syncSaveState(grand) {
+    var canSave = grand > 0;
+    if (saveBtn) {
+      saveBtn.disabled = !canSave;
+      saveBtn.setAttribute('aria-disabled', canSave ? 'false' : 'true');
+    }
+    if (saveHint) saveHint.hidden = canSave;
+  }
   function refreshTotals() {
     var grand = 0;
     tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
@@ -205,6 +222,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     var g = form.querySelector('[data-invoice-grand-total]');
     if (g) g.textContent = money(grand);
     syncPaybox();
+    syncSaveState(grand);
   }
   function syncRemove() {
     var rows = tbody.querySelectorAll('.invoice-edit-row');
@@ -248,6 +266,23 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 
   form.addEventListener('input', refreshTotals);
   form.addEventListener('change', refreshTotals);
+  form.addEventListener('submit', function (e) {
+    var grand = 0;
+    tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
+      var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
+      var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
+      grand += amount * qty;
+    });
+    if (!(grand > 0)) {
+      e.preventDefault();
+      syncSaveState(0);
+      if (saveHint) {
+        saveHint.hidden = false;
+        saveHint.focus && saveHint.focus();
+      }
+      alert('Cannot save with a zero total. Add amounts first, or leave / Print without saving.');
+    }
+  });
   syncRemove();
   refreshTotals();
 })();
