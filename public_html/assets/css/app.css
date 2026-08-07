@@ -1484,10 +1484,34 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   border: 0;
   box-shadow: none;
 }
+.invoice-list-table th,
+.invoice-list-table td {
+  vertical-align: middle;
+}
+.invoice-list-table thead th {
+  position: relative;
+  z-index: 2;
+  background: #fff;
+  overflow: visible;
+  white-space: nowrap;
+}
+.invoice-list-table thead th .info-tip {
+  position: relative;
+  z-index: 3;
+}
+.invoice-list-table tbody td {
+  position: relative;
+  z-index: 0;
+}
+.invoice-list-table .invoice-pay-badge,
+.invoice-list-table .invoice-list-pay-btn {
+  position: relative;
+  z-index: 0;
+}
 .invoice-doc-logo {
-  height: 48px;
+  height: 52px;
   width: auto;
-  max-width: 240px;
+  max-width: 260px;
   display: block;
   object-fit: contain;
   border-radius: 10px;

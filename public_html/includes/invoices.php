@@ -137,6 +137,11 @@ function invoice_company_defaults(): array
 
 function topurlz_logo_url(): string
 {
+    $png = dirname(__DIR__) . '/assets/img/topurlz-logo.png';
+    if (is_file($png)) {
+        $v = (string) filemtime($png);
+        return app_url('asset.php?f=img/topurlz-logo.png&v=' . rawurlencode($v));
+    }
     $file = dirname(__DIR__) . '/assets/img/topurlz-logo.svg';
     $v = is_file($file) ? (string) filemtime($file) : (string) time();
     return app_url('asset.php?f=img/topurlz-logo.svg&v=' . rawurlencode($v));

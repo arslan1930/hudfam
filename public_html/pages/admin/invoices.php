@@ -92,7 +92,7 @@ render_header('Invoices', 'admin');
             <th>Client</th>
             <th>Items</th>
             <th class="num">Total</th>
-            <th><?= label_with_info('Payment', 'Click Paid on an unpaid invoice and confirm — that marks the invoice paid and sets linked sheet rows to Paid.') ?></th>
+            <th>Payment</th>
             <th></th>
           </tr>
         </thead>
