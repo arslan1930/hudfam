@@ -500,10 +500,11 @@ function order_sheet_download_csv(array $client, array $rows): void
     fputcsv($out, ['Client', (string) $client['name']]);
     fputcsv($out, ['Exported', date('Y-m-d H:i')]);
     fputcsv($out, []);
-    fputcsv($out, ['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Month', 'Year', 'Status']);
+    fputcsv($out, ['Site name', 'Note', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Month', 'Year', 'Status']);
     foreach ($rows as $r) {
         fputcsv($out, [
             $r['site'],
+            $r['note'] ?? '',
             $r['country'],
             $r['owner'],
             $r['decided'],
@@ -531,17 +532,17 @@ function order_sheet_download_xls(array $client, array $rows): void
     header('Expires: 0');
     echo '<html><head><meta charset="utf-8"></head><body>';
     echo '<table border="1" cellpadding="4" cellspacing="0">';
-    echo '<tr><th colspan="10">Order sheet — ' . h((string) $client['name']) . '</th></tr>';
-    echo '<tr><td colspan="10">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
+    echo '<tr><th colspan="11">Order sheet — ' . h((string) $client['name']) . '</th></tr>';
+    echo '<tr><td colspan="11">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
     echo '<tr>';
-    foreach (['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Month', 'Year', 'Status'] as $h) {
+    foreach (['Site name', 'Note', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Month', 'Year', 'Status'] as $h) {
         echo '<th>' . h($h) . '</th>';
     }
     echo '</tr>';
     foreach ($rows as $r) {
         $isYear = ($r['month'] === 'YEAR END');
         echo '<tr' . ($isYear ? ' style="background:#e8eaed;font-weight:bold"' : '') . '>';
-        foreach (['site', 'country', 'owner', 'decided', 'live_url', 'paid', 'profit', 'month', 'year', 'status'] as $key) {
+        foreach (['site', 'note', 'country', 'owner', 'decided', 'live_url', 'paid', 'profit', 'month', 'year', 'status'] as $key) {
             echo '<td>' . h((string) ($r[$key] ?? '')) . '</td>';
         }
         echo '</tr>';
