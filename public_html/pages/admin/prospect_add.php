@@ -8,12 +8,12 @@ $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
 
-// Prefill language from country default
-if ($country !== '' && $language === '') {
-    foreach (list_countries(null, true) as $c) {
-        if (strcasecmp((string) $c['name'], $country) === 0) {
-            $language = (string) ($c['default_language'] ?? '');
-            break;
+if ($country !== '') {
+    $canonCountry = resolve_canonical_country($country);
+    if ($canonCountry !== null) {
+        $country = $canonCountry['name'];
+        if ($language === '') {
+            $language = $canonCountry['language'];
         }
     }
 }

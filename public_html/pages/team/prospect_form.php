@@ -33,17 +33,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!in_array($status, ['new', 'contacting', 'replied', 'skipped'], true)) {
         $status = 'new';
     }
-    if ($country !== '') {
-        foreach ($countryOptions as $c) {
-            if (strcasecmp($c['name'], $country) === 0) {
-                if ($region === '') {
-                    $region = $c['region'];
-                }
-                if ($language === '' && $c['default_language'] !== '') {
-                    $language = $c['default_language'];
-                }
-                break;
-            }
+    $canonCountry = $country !== '' ? resolve_canonical_country($country) : null;
+    if ($canonCountry !== null) {
+        $country = $canonCountry['name'];
+        if ($region === '') {
+            $region = $canonCountry['region'];
+        }
+        if ($language === '') {
+            $language = $canonCountry['language'];
         }
     }
     if (!$analyzed['ok']) {
@@ -56,8 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $site['notes'] = $notes;
         $site['url'] = $url;
         $site['status'] = $status;
-    } elseif ($country === '' && !$id) {
-        flash('error', 'Select a country database (type to search, then Enter).');
+    } elseif (($country === '' || $canonCountry === null) && !$id) {
+        flash('error', 'Select an existing country database (type to search, then Enter). New folders are not created.');
+    } elseif ($canonCountry === null && $id && $country !== '') {
+        flash('error', 'Select an existing country database. New country folders are not created.');
+        $site['domain'] = $domain;
+        $site['country'] = $country;
+        $site['language'] = $language;
+        $site['region'] = $region;
+        $site['niche'] = $niche;
+        $site['notes'] = $notes;
+        $site['url'] = $url;
+        $site['status'] = $status;
     } elseif (!$id) {
         $exists = filter_domains_against_prospects([$domain], $country);
         if ($exists['existing']) {
@@ -74,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'UPDATE prospect_sites SET url=?, status=? WHERE TRIM(country)=? AND domain=?'
             )->execute([$url, $status, $country, $domain]);
         }
-        flash('ok', 'Prospect added to ' . $country . ' (also saved in today’s add history).');
+        flash('ok', 'Prospect added to ' . $country . ' (merged into that country’s database).');
         if (!empty($added['batch_id'])) {
             redirect('index.php?page=team_prospect_batch&id=' . (int) $added['batch_id']);
         }

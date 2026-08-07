@@ -145,6 +145,52 @@ function list_country_typeahead_items(): array
     return $items;
 }
 
+/**
+ * Resolve typed/posted country text to an existing countries-table row.
+ * Never creates a new country — returns null when there is no match.
+ *
+ * @return array{name:string,region:string,language:string}|null
+ */
+function resolve_canonical_country(string $input): ?array
+{
+    $input = trim($input);
+    if ($input === '' || strcasecmp($input, '_none') === 0) {
+        return null;
+    }
+    if (function_exists('seed_countries_if_empty')) {
+        try {
+            seed_countries_if_empty(db());
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+    foreach (list_countries(null, true) as $c) {
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $input) === 0) {
+            return [
+                'name' => $name,
+                'region' => (string) ($c['region'] ?? ''),
+                'language' => (string) ($c['default_language'] ?? ''),
+            ];
+        }
+    }
+    return null;
+}
+
+/**
+ * Require a catalog country name. Throws when the value is empty or unknown.
+ */
+function require_canonical_country(string $input): array
+{
+    $resolved = resolve_canonical_country($input);
+    if ($resolved === null) {
+        throw new InvalidArgumentException(
+            'Select an existing country database (e.g. Germany, Spain). New country folders are not created.'
+        );
+    }
+    return $resolved;
+}
+
 function apply_site_geo_filters(array &$where, array &$params, array $filters): void
 {
     if (!empty($filters['region'])) {

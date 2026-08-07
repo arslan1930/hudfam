@@ -4,6 +4,17 @@ ensure_prospect_schema();
 
 $sheet = (string) get('country');
 $emptyCountry = ($sheet === '_none');
+if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
+    $canonSheet = resolve_canonical_country($sheet);
+    if ($canonSheet !== null && $canonSheet['name'] !== $sheet) {
+        redirect('index.php?page=team_prospects&country=' . urlencode($canonSheet['name']));
+    }
+    if ($canonSheet === null) {
+        flash('error', 'That country folder is not in the country list. Sites only live in existing countries.');
+        redirect('index.php?page=team_prospects');
+    }
+    $sheet = $canonSheet['name'];
+}
 $inCountry = ($sheet !== '' && $sheet !== 'all');
 
 // --- Country folders (default) ---
@@ -27,7 +38,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1>Country databases</h1>
-        <p class="muted">Same folders as Admin — each country is its own URL list. <?= (int) $grandTotal ?> URLs total.</p>
+        <p class="muted">Same folders as Admin — new sites you add merge into these existing country lists. <?= (int) $grandTotal ?> URLs total.</p>
       </div>
       <div class="actions">
         <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>

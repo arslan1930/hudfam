@@ -8,6 +8,17 @@ if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
 }
 $emptyCountry = ($sheet === '_none');
+if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
+    $canonSheet = resolve_canonical_country($sheet);
+    if ($canonSheet !== null && $canonSheet['name'] !== $sheet) {
+        redirect('index.php?page=admin_prospects&country=' . urlencode($canonSheet['name']));
+    }
+    if ($canonSheet === null) {
+        flash('error', 'That country folder is not in the country list. Sites only live in existing countries.');
+        redirect('index.php?page=admin_prospects');
+    }
+    $sheet = $canonSheet['name'];
+}
 $inCountry = ($sheet !== '' && $sheet !== 'all');
 
 // --- Country folders (default) ---
@@ -31,7 +42,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1>Country databases</h1>
-        <p class="muted">Each country is its own site database. Open a folder to view or add sites. <?= (int) $grandTotal ?> sites total.</p>
+        <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>

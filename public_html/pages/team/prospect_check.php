@@ -14,19 +14,19 @@ $result = null;
 $old = ['domains' => [], 'total' => 0, 'truncated' => false];
 $oldText = '';
 
-// Prefill language/region from country default
-if ($country !== '' && ($language === '' || $region === '')) {
-    foreach ($countryOptions as $c) {
-        if (strcasecmp((string) $c['name'], $country) === 0) {
-            $country = (string) $c['name'];
-            if ($region === '') {
-                $region = (string) $c['region'];
-            }
-            if ($language === '' && $c['default_language'] !== '') {
-                $language = (string) $c['default_language'];
-            }
-            break;
-        }
+// Always use the existing country folder name (Germany, Spain, …) — never a free-text variant.
+if ($country !== '') {
+    $canonCountry = resolve_canonical_country($country);
+    if ($canonCountry === null) {
+        flash('error', 'Select an existing country database. New country folders are not created.');
+        redirect('index.php?page=team_prospect_check');
+    }
+    $country = $canonCountry['name'];
+    if ($region === '') {
+        $region = $canonCountry['region'];
+    }
+    if ($language === '') {
+        $language = $canonCountry['language'];
     }
 }
 
@@ -50,8 +50,21 @@ try {
         $parsed = parse_domain_list_strict($raw);
         $domains = $parsed['valid'];
 
-        if ($country === '') {
-            flash('error', 'Select a country database first (type to search, then Enter).');
+        $canonCountry = $country !== '' ? resolve_canonical_country($country) : null;
+        if ($country === '' || $canonCountry === null) {
+            flash('error', 'Select an existing country database first (type to search, then Enter). New folders are not created.');
+        } else {
+            $country = $canonCountry['name'];
+            if ($region === '') {
+                $region = $canonCountry['region'];
+            }
+            if ($language === '') {
+                $language = $canonCountry['language'];
+            }
+        }
+
+        if ($country === '' || $canonCountry === null) {
+            // error already flashed
         } elseif ($parsed['invalid_count'] > 0 && $action !== 'add_new') {
             flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
             $raw = $parsed['valid_text'] !== ''
@@ -107,7 +120,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Pick a country database → paste root domains → remove ones already in that country → add only unique sites.</p>
+    <p class="muted">Pick an existing country database → paste root domains → remove ones already in that country → add only unique sites. New sites merge into that same country folder (Germany → Germany, Spain → Spain).</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>

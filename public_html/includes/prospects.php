@@ -276,7 +276,112 @@ function ensure_prospect_schema(): void
 }
 
 /**
- * Country folders for Admin: every active country + URL counts.
+ * Merge orphan / misspelled country labels into existing catalog countries.
+ * Team/admin must never create separate country folders — only the countries table list.
+ *
+ * @return int number of prospect_sites rows rewritten or removed as duplicates
+ */
+function merge_orphan_prospect_countries(): int
+{
+    static $done = false;
+    if ($done) {
+        return 0;
+    }
+    $done = true;
+
+    ensure_prospect_schema();
+    if (function_exists('seed_countries_if_empty')) {
+        try {
+            seed_countries_if_empty(db());
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
+    $pdo = db();
+    $changed = 0;
+    try {
+        $labels = $pdo->query(
+            "SELECT DISTINCT TRIM(country) AS country FROM prospect_sites"
+        )->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $findId = $pdo->prepare(
+        'SELECT id FROM prospect_sites WHERE TRIM(country)=? AND domain=? LIMIT 1'
+    );
+    $upd = $pdo->prepare('UPDATE prospect_sites SET country=?, region=?, updated_at=NOW() WHERE id=?');
+    $del = $pdo->prepare('DELETE FROM prospect_sites WHERE id=?');
+    $updBatch = $pdo->prepare(
+        "UPDATE prospect_batches SET country=?, region=IF(?<>'', ?, region), updated_at=NOW()
+         WHERE TRIM(country)=?"
+    );
+
+    foreach ($labels as $label) {
+        $label = trim((string) $label);
+        if ($label === '') {
+            continue;
+        }
+        $canon = resolve_canonical_country($label);
+        if ($canon === null) {
+            // Unknown free-text folder: clear label so it does not appear as a new country.
+            // Domains remain under empty country (No country) instead of a custom folder.
+            if ($label !== '') {
+                $stmt = $pdo->prepare('SELECT id, domain FROM prospect_sites WHERE TRIM(country)=?');
+                $stmt->execute([$label]);
+                foreach ($stmt->fetchAll() as $row) {
+                    $findId->execute(['', $row['domain']]);
+                    $existingId = (int) $findId->fetchColumn();
+                    if ($existingId > 0 && $existingId !== (int) $row['id']) {
+                        $del->execute([(int) $row['id']]);
+                    } else {
+                        $upd->execute(['', '', (int) $row['id']]);
+                    }
+                    $changed++;
+                }
+                try {
+                    $updBatch->execute(['', '', '', $label]);
+                } catch (Throwable $e) {
+                    // ignore
+                }
+            }
+            continue;
+        }
+        if (strcasecmp($canon['name'], $label) === 0 && $label === $canon['name']) {
+            continue; // already canonical spelling
+        }
+        // Case / spacing variant of an existing country → merge into catalog name
+        $stmt = $pdo->prepare('SELECT id, domain, region FROM prospect_sites WHERE TRIM(country)=?');
+        $stmt->execute([$label]);
+        foreach ($stmt->fetchAll() as $row) {
+            $findId->execute([$canon['name'], $row['domain']]);
+            $existingId = (int) $findId->fetchColumn();
+            if ($existingId > 0 && $existingId !== (int) $row['id']) {
+                // Domain already in the real country folder — drop the orphan duplicate.
+                $del->execute([(int) $row['id']]);
+            } else {
+                $region = trim((string) ($row['region'] ?? ''));
+                if ($region === '') {
+                    $region = $canon['region'];
+                }
+                $upd->execute([$canon['name'], $region, (int) $row['id']]);
+            }
+            $changed++;
+        }
+        try {
+            $updBatch->execute([$canon['name'], $canon['region'], $canon['region'], $label]);
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
+    return $changed;
+}
+
+/**
+ * Country folders for Admin/Team: only existing countries table folders + URL counts.
+ * Orphan free-text country labels are merged away first (never create separate countries).
  *
  * @return list<array{country:string,region:string,region_label:string,total:int,language:string}>
  */
@@ -290,14 +395,24 @@ function prospect_country_folders(): array
             // countries table may be created by upgrade/install
         }
     }
+    try {
+        merge_orphan_prospect_countries();
+    } catch (Throwable $e) {
+        // ignore repair failures
+    }
+
     $counts = [];
     foreach (db()->query(
         "SELECT TRIM(country) AS country, COUNT(*) AS total
          FROM prospect_sites
          GROUP BY TRIM(country)"
     )->fetchAll() as $row) {
-        $counts[(string) $row['country']] = (int) $row['total'];
+        $key = (string) $row['country'];
+        $canon = $key !== '' ? resolve_canonical_country($key) : null;
+        $folderKey = $canon ? $canon['name'] : '';
+        $counts[$folderKey] = ($counts[$folderKey] ?? 0) + (int) $row['total'];
     }
+
     $folders = [];
     foreach (list_countries(null, true) as $c) {
         $name = (string) $c['name'];
@@ -311,23 +426,13 @@ function prospect_country_folders(): array
         ];
         unset($counts[$name]);
     }
-    // Leftover country names in data that are not in countries table
-    foreach ($counts as $name => $total) {
-        if ($name === '') {
-            $folders[] = [
-                'country' => '',
-                'region' => 'other',
-                'region_label' => 'Other',
-                'total' => $total,
-                'language' => '',
-            ];
-            continue;
-        }
+    // Empty-country leftovers only (never invent new country folders)
+    if (!empty($counts[''])) {
         $folders[] = [
-            'country' => $name,
+            'country' => '',
             'region' => 'other',
             'region_label' => 'Other',
-            'total' => $total,
+            'total' => (int) $counts[''],
             'language' => '',
         ];
     }
@@ -359,6 +464,15 @@ function filter_domains_against_prospects(array $domains, string $country = ''):
     @set_time_limit(0);
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
     $country = trim($country);
+    if ($country !== '') {
+        $canon = resolve_canonical_country($country);
+        if ($canon === null) {
+            throw new InvalidArgumentException(
+                'Select an existing country database (e.g. Germany, Spain). New country folders are not created.'
+            );
+        }
+        $country = $canon['name'];
+    }
     $existing = [];
     $new = [];
     if (!$domains) {
@@ -408,6 +522,11 @@ function list_prospect_domain_names(int $maxDisplay = 25000, string $country = '
     ensure_prospect_schema();
     $country = trim($country);
     if ($country !== '') {
+        $canon = resolve_canonical_country($country);
+        if ($canon === null) {
+            return ['domains' => [], 'total' => 0, 'truncated' => false];
+        }
+        $country = $canon['name'];
         $count = db()->prepare('SELECT COUNT(*) FROM prospect_sites WHERE TRIM(country)=?');
         $count->execute([$country]);
         $total = (int) $count->fetchColumn();
@@ -472,26 +591,27 @@ function add_prospect_domains(
 ): array {
     ensure_prospect_schema();
     @set_time_limit(0);
+    try {
+        merge_orphan_prospect_countries();
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    if ($region === '') {
+        $region = $canon['region'];
+    }
+    if ($language === '') {
+        $language = $canon['language'];
+    }
+
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
     $check = filter_domains_against_prospects($domains, $country);
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
     if (!$toAdd) {
         return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null];
-    }
-
-    if ($country !== '') {
-        foreach (list_countries(null, true) as $c) {
-            if (strcasecmp($c['name'], $country) === 0) {
-                if ($region === '') {
-                    $region = $c['region'];
-                }
-                if ($language === '' && $c['default_language'] !== '') {
-                    $language = $c['default_language'];
-                }
-                break;
-            }
-        }
     }
 
     $batchId = get_or_create_prospect_batch(
@@ -555,23 +675,17 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
 {
     ensure_prospect_schema();
     @set_time_limit(0);
-    $country = trim($country);
-    if ($country === '') {
-        throw new InvalidArgumentException('Country is required.');
+    try {
+        merge_orphan_prospect_countries();
+    } catch (Throwable $e) {
+        // ignore
     }
 
-    $region = '';
-    $defaultLang = '';
-    foreach (list_countries(null, true) as $c) {
-        if (strcasecmp((string) $c['name'], $country) === 0) {
-            $country = (string) $c['name'];
-            $region = (string) $c['region'];
-            $defaultLang = (string) ($c['default_language'] ?? '');
-            break;
-        }
-    }
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    $region = $canon['region'];
     if ($language === '') {
-        $language = $defaultLang;
+        $language = $canon['language'];
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
