@@ -231,7 +231,6 @@ if ($folder === 'extracted_sites' && !$inCountry) {
         <p class="muted">Countries with extracted sites. <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> total.</p>
       </div>
       <div class="actions">
-        <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
         <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
       </div>
     </div>
