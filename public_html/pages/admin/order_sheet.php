@@ -233,7 +233,7 @@ render_header('Order · ' . $client['name'], 'admin');
               <span><?= (int) $to ?> months started</span>
               <?php if ($markerId > 0): ?>
                 <button class="btn-link danger order-year-end-remove" type="submit"
-                        onclick="document.getElementById('delete-item-id').value='<?= $markerId ?>'; document.getElementById('sheet-action').value='delete_row'; return confirm('Remove this year-end marker?');">
+                        onclick="document.getElementById('delete-item-id').value='<?= $markerId ?>'; document.getElementById('sheet-action').value='delete_row'; return confirm(<?= h(json_encode('Delete this year-end marker for ' . $from . '? This cannot be undone.', JSON_UNESCAPED_UNICODE)) ?>);">
                   Remove marker
                 </button>
               <?php endif; ?>
