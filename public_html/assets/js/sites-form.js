@@ -14,7 +14,40 @@
     'com.ar': 1, 'com.co': 1, 'com.pe': 1, 'com.ve': 1, 'com.ec': 1,
     'co.kr': 1, 'co.th': 1, 'co.il': 1, 'org.il': 1, 'ac.il': 1,
     'com.cn': 1, 'net.cn': 1, 'org.cn': 1,
-    'co.id': 1, 'or.id': 1, 'web.id': 1
+    'co.id': 1, 'or.id': 1, 'web.id': 1,
+    'com.pl': 1, 'net.pl': 1, 'org.pl': 1, 'info.pl': 1, 'biz.pl': 1, 'edu.pl': 1, 'gov.pl': 1,
+    'com.pk': 1, 'net.pk': 1, 'org.pk': 1, 'gov.pk': 1, 'edu.pk': 1,
+    'com.ua': 1, 'net.ua': 1, 'org.ua': 1, 'gov.ua': 1,
+    'com.pt': 1, 'net.pt': 1, 'org.pt': 1, 'gov.pt': 1, 'edu.pt': 1, 'publ.pt': 1,
+    'com.es': 1, 'nom.es': 1, 'org.es': 1, 'gob.es': 1, 'edu.es': 1,
+    'com.ng': 1, 'org.ng': 1, 'gov.ng': 1, 'edu.ng': 1, 'net.ng': 1,
+    'com.eg': 1, 'net.eg': 1, 'org.eg': 1, 'edu.eg': 1, 'gov.eg': 1,
+    'com.sa': 1, 'net.sa': 1, 'org.sa': 1, 'edu.sa': 1, 'gov.sa': 1,
+    'com.bd': 1, 'net.bd': 1, 'org.bd': 1, 'edu.bd': 1, 'gov.bd': 1, 'ac.bd': 1,
+    'com.np': 1, 'net.np': 1, 'org.np': 1, 'edu.np': 1, 'gov.np': 1,
+    'com.lk': 1, 'org.lk': 1, 'edu.lk': 1, 'gov.lk': 1, 'net.lk': 1,
+    'com.kh': 1, 'net.kh': 1, 'org.kh': 1, 'edu.kh': 1, 'gov.kh': 1,
+    'co.ke': 1, 'or.ke': 1, 'ne.ke': 1, 'go.ke': 1, 'ac.ke': 1,
+    'com.cy': 1, 'net.cy': 1, 'org.cy': 1, 'ac.cy': 1, 'gov.cy': 1,
+    'com.mt': 1, 'org.mt': 1, 'net.mt': 1, 'edu.mt': 1, 'gov.mt': 1,
+    'com.ro': 1, 'org.ro': 1,
+    'com.gr': 1, 'net.gr': 1, 'org.gr': 1, 'edu.gr': 1, 'gov.gr': 1,
+    'com.hr': 1, 'from.hr': 1, 'iz.hr': 1, 'name.hr': 1,
+    'com.ba': 1, 'net.ba': 1, 'org.ba': 1, 'edu.ba': 1, 'gov.ba': 1,
+    'co.ao': 1, 'it.ao': 1, 'og.ao': 1, 'pb.ao': 1, 'gv.ao': 1,
+    'co.bw': 1, 'org.bw': 1,
+    'co.ug': 1, 'or.ug': 1, 'ac.ug': 1, 'go.ug': 1, 'ne.ug': 1, 'sc.ug': 1,
+    'co.tz': 1, 'or.tz': 1, 'ac.tz': 1, 'go.tz': 1, 'ne.tz': 1, 'sc.tz': 1,
+    'co.zm': 1, 'org.zm': 1,
+    'co.zw': 1, 'org.zw': 1, 'ac.zw': 1, 'gov.zw': 1
+  };
+
+  // Second-level labels commonly paired with a 2-letter country code.
+  var COUNTRY_SLD = {
+    com: 1, co: 1, org: 1, net: 1, gov: 1, edu: 1, ac: 1, gob: 1, go: 1, or: 1, ne: 1,
+    me: 1, ltd: 1, plc: 1, gen: 1, firm: 1, ind: 1, web: 1, asn: 1, id: 1, info: 1,
+    biz: 1, name: 1, nom: 1, publ: 1, from: 1, iz: 1, it: 1, og: 1, pb: 1, gv: 1,
+    sc: 1, govt: 1
   };
 
   function publicSuffix(host) {
@@ -22,6 +55,12 @@
     if (parts.length < 2) return '';
     var two = parts[parts.length - 2] + '.' + parts[parts.length - 1];
     if (MULTI_TLDS[two]) return two;
+    // Heuristic: keep multi-part country suffixes (com.pl, com.pk, co.uk, …)
+    var sld = parts[parts.length - 2];
+    var cc = parts[parts.length - 1];
+    if (cc.length === 2 && /^[a-z]{2}$/.test(cc) && COUNTRY_SLD[sld]) {
+      return two;
+    }
     return parts[parts.length - 1];
   }
 

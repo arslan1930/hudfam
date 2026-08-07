@@ -26,7 +26,7 @@ function normalize_domain(string $value): string
 }
 
 /**
- * Common multi-part public suffixes (e.g. example.co.uk is a root domain).
+ * Common multi-part public suffixes (e.g. example.co.uk / shop.com.pl are root domains).
  *
  * @return list<string>
  */
@@ -46,6 +46,47 @@ function known_multi_part_tlds(): array
         'co.kr', 'co.th', 'co.il', 'org.il', 'ac.il',
         'com.cn', 'net.cn', 'org.cn',
         'co.id', 'or.id', 'web.id',
+        // Poland, Pakistan, and other com.*/co.* country suffixes
+        'com.pl', 'net.pl', 'org.pl', 'info.pl', 'biz.pl', 'edu.pl', 'gov.pl',
+        'com.pk', 'net.pk', 'org.pk', 'gov.pk', 'edu.pk',
+        'com.ua', 'net.ua', 'org.ua', 'gov.ua',
+        'com.pt', 'net.pt', 'org.pt', 'gov.pt', 'edu.pt', 'publ.pt',
+        'com.es', 'nom.es', 'org.es', 'gob.es', 'edu.es',
+        'com.ng', 'org.ng', 'gov.ng', 'edu.ng', 'net.ng',
+        'com.eg', 'net.eg', 'org.eg', 'edu.eg', 'gov.eg',
+        'com.sa', 'net.sa', 'org.sa', 'edu.sa', 'gov.sa',
+        'com.bd', 'net.bd', 'org.bd', 'edu.bd', 'gov.bd', 'ac.bd',
+        'com.np', 'net.np', 'org.np', 'edu.np', 'gov.np',
+        'com.lk', 'org.lk', 'edu.lk', 'gov.lk', 'net.lk',
+        'com.kh', 'net.kh', 'org.kh', 'edu.kh', 'gov.kh',
+        'co.ke', 'or.ke', 'ne.ke', 'go.ke', 'ac.ke',
+        'com.cy', 'net.cy', 'org.cy', 'ac.cy', 'gov.cy',
+        'com.mt', 'org.mt', 'net.mt', 'edu.mt', 'gov.mt',
+        'com.ro', 'org.ro',
+        'com.gr', 'net.gr', 'org.gr', 'edu.gr', 'gov.gr',
+        'com.hr', 'from.hr', 'iz.hr', 'name.hr',
+        'com.ba', 'net.ba', 'org.ba', 'edu.ba', 'gov.ba',
+        'co.ao', 'it.ao', 'og.ao', 'pb.ao', 'gv.ao',
+        'co.bw', 'org.bw',
+        'co.ug', 'or.ug', 'ac.ug', 'go.ug', 'ne.ug', 'sc.ug',
+        'co.tz', 'or.tz', 'ac.tz', 'go.tz', 'ne.tz', 'sc.tz',
+        'co.zm', 'org.zm',
+        'co.zw', 'org.zw', 'ac.zw', 'gov.zw',
+    ];
+}
+
+/**
+ * Second-level labels commonly paired with a 2-letter country code (com.pl, co.uk, …).
+ *
+ * @return list<string>
+ */
+function known_country_sld_labels(): array
+{
+    return [
+        'com', 'co', 'org', 'net', 'gov', 'edu', 'ac', 'gob', 'go', 'or', 'ne',
+        'me', 'ltd', 'plc', 'gen', 'firm', 'ind', 'web', 'asn', 'id', 'info',
+        'biz', 'name', 'nom', 'publ', 'from', 'iz', 'it', 'og', 'pb', 'gv',
+        'sc', 'govt',
     ];
 }
 
@@ -59,6 +100,16 @@ function domain_public_suffix(string $host): string
     }
     $two = $parts[$n - 2] . '.' . $parts[$n - 1];
     if (in_array($two, known_multi_part_tlds(), true)) {
+        return $two;
+    }
+    // Heuristic: foo.com.pl / bar.com.pk / shop.co.uk — keep multi-part country suffixes.
+    $sld = $parts[$n - 2];
+    $cc = $parts[$n - 1];
+    if (
+        strlen($cc) === 2
+        && preg_match('/^[a-z]{2}$/', $cc)
+        && in_array($sld, known_country_sld_labels(), true)
+    ) {
         return $two;
     }
     return $parts[$n - 1];
