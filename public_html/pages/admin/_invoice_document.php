@@ -18,6 +18,14 @@ $lineNo = 0;
     <div>
       <span class="invoice-k">Invoice No.</span>
       <strong><?= h($invoice['invoice_number']) ?></strong>
+      <?php
+        $adminNote = function_exists('invoice_admin_note')
+          ? invoice_admin_note($invoice)
+          : trim((string) ($invoice['admin_note'] ?? ''));
+      ?>
+      <?php if ($adminNote !== ''): ?>
+        <div class="invoice-doc-admin-note"><?= h($adminNote) ?></div>
+      <?php endif; ?>
     </div>
     <div>
       <span class="invoice-k">Date</span>

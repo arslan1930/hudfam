@@ -17,7 +17,7 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
         'admin_orders' => ['admin_order_sheet'],
-        'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_view'],
+        'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],

@@ -23,7 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('error', 'Invoice not found.');
             } else {
                 mark_invoice_payment_received($id);
-                flash('ok', 'Invoice ' . $inv['invoice_number'] . ' marked paid — linked sheet rows set to Paid.');
+                if (invoice_is_manual($inv)) {
+                    flash('ok', 'Manual invoice ' . $inv['invoice_number'] . ' marked paid.');
+                } else {
+                    flash('ok', 'Invoice ' . $inv['invoice_number'] . ' marked paid — linked sheet rows set to Paid.');
+                }
             }
             redirect('index.php?page=admin_invoices');
         }
@@ -48,6 +52,7 @@ render_header('Invoices', 'admin');
     <p class="muted">Generate printable invoices from unpaid completed articles (LIVE URL filled). Mark payment received to set those sheet rows Paid.</p>
   </div>
   <div class="actions">
+    <a class="btn secondary" href="index.php?page=admin_invoice_manual">Manual invoice</a>
     <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
 </div>
@@ -68,6 +73,7 @@ render_header('Invoices', 'admin');
   <?php if (!$invoices): ?>
     <div class="empty-state">
       <p>No invoices yet. Generate one from unpaid completed articles on a client sheet.</p>
+      <a class="btn secondary" href="index.php?page=admin_invoice_manual">Manual invoice</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
     </div>
   <?php else: ?>
@@ -86,20 +92,35 @@ render_header('Invoices', 'admin');
         </thead>
         <tbody>
         <?php foreach ($invoices as $inv): ?>
-          <?php $paid = invoice_is_paid($inv); ?>
+          <?php
+            $paid = invoice_is_paid($inv);
+            $manual = invoice_is_manual($inv);
+            $clientLabel = $inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name'];
+            $note = invoice_admin_note($inv);
+          ?>
           <tr data-invoice-row
               data-search="<?= h(mb_strtolower(trim(
                   (string) $inv['invoice_number'] . ' '
+                  . ($manual ? 'manual ' : '')
                   . format_invoice_date((string) $inv['invoice_date']) . ' '
-                  . (string) ($inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name']) . ' '
+                  . (string) $clientLabel . ' '
                   . (string) $inv['item_count'] . ' '
                   . format_euro($inv['total_amount']) . ' '
+                  . $note . ' '
                   . ($paid ? 'paid payment received' : 'unpaid open')
               ))) ?>">
-            <td data-invoice-cell><strong><?= h($inv['invoice_number']) ?></strong></td>
+            <td data-invoice-cell>
+              <strong><?= h($inv['invoice_number']) ?></strong>
+              <?php if ($manual): ?>
+                <span class="invoice-manual-tag">(manual)</span>
+              <?php endif; ?>
+              <?php if ($note !== ''): ?>
+                <div class="invoice-list-note muted"><?= h($note) ?></div>
+              <?php endif; ?>
+            </td>
             <td data-invoice-cell><?= h(format_invoice_date((string) $inv['invoice_date'])) ?></td>
             <td data-invoice-cell>
-              <?= h($inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name']) ?>
+              <?= h($clientLabel) ?>
             </td>
             <td data-invoice-cell><?= (int) $inv['item_count'] ?></td>
             <td class="num" data-invoice-cell><?= h(format_euro($inv['total_amount'])) ?></td>
@@ -110,8 +131,10 @@ render_header('Invoices', 'admin');
                 <form method="post" class="inline" action="index.php?page=admin_invoices"
                       onsubmit="return confirm(<?= h(json_encode(
                           'Confirm this invoice is paid?' . "\n\n"
-                          . 'Invoice ' . $inv['invoice_number'] . "\n"
-                          . 'This will mark the invoice as Paid and set linked sheet rows to Paid.',
+                          . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (manual)' : '') . "\n"
+                          . ($manual
+                              ? 'This will mark the manual invoice as Paid.'
+                              : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
                           JSON_UNESCAPED_UNICODE
                       )) ?>);">
                   <input type="hidden" name="action" value="mark_paid">

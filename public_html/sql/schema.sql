@@ -156,6 +156,8 @@ CREATE TABLE IF NOT EXISTS invoices (
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
   paid_at DATETIME NULL,
+  is_manual TINYINT(1) NOT NULL DEFAULT 0,
+  admin_note VARCHAR(255) NOT NULL DEFAULT '',
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -163,6 +165,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   INDEX (client_id),
   INDEX (invoice_date),
   INDEX (payment_status),
+  INDEX (is_manual),
   CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
   CONSTRAINT fk_inv_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

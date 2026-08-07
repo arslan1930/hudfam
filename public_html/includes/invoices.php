@@ -53,6 +53,8 @@ function ensure_invoice_schema(): void
           total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
           paid_at DATETIME NULL,
+          is_manual TINYINT(1) NOT NULL DEFAULT 0,
+          admin_note VARCHAR(255) NOT NULL DEFAULT '',
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -60,6 +62,7 @@ function ensure_invoice_schema(): void
           INDEX (client_id),
           INDEX (invoice_date),
           INDEX (payment_status),
+          INDEX (is_manual),
           CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
           CONSTRAINT fk_inv_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
@@ -90,8 +93,22 @@ function ensure_invoice_schema(): void
         if (!in_array('paid_at', $invCols, true)) {
             $invAlters[] = 'ADD COLUMN paid_at DATETIME NULL AFTER payment_status';
         }
+        if (!in_array('is_manual', $invCols, true)) {
+            $invAlters[] = 'ADD COLUMN is_manual TINYINT(1) NOT NULL DEFAULT 0 AFTER paid_at';
+        }
+        if (!in_array('admin_note', $invCols, true)) {
+            $invAlters[] = "ADD COLUMN admin_note VARCHAR(255) NOT NULL DEFAULT '' AFTER is_manual";
+        }
         if ($invAlters) {
             $pdo->exec('ALTER TABLE invoices ' . implode(', ', $invAlters));
+        }
+        try {
+            $idx = $pdo->query("SHOW INDEX FROM invoices WHERE Key_name='is_manual'")->fetch();
+            if (!$idx) {
+                $pdo->exec('ALTER TABLE invoices ADD INDEX (is_manual)');
+            }
+        } catch (Throwable $e) {
+            // ignore
         }
         $itemCols = $pdo->query('SHOW COLUMNS FROM invoice_items')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('order_item_ids', $itemCols, true)) {
@@ -381,6 +398,16 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
     return $lines;
 }
 
+function invoice_is_manual(array $invoice): bool
+{
+    return (int) ($invoice['is_manual'] ?? 0) === 1;
+}
+
+function invoice_admin_note(array $invoice): string
+{
+    return trim((string) ($invoice['admin_note'] ?? ''));
+}
+
 /**
  * @param array<string,mixed> $header
  * @param list<array{description:string,amount:float|string,qty:int|string,line_total?:float|string}> $lines
@@ -388,8 +415,11 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
 function create_invoice(array $header, array $lines, ?int $createdBy): int
 {
     ensure_invoice_schema();
+    $isManual = !empty($header['is_manual']);
     if (!$lines) {
-        throw new InvalidArgumentException('Select at least one completed article to invoice.');
+        throw new InvalidArgumentException(
+            $isManual ? 'Add at least one invoice item.' : 'Select at least one completed article to invoice.'
+        );
     }
 
     $company = invoice_company_defaults();
@@ -397,6 +427,10 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
     $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
     if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
         $invoiceDate = date('Y-m-d');
+    }
+    $adminNote = trim((string) ($header['admin_note'] ?? ''));
+    if (mb_strlen($adminNote) > 255) {
+        $adminNote = mb_substr($adminNote, 0, 255);
     }
 
     $normalized = [];
@@ -417,22 +451,27 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
             'amount' => $amount,
             'qty' => $qty,
             'line_total' => $lineTotal,
-            'order_item_ids' => array_values(array_filter(array_map('intval', (array) ($line['order_item_ids'] ?? [])), static fn ($id) => $id > 0)),
+            'order_item_ids' => $isManual
+                ? []
+                : array_values(array_filter(array_map('intval', (array) ($line['order_item_ids'] ?? [])), static fn ($id) => $id > 0)),
             'sort_order' => $sort++,
         ];
         $total += $lineTotal;
     }
     if (!$normalized) {
-        throw new InvalidArgumentException('Select at least one unpaid completed article to invoice.');
+        throw new InvalidArgumentException(
+            $isManual ? 'Add at least one invoice item with a description.' : 'Select at least one unpaid completed article to invoice.'
+        );
     }
 
-    $clientId = (int) ($header['client_id'] ?? 0);
-    if ($clientId <= 0) {
+    // Manual invoices are never linked to order-management clients / sheet rows.
+    $clientId = $isManual ? null : (int) ($header['client_id'] ?? 0);
+    if ($clientId !== null && $clientId <= 0) {
         $clientId = null;
     }
 
-    // Guard: never invoice already-paid order rows
-    if ($clientId) {
+    // Guard: never invoice already-paid order rows (sheet invoices only)
+    if (!$isManual && $clientId) {
         foreach ($normalized as $line) {
             foreach ($line['order_item_ids'] as $oid) {
                 $chk = db()->prepare(
@@ -470,14 +509,14 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                     supplier_number, cost_center, orderer,
                     company_name, company_bic, company_iban, company_phone,
                     company_address, company_reg_no, vat_note,
-                    currency, total_amount, payment_status, created_by
-                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                    currency, total_amount, payment_status, is_manual, admin_note, created_by
+                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
             );
             $stmt->execute([
                 $invoiceNumber,
                 $invoiceDate,
                 $clientId,
-                trim((string) ($header['client_name'] ?? '')),
+                $isManual ? trim((string) ($header['bill_to_name'] ?? ($header['client_name'] ?? ''))) : trim((string) ($header['client_name'] ?? '')),
                 trim((string) ($header['bill_to_name'] ?? '')),
                 trim((string) ($header['bill_to_address'] ?? '')),
                 trim((string) ($header['bill_to_hrb'] ?? '')),
@@ -495,6 +534,8 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 'EUR',
                 round($total, 2),
                 'unpaid',
+                $isManual ? 1 : 0,
+                $adminNote,
                 $createdBy,
             ]);
             $invoiceId = (int) $pdo->lastInsertId();
@@ -515,7 +556,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 ]);
             }
 
-            if ($clientId) {
+            if (!$isManual && $clientId) {
                 save_invoice_client_profile($clientId, $header);
             }
 
@@ -540,7 +581,8 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
 }
 
 /**
- * Mark invoice payment received and mark linked order-sheet rows as paid.
+ * Mark invoice payment received. Sheet invoices also mark linked order rows paid;
+ * manual invoices only update the invoice (not linked to order management).
  */
 function mark_invoice_payment_received(int $invoiceId): void
 {
@@ -553,15 +595,18 @@ function mark_invoice_payment_received(int $invoiceId): void
         return;
     }
 
+    $isManual = invoice_is_manual($invoice);
     $clientId = (int) ($invoice['client_id'] ?? 0);
     $items = list_invoice_items($invoiceId);
     $pdo = db();
     $pdo->beginTransaction();
     try {
-        foreach ($items as $item) {
-            foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
-                if ($clientId > 0) {
-                    set_order_item_paid($oid, $clientId, true);
+        if (!$isManual) {
+            foreach ($items as $item) {
+                foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+                    if ($clientId > 0) {
+                        set_order_item_paid($oid, $clientId, true);
+                    }
                 }
             }
         }
