@@ -8,8 +8,24 @@ if (!$invoice) {
     flash('error', 'Invoice not found.');
     redirect('index.php?page=admin_invoices');
 }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string) post('action');
+    try {
+        if ($action === 'mark_paid') {
+            mark_invoice_payment_received($id);
+            flash('ok', 'Payment marked received — linked sheet rows set to Paid.');
+            redirect('index.php?page=admin_invoice_view&id=' . $id);
+        }
+    } catch (Throwable $e) {
+        flash('error', $e->getMessage());
+        redirect('index.php?page=admin_invoice_view&id=' . $id);
+    }
+}
+
 $items = list_invoice_items($id);
 $print = (string) get('print') === '1';
+$isPaid = invoice_is_paid($invoice);
 
 if ($print) {
     // Standalone print document — no app chrome
@@ -43,12 +59,28 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 <div class="topbar no-print">
   <div>
     <h1>Invoice <?= h($invoice['invoice_number']) ?></h1>
-    <p class="muted"><?= h(format_invoice_date((string) $invoice['invoice_date'])) ?> · <?= h(format_euro($invoice['total_amount'])) ?></p>
+    <p class="muted">
+      <?= h(format_invoice_date((string) $invoice['invoice_date'])) ?>
+      · <?= h(format_euro($invoice['total_amount'])) ?>
+      ·
+      <?php if ($isPaid): ?>
+        <span class="invoice-pay-badge is-paid">Payment received</span>
+      <?php else: ?>
+        <span class="invoice-pay-badge">Unpaid</span>
+      <?php endif; ?>
+    </p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
     <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
-    <a class="btn" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener">Print / PDF</a>
+    <?php if (!$isPaid): ?>
+      <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
+            onsubmit="return confirm('Mark this invoice as payment received? Linked unpaid sheet rows will be marked Paid.');">
+        <input type="hidden" name="action" value="mark_paid">
+        <button class="btn" type="submit">Mark payment received</button>
+      </form>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener">Print / PDF</a>
   </div>
 </div>
 

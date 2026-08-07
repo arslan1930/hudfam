@@ -86,7 +86,7 @@ render_header('Generate invoice', 'admin');
 <div class="topbar">
   <div>
     <h1>Generate invoice</h1>
-    <p class="muted">Pick a client, tick completed articles (LIVE URL), fill bill-to details — layout matches your sample.</p>
+    <p class="muted">Pick a client, tick unpaid completed articles (LIVE URL), fill bill-to details — layout matches your sample.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
@@ -113,17 +113,20 @@ render_header('Generate invoice', 'admin');
 </form>
 
 <?php if ($client): ?>
-<form method="post" class="invoice-generate-form">
+<form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate">
   <input type="hidden" name="action" value="generate">
   <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
 
   <div class="orders-layout">
     <section class="card">
       <h2>Articles to invoice</h2>
-      <p class="muted" style="margin-top:0">Only rows with a LIVE URL from <strong><?= h($client['name']) ?></strong> can be invoiced.</p>
+      <p class="muted" style="margin-top:0">
+        Only <strong>unpaid</strong> rows with a LIVE URL from <strong><?= h($client['name']) ?></strong>.
+        Paid rows are excluded.
+      </p>
       <?php if (!$invoiceable): ?>
         <div class="empty-state">
-          <p>No completed articles yet. Open the sheet and fill LIVE URL on published rows.</p>
+          <p>No unpaid completed articles yet. Fill LIVE URL on the sheet, and leave those rows unpaid.</p>
           <a class="btn secondary" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">Open sheet</a>
         </div>
       <?php else: ?>

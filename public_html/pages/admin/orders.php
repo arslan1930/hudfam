@@ -68,7 +68,8 @@ render_header('Order management', 'admin');
             </div>
             <div class="order-client-actions">
               <a class="btn small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">Open sheet</a>
-              <form method="post" onsubmit="return confirm(<?= h(json_encode('Delete sheet for ' . $c['name'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+              <form method="post" onsubmit="return confirm(<?= h(json_encode('Delete sheet for ' . $c['name'] . '?', JSON_UNESCAPED_UNICODE)) ?>);"
+                    action="index.php?page=admin_orders">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
                 <button class="btn secondary small" type="submit">Delete</button>
@@ -83,7 +84,7 @@ render_header('Order management', 'admin');
   <section class="card" id="new-client">
     <h2>New client sheet</h2>
     <p class="muted" style="margin-top:0">Each client gets their own sheet of sites and prices.</p>
-    <form method="post" autocomplete="off">
+    <form method="post" autocomplete="off" action="index.php?page=admin_orders">
       <input type="hidden" name="action" value="create">
       <label for="client_name">Client name</label>
       <input id="client_name" name="name" required placeholder="e.g. Acme SEO" autocomplete="off">

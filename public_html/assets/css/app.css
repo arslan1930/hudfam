@@ -855,6 +855,28 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-size: 0.82rem;
   white-space: nowrap;
 }
+.sheet-search-hit {
+  outline: 2px solid #2563eb !important;
+  outline-offset: 1px;
+  background: #eff6ff !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+.invoice-pay-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+.invoice-pay-badge.is-paid {
+  background: #e8f7ee;
+  color: #1f4d35;
+  border-color: #b7dcc8;
+}
 .visually-hidden {
   position: absolute;
   width: 1px;

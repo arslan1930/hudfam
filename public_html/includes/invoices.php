@@ -51,12 +51,15 @@ function ensure_invoice_schema(): void
           vat_note VARCHAR(255) NOT NULL DEFAULT 'Not VAT registered – no VAT charged.',
           currency CHAR(3) NOT NULL DEFAULT 'EUR',
           total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+          payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+          paid_at DATETIME NULL,
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_invoice_number (invoice_number),
           INDEX (client_id),
           INDEX (invoice_date),
+          INDEX (payment_status),
           CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
           CONSTRAINT fk_inv_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
@@ -70,11 +73,35 @@ function ensure_invoice_schema(): void
           amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           qty INT NOT NULL DEFAULT 1,
           line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+          order_item_ids VARCHAR(500) NOT NULL DEFAULT '',
           sort_order INT NOT NULL DEFAULT 0,
           INDEX (invoice_id, sort_order),
           CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+
+    // Migrate older invoice tables
+    try {
+        $invCols = $pdo->query('SHOW COLUMNS FROM invoices')->fetchAll(PDO::FETCH_COLUMN);
+        $invAlters = [];
+        if (!in_array('payment_status', $invCols, true)) {
+            $invAlters[] = "ADD COLUMN payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid' AFTER total_amount";
+        }
+        if (!in_array('paid_at', $invCols, true)) {
+            $invAlters[] = 'ADD COLUMN paid_at DATETIME NULL AFTER payment_status';
+        }
+        if ($invAlters) {
+            $pdo->exec('ALTER TABLE invoices ' . implode(', ', $invAlters));
+        }
+        $itemCols = $pdo->query('SHOW COLUMNS FROM invoice_items')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('order_item_ids', $itemCols, true)) {
+            $pdo->exec(
+                "ALTER TABLE invoice_items ADD COLUMN order_item_ids VARCHAR(500) NOT NULL DEFAULT '' AFTER line_total"
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
 }
 
 /** Default supplier / bank block (matches sample invoice). */
@@ -196,7 +223,7 @@ function save_invoice_client_profile(int $clientId, array $data): void
 }
 
 /**
- * Completed order rows (LIVE URL filled) for invoice line picking.
+ * Completed unpaid order rows (LIVE URL filled, not paid) for invoice picking.
  *
  * @return list<array<string,mixed>>
  */
@@ -205,7 +232,9 @@ function list_invoiceable_order_items(int $clientId): array
     ensure_order_schema();
     $stmt = db()->prepare(
         "SELECT * FROM order_items
-         WHERE client_id=? AND row_type='site' AND TRIM(live_url) <> ''
+         WHERE client_id=? AND row_type='site'
+           AND TRIM(live_url) <> ''
+           AND COALESCE(is_paid, 0) = 0
          ORDER BY sort_order ASC, id ASC"
     );
     $stmt->execute([$clientId]);
@@ -213,10 +242,28 @@ function list_invoiceable_order_items(int $clientId): array
 }
 
 /**
+ * @return list<int>
+ */
+function parse_order_item_ids(string $raw): array
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return [];
+    }
+    if ($raw[0] === '[') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            return array_values(array_filter(array_map('intval', $decoded), static fn ($id) => $id > 0));
+        }
+    }
+    return array_values(array_filter(array_map('intval', preg_split('/\s*,\s*/', $raw) ?: []), static fn ($id) => $id > 0));
+}
+
+/**
  * Build invoice line rows from selected order items.
  *
  * @param list<array<string,mixed>> $rows
- * @return list<array{description:string,amount:float,qty:int,line_total:float}>
+ * @return list<array{description:string,amount:float,qty:int,line_total:float,order_item_ids:list<int>}>
  */
 function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): array
 {
@@ -234,6 +281,7 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
                 'amount' => $amount,
                 'qty' => 1,
                 'line_total' => $amount,
+                'order_item_ids' => [(int) $row['id']],
             ];
         }
         return $lines;
@@ -246,12 +294,13 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
         $amount = parse_money($row['decided_price'] ?? 0);
         $key = number_format($amount, 2, '.', '');
         if (!isset($groups[$key])) {
-            $groups[$key] = ['amount' => $amount, 'urls' => []];
+            $groups[$key] = ['amount' => $amount, 'urls' => [], 'ids' => []];
             $order[] = $key;
         }
         $url = trim((string) ($row['live_url'] ?? ''));
         if ($url !== '') {
             $groups[$key]['urls'][] = $url;
+            $groups[$key]['ids'][] = (int) $row['id'];
         }
     }
 
@@ -270,6 +319,7 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
             'amount' => $g['amount'],
             'qty' => $qty,
             'line_total' => round($g['amount'] * $qty, 2),
+            'order_item_ids' => $g['ids'],
         ];
     }
     return $lines;
@@ -314,17 +364,41 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
             'amount' => $amount,
             'qty' => $qty,
             'line_total' => $lineTotal,
+            'order_item_ids' => array_values(array_filter(array_map('intval', (array) ($line['order_item_ids'] ?? [])), static fn ($id) => $id > 0)),
             'sort_order' => $sort++,
         ];
         $total += $lineTotal;
     }
     if (!$normalized) {
-        throw new InvalidArgumentException('Select at least one completed article to invoice.');
+        throw new InvalidArgumentException('Select at least one unpaid completed article to invoice.');
     }
 
     $clientId = (int) ($header['client_id'] ?? 0);
     if ($clientId <= 0) {
         $clientId = null;
+    }
+
+    // Guard: never invoice already-paid order rows
+    if ($clientId) {
+        foreach ($normalized as $line) {
+            foreach ($line['order_item_ids'] as $oid) {
+                $chk = db()->prepare(
+                    "SELECT is_paid, live_url FROM order_items
+                     WHERE id=? AND client_id=? AND row_type='site' LIMIT 1"
+                );
+                $chk->execute([$oid, $clientId]);
+                $row = $chk->fetch();
+                if (!$row) {
+                    throw new InvalidArgumentException('One of the selected sheet rows was not found.');
+                }
+                if ((int) ($row['is_paid'] ?? 0) === 1) {
+                    throw new InvalidArgumentException('Paid rows cannot be added to an invoice. Unmark paid first, or pick unpaid rows only.');
+                }
+                if (trim((string) ($row['live_url'] ?? '')) === '') {
+                    throw new InvalidArgumentException('Only rows with a LIVE URL can be invoiced.');
+                }
+            }
+        }
     }
 
     $pdo = db();
@@ -337,8 +411,8 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 supplier_number, cost_center, orderer,
                 company_name, company_bic, company_iban, company_phone,
                 company_address, company_reg_no, vat_note,
-                currency, total_amount, created_by
-             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                currency, total_amount, payment_status, created_by
+             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->execute([
             $invoiceNumber,
@@ -361,13 +435,14 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
             trim((string) ($header['vat_note'] ?? $company['vat_note'])),
             'EUR',
             round($total, 2),
+            'unpaid',
             $createdBy,
         ]);
         $invoiceId = (int) $pdo->lastInsertId();
 
         $itemStmt = $pdo->prepare(
-            'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, sort_order)
-             VALUES (?,?,?,?,?,?)'
+            'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, order_item_ids, sort_order)
+             VALUES (?,?,?,?,?,?,?)'
         );
         foreach ($normalized as $line) {
             $itemStmt->execute([
@@ -376,6 +451,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 $line['amount'],
                 $line['qty'],
                 $line['line_total'],
+                implode(',', $line['order_item_ids']),
                 $line['sort_order'],
             ]);
         }
@@ -390,6 +466,47 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
         $pdo->rollBack();
         throw $e;
     }
+}
+
+/**
+ * Mark invoice payment received and mark linked order-sheet rows as paid.
+ */
+function mark_invoice_payment_received(int $invoiceId): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    if (($invoice['payment_status'] ?? 'unpaid') === 'paid') {
+        return;
+    }
+
+    $clientId = (int) ($invoice['client_id'] ?? 0);
+    $items = list_invoice_items($invoiceId);
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        foreach ($items as $item) {
+            foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+                if ($clientId > 0) {
+                    set_order_item_paid($oid, $clientId, true);
+                }
+            }
+        }
+        $pdo->prepare(
+            "UPDATE invoices SET payment_status='paid', paid_at=NOW(), updated_at=NOW() WHERE id=?"
+        )->execute([$invoiceId]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+}
+
+function invoice_is_paid(array $invoice): bool
+{
+    return ($invoice['payment_status'] ?? 'unpaid') === 'paid';
 }
 
 function delete_invoice(int $id): void

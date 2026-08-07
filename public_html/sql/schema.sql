@@ -152,12 +152,15 @@ CREATE TABLE IF NOT EXISTS invoices (
   vat_note VARCHAR(255) NOT NULL DEFAULT 'Not VAT registered – no VAT charged.',
   currency CHAR(3) NOT NULL DEFAULT 'EUR',
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+  paid_at DATETIME NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_invoice_number (invoice_number),
   INDEX (client_id),
   INDEX (invoice_date),
+  INDEX (payment_status),
   CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
   CONSTRAINT fk_inv_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -169,6 +172,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   qty INT NOT NULL DEFAULT 1,
   line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  order_item_ids VARCHAR(500) NOT NULL DEFAULT '',
   sort_order INT NOT NULL DEFAULT 0,
   INDEX (invoice_id, sort_order),
   CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE

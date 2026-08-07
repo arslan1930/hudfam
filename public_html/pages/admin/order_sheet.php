@@ -171,7 +171,8 @@ render_header('Order · ' . $client['name'], 'admin');
 
 <details class="card order-client-edit">
   <summary>Edit client name / notes</summary>
-  <form method="post" style="margin-top:0.85rem">
+  <form method="post" style="margin-top:0.85rem"
+        action="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">
     <input type="hidden" name="action" value="rename">
     <div class="form-grid">
       <div>
@@ -189,7 +190,8 @@ render_header('Order · ' . $client['name'], 'admin');
   </form>
 </details>
 
-<form method="post" id="order-sheet-form" class="card order-sheet-card">
+<form method="post" id="order-sheet-form" class="card order-sheet-card"
+      action="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <div class="order-sheet-toolbar">
@@ -518,6 +520,11 @@ render_header('Order · ' . $client['name'], 'admin');
     var matchingRows = 0;
     var times = 0;
     var total = rows.length;
+    matchFields = [];
+
+    document.querySelectorAll('.sheet-search-hit').forEach(function (el) {
+      el.classList.remove('sheet-search-hit');
+    });
 
     rows.forEach(function (row) {
       var parts = rowSearchParts(row);
@@ -530,32 +537,92 @@ render_header('Order · ' . $client['name'], 'admin');
       if (show && q) {
         matchingRows++;
         times += hitCount;
+        row.querySelectorAll('input, select, textarea').forEach(function (el) {
+          var text = '';
+          if (el.tagName === 'SELECT') {
+            var opt = el.options[el.selectedIndex];
+            text = opt ? String(opt.text || '') : '';
+          } else {
+            text = String(el.value || '');
+          }
+          if (q && countInText(text, q) > 0) {
+            matchFields.push(el);
+          }
+        });
       }
     });
     yearRows.forEach(function (row) {
-      // Hide year-end bands while filtering so matches stay easy to scan.
       row.hidden = !!q;
     });
     if (empty) empty.hidden = !(q && matchingRows === 0 && total > 0);
+    if (matchIndex >= matchFields.length) matchIndex = matchFields.length ? 0 : -1;
     if (meta) {
       if (q) {
         meta.hidden = false;
         if (times === 0) {
-          meta.textContent = '0 times';
+          meta.textContent = '0 times · Enter to jump';
+        } else if (matchIndex >= 0 && matchFields.length) {
+          meta.textContent = (matchIndex + 1) + ' of ' + matchFields.length
+            + ' · ' + times + (times === 1 ? ' time' : ' times')
+            + ' · Enter = next';
         } else {
           meta.textContent = times + (times === 1 ? ' time' : ' times')
-            + (matchingRows !== times ? ' · ' + matchingRows + (matchingRows === 1 ? ' row' : ' rows') : '');
+            + (matchingRows !== times ? ' · ' + matchingRows + (matchingRows === 1 ? ' row' : ' rows') : '')
+            + ' · Enter = next';
         }
       } else {
         meta.hidden = true;
         meta.textContent = '';
+        matchIndex = -1;
       }
+    }
+  }
+
+  var matchFields = [];
+  var matchIndex = -1;
+
+  function jumpToMatch(dir) {
+    var input = document.getElementById('sheet-search');
+    if (!input) return;
+    var q = String(input.value || '').trim().toLowerCase();
+    if (!q) return;
+    filterSheet();
+    if (!matchFields.length) return;
+    if (matchIndex < 0) {
+      matchIndex = dir > 0 ? 0 : matchFields.length - 1;
+    } else {
+      matchIndex = (matchIndex + dir + matchFields.length) % matchFields.length;
+    }
+    var el = matchFields[matchIndex];
+    if (!el) return;
+    document.querySelectorAll('.sheet-search-hit').forEach(function (n) {
+      n.classList.remove('sheet-search-hit');
+    });
+    var row = el.closest('[data-row]');
+    if (row) row.hidden = false;
+    el.classList.add('sheet-search-hit');
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+    if (typeof el.value === 'string' && el.setSelectionRange && el.type !== 'number') {
+      var lower = el.value.toLowerCase();
+      var at = lower.indexOf(q);
+      if (at >= 0) {
+        try { el.setSelectionRange(at, at + q.length); } catch (err2) {}
+      }
+    }
+    var meta = document.querySelector('[data-sheet-search-meta]');
+    if (meta) {
+      meta.hidden = false;
+      meta.textContent = (matchIndex + 1) + ' of ' + matchFields.length + ' · Enter = next · Shift+Enter = prev';
     }
   }
 
   var form = document.getElementById('order-sheet-form');
   form.addEventListener('input', function (e) {
     refresh();
+    if (e.target && e.target.id === 'sheet-search') {
+      matchIndex = -1;
+    }
     filterSheet();
   });
   form.addEventListener('change', function () {
@@ -564,10 +631,15 @@ render_header('Order · ' . $client['name'], 'admin');
   });
   var search = document.getElementById('sheet-search');
   if (search) {
-    search.addEventListener('search', filterSheet);
-    // Keep Enter from submitting the whole sheet form.
+    search.addEventListener('search', function () {
+      matchIndex = -1;
+      filterSheet();
+    });
     search.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') e.preventDefault();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        jumpToMatch(e.shiftKey ? -1 : 1);
+      }
     });
   }
 })();
