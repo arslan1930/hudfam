@@ -83,7 +83,15 @@
 
   // --- Search + Enter jump on plain URL list ---
   var input = document.getElementById('extracted-url-search');
-  if (!input) return;
+  var list = document.getElementById('extracted-plain-list');
+  var totalLabel = document.getElementById('extracted_total_label');
+  var countryKey = '';
+  try {
+    var params = new URLSearchParams(window.location.search);
+    countryKey = 'txf-extracted-url-q-' + String(params.get('country') || '');
+  } catch (e0) {
+    countryKey = 'txf-extracted-url-q';
+  }
 
   var matchRows = [];
   var matchIndex = -1;
@@ -96,7 +104,43 @@
     });
   }
 
+  function syncRemoveQFields() {
+    var q = input ? String(input.value || '') : '';
+    document.querySelectorAll('[data-remove-q]').forEach(function (el) {
+      el.value = q;
+    });
+  }
+
+  function persistSearch() {
+    if (!input || !countryKey) return;
+    try {
+      var q = String(input.value || '');
+      if (q) localStorage.setItem(countryKey, q);
+      else localStorage.removeItem(countryKey);
+    } catch (e) { /* ignore */ }
+    syncRemoveQFields();
+  }
+
+  function restoreSearch() {
+    if (!input) return;
+    // Prefer URL ?q=; otherwise restore last typed filter for this country.
+    var urlQ = '';
+    try {
+      urlQ = String(new URLSearchParams(window.location.search).get('q') || '');
+    } catch (e) { /* ignore */ }
+    if (urlQ) {
+      input.value = urlQ;
+      return;
+    }
+    if (String(input.value || '').trim() !== '') return;
+    try {
+      var saved = localStorage.getItem(countryKey);
+      if (saved) input.value = saved;
+    } catch (e2) { /* ignore */ }
+  }
+
   function filterUrls() {
+    if (!input) return;
     var q = String(input.value || '').trim().toLowerCase();
     var rows = document.querySelectorAll('[data-extracted-url-row]');
     var shown = 0;
@@ -130,6 +174,7 @@
         matchIndex = -1;
       }
     }
+    persistSearch();
   }
 
   function jumpToMatch(dir) {
@@ -170,24 +215,93 @@
     window.location.href = url.toString();
   }
 
-  input.addEventListener('input', function () {
-    matchIndex = -1;
-    filterUrls();
-  });
-  input.addEventListener('search', function () {
-    matchIndex = -1;
-    filterUrls();
-  });
-  input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (e.ctrlKey || e.metaKey) {
-        searchAllPages();
-        return;
-      }
-      jumpToMatch(e.shiftKey ? -1 : 1);
+  function updateTotalLabel(n) {
+    if (totalLabel) totalLabel.textContent = String(n);
+    if (btn) {
+      btn.setAttribute('data-count', String(n));
+      btn.disabled = n < 1;
     }
-  });
+  }
 
-  filterUrls();
+  // AJAX remove keeps the current search filter in place (no full reload).
+  if (list) {
+    list.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (!form || !form.matches || !form.matches('[data-remove-site]')) return;
+      e.preventDefault();
+      if (form.getAttribute('data-busy') === '1') return;
+
+      var row = form.closest('[data-extracted-url-row]');
+      var actionUrl = form.getAttribute('action') || window.location.href;
+      var body = new URLSearchParams(new FormData(form));
+      body.set('ajax', '1');
+      if (input) body.set('q', String(input.value || ''));
+
+      form.setAttribute('data-busy', '1');
+      var submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      fetch(actionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Accept': 'application/json'
+        },
+        body: body.toString(),
+        credentials: 'same-origin'
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok || !data || data.ok === false) {
+              throw new Error((data && data.error) || 'Could not remove site.');
+            }
+            return data;
+          });
+        })
+        .then(function (data) {
+          if (row) row.remove();
+          if (typeof data.site_count === 'number') updateTotalLabel(data.site_count);
+          setStatus('Removed ' + (data.domain || 'site') + '. Search kept — continue removing.');
+          filterUrls();
+          if (data.redirect) {
+            window.setTimeout(function () {
+              window.location.href = data.redirect;
+            }, 250);
+            return;
+          }
+          if (input) {
+            try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
+          }
+        })
+        .catch(function (err) {
+          setStatus(err.message || 'Could not remove site.', true);
+          form.removeAttribute('data-busy');
+          if (submitBtn) submitBtn.disabled = false;
+        });
+    });
+  }
+
+  if (input) {
+    restoreSearch();
+    input.addEventListener('input', function () {
+      matchIndex = -1;
+      filterUrls();
+    });
+    input.addEventListener('search', function () {
+      matchIndex = -1;
+      filterUrls();
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey) {
+          searchAllPages();
+          return;
+        }
+        jumpToMatch(e.shiftKey ? -1 : 1);
+      }
+    });
+    filterUrls();
+  }
 })();
+

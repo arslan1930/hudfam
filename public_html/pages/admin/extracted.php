@@ -51,6 +51,24 @@ if ($inCountry && (string) get('export') !== '') {
 if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $countryName = $sheet;
+    $returnQ = trim((string) post('q'));
+    if ($returnQ === '') {
+        $returnQ = trim((string) get('q'));
+    }
+    $returnP = max(1, (int) (post('p') ?: get('p', 1)));
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+
+    $countryReturnUrl = static function () use ($sitesListUrl, $countryName, $returnQ, $returnP): string {
+        $url = $sitesListUrl . '&country=' . rawurlencode($countryName);
+        if ($returnQ !== '') {
+            $url .= '&q=' . rawurlencode($returnQ);
+        }
+        if ($returnP > 1) {
+            $url .= '&p=' . $returnP;
+        }
+        return $url;
+    };
 
     if ($action === 'remove_list') {
         $raw = (string) post('remove_text');
@@ -61,7 +79,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Throwable $e) {
             flash('error', $e->getMessage());
-            redirect($sitesListUrl . '&country=' . urlencode($countryName) . '#remove-by-list');
+            redirect($countryReturnUrl() . '#remove-by-list');
         }
         $result = remove_extracted_sites_by_list($countryName, $raw);
         if ($result['removed'] < 1) {
@@ -71,7 +89,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? 'No matching sites removed. Check the list (root domains) and try again.'
                     : 'No sites from that list were found in ' . $countryName . '.'
             );
-            redirect($sitesListUrl . '&country=' . urlencode($countryName) . '#remove-by-list');
+            redirect($countryReturnUrl() . '#remove-by-list');
         }
         $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from ' . $countryName;
         if ((int) $result['not_found'] > 0) {
@@ -84,7 +102,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (count_extracted_sites_for_country($countryName) < 1) {
             redirect($sitesListUrl);
         }
-        redirect($sitesListUrl . '&country=' . urlencode($countryName));
+        redirect($countryReturnUrl());
     }
 
     if ($action === 'remove_search') {
@@ -92,13 +110,14 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $matchCount = count_extracted_sites_matching($countryName, $qRemove);
         if ($qRemove === '' || $matchCount < 1) {
             flash('error', 'No sites match that search to remove.');
-            redirect($sitesListUrl . '&country=' . urlencode($countryName) . ($qRemove !== '' ? '&q=' . urlencode($qRemove) : ''));
+            redirect($countryReturnUrl());
         }
         $n = remove_extracted_sites_by_search($countryName, $qRemove);
         flash('ok', 'Removed ' . $n . ' site(s) matching “' . $qRemove . '”.');
         if (count_extracted_sites_for_country($countryName) < 1) {
             redirect($sitesListUrl);
         }
+        // After bulk remove-matching, stay on country without the old search (list is gone).
         redirect($sitesListUrl . '&country=' . urlencode($countryName));
     }
 
@@ -106,16 +125,33 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $siteId = (int) post('site_id');
         $site = get_extracted_site($siteId);
         if (!$site || (string) $site['country'] !== $countryName) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'error' => 'Site not found in this country.']);
+                exit;
+            }
             flash('error', 'Site not found in this country.');
-            redirect($sitesListUrl . '&country=' . urlencode($countryName));
+            redirect($countryReturnUrl());
         }
         $domain = (string) $site['domain'];
         delete_extracted_site($siteId);
+        $left = count_extracted_sites_for_country($countryName);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => true,
+                'domain' => $domain,
+                'site_count' => $left,
+                'redirect' => $left < 1 ? $sitesListUrl : null,
+            ]);
+            exit;
+        }
         flash('ok', 'Removed ' . $domain . ' from ' . $countryName . '.');
-        if (count_extracted_sites_for_country($countryName) < 1) {
+        if ($left < 1) {
             redirect($sitesListUrl);
         }
-        redirect($sitesListUrl . '&country=' . urlencode($countryName));
+        redirect($countryReturnUrl());
     }
 
     if ($action === 'remove_all') {
@@ -482,9 +518,12 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       >
         <span class="extracted-plain-domain"><?= h($domain) ?></span>
         <form method="post" class="extracted-plain-remove" action="<?= h($listBase) ?>"
+              data-remove-site
               onsubmit="return confirm('Remove <?= h($domain) ?>?');">
           <input type="hidden" name="action" value="remove_site">
           <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+          <input type="hidden" name="q" value="<?= h($q) ?>" data-remove-q>
+          <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
           <button class="btn secondary small" type="submit">Remove</button>
         </form>
       </li>
