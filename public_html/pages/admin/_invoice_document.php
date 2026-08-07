@@ -48,7 +48,7 @@ if ($editable && !$editRows) {
                     data-no-draft><?= h($adminNote) ?></textarea>
         </div>
       <?php elseif ($adminNote !== ''): ?>
-        <div class="invoice-doc-admin-note" title="<?= h($adminNote) ?>"><?= nl2br(h($adminNote)) ?></div>
+        <div class="invoice-doc-admin-note"><?= nl2br(h($adminNote), false) ?></div>
       <?php endif; ?>
     </div>
     <div>
