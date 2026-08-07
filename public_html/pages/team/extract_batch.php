@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // Clear the box after a successful push into admin Extracted URLs.
         save_extract_batch_results($id, '');
-        $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted URLs · ' . $pushed['country'];
+        $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted URLs → Extracted Sites · ' . $pushed['country'];
         if ((int) $pushed['skipped'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
         }
@@ -180,7 +180,7 @@ render_header('Extracting · ' . $country, 'team');
     <h2>② Extracting Results</h2>
     <p class="help">
       Paste extracted sites for <strong><?= h($country) ?></strong>, then <strong>Push</strong>
-      to send them into Admin → Extracted URLs → <?= h($country) ?>.
+      to send them into Admin → Extracted URLs → Extracted Sites → <?= h($country) ?>.
     </p>
     <form method="post">
       <input type="hidden" name="action" value="push_results">

@@ -38,8 +38,8 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracted URLs</h3>'
-        . '<p><strong>What:</strong> Country rows of sites Team pushed from Extracting Results.</p>'
-        . '<p><strong>How:</strong> Open a country row → Copy all URLs, edit names, or remove sites.</p>'
+        . '<p><strong>What:</strong> Folders: Extracted Sites (country rows) and Sites with emails.</p>'
+        . '<p><strong>How:</strong> Open Extracted Sites → country row → Copy all URLs, edit, or remove.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Add history</h3>'
@@ -136,7 +136,7 @@ function guide_extracting(): string
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country.',
             'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
-            'Paste sites into Extracting Results and Push — they go to Admin → Extracted URLs for that same country.',
+            'Paste sites into Extracting Results and Push — they go to Admin → Extracted URLs → Extracted Sites for that country.',
         ]
     );
 }

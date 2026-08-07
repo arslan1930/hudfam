@@ -3,6 +3,17 @@ require_admin();
 ensure_extracted_schema();
 seed_countries_if_empty(db());
 
+$folder = (string) get('folder');
+// Back-compat: old ?country= links open inside Extracted Sites
+if ($folder === '' && (string) get('country') !== '') {
+    $folder = 'extracted_sites';
+}
+$allowedFolders = ['extracted_sites', 'sites_with_emails'];
+if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
+    flash('error', 'Unknown folder.');
+    redirect('index.php?page=admin_extracted');
+}
+
 $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
@@ -11,16 +22,22 @@ if ($sheet !== '' && $sheet !== 'all') {
     $canonSheet = resolve_canonical_country($sheet);
     if ($canonSheet === null) {
         flash('error', 'That country is not in the country list.');
-        redirect('index.php?page=admin_extracted');
+        redirect('index.php?page=admin_extracted&folder=extracted_sites');
     }
     if ($canonSheet['name'] !== $sheet) {
-        redirect('index.php?page=admin_extracted&country=' . urlencode($canonSheet['name']));
+        redirect(
+            'index.php?page=admin_extracted&folder=extracted_sites&country=' . urlencode($canonSheet['name'])
+        );
     }
     $sheet = $canonSheet['name'];
+    if ($folder === '') {
+        $folder = 'extracted_sites';
+    }
 }
-$inCountry = ($sheet !== '' && $sheet !== 'all');
+$inCountry = ($folder === 'extracted_sites' && $sheet !== '' && $sheet !== 'all');
+$sitesListUrl = 'index.php?page=admin_extracted&folder=extracted_sites';
 
-// --- Mutations on country detail ---
+// --- Mutations on country detail (Extracted Sites only) ---
 if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $countryName = $sheet;
@@ -31,7 +48,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $site = get_extracted_site($siteId);
         if (!$site || (string) $site['country'] !== $countryName) {
             flash('error', 'Site not found in this country.');
-            redirect('index.php?page=admin_extracted&country=' . urlencode($countryName));
+            redirect($sitesListUrl . '&country=' . urlencode($countryName));
         }
         $result = update_extracted_site_domain($siteId, $newDomain);
         if (!$result['ok']) {
@@ -39,7 +56,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             flash('ok', 'Updated site to ' . (string) $result['domain'] . '.');
         }
-        redirect('index.php?page=admin_extracted&country=' . urlencode($countryName));
+        redirect($sitesListUrl . '&country=' . urlencode($countryName));
     }
 
     if ($action === 'remove_site') {
@@ -47,33 +64,33 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $site = get_extracted_site($siteId);
         if (!$site || (string) $site['country'] !== $countryName) {
             flash('error', 'Site not found in this country.');
-            redirect('index.php?page=admin_extracted&country=' . urlencode($countryName));
+            redirect($sitesListUrl . '&country=' . urlencode($countryName));
         }
         $domain = (string) $site['domain'];
         delete_extracted_site($siteId);
         flash('ok', 'Removed ' . $domain . ' from ' . $countryName . '.');
-        // If country is now empty, go back to list
         $left = get_extracted_domains_for_country($countryName, 1);
         if ($left === []) {
-            redirect('index.php?page=admin_extracted');
+            redirect($sitesListUrl);
         }
-        redirect('index.php?page=admin_extracted&country=' . urlencode($countryName));
+        redirect($sitesListUrl . '&country=' . urlencode($countryName));
     }
 
     if ($action === 'remove_all') {
         $n = delete_extracted_sites_for_country($countryName);
         flash('ok', 'Removed ' . $n . ' site' . ($n === 1 ? '' : 's') . ' from ' . $countryName . '.');
-        redirect('index.php?page=admin_extracted');
+        redirect($sitesListUrl);
     }
 }
 
-// --- Country rows (simple list) ---
-if (!$inCountry) {
+// --- Hub: two folders ---
+if ($folder === '') {
     $countryRows = list_extracted_country_rows();
-    $grandTotal = 0;
+    $extractedTotal = 0;
     foreach ($countryRows as $r) {
-        $grandTotal += (int) $r['total'];
+        $extractedTotal += (int) $r['total'];
     }
+    $countryCount = count($countryRows);
 
     render_header('Extracted URLs', 'admin');
     ?>
@@ -83,8 +100,82 @@ if (!$inCountry) {
     ]); ?>
     <div class="topbar">
       <div>
-        <h1>Extracted sites</h1>
+        <h1>Extracted URLs</h1>
+        <p class="muted">Open a folder to work with extracted sites or sites with emails.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="folders">
+        <a class="folder" href="<?= h($sitesListUrl) ?>">
+          <h3>Extracted Sites</h3>
+          <p class="muted">
+            <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
+            · <?= (int) $extractedTotal ?> site<?= (int) $extractedTotal === 1 ? '' : 's' ?>
+          </p>
+        </a>
+        <a class="folder" href="index.php?page=admin_extracted&amp;folder=sites_with_emails">
+          <h3>Sites with emails</h3>
+          <p class="muted">Sites that include email contacts</p>
+        </a>
+      </div>
+    </div>
+    <?php
+    render_footer('admin');
+    return;
+}
+
+// --- Folder: Sites with emails (placeholder) ---
+if ($folder === 'sites_with_emails') {
+    render_header('Sites with emails', 'admin');
+    ?>
+    <?php render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+        ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+        ['label' => 'Sites with emails'],
+    ]); ?>
+    <div class="topbar">
+      <div>
+        <h1>Sites with emails</h1>
+        <p class="muted">Sites that include email contacts.</p>
+      </div>
+      <div class="actions">
+        <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <p>This folder is ready.</p>
+        <p class="muted">No sites with emails have been added yet.</p>
+      </div>
+    </div>
+    <?php
+    render_footer('admin');
+    return;
+}
+
+// --- Folder: Extracted Sites → country rows ---
+if ($folder === 'extracted_sites' && !$inCountry) {
+    $countryRows = list_extracted_country_rows();
+    $grandTotal = 0;
+    foreach ($countryRows as $r) {
+        $grandTotal += (int) $r['total'];
+    }
+
+    render_header('Extracted Sites', 'admin');
+    ?>
+    <?php render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+        ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+        ['label' => 'Extracted Sites'],
+    ]); ?>
+    <div class="topbar">
+      <div>
+        <h1>Extracted Sites</h1>
         <p class="muted">Countries with sites Team pushed from Extracting Results. <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> total.</p>
+      </div>
+      <div class="actions">
+        <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
       </div>
     </div>
 
@@ -107,7 +198,9 @@ if (!$inCountry) {
             <td><span class="badge agreed"><?= (int) $r['total'] ?></span></td>
             <td><?= h($r['language'] !== '' ? $r['language'] : '—') ?></td>
             <td class="muted"><?= h($r['last_pushed_at'] ? substr($r['last_pushed_at'], 0, 16) : '—') ?></td>
-            <td><a class="btn small" href="index.php?page=admin_extracted&amp;country=<?= urlencode($r['country']) ?>">Open</a></td>
+            <td>
+              <a class="btn small" href="<?= h($sitesListUrl) ?>&amp;country=<?= urlencode($r['country']) ?>">Open</a>
+            </td>
           </tr>
         <?php endforeach; ?>
         </tbody>
@@ -124,7 +217,7 @@ if (!$inCountry) {
     return;
 }
 
-// --- One country detail ---
+// --- Extracted Sites → one country detail ---
 $countryName = $sheet;
 $q = trim((string) get('q'));
 $pageNum = max(1, (int) get('p', 1));
@@ -140,15 +233,17 @@ $copyText = implode("\n", array_map(static fn ($d) => 'https://' . $d, $allDomai
 
 $qs = http_build_query(array_filter([
     'page' => 'admin_extracted',
+    'folder' => 'extracted_sites',
     'country' => $countryName,
     'q' => $q,
 ], static fn ($v) => $v !== '' && $v !== null));
 
-render_header('Extracted URLs · ' . $countryName, 'admin');
+render_header('Extracted Sites · ' . $countryName, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
     ['label' => 'Extracted URLs', 'href' => 'index.php?page=admin_extracted'],
+    ['label' => 'Extracted Sites', 'href' => $sitesListUrl],
     ['label' => $countryName],
 ]); ?>
 <div class="topbar">
@@ -158,7 +253,7 @@ render_header('Extracted URLs · ' . $countryName, 'admin');
   </div>
   <div class="actions">
     <button type="button" class="btn" id="extracted_copy_all" <?= $allDomains ? '' : 'disabled' ?>>Copy all URLs</button>
-    <a class="btn secondary" href="index.php?page=admin_extracted">All countries</a>
+    <a class="btn secondary" href="<?= h($sitesListUrl) ?>">All countries</a>
   </div>
 </div>
 
@@ -169,6 +264,7 @@ render_header('Extracted URLs · ' . $countryName, 'admin');
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_extracted">
+  <input type="hidden" name="folder" value="extracted_sites">
   <input type="hidden" name="country" value="<?= h($countryName) ?>">
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
   <button class="btn" type="submit">Filter</button>
@@ -225,7 +321,7 @@ render_header('Extracted URLs · ' . $countryName, 'admin');
   <?php else: ?>
   <div class="empty-state">
     <p>No extracted sites<?= $q !== '' ? ' match this search' : ' in this country yet' ?>.</p>
-    <a class="btn secondary" href="index.php?page=admin_extracted">Back to countries</a>
+    <a class="btn secondary" href="<?= h($sitesListUrl) ?>">Back to countries</a>
   </div>
   <?php endif; ?>
 </div>
@@ -250,7 +346,6 @@ render_header('Extracted URLs · ' . $countryName, 'admin');
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () {
-        src.hidden = false;
         src.classList.remove('visually-hidden');
         src.focus();
         src.select();
