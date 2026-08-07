@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   contact_details TEXT,
   role ENUM('admin','team') NOT NULL DEFAULT 'team',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  must_change_password TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX (role),
   INDEX (full_name)

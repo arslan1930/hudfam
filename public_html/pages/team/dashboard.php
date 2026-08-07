@@ -16,7 +16,7 @@ if ($deptScoped) {
         <p class="muted">
           You are assigned to
           <?= count($myDepartments) ?> department<?= count($myDepartments) === 1 ? '' : 's' ?>.
-          Only those tasks are shown on your login.
+          Your tasks and department tools are shown below.
         </p>
       </div>
       <a class="btn" href="index.php?page=team_departments">My departments</a>
@@ -66,6 +66,41 @@ if ($deptScoped) {
         </div>
       <?php endif; ?>
     </div>
+
+    <?php
+    $toolPages = department_tool_pages_for_user($user);
+    $toolSet = array_fill_keys($toolPages, true);
+    $toolCards = [];
+    if (!empty($toolSet['team_prospect_check'])) {
+        $toolCards[] = ['team_prospect_check', 'Filter & add', 'Paste → filter → add unique sites'];
+        $toolCards[] = ['team_prospect_batches', 'Add history', 'Your daily adds'];
+    }
+    if (!empty($toolSet['team_extracting'])) {
+        $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
+    }
+    if (!empty($toolSet['team_sites_emails'])) {
+        $toolCards[] = ['team_sites_emails', 'Sites with emails - Team', 'Add emails · Push to Admin'];
+    }
+    if (!empty($toolSet['team_admin_emails_delete'])) {
+        $toolCards[] = ['team_admin_emails_delete', 'Sites with emails - Admin', 'Super search · update Admin'];
+    }
+    if (!empty($toolSet['team_email_campaigns'])) {
+        $toolCards[] = ['team_email_campaigns', 'Email campaign search', 'Super search country sheets'];
+    }
+    ?>
+    <?php if ($toolCards): ?>
+    <div class="card" style="margin-top:1rem">
+      <h2>Your tools</h2>
+      <div class="folders">
+        <?php foreach ($toolCards as [$pageKey, $title, $hint]): ?>
+          <a class="folder" href="index.php?page=<?= h($pageKey) ?>">
+            <h3><?= h($title) ?></h3>
+            <p class="muted"><?= h($hint) ?></p>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <?php if ($myDepartments): ?>
     <div class="card" style="margin-top:1rem">

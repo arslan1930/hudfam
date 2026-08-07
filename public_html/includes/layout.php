@@ -103,27 +103,23 @@ function render_header(string $title, string $panel = ''): void
         $adminNewByPage = [];
         $deptScoped = function_exists('user_is_department_scoped') && user_is_department_scoped($user);
         if ($deptScoped) {
-            // Department members only see their assigned work.
+            // Department members: tasks + tools for their departments.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Your assigned tasks'],
+                    'team_dashboard' => ['Dashboard', 'Your assigned tasks and tools'],
                     'team_departments' => ['My departments', 'Only departments you belong to'],
                 ],
             ];
             if (function_exists('list_departments_for_user')) {
                 $mine = list_departments_for_user((int) ($user['id'] ?? 0));
-                $inEmailExtracting = false;
-                $inCommunication = false;
+                $toolPages = function_exists('department_tool_pages_for_user')
+                    ? department_tool_pages_for_user($user)
+                    : [];
+                $toolSet = array_fill_keys($toolPages, true);
                 if ($mine) {
                     $deptLinks = [];
                     foreach ($mine as $d) {
                         $slug = (string) $d['slug'];
-                        if ($slug === 'email_extracting') {
-                            $inEmailExtracting = true;
-                        }
-                        if ($slug === 'communication') {
-                            $inCommunication = true;
-                        }
                         $deptLinks['team_departments&folder=' . rawurlencode($slug)] = [
                             (string) $d['name'],
                             'Tasks for this department',
@@ -131,21 +127,35 @@ function render_header(string $title, string $panel = ''): void
                     }
                     $groups['Departments'] = $deptLinks;
                 }
-                if ($inEmailExtracting) {
-                    $groups['Main']['team_admin_emails_delete'] = [
-                        'Sites with emails - Admin',
-                        'Super search all countries · site + email',
+                if (!empty($toolSet['team_prospect_check'])) {
+                    $groups['Main']['team_prospect_check'] = [
+                        'Filter & add',
+                        'Paste → filter → add new unique only',
                     ];
+                    $groups['Main']['team_prospect_batches'] = [
+                        'Add history',
+                        'Your daily adds',
+                    ];
+                }
+                if (!empty($toolSet['team_extracting'])) {
+                    $groups['Main']['team_extracting'] = [
+                        'Extracting sites',
+                        'Sites list + Extracting Results per country',
+                    ];
+                }
+                if (!empty($toolSet['team_sites_emails'])) {
                     $groups['Main']['team_sites_emails'] = [
                         'Sites with emails - Team',
                         'Add emails · Push to Admin',
                     ];
                 }
-                if ($inCommunication) {
+                if (!empty($toolSet['team_admin_emails_delete'])) {
                     $groups['Main']['team_admin_emails_delete'] = [
                         'Sites with emails - Admin',
                         'Super search all countries · site + email',
                     ];
+                }
+                if (!empty($toolSet['team_email_campaigns'])) {
                     $groups['Main']['team_email_campaigns'] = [
                         'Email campaign search',
                         'Super search campaign sheets · site + email',
@@ -207,6 +217,7 @@ function render_header(string $title, string $panel = ''): void
     }
 
     echo '<div class="nav-group nav-group-end">';
+    echo '<a href="index.php?page=account_password">Change password</a>';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
     echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';

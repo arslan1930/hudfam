@@ -13,6 +13,10 @@ if (current_user()) {
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (attempt_login(trim(post('username')), (string) post('password'))) {
+        if (user_must_change_password()) {
+            flash('error', 'Change your password before continuing.');
+            redirect('index.php?page=account_password');
+        }
         if (is_admin()) {
             redirect('index.php?page=admin_dashboard');
         }

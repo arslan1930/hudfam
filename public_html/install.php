@@ -5,14 +5,27 @@
  */
 session_start();
 require_once __DIR__ . '/includes/helpers.php';
+
 $error = '';
 $done = false;
+$createdPasswords = [];
+$justInstalled = false;
 
+// Already installed — refuse to run again (do not expose credentials).
 if (file_exists(__DIR__ . '/config.php')) {
-    $done = true;
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Install locked</title>';
+    echo '<link rel="stylesheet" href="asset.php?f=css/app.css"></head><body><div class="login-wrap"><div class="login-card">';
+    echo '<h1>Install locked</h1>';
+    echo '<p>This site already has <code>config.php</code>. Installer will not run again.</p>';
+    echo '<p class="help"><strong>Delete <code>install.php</code></strong> from the server now.</p>';
+    echo '<p><a href="index.php">Go to login</a></p>';
+    echo '</div></div></body></html>';
+    exit;
 }
 
-if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $host = trim($_POST['db_host'] ?? 'localhost');
     $name = trim($_POST['db_name'] ?? '');
     $user = trim($_POST['db_user'] ?? '');
@@ -35,25 +48,36 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require_once __DIR__ . '/includes/geo.php';
         seed_countries_if_empty($pdo);
 
-        $adminHash = password_hash('admin123', PASSWORD_DEFAULT);
-        $admin2Hash = password_hash('admin123', PASSWORD_DEFAULT);
-        $teamHash = password_hash('team123', PASSWORD_DEFAULT);
+        $adminPass = bin2hex(random_bytes(5));
+        $admin2Pass = bin2hex(random_bytes(5));
+        $teamPass = bin2hex(random_bytes(5));
+        $createdPasswords = [
+            'admin' => $adminPass,
+            'admin2' => $admin2Pass,
+            'teammate' => $teamPass,
+        ];
+
+        $adminHash = password_hash($adminPass, PASSWORD_DEFAULT);
+        $admin2Hash = password_hash($admin2Pass, PASSWORD_DEFAULT);
+        $teamHash = password_hash($teamPass, PASSWORD_DEFAULT);
         $pdo->prepare(
-            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, must_change_password)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1)
              ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role),
-               phone=VALUES(phone), contact_details=VALUES(contact_details), full_name=VALUES(full_name)'
+               phone=VALUES(phone), contact_details=VALUES(contact_details), full_name=VALUES(full_name),
+               must_change_password=1'
         )->execute(['admin', $adminHash, 'Sara Khan', 'sara@hudfam.local', '+49 30 111111', 'Primary EU admin · Slack @sara', 'admin']);
         $pdo->prepare(
-            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
+            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, must_change_password)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1)
              ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role),
-               phone=VALUES(phone), contact_details=VALUES(contact_details), full_name=VALUES(full_name)'
+               phone=VALUES(phone), contact_details=VALUES(contact_details), full_name=VALUES(full_name),
+               must_change_password=1'
         )->execute(['admin2', $admin2Hash, 'Marcus Lee', 'marcus@hudfam.local', '+1 212 555 0100', 'NA admin · Slack @marcus', 'admin']);
         $pdo->prepare(
-            'INSERT INTO users (username, password_hash, full_name, email, role)
-             VALUES (?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash)'
+            'INSERT INTO users (username, password_hash, full_name, email, role, must_change_password)
+             VALUES (?, ?, ?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), must_change_password=1'
         )->execute(['teammate', $teamHash, 'Alex', 'team@hudfam.local', 'team']);
 
         $teamId = (int) $pdo->query("SELECT id FROM users WHERE username='teammate'")->fetchColumn();
@@ -110,7 +134,9 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (file_put_contents(__DIR__ . '/config.php', $configPhp) === false) {
             throw new RuntimeException('Could not write config.php. Create it manually from config.sample.php.');
         }
+        @file_put_contents(__DIR__ . '/install.lock', date('c') . " installed\n");
         $done = true;
+        $justInstalled = true;
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -129,9 +155,15 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="login-wrap">
   <div class="login-card">
     <h1>TechxForm install</h1>
-    <?php if ($done): ?>
+    <?php if ($done && $justInstalled): ?>
       <p>Installed. <a href="index.php">Go to login</a></p>
-      <p class="help">Demo: admin / admin123 · admin2 / admin123 · teammate / team123</p>
+      <p class="help"><strong>Copy these one-time passwords now</strong> (they are not shown again):</p>
+      <ul class="help">
+        <?php foreach ($createdPasswords as $uname => $pw): ?>
+          <li><code><?= h($uname) ?></code> / <code><?= h($pw) ?></code></li>
+        <?php endforeach; ?>
+      </ul>
+      <p class="help">Each user must change their password on first login.</p>
       <p class="help"><strong>Delete install.php now</strong> for security.</p>
     <?php else: ?>
       <p class="muted">Enter MySQL details from Hostinger hPanel → Databases.</p>

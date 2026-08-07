@@ -23,9 +23,18 @@ if (!file_exists(__DIR__ . '/config.php')) {
     exit;
 }
 
+try {
+    ensure_users_auth_schema();
+} catch (Throwable $e) {
+    // Schema may still be upgrading.
+}
+
 $page = (string) ($_GET['page'] ?? '');
 if ($page === '' && current_user()) {
     $u = current_user();
+    if (user_must_change_password($u)) {
+        redirect('index.php?page=account_password');
+    }
     if (is_admin()) {
         redirect('index.php?page=admin_dashboard');
     }
@@ -43,6 +52,7 @@ if ($page === '') {
 $routes = [
     'login' => 'pages/login.php',
     'logout' => 'pages/logout.php',
+    'account_password' => 'pages/account_password.php',
 
     'admin_dashboard' => 'pages/admin/dashboard.php',
     'admin_departments' => 'pages/admin/departments.php',
@@ -80,45 +90,35 @@ if (!isset($routes[$page])) {
     exit;
 }
 
-// Department members only see their assigned department work.
-// Email Extracting / Communication Team get their extra tools.
+// Must change weak/default password before using the app.
+$cu = current_user();
+if ($cu && user_must_change_password($cu)) {
+    $passwordAllowed = ['login', 'logout', 'account_password'];
+    if (!in_array($page, $passwordAllowed, true)) {
+        flash('error', 'Change your password before continuing.');
+        redirect('index.php?page=account_password');
+    }
+}
+
+// Department members only see assigned work + tools for their departments.
 $deptOnlyAllowed = [
     'login',
     'logout',
+    'account_password',
     'team_dashboard',
     'team_departments',
 ];
-$cu = current_user();
 if (
     $cu
     && ($cu['role'] ?? '') === 'team'
     && user_is_department_scoped($cu)
 ) {
-    $emailExtracting = false;
-    $communication = false;
-    try {
-        $ed = get_department_by_slug('email_extracting');
-        if ($ed) {
-            $emailExtracting = user_in_department((int) $cu['id'], (int) $ed['id']);
-        }
-        $cd = get_department_by_slug('communication');
-        if ($cd) {
-            $communication = user_in_department((int) $cu['id'], (int) $cd['id']);
-        }
-    } catch (Throwable $e) {
-        $emailExtracting = false;
-        $communication = false;
+    foreach (department_tool_pages_for_user($cu) as $toolPage) {
+        $deptOnlyAllowed[] = $toolPage;
     }
-    if ($emailExtracting) {
-        $deptOnlyAllowed[] = 'team_admin_emails_delete';
-        $deptOnlyAllowed[] = 'team_sites_emails';
-    }
-    if ($communication) {
-        $deptOnlyAllowed[] = 'team_email_campaigns';
-        $deptOnlyAllowed[] = 'team_admin_emails_delete';
-    }
+    $deptOnlyAllowed = array_values(array_unique($deptOnlyAllowed));
     if (!in_array($page, $deptOnlyAllowed, true)) {
-        flash('error', 'Your login only shows tasks for your department.');
+        flash('error', 'Your login only shows work and tools for your department.');
         redirect('index.php?page=team_departments');
     }
 }

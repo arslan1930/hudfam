@@ -28,26 +28,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
             }
         }
         try {
+            ensure_users_auth_schema();
             if ($id) {
                 if ($password !== '') {
+                    if (in_array($password, known_weak_passwords(), true)) {
+                        flash('error', 'Do not use demo default passwords (admin123 / team123).');
+                        redirect('index.php?page=admin_users&edit=' . $id);
+                    }
                     db()->prepare(
-                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=? WHERE id=?'
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=1 WHERE id=?'
                     )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $id]);
                 } else {
                     db()->prepare(
                         'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
                     )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
                 }
-                flash('ok', 'User updated.');
+                flash('ok', 'User updated.' . ($password !== '' ? ' They must change the password on next login.' : ''));
             } else {
                 if ($password === '') {
-                    $password = bin2hex(random_bytes(4));
+                    $password = bin2hex(random_bytes(5));
+                }
+                if (in_array($password, known_weak_passwords(), true)) {
+                    flash('error', 'Do not use demo default passwords (admin123 / team123).');
+                    redirect('index.php?page=admin_users');
                 }
                 db()->prepare(
-                    'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, is_active)
-                     VALUES (?,?,?,?,?,?,?,?)'
+                    'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, is_active, must_change_password)
+                     VALUES (?,?,?,?,?,?,?,?,1)'
                 )->execute([$username, password_hash($password, PASSWORD_DEFAULT), $full, $email, $phone, $contact, $role, $active]);
-                flash('ok', 'User created. Password: ' . $password);
+                flash('ok', 'User created. Temporary password: ' . $password . ' (must change on first login)');
             }
         } catch (PDOException $e) {
             flash('error', 'Could not save (username must be unique).');

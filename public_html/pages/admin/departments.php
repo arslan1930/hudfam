@@ -172,7 +172,7 @@ render_breadcrumbs([
 
 <div class="card" id="members">
   <h2>Members</h2>
-  <p class="help">Team logins assigned here will only see this department’s tasks (and any other departments you add them to).</p>
+  <p class="help"><?= h(department_tools_help((string) $dept['slug'])) ?></p>
   <?php if ($members): ?>
   <table>
     <thead>

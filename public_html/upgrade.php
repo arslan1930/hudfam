@@ -1,30 +1,41 @@
 <?php
 /**
  * One-time upgrade for existing Hostinger installs.
- * 1) Ensures Our database + Add history tables
- * 2) DROPS Catalog / Emails / Orders / Published / Projects tables
- * Open once after uploading new files, then delete this file.
+ * Requires a logged-in Admin session. Delete this file after running.
  */
 session_start();
 require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
-require __DIR__ . '/includes/geo.php';
-require __DIR__ . '/includes/prospects.php';
-require __DIR__ . '/includes/extracting.php';
-require __DIR__ . '/includes/extracted.php';
-require __DIR__ . '/includes/sites_with_emails.php';
-require __DIR__ . '/includes/email_campaigns.php';
-require __DIR__ . '/includes/admin_new_data.php';
-require __DIR__ . '/includes/departments.php';
+require __DIR__ . '/includes/auth.php';
 
 $error = '';
 $done = false;
 $notes = [];
+$locked = false;
 
 if (!file_exists(__DIR__ . '/config.php')) {
     $error = 'config.php missing. Run install.php first.';
-} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['run'])) {
+    $locked = true;
+} else {
+    // Admin-only: log in via the app first, then open this page.
+    $user = current_user();
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        $locked = true;
+        http_response_code(403);
+    }
+}
+
+if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        require __DIR__ . '/includes/geo.php';
+        require __DIR__ . '/includes/prospects.php';
+        require __DIR__ . '/includes/extracting.php';
+        require __DIR__ . '/includes/extracted.php';
+        require __DIR__ . '/includes/sites_with_emails.php';
+        require __DIR__ . '/includes/email_campaigns.php';
+        require __DIR__ . '/includes/admin_new_data.php';
+        require __DIR__ . '/includes/departments.php';
+
         $pdo = db();
 
         $pdo->exec(
@@ -80,6 +91,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
         ensure_invoice_schema();
         $notes[] = 'invoices / invoice_items (Invoices panel) OK';
 
+        ensure_users_auth_schema();
+        $notes[] = 'users.must_change_password OK';
+
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('phone', $userCols, true)) {
             $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(80) NOT NULL DEFAULT '' AFTER email");
@@ -89,6 +103,11 @@ if (!file_exists(__DIR__ . '/config.php')) {
             $pdo->exec("ALTER TABLE users ADD COLUMN contact_details TEXT NULL AFTER phone");
             $notes[] = 'added users.contact_details';
         }
+
+        $weak = flag_users_with_weak_passwords();
+        $notes[] = $weak > 0
+            ? 'flagged ' . $weak . ' user(s) still on demo passwords (must change on login)'
+            : 'no demo passwords detected';
 
         // Remove Catalog / Emails / Orders / Published / Projects from the database
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
@@ -135,19 +154,21 @@ if (!file_exists(__DIR__ . '/config.php')) {
   <div class="login-card">
     <h1>Upgrade</h1>
     <p class="muted">
-      Keeps <strong>Our database</strong> (one URL list per country) + <strong>Add history</strong>.
-      Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
+      Admin-only schema upgrade. Keeps live data tables and removes legacy Catalog tables.
+      Delete <code>upgrade.php</code> when finished.
     </p>
     <?php if ($error): render_alert_box('error', $error); endif; ?>
-    <?php if ($done): ?>
+    <?php if ($locked && file_exists(__DIR__ . '/config.php')): ?>
+      <?php render_alert_box('error', 'Admin login required. Sign in as Admin in the app, then open upgrade.php again.'); ?>
+      <p><a class="btn" href="index.php?page=login">Sign in as Admin</a></p>
+    <?php elseif ($done): ?>
       <?php render_alert_box('ok', 'Upgrade complete.'); ?>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
       <p><a href="index.php?page=admin_dashboard">Open Admin dashboard</a></p>
-      <p class="help"><strong>Delete upgrade.php now.</strong> Also delete any old folders:
-        <code>pages/admin/sites.php</code>, email/project pages if still on the server.</p>
-    <?php else: ?>
+      <p class="help"><strong>Delete upgrade.php now.</strong></p>
+    <?php elseif (!$locked): ?>
       <form method="post">
-        <button class="btn" type="submit">Run upgrade (drop Catalog/Emails/Orders)</button>
+        <button class="btn" type="submit">Run upgrade</button>
       </form>
     <?php endif; ?>
   </div>

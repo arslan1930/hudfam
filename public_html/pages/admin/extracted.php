@@ -240,7 +240,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     ]); ?>
     <div class="topbar">
       <div>
-        <h1>Extracted Sites</h1>
+        <h1><?= label_with_info('Extracted Sites', 'Country folders of URLs pushed from Team Extracting Results. Open a country to copy or remove sites.') ?></h1>
         <p class="muted">
           New URLs from Team Push ·
           <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?> ·

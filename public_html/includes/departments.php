@@ -154,6 +154,53 @@ function user_is_department_scoped(array $user): bool
 }
 
 /**
+ * Extra Team page keys unlocked by department membership (beyond tasks/dashboard).
+ *
+ * @return list<string>
+ */
+function department_tool_pages_for_user(array $user): array
+{
+    if (($user['role'] ?? '') !== 'team') {
+        return [];
+    }
+    $pages = [];
+    try {
+        foreach (list_departments_for_user((int) ($user['id'] ?? 0)) as $d) {
+            $slug = (string) ($d['slug'] ?? '');
+            if ($slug === 'site_finding') {
+                $pages[] = 'team_prospect_check';
+                $pages[] = 'team_prospect_batches';
+                $pages[] = 'team_prospect_batch';
+            } elseif ($slug === 'site_extracting') {
+                $pages[] = 'team_extracting';
+                $pages[] = 'team_extract_batch';
+            } elseif ($slug === 'email_extracting') {
+                $pages[] = 'team_sites_emails';
+                $pages[] = 'team_admin_emails_delete';
+            } elseif ($slug === 'communication') {
+                $pages[] = 'team_email_campaigns';
+                $pages[] = 'team_admin_emails_delete';
+            }
+        }
+    } catch (Throwable $e) {
+        return [];
+    }
+    return array_values(array_unique($pages));
+}
+
+/** Short help for Admin department member assignment. */
+function department_tools_help(string $slug): string
+{
+    return match ($slug) {
+        'site_finding' => 'Members also get Filter & add and Add history (not only tasks).',
+        'site_extracting' => 'Members also get Extracting sites / Results + Push (not only tasks).',
+        'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
+        'communication' => 'Members also get Sites with emails – Admin search and Email campaign search.',
+        default => 'Members see this department’s tasks (and tools from any other departments you assign).',
+    };
+}
+
+/**
  * @return list<array<string,mixed>>
  */
 function list_departments_for_user(int $userId): array
