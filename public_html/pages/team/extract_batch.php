@@ -4,62 +4,25 @@ ensure_extract_schema();
 
 $id = (int) (get('id') ?: 0);
 $batch = $id > 0 ? get_extract_batch($id) : null;
-if (!$batch) {
+if (!$batch || (int) ($batch['site_count'] ?? 0) < 1) {
     flash('error', 'That country batch is not available yet. Waiting for sites from the team mate.');
     redirect('index.php?page=team_extracting');
 }
 
+$domains = get_extract_batch_domains($id);
 $resultsText = (string) ($batch['results_text'] ?? '');
-$country = (string) $batch['country'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
-
     if ($action === 'save_results') {
         $resultsText = (string) post('results_text');
         save_extract_batch_results($id, $resultsText);
-        flash('ok', 'Extracting Results saved for ' . $country . '.');
-        redirect('index.php?page=team_extract_batch&id=' . $id);
-    }
-
-    if ($action === 'remove_sites') {
-        $selected = post('domains');
-        if (!is_array($selected)) {
-            $selected = [];
-        }
-        $removed = remove_extract_batch_domains($id, $selected);
-        if ($removed === []) {
-            flash('error', 'Select at least one site to remove from the Sites list.');
-            redirect('index.php?page=team_extract_batch&id=' . $id);
-        }
-        set_extract_sites_undo($id, $removed);
-        $n = count($removed);
-        flash('ok', 'Removed ' . $n . ' site' . ($n === 1 ? '' : 's') . ' from the Sites list. You can Undo.');
-        redirect('index.php?page=team_extract_batch&id=' . $id);
-    }
-
-    if ($action === 'undo_remove') {
-        $undo = get_extract_sites_undo($id);
-        if ($undo === null) {
-            flash('error', 'Nothing to undo.');
-            redirect('index.php?page=team_extract_batch&id=' . $id);
-        }
-        $restored = restore_extract_batch_domains($id, $undo['rows']);
-        clear_extract_sites_undo();
-        flash('ok', 'Undo complete — restored ' . $restored . ' site' . ($restored === 1 ? '' : 's') . ' to the Sites list.');
+        flash('ok', 'Extracting Results saved for ' . (string) $batch['country'] . '.');
         redirect('index.php?page=team_extract_batch&id=' . $id);
     }
 }
 
-$siteRows = get_extract_batch_site_rows($id);
-$domains = array_column($siteRows, 'domain');
-$undo = get_extract_sites_undo($id);
-
-// Empty list after removals — still show page with waiting + undo if available
-if ($domains === [] && $undo === null) {
-    flash('error', 'That country batch is not available yet. Waiting for sites from the team mate.');
-    redirect('index.php?page=team_extracting');
-}
+$country = (string) $batch['country'];
 
 render_header('Extracting · ' . $country, 'team');
 ?>
@@ -86,54 +49,13 @@ render_header('Extracting · ' . $country, 'team');
 <div class="grid two-box">
   <div class="card box-panel">
     <h2>① Sites list</h2>
-    <p class="help">Select sites to <strong>Open</strong> in Chrome (new tabs) or <strong>Remove</strong> from this list after checking. Admin country database is not changed.</p>
-
-    <?php if ($undo): ?>
-      <form method="post" class="sites-list-undo">
-        <input type="hidden" name="action" value="undo_remove">
-        <p class="help" style="margin:0">
-          Last remove: <?= count($undo['rows']) ?> site<?= count($undo['rows']) === 1 ? '' : 's' ?>.
-          <button class="btn secondary small" type="submit">Undo remove</button>
-        </p>
-      </form>
-    <?php endif; ?>
-
+    <p class="help">New unique sites teammates added for <?= h($country) ?> (also merged into the admin country database).</p>
     <?php if ($domains): ?>
-      <form method="post" id="sites_list_form" class="sites-list-form">
-        <input type="hidden" name="action" value="remove_sites">
-
-        <div class="sites-list-toolbar">
-          <label class="sites-list-select-all">
-            <input type="checkbox" id="sites_select_all">
-            <span>Select all</span>
-          </label>
-          <span class="muted" id="sites_selected_count">0 selected</span>
-          <div class="sites-list-actions">
-            <button type="button" class="btn secondary small" id="sites_open_btn" disabled>Open</button>
-            <button type="submit" class="btn small danger" id="sites_remove_btn" disabled>Remove</button>
-          </div>
-        </div>
-
-        <div class="sites-list-box" data-sites-list>
-          <?php foreach ($siteRows as $row): ?>
-            <label class="sites-list-item">
-              <input type="checkbox" name="domains[]" value="<?= h($row['domain']) ?>" data-site-domain="<?= h($row['domain']) ?>">
-              <span class="sites-list-domain"><?= h($row['domain']) ?></span>
-            </label>
-          <?php endforeach; ?>
-        </div>
-
-        <p class="muted" style="margin:0.5rem 0 0">
-          <?= count($domains) ?> domain<?= count($domains) === 1 ? '' : 's' ?>
-          · Open uses your browser (Chrome if it is your default)
-        </p>
-      </form>
+      <textarea class="inventory-box" rows="16" readonly><?= h(implode("\n", $domains)) ?></textarea>
+      <p class="muted" style="margin:0.5rem 0 0"><?= count($domains) ?> domain<?= count($domains) === 1 ? '' : 's' ?></p>
     <?php else: ?>
       <div class="empty-state">
         <p>Waiting for sites from the team mate</p>
-        <?php if ($undo): ?>
-          <p class="muted">Or use Undo remove to bring the last sites back.</p>
-        <?php endif; ?>
       </div>
     <?php endif; ?>
   </div>
@@ -150,8 +72,4 @@ render_header('Extracting · ' . $country, 'team');
     </form>
   </div>
 </div>
-
-<?php if ($domains): ?>
-<script src="<?= h(script_asset_url('js/extract-sites-list.js')) ?>" defer></script>
-<?php endif; ?>
 <?php render_footer('team'); ?>
