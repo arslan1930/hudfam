@@ -69,7 +69,7 @@ render_header('Invoices', 'admin');
             <th>Client</th>
             <th>Lines</th>
             <th class="num">Total</th>
-            <th><?= label_with_info('Payment', 'Unpaid until you open the invoice and click Mark payment received — that also marks linked sheet rows Paid.') ?></th>
+            <th><?= label_with_info('Payment', 'Click Paid on an unpaid invoice and confirm — that marks the invoice paid and sets linked sheet rows to Paid.') ?></th>
             <th></th>
           </tr>
         </thead>
@@ -86,9 +86,21 @@ render_header('Invoices', 'admin');
             <td class="num"><?= h(format_euro($inv['total_amount'])) ?></td>
             <td>
               <?php if ($paid): ?>
-                <span class="invoice-pay-badge is-paid">Received</span>
+                <span class="invoice-pay-badge is-paid" title="Payment already received">Paid</span>
               <?php else: ?>
-                <span class="invoice-pay-badge">Unpaid</span>
+                <form method="post" class="inline" action="index.php?page=admin_invoices"
+                      onsubmit="return confirm(<?= h(json_encode(
+                          'Confirm this invoice is paid?' . "\n\n"
+                          . 'Invoice ' . $inv['invoice_number'] . "\n"
+                          . 'This will mark the invoice as Paid and set linked sheet rows to Paid.',
+                          JSON_UNESCAPED_UNICODE
+                      )) ?>);">
+                  <input type="hidden" name="action" value="mark_paid">
+                  <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
+                  <button class="btn-paid invoice-list-pay-btn" type="submit" title="Mark invoice as paid">
+                    Paid
+                  </button>
+                </form>
               <?php endif; ?>
             </td>
             <td class="invoice-list-actions">
