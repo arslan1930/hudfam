@@ -154,9 +154,6 @@ if ($sheetId > 0) {
           Country email sheet · site names + emails ·
           Communication Team super search ·
           <?= (int) $filledCount ?> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          <?php if ($canon): ?>
-            · <?= h((string) $canon['language']) ?> · <?= h((string) $canon['region']) ?>
-          <?php endif; ?>
         </p>
       </div>
       <div class="actions">
@@ -381,7 +378,7 @@ render_breadcrumbs([
         <tbody>
         <?php foreach ($sheets as $s):
             $cName = (string) $s['country'];
-            $hay = mb_strtolower($cName . ' ' . (string) $s['language'] . ' ' . (string) $s['region']);
+            $hay = mb_strtolower($cName . ' ' . (int) $s['row_count'] . ' sites');
             ?>
           <tr data-camp-country-row data-search="<?= h($hay) ?>">
             <td>
@@ -438,9 +435,6 @@ render_breadcrumbs([
         <?php foreach ($availableCountries as $c): ?>
           <option value="<?= h((string) $c['name']) ?>">
             <?= h((string) $c['name']) ?>
-            <?php if (trim((string) ($c['default_language'] ?? '')) !== ''): ?>
-              · <?= h((string) $c['default_language']) ?>
-            <?php endif; ?>
           </option>
         <?php endforeach; ?>
       </select>

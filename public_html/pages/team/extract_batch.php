@@ -148,8 +148,6 @@ render_header('Extracting · ' . $country, 'team');
     <h1><?= h($country) ?> · Extracting</h1>
     <p class="muted">
       <span id="sites_count_label"><?= count($domains) ?></span> site<?= count($domains) === 1 ? '' : 's' ?> in Sites list
-      · <?= h((string) ($batch['language'] ?: '—')) ?>
-      · <?= h((string) ($batch['region'] ?: '—')) ?>
     </p>
   </div>
   <div class="actions">

@@ -277,8 +277,6 @@ if ($folder === 'extracted_sites' && !$inCountry) {
             $cTotal = (int) $r['total'];
             $searchHay = mb_strtolower(trim(
                 $cName . ' '
-                . (string) ($r['language'] ?? '') . ' '
-                . (string) ($r['region'] ?? '') . ' '
                 . $cTotal . ' urls'
             ));
             ?>

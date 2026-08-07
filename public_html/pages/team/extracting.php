@@ -33,7 +33,6 @@ render_header('Extracting sites', 'team');
       <tr>
         <th>Country</th>
         <th>Sites</th>
-        <th>Language / region</th>
         <th>Updated</th>
         <th></th>
       </tr>
@@ -43,7 +42,6 @@ render_header('Extracting sites', 'team');
       <tr>
         <td><strong><?= h((string) $b['country']) ?></strong></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
-        <td><?= h((string) ($b['language'] ?: '—')) ?> · <?= h((string) ($b['region'] ?: '—')) ?></td>
         <td class="muted"><?= h((string) ($b['updated_at'] ?? '')) ?></td>
         <td><a class="btn small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>

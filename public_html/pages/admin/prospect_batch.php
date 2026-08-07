@@ -26,7 +26,6 @@ render_header('Add history · ' . $batch['batch_date'], 'admin');
     <p class="muted">
       <?= (int) $batch['site_count'] ?> site(s) added
       · <?= h($batch['country'] ?: '—') ?>
-      · <?= h($batch['language'] ?: '—') ?>
       · role <?= h($batch['role'] ?? '—') ?>
     </p>
   </div>

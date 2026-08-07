@@ -27,7 +27,7 @@ render_header('Add history', 'admin');
         <th>Date</th>
         <th>Person</th>
         <th>Sites</th>
-        <th>Country / lang</th>
+        <th>Country</th>
         <th></th>
       </tr>
     </thead>
@@ -37,7 +37,7 @@ render_header('Add history', 'admin');
         <td><strong><?= h($b['batch_date']) ?></strong></td>
         <td><?= h($b['full_name'] ?: $b['username']) ?></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
-        <td><?= h($b['country'] ?: '—') ?> · <?= h($b['language'] ?: '—') ?></td>
+        <td><?= h($b['country'] ?: '—') ?></td>
         <td><a class="btn small" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $b['id'] ?>">View</a></td>
       </tr>
     <?php endforeach; ?>

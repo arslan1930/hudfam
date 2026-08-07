@@ -295,7 +295,7 @@ if (!$inCountry) {
         <tbody>
         <?php foreach ($countryRows as $r):
             $cName = (string) $r['country'];
-            $hay = mb_strtolower($cName . ' ' . (string) $r['language'] . ' ' . (string) $r['region']);
+            $hay = mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
             ?>
           <tr data-swe-country-row data-search="<?= h($hay) ?>">
             <td>

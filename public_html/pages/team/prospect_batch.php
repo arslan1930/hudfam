@@ -17,7 +17,7 @@ render_header('Batch ' . $batch['batch_date'], 'team');
 <div class="topbar">
   <div>
     <h1><?= h($batch['batch_date']) ?> · <?= h($batch['full_name'] ?: $batch['username']) ?></h1>
-    <p class="muted"><?= (int) $batch['site_count'] ?> site(s) · <?= h($batch['country'] ?: '—') ?> · <?= h($batch['language'] ?: '—') ?></p>
+    <p class="muted"><?= (int) $batch['site_count'] ?> site(s) · <?= h($batch['country'] ?: '—') ?></p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">My batches</a>

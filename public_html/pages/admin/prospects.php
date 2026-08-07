@@ -393,7 +393,6 @@ if (!$inCountry && !$emptyCountry) {
                 $siteCount = (int) $f['total'];
                 $searchHay = mb_strtolower(trim(
                     $label . ' '
-                    . (string) ($f['language'] ?? '') . ' '
                     . (string) $regionLabel . ' '
                     . $siteCount . ' sites'
                 ));
@@ -408,7 +407,7 @@ if (!$inCountry && !$emptyCountry) {
                 </h3>
                 <p class="muted">
                   <span class="prospect-folder-count"><?= $siteCount ?></span>
-                  no. of sites<?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?>
+                  no. of sites
                 </p>
               </a>
             <?php endforeach; ?>

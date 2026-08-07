@@ -27,7 +27,7 @@ render_header('Add history', 'team');
         <th>Date</th>
         <th>Teammate</th>
         <th>Sites</th>
-        <th>Country / lang</th>
+        <th>Country</th>
         <th></th>
       </tr>
     </thead>
@@ -37,7 +37,7 @@ render_header('Add history', 'team');
         <td><strong><?= h($b['batch_date']) ?></strong></td>
         <td><?= h($b['full_name'] ?: $b['username']) ?></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
-        <td><?= h($b['country'] ?: '—') ?> · <?= h($b['language'] ?: '—') ?></td>
+        <td><?= h($b['country'] ?: '—') ?></td>
         <td><a class="btn small" href="index.php?page=team_prospect_batch&id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>
     <?php endforeach; ?>
