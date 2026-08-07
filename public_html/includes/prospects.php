@@ -607,9 +607,15 @@ function add_prospect_domains(
     }
 
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    // Team/admin shared insert path: never insert domains already in this country folder.
     $check = filter_domains_against_prospects($domains, $country);
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
+    if (!$toAdd) {
+        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null];
+    }
+    // Defensive: ignore any domain that somehow remained in $domains but is not "new".
+    $toAdd = array_values(array_intersect($toAdd, $domains));
     if (!$toAdd) {
         return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null];
     }

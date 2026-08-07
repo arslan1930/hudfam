@@ -71,15 +71,26 @@ try {
                 ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
                 : $raw;
         } elseif ($action === 'add_new') {
+            // Always re-filter against the country database — only brand-new sites may be saved.
             $filter = filter_domains_against_prospects($domains, $country);
             $selected = $filter['new'];
+            $already = count($filter['existing']);
+            if (!$selected) {
+                flash('error', 'No new sites to add — every domain is already in the ' . $country . ' database. Filter again with a different list.');
+                redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+            }
             $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-            $msg = 'Added ' . (int) $added['inserted'] . ' sites to ' . $country;
+            if ((int) $added['inserted'] < 1) {
+                flash('error', 'No new sites were added — they were already in ' . $country . '.');
+                redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+            }
+            $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s) into ' . $country;
             if (!empty($added['batch_id'])) {
                 $msg .= ' · saved in today’s history';
             }
-            if ((int) $added['skipped'] > 0) {
-                $msg .= ' · Skipped ' . (int) $added['skipped'] . ' already in this country';
+            $skippedTotal = $already + (int) $added['skipped'];
+            if ($skippedTotal > 0) {
+                $msg .= ' · Skipped ' . $skippedTotal . ' already in this country';
             }
             flash('ok', $msg . '.');
             $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
@@ -120,7 +131,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Pick an existing country database → paste root domains → remove ones already in that country → add only unique sites. New sites merge into that same country folder (Germany → Germany, Spain → Spain).</p>
+    <p class="muted">Paste sites → filter against the existing country database → add <strong>only new unique</strong> sites into that same folder (Germany stays Germany, Spain stays Spain).</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
@@ -131,8 +142,8 @@ render_header('Filter & add', 'team');
 
 <ul class="steps">
   <li class="step <?= $stepPaste ?>"><span class="num">1</span> Country + paste</li>
-  <li class="step <?= $stepFilter ?>"><span class="num">2</span> Filter</li>
-  <li class="step <?= $stepAdd ?>"><span class="num">3</span> Add unique</li>
+  <li class="step <?= $stepFilter ?>"><span class="num">2</span> Filter (remove known)</li>
+  <li class="step <?= $stepAdd ?>"><span class="num">3</span> Add new only</li>
 </ul>
 
 <form method="post" id="filter_form">
@@ -229,7 +240,7 @@ render_header('Filter & add', 'team');
     <?php endif; ?>
   </div>
   <div class="card panel-ok">
-    <h2>Unique — add these</h2>
+    <h2>New unique sites only</h2>
     <?php if ($result['new']): ?>
       <form method="post">
         <input type="hidden" name="action" value="add_new">
@@ -240,14 +251,19 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Saves to <?= h($country) ?> and today’s history for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
+        <p class="help">
+          These are <strong>not</strong> in <?= h($country) ?> yet. Clicking add merges only these new sites into the existing <?= h($country) ?> database.
+          Already-known sites stay skipped.
+        </p>
         <div class="actions-sticky">
-          <button class="btn large block" type="submit">Add to <?= h($country) ?> (<?= count($result['new']) ?>)</button>
+          <button class="btn large block" type="submit">
+            Add <?= count($result['new']) ?> new site<?= count($result['new']) === 1 ? '' : 's' ?> to <?= h($country) ?>
+          </button>
         </div>
       </form>
     <?php else: ?>
       <div class="empty-state">
-        <p>No unique domains left — everything was already in <?= h($country) ?>.</p>
+        <p>No new sites to add — everything you pasted is already in <?= h($country) ?>.</p>
         <a class="btn secondary" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Paste a new list</a>
       </div>
     <?php endif; ?>

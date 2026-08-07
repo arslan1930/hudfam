@@ -108,13 +108,13 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — per country database',
-        'Compare a pasted list to one existing country’s site database and save only root domains that country does not already have. New sites merge into that same country folder (never a new country).',
-        'Select country (type + Enter) → Paste root domains → Clean errors if needed → Filter → Add unique.',
+        'Filter & add — new unique sites only',
+        'Paste a list, compare it to the existing country database, and merge only domains that country does not already have.',
+        'Select country → Paste → Filter (known sites removed) → Add new unique sites into that same country folder.',
         [
-            'Select an existing country database (type to search, Enter to select).',
-            'Paste root domains only (example.com, my-site.co.uk) and Clean errors if needed.',
-            'Filter, then add the remaining unique sites into that same country folder.',
+            'Select an existing country database (Germany, Spain, …).',
+            'Paste root domains and Filter against that country’s current list.',
+            'Add only the remaining new unique sites — duplicates never enter the database.',
         ]
     );
 }

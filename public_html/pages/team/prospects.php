@@ -159,8 +159,7 @@ render_header('Our database · ' . $sheetLabel, 'team');
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($countryName) ?>">Filter &amp; add</a>
-      <a class="btn secondary" href="index.php?page=team_prospect_form&amp;country=<?= urlencode($countryName) ?>">Add one</a>
+      <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($countryName) ?>">Filter &amp; add (new unique only)</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=team_prospects">All countries</a>
   </div>

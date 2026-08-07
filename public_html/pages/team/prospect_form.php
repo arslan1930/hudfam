@@ -1,6 +1,19 @@
 <?php
 $user = require_team();
 $id = (int) get('id');
+
+// Team may only create sites via Filter & add (unique after filtering).
+// This page is for editing an existing prospect only.
+if (!$id) {
+    $countryPrefill = trim((string) get('country'));
+    $redir = 'index.php?page=team_prospect_check';
+    if ($countryPrefill !== '') {
+        $redir .= '&country=' . urlencode($countryPrefill);
+    }
+    flash('ok', 'Use Filter & add to paste sites, remove ones already in the country database, then add only the new unique sites.');
+    redirect($redir);
+}
+
 $countryOptions = list_countries(null, true);
 $site = [
     'domain' => '', 'url' => '', 'country' => trim((string) get('country')),
@@ -8,16 +21,14 @@ $site = [
     'notes' => '', 'status' => 'new',
 ];
 
-if ($id) {
-    $stmt = db()->prepare('SELECT * FROM prospect_sites WHERE id=?');
-    $stmt->execute([$id]);
-    $found = $stmt->fetch();
-    if (!$found) {
-        flash('error', 'Prospect not found.');
-        redirect('index.php?page=team_prospects');
-    }
-    $site = $found;
+$stmt = db()->prepare('SELECT * FROM prospect_sites WHERE id=?');
+$stmt->execute([$id]);
+$found = $stmt->fetch();
+if (!$found) {
+    flash('error', 'Prospect not found.');
+    redirect('index.php?page=team_prospects');
 }
+$site = $found;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $domainRaw = trim((string) post('domain'));
@@ -53,9 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $site['notes'] = $notes;
         $site['url'] = $url;
         $site['status'] = $status;
-    } elseif (($country === '' || $canonCountry === null) && !$id) {
-        flash('error', 'Select an existing country database (type to search, then Enter). New folders are not created.');
-    } elseif ($canonCountry === null && $id && $country !== '') {
+    } elseif ($canonCountry === null && $country !== '') {
         flash('error', 'Select an existing country database. New country folders are not created.');
         $site['domain'] = $domain;
         $site['country'] = $country;
@@ -65,28 +74,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $site['notes'] = $notes;
         $site['url'] = $url;
         $site['status'] = $status;
-    } elseif (!$id) {
-        $exists = filter_domains_against_prospects([$domain], $country);
-        if ($exists['existing']) {
-            flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
-            redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
-        }
-        $added = add_prospect_domains([$domain], $user, $country, $language, $region, $niche, $notes);
-        if ($added['inserted'] < 1) {
-            flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
-            redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
-        }
-        if ($url !== '' || $status !== 'new') {
-            db()->prepare(
-                'UPDATE prospect_sites SET url=?, status=? WHERE TRIM(country)=? AND domain=?'
-            )->execute([$url, $status, $country, $domain]);
-        }
-        flash('ok', 'Prospect added to ' . $country . ' (merged into that country’s database).');
-        if (!empty($added['batch_id'])) {
-            redirect('index.php?page=team_prospect_batch&id=' . (int) $added['batch_id']);
-        }
-        redirect('index.php?page=team_prospects&country=' . urlencode($country));
     } else {
+        // If domain/country changed, block when that domain already exists in the target country.
+        $currentDomain = normalize_domain((string) ($site['domain'] ?? ''));
+        $currentCountry = trim((string) ($site['country'] ?? ''));
+        if ($domain !== '' && $country !== '' && ($domain !== $currentDomain || strcasecmp($country, $currentCountry) !== 0)) {
+            $exists = filter_domains_against_prospects([$domain], $country);
+            if ($exists['existing']) {
+                flash('error', 'That domain is already in the ' . $country . ' database. Keep unique sites only.');
+                redirect('index.php?page=team_prospect_form&id=' . $id);
+            }
+        }
         try {
             db()->prepare(
                 'UPDATE prospect_sites SET domain=?, url=?, country=?, language=?, region=?, niche=?, notes=?, status=? WHERE id=?'
@@ -99,12 +97,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-render_header($id ? $site['domain'] : 'Add prospect', 'team');
+render_header($site['domain'], 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= $id ? h($site['domain']) : 'Add one prospect' ?></h1>
-    <p class="muted">Prospects only (no prices). Prefer <a href="index.php?page=team_prospect_check">Filter &amp; add</a> for lists.</p>
+    <h1><?= h($site['domain']) ?></h1>
+    <p class="muted">Edit an existing site. To add new sites, use <a href="index.php?page=team_prospect_check<?= $site['country'] !== '' ? '&amp;country=' . urlencode((string) $site['country']) : '' ?>">Filter &amp; add</a> (unique only).</p>
   </div>
   <a class="btn secondary" href="index.php?page=team_prospects">Back</a>
 </div>
@@ -118,7 +116,7 @@ render_header($id ? $site['domain'] : 'Add prospect', 'team');
     </div>
     <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
     <?= render_country_typeahead((string) ($site['country'] ?? ''), [
-        'required' => !$id,
+        'required' => true,
         'label' => 'Country database',
         'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]"',
     ]) ?>
