@@ -651,6 +651,16 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .extracted-sites-table td form { margin: 0; }
 .extracted-country-table td { vertical-align: middle; }
+.btn.danger {
+  background: var(--bad, #b42318);
+  border-color: var(--bad, #b42318);
+  color: #fff;
+}
+.btn.secondary.danger {
+  background: transparent;
+  color: var(--bad, #b42318);
+  border-color: var(--bad, #b42318);
+}
 .sites-list-shell kbd,
 .box-panel kbd {
   display: inline-block;
