@@ -308,6 +308,16 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   });
   syncRemove();
   refreshTotals();
+
+  var noteTa = form.querySelector('#admin_note, [data-note-input]');
+  if (noteTa) {
+    function fitNote() {
+      noteTa.style.height = 'auto';
+      noteTa.style.height = Math.min(Math.max(noteTa.scrollHeight, 56), 192) + 'px';
+    }
+    noteTa.addEventListener('input', fitNote);
+    fitNote();
+  }
 })();
 </script>
 <?php else: ?>

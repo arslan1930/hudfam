@@ -1044,25 +1044,101 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   max-width: 16rem;
   line-height: 1.3;
 }
+.invoice-note-box {
+  margin-top: 0.4rem;
+  width: 11.5rem;
+  max-width: 100%;
+}
+.invoice-note-preview {
+  display: block;
+  width: 100%;
+  min-height: 2.6rem;
+  max-height: 3.4rem;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+.invoice-note-preview:hover,
+.invoice-note-preview:focus-visible {
+  border-color: #9ca3af;
+  outline: none;
+}
+.invoice-note-preview-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.invoice-note-preview-empty {
+  color: var(--muted);
+}
+.invoice-note-box.is-open .invoice-note-preview {
+  display: none;
+}
 .invoice-list-note-form {
   display: flex;
-  gap: 0.35rem;
-  align-items: center;
-  margin-top: 0.35rem;
-  max-width: 18rem;
-}
-.invoice-list-note-form input[type="text"] {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex-direction: column;
+  gap: 0.4rem;
   margin: 0;
-  padding: 0.28rem 0.45rem;
-  font-size: 0.82rem;
-  border-radius: 8px;
+  padding: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(31, 35, 40, 0.1);
 }
-.invoice-list-note-form .btn {
+.invoice-list-note-form[hidden] {
+  display: none !important;
+}
+.invoice-list-note-form textarea,
+.invoice-doc-note-box textarea {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  max-height: 12rem;
+  margin: 0;
+  padding: 0.45rem 0.5rem;
+  resize: vertical;
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fffef8;
+  box-sizing: border-box;
+  overflow: auto;
+}
+.invoice-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+.invoice-note-actions .btn {
   flex: 0 0 auto;
-  padding: 0.28rem 0.5rem;
+  padding: 0.28rem 0.55rem;
   font-size: 0.78rem;
+}
+.invoice-doc-note-box {
+  width: min(18rem, 100%);
+  margin-top: 0.35rem;
+}
+.invoice-doc-note-box textarea.invoice-edit-note {
+  min-height: 3.5rem;
 }
 .invoice-note-field-label {
   display: block;
@@ -1070,13 +1146,19 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-size: 0.85rem;
 }
 .invoice-doc-admin-note {
-  margin-top: 0.25rem;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.55rem;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.82rem;
   font-weight: 400;
   color: #4b5563;
   max-width: 18rem;
-  line-height: 1.35;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
 }
 .invoice-manual-items-head {
   display: flex;
@@ -1112,10 +1194,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   box-sizing: border-box;
 }
 .invoice-doc-editable .invoice-edit-note {
-  margin-top: 0.35rem;
+  margin-top: 0;
+  min-height: 3.5rem;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.82rem;
   color: #4b5563;
+  white-space: pre-wrap;
+  word-break: break-word;
+  resize: vertical;
 }
 .invoice-doc-editable .invoice-edit-date {
   display: block;

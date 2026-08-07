@@ -127,15 +127,33 @@ render_header('Invoices', 'admin');
               <?php elseif ($manual && !$paid): ?>
                 <span class="invoice-pay-badge is-done">Done</span>
               <?php endif; ?>
-              <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices">
-                <input type="hidden" name="action" value="save_note">
-                <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                <input type="text" name="admin_note" maxlength="255"
-                       value="<?= h($note) ?>" placeholder="note.."
-                       title="Short note under the invoice number" data-no-draft
-                       aria-label="Note for invoice <?= h($inv['invoice_number']) ?>">
-                <button class="btn secondary small" type="submit" title="Save note">Save</button>
-              </form>
+              <div class="invoice-note-box<?= $note !== '' ? ' has-note' : '' ?>" data-invoice-note-box>
+                <button type="button" class="invoice-note-preview" data-note-open
+                        aria-expanded="false"
+                        title="<?= $note !== '' ? 'Click to read or edit note' : 'Add a note' ?>">
+                  <?php if ($note !== ''): ?>
+                    <span class="invoice-note-preview-text"><?= h($note) ?></span>
+                  <?php else: ?>
+                    <span class="invoice-note-preview-empty">note…</span>
+                  <?php endif; ?>
+                </button>
+                <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices"
+                      data-note-panel hidden>
+                  <input type="hidden" name="action" value="save_note">
+                  <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
+                  <label class="visually-hidden" for="inv-note-<?= (int) $inv['id'] ?>">
+                    Note for invoice <?= h($inv['invoice_number']) ?>
+                  </label>
+                  <textarea id="inv-note-<?= (int) $inv['id'] ?>"
+                            name="admin_note" maxlength="255" rows="3"
+                            placeholder="Write a note…" data-no-draft data-note-input
+                            aria-label="Note for invoice <?= h($inv['invoice_number']) ?>"><?= h($note) ?></textarea>
+                  <div class="invoice-note-actions">
+                    <button class="btn secondary small" type="button" data-note-close>Hide</button>
+                    <button class="btn small" type="submit" title="Save note">Save</button>
+                  </div>
+                </form>
+              </div>
             </td>
             <td data-invoice-cell><?= h(format_invoice_date((string) $inv['invoice_date'])) ?></td>
             <td data-invoice-cell>
@@ -279,6 +297,100 @@ render_header('Invoices', 'admin');
           jumpToMatch(e.shiftKey ? -1 : 1);
         }
       });
+    })();
+    </script>
+    <script>
+    (function () {
+      function fitTextarea(ta) {
+        if (!ta) return;
+        ta.style.height = 'auto';
+        var next = Math.min(Math.max(ta.scrollHeight, 72), 192);
+        ta.style.height = next + 'px';
+      }
+
+      function setPreview(box, text) {
+        var openBtn = box.querySelector('[data-note-open]');
+        if (!openBtn) return;
+        text = String(text || '').trim();
+        box.classList.toggle('has-note', text !== '');
+        if (text !== '') {
+          openBtn.innerHTML = '<span class="invoice-note-preview-text"></span>';
+          openBtn.querySelector('.invoice-note-preview-text').textContent = text;
+          openBtn.title = 'Click to read or edit note';
+        } else {
+          openBtn.innerHTML = '<span class="invoice-note-preview-empty">note…</span>';
+          openBtn.title = 'Add a note';
+        }
+      }
+
+      function openBox(box) {
+        var panel = box.querySelector('[data-note-panel]');
+        var openBtn = box.querySelector('[data-note-open]');
+        var ta = box.querySelector('[data-note-input]');
+        if (!panel) return;
+        document.querySelectorAll('[data-invoice-note-box].is-open').forEach(function (other) {
+          if (other !== box) closeBox(other, false);
+        });
+        box.classList.add('is-open');
+        panel.hidden = false;
+        if (openBtn) openBtn.setAttribute('aria-expanded', 'true');
+        fitTextarea(ta);
+        if (ta) {
+          window.setTimeout(function () {
+            try { ta.focus(); } catch (err) {}
+          }, 0);
+        }
+      }
+
+      function closeBox(box, syncPreview) {
+        if (box.getAttribute('data-note-always-open') === 'true') return;
+        var panel = box.querySelector('[data-note-panel]');
+        var openBtn = box.querySelector('[data-note-open]');
+        var ta = box.querySelector('[data-note-input]');
+        if (syncPreview !== false && ta) setPreview(box, ta.value);
+        box.classList.remove('is-open');
+        if (panel) panel.hidden = true;
+        if (openBtn) openBtn.setAttribute('aria-expanded', 'false');
+      }
+
+      document.querySelectorAll('[data-invoice-note-box]').forEach(function (box) {
+        var openBtn = box.querySelector('[data-note-open]');
+        var closeBtn = box.querySelector('[data-note-close]');
+        var ta = box.querySelector('[data-note-input]');
+        if (openBtn) {
+          openBtn.addEventListener('click', function () { openBox(box); });
+        }
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function () { closeBox(box, true); });
+        }
+        if (ta) {
+          ta.addEventListener('input', function () { fitTextarea(ta); });
+          fitTextarea(ta);
+        }
+        if (box.getAttribute('data-note-always-open') === 'true') {
+          box.classList.add('is-open');
+        }
+      });
+
+      document.addEventListener('pointerdown', function (e) {
+        var open = document.querySelector('[data-invoice-note-box].is-open:not([data-note-always-open])');
+        if (!open) return;
+        if (open.contains(e.target)) return;
+        closeBox(open, true);
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var open = document.querySelector('[data-invoice-note-box].is-open:not([data-note-always-open])');
+        if (open) closeBox(open, true);
+      });
+
+      // After saving a note, keep that row's note open and readable.
+      if (location.hash && /^#inv-\d+$/.test(location.hash)) {
+        var row = document.querySelector(location.hash);
+        var box = row && row.querySelector('[data-invoice-note-box]');
+        if (box) openBox(box);
+      }
     })();
     </script>
   <?php endif; ?>

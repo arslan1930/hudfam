@@ -42,10 +42,13 @@ if ($editable && !$editRows) {
       <strong><?= h($invoice['invoice_number']) ?></strong>
       <?php if ($editable): ?>
         <label class="visually-hidden" for="admin_note">Note</label>
-        <input id="admin_note" class="invoice-edit-note" name="admin_note" type="text" maxlength="255"
-               value="<?= h($adminNote) ?>" placeholder="note..">
+        <div class="invoice-note-box invoice-doc-note-box has-note" data-invoice-note-box data-note-always-open>
+          <textarea id="admin_note" class="invoice-edit-note" name="admin_note" maxlength="255"
+                    rows="2" placeholder="Write a note…" data-note-input
+                    data-no-draft><?= h($adminNote) ?></textarea>
+        </div>
       <?php elseif ($adminNote !== ''): ?>
-        <div class="invoice-doc-admin-note"><?= h($adminNote) ?></div>
+        <div class="invoice-doc-admin-note" title="<?= h($adminNote) ?>"><?= nl2br(h($adminNote)) ?></div>
       <?php endif; ?>
     </div>
     <div>
