@@ -217,6 +217,7 @@ function render_glossary(string $panel): void
         echo '<div><dt>Your job</dt><dd>Add sites to the database and manage Team users.</dd></div>';
     } else {
         echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
+        echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';
         echo '<div><dt>Add history</dt><dd>Sites you added, saved by day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }

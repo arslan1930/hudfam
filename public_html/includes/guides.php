@@ -62,7 +62,7 @@ function render_team_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Team works</h2>'
-        . '<p class="muted">Paste new sites for a country. Duplicates are removed privately (existing country lists stay hidden). Add only the new unique sites.</p>'
+        . '<p class="muted">Paste new sites for a country. Duplicates are removed privately (existing country lists stay hidden). Add only the new unique sites — they go into the country database and Extracting sites.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Filter &amp; add</h3>'
@@ -70,7 +70,12 @@ function render_team_panel_guide(): string
         . '<p><strong>How:</strong> Select country → Paste → Filter → Add unique into that country.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Add history</h3>'
+        . '<h3>2. Extracting sites</h3>'
+        . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
+        . '<p><strong>How:</strong> Batches appear only after teammates add sites. Until then the page waits.</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>3. Add history</h3>'
         . '<p><strong>What:</strong> Your daily batches of new sites.</p>'
         . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
         . '</article>'
@@ -80,7 +85,7 @@ function render_team_panel_guide(): string
         . '<ol>'
         . '<li>Open <strong>Filter &amp; add</strong> and select a country.</li>'
         . '<li>Paste domains and Filter (duplicates already in that country are removed privately).</li>'
-        . '<li>Add the unique sites — they join that country’s database and today’s history.</li>'
+        . '<li>Add the unique sites — they join that country’s database, <strong>Extracting sites → Sites list</strong>, and today’s history.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -105,11 +110,25 @@ function guide_filter_add(): string
     return render_page_purpose(
         'Filter & add — new unique sites only',
         'Paste a list and compare it privately against the existing country database. Existing URLs stay hidden; only new unique sites are shown so you can add them.',
-        'Select country → Paste → Filter (known sites removed, list stays private) → Add new unique sites into that same country folder.',
+        'Select country → Paste → Filter → Add. New sites go into the country database and Extracting sites → Sites list.',
         [
             'Select an existing country database (Germany, Spain, …).',
             'Paste root domains and Filter — duplicates are removed without showing the private country list.',
-            'Add only the remaining new unique sites — duplicates never enter the database.',
+            'Add only the remaining new unique sites — they join the country database and that country’s Extracting Sites list.',
+        ]
+    );
+}
+
+function guide_extracting(): string
+{
+    return render_page_purpose(
+        'Extracting sites — Sites list + Results',
+        'Each country has its own batch with two boxes: Sites list and Extracting Results.',
+        'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
+        [
+            'Teammate uses Filter & add and saves new unique sites.',
+            'Those sites appear here under Sites list for that country.',
+            'Use Extracting Results to store output for the same country batch.',
         ]
     );
 }

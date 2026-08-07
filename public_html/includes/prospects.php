@@ -578,7 +578,7 @@ function get_or_create_prospect_batch(
 /**
  * Insert new prospect domains into old inventory + dated batch (both sides).
  *
- * @return array{inserted:int,skipped:int,batch_id:int|null}
+ * @return array{inserted:int,skipped:int,batch_id:int|null,extract_batch_id:int|null}
  */
 function add_prospect_domains(
     array $domains,
@@ -612,12 +612,12 @@ function add_prospect_domains(
     $toAdd = $check['new'];
     $skipped = count($check['existing']);
     if (!$toAdd) {
-        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null];
+        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null, 'extract_batch_id' => null];
     }
     // Defensive: ignore any domain that somehow remained in $domains but is not "new".
     $toAdd = array_values(array_intersect($toAdd, $domains));
     if (!$toAdd) {
-        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null];
+        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null, 'extract_batch_id' => null];
     }
 
     $batchId = get_or_create_prospect_batch(
@@ -638,6 +638,8 @@ function add_prospect_domains(
          ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
     );
     $inserted = 0;
+    /** @var list<array{domain:string,prospect_site_id:int|null}> $insertedRows */
+    $insertedRows = [];
     db()->beginTransaction();
     try {
         $n = 0;
@@ -647,6 +649,7 @@ function add_prospect_domains(
                 $siteId = (int) db()->lastInsertId();
                 $insItem->execute([$batchId, $d, $siteId ?: null]);
                 $inserted++;
+                $insertedRows[] = ['domain' => $d, 'prospect_site_id' => $siteId ?: null];
             } catch (PDOException $e) {
                 $skipped++;
             }
@@ -669,7 +672,28 @@ function add_prospect_domains(
         }
         throw $e;
     }
-    return ['inserted' => $inserted, 'skipped' => $skipped, 'batch_id' => $batchId];
+
+    // Path 2: also copy new sites into Extracting sites → Sites list (per country batch).
+    $extractBatchId = null;
+    if ($insertedRows) {
+        if (!function_exists('add_domains_to_extract_sites')) {
+            require_once __DIR__ . '/extracting.php';
+        }
+        try {
+            $extract = add_domains_to_extract_sites($insertedRows, $user, $country, $language, $region);
+            $extractBatchId = !empty($extract['batch_id']) ? (int) $extract['batch_id'] : null;
+        } catch (Throwable $e) {
+            // Inventory insert already succeeded — do not fail the whole add.
+            $extractBatchId = null;
+        }
+    }
+
+    return [
+        'inserted' => $inserted,
+        'skipped' => $skipped,
+        'batch_id' => $batchId,
+        'extract_batch_id' => $extractBatchId,
+    ];
 }
 
 /**

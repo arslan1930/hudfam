@@ -10,6 +10,7 @@ require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
+require __DIR__ . '/includes/extracting.php';
 
 $error = '';
 $done = false;
@@ -40,6 +41,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';
         $notes[] = 'prospect_batches (Add history) OK';
+
+        ensure_extract_schema();
+        $notes[] = 'extract_batches / extract_batch_sites (Extracting sites) OK';
 
         require_once __DIR__ . '/includes/orders.php';
         ensure_order_schema();

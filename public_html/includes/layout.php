@@ -20,6 +20,7 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'team_extracting' => ['team_extract_batch'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -90,6 +91,7 @@ function render_header(string $title, string $panel = ''): void
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
                 'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
+                'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                 'team_prospect_batches' => ['Add history', 'Your daily adds'],
             ],
         ];

@@ -3,6 +3,7 @@ $user = require_team();
 $uid = (int) $user['id'];
 
 $todayBatch = null;
+$extractCount = 0;
 try {
     $tb = db()->prepare(
         'SELECT * FROM prospect_batches WHERE user_id=? AND batch_date=CURDATE() LIMIT 1'
@@ -11,6 +12,11 @@ try {
     $todayBatch = $tb->fetch() ?: null;
 } catch (Throwable $e) {
     $todayBatch = null;
+}
+try {
+    $extractCount = count_extract_batches();
+} catch (Throwable $e) {
+    $extractCount = 0;
 }
 
 render_header('Dashboard', 'team');
@@ -30,6 +36,10 @@ render_header('Dashboard', 'team');
   <a class="launch-card" href="index.php?page=team_prospect_check">
     <h2>Filter &amp; add</h2>
     <p>Filter against the country database, then add only new unique sites.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_extracting">
+    <h2>Extracting sites</h2>
+    <p><?= $extractCount > 0 ? $extractCount . ' country batch' . ($extractCount === 1 ? '' : 'es') . ' ready' : 'Waiting for sites from the team mate' ?></p>
   </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
     <h2>Today’s history</h2>

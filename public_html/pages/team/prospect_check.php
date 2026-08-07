@@ -82,6 +82,9 @@ try {
                 redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
             $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s) into ' . $country;
+            if (!empty($added['extract_batch_id'])) {
+                $msg .= ' · also added to Extracting sites → Sites list';
+            }
             if (!empty($added['batch_id'])) {
                 $msg .= ' · saved in today’s history';
             }
@@ -90,6 +93,9 @@ try {
                 $msg .= ' · Skipped ' . $skippedTotal . ' already in this country';
             }
             flash('ok', $msg . '.');
+            if (!empty($added['extract_batch_id'])) {
+                redirect('index.php?page=team_extract_batch&id=' . (int) $added['extract_batch_id']);
+            }
             $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
             if (!empty($added['batch_id'])) {
                 $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
@@ -127,6 +133,7 @@ render_header('Filter & add', 'team');
     <p class="muted">Paste sites → filter against the existing country database → add <strong>only new unique</strong> sites into that same folder (Germany stays Germany, Spain stays Spain).</p>
   </div>
   <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
   </div>
 </div>
