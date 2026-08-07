@@ -51,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
             'company_address' => (string) post('company_address'),
             'company_reg_no' => (string) post('company_reg_no'),
             'vat_note' => (string) post('vat_note'),
-            'admin_note' => (string) post('admin_note'),
         ];
         if (trim($header['bill_to_name']) === '') {
             $header['bill_to_name'] = (string) $client['name'];
@@ -168,11 +167,7 @@ render_header('Generate invoice', 'admin');
           <input id="invoice_number" type="text" value="<?= h($nextNumber) ?>" readonly
                  class="invoice-number-auto" data-no-draft
                  title="Assigned automatically when you generate">
-          <label class="invoice-note-field-label" for="admin_note">Note</label>
-          <input id="admin_note" name="admin_note" type="text" maxlength="255"
-                 placeholder="note.."
-                 title="Optional short detail under the invoice number">
-          <p class="help" style="margin:0.35rem 0 0">Next number — locked &amp; unique. Optional note stays blank if unused.</p>
+          <p class="help" style="margin:0.35rem 0 0">Next number — locked &amp; unique. Add notes later under the invoice number on All invoices.</p>
         </div>
         <div>
           <label for="invoice_date">Date</label>

@@ -9,9 +9,10 @@ if (!$invoice) {
     redirect('index.php?page=admin_invoices');
 }
 
+$items = list_invoice_items($id);
+$print = (string) get('print') === '1';
 $isPaid = invoice_is_paid($invoice);
 $isManual = invoice_is_manual($invoice);
-$print = (string) get('print') === '1';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
@@ -23,57 +24,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'Payment marked received — linked sheet rows set to Paid.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
-        if ($action === 'save_blank') {
-            if (!$isManual) {
-                throw new InvalidArgumentException('Only blank invoices can be edited.');
-            }
-            $descs = (array) ($_POST['line_desc'] ?? []);
-            $amounts = (array) ($_POST['line_amount'] ?? []);
-            $qtys = (array) ($_POST['line_qty'] ?? []);
-            $lines = [];
-            foreach ($descs as $i => $desc) {
-                $lines[] = [
-                    'description' => (string) $desc,
-                    'amount' => $amounts[$i] ?? 0,
-                    'qty' => $qtys[$i] ?? 1,
-                ];
-            }
-            $header = [
-                'invoice_date' => (string) post('invoice_date'),
-                'admin_note' => (string) post('admin_note'),
-                'bill_to_name' => (string) post('bill_to_name'),
-                'bill_to_address' => (string) post('bill_to_address'),
-                'bill_to_hrb' => (string) post('bill_to_hrb'),
-                'bill_to_vat' => (string) post('bill_to_vat'),
-                'supplier_number' => (string) post('supplier_number'),
-                'cost_center' => (string) post('cost_center'),
-                'orderer' => (string) post('orderer'),
-                'company_name' => (string) post('company_name'),
-                'company_bic' => (string) post('company_bic'),
-                'company_iban' => (string) post('company_iban'),
-                'company_phone' => (string) post('company_phone'),
-                'company_address' => (string) post('company_address'),
-                'company_reg_no' => (string) post('company_reg_no'),
-                'vat_note' => (string) post('vat_note'),
-            ];
-            update_blank_invoice($id, $header, $lines);
-            flash('ok', 'Blank invoice saved.');
-            redirect('index.php?page=admin_invoice_view&id=' . $id);
-        }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect('index.php?page=admin_invoice_view&id=' . $id);
     }
 }
 
-$invoice = get_invoice($id);
-$items = list_invoice_items($id);
-$isPaid = invoice_is_paid($invoice);
-$isManual = invoice_is_manual($invoice);
-$editable = $isManual && !$isPaid && !$print;
-
 if ($print) {
-    $editable = false;
+    // Standalone print document — no app chrome
     header('Content-Type: text/html; charset=utf-8');
     ?>
 <!DOCTYPE html>
@@ -118,9 +76,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php else: ?>
         <span class="invoice-pay-badge">Unpaid</span>
       <?php endif; ?>
-      <?php if ($editable): ?>
-        · Edit fields on the invoice, then Save
-      <?php elseif (invoice_admin_note($invoice) !== ''): ?>
+      <?php if (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
     </p>
@@ -132,9 +88,6 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php else: ?>
       <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
     <?php endif; ?>
-    <?php if ($editable): ?>
-      <button class="btn" type="submit" form="blank-invoice-form">Save invoice</button>
-    <?php endif; ?>
     <?php if (!$isPaid): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
             onsubmit="return confirm(<?= h(json_encode(
@@ -144,117 +97,14 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
                 JSON_UNESCAPED_UNICODE
             )) ?>);">
         <input type="hidden" name="action" value="mark_paid">
-        <button class="btn<?= $editable ? ' secondary' : '' ?>" type="submit">Mark payment received</button>
+        <button class="btn" type="submit">Mark payment received</button>
       </form>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener">Print / PDF</a>
   </div>
 </div>
 
-<?php if ($editable): ?>
-<form method="post" id="blank-invoice-form" class="invoice-blank-edit-form"
-      action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
-  <input type="hidden" name="action" value="save_blank">
-  <div class="invoice-preview-wrap">
-    <?php include __DIR__ . '/_invoice_document.php'; ?>
-  </div>
-</form>
-<script>
-(function () {
-  var form = document.getElementById('blank-invoice-form');
-  if (!form) return;
-  var tbody = document.getElementById('invoice-edit-items');
-  var addBtn = document.getElementById('invoice-edit-add');
-
-  function money(n) {
-    return '€' + (Math.round(n * 100) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  }
-  function parseNum(v) {
-    var s = String(v || '').replace(/,/g, '').replace(/[^\d.-]/g, '').trim();
-    var n = parseFloat(s);
-    return isNaN(n) ? 0 : n;
-  }
-  function renumber() {
-    tbody.querySelectorAll('.invoice-edit-row').forEach(function (row, i) {
-      var num = row.querySelector('.invoice-edit-num');
-      if (num) num.textContent = String(i + 1);
-    });
-  }
-  function syncPaybox() {
-    var name = (form.querySelector('[name="company_name"]') || {}).value || '';
-    var iban = (form.querySelector('[name="company_iban"]') || {}).value || '';
-    var bic = (form.querySelector('[name="company_bic"]') || {}).value || '';
-    var vat = (form.querySelector('[name="vat_note"]') || {}).value || '';
-    var el;
-    el = form.querySelector('.invoice-pay-company'); if (el) el.textContent = name;
-    el = form.querySelector('.invoice-pay-iban'); if (el) el.textContent = iban;
-    el = form.querySelector('.invoice-pay-bic'); if (el) el.textContent = bic;
-    el = form.querySelector('.invoice-pay-vat'); if (el) el.textContent = vat;
-    el = form.querySelector('.invoice-footer-company'); if (el) el.textContent = name || 'Topurlz Ltd';
-  }
-  function refreshTotals() {
-    var grand = 0;
-    tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
-      var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
-      var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
-      var line = amount * qty;
-      grand += line;
-      var cell = row.querySelector('.invoice-edit-line-total');
-      if (cell) cell.textContent = money(line);
-    });
-    var g = form.querySelector('[data-invoice-grand-total]');
-    if (g) g.textContent = money(grand);
-    syncPaybox();
-  }
-  function syncRemove() {
-    var rows = tbody.querySelectorAll('.invoice-edit-row');
-    rows.forEach(function (row) {
-      var btn = row.querySelector('.invoice-edit-remove');
-      if (btn) btn.disabled = rows.length <= 1;
-    });
-  }
-
-  if (addBtn) {
-    addBtn.addEventListener('click', function () {
-      var first = tbody.querySelector('.invoice-edit-row');
-      if (!first) return;
-      var clone = first.cloneNode(true);
-      clone.querySelectorAll('input, textarea').forEach(function (el) {
-        if (el.classList.contains('invoice-edit-qty')) el.value = '1';
-        else el.value = '';
-      });
-      var tot = clone.querySelector('.invoice-edit-line-total');
-      if (tot) tot.textContent = money(0);
-      tbody.appendChild(clone);
-      renumber();
-      syncRemove();
-      refreshTotals();
-      var focus = clone.querySelector('.invoice-edit-desc');
-      if (focus) focus.focus();
-    });
-  }
-
-  tbody.addEventListener('click', function (e) {
-    var btn = e.target.closest('.invoice-edit-remove');
-    if (!btn || btn.disabled) return;
-    var row = btn.closest('.invoice-edit-row');
-    if (!row) return;
-    if (tbody.querySelectorAll('.invoice-edit-row').length <= 1) return;
-    row.remove();
-    renumber();
-    syncRemove();
-    refreshTotals();
-  });
-
-  form.addEventListener('input', refreshTotals);
-  form.addEventListener('change', refreshTotals);
-  syncRemove();
-  refreshTotals();
-})();
-</script>
-<?php else: ?>
 <div class="invoice-preview-wrap">
   <?php include __DIR__ . '/_invoice_document.php'; ?>
 </div>
-<?php endif; ?>
 <?php render_footer('admin'); ?>

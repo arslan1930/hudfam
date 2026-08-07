@@ -408,6 +408,20 @@ function invoice_admin_note(array $invoice): string
     return trim((string) ($invoice['admin_note'] ?? ''));
 }
 
+function update_invoice_admin_note(int $invoiceId, string $note): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    $note = trim($note);
+    if (mb_strlen($note) > 255) {
+        $note = mb_substr($note, 0, 255);
+    }
+    db()->prepare('UPDATE invoices SET admin_note=?, updated_at=NOW() WHERE id=?')->execute([$note, $invoiceId]);
+}
+
 /**
  * Create an empty blank invoice in the normal bill format (no order-sheet link).
  */

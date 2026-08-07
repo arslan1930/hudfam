@@ -754,9 +754,13 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  max-width: 100%;
 }
-.with-info-label { display: inline; }
+.with-info-label {
+  display: inline;
+  min-width: 0;
+}
 .info-tip {
   position: relative;
   display: inline-grid;
@@ -773,6 +777,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   cursor: help;
   vertical-align: middle;
   flex: 0 0 auto;
+  z-index: 1;
 }
 .info-tip:hover,
 .info-tip:focus-visible,
@@ -781,11 +786,12 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   color: #0f2744;
   background: #eef2ff;
   outline: none;
+  z-index: 80;
 }
 .info-tip-mark { text-transform: lowercase; }
 .info-tip-bubble {
   position: absolute;
-  z-index: 40;
+  z-index: 90;
   left: 50%;
   bottom: calc(100% + 0.45rem);
   transform: translateX(-50%);
@@ -805,6 +811,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.12s ease;
+  white-space: normal;
 }
 .info-tip-bubble::after {
   content: "";
@@ -824,15 +831,35 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .order-sheet th .with-info {
   flex-wrap: nowrap;
   gap: 0.28rem;
+  align-items: flex-start;
+}
+.order-sheet th .with-info-label {
+  white-space: normal;
+  line-height: 1.2;
+  word-break: break-word;
 }
 .order-sheet th .info-tip {
   width: 0.95rem;
   height: 0.95rem;
   font-size: 0.62rem;
+  margin-top: 0.12rem;
+}
+.order-sheet thead th {
+  overflow: visible;
+}
+.order-sheet thead th:has(.info-tip:hover),
+.order-sheet thead th:has(.info-tip:focus-visible),
+.order-sheet thead th:has(.info-tip.is-open) {
+  z-index: 60;
 }
 .orders-summary-item .with-info {
   justify-content: center;
   text-align: center;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+.orders-summary-item .info-tip {
+  margin-left: 0.15rem;
 }
 .history-item { border-left: 3px solid var(--brand-2); padding-left: 0.7rem; margin-bottom: 0.7rem; }
 .checkbox-list { max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 0.5rem; }
@@ -1163,7 +1190,8 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   position: sticky;
   top: 0;
   background: #f3f4f6;
-  z-index: 1;
+  z-index: 2;
+  overflow: visible;
 }
 .order-sheet th,
 .order-sheet td {
@@ -1427,24 +1455,21 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   line-height: 1.45;
   overflow: hidden;
 }
-.invoice-doc-brandbar {
+.invoice-doc-logohead {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  min-height: 0;
-  padding: 0.55rem 1.1rem;
-  background: linear-gradient(90deg, #FF7E00 0%, #FF4B2B 48%, #FF2D55 100%);
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  padding: 0.85rem 1.25rem 0.35rem;
+  background: #fff;
 }
 .invoice-doc-logo {
-  height: 42px;
+  height: 48px;
   width: auto;
-  max-width: 220px;
+  max-width: 240px;
   display: block;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 .invoice-doc-ids {
   display: flex;

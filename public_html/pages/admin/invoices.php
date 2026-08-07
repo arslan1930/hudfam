@@ -31,6 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             redirect('index.php?page=admin_invoices');
         }
+        if ($action === 'save_note') {
+            $id = (int) post('id');
+            update_invoice_admin_note($id, (string) post('admin_note'));
+            flash('ok', 'Note saved for invoice.');
+            redirect('index.php?page=admin_invoices#inv-' . $id);
+        }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect('index.php?page=admin_invoices');
@@ -49,7 +55,7 @@ render_header('Invoices', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice in the same bill format and fill items there. Mark payment received when paid.</p>
+    <p class="muted">Generate from unpaid LIVE sheet rows, or create a blank invoice. Add short notes under each invoice number here. Mark payment received when paid.</p>
   </div>
   <div class="actions">
     <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
@@ -59,7 +65,7 @@ render_header('Invoices', 'admin');
 
 <section class="card">
   <div class="invoice-list-toolbar">
-    <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open an invoice to print it or mark payment received. Use search to find by number, client, date, or total — Enter jumps to the next match.') ?></h2>
+    <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
     <?php if ($invoices): ?>
       <label class="sheet-search invoice-list-search" for="invoice-search">
         <span class="visually-hidden">Search invoices</span>
@@ -98,7 +104,7 @@ render_header('Invoices', 'admin');
             $clientLabel = $inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name'];
             $note = invoice_admin_note($inv);
           ?>
-          <tr data-invoice-row
+          <tr id="inv-<?= (int) $inv['id'] ?>" data-invoice-row
               data-search="<?= h(mb_strtolower(trim(
                   (string) $inv['invoice_number'] . ' '
                   . ($manual ? 'blank manual ' : '')
@@ -114,9 +120,15 @@ render_header('Invoices', 'admin');
               <?php if ($manual): ?>
                 <span class="invoice-manual-tag">(blank)</span>
               <?php endif; ?>
-              <?php if ($note !== ''): ?>
-                <div class="invoice-list-note muted"><?= h($note) ?></div>
-              <?php endif; ?>
+              <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices">
+                <input type="hidden" name="action" value="save_note">
+                <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
+                <input type="text" name="admin_note" maxlength="255"
+                       value="<?= h($note) ?>" placeholder="note.."
+                       title="Short note under the invoice number" data-no-draft
+                       aria-label="Note for invoice <?= h($inv['invoice_number']) ?>">
+                <button class="btn secondary small" type="submit" title="Save note">Save</button>
+              </form>
             </td>
             <td data-invoice-cell><?= h(format_invoice_date((string) $inv['invoice_date'])) ?></td>
             <td data-invoice-cell>
