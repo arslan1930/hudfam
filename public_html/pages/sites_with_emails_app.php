@@ -161,7 +161,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'push_to_admin' && $isTeam) {
         $ready = count_sites_with_emails_ready_to_push($countryName);
         if ($ready < 1) {
-            flash('error', 'Add at least one email before Push to Sites with emails - Admin.');
+            flash('error', 'Sites without emails cannot be pushed. Add at least one email on a site, then Push to Admin.');
             redirect($back);
         }
         $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser);
@@ -352,6 +352,7 @@ $total = $inv['total'];
 $pages = $inv['pages'];
 $countryTotal = count_sites_with_emails_for_country($countryName, $sweScope);
 $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0;
+$missingEmails = $isTeam ? max(0, $countryTotal - $readyToPush) : 0;
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
@@ -392,9 +393,10 @@ render_breadcrumbs($crumbs);
   <div class="actions">
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline"
-          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?');">
+          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nSites without emails cannot be pushed and will stay here.');">
       <input type="hidden" name="action" value="push_to_admin">
-      <button class="btn" type="submit" <?= $readyToPush > 0 ? '' : 'disabled' ?>>
+      <button class="btn" type="submit" <?= $readyToPush > 0 ? '' : 'disabled' ?>
+              title="<?= $readyToPush > 0 ? 'Push sites that have emails' : 'Sites without emails cannot be pushed — add emails first' ?>">
         Push to Admin
       </button>
     </form>
@@ -408,28 +410,51 @@ render_breadcrumbs($crumbs);
 </div>
 <p class="help" id="swe_status" hidden></p>
 <?php if ($isTeam): ?>
-<p class="help">
-  Add emails below, then <strong>Push to Admin</strong> to send the final list to
-  Sites with emails - Admin. Sites without emails are skipped.
-</p>
+  <?php if ($countryTotal > 0 && $readyToPush < 1): ?>
+  <p class="help swe-push-note swe-push-blocked" role="status">
+    <strong>Sites without emails cannot be pushed.</strong>
+    Add at least one email on a site, then Push to Admin.
+    <?= (int) $missingEmails ?> site<?= (int) $missingEmails === 1 ? '' : 's' ?> still missing emails.
+  </p>
+  <?php elseif ($missingEmails > 0): ?>
+  <p class="help swe-push-note" role="status">
+    <strong>Sites without emails cannot be pushed.</strong>
+    Push sends only the <?= (int) $readyToPush ?> site<?= (int) $readyToPush === 1 ? '' : 's' ?> that have emails.
+    <?= (int) $missingEmails ?> site<?= (int) $missingEmails === 1 ? '' : 's' ?> without emails will stay here.
+  </p>
+  <?php else: ?>
+  <p class="help">
+    Add emails below, then <strong>Push to Admin</strong> for the final list in Sites with emails - Admin.
+  </p>
+  <?php endif; ?>
 <?php else: ?>
 <p class="help">
-  Final archive for this country. Team Push updates rows here; nothing is pushed further.
+  Final archive. Search finds a <strong>site + its emails</strong> together.
+  Clear an email with Backspace (autosaves) · Remove deletes the whole row.
 </p>
 <?php endif; ?>
 
 <div class="card">
-  <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
-    <h2 style="margin:0">Sites · Emails</h2>
-    <?php if ($countryTotal > 0 || $q !== ''): ?>
-    <label class="sheet-search" for="swe-row-search">
-      <span class="visually-hidden">Search</span>
-      <input id="swe-row-search" type="search" placeholder="Search sites or emails…"
+  <div class="invoice-list-toolbar swe-list-toolbar">
+    <div>
+      <h2 style="margin:0">Sites · Emails</h2>
+      <p class="help" style="margin:0.25rem 0 0">
+        Search shows both columns together (site + its emails).
+        <?php if ($isAdmin): ?>
+          Edit or Backspace to clear an email · Remove deletes the complete row.
+        <?php else: ?>
+          Edit emails · Backspace clears a field (autosave) · Remove deletes the row.
+        <?php endif; ?>
+      </p>
+    </div>
+    <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
+      <span class="visually-hidden">Search sites and emails</span>
+      <input id="swe-row-search" type="search" placeholder="Search site or email…"
              value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
-             title="Filter this page · Enter = next · Ctrl+Enter = search all pages">
+             <?= ($countryTotal < 1 && $q === '') ? 'disabled' : '' ?>
+             title="Filter · Enter = next match · Ctrl/Cmd+Enter = search all pages">
       <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
     </label>
-    <?php endif; ?>
   </div>
 
   <div class="table-wrap">
@@ -438,21 +463,22 @@ render_breadcrumbs($crumbs);
         <tr>
           <th class="swe-col-site">Site name</th>
           <th class="swe-col-emails">Emails (up to 4)</th>
-          <th></th>
+          <th class="swe-col-actions">Actions</th>
         </tr>
       </thead>
       <tbody id="swe-tbody">
       <?php foreach ($rows as $s):
           $domain = (string) $s['domain'];
-          $hay = mb_strtolower(
-              $domain . ' '
-              . (string) $s['email1'] . ' '
-              . (string) $s['email2'] . ' '
-              . (string) $s['email3'] . ' '
-              . (string) $s['email4']
-          );
+          $e1 = (string) $s['email1'];
+          $e2 = (string) $s['email2'];
+          $e3 = (string) $s['email3'];
+          $e4 = (string) $s['email4'];
+          $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
+          $hay = mb_strtolower($domain . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
           ?>
-        <tr data-swe-row data-search="<?= h($hay) ?>" data-site-id="<?= (int) $s['id'] ?>">
+        <tr data-swe-row data-search="<?= h($hay) ?>" data-site-id="<?= (int) $s['id'] ?>"
+            data-has-email="<?= $hasEmail ? '1' : '0' ?>"
+            class="<?= (!$hasEmail && $isTeam) ? 'swe-row-no-email' : '' ?>">
           <td colspan="3">
             <form method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
               <input type="hidden" name="action" value="save_row">
@@ -464,17 +490,24 @@ render_breadcrumbs($crumbs);
                   <label class="visually-hidden">Site name</label>
                   <input class="swe-domain" name="domain" value="<?= h($domain) ?>" required
                          spellcheck="false" autocomplete="off" aria-label="Site name">
+                  <?php if ($isTeam && !$hasEmail): ?>
+                    <span class="swe-no-email-tag" data-swe-no-email-tag>No email — cannot push</span>
+                  <?php endif; ?>
                 </div>
                 <div class="swe-emails" aria-label="Emails">
-                  <input type="email" name="email1" value="<?= h((string) $s['email1']) ?>" placeholder="email 1" spellcheck="false">
-                  <input type="email" name="email2" value="<?= h((string) $s['email2']) ?>" placeholder="email 2" spellcheck="false">
-                  <input type="email" name="email3" value="<?= h((string) $s['email3']) ?>" placeholder="email 3" spellcheck="false">
-                  <input type="email" name="email4" value="<?= h((string) $s['email4']) ?>" placeholder="email 4" spellcheck="false">
+                  <input type="text" inputmode="email" name="email1" value="<?= h($e1) ?>"
+                         placeholder="email 1" spellcheck="false" autocomplete="off" data-swe-email>
+                  <input type="text" inputmode="email" name="email2" value="<?= h($e2) ?>"
+                         placeholder="email 2" spellcheck="false" autocomplete="off" data-swe-email>
+                  <input type="text" inputmode="email" name="email3" value="<?= h($e3) ?>"
+                         placeholder="email 3" spellcheck="false" autocomplete="off" data-swe-email>
+                  <input type="text" inputmode="email" name="email4" value="<?= h($e4) ?>"
+                         placeholder="email 4" spellcheck="false" autocomplete="off" data-swe-email>
                 </div>
                 <div class="swe-row-actions">
                   <button class="btn small" type="submit">Save</button>
                   <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
-                          onclick="return confirm('Remove <?= h($domain) ?>?');">Remove</button>
+                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove row</button>
                 </div>
               </div>
             </form>
@@ -490,7 +523,9 @@ render_breadcrumbs($crumbs);
       </tbody>
     </table>
   </div>
-  <p class="help sheet-search-empty" data-swe-row-search-empty hidden>No rows on this page match your search.</p>
+  <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
+    No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
+  </p>
 
   <?php if (!$rows && $q === ''): ?>
   <div class="empty-state">

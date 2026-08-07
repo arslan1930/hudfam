@@ -817,6 +817,48 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .swe-add-form .form-grid {
   grid-template-columns: 1.2fr 1fr 1fr;
 }
+.swe-list-toolbar {
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.85rem;
+}
+.swe-row-search-wrap input[type="search"] {
+  width: 14rem;
+  max-width: 48vw;
+}
+.swe-push-note {
+  margin: 0.35rem 0 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #f0c36d;
+  border-radius: var(--radius, 8px);
+  background: #fff8e8;
+  color: #7a4e00;
+}
+.swe-push-note.swe-push-blocked {
+  border-color: #f0b4b0;
+  background: #fff1f0;
+  color: #8a1f17;
+}
+.swe-site-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.swe-no-email-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: #8a1f17;
+  background: #fff1f0;
+  border: 1px solid #f0b4b0;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  width: fit-content;
+}
+.swe-row-no-email .swe-domain {
+  border-color: #f0b4b0;
+}
+.swe-col-actions { width: 6.5rem; }
 @media (max-width: 900px) {
   .swe-row-grid {
     grid-template-columns: 1fr;
@@ -828,6 +870,10 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   .swe-row-actions .btn { width: auto; }
   .swe-emails { grid-template-columns: 1fr; }
   .swe-add-form .form-grid { grid-template-columns: 1fr; }
+  .swe-row-search-wrap input[type="search"] {
+    width: 100%;
+    max-width: none;
+  }
 }
 .btn.danger {
   background: var(--bad, #b42318);
