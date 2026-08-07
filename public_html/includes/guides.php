@@ -135,7 +135,7 @@ function guide_extracting(): string
         [
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country.',
-            'Select sites (kept after refresh) · Ctrl/Cmd+C copy · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
+            'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
             'Paste sites into Extracting Results and Push — they go to Admin → Extracted URLs for that same country.',
         ]
     );

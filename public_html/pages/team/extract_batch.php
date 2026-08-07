@@ -127,7 +127,7 @@ render_header('Extracting · ' . $country, 'team');
     <h2>① Sites list</h2>
     <p class="help">
       Click to select (selection is remembered after refresh).
-      <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>C</kbd> copy ·
+      Use <strong>Open links</strong> to open selected sites in new tabs ·
       <kbd>Backspace</kbd> delete ·
       <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Z</kbd> undo ·
       <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Y</kbd> redo.
@@ -146,7 +146,7 @@ render_header('Extracting · ' . $country, 'team');
       <div class="sites-list-toolbar">
         <span class="muted" id="sites_selected_label">0 selected</span>
         <div class="sites-list-actions">
-          <button type="button" class="btn secondary small" id="sites_copy_btn" disabled>Copy</button>
+          <button type="button" class="btn secondary small" id="sites_open_btn" disabled>Open links</button>
           <button type="button" class="btn secondary small" id="sites_undo_btn" disabled>Undo</button>
           <button type="button" class="btn secondary small" id="sites_redo_btn" disabled>Redo</button>
         </div>

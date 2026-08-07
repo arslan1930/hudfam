@@ -10,7 +10,7 @@
   var selKey = 'txf-extract-sel-' + batchId;
   var histKey = 'txf-extract-hist-' + batchId;
 
-  var copyBtn = document.getElementById('sites_copy_btn');
+  var openBtn = document.getElementById('sites_open_btn');
   var undoBtn = document.getElementById('sites_undo_btn');
   var redoBtn = document.getElementById('sites_redo_btn');
   var selectedLabel = document.getElementById('sites_selected_label');
@@ -90,7 +90,7 @@
     });
     var n = selected.size;
     if (selectedLabel) selectedLabel.textContent = n + ' selected';
-    if (copyBtn) copyBtn.disabled = n === 0 || busy;
+    if (openBtn) openBtn.disabled = n === 0 || busy;
     if (undoBtn) undoBtn.disabled = history.undo.length === 0 || busy;
     if (redoBtn) redoBtn.disabled = history.redo.length === 0 || busy;
     saveSelected();
@@ -192,34 +192,51 @@
     return Array.from(selected);
   }
 
-  function copySelected() {
+  /**
+   * Open selected domains as https://… in new tabs (user-gesture click).
+   * Selection stays in place (including after refresh via localStorage).
+   */
+  function openSelected() {
     var domains = selectedDomains();
     if (!domains.length) return;
-    var text = domains.join('\n');
-    var done = function () {
-      setStatus('Copied ' + domains.length + ' site' + (domains.length === 1 ? '' : 's') + '.');
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () {
-        fallbackCopy(text);
-        done();
-      });
-    } else {
-      fallbackCopy(text);
-      done();
-    }
-  }
 
-  function fallbackCopy(text) {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); } catch (e) { /* ignore */ }
-    document.body.removeChild(ta);
+    var maxOpen = 25;
+    if (domains.length > maxOpen) {
+      if (!window.confirm(
+        'Open the first ' + maxOpen + ' of ' + domains.length +
+        ' selected sites in new tabs?\n\n(Browsers may block very large batches.)'
+      )) {
+        return;
+      }
+      domains = domains.slice(0, maxOpen);
+    } else if (domains.length > 8) {
+      if (!window.confirm('Open ' + domains.length + ' sites in new browser tabs?')) {
+        return;
+      }
+    }
+
+    var blocked = 0;
+    domains.forEach(function (domain, i) {
+      var url = 'https://' + String(domain).replace(/^https?:\/\//i, '');
+      window.setTimeout(function () {
+        var w = window.open(url, '_blank');
+        if (!w) blocked++;
+        if (i === domains.length - 1) {
+          if (blocked > 0) {
+            setStatus(
+              'Opened some tabs, but the browser blocked ' + blocked +
+              '. Allow pop-ups for this site, or open fewer at a time.',
+              true
+            );
+          } else {
+            setStatus(
+              'Opened ' + domains.length + ' link' +
+              (domains.length === 1 ? '' : 's') + ' in new tabs.'
+            );
+          }
+        }
+      }, i * 80);
+    });
   }
 
   function postAction(action, fields) {
@@ -381,11 +398,6 @@
       syncSelectionUi();
       return;
     }
-    if (mod && key.toLowerCase() === 'c') {
-      e.preventDefault();
-      copySelected();
-      return;
-    }
     if (mod && key.toLowerCase() === 'z' && !e.shiftKey) {
       e.preventDefault();
       undo();
@@ -413,7 +425,7 @@
     if (!shell.contains(e.target)) shell.classList.remove('is-active');
   });
 
-  if (copyBtn) copyBtn.addEventListener('click', copySelected);
+  if (openBtn) openBtn.addEventListener('click', openSelected);
   if (undoBtn) undoBtn.addEventListener('click', undo);
   if (redoBtn) redoBtn.addEventListener('click', redo);
 
