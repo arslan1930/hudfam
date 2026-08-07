@@ -1,6 +1,8 @@
 <?php
 /**
- * Shared printable / editable invoice layout.
+ * Shared printable / editable invoice layout for ALL invoices
+ * (sheet-generated and blank). Same logo-only header — no gradient bar.
+ *
  * Expects $invoice + $items.
  * Set $editable = true for blank-invoice in-document editing (not for print).
  */

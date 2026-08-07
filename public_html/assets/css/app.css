@@ -1456,8 +1456,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   border-top: 1px dashed var(--line, #e5e7eb);
 }
 .invoice-preview-wrap {
-  background:
-    linear-gradient(180deg, #e8eef5 0%, #e5e7eb 45%, #f3f4f6 100%);
+  background: #eef1f5;
   border-radius: 16px;
   padding: 1.25rem;
   overflow: auto;
@@ -1475,12 +1474,15 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   line-height: 1.45;
   overflow: hidden;
 }
+/* Shared by sheet + blank invoices: logo only, no gradient header bar. */
 .invoice-doc-logohead {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0.85rem 1.25rem 0.35rem;
+  padding: 0.9rem 1.25rem 0.25rem;
   background: #fff;
+  border: 0;
+  box-shadow: none;
 }
 .invoice-doc-logo {
   height: 48px;
@@ -1490,6 +1492,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   object-fit: contain;
   border-radius: 10px;
   background: transparent;
+  box-shadow: none;
 }
 .invoice-doc-ids {
   display: flex;
