@@ -24,6 +24,7 @@ function nav_is_active(string $navPage, string $current): bool
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_extracting' => ['team_extract_batch'],
         'team_departments' => [],
+        'team_admin_emails_delete' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -102,17 +103,30 @@ function render_header(string $title, string $panel = ''): void
             ];
             if (function_exists('list_departments_for_user')) {
                 $mine = list_departments_for_user((int) ($user['id'] ?? 0));
+                $inEmailExtracting = false;
                 if ($mine) {
                     $deptLinks = [];
                     foreach ($mine as $d) {
                         $slug = (string) $d['slug'];
+                        if ($slug === 'email_extracting') {
+                            $inEmailExtracting = true;
+                        }
                         $deptLinks['team_departments&folder=' . rawurlencode($slug)] = [
                             (string) $d['name'],
                             'Tasks for this department',
                         ];
                     }
-                    // Rendered specially below — store for second group
                     $groups['Departments'] = $deptLinks;
+                }
+                if ($inEmailExtracting) {
+                    $groups['Main']['team_admin_emails_delete'] = [
+                        'Delete Admin emails',
+                        'Search & remove from Sites with emails - Admin',
+                    ];
+                    $groups['Main']['team_sites_emails'] = [
+                        'Sites with emails - Team',
+                        'Add emails · Push to Admin',
+                    ];
                 }
             }
         } else {
@@ -122,6 +136,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
+                    'team_admin_emails_delete' => ['Delete Admin emails', 'Search site/email · remove from Admin'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Add history', 'Your daily adds'],
                 ],

@@ -641,3 +641,148 @@ function stream_sites_with_emails_emails_plain(string $country, string $scope = 
     }
     exit;
 }
+
+/**
+ * Live suggestions from Sites with emails - Admin (site name or email).
+ *
+ * @return list<array{
+ *   id:int,domain:string,country:string,emails:list<string>,
+ *   match_type:string,matched_value:string,label:string
+ * }>
+ */
+function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20): array
+{
+    ensure_sites_with_emails_schema();
+    $q = trim(mb_strtolower($q));
+    if ($q === '' || mb_strlen($q) < 2) {
+        return [];
+    }
+    $limit = max(1, min(40, $limit));
+    $like = '%' . $q . '%';
+    $stmt = db()->prepare(
+        "SELECT id, domain, country, email1, email2, email3, email4
+         FROM sites_with_emails_admin
+         WHERE domain LIKE ?
+            OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
+         ORDER BY
+           CASE
+             WHEN domain = ? THEN 0
+             WHEN domain LIKE ? THEN 1
+             WHEN email1 = ? OR email2 = ? OR email3 = ? OR email4 = ? THEN 2
+             ELSE 3
+           END,
+           domain ASC
+         LIMIT {$limit}"
+    );
+    $stmt->execute([
+        $like, $like, $like, $like, $like,
+        $q,
+        $q . '%',
+        $q, $q, $q, $q,
+    ]);
+
+    $out = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $domain = (string) $row['domain'];
+        $emails = [];
+        foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+            $e = trim((string) ($row[$k] ?? ''));
+            if ($e !== '') {
+                $emails[] = $e;
+            }
+        }
+        $matchType = 'domain';
+        $matched = $domain;
+        $domainLower = mb_strtolower($domain);
+        if (!str_contains($domainLower, $q)) {
+            foreach ($emails as $e) {
+                if (str_contains(mb_strtolower($e), $q)) {
+                    $matchType = 'email';
+                    $matched = $e;
+                    break;
+                }
+            }
+        }
+        $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
+        $out[] = [
+            'id' => (int) $row['id'],
+            'domain' => $domain,
+            'country' => (string) $row['country'],
+            'emails' => $emails,
+            'match_type' => $matchType,
+            'matched_value' => $matched,
+            'label' => $domain . ' · ' . $emailPreview . ' · ' . (string) $row['country'],
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Remove one email slot from an Admin row; keep the site name.
+ *
+ * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string}
+ */
+function remove_email_from_sites_with_emails_admin(int $siteId, string $email): array
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
+    }
+    $target = normalize_email_value($email);
+    if ($target === '') {
+        $target = strtolower(trim($email));
+    }
+    if ($target === '') {
+        return ['ok' => false, 'error' => 'Email is empty.'];
+    }
+
+    $slots = [];
+    $found = false;
+    foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+        $e = strtolower(trim((string) ($row[$k] ?? '')));
+        if ($e === '') {
+            continue;
+        }
+        if ($e === $target) {
+            $found = true;
+            continue;
+        }
+        $slots[] = $e;
+    }
+    if (!$found) {
+        return ['ok' => false, 'error' => 'That email is not on this site.'];
+    }
+    while (count($slots) < 4) {
+        $slots[] = '';
+    }
+    db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         WHERE id=?'
+    )->execute([$slots[0], $slots[1], $slots[2], $slots[3], $siteId]);
+
+    $left = array_values(array_filter($slots, static fn ($e) => $e !== ''));
+    return [
+        'ok' => true,
+        'domain' => (string) $row['domain'],
+        'emails' => $left,
+        'removed' => $target,
+    ];
+}
+
+/**
+ * Delete complete Admin row (site + all emails).
+ *
+ * @return array{ok:bool,error?:string,domain?:string}
+ */
+function delete_sites_with_emails_admin_row(int $siteId): array
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
+    }
+    delete_site_with_emails($siteId, 'admin');
+    return ['ok' => true, 'domain' => (string) $row['domain']];
+}

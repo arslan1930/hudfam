@@ -224,10 +224,25 @@ if (!$inCountry) {
         <?php if ($isAdmin): ?>
           <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
         <?php else: ?>
+          <a class="btn" href="index.php?page=team_admin_emails_delete">Delete Admin emails</a>
           <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
         <?php endif; ?>
       </div>
     </div>
+
+    <?php if ($isTeam): ?>
+    <div class="card" style="margin-bottom:1rem">
+      <h2>Delete Site name or Email (from Admin)</h2>
+      <p class="help">
+        Type a site or email — live suggestions come from
+        <strong>Sites with emails - Admin</strong>.
+        Select a match, then delete the whole row or remove one email only (site name stays).
+      </p>
+      <p class="actions" style="margin-top:0.65rem">
+        <a class="btn" href="index.php?page=team_admin_emails_delete">Open search &amp; delete</a>
+      </p>
+    </div>
+    <?php endif; ?>
 
     <div class="card">
       <?php if ($countryRows): ?>

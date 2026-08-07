@@ -867,6 +867,107 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .dept-add-member select { min-width: 16rem; max-width: 100%; }
 .dept-task-form textarea { width: 100%; min-height: 4.5rem; }
 
+/* Team → Delete from Sites with emails - Admin */
+.swe-admin-delete-label {
+  display: block;
+  font-weight: 650;
+  margin-bottom: 0.4rem;
+}
+.swe-admin-delete-search {
+  position: relative;
+  max-width: 40rem;
+}
+.swe-admin-delete-input {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.55rem 0.7rem;
+}
+.swe-admin-delete-suggest {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 18rem;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+.swe-admin-delete-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+.swe-admin-delete-item:hover,
+.swe-admin-delete-item.is-active {
+  background: #eff6ff;
+}
+.swe-admin-delete-item-main {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-weight: 650;
+  grid-column: 1;
+}
+.swe-admin-delete-item-meta {
+  grid-column: 1;
+  font-size: 0.85rem;
+  color: var(--muted, #6b7280);
+  word-break: break-word;
+}
+.swe-admin-delete-match {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+}
+.swe-admin-delete-panel {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(14rem, 1.4fr);
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  background: var(--bg-2, #f8fafc);
+}
+.swe-admin-delete-domain {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  word-break: break-all;
+}
+.swe-admin-delete-emails {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.swe-admin-delete-email-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+  word-break: break-all;
+}
+.swe-admin-delete-email-row:last-child { border-bottom: none; }
+#swe-admin-delete-status.is-error { color: var(--bad); }
+@media (max-width: 700px) {
+  .swe-admin-delete-panel { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .swe-row-grid {
     grid-template-columns: 1fr;

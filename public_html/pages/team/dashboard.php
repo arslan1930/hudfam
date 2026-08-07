@@ -130,6 +130,10 @@ render_header('Dashboard', 'team');
     <h2>Sites with emails - Team</h2>
     <p>Add emails after Extracting Results Push, then Push to Admin.</p>
   </a>
+  <a class="launch-card" href="index.php?page=team_admin_emails_delete">
+    <h2>Delete Admin emails</h2>
+    <p>Search site/email in Sites with emails - Admin and remove.</p>
+  </a>
   <a class="launch-card" href="index.php?page=team_departments">
     <h2>My departments</h2>
     <p>If Admin assigns you to a department, your tasks appear here.</p>

@@ -67,6 +67,7 @@ $routes = [
     'team_extracting' => 'pages/team/extracting.php',
     'team_extract_batch' => 'pages/team/extract_batch.php',
     'team_sites_emails' => 'pages/team/sites_emails.php',
+    'team_admin_emails_delete' => 'pages/team/admin_emails_delete.php',
 ];
 
 if (!isset($routes[$page])) {
@@ -76,6 +77,7 @@ if (!isset($routes[$page])) {
 }
 
 // Department members only see their assigned department work.
+// Email Extracting also gets the Admin emails delete tool.
 $deptOnlyAllowed = [
     'login',
     'logout',
@@ -87,10 +89,24 @@ if (
     $cu
     && ($cu['role'] ?? '') === 'team'
     && user_is_department_scoped($cu)
-    && !in_array($page, $deptOnlyAllowed, true)
 ) {
-    flash('error', 'Your login only shows tasks for your department.');
-    redirect('index.php?page=team_departments');
+    $emailExtracting = false;
+    try {
+        $ed = get_department_by_slug('email_extracting');
+        if ($ed) {
+            $emailExtracting = user_in_department((int) $cu['id'], (int) $ed['id']);
+        }
+    } catch (Throwable $e) {
+        $emailExtracting = false;
+    }
+    if ($emailExtracting) {
+        $deptOnlyAllowed[] = 'team_admin_emails_delete';
+        $deptOnlyAllowed[] = 'team_sites_emails';
+    }
+    if (!in_array($page, $deptOnlyAllowed, true)) {
+        flash('error', 'Your login only shows tasks for your department.');
+        redirect('index.php?page=team_departments');
+    }
 }
 
 require __DIR__ . '/' . $routes[$page];
