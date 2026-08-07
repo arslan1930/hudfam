@@ -55,7 +55,7 @@ render_header('Invoices', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or create a blank invoice. Add short notes under each invoice number here. Mark payment received when paid.</p>
+    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Add short notes under each invoice number here. Mark payment received when paid.</p>
   </div>
   <div class="actions">
     <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
