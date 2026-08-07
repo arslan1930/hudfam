@@ -36,21 +36,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Always persist current site-row edits before structural changes
         $sites = (array) ($_POST['site_name'] ?? []);
         $notes = (array) ($_POST['site_note'] ?? []);
+        $placements = (array) ($_POST['placement_type'] ?? []);
         $countries = (array) ($_POST['country'] ?? []);
         $orderMonths = (array) ($_POST['order_month'] ?? []);
+        $endMonths = (array) ($_POST['period_end_month'] ?? []);
         $orderYears = (array) ($_POST['order_year'] ?? []);
         $owner = (array) ($_POST['owner_price'] ?? []);
         $decided = (array) ($_POST['decided_price'] ?? []);
         $urls = (array) ($_POST['live_url'] ?? []);
 
         if ($action === 'add_row') {
-            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls);
             add_order_item($clientId);
             flash('ok', 'New site row added.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#sheet-bottom');
         }
         if ($action === 'year_end') {
-            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls);
             $endingYear = (int) post('ending_year');
             if ($endingYear <= 0) {
                 $endingYear = (int) date('Y');
@@ -60,25 +62,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#sheet-bottom');
         }
         if ($action === 'save_sheet') {
-            $n = save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            $n = save_order_sheet_rows($clientId, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls);
             flash('ok', 'Saved ' . $n . ' row' . ($n === 1 ? '' : 's') . '.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId);
         }
         if ($action === 'delete_row') {
-            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls);
             delete_order_item((int) post('item_id'), $clientId);
             flash('ok', 'Row removed.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId);
         }
         if ($action === 'mark_paid') {
-            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls);
             $itemId = (int) post('item_id');
             set_order_item_paid($itemId, $clientId, true);
             flash('ok', 'Row marked as paid.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#row-' . $itemId);
         }
         if ($action === 'unmark_paid') {
-            save_order_sheet_rows($clientId, $sites, $notes, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            save_order_sheet_rows($clientId, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls);
             $itemId = (int) post('item_id');
             set_order_item_paid($itemId, $clientId, false);
             flash('ok', 'Paid mark removed.');
@@ -114,7 +116,8 @@ foreach ($items as $row) {
     }
 }
 
-$colspan = 10;
+$colspan = 11;
+$placementOptions = order_placement_options();
 $defaultYearEnd = (int) date('Y');
 foreach (array_reverse($items) as $row) {
     if (($row['row_type'] ?? '') === 'site' && (int) ($row['order_year'] ?? 0) > 0) {
@@ -228,6 +231,7 @@ render_header('Order · ' . $client['name'], 'admin');
         <tr>
           <th class="col-num">#</th>
           <th class="col-site">Site name</th>
+          <th class="col-placement">Banner / Textlink</th>
           <th class="col-country">Country</th>
           <th class="col-price">Owner price</th>
           <th class="col-price">Decided price</th>
@@ -280,7 +284,10 @@ render_header('Order · ' . $client['name'], 'admin');
           $siteIndex++;
           $done = order_is_completed($row);
           $paid = order_is_paid($row);
+          $placement = normalize_placement_type($row['placement_type'] ?? '');
+          $isPlacement = $placement !== '';
           $monthVal = (int) ($row['order_month'] ?? 0);
+          $endMonthVal = (int) ($row['period_end_month'] ?? 0);
           $yearVal = (int) ($row['order_year'] ?: date('Y'));
           if ($yearVal < 2018) {
               $yearVal = 2018;
@@ -289,7 +296,8 @@ render_header('Order · ' . $client['name'], 'admin');
               $yearVal = 2030;
           }
       ?>
-        <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?>" data-row id="row-<?= $id ?>">
+        <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
+            data-row id="row-<?= $id ?>">
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
           <td class="col-site">
             <div class="site-cell">
@@ -300,6 +308,14 @@ render_header('Order · ' . $client['name'], 'admin');
                      placeholder="note…" maxlength="255" autocomplete="off"
                      aria-label="Note for <?= h($row['site_name'] !== '' ? $row['site_name'] : 'site') ?>">
             </div>
+          </td>
+          <td class="col-placement">
+            <select class="cell-input cell-select cell-placement" name="placement_type[<?= $id ?>]"
+                    data-placement aria-label="Banner or Textlink">
+              <?php foreach ($placementOptions as $pval => $plabel): ?>
+                <option value="<?= h($pval) ?>" <?= $placement === $pval ? 'selected' : '' ?>><?= h($plabel) ?></option>
+              <?php endforeach; ?>
+            </select>
           </td>
           <td class="col-country">
             <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
@@ -318,7 +334,8 @@ render_header('Order · ' . $client['name'], 'admin');
           </td>
           <td class="col-live">
             <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
-                   value="<?= h($row['live_url']) ?>" placeholder="(empty until live)"
+                   value="<?= h($row['live_url']) ?>"
+                   placeholder="<?= $isPlacement ? 'site.com (required)' : '(empty until live)' ?>"
                    data-live autocomplete="off">
           </td>
           <td class="col-paid">
@@ -344,8 +361,8 @@ render_header('Order · ' . $client['name'], 'admin');
           </td>
           <td class="col-month">
             <div class="month-year-cell">
-              <select class="cell-input cell-select" name="order_month[<?= $id ?>]" aria-label="Month">
-                <option value="">Month</option>
+              <select class="cell-input cell-select" name="order_month[<?= $id ?>]" aria-label="<?= $isPlacement ? 'Start month' : 'Month' ?>">
+                <option value=""><?= $isPlacement ? 'Start' : 'Month' ?></option>
                 <?php foreach ($months as $num => $label): ?>
                   <option value="<?= (int) $num ?>" <?= $monthVal === (int) $num ? 'selected' : '' ?>><?= h($label) ?></option>
                 <?php endforeach; ?>
@@ -353,6 +370,13 @@ render_header('Order · ' . $client['name'], 'admin');
               <select class="cell-input cell-select cell-year" name="order_year[<?= $id ?>]" aria-label="Year">
                 <?php foreach ($yearOptions as $y): ?>
                   <option value="<?= (int) $y ?>" <?= $yearVal === (int) $y ? 'selected' : '' ?>><?= (int) $y ?></option>
+                <?php endforeach; ?>
+              </select>
+              <select class="cell-input cell-select cell-end-month" name="period_end_month[<?= $id ?>]"
+                      aria-label="End month" <?= $isPlacement ? '' : 'hidden' ?>>
+                <option value="">End</option>
+                <?php foreach ($months as $num => $label): ?>
+                  <option value="<?= (int) $num ?>" <?= $endMonthVal === (int) $num ? 'selected' : '' ?>><?= h($label) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -376,7 +400,7 @@ render_header('Order · ' . $client['name'], 'admin');
       <tfoot>
         <tr>
           <td></td>
-          <td colspan="2"><strong>Totals</strong></td>
+          <td colspan="3"><strong>Totals</strong></td>
           <td><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
           <td><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
           <td>
@@ -396,6 +420,7 @@ render_header('Order · ' . $client['name'], 'admin');
   <p class="help" style="margin:0.75rem 0 0" id="sheet-bottom">
     Country boxes stay empty for you to type (placeholder reminder: .de .nl …).
     Under each site name you can leave a short <strong>note…</strong> reminder, or leave it empty.
+    <strong>Banner / Textlink</strong> stays empty by default; choose only when needed. For those rows, LIVE URL must be filled like the site name, and set start + end months (invoice text uses that period).
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
     An order counts as <strong>completed</strong> only when LIVE URL is filled.
     Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (click again to undo).
@@ -428,10 +453,32 @@ render_header('Order · ' . $client['name'], 'admin');
   function money(n) {
     return (Math.round(n * 100) / 100).toFixed(2);
   }
+  function syncPlacementRow(row) {
+    if (!row) return;
+    var sel = row.querySelector('[data-placement]');
+    var live = row.querySelector('[data-live]');
+    var endMonth = row.querySelector('.cell-end-month');
+    var startMonth = row.querySelector('select[name^="order_month"]');
+    var isPlacement = !!(sel && sel.value);
+    row.classList.toggle('is-placement', isPlacement);
+    if (live) {
+      live.placeholder = isPlacement ? 'site.com (required)' : '(empty until live)';
+    }
+    if (endMonth) {
+      endMonth.hidden = !isPlacement;
+      if (!isPlacement) endMonth.value = '';
+    }
+    if (startMonth) {
+      var emptyOpt = startMonth.querySelector('option[value=""]');
+      if (emptyOpt) emptyOpt.textContent = isPlacement ? 'Start' : 'Month';
+    }
+  }
+
   function refresh() {
     var ownerTotal = 0, decidedTotal = 0, profitTotal = 0;
     var completed = 0, completedProfit = 0, sites = 0;
     document.querySelectorAll('[data-row]').forEach(function (row) {
+      syncPlacementRow(row);
       sites++;
       var o = num((row.querySelector('[data-owner]') || {}).value);
       var d = num((row.querySelector('[data-decided]') || {}).value);

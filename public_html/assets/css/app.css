@@ -894,7 +894,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .order-sheet {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1140px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -914,6 +914,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .order-sheet .col-month { min-width: 150px; width: 150px; }
 .order-sheet .col-country { min-width: 110px; width: 120px; }
 .order-sheet .col-site { min-width: 160px; }
+.order-sheet .col-placement { min-width: 108px; width: 118px; }
 .site-cell {
   display: grid;
   gap: 0.28rem;
@@ -979,6 +980,13 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.3rem;
+}
+.month-year-cell .cell-end-month {
+  grid-column: 1 / -1;
+}
+.order-row.is-placement .col-live .cell-input {
+  border-color: #93c5fd;
+  background: #eff6ff;
 }
 .cell-input {
   width: 100%;

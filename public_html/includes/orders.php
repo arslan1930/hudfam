@@ -33,8 +33,10 @@ function ensure_order_schema(): void
           row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
           site_name VARCHAR(255) NOT NULL DEFAULT '',
           site_note VARCHAR(255) NOT NULL DEFAULT '',
+          placement_type VARCHAR(20) NOT NULL DEFAULT '',
           country VARCHAR(100) NOT NULL DEFAULT '',
           order_month TINYINT NULL,
+          period_end_month TINYINT NULL,
           order_year SMALLINT NOT NULL DEFAULT 0,
           owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -62,11 +64,17 @@ function ensure_order_schema(): void
         if (!in_array('site_note', $cols, true)) {
             $alters[] = "ADD COLUMN site_note VARCHAR(255) NOT NULL DEFAULT '' AFTER site_name";
         }
+        if (!in_array('placement_type', $cols, true)) {
+            $alters[] = "ADD COLUMN placement_type VARCHAR(20) NOT NULL DEFAULT '' AFTER site_note";
+        }
         if (!in_array('order_month', $cols, true)) {
             $alters[] = 'ADD COLUMN order_month TINYINT NULL AFTER country';
         }
+        if (!in_array('period_end_month', $cols, true)) {
+            $alters[] = 'ADD COLUMN period_end_month TINYINT NULL AFTER order_month';
+        }
         if (!in_array('order_year', $cols, true)) {
-            $alters[] = 'ADD COLUMN order_year SMALLINT NOT NULL DEFAULT 0 AFTER order_month';
+            $alters[] = 'ADD COLUMN order_year SMALLINT NOT NULL DEFAULT 0 AFTER period_end_month';
         }
         if (!in_array('is_paid', $cols, true)) {
             $alters[] = 'ADD COLUMN is_paid TINYINT(1) NOT NULL DEFAULT 0 AFTER live_url';
@@ -111,6 +119,58 @@ function order_month_label(?int $month): string
 {
     $names = order_month_names();
     return $names[(int) $month] ?? '';
+}
+
+/** @return array<string,string> */
+function order_placement_options(): array
+{
+    return [
+        '' => '—',
+        'textlink' => 'Textlink',
+        'banner' => 'Banner',
+    ];
+}
+
+function normalize_placement_type($value): string
+{
+    $v = strtolower(trim((string) $value));
+    return in_array($v, ['textlink', 'banner'], true) ? $v : '';
+}
+
+function order_is_placement(array $row): bool
+{
+    return normalize_placement_type($row['placement_type'] ?? '') !== '';
+}
+
+function order_placement_label(array $row): string
+{
+    $type = normalize_placement_type($row['placement_type'] ?? '');
+    if ($type === 'banner') {
+        return 'Banner';
+    }
+    if ($type === 'textlink') {
+        return 'Textlink';
+    }
+    return '';
+}
+
+/** Invoice / display description for a sheet row. */
+function order_invoice_description(array $row): string
+{
+    if (order_is_placement($row)) {
+        $label = order_placement_label($row);
+        $start = order_month_label((int) ($row['order_month'] ?? 0));
+        $end = order_month_label((int) ($row['period_end_month'] ?? 0));
+        if ($start === '') {
+            $start = '—';
+        }
+        if ($end === '') {
+            $end = '—';
+        }
+        return $label . ' per year starting ' . $start . ' ending ' . $end;
+    }
+    $url = trim((string) ($row['live_url'] ?? ''));
+    return 'Article Published -' . "\n" . $url;
 }
 
 function parse_money($value): float
@@ -302,7 +362,7 @@ function add_order_year_end(int $clientId, int $endingYear): int
 }
 
 /**
- * @param array{site_name?:string,site_note?:string,country?:string,order_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string} $data
+ * @param array{site_name?:string,site_note?:string,placement_type?:string,country?:string,order_month?:mixed,period_end_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string} $data
  */
 function update_order_item(int $itemId, int $clientId, array $data): void
 {
@@ -311,9 +371,17 @@ function update_order_item(int $itemId, int $clientId, array $data): void
     if ($month < 1 || $month > 12) {
         $month = null;
     }
+    $endMonth = (int) ($data['period_end_month'] ?? 0);
+    if ($endMonth < 1 || $endMonth > 12) {
+        $endMonth = null;
+    }
     $year = (int) ($data['order_year'] ?? 0);
     if ($year < 2000 || $year > 2100) {
         $year = (int) date('Y');
+    }
+    $placement = normalize_placement_type($data['placement_type'] ?? '');
+    if ($placement === '') {
+        $endMonth = null;
     }
     $note = trim((string) ($data['site_note'] ?? ''));
     if (mb_strlen($note) > 255) {
@@ -321,14 +389,17 @@ function update_order_item(int $itemId, int $clientId, array $data): void
     }
     db()->prepare(
         'UPDATE order_items
-         SET site_name=?, site_note=?, country=?, order_month=?, order_year=?,
+         SET site_name=?, site_note=?, placement_type=?, country=?,
+             order_month=?, period_end_month=?, order_year=?,
              owner_price=?, decided_price=?, live_url=?, updated_at=NOW()
          WHERE id=? AND client_id=? AND row_type=\'site\''
     )->execute([
         trim((string) ($data['site_name'] ?? '')),
         $note,
+        $placement,
         trim((string) ($data['country'] ?? '')),
         $month,
+        $endMonth,
         $year,
         parse_money($data['owner_price'] ?? 0),
         parse_money($data['decided_price'] ?? 0),
@@ -342,8 +413,10 @@ function update_order_item(int $itemId, int $clientId, array $data): void
 /**
  * @param array<int|string,string> $sites
  * @param array<int|string,string> $notes
+ * @param array<int|string,string> $placements
  * @param array<int|string,string> $countries
  * @param array<int|string,mixed> $months
+ * @param array<int|string,mixed> $endMonths
  * @param array<int|string,mixed> $years
  * @param array<int|string,mixed> $owner
  * @param array<int|string,mixed> $decided
@@ -353,8 +426,10 @@ function save_order_sheet_rows(
     int $clientId,
     array $sites,
     array $notes,
+    array $placements,
     array $countries,
     array $months,
+    array $endMonths,
     array $years,
     array $owner,
     array $decided,
@@ -370,8 +445,10 @@ function save_order_sheet_rows(
         update_order_item($itemId, $clientId, [
             'site_name' => $siteName,
             'site_note' => $notes[$id] ?? '',
+            'placement_type' => $placements[$id] ?? '',
             'country' => $countries[$id] ?? '',
             'order_month' => $months[$id] ?? null,
+            'period_end_month' => $endMonths[$id] ?? null,
             'order_year' => $years[$id] ?? date('Y'),
             'owner_price' => $owner[$id] ?? 0,
             'decided_price' => $decided[$id] ?? 0,
@@ -445,9 +522,11 @@ function order_sheet_export_rows(int $clientId): array
             $out[] = [
                 'month' => 'YEAR END',
                 'year' => (string) $from,
+                'end_month' => '',
                 'country' => '',
                 'site' => 'Year ' . $from . ' ended · ' . $to . ' months started',
                 'note' => '',
+                'placement' => '',
                 'owner' => '',
                 'decided' => '',
                 'profit' => '',
@@ -462,9 +541,11 @@ function order_sheet_export_rows(int $clientId): array
         $out[] = [
             'month' => order_month_label((int) ($row['order_month'] ?? 0)),
             'year' => (string) ((int) ($row['order_year'] ?: 0) ?: ''),
+            'end_month' => order_month_label((int) ($row['period_end_month'] ?? 0)),
             'country' => (string) ($row['country'] ?? ''),
             'site' => (string) ($row['site_name'] ?? ''),
             'note' => (string) ($row['site_note'] ?? ''),
+            'placement' => order_placement_label($row),
             'owner' => format_money($row['owner_price']),
             'decided' => format_money($row['decided_price']),
             'profit' => format_money($profit),

@@ -141,7 +141,11 @@ render_header('Generate invoice', 'admin');
                 <input type="checkbox" name="item_ids[]" value="<?= (int) $row['id'] ?>" checked>
                 <span class="invoice-pick-main">
                   <strong><?= h($row['site_name'] !== '' ? $row['site_name'] : 'Site') ?></strong>
-                  <span class="muted invoice-pick-url"><?= h($row['live_url']) ?></span>
+                  <?php if (order_is_placement($row)): ?>
+                    <span class="muted"><?= h(order_invoice_description($row)) ?></span>
+                  <?php else: ?>
+                    <span class="muted invoice-pick-url"><?= h($row['live_url']) ?></span>
+                  <?php endif; ?>
                 </span>
                 <span class="invoice-pick-price"><?= h(format_euro($row['decided_price'])) ?></span>
               </label>

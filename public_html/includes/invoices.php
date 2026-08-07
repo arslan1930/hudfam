@@ -278,13 +278,35 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
         return [];
     }
 
+    $articles = [];
+    $placements = [];
+    foreach ($rows as $row) {
+        if (order_is_placement($row)) {
+            $placements[] = $row;
+        } else {
+            $articles[] = $row;
+        }
+    }
+
+    $lines = [];
+
+    // Banner / Textlink: one invoice line each (never “Article Published”).
+    foreach ($placements as $row) {
+        $amount = parse_money($row['decided_price'] ?? 0);
+        $lines[] = [
+            'description' => order_invoice_description($row),
+            'amount' => $amount,
+            'qty' => 1,
+            'line_total' => $amount,
+            'order_item_ids' => [(int) $row['id']],
+        ];
+    }
+
     if (!$groupSameAmount) {
-        $lines = [];
-        foreach ($rows as $row) {
-            $url = trim((string) ($row['live_url'] ?? ''));
+        foreach ($articles as $row) {
             $amount = parse_money($row['decided_price'] ?? 0);
             $lines[] = [
-                'description' => 'Article Published -' . "\n" . $url,
+                'description' => order_invoice_description($row),
                 'amount' => $amount,
                 'qty' => 1,
                 'line_total' => $amount,
@@ -294,10 +316,10 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
         return $lines;
     }
 
-    // Group by decided price (order preserved by first appearance).
+    // Group article rows by decided price (order preserved by first appearance).
     $groups = [];
     $order = [];
-    foreach ($rows as $row) {
+    foreach ($articles as $row) {
         $amount = parse_money($row['decided_price'] ?? 0);
         $key = number_format($amount, 2, '.', '');
         if (!isset($groups[$key])) {
@@ -311,7 +333,6 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
         }
     }
 
-    $lines = [];
     foreach ($order as $key) {
         $g = $groups[$key];
         $urls = $g['urls'];
@@ -319,7 +340,6 @@ function build_invoice_lines_from_orders(array $rows, bool $groupSameAmount): ar
         if ($qty === 0) {
             continue;
         }
-        // Sample layout: "Article Published -" once, then each live URL on its own line.
         $desc = 'Article Published -' . "\n" . implode("\n", $urls);
         $lines[] = [
             'description' => $desc,
