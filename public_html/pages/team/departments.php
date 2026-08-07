@@ -66,11 +66,22 @@ if (!$dept) {
         </p>
       </div>
       <?php if ($inCommunication): ?>
-        <a class="btn" href="index.php?page=team_email_campaigns">Email campaign search</a>
+        <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+        <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
       <?php endif; ?>
     </div>
 
     <?php if ($inCommunication): ?>
+    <div class="card" style="margin-bottom:1rem">
+      <h2 style="margin-top:0">Sites with emails - Admin · super search</h2>
+      <p class="help muted">
+        Search all countries in Admin → Emails DATA → Sites with emails - Admin.
+        Site + email + country stay together. Updates that country’s Admin row.
+      </p>
+    </div>
+    <?php
+    render_sites_with_emails_admin_super_search('index.php?page=team_admin_emails_delete');
+    ?>
     <div class="card" style="margin-bottom:1rem">
       <h2 style="margin-top:0">Email campaign · super search</h2>
       <p class="help muted">
@@ -132,13 +143,23 @@ render_breadcrumbs([
   </div>
   <div class="actions">
     <?php if ((string) $dept['slug'] === 'communication'): ?>
-      <a class="btn" href="index.php?page=team_email_campaigns">Email campaign search</a>
+      <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All my departments</a>
   </div>
 </div>
 
 <?php if ((string) $dept['slug'] === 'communication'): ?>
+<div class="card" style="margin-bottom:1rem">
+  <h2 style="margin-top:0">Sites with emails - Admin · super search</h2>
+  <p class="help muted">
+    All countries · site + email + country · updates the matching Admin row.
+  </p>
+</div>
+<?php
+render_sites_with_emails_admin_super_search('index.php?page=team_admin_emails_delete');
+?>
 <div class="card" style="margin-bottom:1rem">
   <h2 style="margin-top:0">Email campaign · super search</h2>
   <p class="help muted">

@@ -34,11 +34,6 @@ if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect('index.php?page=admin_extracted');
 }
-// Clear New reminder after opening Extracted Sites (folder or country detail).
-if ($folder === 'extracted_sites' && function_exists('clear_admin_new_data')) {
-    clear_admin_new_data('extracted_sites', $user);
-}
-
 $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
@@ -213,9 +208,8 @@ if ($folder === '') {
 
     <div class="card">
       <div class="folders">
-        <a class="folder<?= (function_exists('admin_has_new_data') && admin_has_new_data('extracted_sites', $user)) ? ' has-admin-new' : '' ?>"
-           href="<?= h($sitesListUrl) ?>">
-          <h3>Extracted Sites<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('extracted_sites', $user) : '' ?></h3>
+        <a class="folder" href="<?= h($sitesListUrl) ?>">
+          <h3>Extracted Sites</h3>
           <p class="muted">
             <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
             · <?= (int) $extractedTotal ?> URL<?= (int) $extractedTotal === 1 ? '' : 's' ?>

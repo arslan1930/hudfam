@@ -133,8 +133,8 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if ($inEmailExtracting) {
                     $groups['Main']['team_admin_emails_delete'] = [
-                        'Delete Admin emails',
-                        'Search & remove from Sites with emails - Admin',
+                        'Sites with emails - Admin',
+                        'Super search all countries · site + email',
                     ];
                     $groups['Main']['team_sites_emails'] = [
                         'Sites with emails - Team',
@@ -142,9 +142,13 @@ function render_header(string $title, string $panel = ''): void
                     ];
                 }
                 if ($inCommunication) {
+                    $groups['Main']['team_admin_emails_delete'] = [
+                        'Sites with emails - Admin',
+                        'Super search all countries · site + email',
+                    ];
                     $groups['Main']['team_email_campaigns'] = [
                         'Email campaign search',
-                        'Super search all countries · site + email',
+                        'Super search campaign sheets · site + email',
                     ];
                 }
             }
@@ -155,7 +159,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
-                    'team_admin_emails_delete' => ['Delete Admin emails', 'Search site/email · remove from Admin'],
+                    'team_admin_emails_delete' => ['Sites with emails - Admin', 'Super search all countries · update Admin'],
                     'team_email_campaigns' => ['Email campaign search', 'Super search all country sheets'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Add history', 'Your daily adds'],

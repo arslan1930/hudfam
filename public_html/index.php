@@ -115,6 +115,7 @@ if (
     }
     if ($communication) {
         $deptOnlyAllowed[] = 'team_email_campaigns';
+        $deptOnlyAllowed[] = 'team_admin_emails_delete';
     }
     if (!in_array($page, $deptOnlyAllowed, true)) {
         flash('error', 'Your login only shows tasks for your department.');

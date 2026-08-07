@@ -240,7 +240,7 @@ if (!$inCountry) {
         <?php if ($isAdmin): ?>
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
-          <a class="btn" href="index.php?page=team_admin_emails_delete">Delete Admin emails</a>
+          <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
           <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
         <?php endif; ?>
       </div>
@@ -255,7 +255,7 @@ if (!$inCountry) {
         Select a match, then delete the whole row or remove one email only (site name stays).
       </p>
       <p class="actions" style="margin-top:0.65rem">
-        <a class="btn" href="index.php?page=team_admin_emails_delete">Open search &amp; delete</a>
+        <a class="btn" href="index.php?page=team_admin_emails_delete">Open Admin super search</a>
       </p>
     </div>
     <?php endif; ?>

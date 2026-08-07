@@ -917,6 +917,7 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
         "SELECT id, domain, country, email1, email2, email3, email4
          FROM sites_with_emails_admin
          WHERE domain LIKE ?
+            OR country LIKE ?
             OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
          ORDER BY
            CASE
@@ -925,11 +926,11 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
              WHEN email1 = ? OR email2 = ? OR email3 = ? OR email4 = ? THEN 2
              ELSE 3
            END,
-           domain ASC
+           country ASC, domain ASC
          LIMIT {$limit}"
     );
     $stmt->execute([
-        $like, $like, $like, $like, $like,
+        $like, $like, $like, $like, $like, $like,
         $q,
         $q . '%',
         $q, $q, $q, $q,
@@ -938,6 +939,7 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
     $out = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $domain = (string) $row['domain'];
+        $country = (string) $row['country'];
         $emails = [];
         foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
             $e = trim((string) ($row[$k] ?? ''));
@@ -956,19 +958,103 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
                     break;
                 }
             }
+            if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
+                $matchType = 'country';
+                $matched = $country;
+            }
         }
         $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
         $out[] = [
             'id' => (int) $row['id'],
             'domain' => $domain,
-            'country' => (string) $row['country'],
+            'country' => $country,
             'emails' => $emails,
             'match_type' => $matchType,
             'matched_value' => $matched,
-            'label' => $domain . ' · ' . $emailPreview . ' · ' . (string) $row['country'],
+            'label' => $domain . ' · ' . $emailPreview . ' · ' . $country,
         ];
     }
     return $out;
+}
+
+/**
+ * Communication Team / Email Extracting: super search UI for Sites with emails - Admin.
+ */
+function render_sites_with_emails_admin_super_search(string $postBase = 'index.php?page=team_admin_emails_delete'): void
+{
+    ensure_sites_with_emails_schema();
+    $total = 0;
+    $countries = 0;
+    try {
+        $total = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin WHERE LEFT(domain, 8) <> '__blank_'"
+        )->fetchColumn();
+        $countries = (int) db()->query(
+            "SELECT COUNT(DISTINCT country) FROM sites_with_emails_admin WHERE TRIM(country) <> ''"
+        )->fetchColumn();
+    } catch (Throwable $e) {
+        $total = 0;
+        $countries = 0;
+    }
+    $uid = 'swe-admin-super-' . substr(md5($postBase), 0, 6);
+    ?>
+  <div class="card camp-search-card swe-admin-delete-card" style="margin-bottom:1rem"
+       data-swe-admin-delete
+       data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
+       data-post-url="<?= h($postBase) ?>">
+    <h2 style="margin-top:0">Super search · Sites with emails - Admin</h2>
+    <p class="help muted" style="margin-top:0">
+      <?= (int) $countries ?> countr<?= (int) $countries === 1 ? 'y' : 'ies' ?> ·
+      <?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> ·
+      search site or email across all countries · updates that country’s Admin row
+    </p>
+    <label class="swe-admin-delete-label" for="<?= h($uid) ?>">Search site name or email</label>
+    <div class="swe-admin-delete-search">
+      <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-swe-q
+             placeholder="Type site or email (all countries)…"
+             autocomplete="off" spellcheck="false" data-no-draft
+             title="Type to search all countries · Arrow keys · Enter to select / confirm">
+      <ul class="swe-admin-delete-suggest" data-swe-suggest hidden></ul>
+    </div>
+    <p class="help camp-status" data-swe-status hidden></p>
+    <div class="swe-admin-delete-selected" data-swe-selected hidden>
+      <h3 style="margin-top:1rem">Selected</h3>
+      <p class="help">Site name + emails + country stay together. Pick an action, then press Enter (confirm first).</p>
+      <div class="swe-admin-delete-panel">
+        <div>
+          <div class="muted" style="font-size:0.82rem">Site name</div>
+          <div class="swe-admin-delete-domain" data-swe-sel-domain></div>
+          <div class="muted" data-swe-sel-country style="margin-top:0.25rem"></div>
+        </div>
+        <div>
+          <div class="muted" style="font-size:0.82rem;margin-bottom:0.35rem">Emails</div>
+          <ul class="swe-admin-delete-emails" data-swe-sel-emails></ul>
+          <p class="help" data-swe-no-emails hidden>No emails on this site.</p>
+        </div>
+      </div>
+      <fieldset class="camp-action-fieldset">
+        <legend class="visually-hidden">Update action</legend>
+        <label class="camp-action-choice">
+          <input type="radio" name="swe_action_<?= h($uid) ?>" value="row" data-swe-mode checked>
+          Delete both (site name + all emails)
+        </label>
+        <label class="camp-action-choice">
+          <input type="radio" name="swe_action_<?= h($uid) ?>" value="email" data-swe-mode>
+          Remove only email
+        </label>
+        <div class="camp-email-pick" data-swe-email-pick hidden>
+          <label class="muted" style="font-size:0.82rem" for="swe-email-select-<?= h($uid) ?>">Which email</label>
+          <select id="swe-email-select-<?= h($uid) ?>" data-swe-email-select></select>
+        </div>
+      </fieldset>
+      <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
+        <button type="button" class="btn danger" data-swe-apply>Update (Enter)</button>
+        <button type="button" class="btn secondary" data-swe-clear>Clear selection</button>
+      </div>
+    </div>
+  </div>
+    <?php
+    echo '<script src="' . h(script_asset_url('js/admin-emails-delete.js')) . '" defer></script>';
 }
 
 /**
