@@ -1,5 +1,5 @@
 <?php
-require_admin();
+$user = require_admin();
 ensure_extracted_schema();
 seed_countries_if_empty(db());
 
@@ -25,9 +25,11 @@ if ($sheet !== '' && $sheet !== 'all') {
         redirect('index.php?page=admin_extracted&folder=extracted_sites');
     }
     if ($canonSheet['name'] !== $sheet) {
-        redirect(
-            'index.php?page=admin_extracted&folder=extracted_sites&country=' . urlencode($canonSheet['name'])
-        );
+        $qs = 'index.php?page=admin_extracted&folder=extracted_sites&country=' . urlencode($canonSheet['name']);
+        if ((string) get('export') !== '') {
+            $qs .= '&export=' . urlencode((string) get('export'));
+        }
+        redirect($qs);
     }
     $sheet = $canonSheet['name'];
     if ($folder === '') {
@@ -37,10 +39,134 @@ if ($sheet !== '' && $sheet !== 'all') {
 $inCountry = ($folder === 'extracted_sites' && $sheet !== '' && $sheet !== 'all');
 $sitesListUrl = 'index.php?page=admin_extracted&folder=extracted_sites';
 
-// --- Mutations on country detail (Extracted Sites only) ---
+// Stream plain domain list for Copy all / Download (up to ~100k, no HTML embedding)
+if ($inCountry && (string) get('export') !== '') {
+    $mode = (string) get('export');
+    if ($mode === 'domains' || $mode === 'download') {
+        stream_extracted_domains_plain($sheet, $mode === 'download');
+    }
+}
+
+// --- Mutations: add on folder list (pick country) ---
+if ($folder === 'extracted_sites' && !$inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string) post('action');
+    if ($action === 'add_sites') {
+        $countryIn = trim((string) post('country'));
+        try {
+            $result = admin_add_extracted_sites(
+                $countryIn,
+                $user,
+                (string) post('sites_text'),
+                $_FILES['sites_csv'] ?? null
+            );
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($sitesListUrl);
+        }
+        if ($result['inserted'] < 1 && $result['skipped'] < 1) {
+            flash(
+                'error',
+                $result['invalid'] > 0
+                    ? 'No valid sites to add. Use root domains (or a 1-column CSV of site names).'
+                    : 'Paste a site list or upload a CSV first.'
+            );
+            redirect($sitesListUrl);
+        }
+        $msg = 'Added ' . (int) $result['inserted'] . ' site(s) to Extracted Sites · ' . $result['country'];
+        if ((int) $result['skipped'] > 0) {
+            $msg .= ' · ' . (int) $result['skipped'] . ' already there';
+        }
+        if ((int) $result['invalid'] > 0) {
+            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
+        }
+        flash('ok', $msg . '.');
+        redirect($sitesListUrl . '&country=' . urlencode($result['country']));
+    }
+}
+
+// --- Mutations on country detail ---
 if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $countryName = $sheet;
+
+    if ($action === 'add_sites') {
+        try {
+            $result = admin_add_extracted_sites(
+                $countryName,
+                $user,
+                (string) post('sites_text'),
+                $_FILES['sites_csv'] ?? null
+            );
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($sitesListUrl . '&country=' . urlencode($countryName));
+        }
+        if ($result['inserted'] < 1 && $result['skipped'] < 1) {
+            flash(
+                'error',
+                $result['invalid'] > 0
+                    ? 'No valid sites to add. Use root domains (or a 1-column CSV of site names).'
+                    : 'Paste a site list or upload a CSV first.'
+            );
+            redirect($sitesListUrl . '&country=' . urlencode($countryName));
+        }
+        $msg = 'Added ' . (int) $result['inserted'] . ' site(s)';
+        if ((int) $result['skipped'] > 0) {
+            $msg .= ' · ' . (int) $result['skipped'] . ' already there';
+        }
+        if ((int) $result['invalid'] > 0) {
+            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
+        }
+        flash('ok', $msg . '.');
+        redirect($sitesListUrl . '&country=' . urlencode($countryName));
+    }
+
+    if ($action === 'remove_list') {
+        $raw = (string) post('remove_text');
+        try {
+            $fromFile = read_extracted_sites_upload($_FILES['remove_csv'] ?? null);
+            if ($fromFile !== '') {
+                $raw = trim($raw) !== '' ? ($raw . "\n" . $fromFile) : $fromFile;
+            }
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($sitesListUrl . '&country=' . urlencode($countryName));
+        }
+        $result = remove_extracted_sites_by_list($countryName, $raw);
+        if ($result['removed'] < 1) {
+            flash(
+                'error',
+                $result['invalid'] > 0
+                    ? 'No matching sites removed. Check the list (root domains) and try again.'
+                    : 'No sites from that list were found in ' . $countryName . '.'
+            );
+            redirect($sitesListUrl . '&country=' . urlencode($countryName));
+        }
+        $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from ' . $countryName;
+        if ((int) $result['not_found'] > 0) {
+            $msg .= ' · ' . (int) $result['not_found'] . ' not found';
+        }
+        flash('ok', $msg . '.');
+        if (count_extracted_sites_for_country($countryName) < 1) {
+            redirect($sitesListUrl);
+        }
+        redirect($sitesListUrl . '&country=' . urlencode($countryName));
+    }
+
+    if ($action === 'remove_search') {
+        $qRemove = trim((string) post('q'));
+        $matchCount = count_extracted_sites_matching($countryName, $qRemove);
+        if ($qRemove === '' || $matchCount < 1) {
+            flash('error', 'No sites match that search to remove.');
+            redirect($sitesListUrl . '&country=' . urlencode($countryName) . ($qRemove !== '' ? '&q=' . urlencode($qRemove) : ''));
+        }
+        $n = remove_extracted_sites_by_search($countryName, $qRemove);
+        flash('ok', 'Removed ' . $n . ' site(s) matching “' . $qRemove . '”.');
+        if (count_extracted_sites_for_country($countryName) < 1) {
+            redirect($sitesListUrl);
+        }
+        redirect($sitesListUrl . '&country=' . urlencode($countryName));
+    }
 
     if ($action === 'edit_site') {
         $siteId = (int) post('site_id');
@@ -69,8 +195,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $domain = (string) $site['domain'];
         delete_extracted_site($siteId);
         flash('ok', 'Removed ' . $domain . ' from ' . $countryName . '.');
-        $left = get_extracted_domains_for_country($countryName, 1);
-        if ($left === []) {
+        if (count_extracted_sites_for_country($countryName) < 1) {
             redirect($sitesListUrl);
         }
         redirect($sitesListUrl . '&country=' . urlencode($countryName));
@@ -125,7 +250,7 @@ if ($folder === '') {
     return;
 }
 
-// --- Folder: Sites with emails (placeholder) ---
+// --- Folder: Sites with emails ---
 if ($folder === 'sites_with_emails') {
     render_header('Sites with emails', 'admin');
     ?>
@@ -154,7 +279,7 @@ if ($folder === 'sites_with_emails') {
     return;
 }
 
-// --- Folder: Extracted Sites → country rows ---
+// --- Folder: Extracted Sites → country rows + add ---
 if ($folder === 'extracted_sites' && !$inCountry) {
     $countryRows = list_extracted_country_rows();
     $grandTotal = 0;
@@ -172,12 +297,40 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     <div class="topbar">
       <div>
         <h1>Extracted Sites</h1>
-        <p class="muted">Countries with sites Team pushed from Extracting Results. <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> total.</p>
+        <p class="muted">Countries with extracted sites. <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> total.</p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Add sites</h2>
+      <p class="help">Paste a text list and/or upload a 1-column CSV of site names into a country.</p>
+      <form method="post" enctype="multipart/form-data" class="extracted-tools-form">
+        <input type="hidden" name="action" value="add_sites">
+        <div class="form-grid">
+          <?= render_country_typeahead('', [
+              'id' => 'add_country',
+              'label' => 'Country',
+              'required' => true,
+          ]) ?>
+          <div class="full">
+            <label for="sites_text">Site list (text)</label>
+            <textarea id="sites_text" name="sites_text" class="inventory-box" rows="8" placeholder="example.com&#10;another-site.de"></textarea>
+          </div>
+          <div class="full">
+            <label for="sites_csv">Or upload CSV (1 column)</label>
+            <input id="sites_csv" type="file" name="sites_csv" accept=".csv,text/csv,text/plain,.txt">
+            <p class="help">One site name per row in the first column. Optional header: site / domain.</p>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:0.75rem">
+          <button class="btn" type="submit">Add sites</button>
+        </div>
+      </form>
+    </div>
+    <?= sites_form_script_tag() ?>
 
     <div class="card">
       <?php if ($countryRows): ?>
@@ -208,7 +361,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
       <?php else: ?>
       <div class="empty-state">
         <p>No extracted sites yet.</p>
-        <p class="muted">They appear when Team pastes into Extracting Results and clicks Push.</p>
+        <p class="muted">Add a list above, or wait for Team to Push from Extracting Results.</p>
       </div>
       <?php endif; ?>
     </div>
@@ -228,8 +381,10 @@ $inv = extracted_inventory_query([
 $rows = $inv['rows'];
 $total = $inv['total'];
 $pages = $inv['pages'];
-$allDomains = get_extracted_domains_for_country($countryName);
-$copyText = implode("\n", array_map(static fn ($d) => 'https://' . $d, $allDomains));
+$countryTotal = count_extracted_sites_for_country($countryName);
+$searchMatchCount = $q !== '' ? count_extracted_sites_matching($countryName, $q) : 0;
+$exportUrl = $sitesListUrl . '&country=' . rawurlencode($countryName) . '&export=domains';
+$downloadUrl = $sitesListUrl . '&country=' . rawurlencode($countryName) . '&export=download';
 
 $qs = http_build_query(array_filter([
     'page' => 'admin_extracted',
@@ -249,18 +404,52 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($countryName) ?></h1>
-    <p class="muted"><?= (int) $total ?> extracted site<?= (int) $total === 1 ? '' : 's' ?></p>
+    <p class="muted"><?= (int) $countryTotal ?> site<?= (int) $countryTotal === 1 ? '' : 's' ?><?= $q !== '' ? ' · showing ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?></p>
   </div>
   <div class="actions">
-    <button type="button" class="btn" id="extracted_copy_all" <?= $allDomains ? '' : 'disabled' ?>>Copy all URLs</button>
+    <button
+      type="button"
+      class="btn"
+      id="extracted_copy_all"
+      data-export-url="<?= h($exportUrl) ?>"
+      data-count="<?= (int) $countryTotal ?>"
+      <?= $countryTotal > 0 ? '' : 'disabled' ?>
+    >Copy all sites</button>
+    <a class="btn secondary" href="<?= h($downloadUrl) ?>">Download .txt</a>
     <a class="btn secondary" href="<?= h($sitesListUrl) ?>">All countries</a>
   </div>
 </div>
-
-<?php if ($allDomains): ?>
-<textarea id="extracted_copy_source" class="visually-hidden" readonly aria-hidden="true"><?= h($copyText) ?></textarea>
 <p class="help" id="extracted_copy_status" hidden></p>
-<?php endif; ?>
+
+<div class="grid two-box" style="margin-bottom:1rem">
+  <div class="card box-panel">
+    <h2>Add sites</h2>
+    <p class="help">Paste a text list and/or upload a 1-column CSV.</p>
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="action" value="add_sites">
+      <textarea name="sites_text" class="inventory-box" rows="8" placeholder="example.com&#10;another-site.de"></textarea>
+      <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
+      <input type="file" name="sites_csv" accept=".csv,text/csv,text/plain,.txt">
+      <div class="actions" style="margin-top:0.75rem">
+        <button class="btn" type="submit">Add sites</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card box-panel">
+    <h2>Remove by list</h2>
+    <p class="help">Paste site names (or upload a 1-column CSV) to remove those exact sites from <?= h($countryName) ?>.</p>
+    <form method="post" enctype="multipart/form-data" onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?>?');">
+      <input type="hidden" name="action" value="remove_list">
+      <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
+      <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
+      <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
+      <div class="actions" style="margin-top:0.75rem">
+        <button class="btn danger" type="submit">Remove listed sites</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_extracted">
@@ -269,6 +458,22 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain…"></div>
   <button class="btn" type="submit">Filter</button>
 </form>
+<?php if ($q !== '' && $searchMatchCount > 0): ?>
+<form
+  class="card"
+  method="post"
+  action="<?= h($sitesListUrl . '&country=' . rawurlencode($countryName)) ?>"
+  onsubmit="return confirm('Remove <?= (int) $searchMatchCount ?> site(s) matching “<?= h($q) ?>”?');"
+  style="margin-top:0.75rem"
+>
+  <input type="hidden" name="action" value="remove_search">
+  <input type="hidden" name="q" value="<?= h($q) ?>">
+  <p class="help" style="margin:0 0 0.6rem">
+    Search “<?= h($q) ?>” matches <strong><?= (int) $searchMatchCount ?></strong> site<?= (int) $searchMatchCount === 1 ? '' : 's' ?>.
+  </p>
+  <button class="btn danger" type="submit">Remove <?= (int) $searchMatchCount ?> matching</button>
+</form>
+<?php endif; ?>
 
 <div class="card">
   <?php if ($rows): ?>
@@ -313,7 +518,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       <span class="muted">Page <?= $pageNum ?> / <?= $pages ?></span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
     </div>
-    <form method="post" onsubmit="return confirm('Remove ALL <?= (int) count($allDomains) ?> sites from <?= h($countryName) ?>?');">
+    <form method="post" onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> sites from <?= h($countryName) ?>?');">
       <input type="hidden" name="action" value="remove_all">
       <button class="btn secondary small danger" type="submit">Remove all</button>
     </form>
@@ -326,43 +531,5 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <?php endif; ?>
 </div>
 
-<?php if ($allDomains): ?>
-<script>
-(function () {
-  var btn = document.getElementById('extracted_copy_all');
-  var src = document.getElementById('extracted_copy_source');
-  var status = document.getElementById('extracted_copy_status');
-  if (!btn || !src) return;
-  function setStatus(msg) {
-    if (!status) return;
-    status.hidden = !msg;
-    status.textContent = msg || '';
-  }
-  btn.addEventListener('click', function () {
-    var text = src.value || '';
-    if (!text) return;
-    var done = function () {
-      setStatus('Copied ' + text.split(/\n/).filter(Boolean).length + ' URL(s).');
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () {
-        src.classList.remove('visually-hidden');
-        src.focus();
-        src.select();
-        try { document.execCommand('copy'); } catch (e) {}
-        src.classList.add('visually-hidden');
-        done();
-      });
-    } else {
-      src.classList.remove('visually-hidden');
-      src.focus();
-      src.select();
-      try { document.execCommand('copy'); } catch (e) {}
-      src.classList.add('visually-hidden');
-      done();
-    }
-  });
-})();
-</script>
-<?php endif; ?>
+<script src="<?= h(script_asset_url('js/extracted-admin.js')) ?>" defer></script>
 <?php render_footer('admin'); ?>

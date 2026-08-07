@@ -33,19 +33,22 @@ function ensure_extracted_schema(): void
 }
 
 /**
- * Push pasted extracting-results domains into admin Extracted URLs for one country.
+ * Insert domains into Extracted Sites for one country.
  *
- * @return array{inserted:int,skipped:int,invalid:int,country:string,domains:list<string>}
+ * @param list<string> $domains
+ * @return array{inserted:int,skipped:int,country:string,domains:list<string>}
  */
-function push_extract_results_to_extracted(
-    string $raw,
+function add_extracted_domains_to_country(
+    array $domains,
     string $country,
     array $user,
     string $language = '',
     string $region = '',
+    string $notes = '',
     ?int $extractBatchId = null
 ): array {
     ensure_extracted_schema();
+    @set_time_limit(0);
     $canon = require_canonical_country($country);
     $country = $canon['name'];
     if ($region === '') {
@@ -54,18 +57,24 @@ function push_extract_results_to_extracted(
     if ($language === '') {
         $language = $canon['language'];
     }
+    if ($notes === '') {
+        $notes = 'Added to Extracted Sites · ' . $country;
+    }
 
-    $parsed = parse_domain_list_strict($raw);
-    $domains = $parsed['valid'];
-    $invalid = (int) $parsed['invalid_count'];
-    if ($domains === []) {
-        return [
-            'inserted' => 0,
-            'skipped' => 0,
-            'invalid' => $invalid,
-            'country' => $country,
-            'domains' => [],
-        ];
+    $unique = [];
+    foreach ($domains as $d) {
+        $n = normalize_domain((string) $d);
+        $root = function_exists('to_root_domain') ? to_root_domain($n) : $n;
+        if ($root === '' && $n !== '') {
+            $root = function_exists('to_root_domain') ? to_root_domain(extract_host_candidate((string) $d)) : $n;
+        }
+        if ($root !== '') {
+            $unique[$root] = true;
+        }
+    }
+    $list = array_keys($unique);
+    if ($list === []) {
+        return ['inserted' => 0, 'skipped' => 0, 'country' => $country, 'domains' => []];
     }
 
     $ins = db()->prepare(
@@ -83,9 +92,8 @@ function push_extract_results_to_extracted(
     $inserted = 0;
     $skipped = 0;
     $uid = (int) ($user['id'] ?? 0) ?: null;
-    $notes = 'Pushed from Extracting Results · ' . $country;
-
-    foreach ($domains as $domain) {
+    $n = 0;
+    foreach ($list as $domain) {
         $find->execute([$country, $domain]);
         $exists = (int) $find->fetchColumn() > 0;
         try {
@@ -107,14 +115,156 @@ function push_extract_results_to_extracted(
         } catch (PDOException $e) {
             $skipped++;
         }
+        $n++;
+        if ($n % 500 === 0) {
+            // keep long imports from timing out mid-batch
+        }
     }
 
     return [
         'inserted' => $inserted,
         'skipped' => $skipped,
-        'invalid' => $invalid,
         'country' => $country,
-        'domains' => $domains,
+        'domains' => $list,
+    ];
+}
+
+/**
+ * Parse pasted/CSV text into root domains (repairs https/paths when possible).
+ *
+ * @return array{valid:list<string>,invalid_count:int,valid_text:string}
+ */
+function parse_extracted_sites_input(string $raw): array
+{
+    $parsed = parse_domain_list_strict($raw);
+    return [
+        'valid' => $parsed['valid'],
+        'invalid_count' => (int) $parsed['invalid_count'],
+        'valid_text' => (string) $parsed['valid_text'],
+    ];
+}
+
+/**
+ * Read a 1-column CSV/TXT upload into raw paste text (first column per row).
+ */
+function read_extracted_sites_upload(?array $file): string
+{
+    if (!$file || !is_array($file)) {
+        return '';
+    }
+    $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err === UPLOAD_ERR_NO_FILE) {
+        return '';
+    }
+    if ($err !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('CSV upload failed. Try again.');
+    }
+    $tmp = (string) ($file['tmp_name'] ?? '');
+    if ($tmp === '' || !is_uploaded_file($tmp)) {
+        throw new InvalidArgumentException('CSV upload missing on server.');
+    }
+    $size = (int) ($file['size'] ?? 0);
+    if ($size > 25 * 1024 * 1024) {
+        throw new InvalidArgumentException('CSV is too large (max 25 MB).');
+    }
+    $fh = fopen($tmp, 'rb');
+    if (!$fh) {
+        throw new InvalidArgumentException('Could not read the uploaded file.');
+    }
+    $lines = [];
+    $rowNum = 0;
+    while (($row = fgetcsv($fh)) !== false) {
+        $rowNum++;
+        if ($row === [null] || $row === false) {
+            continue;
+        }
+        $cell = trim((string) ($row[0] ?? ''));
+        if ($cell === '') {
+            continue;
+        }
+        // Skip a header like "site" / "domain" / "url"
+        if ($rowNum === 1 && preg_match('/^(site|sites|domain|domains|url|urls|website|websites)$/i', $cell)) {
+            continue;
+        }
+        $lines[] = $cell;
+        if (count($lines) >= 100000) {
+            break;
+        }
+    }
+    fclose($fh);
+    return implode("\n", $lines);
+}
+
+/**
+ * Push pasted extracting-results domains into admin Extracted URLs for one country.
+ *
+ * @return array{inserted:int,skipped:int,invalid:int,country:string,domains:list<string>}
+ */
+function push_extract_results_to_extracted(
+    string $raw,
+    string $country,
+    array $user,
+    string $language = '',
+    string $region = '',
+    ?int $extractBatchId = null
+): array {
+    $parsed = parse_extracted_sites_input($raw);
+    $added = add_extracted_domains_to_country(
+        $parsed['valid'],
+        $country,
+        $user,
+        $language,
+        $region,
+        'Pushed from Extracting Results · ' . trim($country),
+        $extractBatchId
+    );
+    return [
+        'inserted' => (int) $added['inserted'],
+        'skipped' => (int) $added['skipped'],
+        'invalid' => (int) $parsed['invalid_count'],
+        'country' => (string) $added['country'],
+        'domains' => $added['domains'],
+    ];
+}
+
+/**
+ * Admin add from paste and/or CSV upload.
+ *
+ * @return array{inserted:int,skipped:int,invalid:int,country:string}
+ */
+function admin_add_extracted_sites(
+    string $country,
+    array $user,
+    string $paste = '',
+    ?array $upload = null
+): array {
+    $fromFile = read_extracted_sites_upload($upload);
+    $raw = trim($paste);
+    if ($fromFile !== '') {
+        $raw = $raw !== '' ? ($raw . "\n" . $fromFile) : $fromFile;
+    }
+    $parsed = parse_extracted_sites_input($raw);
+    if ($parsed['valid'] === []) {
+        return [
+            'inserted' => 0,
+            'skipped' => 0,
+            'invalid' => (int) $parsed['invalid_count'],
+            'country' => trim($country),
+        ];
+    }
+    $added = add_extracted_domains_to_country(
+        $parsed['valid'],
+        $country,
+        $user,
+        '',
+        '',
+        'Added by admin · text/CSV'
+    );
+    return [
+        'inserted' => (int) $added['inserted'],
+        'skipped' => (int) $added['skipped'],
+        'invalid' => (int) $parsed['invalid_count'],
+        'country' => (string) $added['country'],
     ];
 }
 
@@ -292,6 +442,67 @@ function get_extracted_domains_for_country(string $country, int $limit = 100000)
     return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 }
 
+function count_extracted_sites_for_country(string $country): int
+{
+    ensure_extracted_schema();
+    $stmt = db()->prepare('SELECT COUNT(*) FROM extracted_sites WHERE country=?');
+    $stmt->execute([$country]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Stream domain names (one per line) for copy/download — supports ~100k without bloating HTML.
+ */
+function stream_extracted_domains_plain(string $country, bool $asDownload = false): void
+{
+    ensure_extracted_schema();
+    @set_time_limit(0);
+    $canon = resolve_canonical_country($country);
+    $country = $canon ? $canon['name'] : trim($country);
+    $safeName = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $country) ?: 'sites';
+
+    header('Content-Type: text/plain; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    if ($asDownload) {
+        header('Content-Disposition: attachment; filename="' . $safeName . '-extracted-sites.txt"');
+    }
+
+    $pdo = db();
+    // Unbuffered where supported so we don't load 100k rows into PHP memory at once
+    try {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT domain FROM extracted_sites WHERE country=? ORDER BY domain ASC'
+    );
+    $stmt->execute([$country]);
+    $i = 0;
+    while ($domain = $stmt->fetchColumn()) {
+        echo (string) $domain, "\n";
+        $i++;
+        if ($i % 2000 === 0) {
+            if (function_exists('flush')) {
+                flush();
+            }
+        }
+    }
+    $stmt->closeCursor();
+    try {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+    exit;
+}
+
 function get_extracted_site(int $id): ?array
 {
     ensure_extracted_schema();
@@ -354,5 +565,91 @@ function delete_extracted_sites_for_country(string $country): int
     ensure_extracted_schema();
     $stmt = db()->prepare('DELETE FROM extracted_sites WHERE country=?');
     $stmt->execute([$country]);
+    return $stmt->rowCount();
+}
+
+/**
+ * Remove sites that match a pasted/CSV domain list (exact root-domain match).
+ *
+ * @return array{removed:int,not_found:int,invalid:int}
+ */
+function remove_extracted_sites_by_list(string $country, string $raw): array
+{
+    ensure_extracted_schema();
+    @set_time_limit(0);
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    $parsed = parse_extracted_sites_input($raw);
+    $domains = $parsed['valid'];
+    if ($domains === []) {
+        return ['removed' => 0, 'not_found' => 0, 'invalid' => (int) $parsed['invalid_count']];
+    }
+
+    $removed = 0;
+    $notFound = 0;
+    $chunkSize = 400;
+    for ($i = 0, $n = count($domains); $i < $n; $i += $chunkSize) {
+        $chunk = array_slice($domains, $i, $chunkSize);
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $params = array_merge([$country], $chunk);
+        $sel = db()->prepare(
+            "SELECT domain FROM extracted_sites WHERE country=? AND domain IN ({$placeholders})"
+        );
+        $sel->execute($params);
+        $found = $sel->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $foundSet = array_fill_keys($found, true);
+        foreach ($chunk as $d) {
+            if (!isset($foundSet[$d])) {
+                $notFound++;
+            }
+        }
+        if ($found === []) {
+            continue;
+        }
+        $delPlaceholders = implode(',', array_fill(0, count($found), '?'));
+        $del = db()->prepare(
+            "DELETE FROM extracted_sites WHERE country=? AND domain IN ({$delPlaceholders})"
+        );
+        $del->execute(array_merge([$country], $found));
+        $removed += $del->rowCount();
+    }
+
+    return [
+        'removed' => $removed,
+        'not_found' => $notFound,
+        'invalid' => (int) $parsed['invalid_count'],
+    ];
+}
+
+function count_extracted_sites_matching(string $country, string $q): int
+{
+    ensure_extracted_schema();
+    $q = trim($q);
+    if ($q === '') {
+        return 0;
+    }
+    $like = '%' . $q . '%';
+    $stmt = db()->prepare(
+        'SELECT COUNT(*) FROM extracted_sites WHERE country=? AND (domain LIKE ? OR url LIKE ? OR notes LIKE ?)'
+    );
+    $stmt->execute([$country, $like, $like, $like]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Remove sites in a country that match the search query.
+ */
+function remove_extracted_sites_by_search(string $country, string $q): int
+{
+    ensure_extracted_schema();
+    $q = trim($q);
+    if ($q === '') {
+        return 0;
+    }
+    $like = '%' . $q . '%';
+    $stmt = db()->prepare(
+        'DELETE FROM extracted_sites WHERE country=? AND (domain LIKE ? OR url LIKE ? OR notes LIKE ?)'
+    );
+    $stmt->execute([$country, $like, $like, $like]);
     return $stmt->rowCount();
 }
