@@ -47,6 +47,8 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$inCommunication = user_in_communication_team($user);
+
 if (!$dept) {
     render_header('My departments', 'team');
     render_breadcrumbs([
@@ -63,7 +65,23 @@ if (!$dept) {
               : 'You are not assigned to a department yet. Ask Admin to add you.' ?>
         </p>
       </div>
+      <?php if ($inCommunication): ?>
+        <a class="btn" href="index.php?page=team_email_campaigns">Email campaign sheets</a>
+      <?php endif; ?>
     </div>
+
+    <?php if ($inCommunication): ?>
+    <div class="card" style="margin-bottom:1rem">
+      <h2 style="margin-top:0">Email campaign search</h2>
+      <p class="help muted">
+        Live search bars from Admin → Emails DATA → Email campaign data.
+        Site name + email always appear together. Choose delete both or remove only email, then press Enter (confirm first).
+      </p>
+    </div>
+    <?php
+    render_email_campaign_search_panels(null, 'index.php?page=team_email_campaigns');
+    endif;
+    ?>
 
     <div class="card">
       <?php if ($myDepartments): ?>
@@ -113,9 +131,24 @@ render_breadcrumbs([
     </p>
   </div>
   <div class="actions">
+    <?php if ((string) $dept['slug'] === 'communication'): ?>
+      <a class="btn" href="index.php?page=team_email_campaigns">Email campaign sheets</a>
+    <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All my departments</a>
   </div>
 </div>
+
+<?php if ((string) $dept['slug'] === 'communication'): ?>
+<div class="card" style="margin-bottom:1rem">
+  <h2 style="margin-top:0">Email campaign search</h2>
+  <p class="help muted">
+    Searchbars created by Admin under Emails DATA → Email campaign data.
+  </p>
+</div>
+<?php
+render_email_campaign_search_panels(null, 'index.php?page=team_email_campaigns');
+endif;
+?>
 
 <div class="card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">

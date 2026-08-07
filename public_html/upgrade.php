@@ -13,6 +13,7 @@ require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
 require __DIR__ . '/includes/sites_with_emails.php';
+require __DIR__ . '/includes/email_campaigns.php';
 require __DIR__ . '/includes/departments.php';
 
 $error = '';
@@ -60,6 +61,9 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
         ensure_sites_with_emails_schema();
         $notes[] = 'sites_with_emails_team / sites_with_emails_admin / sites_with_emails_admin_all OK';
+
+        ensure_email_campaign_schema();
+        $notes[] = 'email_campaign_sheets / email_campaign_rows (Email campaign data) OK';
 
         ensure_departments_schema();
         $notes[] = 'departments / department_members / department_tasks OK';

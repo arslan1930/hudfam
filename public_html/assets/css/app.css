@@ -964,6 +964,23 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .swe-admin-delete-email-row:last-child { border-bottom: none; }
 #swe-admin-delete-status.is-error { color: var(--bad); }
+.camp-status.is-error { color: var(--bad); }
+.camp-action-fieldset {
+  margin: 0.85rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+}
+.camp-action-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0;
+  font-weight: 550;
+  cursor: pointer;
+}
+.camp-email-pick { margin-top: 0.55rem; }
+.camp-email-pick select { max-width: 100%; min-width: 14rem; }
 @media (max-width: 700px) {
   .swe-admin-delete-panel { grid-template-columns: 1fr; }
 }

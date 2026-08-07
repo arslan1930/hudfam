@@ -87,7 +87,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
                 'admin_extracted' => ['Extracted URLs', 'Extracted Sites from Team Push'],
-                'admin_emails_data' => ['Emails DATA', 'Sites with emails - Admin · All sites - Final'],
+                'admin_emails_data' => ['Emails DATA', 'Archives · Email campaign sheets'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
@@ -106,12 +106,16 @@ function render_header(string $title, string $panel = ''): void
             if (function_exists('list_departments_for_user')) {
                 $mine = list_departments_for_user((int) ($user['id'] ?? 0));
                 $inEmailExtracting = false;
+                $inCommunication = false;
                 if ($mine) {
                     $deptLinks = [];
                     foreach ($mine as $d) {
                         $slug = (string) $d['slug'];
                         if ($slug === 'email_extracting') {
                             $inEmailExtracting = true;
+                        }
+                        if ($slug === 'communication') {
+                            $inCommunication = true;
                         }
                         $deptLinks['team_departments&folder=' . rawurlencode($slug)] = [
                             (string) $d['name'],
@@ -130,6 +134,12 @@ function render_header(string $title, string $panel = ''): void
                         'Add emails · Push to Admin',
                     ];
                 }
+                if ($inCommunication) {
+                    $groups['Main']['team_email_campaigns'] = [
+                        'Email campaign sheets',
+                        'Live search · site + email · update sheet',
+                    ];
+                }
             }
         } else {
             $groups = [
@@ -139,6 +149,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
                     'team_admin_emails_delete' => ['Delete Admin emails', 'Search site/email · remove from Admin'],
+                    'team_email_campaigns' => ['Email campaign sheets', 'Communication Team live search'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Add history', 'Your daily adds'],
                 ],

@@ -43,8 +43,8 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Emails DATA</h3>'
-        . '<p><strong>What:</strong> Sites with emails - Admin, plus All sites with emails - Final (Admin-only synced mirror).</p>'
-        . '<p><strong>How:</strong> Filled when Team pushes from Sites with emails - Team after adding emails; All stays in sync automatically.</p>'
+        . '<p><strong>What:</strong> Sites with emails - Admin, All sites with emails - Final, and Email campaign data sheets.</p>'
+        . '<p><strong>How:</strong> Archives fill from Team Push. Create an Email Sheet → import sites/emails → Communication Team gets a live search bar with that name.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>4. Add history</h3>'
@@ -65,6 +65,7 @@ function render_admin_panel_guide(): string
         . '<li>Team adds the unique ones → they join that country’s database and <strong>Add history</strong>.</li>'
         . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
         . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails DATA → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Final</strong>).</li>'
+        . '<li>Admin creates an <strong>Email Sheet</strong> under Email campaign data, imports contacts, and Communication Team searches/updates that sheet.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';

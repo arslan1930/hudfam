@@ -9,6 +9,7 @@ require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
 require __DIR__ . '/includes/extracted.php';
 require __DIR__ . '/includes/sites_with_emails.php';
+require __DIR__ . '/includes/email_campaigns.php';
 require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';
@@ -69,6 +70,7 @@ $routes = [
     'team_extract_batch' => 'pages/team/extract_batch.php',
     'team_sites_emails' => 'pages/team/sites_emails.php',
     'team_admin_emails_delete' => 'pages/team/admin_emails_delete.php',
+    'team_email_campaigns' => 'pages/team/email_campaigns.php',
 ];
 
 if (!isset($routes[$page])) {
@@ -78,7 +80,7 @@ if (!isset($routes[$page])) {
 }
 
 // Department members only see their assigned department work.
-// Email Extracting also gets the Admin emails delete tool.
+// Email Extracting / Communication Team get their extra tools.
 $deptOnlyAllowed = [
     'login',
     'logout',
@@ -92,17 +94,26 @@ if (
     && user_is_department_scoped($cu)
 ) {
     $emailExtracting = false;
+    $communication = false;
     try {
         $ed = get_department_by_slug('email_extracting');
         if ($ed) {
             $emailExtracting = user_in_department((int) $cu['id'], (int) $ed['id']);
         }
+        $cd = get_department_by_slug('communication');
+        if ($cd) {
+            $communication = user_in_department((int) $cu['id'], (int) $cd['id']);
+        }
     } catch (Throwable $e) {
         $emailExtracting = false;
+        $communication = false;
     }
     if ($emailExtracting) {
         $deptOnlyAllowed[] = 'team_admin_emails_delete';
         $deptOnlyAllowed[] = 'team_sites_emails';
+    }
+    if ($communication) {
+        $deptOnlyAllowed[] = 'team_email_campaigns';
     }
     if (!in_array($page, $deptOnlyAllowed, true)) {
         flash('error', 'Your login only shows tasks for your department.');

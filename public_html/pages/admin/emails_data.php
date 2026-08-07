@@ -1,15 +1,15 @@
 <?php
 /**
- * Admin · Emails DATA — panel for email archives
- * (Sites with emails - Admin + All sites with emails - Final mirror).
+ * Admin · Emails DATA — email archives + Email campaign data sheets.
  */
 $user = require_admin();
 ensure_sites_with_emails_schema();
+ensure_email_campaign_schema();
 seed_countries_if_empty(db());
 
 $base = 'index.php?page=admin_emails_data';
 $folder = (string) get('folder');
-$allowedFolders = ['sites_with_emails', 'all_sites_with_emails'];
+$allowedFolders = ['sites_with_emails', 'all_sites_with_emails', 'email_campaigns'];
 if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect($base);
@@ -26,7 +26,6 @@ if ($folder === '') {
     }
     $sweCountryCount = count($sweCountryRows);
 
-    // Keep mirror in sync when opening the hub (covers older data / missed hooks).
     if ($sweTotal > 0) {
         $allCount = count_sites_with_emails('admin_all');
         if ($allCount !== $sweTotal) {
@@ -42,6 +41,13 @@ if ($folder === '') {
     }
     $allCountryCount = count($allCountryRows);
 
+    $campaignSheets = list_email_campaign_sheets();
+    $campaignSheetCount = count($campaignSheets);
+    $campaignRowTotal = 0;
+    foreach ($campaignSheets as $cs) {
+        $campaignRowTotal += (int) $cs['row_count'];
+    }
+
     render_header('Emails DATA', 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
@@ -51,7 +57,7 @@ if ($folder === '') {
     <div class="topbar">
       <div>
         <h1>Emails DATA</h1>
-        <p class="muted">Final email archives from Team Push. Open a folder to work by country.</p>
+        <p class="muted">Email archives and campaign sheets for Communication Team.</p>
       </div>
     </div>
 
@@ -75,6 +81,14 @@ if ($folder === '') {
             · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
           </p>
         </a>
+        <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
+          <h3>Email campaign data</h3>
+          <p class="muted">
+            Create Email Sheets for Communication Team search ·
+            <?= (int) $campaignSheetCount ?> sheet<?= (int) $campaignSheetCount === 1 ? '' : 's' ?>
+            · <?= (int) $campaignRowTotal ?> site<?= (int) $campaignRowTotal === 1 ? '' : 's' ?>
+          </p>
+        </a>
       </div>
     </div>
     <?php
@@ -94,7 +108,7 @@ if ($folder === 'sites_with_emails') {
     return;
 }
 
-// --- Folder: All sites with emails - Final (synced mirror) ---
+// --- Folder: All sites with emails - Final ---
 if ($folder === 'all_sites_with_emails') {
     $sweUser = $user;
     $swePanel = 'admin';
@@ -103,5 +117,11 @@ if ($folder === 'all_sites_with_emails') {
     $sweAdminHub = $base;
     $sweAdminHubLabel = 'Emails DATA';
     require __DIR__ . '/../sites_with_emails_app.php';
+    return;
+}
+
+// --- Folder: Email campaign data ---
+if ($folder === 'email_campaigns') {
+    require __DIR__ . '/email_campaigns_app.php';
     return;
 }
