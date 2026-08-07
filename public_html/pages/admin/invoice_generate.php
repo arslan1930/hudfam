@@ -85,7 +85,7 @@ render_header('Generate invoice', 'admin');
 
 <div class="topbar">
   <div>
-    <h1>Generate invoice</h1>
+    <h1><?= label_with_info('Generate invoice', 'Pick unpaid LIVE rows from a client sheet, fill bill-to details, then create a printable Topurlz invoice.') ?></h1>
     <p class="muted">Pick a client, tick unpaid completed articles (LIVE URL), fill bill-to details — layout matches your sample.</p>
   </div>
   <div class="actions">
@@ -119,7 +119,7 @@ render_header('Generate invoice', 'admin');
 
   <div class="orders-layout">
     <section class="card">
-      <h2>Articles to invoice</h2>
+      <h2><?= label_with_info('Articles to invoice', 'Only unpaid rows with a LIVE URL. Banner/Textlink rows show their yearly period text instead of Article Published.') ?></h2>
       <p class="muted" style="margin-top:0">
         Only <strong>unpaid</strong> rows with a LIVE URL from <strong><?= h($client['name']) ?></strong>.
         Paid rows are excluded.
@@ -160,7 +160,7 @@ render_header('Generate invoice', 'admin');
     </section>
 
     <section class="card">
-      <h2>Invoice details</h2>
+      <h2><?= label_with_info('Invoice details', 'Invoice number, date, and bill-to fields appear on the printable bill. Bank details default to Topurlz Ltd.') ?></h2>
       <div class="form-grid">
         <div>
           <label for="invoice_number">Invoice No.</label>

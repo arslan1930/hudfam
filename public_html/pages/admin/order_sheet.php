@@ -148,27 +148,27 @@ render_header('Order · ' . $client['name'], 'admin');
 <div class="orders-summary orders-summary-6">
   <div class="orders-summary-item">
     <strong data-summary-sites><?= (int) $siteCount ?></strong>
-    <span>Sites</span>
+    <span><?= label_with_info('Sites', 'Number of site rows on this sheet (not year-end markers).') ?></span>
   </div>
   <div class="orders-summary-item orders-summary-done">
     <strong data-summary-completed><?= (int) $completedCount ?></strong>
-    <span>Completed orders</span>
+    <span><?= label_with_info('Completed orders', 'Rows with a LIVE URL filled.') ?></span>
   </div>
   <div class="orders-summary-item orders-summary-done">
     <strong data-summary-completed-profit class="<?= $completedProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($completedProfit)) ?></strong>
-    <span>Completed profit</span>
+    <span><?= label_with_info('Completed profit', 'Profit only from rows that have a LIVE URL.') ?></span>
   </div>
   <div class="orders-summary-item">
     <strong data-summary-owner><?= h(format_money($totalOwner)) ?></strong>
-    <span>Owner total</span>
+    <span><?= label_with_info('Owner total', 'Sum of all owner prices on the sheet.') ?></span>
   </div>
   <div class="orders-summary-item">
     <strong data-summary-decided><?= h(format_money($totalDecided)) ?></strong>
-    <span>Decided total</span>
+    <span><?= label_with_info('Decided total', 'Sum of all decided (client) prices on the sheet.') ?></span>
   </div>
   <div class="orders-summary-item">
     <strong data-summary-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong>
-    <span>All profit</span>
+    <span><?= label_with_info('All profit', 'Decided total − Owner total for every site row.') ?></span>
   </div>
 </div>
 
@@ -199,7 +199,7 @@ render_header('Order · ' . $client['name'], 'admin');
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <div class="order-sheet-toolbar">
     <div class="order-sheet-toolbar-left">
-      <h2 style="margin:0">Sheet</h2>
+      <h2 style="margin:0" class="with-info-heading"><?= label_with_info('Sheet', 'Fill sites, prices, LIVE URL, and months. Use search to find rows. Save sheet to store changes on the server.') ?></h2>
       <label class="sheet-search" for="sheet-search">
         <span class="visually-hidden">Search sheet</span>
         <input id="sheet-search" type="search" placeholder="Search sheet…"
@@ -230,16 +230,16 @@ render_header('Order · ' . $client['name'], 'admin');
       <thead>
         <tr>
           <th class="col-num">#</th>
-          <th class="col-site">Site name</th>
-          <th class="col-placement">Banner / Textlink</th>
-          <th class="col-country">Country</th>
-          <th class="col-price">Owner price</th>
-          <th class="col-price">Decided price</th>
-          <th class="col-live">LIVE URL</th>
-          <th class="col-paid">Paid</th>
-          <th class="col-profit">Profit</th>
-          <th class="col-month">Month</th>
-          <th class="col-del">Remove</th>
+          <th class="col-site"><?= label_with_info('Site name', 'Website or domain for this row (e.g. site.com).') ?></th>
+          <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for normal article rows. Choose Banner or Textlink only when this placement is not an article — then LIVE URL is required and invoices use start/end months.') ?></th>
+          <th class="col-country"><?= label_with_info('Country', 'Optional country or TLD reminder (e.g. .de .nl .com). Stays empty unless you type something.') ?></th>
+          <th class="col-price"><?= label_with_info('Owner price', 'What you pay the site owner / publisher.') ?></th>
+          <th class="col-price"><?= label_with_info('Decided price', 'What the client pays you. Profit = Decided − Owner.') ?></th>
+          <th class="col-live"><?= label_with_info('LIVE URL', 'For articles: fill when the piece is live (marks the order completed). For Banner/Textlink: required like the site name.') ?></th>
+          <th class="col-paid"><?= label_with_info('Paid', 'Click Paid when this row is paid. Paid rows cannot be added to a new invoice.') ?></th>
+          <th class="col-profit"><?= label_with_info('Profit', 'Auto-calculated: Decided price − Owner price.') ?></th>
+          <th class="col-month"><?= label_with_info('Month', 'Article month, or for Banner/Textlink the start month plus end month for the yearly period.') ?></th>
+          <th class="col-del"><?= label_with_info('Remove', 'Deletes this row after confirmation. Cannot be undone.') ?></th>
         </tr>
       </thead>
       <tbody>

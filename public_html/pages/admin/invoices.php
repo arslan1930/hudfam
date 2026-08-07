@@ -33,7 +33,7 @@ render_header('Invoices', 'admin');
 
 <div class="topbar">
   <div>
-    <h1>Invoices</h1>
+    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
     <p class="muted">Generate printable invoices from unpaid completed articles (LIVE URL filled). Mark payment received to set those sheet rows Paid.</p>
   </div>
   <div class="actions">
@@ -42,7 +42,7 @@ render_header('Invoices', 'admin');
 </div>
 
 <section class="card">
-  <h2>All invoices</h2>
+  <h2><?= label_with_info('All invoices', 'Open an invoice to print it or mark payment received.') ?></h2>
   <?php if (!$invoices): ?>
     <div class="empty-state">
       <p>No invoices yet. Generate one from unpaid completed articles on a client sheet.</p>
@@ -58,7 +58,7 @@ render_header('Invoices', 'admin');
             <th>Client</th>
             <th>Lines</th>
             <th class="num">Total</th>
-            <th>Payment</th>
+            <th><?= label_with_info('Payment', 'Unpaid until you open the invoice and click Mark payment received — that also marks linked sheet rows Paid.') ?></th>
             <th></th>
           </tr>
         </thead>

@@ -141,6 +141,30 @@ function money_or_dash($value): string
 }
 
 /**
+ * Small “i” info icon with tooltip (hover / focus / tap).
+ */
+function info_icon(string $tip, string $aria = 'More info'): string
+{
+    $tip = trim($tip);
+    if ($tip === '') {
+        return '';
+    }
+    return '<button type="button" class="info-tip" aria-label="' . h($aria) . '">'
+        . '<span class="info-tip-mark" aria-hidden="true">i</span>'
+        . '<span class="info-tip-bubble" role="tooltip">' . h($tip) . '</span>'
+        . '</button>';
+}
+
+/**
+ * Label text + info icon (escaped label).
+ */
+function label_with_info(string $label, string $tip): string
+{
+    return '<span class="with-info"><span class="with-info-label">' . h($label) . '</span>'
+        . info_icon($tip, 'About ' . $label) . '</span>';
+}
+
+/**
  * Breadcrumb trail. Each crumb: ['label' => string, 'href' => ?string]
  */
 function render_breadcrumbs(array $crumbs): void

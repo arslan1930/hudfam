@@ -723,6 +723,91 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .login-card h1 { font-size: 2rem; color: var(--brand-deep); }
 .help { font-size: 0.88rem; color: var(--muted); }
+.with-info,
+.with-info-heading .with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.with-info-label { display: inline; }
+.info-tip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #9ca3af;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font: 700 0.68rem/1 Arial, Helvetica, sans-serif;
+  cursor: help;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+.info-tip:hover,
+.info-tip:focus-visible,
+.info-tip.is-open {
+  border-color: #1e3a5f;
+  color: #0f2744;
+  background: #eef2ff;
+  outline: none;
+}
+.info-tip-mark { text-transform: lowercase; }
+.info-tip-bubble {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: calc(100% + 0.45rem);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(16rem, 70vw);
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #111827;
+  color: #f9fafb;
+  font: 500 0.78rem/1.35 Arial, Helvetica, sans-serif;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.22);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.info-tip-bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: #111827;
+}
+.info-tip:hover .info-tip-bubble,
+.info-tip:focus-visible .info-tip-bubble,
+.info-tip.is-open .info-tip-bubble {
+  opacity: 1;
+  visibility: visible;
+}
+.order-sheet th .with-info {
+  flex-wrap: nowrap;
+  gap: 0.28rem;
+}
+.order-sheet th .info-tip {
+  width: 0.95rem;
+  height: 0.95rem;
+  font-size: 0.62rem;
+}
+.orders-summary-item .with-info {
+  justify-content: center;
+  text-align: center;
+}
 .history-item { border-left: 3px solid var(--brand-2); padding-left: 0.7rem; margin-bottom: 0.7rem; }
 .checkbox-list { max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 0.5rem; }
 .checkbox-list label { font-weight: 500; display: flex; gap: 0.5rem; align-items: flex-start; }

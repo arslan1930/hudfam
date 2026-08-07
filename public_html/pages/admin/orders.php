@@ -40,14 +40,14 @@ render_header('Order management', 'admin');
 
 <div class="topbar">
   <div>
-    <h1>Order management</h1>
+    <h1><?= label_with_info('Order management', 'One editable sheet per client: sites, prices, LIVE URLs, Banner/Textlink placements, and profit.') ?></h1>
     <p class="muted">One sheet per client — country, month, sites, prices, profit, live URL. Completed = LIVE URL filled.</p>
   </div>
 </div>
 
 <div class="orders-layout">
   <section class="card">
-    <h2>Client sheets</h2>
+    <h2><?= label_with_info('Client sheets', 'Open a sheet to edit rows. Completed count = rows with LIVE URL filled.') ?></h2>
     <?php if (!$clients): ?>
       <div class="empty-state">
         <p>No client sheets yet. Create one on the right to start.</p>
@@ -82,7 +82,7 @@ render_header('Order management', 'admin');
   </section>
 
   <section class="card" id="new-client">
-    <h2>New client sheet</h2>
+    <h2><?= label_with_info('New client sheet', 'Creates a new client with a blank sheet ready to fill.') ?></h2>
     <p class="muted" style="margin-top:0">Each client gets their own sheet of sites and prices.</p>
     <form method="post" autocomplete="off" action="index.php?page=admin_orders">
       <input type="hidden" name="action" value="create">

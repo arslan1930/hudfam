@@ -133,6 +133,9 @@ function render_footer(string $panel = ''): void
             $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
             $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
             $jsFile = asset_url('assets/js/draft-autosave.js');
+            $tipVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/info-tips.js') ?: time());
+            $tipPhp = app_url('asset.php?f=js/info-tips.js&v=' . rawurlencode($tipVersion));
+            $tipFile = asset_url('assets/js/info-tips.js');
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
                 'panel' => $panel,
@@ -143,6 +146,8 @@ function render_footer(string $panel = ''): void
             echo '</script>';
             echo '<script src="' . h($jsPhp) . '" defer></script>';
             echo '<script src="' . h($jsFile) . '" defer></script>';
+            echo '<script src="' . h($tipPhp) . '" defer></script>';
+            echo '<script src="' . h($tipFile) . '" defer></script>';
         }
         echo '</main></div>';
     }
