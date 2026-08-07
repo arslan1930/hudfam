@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isManual) {
                 throw new InvalidArgumentException('Only blank invoices can be edited.');
             }
+            $workStatus = normalize_invoice_work_status((string) post('work_status'));
             $descs = (array) ($_POST['line_desc'] ?? []);
             $amounts = (array) ($_POST['line_amount'] ?? []);
             $qtys = (array) ($_POST['line_qty'] ?? []);
@@ -56,8 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'company_reg_no' => (string) post('company_reg_no'),
                 'vat_note' => (string) post('vat_note'),
             ];
-            update_blank_invoice($id, $header, $lines);
-            flash('ok', 'Blank invoice saved.');
+            update_blank_invoice($id, $header, $lines, $workStatus);
+            flash('ok', $workStatus === 'done'
+                ? 'Invoice saved as Done — waiting for payment.'
+                : 'Draft saved. You can finish the invoice later.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
     } catch (Throwable $e) {
@@ -70,6 +73,7 @@ $invoice = get_invoice($id);
 $items = list_invoice_items($id);
 $isPaid = invoice_is_paid($invoice);
 $isManual = invoice_is_manual($invoice);
+$isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
 
 if ($print) {
@@ -114,12 +118,16 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       · <?= h(format_euro($invoice['total_amount'])) ?>
       ·
       <?php if ($isPaid): ?>
-        <span class="invoice-pay-badge is-paid">Payment received</span>
+        <span class="invoice-pay-badge is-paid">Paid</span>
+      <?php elseif ($isDraft): ?>
+        <span class="invoice-pay-badge is-draft" title="Still needs data">Draft</span>
+      <?php elseif ($isManual): ?>
+        <span class="invoice-pay-badge is-done" title="Sent — waiting for payment">Done · waiting</span>
       <?php else: ?>
         <span class="invoice-pay-badge">Unpaid</span>
       <?php endif; ?>
       <?php if ($editable): ?>
-        · Edit on the bill — Save needs a total above €0. Leave or Print / PDF anytime (even at €0).
+        · <strong>Draft</strong> = still needs data · <strong>Done</strong> = sent, waiting for payment
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
@@ -133,10 +141,14 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
     <?php endif; ?>
     <?php if ($editable): ?>
-      <button class="btn" type="submit" form="blank-invoice-form" id="blank-invoice-save"
-              title="Requires a bill total greater than zero">Save invoice</button>
+      <button class="btn secondary" type="submit" form="blank-invoice-form" name="work_status" value="draft"
+              id="blank-invoice-save-draft"
+              title="Save progress even if incomplete">Save as draft</button>
+      <button class="btn" type="submit" form="blank-invoice-form" name="work_status" value="done"
+              id="blank-invoice-save-done"
+              title="Mark as sent — requires a bill total above €0">Save as done</button>
     <?php endif; ?>
-    <?php if (!$isPaid): ?>
+    <?php if (!$isPaid && (!$isManual || !$isDraft)): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
             onsubmit="return confirm(<?= h(json_encode(
                 $isManual
@@ -147,13 +159,15 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <input type="hidden" name="action" value="mark_paid">
         <button class="btn<?= $editable ? ' secondary' : '' ?>" type="submit">Mark payment received</button>
       </form>
+    <?php elseif ($editable && $isDraft): ?>
+      <span class="help" style="align-self:center">Mark Paid after Save as done</span>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener"
        title="Download or print even with a zero total">Print / PDF</a>
   </div>
   <?php if ($editable): ?>
     <p class="help no-print" id="blank-invoice-save-hint" style="margin:0.35rem 0 0;text-align:right" hidden>
-      Add line amounts so the total is above €0 to save. You can still leave or use Print / PDF with a zero total.
+      Save as done needs a total above €0. Use <strong>Save as draft</strong> while descriptions or amounts are still incomplete.
     </p>
   <?php endif; ?>
 </div>
@@ -172,7 +186,8 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   if (!form) return;
   var tbody = document.getElementById('invoice-edit-items');
   var addBtn = document.getElementById('invoice-edit-add');
-  var saveBtn = document.getElementById('blank-invoice-save');
+  var saveDraftBtn = document.getElementById('blank-invoice-save-draft');
+  var saveDoneBtn = document.getElementById('blank-invoice-save-done');
   var saveHint = document.getElementById('blank-invoice-save-hint');
 
   function money(n) {
@@ -201,13 +216,26 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     el = form.querySelector('.invoice-pay-vat'); if (el) el.textContent = vat;
     el = form.querySelector('.invoice-footer-company'); if (el) el.textContent = name || 'Topurlz Ltd';
   }
+  function currentGrand() {
+    var grand = 0;
+    tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
+      var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
+      var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
+      grand += amount * qty;
+    });
+    return grand;
+  }
   function syncSaveState(grand) {
-    var canSave = grand > 0;
-    if (saveBtn) {
-      saveBtn.disabled = !canSave;
-      saveBtn.setAttribute('aria-disabled', canSave ? 'false' : 'true');
+    var canDone = grand > 0;
+    if (saveDoneBtn) {
+      saveDoneBtn.disabled = !canDone;
+      saveDoneBtn.setAttribute('aria-disabled', canDone ? 'false' : 'true');
     }
-    if (saveHint) saveHint.hidden = canSave;
+    if (saveDraftBtn) {
+      saveDraftBtn.disabled = false;
+      saveDraftBtn.setAttribute('aria-disabled', 'false');
+    }
+    if (saveHint) saveHint.hidden = canDone;
   }
   function refreshTotals() {
     var grand = 0;
@@ -267,20 +295,15 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   form.addEventListener('input', refreshTotals);
   form.addEventListener('change', refreshTotals);
   form.addEventListener('submit', function (e) {
-    var grand = 0;
-    tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
-      var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
-      var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
-      grand += amount * qty;
-    });
-    if (!(grand > 0)) {
+    var submitter = e.submitter;
+    var status = submitter && submitter.name === 'work_status'
+      ? String(submitter.value || '')
+      : 'draft';
+    if (status === 'done' && !(currentGrand() > 0)) {
       e.preventDefault();
       syncSaveState(0);
-      if (saveHint) {
-        saveHint.hidden = false;
-        saveHint.focus && saveHint.focus();
-      }
-      alert('Cannot save with a zero total. Add amounts first, or leave / Print without saving.');
+      if (saveHint) saveHint.hidden = false;
+      alert('Save as done needs a total above €0. Use Save as draft while the invoice is incomplete.');
     }
   });
   syncRemove();

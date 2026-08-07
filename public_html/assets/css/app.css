@@ -1185,6 +1185,16 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   color: #1f4d35;
   border-color: #b7dcc8;
 }
+.invoice-pay-badge.is-draft {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fdba74;
+}
+.invoice-pay-badge.is-done {
+  background: #eef2ff;
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
 .invoice-list-pay-btn {
   min-width: 3.6rem;
 }

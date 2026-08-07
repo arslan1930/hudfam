@@ -55,7 +55,7 @@ render_header('Invoices', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Add short notes under each invoice number here. Mark payment received when paid.</p>
+    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark Paid when payment arrives.</p>
   </div>
   <div class="actions">
     <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
@@ -101,8 +101,10 @@ render_header('Invoices', 'admin');
           <?php
             $paid = invoice_is_paid($inv);
             $manual = invoice_is_manual($inv);
+            $draft = invoice_is_draft($inv);
             $clientLabel = $inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name'];
             $note = invoice_admin_note($inv);
+            $statusBits = $paid ? 'paid payment received' : ($draft ? 'draft needs data' : 'done unpaid waiting');
           ?>
           <tr id="inv-<?= (int) $inv['id'] ?>" data-invoice-row
               data-search="<?= h(mb_strtolower(trim(
@@ -113,12 +115,17 @@ render_header('Invoices', 'admin');
                   . (string) $inv['item_count'] . ' '
                   . format_euro($inv['total_amount']) . ' '
                   . $note . ' '
-                  . ($paid ? 'paid payment received' : 'unpaid open')
+                  . $statusBits
               ))) ?>">
             <td data-invoice-cell>
               <strong><?= h($inv['invoice_number']) ?></strong>
               <?php if ($manual): ?>
                 <span class="invoice-manual-tag">(blank)</span>
+              <?php endif; ?>
+              <?php if ($manual && $draft): ?>
+                <span class="invoice-pay-badge is-draft">Draft</span>
+              <?php elseif ($manual && !$paid): ?>
+                <span class="invoice-pay-badge is-done">Done</span>
               <?php endif; ?>
               <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices">
                 <input type="hidden" name="action" value="save_note">
@@ -139,6 +146,8 @@ render_header('Invoices', 'admin');
             <td data-invoice-cell>
               <?php if ($paid): ?>
                 <span class="invoice-pay-badge is-paid" title="Payment already received">Paid</span>
+              <?php elseif ($draft): ?>
+                <span class="invoice-pay-badge is-draft" title="Still needs data — open and Save as done when ready">Draft</span>
               <?php else: ?>
                 <form method="post" class="inline" action="index.php?page=admin_invoices"
                       onsubmit="return confirm(<?= h(json_encode(

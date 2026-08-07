@@ -54,6 +54,7 @@ function ensure_invoice_schema(): void
           payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid',
           paid_at DATETIME NULL,
           is_manual TINYINT(1) NOT NULL DEFAULT 0,
+          work_status VARCHAR(20) NOT NULL DEFAULT 'done',
           admin_note VARCHAR(255) NOT NULL DEFAULT '',
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -63,6 +64,7 @@ function ensure_invoice_schema(): void
           INDEX (invoice_date),
           INDEX (payment_status),
           INDEX (is_manual),
+          INDEX (work_status),
           CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
           CONSTRAINT fk_inv_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
@@ -96,8 +98,11 @@ function ensure_invoice_schema(): void
         if (!in_array('is_manual', $invCols, true)) {
             $invAlters[] = 'ADD COLUMN is_manual TINYINT(1) NOT NULL DEFAULT 0 AFTER paid_at';
         }
+        if (!in_array('work_status', $invCols, true)) {
+            $invAlters[] = "ADD COLUMN work_status VARCHAR(20) NOT NULL DEFAULT 'done' AFTER is_manual";
+        }
         if (!in_array('admin_note', $invCols, true)) {
-            $invAlters[] = "ADD COLUMN admin_note VARCHAR(255) NOT NULL DEFAULT '' AFTER is_manual";
+            $invAlters[] = "ADD COLUMN admin_note VARCHAR(255) NOT NULL DEFAULT '' AFTER work_status";
         }
         if ($invAlters) {
             $pdo->exec('ALTER TABLE invoices ' . implode(', ', $invAlters));
@@ -107,6 +112,24 @@ function ensure_invoice_schema(): void
             if (!$idx) {
                 $pdo->exec('ALTER TABLE invoices ADD INDEX (is_manual)');
             }
+        } catch (Throwable $e) {
+            // ignore
+        }
+        try {
+            $idx = $pdo->query("SHOW INDEX FROM invoices WHERE Key_name='work_status'")->fetch();
+            if (!$idx) {
+                $pdo->exec('ALTER TABLE invoices ADD INDEX (work_status)');
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+        // Existing empty blank invoices start as drafts (still need data).
+        try {
+            $pdo->exec(
+                "UPDATE invoices SET work_status='draft'
+                 WHERE is_manual=1 AND payment_status<>'paid'
+                   AND total_amount<=0 AND (work_status='' OR work_status='done')"
+            );
         } catch (Throwable $e) {
             // ignore
         }
@@ -408,6 +431,38 @@ function invoice_is_manual(array $invoice): bool
     return (int) ($invoice['is_manual'] ?? 0) === 1;
 }
 
+/**
+ * Blank-invoice lifecycle: draft = still needs data; done = sent, waiting for payment.
+ * Sheet-generated invoices are always done.
+ */
+function invoice_work_status(array $invoice): string
+{
+    $status = strtolower(trim((string) ($invoice['work_status'] ?? 'done')));
+    return $status === 'draft' ? 'draft' : 'done';
+}
+
+function invoice_is_draft(array $invoice): bool
+{
+    return invoice_is_manual($invoice) && invoice_work_status($invoice) === 'draft';
+}
+
+function invoice_work_status_label(array $invoice): string
+{
+    if (invoice_is_paid($invoice)) {
+        return 'Paid';
+    }
+    if (invoice_is_draft($invoice)) {
+        return 'Draft';
+    }
+    return 'Done';
+}
+
+function normalize_invoice_work_status(string $status): string
+{
+    $status = strtolower(trim($status));
+    return $status === 'draft' ? 'draft' : 'done';
+}
+
 function invoice_admin_note(array $invoice): string
 {
     return trim((string) ($invoice['admin_note'] ?? ''));
@@ -435,6 +490,7 @@ function create_blank_invoice(?int $createdBy): int
     $company = invoice_company_defaults();
     return create_invoice([
         'is_manual' => 1,
+        'work_status' => 'draft',
         'invoice_date' => date('Y-m-d'),
         'admin_note' => '',
         'bill_to_name' => '',
@@ -459,8 +515,9 @@ function create_blank_invoice(?int $createdBy): int
  *
  * @param array<string,mixed> $header
  * @param list<array{description:string,amount:float|string,qty:int|string}> $lines
+ * @param string $workStatus draft = still needs data; done = sent, waiting for payment
  */
-function update_blank_invoice(int $invoiceId, array $header, array $lines): void
+function update_blank_invoice(int $invoiceId, array $header, array $lines, string $workStatus = 'draft'): void
 {
     ensure_invoice_schema();
     $invoice = get_invoice($invoiceId);
@@ -473,6 +530,8 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines): void
     if (invoice_is_paid($invoice)) {
         throw new InvalidArgumentException('Paid invoices cannot be edited. Unmark is not available — create a new blank invoice if needed.');
     }
+
+    $workStatus = normalize_invoice_work_status($workStatus);
 
     $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
     if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
@@ -506,9 +565,9 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines): void
     }
 
     $total = round($total, 2);
-    if ($total <= 0) {
+    if ($workStatus === 'done' && $total <= 0) {
         throw new InvalidArgumentException(
-            'Cannot save a blank invoice with a zero total. Add line amounts first, or leave without saving — Print / PDF still works with a zero total.'
+            'Cannot mark as Done with a zero total. Add line amounts, or Save as draft while the invoice still needs data.'
         );
     }
 
@@ -518,7 +577,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines): void
     try {
         $pdo->prepare(
             'UPDATE invoices SET
-                invoice_date=?, admin_note=?,
+                invoice_date=?, admin_note=?, work_status=?,
                 client_name=?, bill_to_name=?, bill_to_address=?, bill_to_hrb=?, bill_to_vat=?,
                 supplier_number=?, cost_center=?, orderer=?,
                 company_name=?, company_bic=?, company_iban=?, company_phone=?,
@@ -528,6 +587,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines): void
         )->execute([
             $invoiceDate,
             $adminNote,
+            $workStatus,
             $billName,
             $billName,
             trim((string) ($header['bill_to_address'] ?? '')),
@@ -670,9 +730,12 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                     supplier_number, cost_center, orderer,
                     company_name, company_bic, company_iban, company_phone,
                     company_address, company_reg_no, vat_note,
-                    currency, total_amount, payment_status, is_manual, admin_note, created_by
-                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                    currency, total_amount, payment_status, is_manual, work_status, admin_note, created_by
+                 ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
             );
+            $workStatus = $isManual
+                ? normalize_invoice_work_status((string) ($header['work_status'] ?? 'draft'))
+                : 'done';
             $stmt->execute([
                 $invoiceNumber,
                 $invoiceDate,
@@ -696,6 +759,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 round($total, 2),
                 'unpaid',
                 $isManual ? 1 : 0,
+                $workStatus,
                 $adminNote,
                 $createdBy,
             ]);
@@ -754,6 +818,11 @@ function mark_invoice_payment_received(int $invoiceId): void
     }
     if (($invoice['payment_status'] ?? 'unpaid') === 'paid') {
         return;
+    }
+    if (invoice_is_manual($invoice) && invoice_is_draft($invoice)) {
+        throw new InvalidArgumentException(
+            'This blank invoice is still a Draft. Save as Done first (sent / waiting for payment), then mark Paid.'
+        );
     }
 
     $isManual = invoice_is_manual($invoice);
