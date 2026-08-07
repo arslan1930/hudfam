@@ -602,19 +602,20 @@ render_header('Order · ' . $client['name'], 'admin');
     if (row) row.hidden = false;
     el.classList.add('sheet-search-hit');
     el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
-    if (typeof el.value === 'string' && el.setSelectionRange && el.type !== 'number') {
-      var lower = el.value.toLowerCase();
-      var at = lower.indexOf(q);
-      if (at >= 0) {
-        try { el.setSelectionRange(at, at + q.length); } catch (err2) {}
-      }
-    }
     var meta = document.querySelector('[data-sheet-search-meta]');
     if (meta) {
       meta.hidden = false;
-      meta.textContent = (matchIndex + 1) + ' of ' + matchFields.length + ' · Enter = next · Shift+Enter = prev';
+      meta.textContent = (matchIndex + 1) + ' of ' + matchFields.length
+        + ' · Enter = next · Shift+Enter = prev';
     }
+    // Keep focus in the search box so Enter can jump 2nd, 3rd, 4th… times.
+    window.setTimeout(function () {
+      try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
+      try {
+        var len = String(input.value || '').length;
+        input.setSelectionRange(len, len);
+      } catch (err2) {}
+    }, 0);
   }
 
   var form = document.getElementById('order-sheet-form');
@@ -638,10 +639,24 @@ render_header('Order · ' . $client['name'], 'admin');
     search.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation();
         jumpToMatch(e.shiftKey ? -1 : 1);
       }
     });
   }
+  // If a highlighted match somehow has focus, Enter still advances Find.
+  form.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    if (!search || !String(search.value || '').trim()) return;
+    var t = e.target;
+    if (!t) return;
+    if (t === search) return; // handled above
+    if (t.classList && t.classList.contains('sheet-search-hit')) {
+      e.preventDefault();
+      e.stopPropagation();
+      jumpToMatch(e.shiftKey ? -1 : 1);
+    }
+  });
 })();
 </script>
 <?php render_footer('admin'); ?>
