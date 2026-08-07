@@ -890,6 +890,65 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     ];
 }
 
+/**
+ * Remove sites from Our database for one country using a pasted/CSV domain list.
+ *
+ * @return array{removed:int,not_found:int,invalid:int,country:string}
+ */
+function remove_prospect_sites_by_list(string $country, string $raw): array
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    $parsed = parse_domain_list_strict($raw);
+    $domains = $parsed['valid'];
+    if ($domains === []) {
+        return [
+            'removed' => 0,
+            'not_found' => 0,
+            'invalid' => (int) $parsed['invalid_count'],
+            'country' => $country,
+        ];
+    }
+
+    $removed = 0;
+    $notFound = 0;
+    $chunkSize = 400;
+    for ($i = 0, $n = count($domains); $i < $n; $i += $chunkSize) {
+        $chunk = array_slice($domains, $i, $chunkSize);
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $params = array_merge([$country], $chunk);
+        $sel = db()->prepare(
+            "SELECT domain FROM prospect_sites WHERE country=? AND domain IN ({$placeholders})"
+        );
+        $sel->execute($params);
+        $found = $sel->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $foundSet = array_fill_keys($found, true);
+        foreach ($chunk as $d) {
+            if (!isset($foundSet[$d])) {
+                $notFound++;
+            }
+        }
+        if ($found === []) {
+            continue;
+        }
+        $delPlaceholders = implode(',', array_fill(0, count($found), '?'));
+        $del = db()->prepare(
+            "DELETE FROM prospect_sites WHERE country=? AND domain IN ({$delPlaceholders})"
+        );
+        $del->execute(array_merge([$country], $found));
+        $removed += $del->rowCount();
+    }
+
+    return [
+        'removed' => $removed,
+        'not_found' => $notFound,
+        'invalid' => (int) $parsed['invalid_count'],
+        'country' => $country,
+    ];
+}
+
 function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = ''): array
 {
     ensure_prospect_schema();

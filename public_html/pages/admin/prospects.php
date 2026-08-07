@@ -34,6 +34,50 @@ if ($addCountry !== '') {
     }
 }
 
+// --- Remove by list from Our database (country folder) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove_list') {
+    $removeCountry = trim((string) post('country'));
+    $raw = (string) post('remove_text');
+    try {
+        if (function_exists('read_extracted_sites_upload')) {
+            $fromFile = read_extracted_sites_upload($_FILES['remove_csv'] ?? null);
+            if ($fromFile !== '') {
+                $raw = trim($raw) !== '' ? ($raw . "\n" . $fromFile) : $fromFile;
+            }
+        }
+        if ($removeCountry === '' || resolve_canonical_country($removeCountry) === null) {
+            flash('error', 'Open a country folder first, then remove by list.');
+            redirect('index.php?page=admin_prospects');
+        }
+        $result = remove_prospect_sites_by_list($removeCountry, $raw);
+        if ($result['removed'] < 1) {
+            flash(
+                'error',
+                $result['invalid'] > 0
+                    ? 'No matching sites removed. Check the list (root domains) and try again.'
+                    : 'No sites from that list were found in ' . $result['country'] . '.'
+            );
+            redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']) . '#remove-by-list');
+        }
+        $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from Our database · ' . $result['country'];
+        if ((int) $result['not_found'] > 0) {
+            $msg .= ' · ' . (int) $result['not_found'] . ' not found';
+        }
+        if ((int) $result['invalid'] > 0) {
+            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
+        }
+        flash('ok', $msg . '.');
+        redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+    } catch (Throwable $e) {
+        flash('error', $e->getMessage());
+        redirect(
+            $removeCountry !== ''
+                ? 'index.php?page=admin_prospects&country=' . urlencode($removeCountry) . '#remove-by-list'
+                : 'index.php?page=admin_prospects'
+        );
+    }
+}
+
 // --- Add sites into Our database (same panel) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_sites') {
     $addRaw = (string) post('urls');
@@ -344,4 +388,30 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     </div>
   <?php endif; ?>
 </div>
+
+<?php if (!$emptyCountry): ?>
+<div class="card" id="remove-by-list" style="margin-top:1rem">
+  <h2>Remove by list</h2>
+  <p class="help">
+    Paste site names (or upload a 1-column CSV) to remove those exact domains from
+    <strong><?= h($countryName) ?></strong> in Our database.
+  </p>
+  <form
+    method="post"
+    action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#remove-by-list"
+    enctype="multipart/form-data"
+    onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?> (Our database)?');"
+  >
+    <input type="hidden" name="action" value="remove_list">
+    <input type="hidden" name="country" value="<?= h($countryName) ?>">
+    <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
+    <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
+    <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
+    <p class="help">One site name per row. Only domains already in this country folder are removed.</p>
+    <div class="actions" style="margin-top:0.75rem">
+      <button class="btn danger" type="submit">Remove listed sites</button>
+    </div>
+  </form>
+</div>
+<?php endif; ?>
 <?php render_footer('admin'); ?>

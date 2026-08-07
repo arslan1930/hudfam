@@ -52,38 +52,6 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $countryName = $sheet;
 
-    if ($action === 'remove_list') {
-        $raw = (string) post('remove_text');
-        try {
-            $fromFile = read_extracted_sites_upload($_FILES['remove_csv'] ?? null);
-            if ($fromFile !== '') {
-                $raw = trim($raw) !== '' ? ($raw . "\n" . $fromFile) : $fromFile;
-            }
-        } catch (Throwable $e) {
-            flash('error', $e->getMessage());
-            redirect($sitesListUrl . '&country=' . urlencode($countryName));
-        }
-        $result = remove_extracted_sites_by_list($countryName, $raw);
-        if ($result['removed'] < 1) {
-            flash(
-                'error',
-                $result['invalid'] > 0
-                    ? 'No matching sites removed. Check the list (root domains) and try again.'
-                    : 'No sites from that list were found in ' . $countryName . '.'
-            );
-            redirect($sitesListUrl . '&country=' . urlencode($countryName));
-        }
-        $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from ' . $countryName;
-        if ((int) $result['not_found'] > 0) {
-            $msg .= ' · ' . (int) $result['not_found'] . ' not found';
-        }
-        flash('ok', $msg . '.');
-        if (count_extracted_sites_for_country($countryName) < 1) {
-            redirect($sitesListUrl);
-        }
-        redirect($sitesListUrl . '&country=' . urlencode($countryName));
-    }
-
     if ($action === 'remove_search') {
         $qRemove = trim((string) post('q'));
         $matchCount = count_extracted_sites_matching($countryName, $qRemove);
@@ -323,20 +291,6 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   </div>
 </div>
 <p class="help" id="extracted_copy_status" hidden></p>
-
-<div class="card" style="margin-bottom:1rem">
-  <h2>Remove by list</h2>
-  <p class="help">Paste site names (or upload a 1-column CSV) to remove those exact sites from <?= h($countryName) ?>.</p>
-  <form method="post" enctype="multipart/form-data" onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?>?');">
-    <input type="hidden" name="action" value="remove_list">
-    <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
-    <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
-    <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
-    <div class="actions" style="margin-top:0.75rem">
-      <button class="btn danger" type="submit">Remove listed sites</button>
-    </div>
-  </form>
-</div>
 
 <form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_extracted">
