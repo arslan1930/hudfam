@@ -409,6 +409,144 @@ function invoice_admin_note(array $invoice): string
 }
 
 /**
+ * Create an empty blank invoice in the normal bill format (no order-sheet link).
+ */
+function create_blank_invoice(?int $createdBy): int
+{
+    $company = invoice_company_defaults();
+    return create_invoice([
+        'is_manual' => 1,
+        'invoice_date' => date('Y-m-d'),
+        'admin_note' => '',
+        'bill_to_name' => '',
+        'bill_to_address' => '',
+        'bill_to_hrb' => '',
+        'bill_to_vat' => '',
+        'supplier_number' => 'NEW',
+        'cost_center' => '',
+        'orderer' => '',
+        'company_name' => $company['company_name'],
+        'company_bic' => $company['company_bic'],
+        'company_iban' => $company['company_iban'],
+        'company_phone' => $company['company_phone'],
+        'company_address' => $company['company_address'],
+        'company_reg_no' => $company['company_reg_no'],
+        'vat_note' => $company['vat_note'],
+    ], [], $createdBy);
+}
+
+/**
+ * Update a blank invoice header + replace line items. Not linked to order sheets.
+ *
+ * @param array<string,mixed> $header
+ * @param list<array{description:string,amount:float|string,qty:int|string}> $lines
+ */
+function update_blank_invoice(int $invoiceId, array $header, array $lines): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    if (!invoice_is_manual($invoice)) {
+        throw new InvalidArgumentException('Only blank invoices can be edited this way.');
+    }
+    if (invoice_is_paid($invoice)) {
+        throw new InvalidArgumentException('Paid invoices cannot be edited. Unmark is not available — create a new blank invoice if needed.');
+    }
+
+    $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
+    if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
+        $invoiceDate = (string) $invoice['invoice_date'];
+    }
+    $adminNote = trim((string) ($header['admin_note'] ?? ''));
+    if (mb_strlen($adminNote) > 255) {
+        $adminNote = mb_substr($adminNote, 0, 255);
+    }
+
+    $company = invoice_company_defaults();
+    $normalized = [];
+    $total = 0.0;
+    $sort = 0;
+    foreach ($lines as $line) {
+        $desc = trim((string) ($line['description'] ?? ''));
+        if ($desc === '') {
+            continue;
+        }
+        $amount = parse_money($line['amount'] ?? 0);
+        $qty = max(1, (int) ($line['qty'] ?? 1));
+        $lineTotal = round($amount * $qty, 2);
+        $normalized[] = [
+            'description' => $desc,
+            'amount' => $amount,
+            'qty' => $qty,
+            'line_total' => $lineTotal,
+            'sort_order' => $sort++,
+        ];
+        $total += $lineTotal;
+    }
+
+    $billName = trim((string) ($header['bill_to_name'] ?? ''));
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare(
+            'UPDATE invoices SET
+                invoice_date=?, admin_note=?,
+                client_name=?, bill_to_name=?, bill_to_address=?, bill_to_hrb=?, bill_to_vat=?,
+                supplier_number=?, cost_center=?, orderer=?,
+                company_name=?, company_bic=?, company_iban=?, company_phone=?,
+                company_address=?, company_reg_no=?, vat_note=?,
+                total_amount=?, updated_at=NOW()
+             WHERE id=? AND is_manual=1'
+        )->execute([
+            $invoiceDate,
+            $adminNote,
+            $billName,
+            $billName,
+            trim((string) ($header['bill_to_address'] ?? '')),
+            trim((string) ($header['bill_to_hrb'] ?? '')),
+            trim((string) ($header['bill_to_vat'] ?? '')),
+            trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
+            trim((string) ($header['cost_center'] ?? '')),
+            trim((string) ($header['orderer'] ?? '')),
+            trim((string) ($header['company_name'] ?? $company['company_name'])),
+            trim((string) ($header['company_bic'] ?? $company['company_bic'])),
+            trim((string) ($header['company_iban'] ?? $company['company_iban'])),
+            trim((string) ($header['company_phone'] ?? $company['company_phone'])),
+            trim((string) ($header['company_address'] ?? $company['company_address'])),
+            trim((string) ($header['company_reg_no'] ?? $company['company_reg_no'])),
+            trim((string) ($header['vat_note'] ?? $company['vat_note'])),
+            round($total, 2),
+            $invoiceId,
+        ]);
+
+        $pdo->prepare('DELETE FROM invoice_items WHERE invoice_id=?')->execute([$invoiceId]);
+        $itemStmt = $pdo->prepare(
+            'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, order_item_ids, sort_order)
+             VALUES (?,?,?,?,?,?,?)'
+        );
+        foreach ($normalized as $line) {
+            $itemStmt->execute([
+                $invoiceId,
+                $line['description'],
+                $line['amount'],
+                $line['qty'],
+                $line['line_total'],
+                '',
+                $line['sort_order'],
+            ]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/**
  * @param array<string,mixed> $header
  * @param list<array{description:string,amount:float|string,qty:int|string,line_total?:float|string}> $lines
  */
@@ -416,10 +554,9 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
 {
     ensure_invoice_schema();
     $isManual = !empty($header['is_manual']);
-    if (!$lines) {
-        throw new InvalidArgumentException(
-            $isManual ? 'Add at least one invoice item.' : 'Select at least one completed article to invoice.'
-        );
+    // Blank invoices may start with zero line items (filled later on the invoice).
+    if (!$lines && !$isManual) {
+        throw new InvalidArgumentException('Select at least one completed article to invoice.');
     }
 
     $company = invoice_company_defaults();
@@ -458,10 +595,8 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
         ];
         $total += $lineTotal;
     }
-    if (!$normalized) {
-        throw new InvalidArgumentException(
-            $isManual ? 'Add at least one invoice item with a description.' : 'Select at least one unpaid completed article to invoice.'
-        );
+    if (!$normalized && !$isManual) {
+        throw new InvalidArgumentException('Select at least one unpaid completed article to invoice.');
     }
 
     // Blank invoices are never linked to order-management clients / sheet rows.
