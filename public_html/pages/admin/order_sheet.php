@@ -89,19 +89,19 @@ render_header('Order · ' . $client['name'], 'admin');
 
 <div class="orders-summary">
   <div class="orders-summary-item">
-    <strong><?= count($items) ?></strong>
+    <strong data-summary-sites><?= count($items) ?></strong>
     <span>Sites</span>
   </div>
   <div class="orders-summary-item">
-    <strong><?= h(format_money($totalOwner)) ?></strong>
+    <strong data-summary-owner><?= h(format_money($totalOwner)) ?></strong>
     <span>Owner total</span>
   </div>
   <div class="orders-summary-item">
-    <strong><?= h(format_money($totalDecided)) ?></strong>
+    <strong data-summary-decided><?= h(format_money($totalDecided)) ?></strong>
     <span>Decided total</span>
   </div>
   <div class="orders-summary-item">
-    <strong class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong>
+    <strong data-summary-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong>
     <span>Profit</span>
   </div>
 </div>
@@ -252,6 +252,16 @@ render_header('Order · ' . $client['name'], 'admin');
       tp.textContent = money(profitTotal);
       tp.classList.toggle('profit-pos', profitTotal >= 0);
       tp.classList.toggle('profit-neg', profitTotal < 0);
+    }
+    var so = document.querySelector('[data-summary-owner]');
+    var sd = document.querySelector('[data-summary-decided]');
+    var sp = document.querySelector('[data-summary-profit]');
+    if (so) so.textContent = money(ownerTotal);
+    if (sd) sd.textContent = money(decidedTotal);
+    if (sp) {
+      sp.textContent = money(profitTotal);
+      sp.classList.toggle('profit-pos', profitTotal >= 0);
+      sp.classList.toggle('profit-neg', profitTotal < 0);
     }
   }
   document.getElementById('order-sheet-form').addEventListener('input', function (e) {
