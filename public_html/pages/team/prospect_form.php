@@ -20,7 +20,9 @@ if ($id) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $domain = normalize_domain((string) post('domain'));
+    $domainRaw = trim((string) post('domain'));
+    $analyzed = analyze_pasted_domain_line($domainRaw);
+    $domain = $analyzed['ok'] ? $analyzed['domain'] : '';
     $country = trim((string) post('country'));
     $language = trim((string) post('language'));
     $region = (string) post('region');
@@ -44,17 +46,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    if ($domain === '') {
-        flash('error', 'Domain is required.');
+    if (!$analyzed['ok']) {
+        flash('error', 'Use a root domain only (e.g. example.com or my-site.co.uk) — no https, paths, or subdomains.');
+        $site['domain'] = $domainRaw;
+        $site['country'] = $country;
+        $site['language'] = $language;
+        $site['region'] = $region;
+        $site['niche'] = $niche;
+        $site['notes'] = $notes;
+        $site['url'] = $url;
+        $site['status'] = $status;
     } elseif ($country === '' && !$id) {
-        flash('error', 'Select a country database.');
+        flash('error', 'Select a country database (type to search, then Enter).');
     } elseif (!$id) {
         $exists = filter_domains_against_prospects([$domain], $country);
         if ($exists['existing']) {
             flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
             redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
         }
-        // Writes inventory + today's add history batch for this teammate
         $added = add_prospect_domains([$domain], $user, $country, $language, $region, $niche, $notes);
         if ($added['inserted'] < 1) {
             flash('error', 'Already in this country’s database. Filter first — do not add duplicates.');
@@ -95,17 +104,18 @@ render_header($id ? $site['domain'] : 'Add prospect', 'team');
 <div class="card">
 <form method="post">
   <div class="form-grid">
-    <div><label>Domain</label><input name="domain" value="<?= h($site['domain']) ?>" required></div>
-    <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
-    <div><label>Country database <?= !$id ? '<span class="help">(required)</span>' : '' ?></label>
-      <select name="country" <?= !$id ? 'required' : '' ?>>
-        <option value="">— Select country —</option>
-        <?php foreach ($countryOptions as $c): ?>
-          <option value="<?= h($c['name']) ?>" <?= ($site['country'] ?? '') === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
+    <div>
+      <label>Domain <span class="help">(root only)</span></label>
+      <input name="domain" value="<?= h($site['domain']) ?>" required placeholder="example.com" spellcheck="false">
+      <p class="help">No https, paths, or subdomains. Hyphens and .co.uk are OK.</p>
     </div>
-    <div><label>Language</label><input name="language" value="<?= h($site['language']) ?>"></div>
+    <div><label>URL</label><input name="url" value="<?= h($site['url']) ?>"></div>
+    <?= render_country_typeahead((string) ($site['country'] ?? ''), [
+        'required' => !$id,
+        'label' => 'Country database',
+        'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]"',
+    ]) ?>
+    <?= render_language_typeahead((string) ($site['language'] ?? '')) ?>
     <div><label>Region</label>
       <select name="region">
         <option value="">—</option>
@@ -127,4 +137,5 @@ render_header($id ? $site['domain'] : 'Add prospect', 'team');
   <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
 </form>
 </div>
+<?= sites_form_script_tag() ?>
 <?php render_footer('team'); ?>

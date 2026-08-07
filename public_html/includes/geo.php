@@ -95,6 +95,56 @@ function distinct_site_languages(): array
     return array_column($rows, 'language');
 }
 
+/**
+ * Language labels for optional typeahead (country defaults + any already used on prospects).
+ *
+ * @return list<string>
+ */
+function list_language_options(): array
+{
+    $set = [];
+    foreach (list_countries(null, true) as $c) {
+        $lang = trim((string) ($c['default_language'] ?? ''));
+        if ($lang !== '') {
+            $set[$lang] = true;
+        }
+    }
+    try {
+        $rows = db()->query(
+            "SELECT DISTINCT language FROM prospect_sites WHERE TRIM(language) <> '' ORDER BY language"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($rows as $lang) {
+            $lang = trim((string) $lang);
+            if ($lang !== '') {
+                $set[$lang] = true;
+            }
+        }
+    } catch (Throwable $e) {
+        // table may be missing before upgrade
+    }
+    $list = array_keys($set);
+    natcasesort($list);
+    return array_values($list);
+}
+
+/**
+ * Flat country rows for typeahead (name + default language + region).
+ *
+ * @return list<array{name:string,language:string,region:string}>
+ */
+function list_country_typeahead_items(): array
+{
+    $items = [];
+    foreach (list_countries(null, true) as $c) {
+        $items[] = [
+            'name' => (string) $c['name'],
+            'language' => (string) ($c['default_language'] ?? ''),
+            'region' => (string) ($c['region'] ?? ''),
+        ];
+    }
+    return $items;
+}
+
 function apply_site_geo_filters(array &$where, array &$params, array $filters): void
 {
     if (!empty($filters['region'])) {

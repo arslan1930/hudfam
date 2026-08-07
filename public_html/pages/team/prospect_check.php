@@ -4,7 +4,6 @@ ensure_prospect_schema();
 seed_countries_if_empty(db());
 
 $countryOptions = list_countries(null, true);
-$countryGroups = countries_grouped();
 $raw = '';
 $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
@@ -48,10 +47,16 @@ try {
         $region = (string) post('region');
         $niche = trim((string) post('niche'));
         $notes = trim((string) post('notes'));
-        $domains = parse_domain_list($raw);
+        $parsed = parse_domain_list_strict($raw);
+        $domains = $parsed['valid'];
 
         if ($country === '') {
-            flash('error', 'Select a country database first.');
+            flash('error', 'Select a country database first (type to search, then Enter).');
+        } elseif ($parsed['invalid_count'] > 0 && $action !== 'add_new') {
+            flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+            $raw = $parsed['valid_text'] !== ''
+                ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
+                : $raw;
         } elseif ($action === 'add_new') {
             $filter = filter_domains_against_prospects($domains, $country);
             $selected = $filter['new'];
@@ -72,9 +77,10 @@ try {
         } elseif (count($domains) > 100000) {
             flash('error', 'Paste at most 100,000 domains per run (split into batches).');
         } elseif (!$domains) {
-            flash('error', 'Paste at least one domain under “Paste new sites”.');
+            flash('error', 'Paste at least one root domain under “Paste new sites”.');
         } else {
             $result = filter_domains_against_prospects($domains, $country);
+            $raw = implode("\n", $domains);
             // refresh box 1 after filter
             $old = list_prospect_domain_names(25000, $country);
             $oldText = implode("\n", $old['domains']);
@@ -101,7 +107,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Pick a country database → paste domains → remove ones already in that country → add only unique sites.</p>
+    <p class="muted">Pick a country database → paste root domains → remove ones already in that country → add only unique sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
@@ -121,26 +127,12 @@ render_header('Filter & add', 'team');
 
   <div class="card" style="margin-bottom:1rem">
     <div class="form-grid">
-      <div>
-        <label for="country_select">Country database <span class="help">(required)</span></label>
-        <select name="country" id="country_select" required>
-          <option value="">— Select country —</option>
-          <?php foreach ($countryGroups as $regionCode => $block): ?>
-            <?php if (empty($block['countries'])) {
-                continue;
-            } ?>
-            <optgroup label="<?= h($block['label']) ?>">
-              <?php foreach ($block['countries'] as $c): ?>
-                <option value="<?= h($c['name']) ?>"
-                  data-region="<?= h($c['region']) ?>"
-                  data-lang="<?= h($c['default_language']) ?>"
-                  <?= $country === $c['name'] ? 'selected' : '' ?>><?= h($c['name']) ?></option>
-              <?php endforeach; ?>
-            </optgroup>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <div><label>Language</label><input name="language" id="language_input" value="<?= h($language) ?>"></div>
+      <?= render_country_typeahead($country, [
+          'id' => 'country',
+          'label' => 'Country database',
+          'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]" data-reload-on-select="1"',
+      ]) ?>
+      <?= render_language_typeahead($language) ?>
       <div><label>Region</label>
         <select name="region">
           <option value="">—</option>
@@ -168,36 +160,41 @@ render_header('Filter & add', 'team');
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
-      <p class="help">One per line (or commas). https:// is removed automatically.</p>
-      <textarea class="inventory-box" id="domains" name="domains" rows="14" required
-        placeholder="site1.com&#10;site2.de&#10;https://www.site3.com"><?= h($raw) ?></textarea>
+      <?= render_domains_paste_field('domains', $raw, [
+          'id' => 'domains',
+          'label' => 'Root domains',
+          'required' => true,
+          'rows' => 14,
+          'class' => 'inventory-box',
+      ]) ?>
     </div>
   </div>
 
   <div class="actions-sticky">
-    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?>>Filter against country</button>
+    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?> id="filter_submit">Filter against country</button>
   </div>
 </form>
 
 <script>
 (function(){
-  var sel = document.getElementById('country_select');
-  var lang = document.getElementById('language_input');
-  var region = document.querySelector('select[name=region]');
-  var btn = document.querySelector('#filter_form button[type=submit]');
-  if (!sel) return;
-  sel.addEventListener('change', function(){
-    var opt = sel.options[sel.selectedIndex];
-    if (!opt) return;
-    if (region && opt.dataset.region) region.value = opt.dataset.region;
-    if (lang && opt.dataset.lang && !lang.value) lang.value = opt.dataset.lang;
-    if (btn) btn.disabled = !sel.value;
-    if (sel.value) {
-      window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(sel.value);
+  var form = document.getElementById('filter_form');
+  var btn = document.getElementById('filter_submit');
+  var countryRoot = form && form.querySelector('[data-name="country"]');
+  if (!countryRoot) return;
+  function syncBtn() {
+    var hidden = countryRoot.querySelector('[data-typeahead-value]');
+    if (btn) btn.disabled = !(hidden && hidden.value);
+  }
+  countryRoot.addEventListener('typeahead:select', function(e){
+    syncBtn();
+    if (countryRoot.getAttribute('data-reload-on-select') === '1' && e.detail && e.detail.value) {
+      window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(e.detail.value);
     }
   });
+  syncBtn();
 })();
 </script>
+<?= sites_form_script_tag() ?>
 
 <?php if ($result): ?>
 <div class="card">
@@ -223,7 +220,7 @@ render_header('Filter & add', 'team');
     <?php if ($result['new']): ?>
       <form method="post">
         <input type="hidden" name="action" value="add_new">
-        <input type="hidden" name="domains" value="<?= h($raw) ?>">
+        <input type="hidden" name="domains" value="<?= h(implode("\n", $result['new'])) ?>">
         <input type="hidden" name="country" value="<?= h($country) ?>">
         <input type="hidden" name="language" value="<?= h($language) ?>">
         <input type="hidden" name="region" value="<?= h($region) ?>">

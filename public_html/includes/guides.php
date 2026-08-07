@@ -95,11 +95,11 @@ function guide_inventory(): string
 {
     return render_page_purpose(
         'Our database — country folders',
-        'Each country has its own URL database. Admin opens a country folder to view or add URLs.',
-        'Pick a country folder, then browse or add URLs for that country only.',
+        'Each country has its own site database. Admin opens a country folder to view or add sites.',
+        'Pick a country folder, then browse or add sites for that country only.',
         [
             'Open a country folder.',
-            'Add URLs into that country’s database.',
+            'Add sites into that country’s database.',
             'Team can filter against the same country list.',
         ]
     );
@@ -109,12 +109,12 @@ function guide_filter_add(): string
 {
     return render_page_purpose(
         'Filter & add — per country database',
-        'Compare a pasted list to one country’s URL database and save only domains that country does not already have.',
-        'Select country → Paste → Filter → Add unique into that country folder.',
+        'Compare a pasted list to one country’s site database and save only root domains that country does not already have.',
+        'Select country (type + Enter) → Paste root domains → Clean errors if needed → Filter → Add unique.',
         [
-            'Select the country database.',
-            'Paste domains (one per line) and Filter.',
-            'Add the remaining unique sites to that country.',
+            'Select the country database (type to search, Enter to select).',
+            'Paste root domains only (example.com, my-site.co.uk) and Clean errors if needed.',
+            'Filter, then add the remaining unique sites to that country.',
         ]
     );
 }
@@ -132,13 +132,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add URLs — seed a country database',
-        'Paste URLs or domains into one country’s folder (no prices).',
-        'Choose country, paste, save. URLs live only in that country’s database for Team filtering later.',
+        'Add sites — seed a country database',
+        'Paste root domains into one country’s folder (no prices). Optional language via search + Enter.',
+        'Choose country (type + Enter), paste root domains, Clean errors if needed, save.',
         [
-            'Select the country folder.',
-            'Paste URLs or domains and Save.',
-            'Browse them under that country’s folder.',
+            'Select the country folder (type to search, Enter to select).',
+            'Paste root domains only — no https, paths, or subdomains.',
+            'Use Clean errors, then Save. Browse them under that country’s folder.',
         ]
     );
 }
@@ -159,7 +159,7 @@ function guide_admin_users(): string
     return render_page_purpose(
         'Users — who can log in',
         'Create Admin and Team accounts.',
-        'Team users can open Filter & add and grow Our database. Admins can add URLs and view all history.',
+        'Team users can open Filter & add and grow Our database. Admins can add sites and view all history.',
         []
     );
 }

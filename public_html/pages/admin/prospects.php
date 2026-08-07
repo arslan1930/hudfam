@@ -31,7 +31,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1>Country databases</h1>
-        <p class="muted">Each country is its own URL database. Open a folder to view or add URLs. <?= (int) $grandTotal ?> URLs total.</p>
+        <p class="muted">Each country is its own site database. Open a folder to view or add sites. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
@@ -39,11 +39,11 @@ if (!$inCountry && !$emptyCountry) {
     </div>
     <?= render_page_purpose(
         'Our database — one folder per country',
-        'URLs are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add URLs inside the folder to paste sites into that country only.',
+        'Sites are stored separately for each country.',
+        'Click a country folder to open that country’s database. Use Add sites inside the folder to paste domains into that country only.',
         [
             'Open a country folder.',
-            'Add URLs into that country’s database.',
+            'Add sites into that country’s database.',
             'Team Filter & add can check against the same country list.',
         ]
     ) ?>
@@ -139,7 +139,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add URLs</a>
+      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
@@ -178,9 +178,9 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </table>
   <?php if (!$rows): ?>
     <div class="empty-state">
-      <p>No URLs in this country yet.</p>
+      <p>No sites in this country yet.</p>
       <?php if (!$emptyCountry): ?>
-        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add URLs</a>
+        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
       <?php endif; ?>
     </div>
   <?php else: ?>
