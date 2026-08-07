@@ -38,8 +38,8 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracted URLs</h3>'
-        . '<p><strong>What:</strong> Folders: Extracted Sites (country rows) and Sites with emails.</p>'
-        . '<p><strong>How:</strong> Open Extracted Sites → country row → Copy all URLs, edit, or remove.</p>'
+        . '<p><strong>What:</strong> Folders: Extracted Sites (Team Push only) and Sites with emails.</p>'
+        . '<p><strong>How:</strong> Open Extracted Sites → country row → copy, edit, or remove. Admin Add sites does not fill this.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Add history</h3>'
@@ -154,13 +154,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add sites — Extracted Sites',
-        'Paste a text list or upload a 1-column CSV into Extracted URLs → Extracted Sites for one country.',
-        'Choose country → paste and/or upload CSV → Add sites.',
+        'Add sites — Our database only',
+        'Paste root domains into one country’s folder in Our database. Extracted Sites are filled only when Team clicks Push.',
+        'Choose country (type + Enter), paste root domains, Clean errors if needed, save.',
         [
-            'Select the country (type to search, Enter to select).',
-            'Paste site names and/or upload a 1-column CSV.',
-            'Open Extracted URLs → Extracted Sites → that country to copy, edit, or remove.',
+            'Select the country folder (type to search, Enter to select).',
+            'Paste root domains only — use Clean errors for https/paths/subdomains.',
+            'Save into Our database. Extracted Sites come from Team Push only.',
         ]
     );
 }

@@ -264,7 +264,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
       <?php else: ?>
       <div class="empty-state">
         <p>No extracted sites yet.</p>
-        <p class="muted">Use <a href="index.php?page=admin_prospect_add">Add sites</a>, or wait for Team to Push from Extracting Results.</p>
+        <p class="muted">They appear only when Team clicks Push in Extracting Results.</p>
       </div>
       <?php endif; ?>
     </div>
@@ -310,10 +310,9 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     <p class="muted"><?= (int) $countryTotal ?> site<?= (int) $countryTotal === 1 ? '' : 's' ?><?= $q !== '' ? ' · showing ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?></p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <button
       type="button"
-      class="btn secondary"
+      class="btn"
       id="extracted_copy_all"
       data-export-url="<?= h($exportUrl) ?>"
       data-count="<?= (int) $countryTotal ?>"
