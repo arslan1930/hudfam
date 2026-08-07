@@ -38,6 +38,7 @@ function ensure_order_schema(): void
           owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           live_url VARCHAR(500) NOT NULL DEFAULT '',
+          is_paid TINYINT(1) NOT NULL DEFAULT 0,
           sort_order INT NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -62,6 +63,9 @@ function ensure_order_schema(): void
         }
         if (!in_array('order_year', $cols, true)) {
             $alters[] = 'ADD COLUMN order_year SMALLINT NOT NULL DEFAULT 0 AFTER order_month';
+        }
+        if (!in_array('is_paid', $cols, true)) {
+            $alters[] = 'ADD COLUMN is_paid TINYINT(1) NOT NULL DEFAULT 0 AFTER live_url';
         }
         if ($alters) {
             $pdo->exec('ALTER TABLE order_items ' . implode(', ', $alters));
@@ -135,6 +139,24 @@ function order_is_completed(array $row): bool
         return false;
     }
     return trim((string) ($row['live_url'] ?? '')) !== '';
+}
+
+function order_is_paid(array $row): bool
+{
+    if (($row['row_type'] ?? 'site') === 'year_end') {
+        return false;
+    }
+    return (int) ($row['is_paid'] ?? 0) === 1;
+}
+
+function set_order_item_paid(int $itemId, int $clientId, bool $paid): void
+{
+    ensure_order_schema();
+    db()->prepare(
+        'UPDATE order_items SET is_paid=?, updated_at=NOW()
+         WHERE id=? AND client_id=? AND row_type=\'site\''
+    )->execute([$paid ? 1 : 0, $itemId, $clientId]);
+    db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
 }
 
 /**
@@ -417,6 +439,7 @@ function order_sheet_export_rows(int $clientId): array
                 'decided' => '',
                 'profit' => '',
                 'live_url' => '',
+                'paid' => '',
                 'status' => 'Year end',
             ];
             continue;
@@ -432,6 +455,7 @@ function order_sheet_export_rows(int $clientId): array
             'decided' => format_money($row['decided_price']),
             'profit' => format_money($profit),
             'live_url' => (string) ($row['live_url'] ?? ''),
+            'paid' => order_is_paid($row) ? 'Paid' : '',
             'status' => order_is_completed($row) ? 'Completed' : 'Open',
         ];
     }
@@ -462,7 +486,7 @@ function order_sheet_download_csv(array $client, array $rows): void
     fputcsv($out, ['Client', (string) $client['name']]);
     fputcsv($out, ['Exported', date('Y-m-d H:i')]);
     fputcsv($out, []);
-    fputcsv($out, ['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Profit', 'Month', 'Year', 'Status']);
+    fputcsv($out, ['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Month', 'Year', 'Status']);
     foreach ($rows as $r) {
         fputcsv($out, [
             $r['site'],
@@ -470,6 +494,7 @@ function order_sheet_download_csv(array $client, array $rows): void
             $r['owner'],
             $r['decided'],
             $r['live_url'],
+            $r['paid'] ?? '',
             $r['profit'],
             $r['month'],
             $r['year'],
@@ -492,18 +517,18 @@ function order_sheet_download_xls(array $client, array $rows): void
     header('Expires: 0');
     echo '<html><head><meta charset="utf-8"></head><body>';
     echo '<table border="1" cellpadding="4" cellspacing="0">';
-    echo '<tr><th colspan="9">Order sheet — ' . h((string) $client['name']) . '</th></tr>';
-    echo '<tr><td colspan="9">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
+    echo '<tr><th colspan="10">Order sheet — ' . h((string) $client['name']) . '</th></tr>';
+    echo '<tr><td colspan="10">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
     echo '<tr>';
-    foreach (['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Profit', 'Month', 'Year', 'Status'] as $h) {
+    foreach (['Site name', 'Country', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Month', 'Year', 'Status'] as $h) {
         echo '<th>' . h($h) . '</th>';
     }
     echo '</tr>';
     foreach ($rows as $r) {
         $isYear = ($r['month'] === 'YEAR END');
         echo '<tr' . ($isYear ? ' style="background:#e8eaed;font-weight:bold"' : '') . '>';
-        foreach (['site', 'country', 'owner', 'decided', 'live_url', 'profit', 'month', 'year', 'status'] as $key) {
-            echo '<td>' . h((string) $r[$key]) . '</td>';
+        foreach (['site', 'country', 'owner', 'decided', 'live_url', 'paid', 'profit', 'month', 'year', 'status'] as $key) {
+            echo '<td>' . h((string) ($r[$key] ?? '')) . '</td>';
         }
         echo '</tr>';
     }

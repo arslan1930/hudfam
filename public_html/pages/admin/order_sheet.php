@@ -69,6 +69,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('ok', 'Row removed.');
             redirect('index.php?page=admin_order_sheet&id=' . $clientId);
         }
+        if ($action === 'mark_paid') {
+            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            $itemId = (int) post('item_id');
+            set_order_item_paid($itemId, $clientId, true);
+            flash('ok', 'Row marked as paid.');
+            redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#row-' . $itemId);
+        }
+        if ($action === 'unmark_paid') {
+            save_order_sheet_rows($clientId, $sites, $countries, $orderMonths, $orderYears, $owner, $decided, $urls);
+            $itemId = (int) post('item_id');
+            set_order_item_paid($itemId, $clientId, false);
+            flash('ok', 'Paid mark removed.');
+            redirect('index.php?page=admin_order_sheet&id=' . $clientId . '#row-' . $itemId);
+        }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect('index.php?page=admin_order_sheet&id=' . $clientId);
@@ -99,7 +113,7 @@ foreach ($items as $row) {
     }
 }
 
-$colspan = 9;
+$colspan = 10;
 $defaultYearEnd = (int) date('Y');
 foreach (array_reverse($items) as $row) {
     if (($row['row_type'] ?? '') === 'site' && (int) ($row['order_year'] ?? 0) > 0) {
@@ -215,6 +229,7 @@ render_header('Order · ' . $client['name'], 'admin');
           <th class="col-price">Owner price</th>
           <th class="col-price">Decided price</th>
           <th class="col-live">LIVE URL</th>
+          <th class="col-paid">Paid</th>
           <th class="col-profit">Profit</th>
           <th class="col-month">Month</th>
           <th class="col-del">Remove</th>
@@ -261,6 +276,7 @@ render_header('Order · ' . $client['name'], 'admin');
           $id = (int) $row['id'];
           $siteIndex++;
           $done = order_is_completed($row);
+          $paid = order_is_paid($row);
           $monthVal = (int) ($row['order_month'] ?? 0);
           $yearVal = (int) ($row['order_year'] ?: date('Y'));
           if ($yearVal < 2018) {
@@ -270,7 +286,7 @@ render_header('Order · ' . $client['name'], 'admin');
               $yearVal = 2030;
           }
       ?>
-        <tr class="order-row<?= $done ? ' is-completed' : '' ?>" data-row>
+        <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?>" data-row id="row-<?= $id ?>">
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
           <td class="col-site">
             <input class="cell-input" type="text" name="site_name[<?= $id ?>]"
@@ -295,6 +311,22 @@ render_header('Order · ' . $client['name'], 'admin');
             <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
                    value="<?= h($row['live_url']) ?>" placeholder="(empty until live)"
                    data-live autocomplete="off">
+          </td>
+          <td class="col-paid">
+            <?php if ($paid): ?>
+              <button class="btn-paid is-paid" type="submit"
+                      title="Click to remove paid mark"
+                      data-paid="paid"
+                      onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='unmark_paid';">
+                Paid
+              </button>
+            <?php else: ?>
+              <button class="btn-paid" type="submit"
+                      data-paid=""
+                      onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_paid';">
+                Paid
+              </button>
+            <?php endif; ?>
           </td>
           <td class="col-profit">
             <span class="profit-cell <?= $profit >= 0 ? 'profit-pos' : 'profit-neg' ?>" data-profit>
@@ -344,6 +376,7 @@ render_header('Order · ' . $client['name'], 'admin');
             <span class="muted"> · profit </span>
             <strong data-total-completed-profit class="<?= $completedProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($completedProfit)) ?></strong>
           </td>
+          <td></td>
           <td><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
           <td colspan="2"></td>
         </tr>
@@ -355,6 +388,7 @@ render_header('Order · ' . $client['name'], 'admin');
     Country boxes stay empty for you to type (placeholder reminder: .de .nl …).
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
     An order counts as <strong>completed</strong> only when LIVE URL is filled.
+    Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (click again to undo).
     Remove asks for confirmation before deleting a row.
   </p>
   <div class="actions-sticky">
@@ -436,12 +470,15 @@ render_header('Order · ' . $client['name'], 'admin');
 
   function rowSearchParts(row) {
     var parts = [];
-    row.querySelectorAll('input, select, textarea, [data-profit]').forEach(function (el) {
+    row.querySelectorAll('input, select, textarea, [data-profit], .btn-paid').forEach(function (el) {
       if (el.tagName === 'SELECT') {
         var opt = el.options[el.selectedIndex];
         parts.push(opt ? String(opt.text || '') : '');
       } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
         parts.push(el.value || '');
+      } else if (el.classList && el.classList.contains('btn-paid')) {
+        parts.push(el.getAttribute('data-paid') || '');
+        parts.push(el.textContent || '');
       } else {
         parts.push(el.textContent || '');
       }

@@ -811,7 +811,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .order-sheet {
   width: 100%;
-  min-width: 980px;
+  min-width: 1040px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -835,6 +835,37 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .order-sheet .col-profit { width: 6.5rem; text-align: right; }
 .order-sheet .col-del { width: 4.8rem; text-align: center; }
 .order-sheet .col-live { min-width: 160px; }
+.order-sheet .col-paid { width: 4.6rem; text-align: center; }
+.btn-paid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.4rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #9ca3af;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1.1;
+}
+.btn-paid:hover {
+  border-color: #4a9b6e;
+  color: #2f6f4e;
+}
+.btn-paid.is-paid,
+.order-row.is-paid .btn-paid.is-paid {
+  background: linear-gradient(180deg, #4a9b6e 0%, #2f6f4e 100%);
+  border-color: #2f6f4e;
+  color: #fff;
+}
+.order-row.is-paid .col-paid .btn-paid.is-paid:hover {
+  filter: brightness(1.05);
+}
 .order-download-bar {
   display: flex;
   flex-wrap: wrap;
