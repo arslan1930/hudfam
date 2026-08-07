@@ -188,11 +188,16 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $msg .= ')';
         }
+        if ((int) ($pushed['cleared'] ?? 0) > 0) {
+            $msg .= ' · cleared from Team working copy';
+        }
         if ((int) $pushed['skipped_empty'] > 0) {
-            $msg .= ' · ' . (int) $pushed['skipped_empty'] . ' without emails skipped';
+            $msg .= ' · ' . (int) $pushed['skipped_empty'] . ' without emails left here';
         }
         flash('ok', $msg . '.');
-        redirect($back);
+        // After push, stay on country if unfinished rows remain; else country list.
+        $remaining = count_sites_with_emails_for_country($countryName, 'team');
+        redirect($remaining > 0 ? $back : $sweBase);
     }
 }
 
@@ -224,7 +229,7 @@ if (!$inCountry) {
         <h1><?= label_with_info(
             $sweLabel,
             $isTeam
-                ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin. Sites without emails cannot be pushed.'
+                ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
                     ? 'Admin-only mirror of Sites with emails - Admin. Synced automatically. Not linked to Team.'
                     : 'Final archive from Team Push. Also synced to All sites with emails - Final. Communication Team can super-search this data.')
@@ -424,7 +429,7 @@ render_breadcrumbs($crumbs);
     <h1><?= label_with_info(
         $countryName,
         $isTeam
-            ? 'Add up to 4 emails per site, then Push to Admin. Sites without emails stay here and cannot be pushed.'
+            ? 'Add up to 4 emails per site, then Push to Admin. Pushed rows leave this working copy; sites without emails stay here.'
             : 'Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.'
     ) ?></h1>
     <p class="muted">
@@ -439,10 +444,10 @@ render_breadcrumbs($crumbs);
   <div class="actions">
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline"
-          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nSites without emails cannot be pushed and will stay here.');">
+          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nThose rows will leave this Team working copy. Sites without emails stay here.');">
       <input type="hidden" name="action" value="push_to_admin">
       <button class="btn" type="submit" <?= $readyToPush > 0 ? '' : 'disabled' ?>
-              title="<?= $readyToPush > 0 ? 'Push sites that have emails' : 'Sites without emails cannot be pushed — add emails first' ?>">
+              title="<?= $readyToPush > 0 ? 'Push sites with emails, then clear them from Team' : 'Sites without emails cannot be pushed — add emails first' ?>">
         Push to Admin
       </button>
     </form>
@@ -470,7 +475,7 @@ render_breadcrumbs($crumbs);
   </p>
   <?php else: ?>
   <p class="help">
-    Add emails below, then <strong>Push to Admin</strong> for the final list in Sites with emails - Admin.
+    Add emails below, then <strong>Push to Admin</strong> — they move to Sites with emails - Admin and clear from this Team list.
   </p>
   <?php endif; ?>
 <?php elseif ($isAdminAll): ?>

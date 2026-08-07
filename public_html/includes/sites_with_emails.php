@@ -348,9 +348,10 @@ function add_sites_with_emails_domains_to_scope(
 }
 
 /**
- * Team → Admin: copy rows that have at least one email into the admin archive.
+ * Team → Admin: copy rows that have at least one email into the admin archive,
+ * then remove those rows from the Team working copy (sites without emails stay).
  *
- * @return array{pushed:int,updated:int,skipped_empty:int,country:string}
+ * @return array{pushed:int,updated:int,cleared:int,skipped_empty:int,country:string}
  */
 function push_sites_with_emails_team_to_admin(string $country, array $user): array
 {
@@ -392,6 +393,7 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
     $pushed = 0;
     $updated = 0;
     $skippedEmpty = 0;
+    $pushedDomains = [];
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
         $hasEmail = trim((string) ($row['email1'] ?? '')) !== ''
             || trim((string) ($row['email2'] ?? '')) !== ''
@@ -428,10 +430,25 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
             'extract_batch_id' => $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
             'pushed_by' => $uid,
         ]);
+        $pushedDomains[] = $domain;
         if ($already) {
             $updated++;
         } else {
             $pushed++;
+        }
+    }
+
+    // Clear Team working copy for rows that were pushed (keep no-email sites).
+    $cleared = 0;
+    if ($pushedDomains) {
+        $chunkSize = 200;
+        foreach (array_chunk($pushedDomains, $chunkSize) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $del = db()->prepare(
+                "DELETE FROM {$team} WHERE country=? AND domain IN ({$placeholders})"
+            );
+            $del->execute(array_merge([$country], $chunk));
+            $cleared += $del->rowCount();
         }
     }
 
@@ -442,6 +459,7 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
     return [
         'pushed' => $pushed,
         'updated' => $updated,
+        'cleared' => $cleared,
         'skipped_empty' => $skippedEmpty,
         'country' => $country,
     ];
