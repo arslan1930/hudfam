@@ -602,6 +602,13 @@ function prospect_country_folders(): array
             // countries table may be created by upgrade/install
         }
     }
+    if (function_exists('dedupe_countries_catalog')) {
+        try {
+            dedupe_countries_catalog();
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
     try {
         merge_orphan_prospect_countries();
     } catch (Throwable $e) {
@@ -622,8 +629,17 @@ function prospect_country_folders(): array
 
     $regionOrder = array_flip(array_keys(regions()));
     $folders = [];
+    $seenNames = [];
     foreach (list_countries(null, true) as $c) {
-        $name = (string) $c['name'];
+        $name = trim((string) $c['name']);
+        if ($name === '') {
+            continue;
+        }
+        $nameKey = mb_strtolower($name);
+        if (isset($seenNames[$nameKey])) {
+            continue;
+        }
+        $seenNames[$nameKey] = true;
         $region = (string) $c['region'];
         $code = strtoupper(trim((string) ($c['code'] ?? '')));
         $folders[] = [
@@ -1347,6 +1363,68 @@ function distinct_prospect_countries(): array
         "SELECT DISTINCT country FROM prospect_sites WHERE country <> '' ORDER BY country"
     )->fetchAll();
     return array_column($rows, 'country');
+}
+
+/**
+ * Super search: find a site across every country folder in Our database.
+ *
+ * @return list<array<string,mixed>>
+ */
+function search_prospect_sites_global(string $q, int $limit = 200): array
+{
+    ensure_prospect_schema();
+    $q = trim($q);
+    if ($q === '') {
+        return [];
+    }
+    $limit = max(1, min(500, $limit));
+
+    // Prefer exact / root-domain matches first, then partial.
+    $host = function_exists('extract_host_candidate') ? extract_host_candidate($q) : $q;
+    $root = function_exists('to_root_domain') ? to_root_domain($host) : $host;
+    $like = '%' . $q . '%';
+    $rootLike = $root !== '' ? '%' . $root . '%' : $like;
+
+    $stmt = db()->prepare(
+        "SELECT p.*, u.username AS added_by_name, u.full_name AS added_by_full
+         FROM prospect_sites p
+         LEFT JOIN users u ON u.id = p.created_by
+         WHERE p.domain LIKE ? OR p.url LIKE ? OR p.domain LIKE ? OR p.url LIKE ?
+         ORDER BY
+           CASE
+             WHEN p.domain = ? THEN 0
+             WHEN p.domain = ? THEN 1
+             WHEN p.domain LIKE ? THEN 2
+             ELSE 3
+           END,
+           p.country ASC,
+           p.domain ASC
+         LIMIT {$limit}"
+    );
+    $exact = $root !== '' ? $root : $q;
+    $stmt->execute([
+        $like,
+        $like,
+        $rootLike,
+        $rootLike,
+        $exact,
+        $q,
+        $exact . '%',
+    ]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function delete_prospect_site_by_id(int $id): ?array
+{
+    ensure_prospect_schema();
+    $stmt = db()->prepare('SELECT * FROM prospect_sites WHERE id=? LIMIT 1');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+    db()->prepare('DELETE FROM prospect_sites WHERE id=?')->execute([$id]);
+    return $row;
 }
 
 function list_admin_users(bool $activeOnly = true): array

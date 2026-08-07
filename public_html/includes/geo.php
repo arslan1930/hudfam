@@ -93,10 +93,70 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         $sql .= ' AND region = ?';
         $params[] = $region;
     }
-    $sql .= ' ORDER BY name';
+    $sql .= ' ORDER BY name, id';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    // Never show duplicate country names (case/whitespace variants).
+    $out = [];
+    $seen = [];
+    foreach ($rows as $row) {
+        $name = trim((string) ($row['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $row['name'] = $name;
+        $out[] = $row;
+    }
+    return $out;
+}
+
+/**
+ * Remove duplicate rows from countries table (same name, case/space insensitive).
+ * Keeps the lowest id.
+ */
+function dedupe_countries_catalog(): int
+{
+    $pdo = db();
+    $rows = $pdo->query(
+        'SELECT id, name FROM countries ORDER BY id ASC'
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $keep = [];
+    $removed = 0;
+    $del = $pdo->prepare('DELETE FROM countries WHERE id=?');
+    $fixName = $pdo->prepare('UPDATE countries SET name=? WHERE id=?');
+    foreach ($rows as $row) {
+        $id = (int) $row['id'];
+        $name = trim((string) ($row['name'] ?? ''));
+        if ($name === '') {
+            $del->execute([$id]);
+            $removed++;
+            continue;
+        }
+        $key = mb_strtolower($name);
+        if (isset($keep[$key])) {
+            $del->execute([$id]);
+            $removed++;
+            continue;
+        }
+        $keep[$key] = $id;
+        if ($name !== (string) $row['name']) {
+            try {
+                $fixName->execute([$name, $id]);
+            } catch (Throwable $e) {
+                // unique collision after trim — drop this row
+                $del->execute([$id]);
+                $removed++;
+                unset($keep[$key]);
+            }
+        }
+    }
+    return $removed;
 }
 
 function countries_grouped(): array

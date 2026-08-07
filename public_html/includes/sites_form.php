@@ -79,8 +79,17 @@ function render_country_typeahead(string $value = '', array $opts = []): string
         }
     }
     $items = [];
+    $seen = [];
     foreach (list_countries(null, true) as $c) {
-        $name = (string) ($c['name'] ?? '');
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
         $region = (string) ($c['region'] ?? '');
         $code = strtoupper(trim((string) ($c['code'] ?? '')));
         $display = function_exists('prospect_folder_display_label')

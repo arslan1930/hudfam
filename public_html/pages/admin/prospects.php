@@ -2,6 +2,13 @@
 $user = require_admin();
 ensure_prospect_schema();
 seed_countries_if_empty(db());
+if (function_exists('dedupe_countries_catalog')) {
+    try {
+        dedupe_countries_catalog();
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
 
 $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
@@ -32,6 +39,26 @@ if ($addCountry !== '') {
             $addLanguage = $canonAdd['language'];
         }
     }
+}
+
+// --- Remove one site (from super search or elsewhere) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove_site') {
+    $siteId = (int) post('site_id');
+    $returnSuper = trim((string) post('super_q'));
+    $returnCountry = trim((string) post('country'));
+    $removed = delete_prospect_site_by_id($siteId);
+    if (!$removed) {
+        flash('error', 'Site not found.');
+    } else {
+        flash('ok', 'Removed ' . (string) $removed['domain'] . ' from ' . ((string) ($removed['country'] ?: 'No country')) . '.');
+    }
+    if ($returnSuper !== '') {
+        redirect('index.php?page=admin_prospects&super_q=' . rawurlencode($returnSuper) . '#super-search');
+    }
+    if ($returnCountry !== '') {
+        redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
+    }
+    redirect('index.php?page=admin_prospects');
 }
 
 // --- Remove by list from Our database (country folder) ---
@@ -146,6 +173,18 @@ if (is_array($draft)) {
 
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
+    $superQ = trim((string) get('super_q'));
+    $superResults = $superQ !== '' ? search_prospect_sites_global($superQ, 200) : [];
+    // Group matches by country for “present in multiple places”
+    $superByCountry = [];
+    foreach ($superResults as $hit) {
+        $cKey = trim((string) ($hit['country'] ?? ''));
+        if ($cKey === '') {
+            $cKey = '_none';
+        }
+        $superByCountry[$cKey][] = $hit;
+    }
+
     $folders = prospect_country_folders();
     $byRegion = [];
     // Preserve region order from regions()
@@ -182,9 +221,91 @@ if (!$inCountry && !$emptyCountry) {
         <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
-        <a class="btn" href="#add-sites">Add sites</a>
+        <a class="btn" href="#super-search">Super search</a>
+        <a class="btn secondary" href="#add-sites">Add sites</a>
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
       </div>
+    </div>
+
+    <div class="card" id="super-search">
+      <h2>Super search</h2>
+      <p class="help">
+        Search any site across <strong>all country databases</strong>.
+        If it exists in more than one country, every place is listed.
+      </p>
+      <form method="get" action="index.php" class="super-search-form">
+        <input type="hidden" name="page" value="admin_prospects">
+        <label class="visually-hidden" for="super_q">Site name</label>
+        <div class="super-search-row">
+          <input id="super_q" name="super_q" type="search" value="<?= h($superQ) ?>"
+                 placeholder="example.com" required autocomplete="off" spellcheck="false" data-no-draft>
+          <button class="btn" type="submit">Super search</button>
+          <?php if ($superQ !== ''): ?>
+            <a class="btn secondary" href="index.php?page=admin_prospects">Clear</a>
+          <?php endif; ?>
+        </div>
+      </form>
+
+      <?php if ($superQ !== ''): ?>
+        <?php if (!$superResults): ?>
+          <div class="empty-state" style="margin-top:0.85rem">
+            <p>No matches for “<?= h($superQ) ?>” in any country database.</p>
+          </div>
+        <?php else: ?>
+          <p class="help" style="margin-top:0.85rem">
+            Found <strong><?= count($superResults) ?></strong> match<?= count($superResults) === 1 ? '' : 'es' ?>
+            in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>.
+          </p>
+          <div class="table-wrap" style="margin-top:0.55rem">
+            <table class="super-search-table">
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>Country</th>
+                  <th>Language</th>
+                  <th>Added</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($superResults as $hit):
+                  $hitCountry = trim((string) ($hit['country'] ?? ''));
+                  $countryHref = $hitCountry !== '' ? $hitCountry : '_none';
+                  $countryLabel = $hitCountry !== ''
+                      ? (function_exists('prospect_folder_display_label')
+                          ? prospect_folder_display_label($hitCountry, (string) ($hit['region'] ?? ''))
+                          : $hitCountry)
+                      : 'No country';
+                  $openUrl = 'index.php?page=admin_prospects&country=' . rawurlencode($countryHref)
+                      . '&q=' . rawurlencode((string) $hit['domain']);
+                  ?>
+                <tr>
+                  <td><strong><?= h((string) $hit['domain']) ?></strong></td>
+                  <td>
+                    <?= h($countryLabel) ?>
+                    <?php if ($countryLabel !== $hitCountry && $hitCountry !== ''): ?>
+                      <span class="muted"> · <?= h($hitCountry) ?></span>
+                    <?php endif; ?>
+                  </td>
+                  <td><?= h((string) ($hit['language'] ?: '—')) ?></td>
+                  <td class="muted"><?= h(substr((string) ($hit['created_at'] ?? ''), 0, 10)) ?></td>
+                  <td class="actions">
+                    <a class="btn small" href="<?= h($openUrl) ?>">Go to site</a>
+                    <form method="post" action="index.php?page=admin_prospects#super-search" class="inline-form"
+                          onsubmit="return confirm('Remove <?= h((string) $hit['domain']) ?> from <?= h($hitCountry !== '' ? $hitCountry : 'No country') ?>?');">
+                      <input type="hidden" name="action" value="remove_site">
+                      <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
+                      <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
+                      <button class="btn secondary small danger" type="submit">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      <?php endif; ?>
     </div>
     <?= render_page_purpose(
         'Our database — one folder per country',

@@ -39,7 +39,14 @@ if (!file_exists(__DIR__ . '/config.php')) {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
         seed_countries_if_empty($pdo);
-        $notes[] = 'countries OK';
+        if (function_exists('dedupe_countries_catalog')) {
+            $n = dedupe_countries_catalog();
+            $notes[] = $n > 0
+                ? 'countries OK · removed ' . $n . ' duplicate country name(s)'
+                : 'countries OK';
+        } else {
+            $notes[] = 'countries OK';
+        }
 
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';

@@ -1104,6 +1104,23 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   outline-offset: 2px;
   background: #eff6ff;
 }
+
+/* Our database — super search */
+.super-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.45rem;
+}
+.super-search-row input[type="search"] {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+  font-size: 1rem;
+  padding: 0.55rem 0.7rem;
+}
+.super-search-table td { vertical-align: middle; }
+.super-search-table .inline-form { display: inline; margin: 0; }
 .tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.9rem 0; }
 .tabs a {
   padding: 0.35rem 0.7rem;
