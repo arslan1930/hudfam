@@ -60,39 +60,48 @@ if ($folder === '') {
     ?>
     <div class="topbar">
       <div>
-        <h1>Emails DATA</h1>
+        <h1><?= label_with_info('Emails DATA', 'Final email archives from Team Push, plus country Email Sheets for Communication Team search.') ?></h1>
         <p class="muted">Email archives and campaign sheets for Communication Team.</p>
       </div>
     </div>
 
     <div class="card">
-      <div class="folders">
-        <a class="folder" href="<?= h($base) ?>&amp;folder=sites_with_emails">
-          <h3>Sites with emails - Admin</h3>
-          <p class="muted">
-            Final list from Team Push ·
-            <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
-            · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
-            · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
-          </p>
-        </a>
-        <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
-          <h3>All sites with emails - Final</h3>
-          <p class="muted">
-            Admin-only mirror of Sites with emails - Admin (not linked to Team) ·
-            <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
-            · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
-            · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
-          </p>
-        </a>
-        <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
-          <h3>Email campaign data</h3>
-          <p class="muted">
-            One sheet per country · Communication Team super search ·
-            <?= (int) $campaignSheetCount ?> countr<?= (int) $campaignSheetCount === 1 ? 'y' : 'ies' ?>
-            · <?= (int) $campaignRowTotal ?> site<?= (int) $campaignRowTotal === 1 ? '' : 's' ?>
-          </p>
-        </a>
+      <div class="folders emails-data-folders">
+        <div class="folder-with-info">
+          <a class="folder" href="<?= h($base) ?>&amp;folder=sites_with_emails">
+            <h3>Sites with emails - Admin</h3>
+            <p class="muted">
+              Final list from Team Push ·
+              <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
+              · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
+              · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
+            </p>
+          </a>
+          <?= info_icon('Final site + email archive filled when Team pushes from Sites with emails - Team. Communication Team can super-search this across all countries.', 'About Sites with emails - Admin') ?>
+        </div>
+        <div class="folder-with-info">
+          <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
+            <h3>All sites with emails - Final</h3>
+            <p class="muted">
+              Admin-only mirror of Sites with emails - Admin (not linked to Team) ·
+              <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
+              · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
+              · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
+            </p>
+          </a>
+          <?= info_icon('Admin-only mirror of Sites with emails - Admin. Stays in sync automatically. Not linked to Team.', 'About All sites with emails - Final') ?>
+        </div>
+        <div class="folder-with-info">
+          <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
+            <h3>Email campaign data</h3>
+            <p class="muted">
+              One sheet per country · Communication Team super search ·
+              <?= (int) $campaignSheetCount ?> countr<?= (int) $campaignSheetCount === 1 ? 'y' : 'ies' ?>
+              · <?= (int) $campaignRowTotal ?> site<?= (int) $campaignRowTotal === 1 ? '' : 's' ?>
+            </p>
+          </a>
+          <?= info_icon('Create one Email Sheet per country with site names + emails. Communication Team searches all country sheets in one super search bar.', 'About Email campaign data') ?>
+        </div>
       </div>
     </div>
     <?php

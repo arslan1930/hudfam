@@ -50,7 +50,7 @@ render_header('Dashboard', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1>Admin dashboard</h1>
+    <h1><?= label_with_info('Admin dashboard', 'Orange New badges appear when Team adds sites, pushes Extracted Sites, or pushes Sites with emails - Admin. Open that section to clear the reminder.') ?></h1>
     <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — each country has its own URL database.</p>
   </div>
   <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">

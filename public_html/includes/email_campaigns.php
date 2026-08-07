@@ -789,13 +789,13 @@ function render_email_campaign_super_search(string $postBase = 'index.php?page=t
        data-sheet-name="All countries"
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0">Super search · all countries</h2>
+    <h2 style="margin-top:0"><?= label_with_info('Super search · all countries', 'Type a site or email. Pick a result, choose delete both or remove only email, then press Enter and confirm. The matching country Email Sheet row updates.') ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= count($sheets) ?> countr<?= count($sheets) === 1 ? 'y' : 'ies' ?> ·
       <?= (int) $totalSites ?> site<?= (int) $totalSites === 1 ? '' : 's' ?> ·
       search site or email across every country sheet · updates that country’s row
     </p>
-    <label class="swe-admin-delete-label" for="<?= h($uid) ?>">Search site name or email</label>
+    <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions across every country sheet. Site name and emails always appear together.') ?></label>
     <div class="swe-admin-delete-search">
       <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-camp-q
              placeholder="Type site or email (all countries)…"

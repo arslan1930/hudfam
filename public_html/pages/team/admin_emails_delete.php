@@ -116,7 +116,7 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1>Sites with emails - Admin</h1>
+    <h1><?= label_with_info('Sites with emails - Admin', 'Super search across every country in the Admin archive. Results always show site + email + country. Enter confirms delete-both or remove-email-only on that country’s row.') ?></h1>
     <p class="muted">
       One <strong>super search</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.

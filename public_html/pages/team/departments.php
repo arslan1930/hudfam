@@ -73,7 +73,7 @@ if (!$dept) {
 
     <?php if ($inCommunication): ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0">Sites with emails - Admin · super search</h2>
+      <h2 style="margin-top:0"><?= label_with_info('Sites with emails - Admin · super search', 'Archive search for Communication Team. Same rules as campaign search: site + email + country, Enter confirms, updates the Admin country row.') ?></h2>
       <p class="help muted">
         Search all countries in Admin → Emails DATA → Sites with emails - Admin.
         Site + email + country stay together. Updates that country’s Admin row.
@@ -83,7 +83,7 @@ if (!$dept) {
     render_sites_with_emails_admin_super_search('index.php?page=team_admin_emails_delete');
     ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0">Email campaign · super search</h2>
+      <h2 style="margin-top:0"><?= label_with_info('Email campaign · super search', 'Searches country Email Sheets created under Emails DATA → Email campaign data. Updates apply to that sheet only.') ?></h2>
       <p class="help muted">
         Search all country sheets from Admin → Emails DATA → Email campaign data.
         Site + email + country stay together. Updates apply to that country’s sheet row.
@@ -152,7 +152,7 @@ render_breadcrumbs([
 
 <?php if ((string) $dept['slug'] === 'communication'): ?>
 <div class="card" style="margin-bottom:1rem">
-  <h2 style="margin-top:0">Sites with emails - Admin · super search</h2>
+  <h2 style="margin-top:0"><?= label_with_info('Sites with emails - Admin · super search', 'Archive search for Communication Team. Site + email + country; Enter confirms; updates the Admin country row.') ?></h2>
   <p class="help muted">
     All countries · site + email + country · updates the matching Admin row.
   </p>
@@ -161,7 +161,7 @@ render_breadcrumbs([
 render_sites_with_emails_admin_super_search('index.php?page=team_admin_emails_delete');
 ?>
 <div class="card" style="margin-bottom:1rem">
-  <h2 style="margin-top:0">Email campaign · super search</h2>
+  <h2 style="margin-top:0"><?= label_with_info('Email campaign · super search', 'Searches country Email Sheets. Updates apply to that sheet only.') ?></h2>
   <p class="help muted">
     All country sheets · site + email together · updates the matching country row.
   </p>

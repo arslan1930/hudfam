@@ -149,7 +149,7 @@ if ($sheetId > 0) {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= h($sheetCountry) ?></h1>
+        <h1><?= label_with_info($sheetCountry, 'Country Email Sheet: enter site names with emails next to them. Communication Team finds these rows in the campaign super search.') ?></h1>
         <p class="muted">
           Country email sheet · site names + emails ·
           Communication Team super search ·
@@ -167,7 +167,7 @@ if ($sheetId > 0) {
     <div class="card">
       <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0">Sites · Emails</h2>
+          <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is a site name with up to 4 emails. Save the sheet so Communication Team can search and update these rows.') ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             Enter site names with emails next to them for <strong><?= h($sheetCountry) ?></strong>.
             Save — Communication Team can find them in the all-countries super search.
@@ -237,7 +237,7 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2>Paste site + emails</h2>
+      <h2><?= label_with_info('Paste site + emails', 'Paste many lines at once. Format: site.com, email1, email2 (commas, tabs, or spaces).') ?></h2>
       <p class="help">One line per site for <strong><?= h($sheetCountry) ?></strong>: <code>site.com, email1@x.com</code></p>
       <form method="post" action="<?= h($formAction) ?>">
         <input type="hidden" name="action" value="paste">
@@ -250,7 +250,7 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2>Import <?= h($sheetCountry) ?> from archive (optional)</h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive (optional)', 'Copies only this country’s rows from Sites with emails - Final or Admin into this campaign sheet. Archives are not changed.') ?></h2>
       <p class="help">Copies only this country’s rows from Final / Admin into this sheet.</p>
       <form method="post" action="<?= h($formAction) ?>"
             onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?');">
@@ -267,7 +267,7 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2>Communication Team</h2>
+      <h2><?= label_with_info('Communication Team', 'Always connected: this country sheet appears in their campaign super search. Deletes there update this sheet.') ?></h2>
       <p class="help">
         This country sheet is included in the <strong>Communication Team super search</strong>
         (all countries). Their remove/update actions change rows in <strong><?= h($sheetCountry) ?></strong>.
@@ -342,7 +342,7 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1>Email campaign data</h1>
+    <h1><?= label_with_info('Email campaign data', 'One Email Sheet per country. Fill site names + emails; Communication Team searches all countries in one bar.') ?></h1>
     <p class="muted">
       One Email Sheet per country (site names + emails).
       Communication Team searches all countries in one super search bar.
@@ -355,7 +355,7 @@ render_breadcrumbs([
 
 <div class="orders-layout">
   <section class="card">
-    <h2>Country sheets</h2>
+    <h2><?= label_with_info('Country sheets', 'Open a country to edit its site + email rows. Each country has one sheet.') ?></h2>
     <?php if (!$sheets): ?>
       <div class="empty-state">
         <p>No country sheets yet.</p>
@@ -420,7 +420,7 @@ render_breadcrumbs([
   </section>
 
   <section class="card" id="create-email-sheet">
-    <h2>Create an Email Sheet</h2>
+    <h2><?= label_with_info('Create an Email Sheet', 'Pick a country that does not have a sheet yet. It is automatically available to Communication Team search.') ?></h2>
     <p class="muted" style="margin-top:0">
       Pick a country. That country gets its own sheet of site names + emails,
       and joins the Communication Team all-countries super search.

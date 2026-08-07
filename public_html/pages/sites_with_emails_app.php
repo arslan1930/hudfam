@@ -221,7 +221,14 @@ if (!$inCountry) {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= h($sweLabel) ?></h1>
+        <h1><?= label_with_info(
+            $sweLabel,
+            $isTeam
+                ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin. Sites without emails cannot be pushed.'
+                : ($isAdminAll
+                    ? 'Admin-only mirror of Sites with emails - Admin. Synced automatically. Not linked to Team.'
+                    : 'Final archive from Team Push. Also synced to All sites with emails - Final. Communication Team can super-search this data.')
+        ) ?></h1>
         <p class="muted">
           <?php if ($isTeam): ?>
             Site names arrive from Extracting Results → Push.
@@ -248,7 +255,7 @@ if (!$inCountry) {
 
     <?php if ($isTeam): ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2>Delete Site name or Email (from Admin)</h2>
+      <h2><?= label_with_info('Delete Site name or Email (from Admin)', 'Live search across Sites with emails - Admin. Delete the whole site row, or remove one email only and keep the site name.') ?></h2>
       <p class="help">
         Type a site or email — live suggestions come from
         <strong>Sites with emails - Admin</strong>.
@@ -263,7 +270,7 @@ if (!$inCountry) {
     <div class="card">
       <?php if ($countryRows): ?>
       <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
-        <h2 style="margin:0">By country</h2>
+        <h2 style="margin:0"><?= label_with_info('By country', 'Open a country to see its sites and emails. Counts show how many sites have at least one email.') ?></h2>
         <label class="sheet-search" for="swe-country-search">
           <span class="visually-hidden">Search countries</span>
           <input id="swe-country-search" type="search" placeholder="Search…"
@@ -414,7 +421,12 @@ render_breadcrumbs($crumbs);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= h($countryName) ?></h1>
+    <h1><?= label_with_info(
+        $countryName,
+        $isTeam
+            ? 'Add up to 4 emails per site, then Push to Admin. Sites without emails stay here and cannot be pushed.'
+            : 'Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.'
+    ) ?></h1>
     <p class="muted">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
       <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
@@ -477,7 +489,7 @@ render_breadcrumbs($crumbs);
 <div class="card">
   <div class="invoice-list-toolbar swe-list-toolbar">
     <div>
-      <h2 style="margin:0">Sites · Emails</h2>
+      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Search matches site name or any email on that row.') ?></h2>
       <p class="help" style="margin:0.25rem 0 0">
         Search shows both columns together (site + its emails).
         <?php if ($isAdmin): ?>
@@ -602,7 +614,7 @@ render_breadcrumbs($crumbs);
 
 <?php if ($isTeam): ?>
 <div class="card" style="margin-top:1rem">
-  <h2>Add site row</h2>
+  <h2><?= label_with_info('Add site row', 'Optional manual add. Most site names arrive from Extracting Results → Push.') ?></h2>
   <p class="help">Optional manual add. Most sites arrive from Extracting Results → Push.</p>
   <form method="post" action="<?= h($listBase) ?>" class="swe-add-form">
     <input type="hidden" name="action" value="save_row">
@@ -638,7 +650,7 @@ render_breadcrumbs($crumbs);
 
 <?php if ($countryTotal > 0): ?>
 <div class="card" id="remove-by-list" style="margin-top:1rem">
-  <h2>Remove by list</h2>
+  <h2><?= label_with_info('Remove by list', 'Paste site names or upload a 1-column CSV. Matching rows in this country are removed.') ?></h2>
   <p class="help">Paste site names (or 1-column CSV) to remove those rows from <?= h($countryName) ?>.</p>
   <form method="post" action="<?= h($listBase) ?>#remove-by-list" enctype="multipart/form-data"
         onsubmit="return confirm('Remove matching sites from <?= h($countryName) ?>?');">

@@ -1002,13 +1002,13 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
        data-swe-admin-delete
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0">Super search · Sites with emails - Admin</h2>
+    <h2 style="margin-top:0"><?= label_with_info('Super search · Sites with emails - Admin', 'Type a site or email across all countries in the Admin archive. Choose delete both or remove only email, then Enter + confirm. Updates that country’s Admin row (and Final mirror).') ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= (int) $countries ?> countr<?= (int) $countries === 1 ? 'y' : 'ies' ?> ·
       <?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> ·
       search site or email across all countries · updates that country’s Admin row
     </p>
-    <label class="swe-admin-delete-label" for="<?= h($uid) ?>">Search site name or email</label>
+    <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions from Sites with emails - Admin. Results always show site + email + country together.') ?></label>
     <div class="swe-admin-delete-search">
       <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-swe-q
              placeholder="Type site or email (all countries)…"

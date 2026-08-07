@@ -105,7 +105,7 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1>Email campaign search</h1>
+    <h1><?= label_with_info('Email campaign search', 'Searches all country Email Sheets created by Admin. Results show site + email + country. Enter confirms your chosen action on that country sheet row.') ?></h1>
     <p class="muted">
       One super search across <strong>all country sheets</strong> from Admin → Emails DATA → Email campaign data.
       Results show <strong>site name + email + country</strong>. Choose delete both or remove only email, then press
