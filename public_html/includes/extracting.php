@@ -166,10 +166,10 @@ function list_extract_batches(int $limit = 200): array
 {
     ensure_extract_schema();
     $limit = max(1, min(500, $limit));
+    // Include emptied batches so teammates can reopen and Undo after a full clear.
     $sql = "SELECT b.*, u.username, u.full_name
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
-            WHERE b.site_count > 0
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
     return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -203,6 +203,131 @@ function get_extract_batch_domains(int $batchId, int $limit = 50000): array
     return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 }
 
+/**
+ * @return list<array{id:int,domain:string,prospect_site_id:?int,added_by:?int}>
+ */
+function get_extract_batch_site_rows(int $batchId, int $limit = 50000): array
+{
+    ensure_extract_schema();
+    $limit = max(1, min(100000, $limit));
+    $stmt = db()->prepare(
+        'SELECT id, domain, prospect_site_id, added_by
+         FROM extract_batch_sites
+         WHERE batch_id=?
+         ORDER BY domain ASC
+         LIMIT ' . (int) $limit
+    );
+    $stmt->execute([$batchId]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($rows as &$row) {
+        $row['id'] = (int) $row['id'];
+        $row['domain'] = (string) $row['domain'];
+        $row['prospect_site_id'] = $row['prospect_site_id'] !== null ? (int) $row['prospect_site_id'] : null;
+        $row['added_by'] = $row['added_by'] !== null ? (int) $row['added_by'] : null;
+    }
+    unset($row);
+    return $rows;
+}
+
+function refresh_extract_batch_site_count(int $batchId): int
+{
+    ensure_extract_schema();
+    $cnt = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
+    $cnt->execute([$batchId]);
+    $siteCount = (int) $cnt->fetchColumn();
+    db()->prepare(
+        'UPDATE extract_batches SET site_count=?, updated_at=NOW() WHERE id=?'
+    )->execute([$siteCount, $batchId]);
+    return $siteCount;
+}
+
+/**
+ * Remove domains from Sites list only (admin country DB untouched).
+ *
+ * @param list<string> $domains
+ * @return list<array{domain:string,prospect_site_id:?int,added_by:?int}>
+ */
+function remove_extract_batch_domains(int $batchId, array $domains): array
+{
+    ensure_extract_schema();
+    $wanted = [];
+    foreach ($domains as $d) {
+        $n = normalize_domain((string) $d);
+        if ($n !== '') {
+            $wanted[$n] = true;
+        }
+    }
+    if ($wanted === []) {
+        return [];
+    }
+    $list = array_keys($wanted);
+    $placeholders = implode(',', array_fill(0, count($list), '?'));
+    $params = array_merge([$batchId], $list);
+    $sel = db()->prepare(
+        "SELECT domain, prospect_site_id, added_by
+         FROM extract_batch_sites
+         WHERE batch_id=? AND domain IN ({$placeholders})"
+    );
+    $sel->execute($params);
+    $removed = $sel->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if ($removed === []) {
+        return [];
+    }
+    $del = db()->prepare(
+        "DELETE FROM extract_batch_sites WHERE batch_id=? AND domain IN ({$placeholders})"
+    );
+    $del->execute($params);
+    refresh_extract_batch_site_count($batchId);
+
+    $out = [];
+    foreach ($removed as $row) {
+        $out[] = [
+            'domain' => (string) $row['domain'],
+            'prospect_site_id' => $row['prospect_site_id'] !== null ? (int) $row['prospect_site_id'] : null,
+            'added_by' => $row['added_by'] !== null ? (int) $row['added_by'] : null,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * @param list<array{domain:string,prospect_site_id?:int|null,added_by?:int|null}> $rows
+ */
+function restore_extract_batch_domains(int $batchId, array $rows): int
+{
+    ensure_extract_schema();
+    if ($rows === []) {
+        return 0;
+    }
+    $ins = db()->prepare(
+        'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           prospect_site_id = COALESCE(VALUES(prospect_site_id), prospect_site_id),
+           added_by = COALESCE(VALUES(added_by), added_by)'
+    );
+    $restored = 0;
+    foreach ($rows as $row) {
+        $domain = normalize_domain((string) ($row['domain'] ?? ''));
+        if ($domain === '') {
+            continue;
+        }
+        try {
+            $ins->execute([
+                $batchId,
+                $domain,
+                !empty($row['prospect_site_id']) ? (int) $row['prospect_site_id'] : null,
+                !empty($row['added_by']) ? (int) $row['added_by'] : null,
+            ]);
+            $restored++;
+        } catch (PDOException $e) {
+            // skip
+        }
+    }
+    refresh_extract_batch_site_count($batchId);
+    return $restored;
+}
+
 function save_extract_batch_results(int $batchId, string $resultsText): void
 {
     ensure_extract_schema();
@@ -215,4 +340,21 @@ function count_extract_batches(): int
 {
     ensure_extract_schema();
     return (int) db()->query('SELECT COUNT(*) FROM extract_batches WHERE site_count > 0')->fetchColumn();
+}
+
+function extract_request_wants_json(): bool
+{
+    if ((string) ($_POST['ajax'] ?? '') === '1') {
+        return true;
+    }
+    $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+    return str_contains($accept, 'application/json');
+}
+
+function extract_json_response(array $payload, int $status = 200): void
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
 }
