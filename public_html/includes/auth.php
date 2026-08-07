@@ -108,7 +108,7 @@ function attempt_login(string $username, string $password): bool
         }
     }
 
-    if (session_status() === PHP_SESSION_ACTIVE) {
+    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
         session_regenerate_id(true);
     }
 

@@ -338,8 +338,9 @@ function add_order_item(int $clientId, string $siteName = '', ?int $month = null
           (client_id, row_type, site_name, country, order_month, order_year, owner_price, decided_price, live_url, sort_order)
          VALUES (?, 'site', ?, '', ?, ?, 0, 0, '', ?)"
     )->execute([$clientId, trim($siteName), $month, $year, $next]);
+    $id = (int) db()->lastInsertId();
     db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
-    return (int) db()->lastInsertId();
+    return $id;
 }
 
 /**
@@ -357,10 +358,11 @@ function add_order_year_end(int $clientId, int $endingYear): int
           (client_id, row_type, site_name, country, order_month, order_year, owner_price, decided_price, live_url, sort_order)
          VALUES (?, 'year_end', '', '', 12, ?, 0, 0, '', ?)"
     )->execute([$clientId, $endingYear, $next]);
+    $id = (int) db()->lastInsertId();
     // Seed first row of the new year so admin can keep filling
     add_order_item($clientId, '', 1, $endingYear + 1);
     db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
-    return (int) db()->lastInsertId();
+    return $id;
 }
 
 /**

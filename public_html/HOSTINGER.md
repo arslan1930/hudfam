@@ -37,6 +37,9 @@ Do a **clean replace**:
 4. Copy the one-time passwords shown, then **delete `install.php`**  
 5. Login and set a new password when prompted (demo defaults like `admin123` are no longer created)
 
+## PHP extensions
+Enable **pdo_mysql** and **mbstring** in hPanel → PHP Configuration (Hostinger usually has both on).
+
 ## Correct layout
 ```text
 public_html/

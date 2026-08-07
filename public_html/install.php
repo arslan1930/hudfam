@@ -89,8 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              ON DUPLICATE KEY UPDATE country=VALUES(country), language=VALUES(language)'
         );
         $demoProspects = [
-            ['prospect-blog-de.example', 'Germany', 'German', 'europe', 'Finance', 'Demo site in Our database', 'new'],
-            ['outreach-target-us.example', 'United States', 'English', 'north_america', 'Business', 'Demo site in Our database', 'contacting'],
+            ['prospect-blog-de.com', 'Germany', 'German', 'europe', 'Finance', 'Demo site in Our database', 'new'],
+            ['outreach-target-us.com', 'United States', 'English', 'north_america', 'Business', 'Demo site in Our database', 'contacting'],
         ];
         foreach ($demoProspects as $pr) {
             $prospectIns->execute([$pr[0], $pr[1], $pr[2], $pr[3], $pr[4], $pr[5], $pr[6], $teamId]);
