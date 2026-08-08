@@ -1,20 +1,23 @@
 <?php
-require_admin();
+$user = require_admin();
+if (function_exists('clear_admin_new_data')) {
+    clear_admin_new_data('our_database', $user);
+}
 $id = (int) get('id');
 $batch = get_prospect_batch($id);
 if (!$batch) {
-    flash('error', 'Add history day not found.');
+    flash('error', 'Site adding history day not found.');
     redirect('index.php?page=admin_prospect_batches');
 }
 $items = get_prospect_batch_items($id);
 $domains = array_column($items, 'domain');
 $person = $batch['full_name'] ?: $batch['username'];
 
-render_header('Add history · ' . $batch['batch_date'], 'admin');
+render_header('Site adding history · ' . $batch['batch_date'], 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Add history', 'href' => 'index.php?page=admin_prospect_batches'],
+    ['label' => 'Site adding history', 'href' => 'index.php?page=admin_prospect_batches'],
     ['label' => $batch['batch_date'] . ' · ' . $person],
 ]); ?>
 <div class="topbar">
@@ -23,7 +26,6 @@ render_header('Add history · ' . $batch['batch_date'], 'admin');
     <p class="muted">
       <?= (int) $batch['site_count'] ?> site(s) added
       · <?= h($batch['country'] ?: '—') ?>
-      · <?= h($batch['language'] ?: '—') ?>
       · role <?= h($batch['role'] ?? '—') ?>
     </p>
   </div>
@@ -38,7 +40,7 @@ render_header('Add history · ' . $batch['batch_date'], 'admin');
   <?php if (!empty($batch['notes'])): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">Saved in Our database and in this teammate’s daily add history.</p>
+  <p class="help">Saved in Our database and in this teammate’s daily site adding history.</p>
   <?php if ($domains): ?>
     <textarea class="inventory-box" rows="16" readonly><?= h(implode("\n", $domains)) ?></textarea>
     <details style="margin-top:1rem">

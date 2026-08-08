@@ -1,0 +1,3 @@
+-- Applied automatically by ensure_users_auth_schema() and upgrade.php.
+-- Run manually only if that column is missing:
+-- ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active;

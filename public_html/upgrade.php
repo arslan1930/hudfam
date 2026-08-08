@@ -1,24 +1,41 @@
 <?php
 /**
  * One-time upgrade for existing Hostinger installs.
- * 1) Ensures Our database + Add history tables
- * 2) DROPS Catalog / Emails / Orders / Published / Projects tables
- * Open once after uploading new files, then delete this file.
+ * Requires a logged-in Admin session. Delete this file after running.
  */
 session_start();
 require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
-require __DIR__ . '/includes/geo.php';
-require __DIR__ . '/includes/prospects.php';
+require __DIR__ . '/includes/auth.php';
 
 $error = '';
 $done = false;
 $notes = [];
+$locked = false;
 
 if (!file_exists(__DIR__ . '/config.php')) {
     $error = 'config.php missing. Run install.php first.';
-} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['run'])) {
+    $locked = true;
+} else {
+    // Admin-only: log in via the app first, then open this page.
+    $user = current_user();
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        $locked = true;
+        http_response_code(403);
+    }
+}
+
+if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        require __DIR__ . '/includes/geo.php';
+        require __DIR__ . '/includes/prospects.php';
+        require __DIR__ . '/includes/extracting.php';
+        require __DIR__ . '/includes/extracted.php';
+        require __DIR__ . '/includes/sites_with_emails.php';
+        require __DIR__ . '/includes/email_campaigns.php';
+        require __DIR__ . '/includes/admin_new_data.php';
+        require __DIR__ . '/includes/departments.php';
+
         $pdo = db();
 
         $pdo->exec(
@@ -35,11 +52,57 @@ if (!file_exists(__DIR__ . '/config.php')) {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
         seed_countries_if_empty($pdo);
-        $notes[] = 'countries OK';
+        if (function_exists('dedupe_countries_catalog')) {
+            $n = dedupe_countries_catalog();
+            $notes[] = $n > 0
+                ? 'countries OK · removed ' . $n . ' duplicate country name(s)'
+                : 'countries OK';
+        } else {
+            $notes[] = 'countries OK';
+        }
+        if (function_exists('repair_country_alias_folders')) {
+            $repair = repair_country_alias_folders(true);
+            if (($repair['removed_catalog'] ?? 0) > 0 || ($repair['merged'] ?? 0) > 0) {
+                $notes[] = 'merged demonym folders (e.g. German → Germany) · '
+                    . (int) ($repair['merged'] ?? 0) . ' row(s) · removed '
+                    . (int) ($repair['removed_catalog'] ?? 0) . ' fake country name(s)';
+            } else {
+                $notes[] = 'country aliases OK (no German/Spanish-style folders)';
+            }
+        }
 
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';
-        $notes[] = 'prospect_batches (Add history) OK';
+        $notes[] = 'prospect_batches (Site adding history) OK';
+
+        ensure_extract_schema();
+        $notes[] = 'extract_batches / extract_batch_sites (Extracting sites) OK';
+
+        ensure_extracted_schema();
+        $notes[] = 'extracted_sites (Extracted URLs) OK';
+
+        ensure_sites_with_emails_schema();
+        $notes[] = 'sites_with_emails_team / sites_with_emails_admin / sites_with_emails_admin_all OK';
+
+        ensure_email_campaign_schema();
+        $notes[] = 'email_campaign_sheets / email_campaign_rows (Email campaign data) OK';
+
+        ensure_admin_new_data_schema();
+        $notes[] = 'admin_data_signals / admin_data_seen (New data reminders) OK';
+
+        ensure_departments_schema();
+        $notes[] = 'departments / department_members / department_tasks OK';
+
+        require_once __DIR__ . '/includes/orders.php';
+        ensure_order_schema();
+        $notes[] = 'order_clients / order_items (Order management) OK';
+
+        require_once __DIR__ . '/includes/invoices.php';
+        ensure_invoice_schema();
+        $notes[] = 'invoices / invoice_items (Invoices panel) OK';
+
+        ensure_users_auth_schema();
+        $notes[] = 'users.must_change_password OK';
 
         $userCols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('phone', $userCols, true)) {
@@ -50,6 +113,11 @@ if (!file_exists(__DIR__ . '/config.php')) {
             $pdo->exec("ALTER TABLE users ADD COLUMN contact_details TEXT NULL AFTER phone");
             $notes[] = 'added users.contact_details';
         }
+
+        $weak = flag_users_with_weak_passwords();
+        $notes[] = $weak > 0
+            ? 'flagged ' . $weak . ' user(s) still on demo passwords (must change on login)'
+            : 'no demo passwords detected';
 
         // Remove Catalog / Emails / Orders / Published / Projects from the database
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
@@ -96,19 +164,21 @@ if (!file_exists(__DIR__ . '/config.php')) {
   <div class="login-card">
     <h1>Upgrade</h1>
     <p class="muted">
-      Keeps <strong>Our database</strong> (one URL list per country) + <strong>Add history</strong>.
-      Permanently removes Catalog, Emails, Orders, Published, and Projects tables.
+      Admin-only schema upgrade. Keeps live data tables and removes legacy Catalog tables.
+      Delete <code>upgrade.php</code> when finished.
     </p>
-    <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
-    <?php if ($done): ?>
-      <p>Upgrade complete.</p>
+    <?php if ($error): render_alert_box('error', $error); endif; ?>
+    <?php if ($locked && file_exists(__DIR__ . '/config.php')): ?>
+      <?php render_alert_box('error', 'Admin login required. Sign in as Admin in the app, then open upgrade.php again.'); ?>
+      <p><a class="btn" href="index.php?page=login">Sign in as Admin</a></p>
+    <?php elseif ($done): ?>
+      <?php render_alert_box('ok', 'Upgrade complete.'); ?>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
       <p><a href="index.php?page=admin_dashboard">Open Admin dashboard</a></p>
-      <p class="help"><strong>Delete upgrade.php now.</strong> Also delete any old folders:
-        <code>pages/admin/sites.php</code>, email/project pages if still on the server.</p>
-    <?php else: ?>
+      <p class="help"><strong>Delete upgrade.php now.</strong></p>
+    <?php elseif (!$locked): ?>
       <form method="post">
-        <button class="btn" type="submit">Run upgrade (drop Catalog/Emails/Orders)</button>
+        <button class="btn" type="submit">Run upgrade</button>
       </form>
     <?php endif; ?>
   </div>

@@ -1,8 +1,45 @@
 <?php
 
+// Soft polyfills when php-mbstring is missing (Hostinger usually has it).
+if (!function_exists('mb_strtolower')) {
+    function mb_strtolower(string $string, ?string $encoding = null): string
+    {
+        return strtolower($string);
+    }
+}
+if (!function_exists('mb_strlen')) {
+    function mb_strlen(string $string, ?string $encoding = null): int
+    {
+        return strlen($string);
+    }
+}
+if (!function_exists('mb_substr')) {
+    function mb_substr(string $string, int $start, ?int $length = null, ?string $encoding = null): string
+    {
+        return $length === null ? substr($string, $start) : substr($string, $start, $length);
+    }
+}
+
 function h(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Hidden multi-line POST field (domain lists, notes, etc.).
+ * Never put multi-line values in <input type="hidden"> — browsers turn
+ * newlines in attribute values into spaces, which breaks domain parsing.
+ */
+function render_hidden_multiline(string $name, string $value, array $opts = []): string
+{
+    $id = trim((string) ($opts['id'] ?? ''));
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $class = trim('visually-hidden ' . $extraClass);
+    return '<textarea name="' . h($name) . '"'
+        . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ' class="' . h($class) . '" aria-hidden="true" tabindex="-1">'
+        . h($value)
+        . '</textarea>';
 }
 
 /**
@@ -63,6 +100,18 @@ function stylesheet_url(): string
     return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
 }
 
+/** Hostinger-safe JS URL via asset.php allowlist. */
+function script_asset_url(string $f): string
+{
+    $f = ltrim(str_replace('\\', '/', $f), '/');
+    if (str_starts_with($f, 'assets/')) {
+        $f = substr($f, strlen('assets/'));
+    }
+    $file = dirname(__DIR__) . '/assets/' . $f;
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=' . rawurlencode($f) . '&v=' . rawurlencode($v));
+}
+
 function redirect(string $path): void
 {
     header('Location: ' . $path);
@@ -79,6 +128,20 @@ function get_flashes(): array
     $flashes = $_SESSION['flash'] ?? [];
     unset($_SESSION['flash']);
     return $flashes;
+}
+
+/** Pretty alert / flash message box used across the app. */
+function render_alert_box(string $type, string $message): void
+{
+    $isError = $type === 'error';
+    $cls = $isError ? 'alert-error' : 'alert-ok';
+    $alertTitle = $isError ? 'Error' : 'Success';
+    echo '<div class="alert-box ' . h($cls) . '" role="alert">';
+    echo '<div class="alert-icon" aria-hidden="true">' . ($isError ? '!' : '✓') . '</div>';
+    echo '<div class="alert-body">';
+    echo '<strong class="alert-title">' . h($alertTitle) . '</strong>';
+    echo '<p class="alert-text">' . h($message) . '</p>';
+    echo '</div></div>';
 }
 
 function post(string $key, $default = '')
@@ -127,6 +190,30 @@ function money_or_dash($value): string
 }
 
 /**
+ * Small “i” info icon with tooltip (hover / focus / tap).
+ */
+function info_icon(string $tip, string $aria = 'More info'): string
+{
+    $tip = trim($tip);
+    if ($tip === '') {
+        return '';
+    }
+    return '<button type="button" class="info-tip" aria-label="' . h($aria) . '">'
+        . '<span class="info-tip-mark" aria-hidden="true">i</span>'
+        . '<span class="info-tip-bubble" role="tooltip">' . h($tip) . '</span>'
+        . '</button>';
+}
+
+/**
+ * Label text + info icon (escaped label).
+ */
+function label_with_info(string $label, string $tip): string
+{
+    return '<span class="with-info"><span class="with-info-label">' . h($label) . '</span>'
+        . info_icon($tip, 'About ' . $label) . '</span>';
+}
+
+/**
  * Breadcrumb trail. Each crumb: ['label' => string, 'href' => ?string]
  */
 function render_breadcrumbs(array $crumbs): void
@@ -154,21 +241,43 @@ function render_breadcrumbs(array $crumbs): void
 /**
  * Short glossary for the simple inventory panel.
  * $panel: 'admin' | 'team'
+ * $showTitle: false when nested inside a collapsible help block.
  */
-function render_glossary(string $panel): void
+function render_glossary(string $panel, bool $showTitle = true): void
 {
     echo '<div class="glossary card" role="note">';
-    echo '<h2 class="glossary-title">How this works</h2>';
+    if ($showTitle) {
+        echo '<h2 class="glossary-title">How this works</h2>';
+    }
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Our database</dt><dd>One shared list of unique website domains (URLs).</dd></div>';
-    echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
-    echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
     if ($panel === 'admin') {
-        echo '<div><dt>Your job</dt><dd>Add URLs to the database and manage Team users.</dd></div>';
+        echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
+        echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
+        echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
+        echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';
     } else {
-        echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
+        echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';
+        echo '<div><dt>Sites with emails - Team</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
+        echo '<div><dt>Admin emails search</dt><dd>Super search Sites with emails - Admin across all countries.</dd></div>';
+        echo '<div><dt>Campaign search</dt><dd>Super search Email campaign sheets across all countries.</dd></div>';
+        echo '<div><dt>Site adding history</dt><dd>Sites you added, saved by day.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }
     echo '</dl></div>';
+}
+
+/** Dashboard help collapsed by default so work cards stay above the fold. */
+function render_dashboard_help(string $panel): void
+{
+    echo '<details class="help-details">';
+    echo '<summary>How this works</summary>';
+    echo '<div class="help-details-body">';
+    render_glossary($panel, false);
+    echo $panel === 'admin' ? render_admin_panel_guide() : render_team_panel_guide();
+    echo '</div></details>';
 }
 
 /**
