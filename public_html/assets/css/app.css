@@ -974,17 +974,22 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.4rem;
 }
+/* Clearable email boxes (Sites with emails + Email campaign sheets) */
+.email-field,
 .swe-email-field {
   position: relative;
   min-width: 0;
 }
 .swe-emails input,
-.swe-email-field input {
+.email-field input,
+.swe-email-field input,
+.camp-sheet-table .email-field .camp-cell {
   width: 100%;
   font-size: 0.9rem;
   min-width: 0;
   padding-right: 1.7rem;
 }
+.email-field-clear,
 .swe-email-clear {
   position: absolute;
   top: 50%;
@@ -1005,15 +1010,24 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   align-items: center;
   justify-content: center;
 }
+.email-field-clear:hover,
+.email-field-clear:focus-visible,
 .swe-email-clear:hover,
 .swe-email-clear:focus-visible {
   background: #f3f4f6;
   color: var(--bad, #b42318);
   outline: none;
 }
+.email-field:not(.has-value) .email-field-clear,
+.email-field:not(.has-value) .swe-email-clear,
+.swe-email-field:not(.has-value) .email-field-clear,
 .swe-email-field:not(.has-value) .swe-email-clear,
+.email-field-clear[hidden],
 .swe-email-clear[hidden] {
   display: none;
+}
+.camp-sheet-table .email-field {
+  width: 100%;
 }
 .swe-row-actions {
   display: flex;

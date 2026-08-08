@@ -535,22 +535,10 @@ render_breadcrumbs($crumbs);
                          spellcheck="false" autocomplete="off" aria-label="Site name">
                 </div>
                 <div class="swe-emails" aria-label="Emails" data-swe-emails>
-                  <?php
-                  $emailSlots = [
-                      ['email1', $e1, 'email 1 · or paste up to 4'],
-                      ['email2', $e2, 'email 2'],
-                      ['email3', $e3, 'email 3'],
-                      ['email4', $e4, 'email 4'],
-                  ];
-                  foreach ($emailSlots as [$ename, $eval, $ph]):
-                  ?>
-                  <div class="swe-email-field<?= $eval !== '' ? ' has-value' : '' ?>">
-                    <input type="text" inputmode="email" name="<?= h($ename) ?>" value="<?= h($eval) ?>"
-                           placeholder="<?= h($ph) ?>" spellcheck="false" autocomplete="off" data-swe-email>
-                    <button type="button" class="swe-email-clear" data-swe-email-clear
-                            aria-label="Clear <?= h($ename) ?>" title="Clear email"<?= $eval === '' ? ' hidden' : '' ?>>&times;</button>
-                  </div>
-                  <?php endforeach; ?>
+                  <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
+                  <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+                  <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+                  <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
                 </div>
                 <div class="swe-row-actions">
                   <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
@@ -622,22 +610,10 @@ render_breadcrumbs($crumbs);
       <div class="full" data-swe-emails>
         <label>Emails (up to 4 — paste all at once into any box)</label>
         <div class="swe-emails swe-emails-add">
-          <?php
-          $addSlots = [
-              ['swe_add_e1', 'email1', 'email 1 · or paste up to 4'],
-              ['swe_add_e2', 'email2', 'email 2'],
-              ['swe_add_e3', 'email3', 'email 3'],
-              ['swe_add_e4', 'email4', 'email 4'],
-          ];
-          foreach ($addSlots as [$aid, $aname, $aph]):
-          ?>
-          <div class="swe-email-field">
-            <input id="<?= h($aid) ?>" type="text" inputmode="email" name="<?= h($aname) ?>"
-                   placeholder="<?= h($aph) ?>" spellcheck="false" autocomplete="off" data-swe-email>
-            <button type="button" class="swe-email-clear" data-swe-email-clear
-                    aria-label="Clear <?= h($aname) ?>" title="Clear email" hidden>&times;</button>
-          </div>
-          <?php endforeach; ?>
+          <?= render_clearable_email_input('email1', '', ['id' => 'swe_add_e1', 'swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
+          <?= render_clearable_email_input('email2', '', ['id' => 'swe_add_e2', 'swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+          <?= render_clearable_email_input('email3', '', ['id' => 'swe_add_e3', 'swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+          <?= render_clearable_email_input('email4', '', ['id' => 'swe_add_e4', 'swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
         </div>
       </div>
     </div>
@@ -665,6 +641,7 @@ render_breadcrumbs($crumbs);
 </div>
 <?php endif; ?>
 
+<?= email_field_clear_script_tag() ?>
 <script src="<?= h(script_asset_url('js/sites-with-emails.js')) ?>" defer></script>
 <?php
 render_footer($swePanel);

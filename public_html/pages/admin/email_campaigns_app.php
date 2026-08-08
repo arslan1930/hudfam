@@ -201,14 +201,23 @@ if ($sheetId > 0) {
                   <input class="camp-cell" name="domain[]" value="<?= h($domain) ?>"
                          placeholder="example.com" spellcheck="false" autocomplete="off">
                 </td>
-                <td><input class="camp-cell" type="text" inputmode="email" name="email1[]"
-                           value="<?= h((string) $r['email1']) ?>" placeholder="email@" spellcheck="false" autocomplete="off"></td>
-                <td><input class="camp-cell" type="text" inputmode="email" name="email2[]"
-                           value="<?= h((string) $r['email2']) ?>" spellcheck="false" autocomplete="off"></td>
-                <td><input class="camp-cell" type="text" inputmode="email" name="email3[]"
-                           value="<?= h((string) $r['email3']) ?>" spellcheck="false" autocomplete="off"></td>
-                <td><input class="camp-cell" type="text" inputmode="email" name="email4[]"
-                           value="<?= h((string) $r['email4']) ?>" spellcheck="false" autocomplete="off"></td>
+                <td><?= render_clearable_email_input('email1[]', (string) $r['email1'], [
+                    'class' => 'camp-cell',
+                    'placeholder' => 'email@',
+                    'aria_label' => 'Clear email 1',
+                ]) ?></td>
+                <td><?= render_clearable_email_input('email2[]', (string) $r['email2'], [
+                    'class' => 'camp-cell',
+                    'aria_label' => 'Clear email 2',
+                ]) ?></td>
+                <td><?= render_clearable_email_input('email3[]', (string) $r['email3'], [
+                    'class' => 'camp-cell',
+                    'aria_label' => 'Clear email 3',
+                ]) ?></td>
+                <td><?= render_clearable_email_input('email4[]', (string) $r['email4'], [
+                    'class' => 'camp-cell',
+                    'aria_label' => 'Clear email 4',
+                ]) ?></td>
                 <td class="camp-col-actions">
                   <button type="submit" class="btn secondary small"
                           onclick="document.getElementById('camp-sheet-action').value='delete_row';document.getElementById('camp-delete-row-id').value='<?= $rid ?>';return confirm('Remove this row?');">
@@ -279,6 +288,7 @@ if ($sheetId > 0) {
         <button class="btn danger" type="submit">Delete country sheet</button>
       </form>
     </div>
+    <?= email_field_clear_script_tag() ?>
     <?php
     render_footer('admin');
     return;

@@ -151,6 +151,50 @@ function render_language_typeahead(string $value = '', array $opts = []): string
 }
 
 /**
+ * Email text input with an in-box × clear control.
+ * Use anywhere a site has email1…email4 style fields.
+ *
+ * @param array{
+ *   id?:string,placeholder?:string,class?:string,attrs?:string,
+ *   aria_label?:string,swe?:bool
+ * } $opts
+ */
+function render_clearable_email_input(string $name, string $value = '', array $opts = []): string
+{
+    $id = trim((string) ($opts['id'] ?? ''));
+    $placeholder = (string) ($opts['placeholder'] ?? '');
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $attrs = trim((string) ($opts['attrs'] ?? ''));
+    $aria = (string) ($opts['aria_label'] ?? ('Clear email'));
+    $swe = !empty($opts['swe']);
+    $has = trim($value) !== '';
+
+    $html = '<div class="email-field swe-email-field' . ($has ? ' has-value' : '') . '">';
+    $html .= '<input type="text" inputmode="email" name="' . h($name) . '"'
+        . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ' class="' . h(trim('email-field-input ' . $extraClass)) . '"'
+        . ' value="' . h($value) . '"'
+        . ($placeholder !== '' ? ' placeholder="' . h($placeholder) . '"' : '')
+        . ' spellcheck="false" autocomplete="off"'
+        . ' data-email-input'
+        . ($swe ? ' data-swe-email' : '')
+        . ($attrs !== '' ? ' ' . $attrs : '')
+        . '>';
+    $html .= '<button type="button" class="email-field-clear swe-email-clear"'
+        . ' data-email-clear data-swe-email-clear'
+        . ' aria-label="' . h($aria) . '" title="Clear email"'
+        . ($has ? '' : ' hidden')
+        . '>&times;</button>';
+    $html .= '</div>';
+    return $html;
+}
+
+function email_field_clear_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/email-field-clear.js')) . '" defer></script>';
+}
+
+/**
  * Domains textarea + Clean errors control (root domains only).
  */
 function render_domains_paste_field(

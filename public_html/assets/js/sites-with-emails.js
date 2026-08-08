@@ -92,17 +92,17 @@
   }
 
   function syncEmailClearButton(input) {
+    if (window.EmailFieldClear && typeof window.EmailFieldClear.sync === 'function') {
+      window.EmailFieldClear.sync(input);
+      return;
+    }
     if (!input) return;
-    var wrap = input.closest('.swe-email-field');
+    var wrap = input.closest('.email-field, .swe-email-field');
     if (!wrap) return;
-    var btn = wrap.querySelector('[data-swe-email-clear]');
+    var btn = wrap.querySelector('[data-email-clear], [data-swe-email-clear]');
     var has = String(input.value || '').trim() !== '';
     wrap.classList.toggle('has-value', has);
     if (btn) btn.hidden = !has;
-  }
-
-  function syncEmailClearButtons(root) {
-    emailInputsIn(root || document).forEach(syncEmailClearButton);
   }
 
   function parseEmailPaste(text) {
@@ -335,31 +335,7 @@
     autosaveTimers.set(form, timer);
   }
 
-  // Clear (×) inside each email box — deletes that email and autosaves
-  document.addEventListener('click', function (e) {
-    var btn = e.target && e.target.closest ? e.target.closest('[data-swe-email-clear]') : null;
-    if (!btn) return;
-    e.preventDefault();
-    var wrap = btn.closest('.swe-email-field');
-    var input = wrap && wrap.querySelector('[data-swe-email]');
-    if (!input) return;
-    input.value = '';
-    syncEmailClearButton(input);
-    input.focus();
-    var form = input.closest('[data-swe-save]');
-    var row = input.closest('[data-swe-row]');
-    refreshRowSearchIndex(row);
-    filterRows();
-    setStatus('Email cleared.');
-    if (form) {
-      var prev = autosaveTimers.get(form);
-      if (prev) {
-        window.clearTimeout(prev);
-        autosaveTimers.delete(form);
-      }
-      saveRowForm(form, { quiet: true });
-    }
-  });
+  // × clear is handled by email-field-clear.js; its input event triggers autosave below.
 
   // Paste: fill up to 4 email boxes at once (no need to click each box)
   document.addEventListener('paste', function (e) {
@@ -369,10 +345,7 @@
     var text = clip ? clip.getData('text') : '';
     if (!text) return;
     var multi = parseEmailPaste(text);
-    if (multi.length <= 1) {
-      window.setTimeout(function () { syncEmailClearButton(input); }, 0);
-      return; // let normal single paste through
-    }
+    if (multi.length <= 1) return; // email-field-clear.js syncs ×; let normal paste through
     e.preventDefault();
     applyEmailPaste(input, text);
     var form = input.closest('[data-swe-save]');
@@ -383,22 +356,19 @@
     if (form) scheduleAutosave(form);
   });
 
-  // Autosave on every email / domain edit
+  // Autosave on every email / domain edit (also runs after × clear)
   document.addEventListener('input', function (e) {
     var input = e.target;
     if (!input || !input.matches || !input.matches('[data-swe-email], .swe-domain')) return;
-    if (input.matches('[data-swe-email]')) syncEmailClearButton(input);
     var form = input.closest('[data-swe-save]');
-    if (!form) {
-      // Add-row form: only sync × visibility
-      return;
-    }
+    if (!form) return;
     refreshRowSearchIndex(form.closest('[data-swe-row]'));
     filterRows();
     scheduleAutosave(form);
+    if (input.matches('[data-swe-email]') && String(input.value || '').trim() === '') {
+      setStatus('Email cleared.');
+    }
   });
-
-  syncEmailClearButtons(document);
 
   document.addEventListener('blur', function (e) {
     var input = e.target;
