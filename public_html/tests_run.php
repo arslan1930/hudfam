@@ -137,6 +137,66 @@ try {
 
 $country = 'Germany';
 
+// --- Clean errors / https:// paste → root domains (Filter & add) ---
+try {
+    $messy = implode("\n", [
+        'https://mail.google.com/mail/u/6/#inbox',
+        'https://mail.google.com/mail/u/3/#inbox',
+        'https://mail.google.com/mail/u/3/#inbox',
+        'https://mail.google.com/mail/u/4/#inbox',
+        'https://mail.google.com/mail/u/9/#inbox',
+        'ttps://utilfox.vercel.app/data-tools/url-cleaner',
+        'https://utilfox.vercel.app/data-tools/url-cleaner',
+        'https://utilfox.vercel.app/data-tools/data-deduplication',
+        'https://members.toolszen.com/page/semrush',
+        'https://techxform.com/index.php?page=team_extract_queue&country=Italy',
+        'https://seolinkbuildings.com/publisher/websites',
+        'https://guruhitech.com/',
+        'https://www.letemps.ch/',
+        'https://cloudconvert.com/png-to-webp',
+        'https://seolinkbuildings.com/login',
+    ]);
+    $parsedMessy = parse_domain_list_strict($messy);
+    $expectRoots = [
+        'google.com',
+        'vercel.app',
+        'toolszen.com',
+        'techxform.com',
+        'seolinkbuildings.com',
+        'guruhitech.com',
+        'letemps.ch',
+        'cloudconvert.com',
+    ];
+    sort($expectRoots);
+    $got = $parsedMessy['valid'];
+    sort($got);
+    if ((int) ($parsedMessy['invalid_count'] ?? -1) === 0 && $got === $expectRoots) {
+        pass('clean https paste → unique root domains (guruhitech.com etc.)');
+    } else {
+        fail('clean https paste: ' . json_encode([
+            'got' => $got,
+            'expect' => $expectRoots,
+            'invalid' => $parsedMessy['invalid'] ?? [],
+        ]));
+    }
+    $g = analyze_pasted_domain_line('https://guruhitech.com/');
+    if (!empty($g['ok']) && ($g['domain'] ?? '') === 'guruhitech.com' && !empty($g['fixed'])) {
+        pass('analyze https://guruhitech.com/ → guruhitech.com');
+    } else {
+        fail('analyze guruhitech: ' . json_encode($g));
+    }
+    $q = analyze_pasted_domain_line(
+        'https://techxform.com/index.php?page=team_extract_queue&country=Italy'
+    );
+    if (!empty($q['ok']) && ($q['domain'] ?? '') === 'techxform.com') {
+        pass('analyze https URL with query string → root domain');
+    } else {
+        fail('analyze query URL: ' . json_encode($q));
+    }
+} catch (Throwable $e) {
+    fail('clean https: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Our database ---
 try {
     $added = add_prospect_domains(
