@@ -3530,6 +3530,31 @@ table.extracted-country-table th {
   font-weight: 650;
 }
 
+/* Rows-per-page filter (sitewide sheet lists) */
+.sheet-per-page-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.sheet-per-page-filter label {
+  margin: 0;
+  font-weight: 650;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+.sheet-per-page-filter select {
+  min-width: 5.5rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 650;
+}
+
 /* Pagination / sheet footers */
 .pagination,
 .card .pagination {
