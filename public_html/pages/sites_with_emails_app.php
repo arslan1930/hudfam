@@ -219,6 +219,53 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($back);
     }
 
+    if ($action === 'clear_emailed_up_to' && $sweScope === 'admin') {
+        $siteId = (int) post('site_id');
+        $result = clear_sites_with_emails_admin_emailed_up_to($siteId);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (!$result['ok']) {
+                http_response_code(400);
+            }
+            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
+            exit;
+        }
+        if (!$result['ok']) {
+            flash('error', (string) ($result['error'] ?? 'Could not clear checkpoint.'));
+        } else {
+            flash(
+                'ok',
+                'Cleared emailed up to ' . (string) ($result['domain'] ?? 'site')
+                . ' · ' . (int) ($result['cleared'] ?? 0) . ' cleared.'
+                . ' You can mark again to redo this stretch.'
+            );
+        }
+        redirect($back);
+    }
+
+    if ($action === 'clear_all_emailed' && $sweScope === 'admin') {
+        $result = clear_all_sites_with_emails_admin_emailed($countryName);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (!$result['ok']) {
+                http_response_code(400);
+            }
+            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
+            exit;
+        }
+        if (!$result['ok']) {
+            flash('error', (string) ($result['error'] ?? 'Could not clear emailed marks.'));
+        } else {
+            flash(
+                'ok',
+                'Cleared all emailed marks on ' . $countryName
+                . ' · ' . (int) ($result['cleared'] ?? 0) . ' sites.'
+                . ' Ready to resend and track again. Final archive stays unchanged.'
+            );
+        }
+        redirect($back);
+    }
+
     if ($action === 'remove_all') {
         $n = delete_sites_with_emails_for_country($countryName, $sweScope);
         flash('ok', 'Removed ' . $n . ' site' . ($n === 1 ? '' : 's') . ' from ' . $countryName . '.');
@@ -564,9 +611,9 @@ render_breadcrumbs($crumbs);
 </p>
 <?php else: ?>
 <p class="help">
-  Working archive from Team Push. Mark sites you’ve already emailed — use
-  <strong>Mark emailed up to here</strong> as a checkpoint. New Team pushes stay unmarked.
-  Emailed marks stay on Admin only; <strong>Final stays neutral</strong>.
+  Working archive from Team Push. Track sends with <strong>Mark up to here</strong> /
+  <strong>Clear up to here</strong> (redo anytime). Use <strong>Clear all emailed</strong>
+  to restart the sheet after a resend. Marks stay on Admin only — <strong>Final stays neutral</strong>.
 </p>
 <?php endif; ?>
 
@@ -604,6 +651,20 @@ render_breadcrumbs($crumbs);
             ?>
           <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
         <?php endforeach; ?>
+        <?php if ($sentStats && (int) $sentStats['sent'] > 0): ?>
+        <form method="post" action="<?= h($listBase) ?>" class="swe-clear-all-emailed"
+              onsubmit="return confirm('Clear ALL emailed marks on <?= h($countryName) ?>?\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.');">
+          <input type="hidden" name="action" value="clear_all_emailed">
+          <input type="hidden" name="q" value="<?= h($q) ?>">
+          <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+          <?php if ($sentFilter !== ''): ?>
+          <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+          <?php endif; ?>
+          <button class="btn secondary small" type="submit" title="Clear every emailed mark on this Admin country sheet">
+            Clear all emailed
+          </button>
+        </form>
+        <?php endif; ?>
       </p>
       <?php endif; ?>
     </div>
@@ -675,13 +736,18 @@ render_breadcrumbs($crumbs);
                   <?php if ($sweScope === 'admin'): ?>
                   <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
                           form="swe-mark-<?= (int) $s['id'] ?>"
-                          title="<?= $isEmailed ? 'Clear emailed mark' : 'Mark this site as emailed' ?>">
+                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
                     <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
                   </button>
                   <button class="btn secondary small" type="submit" form="swe-upto-<?= (int) $s['id'] ?>"
-                          title="Mark every site from the top of this list through this row as emailed"
-                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older/earlier site in <?= h($countryName) ?> up to this row will be marked emailed.\n\nFinal archive stays unchanged.');">
+                          title="Mark every site from the top of this Admin list through this row as emailed"
+                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older/earlier site in <?= h($countryName) ?> up to this row will be marked emailed.\n\nYou can Clear up to here later to redo.\n\nFinal archive stays unchanged.');">
                     Mark up to here
+                  </button>
+                  <button class="btn secondary small" type="submit" form="swe-clear-upto-<?= (int) $s['id'] ?>"
+                          title="Clear emailed marks from the top of this Admin list through this row (redo stretch)"
+                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older/earlier emailed site in <?= h($countryName) ?> up to this row will be unmarked so you can redo.\n\nFinal archive stays unchanged.');">
+                    Clear up to here
                   </button>
                   <?php endif; ?>
                   <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
@@ -710,6 +776,15 @@ render_breadcrumbs($crumbs);
             </form>
             <form id="swe-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" hidden>
               <input type="hidden" name="action" value="mark_emailed_up_to">
+              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="q" value="<?= h($q) ?>">
+              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <?php if ($sentFilter !== ''): ?>
+              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+            </form>
+            <form id="swe-clear-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" hidden>
+              <input type="hidden" name="action" value="clear_emailed_up_to">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">

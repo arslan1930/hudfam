@@ -870,6 +870,61 @@ function mark_sites_with_emails_admin_emailed_up_to(int $siteId): array
 }
 
 /**
+ * Undo checkpoint: clear emailed marks on every Admin row in this country with id <= $siteId.
+ * Lets Admin redo a campaign stretch. Final stays unchanged.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,domain?:string,country?:string}
+ */
+function clear_sites_with_emails_admin_emailed_up_to(int $siteId): array
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
+    }
+    $country = (string) $row['country'];
+    $st = db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=0, email_sent_at=NULL
+         WHERE country=? AND id<=? AND email_sent=1'
+    );
+    $st->execute([$country, $siteId]);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'country' => $country,
+    ];
+}
+
+/**
+ * Clear every emailed mark for one Admin country sheet so Admin can resend and re-track.
+ * Final stays neutral.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,country?:string}
+ */
+function clear_all_sites_with_emails_admin_emailed(string $country): array
+{
+    ensure_sites_with_emails_schema();
+    $canon = resolve_canonical_country(trim($country));
+    $countryName = $canon ? $canon['name'] : trim($country);
+    if ($countryName === '') {
+        return ['ok' => false, 'error' => 'Country is required.'];
+    }
+    $st = db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=0, email_sent_at=NULL
+         WHERE country=? AND email_sent=1'
+    );
+    $st->execute([$countryName]);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'country' => $countryName,
+    ];
+}
+
+/**
  * If a row has several addresses crammed into one cell, split into email1–4 and persist.
  *
  * @param list<array<string,mixed>> $rows

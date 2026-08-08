@@ -684,6 +684,43 @@ try {
             fail('new push: ' . json_encode($newPush) . " sent=$newSent last=$last order=" . json_encode($order));
         }
 
+        // Clear up to here — redo a stretch (Admin only).
+        $clearUpto = clear_sites_with_emails_admin_emailed_up_to($idB);
+        $sentA = (int) db()->query(
+            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idA
+        )->fetchColumn();
+        $sentB = (int) db()->query(
+            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idB
+        )->fetchColumn();
+        $afterClearUpto = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE domain LIKE 'txfsent-%' AND email_sent=1"
+        )->fetchColumn();
+        if (!empty($clearUpto['ok']) && (int) ($clearUpto['cleared'] ?? 0) >= 2
+            && $sentA === 0 && $sentB === 0 && $afterClearUpto === 0) {
+            pass('clear up to here undoes Admin emailed marks');
+        } else {
+            fail('clear up to: ' . json_encode($clearUpto)
+                . " a=$sentA b=$sentB left=$afterClearUpto");
+        }
+
+        // Redo mark, then clear all emailed for a full resend restart.
+        mark_sites_with_emails_admin_emailed_up_to($idC);
+        set_site_with_emails_admin_email_sent(
+            (int) db()->query("SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-new.com' LIMIT 1")->fetchColumn(),
+            true
+        );
+        $clearAll = clear_all_sites_with_emails_admin_emailed('Germany');
+        $sentLeft = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE domain LIKE 'txfsent-%' AND email_sent=1"
+        )->fetchColumn();
+        if (!empty($clearAll['ok']) && (int) ($clearAll['cleared'] ?? 0) >= 3 && $sentLeft === 0) {
+            pass('clear all emailed resets Admin sheet for resend');
+        } else {
+            fail('clear all: ' . json_encode($clearAll) . " left=$sentLeft");
+        }
+
         // Sync must not invent sent state on Final (no column); domains still mirror.
         sync_sites_with_emails_admin_to_all('Germany');
         $finalMirror = (int) db()->query(

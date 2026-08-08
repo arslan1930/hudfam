@@ -1044,6 +1044,10 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   gap: 0.4rem;
   align-items: center;
 }
+.swe-clear-all-emailed {
+  display: inline;
+  margin: 0;
+}
 .swe-table tr.sheet-search-hit {
   outline: 2px solid #4b5563;
   outline-offset: -2px;
