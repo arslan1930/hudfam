@@ -652,10 +652,26 @@ render_breadcrumbs($crumbs);
 </p>
 <?php else: ?>
 <p class="help">
-  Working archive from Team Push. Track sends with <strong>Mark up to here</strong> /
-  <strong>Clear up to here</strong> (redo anytime). Use <strong>Clear all emailed</strong>
-  to restart the sheet after a resend. Marks stay on Admin only — <strong>Final stays neutral</strong>.
+  Working archive from Team Push. Campaign progress is tracked on this Admin sheet only —
+  <strong>Final stays neutral</strong> (no emailed marks).
 </p>
+<?php endif; ?>
+
+<?php if ($sweScope === 'admin'): ?>
+<div class="card swe-checkpoint-rule" style="margin-bottom:1rem">
+  <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'How Mark emailed / Mark up to here / Clear up to here work on this Admin country sheet.') ?></h2>
+  <ol class="swe-checkpoint-steps">
+    <li><strong>Order:</strong> oldest sites at the top · newest Team pushes at the bottom.</li>
+    <li><strong>Mark emailed:</strong> marks only that one site as done.</li>
+    <li><strong>Mark up to here:</strong> marks this site <em>and every site above it</em> as emailed (checkpoint).</li>
+    <li><strong>Clear up to here:</strong> clears emailed marks from the top through this site (redo that stretch).</li>
+    <li><strong>Clear all emailed:</strong> resets the whole country sheet for a full resend.</li>
+  </ol>
+  <p class="help" style="margin:0.55rem 0 0">
+    Highlighted rows = already emailed. Filters: All / Not emailed / Emailed.
+    These marks never sync to Final.
+  </p>
+</div>
 <?php endif; ?>
 
 <div class="card">
@@ -665,7 +681,7 @@ render_breadcrumbs($crumbs);
       <p class="help" style="margin:0.25rem 0 0">
         Search shows both columns together (site + its emails).
         <?php if ($sweScope === 'admin'): ?>
-          Oldest first · new Team sites appear at the bottom · emailed rows are highlighted.
+          Use the green <strong>checkpoint bar</strong> under each row for emailed / up to here.
         <?php elseif ($isAdmin): ?>
           Edit or Backspace to clear an email · Remove deletes the complete row.
         <?php else: ?>
@@ -721,12 +737,12 @@ render_breadcrumbs($crumbs);
   </div>
 
   <div class="table-wrap">
-    <table class="swe-table" id="swe-table">
+    <table class="swe-table<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>" id="swe-table">
       <thead>
         <tr>
           <th class="swe-col-site">Site name</th>
           <th class="swe-col-emails">Emails (up to 4)</th>
-          <th class="swe-col-actions">Actions</th>
+          <th class="swe-col-actions"><?= $sweScope === 'admin' ? 'Row' : 'Actions' ?></th>
         </tr>
       </thead>
       <tbody id="swe-tbody">
@@ -775,27 +791,34 @@ render_breadcrumbs($crumbs);
                           title="<?= $hasEmail ? 'Push this site to Admin' : 'Add at least one email first' ?>"
                           onclick="return confirm('Push <?= h($domain) ?> to Sites with emails - Admin?\n\nThis row will leave the Team working copy.');">Push</button>
                   <?php endif; ?>
-                  <?php if ($sweScope === 'admin'): ?>
+                  <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
+                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
+                </div>
+              </div>
+              <?php if ($sweScope === 'admin'): ?>
+              <div class="swe-checkpoint-bar" aria-label="Emailed checkpoint for <?= h($domain) ?>">
+                <span class="swe-checkpoint-status<?= $isEmailed ? ' is-done' : '' ?>">
+                  <?= $isEmailed ? 'Emailed done' : 'Not emailed' ?>
+                </span>
+                <div class="swe-checkpoint-actions">
                   <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
                           form="swe-mark-<?= (int) $s['id'] ?>"
                           title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
                     <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
                   </button>
                   <button class="btn secondary small" type="submit" form="swe-upto-<?= (int) $s['id'] ?>"
-                          title="Mark every site from the top of this Admin list through this row as emailed"
-                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older/earlier site in <?= h($countryName) ?> up to this row will be marked emailed.\n\nYou can Clear up to here later to redo.\n\nFinal archive stays unchanged.');">
+                          title="Selection rule: mark this site and every older site above it as emailed"
+                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nSelection rule: every older site from the top of <?= h($countryName) ?> through this row will be marked emailed.\n\nYou can Clear up to here later to redo.\n\nFinal archive stays unchanged.');">
                     Mark up to here
                   </button>
                   <button class="btn secondary small" type="submit" form="swe-clear-upto-<?= (int) $s['id'] ?>"
-                          title="Clear emailed marks from the top of this Admin list through this row (redo stretch)"
-                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older/earlier emailed site in <?= h($countryName) ?> up to this row will be unmarked so you can redo.\n\nFinal archive stays unchanged.');">
+                          title="Selection rule: clear emailed marks from the top through this site"
+                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nSelection rule: every older emailed site from the top of <?= h($countryName) ?> through this row will be unmarked so you can redo.\n\nFinal archive stays unchanged.');">
                     Clear up to here
                   </button>
-                  <?php endif; ?>
-                  <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
-                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove row</button>
                 </div>
               </div>
+              <?php endif; ?>
             </form>
             <?php if ($isTeam): ?>
             <form id="swe-push-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" data-swe-push hidden>
