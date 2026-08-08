@@ -4,6 +4,8 @@
   var statusEl = document.getElementById('swe_status');
   var copyBtn = document.getElementById('swe_copy_emails');
   var totalLabel = document.getElementById('swe_total_label');
+  var sentLabel = document.getElementById('swe_sent_label');
+  var unsentLabel = document.getElementById('swe_unsent_label');
   var searchInput = document.getElementById('swe-row-search');
   var pushBtn = document.getElementById('swe-push-btn');
   var readyLabel = document.getElementById('swe_ready_label');
@@ -496,6 +498,69 @@
       });
   }
 
+  function updateSentStats(data) {
+    if (!data) return;
+    if (typeof data.sent === 'number' && sentLabel) {
+      sentLabel.textContent = String(data.sent);
+    }
+    if (typeof data.unsent === 'number' && unsentLabel) {
+      unsentLabel.textContent = String(data.unsent);
+    }
+  }
+
+  /** Update one Admin row's emailed UI without reloading (keeps scroll position). */
+  function setRowEmailedState(row, emailed) {
+    if (!row) return;
+    var sent = !!emailed;
+    row.setAttribute('data-email-sent', sent ? '1' : '0');
+    row.classList.toggle('swe-row-emailed', sent);
+
+    var siteBlock = row.querySelector('.swe-site-block');
+    if (siteBlock) {
+      var badge = siteBlock.querySelector('.swe-emailed-badge');
+      if (sent && !badge) {
+        badge = document.createElement('span');
+        badge.className = 'swe-emailed-badge';
+        badge.title = 'Email already sent';
+        badge.textContent = 'Emailed';
+        siteBlock.appendChild(badge);
+      } else if (!sent && badge) {
+        badge.remove();
+      }
+    }
+
+    var status = row.querySelector('.swe-checkpoint-status');
+    if (status) {
+      status.classList.toggle('is-done', sent);
+      status.textContent = sent ? 'Emailed done' : 'Not emailed';
+    }
+
+    var markBtn = row.querySelector('button[form^="swe-mark-"]');
+    if (markBtn) {
+      markBtn.textContent = sent ? 'Clear emailed' : 'Mark emailed';
+      markBtn.title = sent
+        ? 'Clear emailed mark on this site only'
+        : 'Mark this site as emailed';
+      markBtn.classList.toggle('secondary', sent);
+    }
+
+    var markForm = document.getElementById('swe-mark-' + row.getAttribute('data-site-id'));
+    if (markForm) {
+      var sentInput = markForm.querySelector('[name="email_sent"]');
+      if (sentInput) sentInput.value = sent ? '0' : '1';
+    }
+  }
+
+  function applyEmailedUpTo(siteId, emailed) {
+    var maxId = parseInt(siteId, 10) || 0;
+    document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
+      var id = parseInt(row.getAttribute('data-site-id') || '0', 10);
+      if (id > 0 && id <= maxId) {
+        setRowEmailedState(row, emailed);
+      }
+    });
+  }
+
   // Push all: flush every pending autosave first (otherwise only email1 may be on the server)
   var pushAllForm = document.getElementById('swe-push-form');
   if (pushAllForm) {
@@ -584,6 +649,63 @@
           hideProcessing();
           form.removeAttribute('data-busy');
         }
+      });
+      return;
+    }
+
+    if (form.matches('[data-swe-mark]')) {
+      e.preventDefault();
+      var markSent = String((form.querySelector('[name="email_sent"]') || {}).value || '') === '1';
+      setStatus(markSent ? 'Marking emailed…' : 'Clearing emailed mark…', false, true);
+      postAjaxForm(form, 'Could not update emailed mark').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        var id = result.siteId;
+        var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
+        var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
+        setRowEmailedState(rowEl, nextSent);
+        updateSentStats(data);
+        setStatus(
+          (nextSent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
+          + (data.domain || 'site')
+        );
+        form.removeAttribute('data-busy');
+      });
+      return;
+    }
+
+    if (form.matches('[data-swe-mark-upto]')) {
+      e.preventDefault();
+      setStatus('Marking emailed up to here…', false, true);
+      postAjaxForm(form, 'Could not mark checkpoint').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        applyEmailedUpTo(result.siteId, true);
+        updateSentStats(data);
+        setStatus(
+          'Marked emailed up to ' + (data.domain || 'site')
+          + (typeof data.marked === 'number' ? ' · ' + data.marked + ' newly marked' : '')
+          + '.'
+        );
+        form.removeAttribute('data-busy');
+      });
+      return;
+    }
+
+    if (form.matches('[data-swe-clear-upto]')) {
+      e.preventDefault();
+      setStatus('Clearing emailed up to here…', false, true);
+      postAjaxForm(form, 'Could not clear checkpoint').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        applyEmailedUpTo(result.siteId, false);
+        updateSentStats(data);
+        setStatus(
+          'Cleared emailed up to ' + (data.domain || 'site')
+          + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' cleared' : '')
+          + '.'
+        );
+        form.removeAttribute('data-busy');
       });
       return;
     }

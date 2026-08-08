@@ -830,7 +830,7 @@ render_breadcrumbs($crumbs);
             <?php endif; ?>
             <?php if ($sweScope === 'admin'): ?>
             <form id="swe-mark-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>"
-                  data-show-processing="<?= $isEmailed ? 'Clearing emailed mark…' : 'Marking emailed…' ?>" hidden>
+                  data-swe-mark hidden>
               <input type="hidden" name="action" value="mark_email_sent">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
               <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
@@ -841,7 +841,7 @@ render_breadcrumbs($crumbs);
               <?php endif; ?>
             </form>
             <form id="swe-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>"
-                  data-show-processing="Marking emailed up to here…" hidden>
+                  data-swe-mark-upto hidden>
               <input type="hidden" name="action" value="mark_emailed_up_to">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
@@ -851,7 +851,7 @@ render_breadcrumbs($crumbs);
               <?php endif; ?>
             </form>
             <form id="swe-clear-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>"
-                  data-show-processing="Clearing emailed up to here…" hidden>
+                  data-swe-clear-upto hidden>
               <input type="hidden" name="action" value="clear_emailed_up_to">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
