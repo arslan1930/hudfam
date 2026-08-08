@@ -1304,8 +1304,17 @@ if ($projectIdParam > 0) {
             </div>
             <div class="camp-hub-field">
               <label for="admin_draft_body">Draft text</label>
-              <textarea id="admin_draft_body" name="body" required rows="8" class="inventory-box"
-                        placeholder="Hi,&#10;&#10;…"><?= h((string) ($editDraft['body'] ?? '')) ?></textarea>
+              <p class="help" style="margin:0 0 0.45rem">
+                Bold / italic / underline / headings are kept when Communication copies into email.
+              </p>
+              <?php
+              render_email_campaign_draft_editor(
+                  'admin_draft_body',
+                  'body',
+                  (string) ($editDraft['body'] ?? ''),
+                  ['placeholder' => "Hi,\n\n…"]
+              );
+              ?>
             </div>
             <p class="actions camp-hub-create-actions">
               <button class="btn" type="submit"><?= $editDraft ? 'Update draft' : 'Save draft' ?></button>
@@ -1329,6 +1338,7 @@ if ($projectIdParam > 0) {
         </section>
       </aside>
     </div>
+    <script src="<?= h(script_asset_url('js/email-campaign-drafts.js')) ?>" defer></script>
     <?php
     render_footer('admin');
     return;

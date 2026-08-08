@@ -819,19 +819,47 @@ try {
         (int) $adminUser['id']
     );
     $afterUpdate = get_email_campaign_draft((int) ($savedOffer['id'] ?? 0));
+    $richSaved = save_email_campaign_draft(
+        $draftPid,
+        'Rich format sample',
+        '<h2 onclick="x()">Guest post offer</h2><p>Hi <strong>there</strong>, we can do <em>guest posts</em> and <u>niche edits</u>.</p><script>alert(1)</script><a href="https://evil.example">click</a>',
+        'offer',
+        0,
+        (int) $adminUser['id']
+    );
+    $richRow = get_email_campaign_draft((int) ($richSaved['id'] ?? 0));
+    $richBody = (string) ($richRow['body'] ?? '');
+    $sanitized = sanitize_email_campaign_draft_html($richBody);
+    $plainFromHtml = email_campaign_draft_html_to_plain($richBody);
+    $keepsFormat = str_contains($richBody, '<strong>')
+        && str_contains($richBody, '<em>')
+        && str_contains($richBody, '<u>')
+        && str_contains($richBody, '<h2>')
+        && !str_contains(strtolower($richBody), '<script')
+        && !str_contains(strtolower($richBody), 'onclick')
+        && !str_contains(strtolower($richBody), '<a ')
+        && str_contains($plainFromHtml, 'Guest post offer')
+        && str_contains($plainFromHtml, 'guest posts');
     $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0));
     $left = count_email_campaign_drafts($draftPid);
     $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0));
     if (!empty($updated['ok'])
         && (string) ($afterUpdate['title'] ?? '') === 'Pricing offer v2'
+        && !empty($richSaved['ok'])
+        && $keepsFormat
+        && $sanitized === $richBody
         && !empty($del['ok'])
-        && $left === 1
+        && $left === 2
         && empty($wrongProjectDel['ok'])) {
         pass('campaign drafts update/delete stay scoped to project');
+        pass('campaign drafts keep bold/italic/underline/headings and strip unsafe HTML');
     } else {
         fail('campaign draft mutate: ' . json_encode([
             'updated' => $updated,
             'after' => $afterUpdate,
+            'rich' => $richSaved,
+            'body' => $richBody,
+            'keeps' => $keepsFormat,
             'del' => $del,
             'left' => $left,
             'wrong' => $wrongProjectDel,

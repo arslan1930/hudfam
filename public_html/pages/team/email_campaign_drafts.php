@@ -125,10 +125,10 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Campaign drafts', 'Reusable outreach text for Communication Team. Each Admin project has its own drafts and categories. Copy with one click, then paste into your email client for many clients.') ?></h1>
+    <h1><?= label_with_info('Campaign drafts', 'Reusable outreach text for Communication Team. Format with bold, italic, underline, and headings. Copy with one click — formatting is kept when you paste into your email client.') ?></h1>
     <p class="muted">
       <?= count($projects) ?> project<?= count($projects) === 1 ? '' : 's' ?> shared by Admin ·
-      save replies / offers / follow-ups · <strong>Copy</strong> then paste to send
+      format replies / offers / follow-ups · <strong>Copy</strong> keeps formatting for paste
     </p>
   </div>
   <div class="actions">
@@ -182,7 +182,7 @@ endif;
           <p class="help" style="margin:0.25rem 0 0">
             <?= (int) $draftCount ?> draft<?= (int) $draftCount === 1 ? '' : 's' ?>
             <?= $filterCategory !== '' ? ' in “' . h(email_campaign_draft_category_label($filterCategory)) . '”' : '' ?>.
-            Copy the text, paste into your mail client, send to many clients.
+            Copy keeps bold / italic / underline / headings for paste into your mail client.
           </p>
           <p class="swe-sent-filters camp-drafts-filters">
             <?php
@@ -213,9 +213,8 @@ endif;
         <?php foreach ($drafts as $d):
             $did = (int) $d['id'];
             $title = (string) $d['title'];
-            $body = (string) $d['body'];
+            $bodyHtml = email_campaign_draft_body_html((string) $d['body']);
             $cat = (string) $d['category'];
-            $preview = mb_strlen($body) > 220 ? (mb_substr($body, 0, 220) . '…') : $body;
             $editHref = $formAction . '&edit=' . $did . '#camp-draft-form';
             ?>
           <article class="camp-draft-card" data-camp-draft-card data-draft-id="<?= $did ?>">
@@ -223,11 +222,10 @@ endif;
               <h3 class="camp-draft-title"><?= h($title) ?></h3>
               <span class="swe-status-badge is-ready"><?= h(email_campaign_draft_category_label($cat)) ?></span>
             </div>
-            <pre class="camp-draft-preview" data-camp-draft-preview><?= h($preview) ?></pre>
-            <textarea class="camp-draft-body" data-camp-draft-body hidden readonly><?= h($body) ?></textarea>
+            <div class="camp-draft-preview camp-draft-rich" data-camp-draft-preview data-camp-draft-html><?= $bodyHtml ?></div>
             <div class="camp-draft-card-actions actions">
               <button type="button" class="btn small" data-camp-draft-copy
-                      title="Copy full draft text">Copy</button>
+                      title="Copy with formatting for email paste">Copy</button>
               <a class="btn secondary small" href="<?= h($editHref) ?>">Edit</a>
               <form method="post" action="<?= h($formAction) ?>" class="camp-draft-delete-form"
                     data-camp-draft-delete
@@ -252,7 +250,8 @@ endif;
         · <?= h($projectName) ?>
       </h2>
       <p class="help" style="margin-top:0">
-        Raw text only — whatever you paste into Gmail/Outlook. Save once, copy for many clients.
+        Format with <strong>bold</strong>, <em>italic</em>, <u>underline</u>, and headings.
+        <strong>Copy</strong> keeps that formatting when you paste into Gmail / Outlook.
       </p>
       <form method="post" action="<?= h($formAction) ?>" class="camp-draft-form" autocomplete="off"
             data-show-processing="<?= $editDraft ? 'Updating draft…' : 'Saving draft…' ?>">
@@ -280,8 +279,14 @@ endif;
           </div>
           <div class="full">
             <label for="camp_draft_body">Draft text</label>
-            <textarea id="camp_draft_body" name="body" required rows="12" class="inventory-box camp-draft-textarea"
-                      placeholder="Hi,&#10;&#10;We’d love to…&#10;&#10;Best,"><?= h((string) ($editDraft['body'] ?? '')) ?></textarea>
+            <?php
+            render_email_campaign_draft_editor(
+                'camp_draft_body',
+                'body',
+                (string) ($editDraft['body'] ?? ''),
+                ['placeholder' => "Hi,\n\nWe’d love to…\n\nBest,"]
+            );
+            ?>
           </div>
         </div>
         <p class="actions" style="margin-top:0.85rem">

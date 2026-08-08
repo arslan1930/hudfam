@@ -2381,6 +2381,157 @@ function email_campaign_draft_category_label(string $category): string
     return $cats[$slug] ?? 'Custom';
 }
 
+/**
+ * Tags Communication may use in draft bodies (email-safe formatting).
+ *
+ * @return list<string>
+ */
+function email_campaign_draft_allowed_tags(): array
+{
+    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3'];
+}
+
+/** Convert plain outreach text into simple paragraph HTML. */
+function email_campaign_draft_plain_to_html(string $plain): string
+{
+    $plain = trim(str_replace(["\r\n", "\r"], "\n", $plain));
+    if ($plain === '') {
+        return '';
+    }
+    $parts = preg_split("/\n{2,}/", $plain) ?: [];
+    $out = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $out[] = '<p>' . nl2br(h($part), false) . '</p>';
+    }
+    return implode('', $out);
+}
+
+/** Strip draft HTML down to plain text (clipboard / empty checks). */
+function email_campaign_draft_html_to_plain(string $html): string
+{
+    $html = trim(str_replace(["\r\n", "\r"], "\n", $html));
+    if ($html === '') {
+        return '';
+    }
+    if (!preg_match('/<[a-zA-Z][^>]*>/', $html)) {
+        return $html;
+    }
+    $withBreaks = preg_replace(
+        [
+            '/<\s*br\s*\/?\s*>/i',
+            '/<\s*\/\s*(p|h1|h2|h3)\s*>/i',
+            '/<\s*(p|h1|h2|h3)(\s[^>]*)?>/i',
+        ],
+        ["\n", "\n", "\n"],
+        $html
+    ) ?? $html;
+    $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
+    $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+    return trim($text);
+}
+
+/**
+ * Keep only email-safe formatting tags. Plain text becomes paragraphs.
+ * Scripts, styles, links, and attributes are stripped.
+ * (Regex-based so it works without the PHP xml/DOM extension.)
+ */
+function sanitize_email_campaign_draft_html(string $html): string
+{
+    $html = trim(str_replace(["\r\n", "\r"], "\n", $html));
+    if ($html === '') {
+        return '';
+    }
+    if (!preg_match('/<[a-zA-Z][^>]*>/', $html)) {
+        return email_campaign_draft_plain_to_html($html);
+    }
+
+    // Drop dangerous blocks entirely (content included).
+    $html = preg_replace(
+        '/<\s*(script|style|iframe|object|embed|noscript)\b[^>]*>.*?<\s*\/\s*\1\s*>/is',
+        '',
+        $html
+    ) ?? $html;
+    $html = preg_replace(
+        '/<\s*(script|style|iframe|object|embed|meta|link|noscript)\b[^>]*\/?\s*>/is',
+        '',
+        $html
+    ) ?? $html;
+
+    // Keep only formatting tags; unwrap everything else (links, spans, divs…).
+    $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3>');
+
+    // Strip attributes from remaining tags (onclick, style, href, etc.).
+    $html = preg_replace('/<\s*([a-z0-9]+)\b[^>]*>/i', '<$1>', $html) ?? $html;
+    $html = preg_replace('/<\s*\/\s*([a-z0-9]+)\s*>/i', '</$1>', $html) ?? $html;
+
+    // Normalize aliases for consistent email paste.
+    $html = preg_replace('/<\s*b\s*>/i', '<strong>', $html) ?? $html;
+    $html = preg_replace('/<\s*\/\s*b\s*>/i', '</strong>', $html) ?? $html;
+    $html = preg_replace('/<\s*i\s*>/i', '<em>', $html) ?? $html;
+    $html = preg_replace('/<\s*\/\s*i\s*>/i', '</em>', $html) ?? $html;
+
+    // Self-close / normalize br.
+    $html = preg_replace('/<\s*br\s*>/i', '<br>', $html) ?? $html;
+
+    $html = trim($html);
+    if (email_campaign_draft_html_to_plain($html) === '') {
+        return '';
+    }
+    return $html;
+}
+
+/** Safe HTML for rendering a stored draft (legacy plain text supported). */
+function email_campaign_draft_body_html(string $body): string
+{
+    return sanitize_email_campaign_draft_html($body);
+}
+
+/**
+ * Rich-text editor markup (toolbar + contenteditable + hidden textarea).
+ *
+ * @param array{placeholder?:string,rows?:int} $opts
+ */
+function render_email_campaign_draft_editor(
+    string $textareaId,
+    string $name,
+    string $bodyHtml,
+    array $opts = []
+): void {
+    $placeholder = (string) ($opts['placeholder'] ?? 'Write your outreach…');
+    $safe = email_campaign_draft_body_html($bodyHtml);
+    $emptyClass = $safe === '' ? ' is-empty' : '';
+    ?>
+    <div class="camp-draft-editor" data-camp-draft-editor>
+      <div class="camp-draft-toolbar" role="toolbar" aria-label="Text formatting">
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="bold" title="Bold"><strong>B</strong></button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="italic" title="Italic"><em>I</em></button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="underline" title="Underline"><span style="text-decoration:underline">U</span></button>
+        <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="h2" title="Heading">Heading</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="h3" title="Subheading">Subhead</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="p" title="Normal paragraph">Normal</button>
+      </div>
+      <div class="camp-draft-surface<?= $emptyClass ?>"
+           data-camp-draft-surface
+           contenteditable="true"
+           role="textbox"
+           aria-multiline="true"
+           aria-label="Draft text"
+           data-placeholder="<?= h($placeholder) ?>"><?= $safe ?></div>
+      <textarea id="<?= h($textareaId) ?>"
+                name="<?= h($name) ?>"
+                class="camp-draft-textarea-sync"
+                data-camp-draft-sync
+                hidden><?= h($safe) ?></textarea>
+    </div>
+    <?php
+}
+
 function get_email_campaign_draft(int $draftId): ?array
 {
     ensure_email_campaign_schema();
@@ -2449,7 +2600,7 @@ function save_email_campaign_draft(
     if (mb_strlen($title) > 180) {
         $title = mb_substr($title, 0, 180);
     }
-    $body = trim(str_replace(["\r\n", "\r"], "\n", $body));
+    $body = sanitize_email_campaign_draft_html($body);
     if ($body === '') {
         return ['ok' => false, 'error' => 'Draft text is required.'];
     }

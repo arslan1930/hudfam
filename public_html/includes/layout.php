@@ -171,7 +171,7 @@ function render_header(string $title, string $panel = ''): void
                 if (!empty($toolSet['team_email_campaigns_drafts'])) {
                     $groups['Main']['team_email_campaigns_drafts'] = [
                         'Campaign drafts',
-                        'Outreach / offers per project · one-click copy',
+                        'Formatted outreach per project · copy for email',
                     ];
                 }
             }
