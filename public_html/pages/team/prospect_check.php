@@ -69,61 +69,85 @@ try {
                 : $raw;
         } elseif ($action === 'add_new') {
             // Always re-filter against the country database — only brand-new sites may be saved.
+            if (!$domains) {
+                // Hidden <input> newlines often become spaces in browsers — use textarea POST.
+                flash('error', 'Could not read the unique list. Click Filter against country again, then Add.');
+                redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+            }
             $filter = filter_domains_against_prospects($domains, $country);
             $selected = $filter['new'];
             $already = count($filter['existing']);
+            $result = [
+                'existing' => $filter['existing'],
+                'new' => $selected,
+                'invalid' => 0,
+                'total_input' => (int) $filter['total_input'],
+            ];
+            $raw = implode("\n", $selected);
             if (!$selected) {
-                flash('error', 'No new sites to add — every domain is already in the ' . $country . ' database. Filter again with a different list.');
-                redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
-            }
-            $tldGate = analyze_country_tld_match($selected, $country);
-            $acked = post('confirm_tld_mismatch') === '1';
-            if ($tldGate['warn'] && !$acked) {
-                flash('error', 'Country/TLD mismatch warning: confirm the checkbox before adding to ' . $country . ', or change the country.');
-                $result = [
-                    'existing' => $filter['existing'],
-                    'new' => $selected,
-                    'invalid' => 0,
-                    'total_input' => count($domains),
-                ];
-                $tldCheck = $tldGate;
+                flash('ok', 'No new unique sites — all ' . (int) $already . ' domain(s) are already in ' . $country . '. Paste a different list.');
             } else {
-                $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
-                if ((int) $added['inserted'] < 1) {
-                    flash('error', 'No new sites were added — they were already in ' . $country . '.');
-                    redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+                $tldGate = analyze_country_tld_match($selected, $country);
+                $acked = post('confirm_tld_mismatch') === '1';
+                if ($tldGate['warn'] && !$acked) {
+                    flash('error', 'Country/TLD mismatch warning: confirm the checkbox before adding to ' . $country . ', or change the country.');
+                    $tldCheck = $tldGate;
+                } else {
+                    $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
+                    if ((int) $added['inserted'] < 1) {
+                        flash('ok', 'No new unique sites were added — they are already in ' . $country . '.');
+                        $result['new'] = [];
+                        $raw = '';
+                    } else {
+                        $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s) into ' . $country;
+                        if (!empty($added['extract_batch_id'])) {
+                            $msg .= ' · also added to Extracting sites → Sites list';
+                        }
+                        if (!empty($added['batch_id'])) {
+                            $msg .= ' · saved in today’s history';
+                        }
+                        $skippedTotal = $already + (int) $added['skipped'];
+                        if ($skippedTotal > 0) {
+                            $msg .= ' · Skipped ' . $skippedTotal . ' already in this country';
+                        }
+                        if ($tldGate['warn']) {
+                            $msg .= ' · saved despite TLD mismatch warning';
+                        }
+                        flash('ok', $msg . '.');
+                        if (!empty($added['extract_batch_id'])) {
+                            redirect('index.php?page=team_extract_batch&id=' . (int) $added['extract_batch_id']);
+                        }
+                        $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
+                        if (!empty($added['batch_id'])) {
+                            $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
+                        }
+                        redirect($redir);
+                    }
                 }
-                $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s) into ' . $country;
-                if (!empty($added['extract_batch_id'])) {
-                    $msg .= ' · also added to Extracting sites → Sites list';
-                }
-                if (!empty($added['batch_id'])) {
-                    $msg .= ' · saved in today’s history';
-                }
-                $skippedTotal = $already + (int) $added['skipped'];
-                if ($skippedTotal > 0) {
-                    $msg .= ' · Skipped ' . $skippedTotal . ' already in this country';
-                }
-                if ($tldGate['warn']) {
-                    $msg .= ' · saved despite TLD mismatch warning';
-                }
-                flash('ok', $msg . '.');
-                if (!empty($added['extract_batch_id'])) {
-                    redirect('index.php?page=team_extract_batch&id=' . (int) $added['extract_batch_id']);
-                }
-                $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
-                if (!empty($added['batch_id'])) {
-                    $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
-                }
-                redirect($redir);
             }
         } elseif (count($domains) > 100000) {
             flash('error', 'Paste at most 100,000 domains per run (split into batches).');
         } elseif (!$domains) {
             flash('error', 'Paste at least one root domain under “Paste new sites”.');
         } else {
+            // Filter: drop sites already in this country; keep only unique for add.
             $result = filter_domains_against_prospects($domains, $country);
-            $raw = implode("\n", $domains);
+            $raw = implode("\n", $result['new']);
+            $skippedN = count($result['existing']);
+            $uniqueN = count($result['new']);
+            if ($uniqueN > 0) {
+                flash(
+                    'ok',
+                    'Filtered against ' . $country . ': removed ' . $skippedN
+                    . ' already in database · ' . $uniqueN . ' unique site(s) ready to add.'
+                );
+            } else {
+                flash(
+                    'ok',
+                    'Filtered against ' . $country . ': all ' . $skippedN
+                    . ' domain(s) are already in this country. Nothing new to add.'
+                );
+            }
             // refresh private count after filter (domains stay hidden from teammates)
             $old = list_prospect_domain_names(1, $country);
             $old['domains'] = [];
@@ -160,7 +184,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → filter against the existing country database → add <strong>only new unique</strong> sites into that same folder (Germany stays Germany, Spain stays Spain).</p>
+    <p class="muted">Paste sites → Filter against country removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
@@ -213,7 +237,7 @@ render_header('Filter & add', 'team');
       <div class="empty-state" style="min-height:12rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
         <p class="muted" style="margin:0;max-width:18rem">
           Existing country sites are not shown here.<br>
-          Paste your list on the right, then Filter — only <strong>new unique</strong> sites will appear.
+          Paste your list on the right, then Filter — known sites are removed and only <strong>unique</strong> sites remain.
         </p>
       </div>
     </div>
@@ -302,13 +326,22 @@ render_header('Filter & add', 'team');
     <?php if ($result['new']): ?>
       <form method="post" id="add_unique_form">
         <input type="hidden" name="action" value="add_new">
-        <input type="hidden" name="domains" value="<?= h(implode("\n", $result['new'])) ?>">
         <input type="hidden" name="country" value="<?= h($country) ?>">
         <input type="hidden" name="language" value="<?= h($language) ?>">
         <input type="hidden" name="region" value="<?= h($region) ?>">
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
-        <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
+        <?php
+          // Must be a textarea (not input[type=hidden]): browsers turn newlines in
+          // attribute values into spaces, which broke Add and showed a false “already in DB” error.
+          $uniqueText = implode("\n", $result['new']);
+          $uniquePreview = implode("\n", array_slice($result['new'], 0, 5000));
+          if (count($result['new']) > 5000) {
+              $uniquePreview .= "\n… +" . (count($result['new']) - 5000) . ' more';
+          }
+        ?>
+        <textarea name="domains" class="visually-hidden" aria-hidden="true" tabindex="-1"><?= h($uniqueText) ?></textarea>
+        <textarea class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in <?= h($country) ?> yet. Clicking add merges only these new sites into the existing <?= h($country) ?> database.
           Already-known sites stay skipped.

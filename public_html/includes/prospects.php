@@ -367,7 +367,8 @@ function parse_domain_list_strict(string $raw): array
         if ($line === '') {
             continue;
         }
-        $chunks = preg_split('/\s*,\s*/', $line) ?: [$line];
+        // Commas or whitespace (browsers often turn newlines in <input value> into spaces).
+        $chunks = preg_split('/[\s,]+/', $line) ?: [$line];
         foreach ($chunks as $chunk) {
             $chunk = trim($chunk);
             if ($chunk === '') {
