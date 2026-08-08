@@ -1015,7 +1015,10 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   background: #f1f8f4;
 }
 .swe-add-form .form-grid {
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr;
+}
+.swe-emails-add {
+  margin-top: 0.35rem;
 }
 .swe-list-toolbar {
   align-items: flex-start;

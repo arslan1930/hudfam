@@ -175,7 +175,8 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'push_to_admin' && $isTeam) {
         $ready = count_sites_with_emails_ready_to_push($countryName);
         if ($ready < 1) {
-            flash('error', 'Sites without emails cannot be pushed. Add at least one email on a site, then Push to Admin.');
+            // Only when every site still has all 4 email boxes empty (nothing ready).
+            flash('error', 'All email boxes are empty. Fill at least one email on a site, then Push to Admin.');
             redirect($back);
         }
         $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser);
@@ -398,7 +399,6 @@ $total = $inv['total'];
 $pages = $inv['pages'];
 $countryTotal = count_sites_with_emails_for_country($countryName, $sweScope);
 $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0;
-$missingEmails = $isTeam ? max(0, $countryTotal - $readyToPush) : 0;
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
@@ -429,7 +429,7 @@ render_breadcrumbs($crumbs);
     <h1><?= label_with_info(
         $countryName,
         $isTeam
-            ? 'Add up to 4 emails per site, then Push to Admin. Pushed rows leave this working copy; sites without emails stay here.'
+            ? 'Add up to 4 emails per site (paste all four at once). Changes autosave. Push to Admin moves rows that have at least one email.'
             : 'Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.'
     ) ?></h1>
     <p class="muted">
@@ -443,11 +443,11 @@ render_breadcrumbs($crumbs);
   </div>
   <div class="actions">
     <?php if ($isTeam): ?>
-    <form method="post" action="<?= h($listBase) ?>" style="display:inline"
-          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nThose rows will leave this Team working copy. Sites without emails stay here.');">
+    <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
+          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nThose rows will leave this Team working copy.');">
       <input type="hidden" name="action" value="push_to_admin">
-      <button class="btn" type="submit" <?= $readyToPush > 0 ? '' : 'disabled' ?>
-              title="<?= $readyToPush > 0 ? 'Push sites with emails, then clear them from Team' : 'Sites without emails cannot be pushed — add emails first' ?>">
+      <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
+              title="<?= $readyToPush > 0 ? 'Push sites that have at least one email' : 'Add at least one email on a site first' ?>">
         Push to Admin
       </button>
     </form>
@@ -461,23 +461,10 @@ render_breadcrumbs($crumbs);
 </div>
 <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 <?php if ($isTeam): ?>
-  <?php if ($countryTotal > 0 && $readyToPush < 1): ?>
-  <p class="help swe-push-note swe-push-blocked" role="status">
-    <strong>Sites without emails cannot be pushed.</strong>
-    Add at least one email on a site, then Push to Admin.
-    <?= (int) $missingEmails ?> site<?= (int) $missingEmails === 1 ? '' : 's' ?> still missing emails.
-  </p>
-  <?php elseif ($missingEmails > 0): ?>
-  <p class="help swe-push-note" role="status">
-    <strong>Sites without emails cannot be pushed.</strong>
-    Push sends only the <?= (int) $readyToPush ?> site<?= (int) $readyToPush === 1 ? '' : 's' ?> that have emails.
-    <?= (int) $missingEmails ?> site<?= (int) $missingEmails === 1 ? '' : 's' ?> without emails will stay here.
-  </p>
-  <?php else: ?>
-  <p class="help">
-    Add emails below, then <strong>Push to Admin</strong> — they move to Sites with emails - Admin and clear from this Team list.
-  </p>
-  <?php endif; ?>
+<p class="help">
+  Paste up to 4 emails into any email box (one per line or commas). Edits <strong>autosave</strong>.
+  <strong>Push to Admin</strong> sends sites that have at least one email.
+</p>
 <?php elseif ($isAdminAll): ?>
 <p class="help">
   Synced Admin mirror. Search finds a <strong>site + its emails</strong> together.
@@ -500,7 +487,7 @@ render_breadcrumbs($crumbs);
         <?php if ($isAdmin): ?>
           Edit or Backspace to clear an email · Remove deletes the complete row.
         <?php else: ?>
-          Edit emails · Backspace clears a field (autosave) · Remove deletes the row.
+          Paste up to 4 emails at once · autosave · Remove deletes the row.
         <?php endif; ?>
       </p>
     </div>
@@ -534,8 +521,7 @@ render_breadcrumbs($crumbs);
           $hay = mb_strtolower($domain . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
           ?>
         <tr data-swe-row data-search="<?= h($hay) ?>" data-site-id="<?= (int) $s['id'] ?>"
-            data-has-email="<?= $hasEmail ? '1' : '0' ?>"
-            class="<?= (!$hasEmail && $isTeam) ? 'swe-row-no-email' : '' ?>">
+            data-has-email="<?= $hasEmail ? '1' : '0' ?>">
           <td colspan="3">
             <form method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
               <input type="hidden" name="action" value="save_row">
@@ -547,13 +533,10 @@ render_breadcrumbs($crumbs);
                   <label class="visually-hidden">Site name</label>
                   <input class="swe-domain" name="domain" value="<?= h($domain) ?>" required
                          spellcheck="false" autocomplete="off" aria-label="Site name">
-                  <?php if ($isTeam && !$hasEmail): ?>
-                    <span class="swe-no-email-tag" data-swe-no-email-tag>No email — cannot push</span>
-                  <?php endif; ?>
                 </div>
-                <div class="swe-emails" aria-label="Emails">
+                <div class="swe-emails" aria-label="Emails" data-swe-emails>
                   <input type="text" inputmode="email" name="email1" value="<?= h($e1) ?>"
-                         placeholder="email 1" spellcheck="false" autocomplete="off" data-swe-email>
+                         placeholder="email 1 · or paste up to 4" spellcheck="false" autocomplete="off" data-swe-email>
                   <input type="text" inputmode="email" name="email2" value="<?= h($e2) ?>"
                          placeholder="email 2" spellcheck="false" autocomplete="off" data-swe-email>
                   <input type="text" inputmode="email" name="email3" value="<?= h($e3) ?>"
@@ -562,7 +545,6 @@ render_breadcrumbs($crumbs);
                          placeholder="email 4" spellcheck="false" autocomplete="off" data-swe-email>
                 </div>
                 <div class="swe-row-actions">
-                  <button class="btn small" type="submit">Save</button>
                   <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
                           onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove row</button>
                 </div>
@@ -624,26 +606,19 @@ render_breadcrumbs($crumbs);
   <form method="post" action="<?= h($listBase) ?>" class="swe-add-form">
     <input type="hidden" name="action" value="save_row">
     <input type="hidden" name="site_id" value="0">
-    <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr;gap:0.65rem">
-      <div>
+    <div class="form-grid" style="gap:0.65rem">
+      <div class="full">
         <label for="swe_add_domain">Site name</label>
         <input id="swe_add_domain" name="domain" required placeholder="example.com" spellcheck="false">
       </div>
-      <div>
-        <label for="swe_add_e1">Email 1</label>
-        <input id="swe_add_e1" type="email" name="email1" placeholder="name@example.com" spellcheck="false">
-      </div>
-      <div>
-        <label for="swe_add_e2">Email 2</label>
-        <input id="swe_add_e2" type="email" name="email2" spellcheck="false">
-      </div>
-      <div>
-        <label for="swe_add_e3">Email 3</label>
-        <input id="swe_add_e3" type="email" name="email3" spellcheck="false">
-      </div>
-      <div>
-        <label for="swe_add_e4">Email 4</label>
-        <input id="swe_add_e4" type="email" name="email4" spellcheck="false">
+      <div class="full" data-swe-emails>
+        <label>Emails (up to 4 — paste all at once into any box)</label>
+        <div class="swe-emails swe-emails-add">
+          <input id="swe_add_e1" type="text" inputmode="email" name="email1" placeholder="email 1 · or paste up to 4" spellcheck="false" autocomplete="off" data-swe-email>
+          <input id="swe_add_e2" type="text" inputmode="email" name="email2" placeholder="email 2" spellcheck="false" autocomplete="off" data-swe-email>
+          <input id="swe_add_e3" type="text" inputmode="email" name="email3" placeholder="email 3" spellcheck="false" autocomplete="off" data-swe-email>
+          <input id="swe_add_e4" type="text" inputmode="email" name="email4" placeholder="email 4" spellcheck="false" autocomplete="off" data-swe-email>
+        </div>
       </div>
     </div>
     <p class="actions" style="margin-top:0.85rem">

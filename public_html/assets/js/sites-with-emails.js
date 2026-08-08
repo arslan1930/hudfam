@@ -5,6 +5,7 @@
   var copyBtn = document.getElementById('swe_copy_emails');
   var totalLabel = document.getElementById('swe_total_label');
   var searchInput = document.getElementById('swe-row-search');
+  var pushBtn = document.getElementById('swe-push-btn');
   var autosaveTimers = new WeakMap();
 
   function setStatus(msg, isError) {
@@ -85,6 +86,84 @@
     });
   }
 
+  function emailInputsIn(root) {
+    if (!root) return [];
+    return Array.prototype.slice.call(root.querySelectorAll('[data-swe-email]'));
+  }
+
+  function parseEmailPaste(text) {
+    var raw = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!raw) return [];
+    var parts = raw.split(/[\n,;]+|\s+/);
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < parts.length; i++) {
+      var e = String(parts[i] || '').trim().replace(/^<|>$/g, '');
+      if (!e || seen[e.toLowerCase()]) continue;
+      // Keep plausible emails; also keep other tokens so user can fix typos after paste
+      if (e.indexOf('@') === -1 && out.length === 0 && parts.length === 1) {
+        out.push(e);
+        break;
+      }
+      if (e.indexOf('@') === -1) continue;
+      seen[e.toLowerCase()] = true;
+      out.push(e);
+      if (out.length >= 4) break;
+    }
+    return out;
+  }
+
+  /**
+   * Paste into any email box: if clipboard has multiple emails, fill all 4 fields.
+   * Single value pastes into the focused box only.
+   */
+  function applyEmailPaste(targetInput, clipboardText) {
+    var group = targetInput.closest('[data-swe-emails]') || targetInput.closest('form');
+    var inputs = emailInputsIn(group);
+    if (!inputs.length) return false;
+    var emails = parseEmailPaste(clipboardText);
+    if (!emails.length) return false;
+
+    if (emails.length === 1) {
+      targetInput.value = emails[0];
+      return true;
+    }
+
+    for (var i = 0; i < inputs.length; i++) {
+      inputs[i].value = emails[i] || '';
+    }
+    return true;
+  }
+
+  function countReadyRows() {
+    var n = 0;
+    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+      if (row.getAttribute('data-has-email') === '1') n++;
+    });
+    return n;
+  }
+
+  function syncPushButton() {
+    if (!pushBtn) return;
+    var ready = countReadyRows();
+    // Page may have more rows on other pages — only enable from server if already enabled,
+    // or enable when this page has at least one ready row.
+    var serverReady = !pushBtn.disabled || ready > 0;
+    if (ready > 0) {
+      pushBtn.disabled = false;
+      pushBtn.title = 'Push sites that have at least one email';
+    } else if (pushBtn.getAttribute('data-server-ready') === '1') {
+      // Keep server state when other pages may have ready rows
+      pushBtn.disabled = false;
+    }
+    // If server had none and this page still has none, stay disabled
+    if (ready < 1 && pushBtn.getAttribute('data-server-ready') !== '1') {
+      pushBtn.disabled = true;
+      pushBtn.title = 'Add at least one email on a site first';
+    }
+    void serverReady;
+  }
+
   function refreshRowSearchIndex(row) {
     if (!row) return;
     var form = row.querySelector('[data-swe-save]');
@@ -98,18 +177,7 @@
     var hasEmail = emails.some(function (e) { return e !== ''; });
     row.setAttribute('data-search', [domain].concat(emails).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
-    row.classList.toggle('swe-row-no-email', !hasEmail);
-    var tag = row.querySelector('[data-swe-no-email-tag]');
-    var siteBlock = row.querySelector('.swe-site-block');
-    if (!hasEmail && siteBlock && !tag) {
-      tag = document.createElement('span');
-      tag.className = 'swe-no-email-tag';
-      tag.setAttribute('data-swe-no-email-tag', '');
-      tag.textContent = 'No email — cannot push';
-      siteBlock.appendChild(tag);
-    } else if (hasEmail && tag) {
-      tag.remove();
-    }
+    syncPushButton();
   }
 
   function filterRows() {
@@ -184,12 +252,19 @@
     filterRows();
   }
 
+  if (pushBtn && !pushBtn.disabled) {
+    pushBtn.setAttribute('data-server-ready', '1');
+  }
+
   function saveRowForm(form, opts) {
     opts = opts || {};
     if (!form || form.getAttribute('data-busy') === '1') {
       return Promise.resolve(null);
     }
-    var saveBtn = form.querySelector('button[type="submit"]:not([form])');
+    // Manual "Add site row" form still does a normal submit
+    if (!form.matches('[data-swe-save]')) {
+      return Promise.resolve(null);
+    }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
     if (searchInput) body.set('q', String(searchInput.value || ''));
@@ -214,13 +289,13 @@
       .then(function (data) {
         var row = form.closest('[data-swe-row]');
         refreshRowSearchIndex(row);
-        setStatus(opts.quiet ? 'Email updated.' : 'Saved.');
-        if (saveBtn && !opts.quiet) {
-          var old = saveBtn.textContent;
-          saveBtn.textContent = 'Saved';
-          window.setTimeout(function () { saveBtn.textContent = old || 'Save'; }, 1000);
+        if (!opts.quiet) {
+          setStatus('Saved.');
+        } else {
+          setStatus('Autosaved.');
         }
         filterRows();
+        syncPushButton();
         return data;
       })
       .catch(function (err) {
@@ -233,21 +308,45 @@
       });
   }
 
-  // Autosave when clearing/editing emails with Backspace (debounced)
-  document.addEventListener('input', function (e) {
-    var input = e.target;
-    if (!input || !input.matches || !input.matches('[data-swe-email]')) return;
-    var form = input.closest('[data-swe-save]');
-    if (!form) return;
-    refreshRowSearchIndex(form.closest('[data-swe-row]'));
-    filterRows();
+  function scheduleAutosave(form) {
+    if (!form || !form.matches('[data-swe-save]')) return;
     var prev = autosaveTimers.get(form);
     if (prev) window.clearTimeout(prev);
     var timer = window.setTimeout(function () {
       autosaveTimers.delete(form);
       saveRowForm(form, { quiet: true });
-    }, 450);
+    }, 400);
     autosaveTimers.set(form, timer);
+  }
+
+  // Paste: fill up to 4 email boxes at once (no need to click each box)
+  document.addEventListener('paste', function (e) {
+    var input = e.target;
+    if (!input || !input.matches || !input.matches('[data-swe-email]')) return;
+    var clip = (e.clipboardData || window.clipboardData);
+    var text = clip ? clip.getData('text') : '';
+    if (!text) return;
+    var multi = parseEmailPaste(text);
+    if (multi.length <= 1) return; // let normal single paste through
+    e.preventDefault();
+    applyEmailPaste(input, text);
+    var form = input.closest('[data-swe-save]');
+    var row = input.closest('[data-swe-row]');
+    refreshRowSearchIndex(row);
+    filterRows();
+    setStatus('Pasted ' + Math.min(multi.length, 4) + ' email' + (multi.length === 1 ? '' : 's') + '.');
+    if (form) scheduleAutosave(form);
+  });
+
+  // Autosave on every email / domain edit
+  document.addEventListener('input', function (e) {
+    var input = e.target;
+    if (!input || !input.matches || !input.matches('[data-swe-email], .swe-domain')) return;
+    var form = input.closest('[data-swe-save]');
+    if (!form) return;
+    refreshRowSearchIndex(form.closest('[data-swe-row]'));
+    filterRows();
+    scheduleAutosave(form);
   });
 
   document.addEventListener('blur', function (e) {
@@ -263,19 +362,20 @@
     saveRowForm(form, { quiet: true });
   }, true);
 
-  // Manual Save / Remove keep search context
+  // Remove row (ajax); row forms no longer have a Save submit
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form || !form.matches) return;
 
     if (form.matches('[data-swe-save]')) {
+      // No Save button — keep Enter-in-field from full page reload; autosave instead
       e.preventDefault();
       var prev = autosaveTimers.get(form);
       if (prev) {
         window.clearTimeout(prev);
         autosaveTimers.delete(form);
       }
-      saveRowForm(form, { quiet: false });
+      saveRowForm(form, { quiet: true });
       return;
     }
 
@@ -310,8 +410,9 @@
         if (typeof data.site_count === 'number' && totalLabel) {
           totalLabel.textContent = String(data.site_count);
         }
-        setStatus('Removed complete row for ' + (data.domain || 'site') + '. Search kept.');
+        setStatus('Removed complete row for ' + (data.domain || 'site') + '.');
         filterRows();
+        syncPushButton();
         if (data.redirect) {
           window.setTimeout(function () { window.location.href = data.redirect; }, 250);
         }
