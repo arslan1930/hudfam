@@ -653,6 +653,30 @@
       return;
     }
 
+    if (form.matches('[data-swe-clear-all-emailed]')) {
+      e.preventDefault();
+      setStatus('Clearing all emailed marks…', false, true);
+      postAjaxForm(form, 'Could not clear emailed marks').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
+          setRowEmailedState(row, false);
+        });
+        updateSentStats(data);
+        setStatus(
+          'Cleared all emailed marks'
+          + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' sites' : '')
+          + '.'
+        );
+        form.removeAttribute('data-busy');
+        // Hide the clear-all control when nothing is emailed anymore.
+        if (typeof data.sent === 'number' && data.sent < 1) {
+          form.hidden = true;
+        }
+      });
+      return;
+    }
+
     if (form.matches('[data-swe-mark]')) {
       e.preventDefault();
       var markSent = String((form.querySelector('[name="email_sent"]') || {}).value || '') === '1';

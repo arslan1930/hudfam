@@ -54,6 +54,12 @@ function render_header(string $title, string $panel = ''): void
     }
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
     echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
+    // Early scroll restore after same-page POST actions (before paint when possible).
+    echo '<script>';
+    echo '(function(){try{var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
+    echo 'if(p&&y&&p===location.pathname+location.search){var t=parseInt(y,10)||0;if(t>0){';
+    echo 'if("scrollRestoration" in history)history.scrollRestoration="manual";window.scrollTo(0,t);}}}catch(e){}})();';
+    echo '</script>';
     echo '</head><body>';
 
     if (!$user || $panel === '') {
@@ -246,6 +252,9 @@ function render_footer(string $panel = ''): void
             $procVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/app-processing.js') ?: time());
             $procPhp = app_url('asset.php?f=js/app-processing.js&v=' . rawurlencode($procVersion));
             $procFile = asset_url('assets/js/app-processing.js');
+            $stayVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/stay-scroll.js') ?: time());
+            $stayPhp = app_url('asset.php?f=js/stay-scroll.js&v=' . rawurlencode($stayVersion));
+            $stayFile = asset_url('assets/js/stay-scroll.js');
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
                 'panel' => $panel,
@@ -256,6 +265,8 @@ function render_footer(string $panel = ''): void
             echo '</script>';
             echo '<script src="' . h($procPhp) . '" defer></script>';
             echo '<script src="' . h($procFile) . '" defer></script>';
+            echo '<script src="' . h($stayPhp) . '" defer></script>';
+            echo '<script src="' . h($stayFile) . '" defer></script>';
             echo '<script src="' . h($jsPhp) . '" defer></script>';
             echo '<script src="' . h($jsFile) . '" defer></script>';
             echo '<script src="' . h($tipPhp) . '" defer></script>';

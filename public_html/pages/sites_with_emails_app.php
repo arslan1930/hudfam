@@ -710,7 +710,7 @@ render_breadcrumbs($crumbs);
         <?php endforeach; ?>
         <?php if ($sentStats && (int) $sentStats['sent'] > 0): ?>
         <form method="post" action="<?= h($listBase) ?>" class="swe-clear-all-emailed"
-              data-show-processing="Clearing all emailed marks…"
+              data-swe-clear-all-emailed
               onsubmit="return confirm('Clear ALL emailed marks on <?= h($countryName) ?>?\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.');">
           <input type="hidden" name="action" value="clear_all_emailed">
           <input type="hidden" name="q" value="<?= h($q) ?>">
