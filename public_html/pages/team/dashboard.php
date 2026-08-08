@@ -103,7 +103,7 @@ if ($deptScoped) {
         $toolCards[] = ['team_prospect_batches', 'Site adding history', 'Your daily adds'];
     }
     if (!empty($toolSet['team_semrush_research'])) {
-        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'Site names per country · edit + comments'];
+        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, clear country'];
     }
     if (!empty($toolSet['team_extracting'])) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
@@ -194,7 +194,7 @@ render_header('Dashboard', 'team');
   </a>
   <a class="launch-card" href="index.php?page=team_semrush_research">
     <h2>Semrush Research</h2>
-    <p>Site names per country from Admin · edit, copy, undo, comments.</p>
+    <p>From Extracting Results Push · edit, comment, clear country.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_extracting">
     <h2>Extracting sites</h2>

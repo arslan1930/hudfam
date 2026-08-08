@@ -94,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted Sites and Sites with emails - Team · '
                 . (string) $pushed['country'];
         }
+        $msg .= ' · also copied to Semrush Research for Site Finding';
         if ((int) $pushed['skipped'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
         }

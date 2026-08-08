@@ -268,6 +268,12 @@ function push_extract_results_to_extracted(
             );
         }
 
+        // Site Finding copy: same country/TLD buckets, append + skip duplicates.
+        $semrush = ['inserted' => 0, 'skipped' => 0];
+        if (function_exists('add_semrush_domain_list')) {
+            $semrush = add_semrush_domain_list($destName, $domains, $user);
+        }
+
         $ins = (int) $added['inserted'];
         $skip = (int) $added['skipped'];
         $totalInserted += $ins;
@@ -279,6 +285,8 @@ function push_extract_results_to_extracted(
             'inserted' => $ins,
             'skipped' => $skip,
             'domains' => $added['domains'],
+            'semrush_inserted' => (int) ($semrush['inserted'] ?? 0),
+            'semrush_skipped' => (int) ($semrush['skipped'] ?? 0),
         ];
     }
 

@@ -220,8 +220,11 @@ try {
     }
 
     // Push auto-route: country TLDs → own folders; generic TLDs stay in selected country.
+    // Also mirrors site names into Semrush Research (append + skip duplicates).
     db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-route%'");
     $routePush = push_extract_results_to_extracted(
         implode("\n", [
             'txfroute-stay.com',
@@ -257,6 +260,18 @@ try {
     $sweAt = (int) db()->query(
         "SELECT COUNT(*) FROM sites_with_emails_team WHERE country='Austria' AND domain='txfroute-at.at'"
     )->fetchColumn();
+    $semDe = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Germany' AND domain LIKE 'txfroute-%'"
+    )->fetchColumn();
+    $semAt = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $semCh = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Switzerland' AND domain='txfroute-ch.ch'"
+    )->fetchColumn();
+    $semUk = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='United Kingdom' AND domain='txfroute-uk.co.uk'"
+    )->fetchColumn();
     $mapOk = country_for_push_domain('shop.de', 'Germany') === 'Germany'
         && country_for_push_domain('shop.at', 'Germany') === 'Austria'
         && country_for_push_domain('shop.ch', 'Germany') === 'Switzerland'
@@ -287,8 +302,64 @@ try {
             'map' => $mapOk,
         ]));
     }
+    if ($semDe === 4 && $semAt === 1 && $semCh === 1 && $semUk === 1
+        && (int) (($routePush['by_country']['Austria']['semrush_inserted'] ?? 0)) === 1) {
+        pass('extract push also appends Semrush Research with same TLD countries');
+    } else {
+        fail('extract→semrush mirror: ' . json_encode([
+            'sem_de' => $semDe,
+            'sem_at' => $semAt,
+            'sem_ch' => $semCh,
+            'sem_uk' => $semUk,
+            'by' => $routePush['by_country'] ?? null,
+        ]));
+    }
+    $routeAgain = push_extract_results_to_extracted(
+        "txfroute-at.at\ntxfroute-new.de",
+        'Germany',
+        $teamUser,
+        'German',
+        'europe',
+        $batchId
+    );
+    $semAtAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $semNewDe = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Germany' AND domain='txfroute-new.de'"
+    )->fetchColumn();
+    if ($semAtAfter === 1 && $semNewDe === 1
+        && (int) (($routeAgain['by_country']['Austria']['semrush_skipped'] ?? 0)) === 1
+        && (int) (($routeAgain['by_country']['Germany']['semrush_inserted'] ?? 0)) === 1) {
+        pass('extract→semrush append skips duplicates');
+    } else {
+        fail('extract→semrush skip: ' . json_encode($routeAgain['by_country'] ?? null));
+    }
+    add_semrush_comment('Austria', 'txfsem-route note', $teamUser);
+    $clearAt = clear_semrush_country('Austria');
+    $semAtCleared = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Austria' AND domain LIKE 'txfroute-%'"
+    )->fetchColumn();
+    $commentsAt = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sheet_comments WHERE country='Austria' AND body LIKE 'txfsem-route%'"
+    )->fetchColumn();
+    $extractedAtKept = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    if (!empty($clearAt['ok']) && $semAtCleared === 0 && $commentsAt === 0 && $extractedAtKept === 1) {
+        pass('semrush clear country deletes sites+comments; Extracted Sites kept');
+    } else {
+        fail('semrush clear vs extracted: ' . json_encode([
+            'clear' => $clearAt,
+            'sem' => $semAtCleared,
+            'comments' => $commentsAt,
+            'extracted' => $extractedAtKept,
+        ]));
+    }
     db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-route%'");
 } catch (Throwable $e) {
     fail('extracting: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

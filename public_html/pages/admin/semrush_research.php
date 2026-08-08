@@ -59,8 +59,8 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Semrush Research', 'Seed site names per country for Site Finding. Countries only appear to Team after you add sites. Sheets show site names only — Team can edit, copy, undo/redo, and comment.') ?></h1>
-    <p class="muted"><?= count($folders) ?> countr<?= count($folders) === 1 ? 'y' : 'ies' ?> seeded · site names only</p>
+    <h1><?= label_with_info('Semrush Research', 'Optional manual seed for Site Finding. Extracting Results Push also copies site names here with the same country / TLD routing. Site Finding can edit, comment, or clear a full country (sites + comments) without affecting Extracted Sites.') ?></h1>
+    <p class="muted"><?= count($folders) ?> countr<?= count($folders) === 1 ? 'y' : 'ies' ?> with research sites · site names only</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_semrush_research">Team view</a>
@@ -71,7 +71,7 @@ render_breadcrumbs([
 <div class="card" id="add-sites">
   <h2 style="margin:0 0 0.45rem">Add site names</h2>
   <p class="help" style="margin-top:0">
-    Pick a country and paste Semrush site names (one per line). That country then appears for Site Finding.
+    Optional: pick a country and paste site names (one per line). Push from Extracting Results already appends here automatically.
   </p>
   <form method="post" action="<?= h($hub) ?>#add-sites" autocomplete="off"
         data-show-processing="Adding Semrush sites…">

@@ -71,9 +71,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $json(['ok' => true, 'message' => 'Comment deleted.']);
     }
 
-    if ($action === 'clear_all' && $isAdmin) {
+    if ($action === 'clear_all') {
         $result = clear_semrush_country($country);
-        flash('ok', 'Cleared Semrush Research for ' . $country . '.');
+        flash(
+            !empty($result['ok']) ? 'ok' : 'error',
+            !empty($result['ok'])
+                ? ('Cleared Semrush Research for ' . $country
+                    . ' (sites + comments). Extracted Sites were not changed.')
+                : (string) ($result['error'] ?? 'Could not clear.')
+        );
         redirect($hub);
     }
 
@@ -103,7 +109,7 @@ render_breadcrumbs([
     <h1><?= h($country) ?> · Semrush Research</h1>
     <p class="muted">
       <span id="semrush_count_label"><?= (int) $total ?></span> site name<?= $total === 1 ? '' : 's' ?> ·
-      edit, copy, cut, undo/redo · comments below
+      from Extracting Results Push (copy) · edit, copy, cut, undo/redo · comments below
     </p>
   </div>
   <div class="actions">
@@ -150,13 +156,11 @@ render_breadcrumbs([
     </p>
     <p class="help" id="semrush_list_status" hidden></p>
   </div>
-  <?php if ($isAdmin): ?>
   <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem"
-        onsubmit="return confirm('Clear ALL site names and comments for <?= h($country) ?>?');">
+        onsubmit="return confirm('Clear ALL site names and comments for <?= h($country) ?>? Extracted Sites stay unchanged.');">
     <input type="hidden" name="action" value="clear_all">
     <button class="btn danger small" type="submit">Clear country</button>
   </form>
-  <?php endif; ?>
 </div>
 
 <div class="card" style="margin-top:1rem" id="semrush-comments">

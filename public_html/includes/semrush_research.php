@@ -179,11 +179,12 @@ function set_semrush_domains_from_text(string $country, string $raw, array $user
 }
 
 /**
- * Append sites to a country (Admin seed). Does not remove existing.
+ * Append pre-normalized site names to a country. Skips duplicates. Does not remove existing.
  *
- * @return array{ok:bool,error?:string,country?:string,inserted?:int,skipped?:int,total?:int,invalid?:int}
+ * @param list<string> $domains
+ * @return array{ok:bool,error?:string,country?:string,inserted?:int,skipped?:int,total?:int}
  */
-function add_semrush_domains(string $country, string $raw, array $user): array
+function add_semrush_domain_list(string $country, array $domains, array $user): array
 {
     ensure_semrush_research_schema();
     $canon = resolve_canonical_country($country);
@@ -191,14 +192,23 @@ function add_semrush_domains(string $country, string $raw, array $user): array
         return ['ok' => false, 'error' => 'Select an existing country.'];
     }
     $countryName = $canon['name'];
-    $parsed = parse_domain_list_strict($raw);
-    if ($parsed['valid'] === []) {
+
+    $unique = [];
+    foreach ($domains as $d) {
+        $n = function_exists('normalize_domain') ? normalize_domain((string) $d) : strtolower(trim((string) $d));
+        $root = function_exists('to_root_domain') ? to_root_domain($n) : $n;
+        if ($root !== '') {
+            $unique[$root] = true;
+        }
+    }
+    $list = array_keys($unique);
+    if ($list === []) {
         return [
-            'ok' => false,
-            'error' => ((int) $parsed['invalid_count'] > 0)
-                ? 'No valid site names — fix invalid lines first.'
-                : 'Paste at least one site name.',
-            'invalid' => (int) $parsed['invalid_count'],
+            'ok' => true,
+            'country' => $countryName,
+            'inserted' => 0,
+            'skipped' => 0,
+            'total' => count_semrush_sites_for_country($countryName),
         ];
     }
 
@@ -214,11 +224,7 @@ function add_semrush_domains(string $country, string $raw, array $user): array
     $inserted = 0;
     $skipped = 0;
     $order = $maxOrder + 1;
-    foreach ($parsed['valid'] as $d) {
-        $root = to_root_domain(normalize_domain((string) $d));
-        if ($root === '') {
-            continue;
-        }
+    foreach ($list as $root) {
         if (isset($existing[$root])) {
             $skipped++;
             continue;
@@ -239,8 +245,29 @@ function add_semrush_domains(string $country, string $raw, array $user): array
         'inserted' => $inserted,
         'skipped' => $skipped,
         'total' => count_semrush_sites_for_country($countryName),
-        'invalid' => (int) $parsed['invalid_count'],
     ];
+}
+
+/**
+ * Append sites to a country from pasted text (Admin seed / manual add).
+ *
+ * @return array{ok:bool,error?:string,country?:string,inserted?:int,skipped?:int,total?:int,invalid?:int}
+ */
+function add_semrush_domains(string $country, string $raw, array $user): array
+{
+    $parsed = parse_domain_list_strict($raw);
+    if ($parsed['valid'] === []) {
+        return [
+            'ok' => false,
+            'error' => ((int) $parsed['invalid_count'] > 0)
+                ? 'No valid site names — fix invalid lines first.'
+                : 'Paste at least one site name.',
+            'invalid' => (int) $parsed['invalid_count'],
+        ];
+    }
+    $result = add_semrush_domain_list($country, $parsed['valid'], $user);
+    $result['invalid'] = (int) $parsed['invalid_count'];
+    return $result;
 }
 
 function clear_semrush_country(string $country): array
