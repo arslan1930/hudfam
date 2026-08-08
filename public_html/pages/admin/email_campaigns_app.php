@@ -40,6 +40,10 @@ if ($sheetId > 0) {
     }
 
     $q = trim((string) get('q'));
+    $sentFilter = (string) get('sent'); // '', '0' (not emailed), '1' (emailed)
+    if ($sentFilter !== '0' && $sentFilter !== '1') {
+        $sentFilter = '';
+    }
     $pageNum = max(1, (int) get('p', 1));
     $perPage = 100;
 
@@ -47,9 +51,16 @@ if ($sheetId > 0) {
         $action = (string) post('action');
         $returnQ = trim((string) post('q'));
         $returnP = max(1, (int) post('p', 1));
+        $returnSent = (string) post('sent');
+        if ($returnSent !== '0' && $returnSent !== '1') {
+            $returnSent = '';
+        }
         $back = $campBase . '&sheet=' . $sheetId;
         if ($returnQ !== '') {
             $back .= '&q=' . rawurlencode($returnQ);
+        }
+        if ($returnSent !== '') {
+            $back .= '&sent=' . $returnSent;
         }
         if ($returnP > 1) {
             $back .= '&p=' . $returnP;
@@ -102,11 +113,94 @@ if ($sheetId > 0) {
                         'error' => $del['error'] ?? null,
                         'domain' => $del['domain'] ?? '',
                         'site_count' => count_email_campaign_rows($sheetId),
-                    ], !empty($del['ok']) ? 200 : 404);
+                    ] + count_email_campaign_sent_stats($sheetId), !empty($del['ok']) ? 200 : 404);
                 }
                 flash($del['ok'] ? 'ok' : 'error', $del['ok']
                     ? 'Removed ' . (string) ($del['domain'] ?? 'site') . '.'
                     : (string) ($del['error'] ?? 'Could not remove row.'));
+                redirect($back);
+            }
+            // Campaign emailed progress — same rule as Sites with emails - Admin, per sheet.
+            if ($action === 'mark_email_sent') {
+                $rowId = (int) post('site_id');
+                $sent = (string) post('email_sent') === '1';
+                $result = set_email_campaign_row_email_sent($sheetId, $rowId, $sent);
+                if ($wantsJson) {
+                    $jsonOut(
+                        $result + count_email_campaign_sent_stats($sheetId),
+                        !empty($result['ok']) ? 200 : 400
+                    );
+                }
+                if (empty($result['ok'])) {
+                    flash('error', (string) ($result['error'] ?? 'Could not update sent mark.'));
+                } else {
+                    flash(
+                        'ok',
+                        ($sent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
+                        . (string) ($result['domain'] ?? 'site')
+                    );
+                }
+                redirect($back);
+            }
+            if ($action === 'mark_emailed_up_to') {
+                $rowId = (int) post('site_id');
+                $result = mark_email_campaign_emailed_up_to($sheetId, $rowId);
+                if ($wantsJson) {
+                    $jsonOut(
+                        $result + count_email_campaign_sent_stats($sheetId),
+                        !empty($result['ok']) ? 200 : 400
+                    );
+                }
+                if (empty($result['ok'])) {
+                    flash('error', (string) ($result['error'] ?? 'Could not mark checkpoint.'));
+                } else {
+                    flash(
+                        'ok',
+                        'Marked emailed up to ' . (string) ($result['domain'] ?? 'site')
+                        . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked.'
+                    );
+                }
+                redirect($back);
+            }
+            if ($action === 'clear_emailed_up_to') {
+                $rowId = (int) post('site_id');
+                $result = clear_email_campaign_emailed_up_to($sheetId, $rowId);
+                if ($wantsJson) {
+                    $jsonOut(
+                        $result + count_email_campaign_sent_stats($sheetId),
+                        !empty($result['ok']) ? 200 : 400
+                    );
+                }
+                if (empty($result['ok'])) {
+                    flash('error', (string) ($result['error'] ?? 'Could not clear checkpoint.'));
+                } else {
+                    flash(
+                        'ok',
+                        'Cleared emailed up to ' . (string) ($result['domain'] ?? 'site')
+                        . ' · ' . (int) ($result['cleared'] ?? 0) . ' cleared.'
+                        . ' You can mark again to redo this stretch.'
+                    );
+                }
+                redirect($back);
+            }
+            if ($action === 'clear_all_emailed') {
+                $result = clear_all_email_campaign_emailed($sheetId);
+                if ($wantsJson) {
+                    $jsonOut(
+                        $result + count_email_campaign_sent_stats($sheetId),
+                        !empty($result['ok']) ? 200 : 400
+                    );
+                }
+                if (empty($result['ok'])) {
+                    flash('error', (string) ($result['error'] ?? 'Could not clear emailed marks.'));
+                } else {
+                    flash(
+                        'ok',
+                        'Cleared all emailed marks on ' . $sheetCountry
+                        . ' · ' . (int) ($result['cleared'] ?? 0) . ' sites.'
+                        . ' Ready to resend and track again.'
+                    );
+                }
                 redirect($back);
             }
             if ($action === 'paste') {
@@ -225,13 +319,21 @@ if ($sheetId > 0) {
         }
     }
 
-    $inv = email_campaign_rows_inventory_query($sheetId, ['q' => $q], $pageNum, $perPage);
+    $inv = email_campaign_rows_inventory_query(
+        $sheetId,
+        ['q' => $q, 'sent' => $sentFilter],
+        $pageNum,
+        $perPage
+    );
     $rows = $inv['rows'];
     $total = (int) $inv['total'];
     $pages = (int) $inv['pages'];
     $pageNum = (int) $inv['page'];
-    $sheetTotal = $q !== '' ? count_email_campaign_rows($sheetId) : $total;
+    $sheetTotal = ($q !== '' || $sentFilter !== '')
+        ? count_email_campaign_rows($sheetId)
+        : $total;
     $filledCount = $sheetTotal;
+    $sentStats = count_email_campaign_sent_stats($sheetId);
     $excludedCount = count_email_campaign_excluded_domains($sheetId);
     $excludedDomains = list_email_campaign_excluded_domains($sheetId, 200);
     $formAction = $campBase . '&sheet=' . $sheetId;
@@ -240,6 +342,7 @@ if ($sheetId > 0) {
         'folder' => 'email_campaigns',
         'sheet' => $sheetId,
         'q' => $q,
+        'sent' => $sentFilter,
     ], static fn ($v) => $v !== '' && $v !== null));
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
     $projectName = email_campaign_sheet_project_name($sheet);
@@ -264,7 +367,9 @@ if ($sheetId > 0) {
         <p class="muted">
           Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
+          <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
+          · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
+          · <span id="swe_sent_label"><?= (int) $sentStats['sent'] ?></span> emailed
           · <?= (int) $perPage ?> per page · autosave ·
           Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
         </p>
@@ -279,15 +384,66 @@ if ($sheetId > 0) {
     <p class="help">
       Admin fills <strong><?= h($sheetCountry) ?></strong> data for project <strong><?= h($projectName) ?></strong>.
       Use <strong>+ Add site</strong>, paste, file import, or import from Final.
+      Track send progress with the same <strong>emailed</strong> rule as Sites with emails - Admin (this sheet only).
     </p>
+
+    <div class="card swe-checkpoint-rule" style="margin-bottom:1rem">
+      <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'How Mark emailed / Mark up to here / Clear up to here work on this Email campaign country sheet.') ?></h2>
+      <ol class="swe-checkpoint-steps">
+        <li><strong>Order:</strong> oldest sites at the top · newest adds at the bottom.</li>
+        <li><strong>Mark emailed:</strong> marks only that one site as done.</li>
+        <li><strong>Mark up to here:</strong> marks this site <em>and every site above it</em> as emailed (checkpoint).</li>
+        <li><strong>Clear up to here:</strong> clears emailed marks from the top through this site (redo that stretch).</li>
+        <li><strong>Clear all emailed:</strong> resets this country sheet for a full resend.</li>
+      </ol>
+      <p class="help" style="margin:0.55rem 0 0">
+        Highlighted rows = already emailed. Filters: All / Not emailed / Emailed.
+        Marks stay on this sheet only (other projects / countries are separate).
+      </p>
+    </div>
 
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated rows (not all 100K at once). Use + Add site for a single row. Clearing the last email removes the site.') ?></h2>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated rows (not all 100K at once). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
             Browse page by page — large sheets stay fast.
+          </p>
+          <p class="swe-sent-filters">
+            <?php
+            $sentLinks = [
+                '' => 'All',
+                '0' => 'Not emailed',
+                '1' => 'Emailed',
+            ];
+            foreach ($sentLinks as $val => $label):
+                $href = $formAction;
+                if ($q !== '') {
+                    $href .= '&q=' . rawurlencode($q);
+                }
+                if ($val !== '') {
+                    $href .= '&sent=' . $val;
+                }
+                $active = $sentFilter === (string) $val;
+                ?>
+              <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
+            <?php endforeach; ?>
+            <?php if ((int) $sentStats['sent'] > 0): ?>
+            <form method="post" action="<?= h($formAction) ?>" class="swe-clear-all-emailed"
+                  data-swe-clear-all-emailed
+                  onsubmit="return confirm('Clear ALL emailed marks on <?= h($sheetCountry) ?> in this project?\n\nYou can resend and track this sheet from scratch.');">
+              <input type="hidden" name="action" value="clear_all_emailed">
+              <input type="hidden" name="q" value="<?= h($q) ?>">
+              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <?php if ($sentFilter !== ''): ?>
+              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+              <button class="btn secondary small" type="submit" title="Clear every emailed mark on this Email campaign sheet">
+                Clear all emailed
+              </button>
+            </form>
+            <?php endif; ?>
           </p>
         </div>
         <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
@@ -296,7 +452,7 @@ if ($sheetId > 0) {
             <span class="visually-hidden">Search sites and emails</span>
             <input id="swe-row-search" type="search" placeholder="Search site or email…"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
-                   <?= $filledCount < 1 && $q === '' ? 'disabled' : '' ?>
+                   <?= $filledCount < 1 && $q === '' && $sentFilter === '' ? 'disabled' : '' ?>
                    title="Filter this page · Enter = next match · Ctrl/Cmd+Enter = search all pages">
             <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
           </label>
@@ -305,7 +461,7 @@ if ($sheetId > 0) {
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
       <div class="table-wrap swe-sheet-wrap">
-        <table class="swe-table swe-sheet-table" id="camp-sheet-table">
+        <table class="swe-table swe-sheet-table is-admin-checkpoint" id="camp-sheet-table">
           <thead>
             <tr>
               <th class="swe-col-site">Site</th>
@@ -327,6 +483,9 @@ if ($sheetId > 0) {
                 <input type="hidden" name="site_id" value="0">
                 <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
                 <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                <?php if ($sentFilter !== ''): ?>
+                <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                <?php endif; ?>
               </form>
               <label class="visually-hidden" for="camp_add_domain">Site</label>
               <input id="camp_add_domain" class="swe-domain" form="camp-add-form" name="domain" required
@@ -366,16 +525,24 @@ if ($sheetId > 0) {
               $e3 = (string) $r['email3'];
               $e4 = (string) $r['email4'];
               $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
+              $isEmailed = (int) ($r['email_sent'] ?? 0) === 1;
+              $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
+              $statusClass = $isEmailed ? 'is-emailed' : 'is-open';
               $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
               ?>
             <tr data-swe-row data-swe-emails data-search="<?= h($hay) ?>" data-site-id="<?= $rid ?>"
-                data-has-email="<?= $hasEmail ? '1' : '0' ?>">
+                data-has-email="<?= $hasEmail ? '1' : '0' ?>"
+                data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
+                class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
               <td class="swe-td-site">
                 <form id="<?= h($formId) ?>" method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
                   <input type="hidden" name="action" value="save_row">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
                   <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
                   <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                  <?php if ($sentFilter !== ''): ?>
+                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                  <?php endif; ?>
                 </form>
                 <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
                 <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
@@ -395,20 +562,64 @@ if ($sheetId > 0) {
                 <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
               </td>
               <td class="swe-td-status">
-                <span class="swe-status-badge <?= $hasEmail ? 'is-ready' : 'is-open' ?>" data-swe-status>
-                  <?= $hasEmail ? 'Ready' : 'Needs email' ?>
-                </span>
+                <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
               </td>
               <td class="swe-td-actions">
                 <div class="swe-row-actions">
+                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
+                          form="camp-mark-<?= $rid ?>"
+                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
+                    <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
+                  </button>
+                  <button class="btn secondary small" type="submit" form="camp-upto-<?= $rid ?>"
+                          title="Mark this site and every older site above it as emailed"
+                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be marked emailed on this sheet.');">
+                    Up to here
+                  </button>
+                  <button class="btn secondary small" type="submit" form="camp-clear-upto-<?= $rid ?>"
+                          title="Clear emailed marks from the top through this site"
+                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older emailed site from the top through this row will be unmarked on this sheet.');">
+                    Clear up to
+                  </button>
                   <button class="btn secondary small" type="submit" form="camp-remove-<?= $rid ?>"
                           onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
                 </div>
+                <form id="camp-mark-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-mark hidden>
+                  <input type="hidden" name="action" value="mark_email_sent">
+                  <input type="hidden" name="site_id" value="<?= $rid ?>">
+                  <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
+                  <input type="hidden" name="q" value="<?= h($q) ?>">
+                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                  <?php if ($sentFilter !== ''): ?>
+                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                  <?php endif; ?>
+                </form>
+                <form id="camp-upto-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-mark-upto hidden>
+                  <input type="hidden" name="action" value="mark_emailed_up_to">
+                  <input type="hidden" name="site_id" value="<?= $rid ?>">
+                  <input type="hidden" name="q" value="<?= h($q) ?>">
+                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                  <?php if ($sentFilter !== ''): ?>
+                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                  <?php endif; ?>
+                </form>
+                <form id="camp-clear-upto-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-clear-upto hidden>
+                  <input type="hidden" name="action" value="clear_emailed_up_to">
+                  <input type="hidden" name="site_id" value="<?= $rid ?>">
+                  <input type="hidden" name="q" value="<?= h($q) ?>">
+                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                  <?php if ($sentFilter !== ''): ?>
+                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                  <?php endif; ?>
+                </form>
                 <form id="camp-remove-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-remove hidden>
                   <input type="hidden" name="action" value="remove_site">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
                   <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
                   <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                  <?php if ($sentFilter !== ''): ?>
+                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                  <?php endif; ?>
                 </form>
               </td>
             </tr>
@@ -419,7 +630,7 @@ if ($sheetId > 0) {
       <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
         No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
       </p>
-      <?php if ($rows === [] && $q === ''): ?>
+      <?php if ($rows === [] && $q === '' && $sentFilter === ''): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
         <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Final (new sites only)</strong>.</p>
@@ -428,11 +639,19 @@ if ($sheetId > 0) {
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
         </p>
       </div>
-      <?php elseif ($rows === [] && $q !== ''): ?>
+      <?php elseif ($rows === [] && ($q !== '' || $sentFilter !== '')): ?>
       <div class="empty-state">
-        <p>No sites match “<?= h($q) ?>”.</p>
+        <?php if ($sentFilter === '0'): ?>
+          <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+          <p class="muted">New imports and adds appear here until you mark them emailed.</p>
+        <?php elseif ($sentFilter === '1'): ?>
+          <p>No emailed sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+          <p class="muted">Use “Mark emailed” or “Mark up to here” while working the campaign.</p>
+        <?php else: ?>
+          <p>No sites match “<?= h($q) ?>”.</p>
+        <?php endif; ?>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
-          <a class="btn secondary" href="<?= h($formAction) ?>">Clear search</a>
+          <a class="btn secondary" href="<?= h($formAction) ?>">Clear filters</a>
         </p>
       </div>
       <?php endif; ?>

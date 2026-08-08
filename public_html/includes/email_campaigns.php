@@ -64,11 +64,14 @@ function ensure_email_campaign_schema(): void
           email2 VARCHAR(255) NOT NULL DEFAULT '',
           email3 VARCHAR(255) NOT NULL DEFAULT '',
           email4 VARCHAR(255) NOT NULL DEFAULT '',
+          email_sent TINYINT(1) NOT NULL DEFAULT 0,
+          email_sent_at TIMESTAMP NULL DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_email_campaign_sheet_domain (sheet_id, domain),
           INDEX (sheet_id),
           INDEX idx_email_campaign_sheet_id (sheet_id, id),
+          INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent),
           INDEX (domain),
           INDEX (country),
           CONSTRAINT fk_email_campaign_row_sheet
@@ -76,8 +79,23 @@ function ensure_email_campaign_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
-    // Older installs: composite index for paginated sheet browsing.
+    // Older installs: composite index for paginated sheet browsing + emailed checkpoint columns.
     try {
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['email_sent'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_rows
+                 ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0 AFTER email4,
+                 ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent)'
+            );
+        }
+        if (!isset($have['email_sent_at'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_rows
+                 ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent'
+            );
+        }
         $idx = $pdo->query('SHOW INDEX FROM email_campaign_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $haveIdx = [];
         foreach ($idx as $row) {
@@ -85,6 +103,17 @@ function ensure_email_campaign_schema(): void
         }
         if (empty($haveIdx['idx_email_campaign_sheet_id'])) {
             $pdo->exec('ALTER TABLE email_campaign_rows ADD INDEX idx_email_campaign_sheet_id (sheet_id, id)');
+        }
+        if (empty($haveIdx['idx_email_campaign_sheet_sent']) && isset($have['email_sent'])) {
+            // Column may have existed without index on very old installs.
+            try {
+                $pdo->exec(
+                    'ALTER TABLE email_campaign_rows
+                     ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent)'
+                );
+            } catch (Throwable $e) {
+                // ignore duplicate index
+            }
         }
     } catch (Throwable $e) {
         // ignore
@@ -813,10 +842,149 @@ function count_email_campaign_rows(int $sheetId): int
 }
 
 /**
+ * @return array{total:int,sent:int,unsent:int}
+ */
+function count_email_campaign_sent_stats(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN email_sent=1 THEN 1 ELSE 0 END), 0) AS sent
+         FROM email_campaign_rows
+         WHERE sheet_id=? AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $stmt->execute([$sheetId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $total = (int) ($row['total'] ?? 0);
+    $sent = (int) ($row['sent'] ?? 0);
+    return [
+        'total' => $total,
+        'sent' => $sent,
+        'unsent' => max(0, $total - $sent),
+    ];
+}
+
+/**
+ * Mark one campaign sheet row emailed / not emailed.
+ *
+ * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int}
+ */
+function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent): array
+{
+    ensure_email_campaign_schema();
+    $row = get_email_campaign_row($rowId, $sheetId);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
+    }
+    if ($sent) {
+        db()->prepare(
+            'UPDATE email_campaign_rows
+             SET email_sent=1, email_sent_at=NOW()
+             WHERE id=? AND sheet_id=?'
+        )->execute([$rowId, $sheetId]);
+    } else {
+        db()->prepare(
+            'UPDATE email_campaign_rows
+             SET email_sent=0, email_sent_at=NULL
+             WHERE id=? AND sheet_id=?'
+        )->execute([$rowId, $sheetId]);
+    }
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'domain' => (string) $row['domain'],
+        'email_sent' => $sent,
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
+ * Checkpoint: mark every row on this sheet with id <= $rowId as emailed.
+ *
+ * @return array{ok:bool,error?:string,marked?:int,domain?:string,sheet_id?:int}
+ */
+function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
+{
+    ensure_email_campaign_schema();
+    $row = get_email_campaign_row($rowId, $sheetId);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
+         WHERE sheet_id=? AND id<=? AND email_sent=0
+           AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $st->execute([$sheetId, $rowId]);
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'marked' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
+ * Undo checkpoint: clear emailed marks on every row on this sheet with id <= $rowId.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,domain?:string,sheet_id?:int}
+ */
+function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
+{
+    ensure_email_campaign_schema();
+    $row = get_email_campaign_row($rowId, $sheetId);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email_sent=0, email_sent_at=NULL
+         WHERE sheet_id=? AND id<=? AND email_sent=1
+           AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $st->execute([$sheetId, $rowId]);
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
+ * Clear every emailed mark on one Email campaign sheet so Admin can resend and re-track.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,sheet_id?:int}
+ */
+function clear_all_email_campaign_emailed(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    if (!get_email_campaign_sheet($sheetId)) {
+        return ['ok' => false, 'error' => 'Sheet not found.'];
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email_sent=0, email_sent_at=NULL
+         WHERE sheet_id=? AND email_sent=1
+           AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $st->execute([$sheetId]);
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
  * Paginated Email Sheet rows — same model as Our database / Sites with emails.
  * Never load 100K rows into one page; use page + optional site/email search.
  *
- * @param array{q?:string} $filters
+ * @param array{q?:string,sent?:string} $filters sent: '', '0', '1'
  * @return array{rows:list<array<string,mixed>>,total:int,pages:int,page:int,per_page:int}
  */
 function email_campaign_rows_inventory_query(
@@ -831,6 +999,7 @@ function email_campaign_rows_inventory_query(
     $page = max(1, $page);
     $perPage = max(1, min(200, $perPage));
     $q = trim((string) ($filters['q'] ?? ''));
+    $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1'
 
     $where = ["sheet_id = ?", "LEFT(domain, 8) <> '__blank_'"];
     $params = [$sheetId];
@@ -838,6 +1007,10 @@ function email_campaign_rows_inventory_query(
         $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
         $like = '%' . $q . '%';
         array_push($params, $like, $like, $like, $like, $like);
+    }
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
     }
     $whereSql = implode(' AND ', $where);
 

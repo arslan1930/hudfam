@@ -82,7 +82,7 @@ db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain 
 db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
 db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
 db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
-db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%'");
+db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
 
@@ -576,6 +576,183 @@ try {
     delete_email_campaign_project($multiPid);
     delete_email_campaign_project($otherPid);
 
+    // Communication Team search bars: one per Admin-visible project; each searches
+    // all countries in that project; deletes update the matching country sheet.
+    foreach (['TXF Bar Alpha', 'TXF Bar Beta', 'TXF Bar Hidden'] as $pn) {
+        $oldP = get_email_campaign_project_by_name($pn);
+        if ($oldP) {
+            delete_email_campaign_project((int) $oldP['id']);
+        }
+    }
+    $barAlpha = create_email_campaign_project('TXF Bar Alpha', (int) $adminUser['id'], true);
+    $barBeta = create_email_campaign_project('TXF Bar Beta', (int) $adminUser['id'], true);
+    $barHidden = create_email_campaign_project('TXF Bar Hidden', (int) $adminUser['id'], false);
+    $alphaDe = add_email_campaign_country_to_project($barAlpha, 'Germany', (int) $adminUser['id']);
+    $alphaFr = add_email_campaign_country_to_project($barAlpha, 'France', (int) $adminUser['id']);
+    $betaNl = add_email_campaign_country_to_project($barBeta, 'Netherlands', (int) $adminUser['id']);
+    $hiddenDe = add_email_campaign_country_to_project($barHidden, 'Germany', (int) $adminUser['id']);
+    upsert_email_campaign_row($alphaDe, 'txfcamp-bar-alpha-de.com', [
+        'email1' => 'ade@txfcamp-bar-alpha-de.com',
+        'email2' => 'ade2@txfcamp-bar-alpha-de.com',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    upsert_email_campaign_row($alphaFr, 'txfcamp-bar-alpha-fr.com', [
+        'email1' => 'afr@txfcamp-bar-alpha-fr.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    upsert_email_campaign_row($betaNl, 'txfcamp-bar-beta-nl.com', [
+        'email1' => 'bnl@txfcamp-bar-beta-nl.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    upsert_email_campaign_row($hiddenDe, 'txfcamp-bar-hidden-de.com', [
+        'email1' => 'hid@txfcamp-bar-hidden-de.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+
+    $visibleBars = list_email_campaign_projects(true);
+    $visibleBarNames = array_map(static fn ($p) => (string) $p['name'], $visibleBars);
+    $barIdsOnPage = array_map(static fn ($p) => (int) $p['id'], $visibleBars);
+    if (in_array('TXF Bar Alpha', $visibleBarNames, true)
+        && in_array('TXF Bar Beta', $visibleBarNames, true)
+        && !in_array('TXF Bar Hidden', $visibleBarNames, true)
+        && in_array($barAlpha, $barIdsOnPage, true)
+        && in_array($barBeta, $barIdsOnPage, true)
+        && !in_array($barHidden, $barIdsOnPage, true)) {
+        pass('Communication page shows one bar per Admin-enabled project only');
+    } else {
+        fail('visible bars: ' . json_encode($visibleBarNames));
+    }
+
+    // Same gate as pages/team/email_campaigns.php ajax=suggest
+    $teamSuggestGate = static function (int $projectId, string $q): array {
+        $project = get_email_campaign_project($projectId);
+        if (!$project || !email_campaign_project_team_visible($project)) {
+            return [];
+        }
+        return search_email_campaign_suggestions_for_project($projectId, $q, 25);
+    };
+    $alphaBySite = $teamSuggestGate($barAlpha, 'txfcamp-bar-alpha');
+    $alphaByEmail = $teamSuggestGate($barAlpha, 'ade2@txfcamp-bar');
+    $alphaDomains = array_map(static fn ($s) => (string) $s['domain'], $alphaBySite);
+    sort($alphaDomains);
+    $alphaEmailHit = $alphaByEmail[0] ?? null;
+    $betaHits = $teamSuggestGate($barBeta, 'txfcamp-bar-beta');
+    $hiddenHits = $teamSuggestGate($barHidden, 'txfcamp-bar-hidden');
+    $alphaDoesNotSeeBeta = !in_array('txfcamp-bar-beta-nl.com', $alphaDomains, true);
+    if ($alphaDomains === ['txfcamp-bar-alpha-de.com', 'txfcamp-bar-alpha-fr.com']
+        && $alphaDoesNotSeeBeta
+        && $alphaEmailHit
+        && (string) ($alphaEmailHit['domain'] ?? '') === 'txfcamp-bar-alpha-de.com'
+        && (int) ($alphaEmailHit['sheet_id'] ?? 0) === $alphaDe
+        && ($alphaEmailHit['match_type'] ?? '') === 'email'
+        && count($betaHits) === 1
+        && (string) ($betaHits[0]['domain'] ?? '') === 'txfcamp-bar-beta-nl.com'
+        && $hiddenHits === []) {
+        pass('each project search bar finds its countries/emails; hidden project returns none');
+    } else {
+        fail('bar suggest: ' . json_encode([
+            'alpha' => $alphaBySite,
+            'alpha_email' => $alphaByEmail,
+            'beta' => $betaHits,
+            'hidden' => $hiddenHits,
+        ]));
+    }
+
+    // Remove-only-email from Alpha DE; Beta untouched.
+    $alphaRow = get_email_campaign_row((int) ($alphaEmailHit['id'] ?? 0), $alphaDe);
+    $rmEmail = remove_email_from_email_campaign_row(
+        $alphaDe,
+        (int) ($alphaRow['id'] ?? 0),
+        'ade2@txfcamp-bar-alpha-de.com'
+    );
+    $alphaAfter = get_email_campaign_row((int) ($alphaRow['id'] ?? 0), $alphaDe);
+    $betaStill = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $betaNl
+        . " AND domain='txfcamp-bar-beta-nl.com'"
+    )->fetchColumn();
+    if (!empty($rmEmail['ok']) && empty($rmEmail['row_deleted'])
+        && ($alphaAfter['email1'] ?? '') === 'ade@txfcamp-bar-alpha-de.com'
+        && ($alphaAfter['email2'] ?? '') === ''
+        && $betaStill === 1) {
+        pass('Communication remove-only-email updates that country sheet only');
+    } else {
+        fail('bar remove email: ' . json_encode(['rm' => $rmEmail, 'row' => $alphaAfter, 'beta' => $betaStill]));
+    }
+
+    // Delete both from Alpha FR; Alpha DE + Beta kept.
+    $frSuggest = $teamSuggestGate($barAlpha, 'txfcamp-bar-alpha-fr');
+    $frHit = $frSuggest[0] ?? null;
+    $delFr = delete_email_campaign_row($alphaFr, (int) ($frHit['id'] ?? 0));
+    $frGone = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $alphaFr
+        . " AND domain='txfcamp-bar-alpha-fr.com'"
+    )->fetchColumn();
+    $deKept = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $alphaDe
+        . " AND domain='txfcamp-bar-alpha-de.com'"
+    )->fetchColumn();
+    if (!empty($delFr['ok']) && $frGone === 0 && $deKept === 1 && $betaStill === 1
+        && (int) ($frHit['sheet_id'] ?? 0) === $alphaFr) {
+        pass('Communication delete-both updates matching country sheet only');
+    } else {
+        fail('bar delete both: ' . json_encode([
+            'hit' => $frHit, 'del' => $delFr, 'fr' => $frGone, 'de' => $deKept,
+        ]));
+    }
+
+    // Admin hub toggle off/on controls whether the bar appears.
+    $hideBar = set_email_campaign_project_team_visible($barAlpha, false);
+    $barsAfterHide = array_map(
+        static fn ($p) => (string) $p['name'],
+        list_email_campaign_projects(true)
+    );
+    $alphaAfterHide = $teamSuggestGate($barAlpha, 'txfcamp-bar-alpha');
+    $showBar = set_email_campaign_project_team_visible($barAlpha, true);
+    $barsAfterShow = array_map(
+        static fn ($p) => (string) $p['name'],
+        list_email_campaign_projects(true)
+    );
+    if (!empty($hideBar['ok']) && !empty($showBar['ok'])
+        && !in_array('TXF Bar Alpha', $barsAfterHide, true)
+        && $alphaAfterHide === []
+        && in_array('TXF Bar Alpha', $barsAfterShow, true)) {
+        pass('Admin team-search toggle shows/hides Communication project bar');
+    } else {
+        fail('bar toggle: ' . json_encode([
+            'hide' => $hideBar,
+            'show' => $showBar,
+            'after_hide' => $barsAfterHide,
+            'after_show' => $barsAfterShow,
+            'suggest_hidden' => $alphaAfterHide,
+        ]));
+    }
+
+    // Rendered HTML: each visible project gets its own suggest URL + JS hook.
+    ob_start();
+    render_email_campaign_super_search('index.php?page=team_email_campaigns');
+    $barHtml = (string) ob_get_clean();
+    $hasAlphaCard = str_contains($barHtml, 'data-project-id="' . $barAlpha . '"')
+        && str_contains($barHtml, 'project_id=' . $barAlpha)
+        && str_contains($barHtml, 'ajax=suggest');
+    $hasBetaCard = str_contains($barHtml, 'data-project-id="' . $barBeta . '"')
+        && str_contains($barHtml, 'project_id=' . $barBeta);
+    $noHiddenCard = !str_contains($barHtml, 'data-project-id="' . $barHidden . '"')
+        && !str_contains($barHtml, 'TXF Bar Hidden');
+    $hasSearchJs = str_contains($barHtml, 'email-campaign-search.js');
+    if ($hasAlphaCard && $hasBetaCard && $noHiddenCard && $hasSearchJs) {
+        pass('Communication search HTML wires one card + suggest URL per visible project');
+    } else {
+        fail('bar HTML: ' . json_encode([
+            'alpha' => $hasAlphaCard,
+            'beta' => $hasBetaCard,
+            'hidden_absent' => $noHiddenCard,
+            'js' => $hasSearchJs,
+            'len' => strlen($barHtml),
+        ]));
+    }
+
+    delete_email_campaign_project($barAlpha);
+    delete_email_campaign_project($barBeta);
+    delete_email_campaign_project($barHidden);
+
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
     $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
@@ -951,6 +1128,179 @@ try {
     }
 } catch (Throwable $e) {
     fail('admin emailed checkpoint: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Email campaign sheet emailed checkpoint (same rule as Admin SWE, per sheet) ---
+try {
+    db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-sent-%'");
+    db()->exec(
+        "DELETE FROM email_campaign_sheets
+         WHERE name LIKE 'txfcamp-sent-%' OR project_name LIKE 'txfcamp-sent-%'"
+    );
+    db()->exec("DELETE FROM email_campaign_projects WHERE name LIKE 'txfcamp-sent-%'");
+
+    ensure_email_campaign_schema();
+    $campCols = db()->query('SHOW COLUMNS FROM email_campaign_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    if (in_array('email_sent', $campCols, true) && in_array('email_sent_at', $campCols, true)) {
+        pass('campaign rows have email_sent columns');
+    } else {
+        fail('campaign missing email_sent columns: ' . json_encode($campCols));
+    }
+
+    $campPid = create_email_campaign_project(
+        'txfcamp-sent-proj',
+        (int) $adminUser['id'],
+        false
+    );
+    $campSheetA = add_email_campaign_country_to_project($campPid, 'Germany', (int) $adminUser['id']);
+    $campSheetB = add_email_campaign_country_to_project($campPid, 'France', (int) $adminUser['id']);
+    foreach (
+        [
+            ['txfcamp-sent-a.com', 'a@txfcamp-sent-a.com'],
+            ['txfcamp-sent-b.com', 'b@txfcamp-sent-b.com'],
+            ['txfcamp-sent-c.com', 'c@txfcamp-sent-c.com'],
+        ] as [$dom, $em]
+    ) {
+        upsert_email_campaign_row($campSheetA, $dom, [
+            'email1' => $em, 'email2' => '', 'email3' => '', 'email4' => '',
+        ]);
+    }
+    // Same domain in another country sheet of the same project — separate progress.
+    upsert_email_campaign_row($campSheetB, 'txfcamp-sent-a.com', [
+        'email1' => 'fr@txfcamp-sent-a.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+
+    $campIds = db()->query(
+        'SELECT id, domain FROM email_campaign_rows
+         WHERE sheet_id=' . (int) $campSheetA . " AND domain LIKE 'txfcamp-sent-%'
+         ORDER BY id ASC"
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if (count($campIds) !== 3) {
+        fail('txfcamp-sent seed count=' . count($campIds));
+    } else {
+        $cA = (int) $campIds[0]['id'];
+        $cB = (int) $campIds[1]['id'];
+        $cC = (int) $campIds[2]['id'];
+
+        $one = set_email_campaign_row_email_sent($campSheetA, $cA, true);
+        $rowA = get_email_campaign_row($cA, $campSheetA);
+        if (!empty($one['ok']) && (int) ($rowA['email_sent'] ?? 0) === 1) {
+            pass('campaign mark one site emailed');
+        } else {
+            fail('campaign mark one: ' . json_encode($one));
+        }
+
+        $upto = mark_email_campaign_emailed_up_to($campSheetA, $cB);
+        $stats = count_email_campaign_sent_stats($campSheetA);
+        $sentRows = (int) db()->query(
+            'SELECT COUNT(*) FROM email_campaign_rows
+             WHERE sheet_id=' . (int) $campSheetA . " AND domain LIKE 'txfcamp-sent-%' AND email_sent=1"
+        )->fetchColumn();
+        $unsentC = (int) db()->query(
+            'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $cC
+        )->fetchColumn();
+        $otherSheetSent = (int) db()->query(
+            'SELECT email_sent FROM email_campaign_rows
+             WHERE sheet_id=' . (int) $campSheetB . " AND domain='txfcamp-sent-a.com' LIMIT 1"
+        )->fetchColumn();
+        if (!empty($upto['ok']) && $sentRows === 2 && (int) $unsentC === 0
+            && (int) ($stats['sent'] ?? 0) === 2 && $otherSheetSent === 0) {
+            pass('campaign mark up to here is per-sheet only');
+        } else {
+            fail('campaign mark up to: ' . json_encode([
+                'upto' => $upto,
+                'sentRows' => $sentRows,
+                'c' => $unsentC,
+                'stats' => $stats,
+                'other' => $otherSheetSent,
+            ]));
+        }
+
+        $filterSent = email_campaign_rows_inventory_query($campSheetA, ['sent' => '1'], 1, 100);
+        $filterUnsent = email_campaign_rows_inventory_query($campSheetA, ['sent' => '0'], 1, 100);
+        $sentDomains = array_column($filterSent['rows'] ?? [], 'domain');
+        $unsentDomains = array_column($filterUnsent['rows'] ?? [], 'domain');
+        if (in_array('txfcamp-sent-a.com', $sentDomains, true)
+            && in_array('txfcamp-sent-b.com', $sentDomains, true)
+            && in_array('txfcamp-sent-c.com', $unsentDomains, true)
+            && !in_array('txfcamp-sent-c.com', $sentDomains, true)) {
+            pass('campaign sent filter splits emailed / not emailed');
+        } else {
+            fail('campaign sent filter: sent=' . json_encode($sentDomains)
+                . ' unsent=' . json_encode($unsentDomains));
+        }
+
+        // Updating emails on an already-emailed row must keep email_sent=1.
+        $saveKeep = save_email_campaign_row($campSheetA, $cA, 'txfcamp-sent-a.com', [
+            'a2@txfcamp-sent-a.com', '', '', '',
+        ]);
+        $afterSave = (int) db()->query(
+            'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $cA
+        )->fetchColumn();
+        if (!empty($saveKeep['ok']) && $afterSave === 1) {
+            pass('campaign save emails keeps emailed mark');
+        } else {
+            fail('campaign save keep: ' . json_encode($saveKeep) . " sent=$afterSave");
+        }
+
+        // New import / upsert lands unmarked (and does not clear other sheet).
+        upsert_email_campaign_row($campSheetA, 'txfcamp-sent-new.com', [
+            'email1' => 'n@txfcamp-sent-new.com', 'email2' => '', 'email3' => '', 'email4' => '',
+        ]);
+        $newSent = (int) db()->query(
+            "SELECT email_sent FROM email_campaign_rows
+             WHERE sheet_id=" . (int) $campSheetA . " AND domain='txfcamp-sent-new.com' LIMIT 1"
+        )->fetchColumn();
+        $order = db()->query(
+            'SELECT domain FROM email_campaign_rows
+             WHERE sheet_id=' . (int) $campSheetA . " AND domain LIKE 'txfcamp-sent-%'
+             ORDER BY id ASC"
+        )->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $last = (string) (end($order) ?: '');
+        if ($newSent === 0 && $last === 'txfcamp-sent-new.com') {
+            pass('campaign new row is unmarked and last');
+        } else {
+            fail("campaign new row sent=$newSent last=$last order=" . json_encode($order));
+        }
+
+        $clearUpto = clear_email_campaign_emailed_up_to($campSheetA, $cB);
+        $sentA = (int) db()->query(
+            'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $cA
+        )->fetchColumn();
+        $sentB = (int) db()->query(
+            'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $cB
+        )->fetchColumn();
+        if (!empty($clearUpto['ok']) && (int) ($clearUpto['cleared'] ?? 0) >= 2
+            && $sentA === 0 && $sentB === 0) {
+            pass('campaign clear up to here undoes emailed marks');
+        } else {
+            fail('campaign clear up to: ' . json_encode($clearUpto) . " a=$sentA b=$sentB");
+        }
+
+        mark_email_campaign_emailed_up_to($campSheetA, $cC);
+        set_email_campaign_row_email_sent(
+            $campSheetA,
+            (int) db()->query(
+                "SELECT id FROM email_campaign_rows
+                 WHERE sheet_id=" . (int) $campSheetA . " AND domain='txfcamp-sent-new.com' LIMIT 1"
+            )->fetchColumn(),
+            true
+        );
+        $clearAll = clear_all_email_campaign_emailed($campSheetA);
+        $sentLeft = (int) db()->query(
+            'SELECT COUNT(*) FROM email_campaign_rows
+             WHERE sheet_id=' . (int) $campSheetA . " AND domain LIKE 'txfcamp-sent-%' AND email_sent=1"
+        )->fetchColumn();
+        if (!empty($clearAll['ok']) && (int) ($clearAll['cleared'] ?? 0) >= 3 && $sentLeft === 0) {
+            pass('campaign clear all emailed resets sheet for resend');
+        } else {
+            fail('campaign clear all: ' . json_encode($clearAll) . " left=$sentLeft");
+        }
+    }
+
+    delete_email_campaign_project($campPid);
+} catch (Throwable $e) {
+    fail('campaign emailed checkpoint: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Departments ACL ---

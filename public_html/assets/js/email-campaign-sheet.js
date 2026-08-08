@@ -7,8 +7,12 @@
 
   var statusEl = document.getElementById('swe_status');
   var totalLabel = document.getElementById('swe_total_label');
+  var sentLabel = document.getElementById('swe_sent_label');
+  var unsentLabel = document.getElementById('swe_unsent_label');
   var searchInput = document.getElementById('swe-row-search');
   var autosaveTimers = new WeakMap();
+  var isCheckpointSheet = !!(document.querySelector('.swe-sheet-table.is-admin-checkpoint')
+    || document.querySelector('[data-swe-mark]'));
 
   function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
@@ -124,12 +128,68 @@
     var hasEmail = emails.some(function (e) { return e !== ''; });
     row.setAttribute('data-search', [domain, lang].concat(emails).filter(Boolean).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
+    // Checkpoint sheets use Emailed / Not emailed — do not overwrite from email readiness.
+    if (isCheckpointSheet || row.getAttribute('data-email-sent') != null) {
+      return;
+    }
     var status = row.querySelector('[data-swe-status], .swe-status-badge');
     if (status && !row.classList.contains('camp-add-row')) {
       status.classList.toggle('is-ready', hasEmail);
       status.classList.toggle('is-open', !hasEmail);
       status.textContent = hasEmail ? 'Ready' : 'Needs email';
     }
+  }
+
+  function updateSentStats(data) {
+    if (!data) return;
+    if (typeof data.sent === 'number' && sentLabel) {
+      sentLabel.textContent = String(data.sent);
+    }
+    if (typeof data.unsent === 'number' && unsentLabel) {
+      unsentLabel.textContent = String(data.unsent);
+    }
+  }
+
+  /** Update one campaign row's emailed UI without reloading (keeps scroll position). */
+  function setRowEmailedState(row, emailed) {
+    if (!row) return;
+    var sent = !!emailed;
+    row.setAttribute('data-email-sent', sent ? '1' : '0');
+    row.classList.toggle('swe-row-emailed', sent);
+
+    var status = row.querySelector('[data-swe-status]');
+    if (status) {
+      status.classList.toggle('is-emailed', sent);
+      status.classList.toggle('is-open', !sent);
+      status.classList.remove('is-ready', 'is-archive');
+      status.textContent = sent ? 'Emailed' : 'Not emailed';
+    }
+
+    var siteId = row.getAttribute('data-site-id');
+    var markBtn = row.querySelector('button[form="camp-mark-' + siteId + '"], button[form^="camp-mark-"]');
+    if (markBtn) {
+      markBtn.textContent = sent ? 'Clear emailed' : 'Mark emailed';
+      markBtn.title = sent
+        ? 'Clear emailed mark on this site only'
+        : 'Mark this site as emailed';
+      markBtn.classList.toggle('secondary', sent);
+    }
+
+    var markForm = document.getElementById('camp-mark-' + siteId);
+    if (markForm) {
+      var sentInput = markForm.querySelector('[name="email_sent"]');
+      if (sentInput) sentInput.value = sent ? '0' : '1';
+    }
+  }
+
+  function applyEmailedUpTo(siteId, emailed) {
+    var maxId = parseInt(siteId, 10) || 0;
+    document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
+      var id = parseInt(row.getAttribute('data-site-id') || '0', 10);
+      if (id > 0 && id <= maxId) {
+        setRowEmailedState(row, emailed);
+      }
+    });
   }
 
   function filterRows() {
@@ -389,6 +449,86 @@
       return;
     }
 
+    if (form.matches('[data-swe-clear-all-emailed]')) {
+      e.preventDefault();
+      setStatus('Clearing all emailed marks…', false, true);
+      postAjaxForm(form, 'Could not clear emailed marks').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
+          setRowEmailedState(row, false);
+        });
+        updateSentStats(data);
+        setStatus(
+          'Cleared all emailed marks'
+          + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' sites' : '')
+          + '.'
+        );
+        form.removeAttribute('data-busy');
+        if (typeof data.sent === 'number' && data.sent < 1) {
+          form.hidden = true;
+        }
+      });
+      return;
+    }
+
+    if (form.matches('[data-swe-mark]')) {
+      e.preventDefault();
+      var markSent = String((form.querySelector('[name="email_sent"]') || {}).value || '') === '1';
+      setStatus(markSent ? 'Marking emailed…' : 'Clearing emailed mark…', false, true);
+      postAjaxForm(form, 'Could not update emailed mark').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        var id = result.siteId;
+        var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
+        var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
+        setRowEmailedState(rowEl, nextSent);
+        updateSentStats(data);
+        setStatus(
+          (nextSent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
+          + (data.domain || 'site')
+        );
+        form.removeAttribute('data-busy');
+      });
+      return;
+    }
+
+    if (form.matches('[data-swe-mark-upto]')) {
+      e.preventDefault();
+      setStatus('Marking emailed up to here…', false, true);
+      postAjaxForm(form, 'Could not mark checkpoint').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        applyEmailedUpTo(result.siteId, true);
+        updateSentStats(data);
+        setStatus(
+          'Marked emailed up to ' + (data.domain || 'site')
+          + (typeof data.marked === 'number' ? ' · ' + data.marked + ' newly marked' : '')
+          + '.'
+        );
+        form.removeAttribute('data-busy');
+      });
+      return;
+    }
+
+    if (form.matches('[data-swe-clear-upto]')) {
+      e.preventDefault();
+      setStatus('Clearing emailed up to here…', false, true);
+      postAjaxForm(form, 'Could not clear checkpoint').then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        applyEmailedUpTo(result.siteId, false);
+        updateSentStats(data);
+        setStatus(
+          'Cleared emailed up to ' + (data.domain || 'site')
+          + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' cleared' : '')
+          + '.'
+        );
+        form.removeAttribute('data-busy');
+      });
+      return;
+    }
+
     if (!form.matches('[data-swe-remove]')) return;
     e.preventDefault();
     setStatus('Removing site…', false, true);
@@ -399,6 +539,7 @@
         return;
       }
       removeRowFromDom(result.siteId, result.data.site_count);
+      updateSentStats(result.data);
       setStatus('Removed ' + (result.data.domain || 'site') + '.');
       form.removeAttribute('data-busy');
       hideProcessing();
