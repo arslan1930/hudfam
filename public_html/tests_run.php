@@ -576,6 +576,183 @@ try {
     delete_email_campaign_project($multiPid);
     delete_email_campaign_project($otherPid);
 
+    // Communication Team search bars: one per Admin-visible project; each searches
+    // all countries in that project; deletes update the matching country sheet.
+    foreach (['TXF Bar Alpha', 'TXF Bar Beta', 'TXF Bar Hidden'] as $pn) {
+        $oldP = get_email_campaign_project_by_name($pn);
+        if ($oldP) {
+            delete_email_campaign_project((int) $oldP['id']);
+        }
+    }
+    $barAlpha = create_email_campaign_project('TXF Bar Alpha', (int) $adminUser['id'], true);
+    $barBeta = create_email_campaign_project('TXF Bar Beta', (int) $adminUser['id'], true);
+    $barHidden = create_email_campaign_project('TXF Bar Hidden', (int) $adminUser['id'], false);
+    $alphaDe = add_email_campaign_country_to_project($barAlpha, 'Germany', (int) $adminUser['id']);
+    $alphaFr = add_email_campaign_country_to_project($barAlpha, 'France', (int) $adminUser['id']);
+    $betaNl = add_email_campaign_country_to_project($barBeta, 'Netherlands', (int) $adminUser['id']);
+    $hiddenDe = add_email_campaign_country_to_project($barHidden, 'Germany', (int) $adminUser['id']);
+    upsert_email_campaign_row($alphaDe, 'txfcamp-bar-alpha-de.com', [
+        'email1' => 'ade@txfcamp-bar-alpha-de.com',
+        'email2' => 'ade2@txfcamp-bar-alpha-de.com',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    upsert_email_campaign_row($alphaFr, 'txfcamp-bar-alpha-fr.com', [
+        'email1' => 'afr@txfcamp-bar-alpha-fr.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    upsert_email_campaign_row($betaNl, 'txfcamp-bar-beta-nl.com', [
+        'email1' => 'bnl@txfcamp-bar-beta-nl.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    upsert_email_campaign_row($hiddenDe, 'txfcamp-bar-hidden-de.com', [
+        'email1' => 'hid@txfcamp-bar-hidden-de.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+
+    $visibleBars = list_email_campaign_projects(true);
+    $visibleBarNames = array_map(static fn ($p) => (string) $p['name'], $visibleBars);
+    $barIdsOnPage = array_map(static fn ($p) => (int) $p['id'], $visibleBars);
+    if (in_array('TXF Bar Alpha', $visibleBarNames, true)
+        && in_array('TXF Bar Beta', $visibleBarNames, true)
+        && !in_array('TXF Bar Hidden', $visibleBarNames, true)
+        && in_array($barAlpha, $barIdsOnPage, true)
+        && in_array($barBeta, $barIdsOnPage, true)
+        && !in_array($barHidden, $barIdsOnPage, true)) {
+        pass('Communication page shows one bar per Admin-enabled project only');
+    } else {
+        fail('visible bars: ' . json_encode($visibleBarNames));
+    }
+
+    // Same gate as pages/team/email_campaigns.php ajax=suggest
+    $teamSuggestGate = static function (int $projectId, string $q): array {
+        $project = get_email_campaign_project($projectId);
+        if (!$project || !email_campaign_project_team_visible($project)) {
+            return [];
+        }
+        return search_email_campaign_suggestions_for_project($projectId, $q, 25);
+    };
+    $alphaBySite = $teamSuggestGate($barAlpha, 'txfcamp-bar-alpha');
+    $alphaByEmail = $teamSuggestGate($barAlpha, 'ade2@txfcamp-bar');
+    $alphaDomains = array_map(static fn ($s) => (string) $s['domain'], $alphaBySite);
+    sort($alphaDomains);
+    $alphaEmailHit = $alphaByEmail[0] ?? null;
+    $betaHits = $teamSuggestGate($barBeta, 'txfcamp-bar-beta');
+    $hiddenHits = $teamSuggestGate($barHidden, 'txfcamp-bar-hidden');
+    $alphaDoesNotSeeBeta = !in_array('txfcamp-bar-beta-nl.com', $alphaDomains, true);
+    if ($alphaDomains === ['txfcamp-bar-alpha-de.com', 'txfcamp-bar-alpha-fr.com']
+        && $alphaDoesNotSeeBeta
+        && $alphaEmailHit
+        && (string) ($alphaEmailHit['domain'] ?? '') === 'txfcamp-bar-alpha-de.com'
+        && (int) ($alphaEmailHit['sheet_id'] ?? 0) === $alphaDe
+        && ($alphaEmailHit['match_type'] ?? '') === 'email'
+        && count($betaHits) === 1
+        && (string) ($betaHits[0]['domain'] ?? '') === 'txfcamp-bar-beta-nl.com'
+        && $hiddenHits === []) {
+        pass('each project search bar finds its countries/emails; hidden project returns none');
+    } else {
+        fail('bar suggest: ' . json_encode([
+            'alpha' => $alphaBySite,
+            'alpha_email' => $alphaByEmail,
+            'beta' => $betaHits,
+            'hidden' => $hiddenHits,
+        ]));
+    }
+
+    // Remove-only-email from Alpha DE; Beta untouched.
+    $alphaRow = get_email_campaign_row((int) ($alphaEmailHit['id'] ?? 0), $alphaDe);
+    $rmEmail = remove_email_from_email_campaign_row(
+        $alphaDe,
+        (int) ($alphaRow['id'] ?? 0),
+        'ade2@txfcamp-bar-alpha-de.com'
+    );
+    $alphaAfter = get_email_campaign_row((int) ($alphaRow['id'] ?? 0), $alphaDe);
+    $betaStill = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $betaNl
+        . " AND domain='txfcamp-bar-beta-nl.com'"
+    )->fetchColumn();
+    if (!empty($rmEmail['ok']) && empty($rmEmail['row_deleted'])
+        && ($alphaAfter['email1'] ?? '') === 'ade@txfcamp-bar-alpha-de.com'
+        && ($alphaAfter['email2'] ?? '') === ''
+        && $betaStill === 1) {
+        pass('Communication remove-only-email updates that country sheet only');
+    } else {
+        fail('bar remove email: ' . json_encode(['rm' => $rmEmail, 'row' => $alphaAfter, 'beta' => $betaStill]));
+    }
+
+    // Delete both from Alpha FR; Alpha DE + Beta kept.
+    $frSuggest = $teamSuggestGate($barAlpha, 'txfcamp-bar-alpha-fr');
+    $frHit = $frSuggest[0] ?? null;
+    $delFr = delete_email_campaign_row($alphaFr, (int) ($frHit['id'] ?? 0));
+    $frGone = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $alphaFr
+        . " AND domain='txfcamp-bar-alpha-fr.com'"
+    )->fetchColumn();
+    $deKept = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $alphaDe
+        . " AND domain='txfcamp-bar-alpha-de.com'"
+    )->fetchColumn();
+    if (!empty($delFr['ok']) && $frGone === 0 && $deKept === 1 && $betaStill === 1
+        && (int) ($frHit['sheet_id'] ?? 0) === $alphaFr) {
+        pass('Communication delete-both updates matching country sheet only');
+    } else {
+        fail('bar delete both: ' . json_encode([
+            'hit' => $frHit, 'del' => $delFr, 'fr' => $frGone, 'de' => $deKept,
+        ]));
+    }
+
+    // Admin hub toggle off/on controls whether the bar appears.
+    $hideBar = set_email_campaign_project_team_visible($barAlpha, false);
+    $barsAfterHide = array_map(
+        static fn ($p) => (string) $p['name'],
+        list_email_campaign_projects(true)
+    );
+    $alphaAfterHide = $teamSuggestGate($barAlpha, 'txfcamp-bar-alpha');
+    $showBar = set_email_campaign_project_team_visible($barAlpha, true);
+    $barsAfterShow = array_map(
+        static fn ($p) => (string) $p['name'],
+        list_email_campaign_projects(true)
+    );
+    if (!empty($hideBar['ok']) && !empty($showBar['ok'])
+        && !in_array('TXF Bar Alpha', $barsAfterHide, true)
+        && $alphaAfterHide === []
+        && in_array('TXF Bar Alpha', $barsAfterShow, true)) {
+        pass('Admin team-search toggle shows/hides Communication project bar');
+    } else {
+        fail('bar toggle: ' . json_encode([
+            'hide' => $hideBar,
+            'show' => $showBar,
+            'after_hide' => $barsAfterHide,
+            'after_show' => $barsAfterShow,
+            'suggest_hidden' => $alphaAfterHide,
+        ]));
+    }
+
+    // Rendered HTML: each visible project gets its own suggest URL + JS hook.
+    ob_start();
+    render_email_campaign_super_search('index.php?page=team_email_campaigns');
+    $barHtml = (string) ob_get_clean();
+    $hasAlphaCard = str_contains($barHtml, 'data-project-id="' . $barAlpha . '"')
+        && str_contains($barHtml, 'project_id=' . $barAlpha)
+        && str_contains($barHtml, 'ajax=suggest');
+    $hasBetaCard = str_contains($barHtml, 'data-project-id="' . $barBeta . '"')
+        && str_contains($barHtml, 'project_id=' . $barBeta);
+    $noHiddenCard = !str_contains($barHtml, 'data-project-id="' . $barHidden . '"')
+        && !str_contains($barHtml, 'TXF Bar Hidden');
+    $hasSearchJs = str_contains($barHtml, 'email-campaign-search.js');
+    if ($hasAlphaCard && $hasBetaCard && $noHiddenCard && $hasSearchJs) {
+        pass('Communication search HTML wires one card + suggest URL per visible project');
+    } else {
+        fail('bar HTML: ' . json_encode([
+            'alpha' => $hasAlphaCard,
+            'beta' => $hasBetaCard,
+            'hidden_absent' => $noHiddenCard,
+            'js' => $hasSearchJs,
+            'len' => strlen($barHtml),
+        ]));
+    }
+
+    delete_email_campaign_project($barAlpha);
+    delete_email_campaign_project($barBeta);
+    delete_email_campaign_project($barHidden);
+
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
     $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
