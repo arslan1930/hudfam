@@ -89,17 +89,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
         }
         $country = $before ? (string) $before['country'] : '';
+        $rowDeleted = !empty($result['row_deleted']);
+        $msg = $rowDeleted
+            ? 'Removed last email from ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . ' · site row deleted from Admin + Final (no empty-email sites).'
+            : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . '. Site name kept in Admin.';
         $json([
             'ok' => true,
-            'message' => 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
-                . ($country !== '' ? ' (' . $country . ')' : '')
-                . '. Site name kept in Admin.',
+            'message' => $msg,
             'domain' => (string) $result['domain'],
             'country' => $country,
             'emails' => $result['emails'] ?? [],
             'removed' => (string) ($result['removed'] ?? ''),
             'site_id' => $siteId,
-            'mode' => 'email',
+            'mode' => $rowDeleted ? 'row' : 'email',
+            'row_deleted' => $rowDeleted,
         ]);
     }
 
@@ -121,6 +128,7 @@ render_breadcrumbs([
       Search <strong>Sites with emails - Admin</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.
       Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
+      Removing the <strong>last</strong> email also deletes the site row.
     </p>
   </div>
   <div class="actions">

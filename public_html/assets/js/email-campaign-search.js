@@ -228,16 +228,24 @@
       var mode = currentMode();
       if (mode === 'email') {
         var email = emailSelect ? String(emailSelect.value || '') : '';
+        if (!email && (selected.emails || []).length === 1) {
+          email = selected.emails[0];
+        }
         if (!email) {
           setStatus('Pick an email to remove, or choose Delete both.', true);
           return;
         }
         var sid = String(selected.sheetId || sheetId || '');
         var countryLabel = selected.country || sheetName;
-        if (!window.confirm(
-          'Remove only this email from ' + countryLabel + ' sheet?\n\n' +
-          'Site: ' + selected.domain + '\nEmail: ' + email + '\n\nSite name will stay in that country sheet.'
-        )) {
+        var isLastEmail = (selected.emails || []).length <= 1;
+        var confirmMsg = isLastEmail
+          ? 'Remove this email from ' + countryLabel + ' sheet?\n\n'
+            + 'Site: ' + selected.domain + '\nEmail: ' + email
+            + '\n\nThis is the only email — the site row will also be deleted (no empty-email sites).'
+          : 'Remove only this email from ' + countryLabel + ' sheet?\n\n'
+            + 'Site: ' + selected.domain + '\nEmail: ' + email
+            + '\n\nSite name stays; other emails remain.';
+        if (!window.confirm(confirmMsg)) {
           return;
         }
         postAction({
@@ -249,16 +257,20 @@
         })
           .then(function (data) {
             setStatus(data.message || 'Email removed.');
+            if (data.row_deleted) {
+              selected = null;
+              renderSelected();
+              if (input) {
+                input.value = '';
+                input.focus();
+              }
+              suggestions = [];
+              hideSuggest();
+              return;
+            }
             selected.emails = data.emails || [];
             selected.focusEmail = null;
             renderSelected();
-            if (!(selected.emails || []).length) {
-              // keep selection so they can delete the empty site row if wanted
-              modeInputs.forEach(function (el) {
-                if (el.value === 'row') el.checked = true;
-              });
-              syncEmailPick();
-            }
           })
           .catch(function (err) {
             setStatus(err.message || 'Could not remove email.', true);

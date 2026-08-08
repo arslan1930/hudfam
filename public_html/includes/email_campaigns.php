@@ -680,9 +680,11 @@ function delete_email_campaign_row(int $sheetId, int $rowId): array
 }
 
 /**
- * Remove one email; keep site name (and other emails).
+ * Remove one email; keep site name when other emails remain.
+ * If this was the last email on the site, delete the whole row
+ * (no empty email rows in campaign sheets).
  *
- * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string}
+ * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string,row_deleted?:bool}
  */
 function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $email): array
 {
@@ -717,6 +719,21 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
     if (!$found) {
         return ['ok' => false, 'error' => 'That email is not on this site in the sheet.'];
     }
+
+    $domain = (string) $row['domain'];
+    // Last email gone → drop the site row (no empty-email sites).
+    if ($slots === []) {
+        db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
+        db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+        return [
+            'ok' => true,
+            'domain' => $domain,
+            'emails' => [],
+            'removed' => $target,
+            'row_deleted' => true,
+        ];
+    }
+
     while (count($slots) < 4) {
         $slots[] = '';
     }
@@ -730,9 +747,10 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
     $left = array_values(array_filter($slots, static fn ($e) => $e !== ''));
     return [
         'ok' => true,
-        'domain' => (string) $row['domain'],
+        'domain' => $domain,
         'emails' => $left,
         'removed' => $target,
+        'row_deleted' => false,
     ];
 }
 
@@ -789,7 +807,7 @@ function render_email_campaign_super_search(string $postBase = 'index.php?page=t
        data-sheet-name="All countries"
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0"><?= label_with_info('Super search · all countries', 'Type a site or email. Pick a result, choose delete both or remove only email, then press Enter and confirm. The matching country Email Sheet row updates.') ?></h2>
+    <h2 style="margin-top:0"><?= label_with_info('Super search · all countries', 'Type a site or email. Pick a result, choose delete both or remove only email, then press Enter and confirm. If you remove the last email on a site, the whole site row is deleted too.') ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= count($sheets) ?> countr<?= count($sheets) === 1 ? 'y' : 'ies' ?> ·
       <?= (int) $totalSites ?> site<?= (int) $totalSites === 1 ? '' : 's' ?> ·

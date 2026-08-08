@@ -80,17 +80,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
         }
+        $rowDeleted = !empty($result['row_deleted']);
+        $msg = $rowDeleted
+            ? 'Removed last email from ' . (string) $result['domain']
+                . ' (' . $countryName . ') · site row deleted (no empty-email sites).'
+            : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
+                . ' (' . $countryName . '). Site name kept.';
         $json([
             'ok' => true,
-            'message' => 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
-                . ' (' . $countryName . '). Site name kept.',
+            'message' => $msg,
             'domain' => (string) $result['domain'],
             'country' => $countryName,
             'emails' => $result['emails'] ?? [],
             'removed' => (string) ($result['removed'] ?? ''),
             'row_id' => $rowId,
             'sheet_id' => $sid,
-            'mode' => 'email',
+            'mode' => $rowDeleted ? 'row' : 'email',
+            'row_deleted' => $rowDeleted,
         ]);
     }
 
@@ -109,7 +115,7 @@ render_breadcrumbs([
     <p class="muted">
       One super search across <strong>all country sheets</strong> from Admin → Emails data → Email campaign data.
       Results show <strong>site name + email + country</strong>. Choose delete both or remove only email, then press
-      <strong>Enter</strong> (confirm first) — the matching country sheet row updates.
+      <strong>Enter</strong> (confirm first). Removing the <strong>last</strong> email also deletes the site row.
     </p>
   </div>
 </div>

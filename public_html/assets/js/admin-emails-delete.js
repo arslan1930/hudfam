@@ -234,11 +234,15 @@
           setStatus('Pick an email to remove, or choose Delete both.', true);
           return;
         }
-        if (!window.confirm(
-          'Remove only this email from Sites with emails - Admin?\n\n' +
-          'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email +
-          '\n\nSite name stays in that country.'
-        )) {
+        var isLastEmail = (selected.emails || []).length <= 1;
+        var confirmMsg = isLastEmail
+          ? 'Remove this email from Sites with emails - Admin?\n\n'
+            + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
+            + '\n\nThis is the only email — the site row will also be deleted from Admin + Final (no empty-email sites).'
+          : 'Remove only this email from Sites with emails - Admin?\n\n'
+            + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
+            + '\n\nSite name stays; other emails remain.';
+        if (!window.confirm(confirmMsg)) {
           return;
         }
         postAction({
@@ -249,15 +253,20 @@
         })
           .then(function (data) {
             setStatus(data.message || 'Email removed.');
+            if (data.row_deleted) {
+              selected = null;
+              renderSelected();
+              if (input) {
+                input.value = '';
+                input.focus();
+              }
+              suggestions = [];
+              hideSuggest();
+              return;
+            }
             selected.emails = data.emails || [];
             selected.focusEmail = null;
             renderSelected();
-            if (!(selected.emails || []).length) {
-              modeInputs.forEach(function (el) {
-                if (el.value === 'row') el.checked = true;
-              });
-              syncEmailPick();
-            }
           })
           .catch(function (err) {
             setStatus(err.message || 'Could not remove email.', true);

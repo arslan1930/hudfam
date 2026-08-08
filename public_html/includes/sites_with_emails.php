@@ -1265,7 +1265,7 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
        data-swe-admin-delete
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0"><?= label_with_info('Admin emails search', 'Type a site or email across all countries in Sites with emails - Admin. Choose delete both or remove only email, then Enter + confirm. Updates that country’s Admin row (and Final mirror).') ?></h2>
+    <h2 style="margin-top:0"><?= label_with_info('Admin emails search', 'Type a site or email across all countries in Sites with emails - Admin. Choose delete both or remove only email, then Enter + confirm. If you remove the last email on a site, the whole site row is deleted from Admin and Final.') ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= (int) $countries ?> countr<?= (int) $countries === 1 ? 'y' : 'ies' ?> ·
       <?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> ·
@@ -1321,9 +1321,10 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
 }
 
 /**
- * Remove one email slot from an Admin row; keep the site name.
+ * Remove one email slot from an Admin row; keep the site name when others remain.
+ * If this was the last email, delete the whole Admin row (and Final mirror).
  *
- * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string}
+ * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string,row_deleted?:bool}
  */
 function remove_email_from_sites_with_emails_admin(int $siteId, string $email): array
 {
@@ -1356,6 +1357,20 @@ function remove_email_from_sites_with_emails_admin(int $siteId, string $email): 
     if (!$found) {
         return ['ok' => false, 'error' => 'That email is not on this site.'];
     }
+
+    $domain = (string) $row['domain'];
+    // Last email gone → remove site from Admin + Final (no empty-email rows).
+    if ($slots === []) {
+        delete_site_with_emails($siteId, 'admin');
+        return [
+            'ok' => true,
+            'domain' => $domain,
+            'emails' => [],
+            'removed' => $target,
+            'row_deleted' => true,
+        ];
+    }
+
     while (count($slots) < 4) {
         $slots[] = '';
     }
@@ -1366,7 +1381,7 @@ function remove_email_from_sites_with_emails_admin(int $siteId, string $email): 
     )->execute([$slots[0], $slots[1], $slots[2], $slots[3], $siteId]);
 
     sync_sites_with_emails_admin_row_to_all([
-        'domain' => (string) $row['domain'],
+        'domain' => $domain,
         'country' => (string) $row['country'],
         'language' => (string) ($row['language'] ?? ''),
         'region' => (string) ($row['region'] ?? ''),
@@ -1381,9 +1396,10 @@ function remove_email_from_sites_with_emails_admin(int $siteId, string $email): 
     $left = array_values(array_filter($slots, static fn ($e) => $e !== ''));
     return [
         'ok' => true,
-        'domain' => (string) $row['domain'],
+        'domain' => $domain,
         'emails' => $left,
         'removed' => $target,
+        'row_deleted' => false,
     ];
 }
 

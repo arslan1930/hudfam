@@ -77,9 +77,9 @@ db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR do
 db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
+db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
+db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
+db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
@@ -347,6 +347,63 @@ try {
         pass('campaign row present');
     } else {
         fail("campaign row count=$rc");
+    }
+
+    // Remove one of two emails → site stays.
+    $up2 = upsert_email_campaign_row($sid, 'txfcamp-two.com', [
+        'email1' => 'one@txfcamp-two.com',
+        'email2' => 'two@txfcamp-two.com',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    $twoId = (int) ($up2['id'] ?? 0);
+    $rmOne = remove_email_from_email_campaign_row($sid, $twoId, 'one@txfcamp-two.com');
+    if (!empty($rmOne['ok']) && empty($rmOne['row_deleted']) && ($rmOne['emails'] ?? []) === ['two@txfcamp-two.com']) {
+        pass('campaign remove-one keeps site');
+    } else {
+        fail('campaign remove-one: ' . json_encode($rmOne));
+    }
+
+    // Remove last email → site row deleted.
+    $solo = upsert_email_campaign_row($sid, 'txfcamp-solo.com', [
+        'email1' => 'only@txfcamp-solo.com',
+        'email2' => '',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    $soloId = (int) ($solo['id'] ?? 0);
+    $rmLast = remove_email_from_email_campaign_row($sid, $soloId, 'only@txfcamp-solo.com');
+    $soloLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $sid . " AND domain='txfcamp-solo.com'"
+    )->fetchColumn();
+    if (!empty($rmLast['ok']) && !empty($rmLast['row_deleted']) && $soloLeft === 0) {
+        pass('campaign last-email deletes site row');
+    } else {
+        fail('campaign last-email: ' . json_encode($rmLast) . " left=$soloLeft");
+    }
+
+    // Admin emails search: last email also drops Admin + Final.
+    db()->prepare(
+        "INSERT INTO sites_with_emails_admin
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfcamp-admin-solo.com','Germany','German','europe','solo@admin.test','','','')
+         ON DUPLICATE KEY UPDATE email1='solo@admin.test', email2='', email3='', email4=''"
+    )->execute();
+    sync_sites_with_emails_admin_to_all('Germany');
+    $adminSoloId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_admin WHERE domain='txfcamp-admin-solo.com' LIMIT 1"
+    )->fetchColumn();
+    $rmAdmin = remove_email_from_sites_with_emails_admin($adminSoloId, 'solo@admin.test');
+    $adminLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfcamp-admin-solo.com'"
+    )->fetchColumn();
+    $finalLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfcamp-admin-solo.com'"
+    )->fetchColumn();
+    if (!empty($rmAdmin['ok']) && !empty($rmAdmin['row_deleted']) && $adminLeft === 0 && $finalLeft === 0) {
+        pass('admin last-email deletes Admin+Final row');
+    } else {
+        fail('admin last-email: ' . json_encode($rmAdmin) . " admin=$adminLeft final=$finalLeft");
     }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
