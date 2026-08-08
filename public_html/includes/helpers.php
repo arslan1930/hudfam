@@ -254,7 +254,6 @@ function render_glossary(string $panel, bool $showTitle = true): void
         echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
         echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
         echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
-        echo '<div><dt>New badge</dt><dd>Reminder when Team adds Our database sites, Extracted Sites, or Admin emails — clears when you open that section.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';

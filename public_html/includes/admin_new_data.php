@@ -154,12 +154,13 @@ function admin_new_data_flags(?array $user = null): array
     return $flags;
 }
 
+/**
+ * New badges removed sitewide — kept as a no-op so older call sites stay safe.
+ */
 function admin_new_badge_html(string $section, ?array $user = null): string
 {
-    if (!admin_has_new_data($section, $user)) {
-        return '';
-    }
-    return ' <span class="admin-new-badge" title="New data — open to clear">New</span>';
+    unset($section, $user);
+    return '';
 }
 
 /**

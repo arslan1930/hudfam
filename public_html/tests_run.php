@@ -342,7 +342,7 @@ try {
     fail('orders/invoices: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
-// --- Admin new badges ---
+// --- Admin new-data signals (UI badges removed sitewide; helpers still work) ---
 try {
     db()->prepare('DELETE FROM admin_data_seen WHERE user_id=?')->execute([(int) $adminUser['id']]);
     db()->exec("DELETE FROM admin_data_signals");
@@ -350,20 +350,20 @@ try {
     mark_admin_new_data('extracted_sites', 2, 'Germany');
     mark_admin_new_data('emails_admin', 2, 'Germany');
     if (admin_has_new_data('our_database', $adminUser)) {
-        pass('new badge our_database');
+        pass('admin signal our_database');
     } else {
-        fail('new badge our_database missing');
+        fail('admin signal our_database missing');
     }
     clear_admin_new_data('our_database', $adminUser);
     if (!admin_has_new_data('our_database', $adminUser)) {
-        pass('cleared our_database badge');
+        pass('cleared our_database signal');
     } else {
-        fail('badge not cleared');
+        fail('signal not cleared');
     }
-    if (admin_has_new_data('extracted_sites', $adminUser) && admin_has_new_data('emails_admin', $adminUser)) {
-        pass('other badges still new');
+    if (admin_new_badge_html('our_database', $adminUser) === '') {
+        pass('New badge UI disabled sitewide');
     } else {
-        fail('other badges unexpectedly cleared');
+        fail('New badge HTML still rendered');
     }
 } catch (Throwable $e) {
     fail('admin new: ' . $e->getMessage());

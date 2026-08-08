@@ -50,7 +50,7 @@ render_header('Dashboard', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Admin dashboard', 'Orange New badges appear when Team adds sites, pushes Extracted Sites, or pushes Sites with emails - Admin. Open that section to clear the reminder.') ?></h1>
+    <h1><?= label_with_info('Admin dashboard', 'Overview of Our database, Extracted Sites, Emails data, departments, orders, and invoices.') ?></h1>
     <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — each country has its own URL database.</p>
   </div>
   <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">
@@ -76,18 +76,10 @@ render_header('Dashboard', 'admin');
   <div class="card stat"><span class="muted">Invoices</span><strong><?= $invoiceCount ?></strong></div>
 </div>
 
-<?php
-$newOur = function_exists('admin_has_new_data') && admin_has_new_data('our_database', $user);
-$newExtracted = function_exists('admin_has_new_data') && admin_has_new_data('extracted_sites', $user);
-$newEmails = function_exists('admin_has_new_data') && admin_has_new_data('emails_admin', $user);
-$badge = static function (bool $on): string {
-    return $on ? ' <span class="admin-new-badge" title="New data — open to clear">New</span>' : '';
-};
-?>
 <div class="launch-cards" id="dashboard-launch-cards">
-  <a class="launch-card<?= $newOur ? ' has-admin-new' : '' ?>" href="index.php?page=admin_prospects#add-sites" data-dashboard-item
-     data-search="our database add sites paste root domains country folders urls new">
-    <h2>Our database<?= $badge($newOur) ?></h2>
+  <a class="launch-card" href="index.php?page=admin_prospects#add-sites" data-dashboard-item
+     data-search="our database add sites paste root domains country folders urls">
+    <h2>Our database</h2>
     <p>Country folders — browse and add sites.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_departments" data-dashboard-item
@@ -95,14 +87,14 @@ $badge = static function (bool $on): string {
     <h2>Departments</h2>
     <p>Site Finding · Site Extracting · Email Extracting · Communication Team.</p>
   </a>
-  <a class="launch-card<?= $newExtracted ? ' has-admin-new' : '' ?>" href="index.php?page=admin_extracted" data-dashboard-item
-     data-search="extracted urls extracted sites countries copy edit remove push new">
-    <h2>Extracted Sites<?= $badge($newExtracted) ?></h2>
+  <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
+     data-search="extracted urls extracted sites countries copy edit remove push">
+    <h2>Extracted Sites</h2>
     <p>From Team Extracting Results Push.</p>
   </a>
-  <a class="launch-card<?= $newEmails ? ' has-admin-new' : '' ?>" href="index.php?page=admin_emails_data" data-dashboard-item
-     data-search="emails data sites with emails admin archive push new">
-    <h2>Emails data<?= $badge($newEmails) ?></h2>
+  <a class="launch-card" href="index.php?page=admin_emails_data" data-dashboard-item
+     data-search="emails data sites with emails admin archive push">
+    <h2>Emails data</h2>
     <p>Admin archive, Final mirror, and campaign sheets.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
@@ -115,9 +107,9 @@ $badge = static function (bool $on): string {
     <h2>Invoices</h2>
     <p>Generate printable invoices from completed articles.</p>
   </a>
-  <a class="launch-card<?= $newOur ? ' has-admin-new' : '' ?>" href="index.php?page=admin_prospect_batches" data-dashboard-item
-     data-search="site adding history who added sites by day batches new">
-    <h2>Site adding history<?= $badge($newOur) ?></h2>
+  <a class="launch-card" href="index.php?page=admin_prospect_batches" data-dashboard-item
+     data-search="site adding history who added sites by day batches">
+    <h2>Site adding history</h2>
     <p>See who added sites, by day.</p>
   </a>
 </div>

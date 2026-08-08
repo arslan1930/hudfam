@@ -198,7 +198,7 @@ if ($folder === '') {
     ]); ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info('Extracted Sites', 'Filled when Team pushes Extracting Results. A New badge appears on Admin until you open this section.') ?></h1>
+        <h1><?= label_with_info('Extracted Sites', 'Filled when Team pushes Extracting Results.') ?></h1>
         <p class="muted">
           New URLs from Team Push.
           Email archives are under <a href="index.php?page=admin_emails_data">Emails data</a>.

@@ -220,7 +220,7 @@ if (!$inCountry && !$emptyCountry) {
     ]); ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info('Our database', 'Country folders of unique sites. Team Filter & add writes here. A New badge appears until you open this section.') ?></h1>
+        <h1><?= label_with_info('Our database', 'Country folders of unique sites. Team Filter & add writes here.') ?></h1>
         <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
