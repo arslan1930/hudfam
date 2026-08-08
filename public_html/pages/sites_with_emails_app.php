@@ -681,7 +681,7 @@ render_breadcrumbs($crumbs);
       <p class="help" style="margin:0.25rem 0 0">
         Search shows both columns together (site + its emails).
         <?php if ($sweScope === 'admin'): ?>
-          Use the green <strong>checkpoint bar</strong> under each row for emailed / up to here.
+          Use <strong>Status</strong> and the Actions buttons on each row for emailed / up to here.
         <?php elseif ($isAdmin): ?>
           Edit or Backspace to clear an email · Remove deletes the complete row.
         <?php else: ?>
@@ -736,103 +736,121 @@ render_breadcrumbs($crumbs);
     </label>
   </div>
 
-  <div class="table-wrap">
-    <table class="swe-table<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>" id="swe-table">
+  <div class="table-wrap swe-sheet-wrap">
+    <table class="swe-table swe-sheet-table<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>" id="swe-table">
       <thead>
         <tr>
-          <th class="swe-col-site">Site name</th>
-          <th class="swe-col-emails">Emails (up to 4)</th>
-          <th class="swe-col-actions"><?= $sweScope === 'admin' ? 'Row' : 'Actions' ?></th>
+          <th class="swe-col-site">Site</th>
+          <th class="swe-col-lang">Language</th>
+          <th class="swe-col-email">Email 1</th>
+          <th class="swe-col-email">Email 2</th>
+          <th class="swe-col-email">Email 3</th>
+          <th class="swe-col-email">Email 4</th>
+          <th class="swe-col-status">Status</th>
+          <th class="swe-col-actions">Actions</th>
         </tr>
       </thead>
       <tbody id="swe-tbody">
       <?php foreach ($rows as $s):
+          $sid = (int) $s['id'];
+          $formId = 'swe-save-' . $sid;
           $domain = (string) $s['domain'];
+          $lang = trim((string) ($s['language'] ?? ''));
+          if ($lang === '') {
+              $lang = '—';
+          }
           $e1 = (string) $s['email1'];
           $e2 = (string) $s['email2'];
           $e3 = (string) $s['email3'];
           $e4 = (string) $s['email4'];
           $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
           $isEmailed = $sweScope === 'admin' && (int) ($s['email_sent'] ?? 0) === 1;
-          $hay = mb_strtolower($domain . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
+          $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
+          if ($sweScope === 'admin') {
+              $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
+              $statusClass = $isEmailed ? 'is-emailed' : 'is-open';
+          } elseif ($isTeam) {
+              $statusLabel = $hasEmail ? 'Ready' : 'Needs email';
+              $statusClass = $hasEmail ? 'is-ready' : 'is-open';
+          } else {
+              $statusLabel = 'Archive';
+              $statusClass = 'is-archive';
+          }
           ?>
-        <tr data-swe-row data-search="<?= h($hay) ?>" data-site-id="<?= (int) $s['id'] ?>"
+        <tr data-swe-row data-swe-emails data-search="<?= h($hay) ?>" data-site-id="<?= $sid ?>"
             data-has-email="<?= $hasEmail ? '1' : '0' ?>"
             data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
             class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
-          <td colspan="3">
-            <form method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
+          <td class="swe-td-site">
+            <form id="<?= h($formId) ?>" method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
               <input type="hidden" name="action" value="save_row">
-              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
-              <div class="swe-row-grid">
-                <div class="swe-site-block">
-                  <label class="visually-hidden">Site name</label>
-                  <input class="swe-domain" name="domain" value="<?= h($domain) ?>" required
-                         spellcheck="false" autocomplete="off" aria-label="Site name">
-                  <?php if ($isEmailed): ?>
-                    <span class="swe-emailed-badge" title="Email already sent">Emailed</span>
-                  <?php endif; ?>
-                </div>
-                <div class="swe-emails" aria-label="Emails" data-swe-emails>
-                  <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
-                  <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
-                  <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
-                  <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
-                </div>
-                <div class="swe-row-actions">
-                  <?php if ($isTeam): ?>
-                  <button class="btn small" type="submit" form="swe-push-<?= (int) $s['id'] ?>"
-                          data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
-                          title="<?= $hasEmail ? 'Push this site to Admin' : 'Add at least one email first' ?>"
-                          onclick="return confirm('Push <?= h($domain) ?> to Sites with emails - Admin?\n\nThis row will leave the Team working copy.');">Push</button>
-                  <?php endif; ?>
-                  <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
-                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
-                </div>
-              </div>
-              <?php if ($sweScope === 'admin'): ?>
-              <div class="swe-checkpoint-bar" aria-label="Emailed checkpoint for <?= h($domain) ?>">
-                <span class="swe-checkpoint-status<?= $isEmailed ? ' is-done' : '' ?>">
-                  <?= $isEmailed ? 'Emailed done' : 'Not emailed' ?>
-                </span>
-                <div class="swe-checkpoint-actions">
-                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
-                          form="swe-mark-<?= (int) $s['id'] ?>"
-                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
-                    <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
-                  </button>
-                  <button class="btn secondary small" type="submit" form="swe-upto-<?= (int) $s['id'] ?>"
-                          title="Selection rule: mark this site and every older site above it as emailed"
-                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nSelection rule: every older site from the top of <?= h($countryName) ?> through this row will be marked emailed.\n\nYou can Clear up to here later to redo.\n\nFinal archive stays unchanged.');">
-                    Mark up to here
-                  </button>
-                  <button class="btn secondary small" type="submit" form="swe-clear-upto-<?= (int) $s['id'] ?>"
-                          title="Selection rule: clear emailed marks from the top through this site"
-                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nSelection rule: every older emailed site from the top of <?= h($countryName) ?> through this row will be unmarked so you can redo.\n\nFinal archive stays unchanged.');">
-                    Clear up to here
-                  </button>
-                </div>
-              </div>
-              <?php endif; ?>
             </form>
+            <label class="visually-hidden" for="swe-domain-<?= $sid ?>">Site</label>
+            <input id="swe-domain-<?= $sid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
+                   value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site">
+          </td>
+          <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
+          <td class="swe-td-email">
+            <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+          </td>
+          <td class="swe-td-email">
+            <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+          </td>
+          <td class="swe-td-email">
+            <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+          </td>
+          <td class="swe-td-email">
+            <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+          </td>
+          <td class="swe-td-status">
+            <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
+          </td>
+          <td class="swe-td-actions">
+            <div class="swe-row-actions">
+              <?php if ($sweScope === 'admin'): ?>
+              <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
+                      form="swe-mark-<?= $sid ?>"
+                      title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
+                <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
+              </button>
+              <button class="btn secondary small" type="submit" form="swe-upto-<?= $sid ?>"
+                      title="Mark this site and every older site above it as emailed"
+                      onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be marked emailed.\n\nFinal archive stays unchanged.');">
+                Up to here
+              </button>
+              <button class="btn secondary small" type="submit" form="swe-clear-upto-<?= $sid ?>"
+                      title="Clear emailed marks from the top through this site"
+                      onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older emailed site from the top through this row will be unmarked.\n\nFinal archive stays unchanged.');">
+                Clear up to
+              </button>
+              <?php endif; ?>
+              <?php if ($isTeam): ?>
+              <button class="btn small" type="submit" form="swe-push-<?= $sid ?>"
+                      data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
+                      title="<?= $hasEmail ? 'Push this site to Admin' : 'Add at least one email first' ?>"
+                      onclick="return confirm('Push <?= h($domain) ?> to Sites with emails - Admin?\n\nThis row will leave the Team working copy.');">Push</button>
+              <?php endif; ?>
+              <button class="btn secondary small" type="submit" form="swe-remove-<?= $sid ?>"
+                      onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
+            </div>
             <?php if ($isTeam): ?>
-            <form id="swe-push-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" data-swe-push hidden>
+            <form id="swe-push-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-push hidden>
               <input type="hidden" name="action" value="push_site">
-              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
             </form>
             <?php endif; ?>
             <?php if ($sweScope === 'admin'): ?>
-            <form id="swe-mark-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>"
-                  data-swe-mark hidden>
+            <form id="swe-mark-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-mark hidden>
               <input type="hidden" name="action" value="mark_email_sent">
-              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
@@ -840,20 +858,18 @@ render_breadcrumbs($crumbs);
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
             </form>
-            <form id="swe-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>"
-                  data-swe-mark-upto hidden>
+            <form id="swe-upto-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-mark-upto hidden>
               <input type="hidden" name="action" value="mark_emailed_up_to">
-              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
             </form>
-            <form id="swe-clear-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>"
-                  data-swe-clear-upto hidden>
+            <form id="swe-clear-upto-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-clear-upto hidden>
               <input type="hidden" name="action" value="clear_emailed_up_to">
-              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
               <?php if ($sentFilter !== ''): ?>
@@ -861,9 +877,9 @@ render_breadcrumbs($crumbs);
               <?php endif; ?>
             </form>
             <?php endif; ?>
-            <form id="swe-remove-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" data-swe-remove hidden>
+            <form id="swe-remove-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-remove hidden>
               <input type="hidden" name="action" value="remove_site">
-              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
               <?php if ($sentFilter !== ''): ?>
