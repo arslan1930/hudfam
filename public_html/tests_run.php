@@ -99,6 +99,34 @@ try {
     } else {
         pass('bad login rejected');
     }
+
+    // Admin may sign in with account email; Team may not.
+    db()->prepare("UPDATE users SET email=? WHERE username='admin'")
+        ->execute(['admin.login@txf-test.local']);
+    db()->prepare("UPDATE users SET email=? WHERE username='teammate'")
+        ->execute(['teammate.login@txf-test.local']);
+    logout_user();
+    $adminEmailOk = attempt_login('Admin.Login@txf-test.local', 'TestAdmin9x');
+    $adminEmailUser = current_user();
+    logout_user();
+    $teamEmailBlocked = !attempt_login('teammate.login@txf-test.local', 'TestTeam8z');
+    logout_user();
+    $teamUserOk = attempt_login('teammate', 'TestTeam8z');
+    logout_user();
+    if ($adminEmailOk
+        && ($adminEmailUser['role'] ?? '') === 'admin'
+        && ($adminEmailUser['username'] ?? '') === 'admin'
+        && $teamEmailBlocked
+        && $teamUserOk) {
+        pass('admin email login allowed; team email login blocked');
+    } else {
+        fail('email login ACL: ' . json_encode([
+            'admin_email' => $adminEmailOk,
+            'admin_user' => $adminEmailUser,
+            'team_email_blocked' => $teamEmailBlocked,
+            'team_username' => $teamUserOk,
+        ]));
+    }
 } catch (Throwable $e) {
     fail('login: ' . $e->getMessage());
 }
