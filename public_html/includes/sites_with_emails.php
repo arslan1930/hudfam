@@ -129,6 +129,23 @@ function ensure_sites_with_emails_schema(): void
     } catch (Throwable $e) {
         // ignore
     }
+
+    // Country + id for paginated country sheets (up to ~100K rows per country).
+    foreach (['sites_with_emails_team', 'sites_with_emails_admin', 'sites_with_emails_admin_all'] as $tbl) {
+        try {
+            $idxName = 'idx_' . $tbl . '_country_id';
+            $idx = $pdo->query('SHOW INDEX FROM ' . $tbl)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $haveIdx = [];
+            foreach ($idx as $row) {
+                $haveIdx[(string) ($row['Key_name'] ?? '')] = true;
+            }
+            if (empty($haveIdx[$idxName])) {
+                $pdo->exec("ALTER TABLE {$tbl} ADD INDEX {$idxName} (country, id)");
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
 }
 
 /**

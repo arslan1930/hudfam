@@ -543,6 +543,34 @@ try {
     } else {
         fail('campaign scale: ' . json_encode($scale) . " count=$scaleCount");
     }
+
+    // Paginated browse (Our database model) — never load all rows in UI.
+    $page1 = email_campaign_rows_inventory_query($bulkSheet, [], 1, 100);
+    $page2 = email_campaign_rows_inventory_query($bulkSheet, [], 2, 100);
+    $lastPageNum = (int) ceil((int) $page1['total'] / 100);
+    $lastPage = email_campaign_rows_inventory_query($bulkSheet, [], $lastPageNum, 100);
+    $searchHit = email_campaign_rows_inventory_query($bulkSheet, ['q' => 'txfcamp-scale500'], 1, 100);
+    $page1Ids = array_column($page1['rows'], 'id');
+    $page2Ids = array_column($page2['rows'], 'id');
+    if ((int) $page1['total'] >= 1200
+        && count($page1['rows']) === 100
+        && count($page2['rows']) === 100
+        && array_intersect($page1Ids, $page2Ids) === []
+        && (int) $lastPage['page'] === $lastPageNum
+        && (int) $searchHit['total'] === 1
+        && str_contains((string) ($searchHit['rows'][0]['domain'] ?? ''), 'scale500')) {
+        pass('campaign sheet paginated inventory + search');
+    } else {
+        fail('campaign pagination: ' . json_encode([
+            'total' => $page1['total'] ?? null,
+            'p1' => count($page1['rows']),
+            'p2' => count($page2['rows']),
+            'overlap' => count(array_intersect($page1Ids, $page2Ids)),
+            'last' => $lastPage['page'] ?? null,
+            'search' => $searchHit['total'] ?? null,
+        ]));
+    }
+
     db()->exec(
         "DELETE FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
         . " AND (domain LIKE 'txfcamp-bulk%' OR domain LIKE 'txfcamp-csv%' OR domain LIKE 'txfcamp-scale%')"
