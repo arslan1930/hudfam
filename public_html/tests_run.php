@@ -545,6 +545,99 @@ try {
         "DELETE FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
         . " AND (domain LIKE 'txfcamp-bulk%' OR domain LIKE 'txfcamp-csv%' OR domain LIKE 'txfcamp-scale%')"
     );
+
+    // New sites only + never re-add deleted (Final → Email Sheet).
+    db()->exec("DELETE FROM email_campaign_sheets WHERE name='Netherlands'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfcamp-nl-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfcamp-nl-%'");
+    $nlSheet = create_email_campaign_sheet('Netherlands', (int) $adminUser['id'], 'NL Outreach', false);
+    $seedFinal = db()->prepare(
+        "INSERT INTO sites_with_emails_admin_all
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?,?, 'Dutch', 'europe', ?, '', '', '')
+         ON DUPLICATE KEY UPDATE email1=VALUES(email1), email2='', email3='', email4=''"
+    );
+    foreach (
+        [
+            ['txfcamp-nl-a.nl', 'a@txfcamp-nl-a.nl'],
+            ['txfcamp-nl-b.nl', 'b@txfcamp-nl-b.nl'],
+            ['txfcamp-nl-c.nl', 'c@txfcamp-nl-c.nl'],
+        ] as [$dom, $em]
+    ) {
+        $seedFinal->execute([$dom, 'Netherlands', $em]);
+    }
+    $imp1 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $nlCount1 = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    if ((int) $imp1['imported'] === 3 && $nlCount1 === 3 && (int) ($imp1['updated'] ?? 0) === 0) {
+        pass('archive import new_only adds 3 sites');
+    } else {
+        fail('imp1: ' . json_encode($imp1) . " count=$nlCount1");
+    }
+
+    // Change Final email for A; re-import new_only must not update existing.
+    db()->prepare(
+        "UPDATE sites_with_emails_admin_all SET email1='a2@txfcamp-nl-a.nl'
+         WHERE domain='txfcamp-nl-a.nl' AND country='Netherlands'"
+    )->execute();
+    $imp2 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $emailA = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    if ((int) $imp2['imported'] === 0 && (int) ($imp2['skipped_existing'] ?? 0) >= 3
+        && $emailA === 'a@txfcamp-nl-a.nl') {
+        pass('new_only skips existing and does not update emails');
+    } else {
+        fail('imp2: ' . json_encode($imp2) . " emailA=$emailA");
+    }
+
+    $rowB = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-b.nl' LIMIT 1"
+    )->fetchColumn();
+    $delB = delete_email_campaign_row($nlSheet, $rowB);
+    $excludedB = is_email_campaign_domain_excluded($nlSheet, 'txfcamp-nl-b.nl');
+    $imp3 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $bBack = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-b.nl'"
+    )->fetchColumn();
+    if (!empty($delB['ok']) && $excludedB && (int) ($imp3['skipped_excluded'] ?? 0) >= 1 && $bBack === 0) {
+        pass('deleted site stays excluded from Final re-import');
+    } else {
+        fail('exclude: ' . json_encode([
+            'del' => $delB,
+            'excluded' => $excludedB,
+            'imp3' => $imp3,
+            'bBack' => $bBack,
+        ]));
+    }
+
+    clear_email_campaign_domain_exclusion($nlSheet, 'txfcamp-nl-b.nl');
+    $imp4 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $bAgain = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-b.nl'"
+    )->fetchColumn();
+    if ((int) $imp4['imported'] >= 1 && $bAgain === 1) {
+        pass('Allow again lets Final import re-add site');
+    } else {
+        fail('allow again: ' . json_encode($imp4) . " bAgain=$bAgain");
+    }
+
+    $impUpsert = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'upsert');
+    $emailA2 = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    if ((int) ($impUpsert['updated'] ?? 0) >= 1 && $emailA2 === 'a2@txfcamp-nl-a.nl') {
+        pass('upsert mode updates emails on existing sheet rows');
+    } else {
+        fail('upsert: ' . json_encode($impUpsert) . " emailA2=$emailA2");
+    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

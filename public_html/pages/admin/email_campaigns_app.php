@@ -127,19 +127,40 @@ if ($sheetId > 0) {
             }
             if ($action === 'import') {
                 $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
-                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry);
+                $mode = (string) post('import_mode') === 'upsert' ? 'upsert' : 'new_only';
+                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, $mode);
                 $label = $source === 'admin' ? 'Sites with emails - Admin' : 'All sites with emails - Final';
-                flash(
-                    'ok',
-                    'Imported ' . $sheetCountry . ' from ' . $label . ': '
-                    . (int) $result['imported'] . ' new, '
-                    . (int) $result['updated'] . ' updated'
-                    . ((int) ($result['skipped'] ?? 0) > 0
-                        ? ', ' . (int) $result['skipped'] . ' skipped (no emails)'
-                        : '')
-                    . '.'
-                );
+                $msg = 'Imported ' . $sheetCountry . ' from ' . $label
+                    . ($mode === 'new_only' ? ' (new sites only)' : ' (add + update existing)')
+                    . ': ' . (int) $result['imported'] . ' new';
+                if ($mode === 'upsert') {
+                    $msg .= ', ' . (int) $result['updated'] . ' updated';
+                }
+                if ((int) ($result['skipped_existing'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_existing'] . ' already on sheet';
+                }
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_empty'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
+                }
+                $msg .= '.';
+                flash('ok', $msg);
                 redirect($back);
+            }
+            if ($action === 'allow_excluded_domain') {
+                $domain = (string) post('domain');
+                if (clear_email_campaign_domain_exclusion($sheetId, $domain)) {
+                    flash(
+                        'ok',
+                        'Allowed “' . normalize_email_campaign_domain($domain) . '” again. '
+                        . 'Next Final/Admin import can add it if it still has emails.'
+                    );
+                } else {
+                    flash('error', 'That site was not on the excluded list.');
+                }
+                redirect($back . '#camp-excluded');
             }
             if ($action === 'save_settings') {
                 $result = update_email_campaign_sheet_settings(
@@ -174,6 +195,8 @@ if ($sheetId > 0) {
     purge_blank_email_campaign_rows($sheetId);
     $rows = list_email_campaign_rows($sheetId);
     $filledCount = count($rows);
+    $excludedDomains = list_email_campaign_excluded_domains($sheetId);
+    $excludedCount = count($excludedDomains);
     $formAction = $campBase . '&sheet=' . $sheetId;
     $q = trim((string) get('q'));
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
@@ -387,21 +410,72 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive (optional)', 'Optional shortcut: copy this country’s sites that already have emails from Final or Admin. Empty-email sites are skipped. Primary entry is still Admin paste / file / + Add site.') ?></h2>
-      <p class="help">Copies only sites that have at least one email. Archives are not changed.</p>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Copy site + emails from Final or Admin into this sheet. Default is new sites only: skips sites already on the sheet, and never re-adds sites Team/Admin deleted from this sheet. Archives are not changed.') ?></h2>
+      <p class="help">
+        Default: <strong>New sites only</strong> — adds what you don’t have yet.
+        Sites removed from this sheet are remembered and <strong>won’t come back</strong> from Final/Admin
+        (unless you Allow again below, or paste/+ Add them yourself).
+      </p>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Importing from archive…"
-            onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?');">
+            onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?\n\nNew sites only skips existing rows and previously removed sites.\n\nFinal/Admin archives are not changed.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
           <option value="admin_all">All sites with emails - Final</option>
           <option value="admin">Sites with emails - Admin</option>
         </select>
+        <label for="camp_import_mode" style="display:block;margin-top:0.75rem">Import mode</label>
+        <select id="camp_import_mode" name="import_mode">
+          <option value="new_only" selected>New sites only (recommended)</option>
+          <option value="upsert">Also update sites already on this sheet</option>
+        </select>
+        <p class="help" style="margin-top:0.35rem">
+          Both modes still skip previously removed sites. “Also update…” refreshes emails on sites that are still on the sheet.
+        </p>
         <p class="actions" style="margin-top:0.75rem">
-          <button class="btn secondary" type="submit">Import country into sheet</button>
+          <button class="btn" type="submit">Import into sheet</button>
         </p>
       </form>
+    </div>
+
+    <div class="card" style="margin-top:1rem" id="camp-excluded">
+      <h2><?= label_with_info('Previously removed sites', 'Sites deleted from this Email Sheet (by Admin or Communication Team) are listed here so Final/Admin import never re-adds them. Allow again if a removal was a mistake.') ?></h2>
+      <?php if ($excludedCount < 1): ?>
+        <p class="muted" style="margin:0">No excluded sites yet. When a site is removed from this sheet, it appears here.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from archive import.
+        </p>
+        <div class="table-wrap">
+          <table class="extracted-country-table">
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Removed</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($excludedDomains as $ex): ?>
+              <tr>
+                <td><code><?= h((string) $ex['domain']) ?></code></td>
+                <td class="muted"><?= h((string) $ex['excluded_at']) ?></td>
+                <td class="num">
+                  <form method="post" action="<?= h($formAction) ?>" style="display:inline"
+                        data-show-processing="Allowing site again…">
+                    <input type="hidden" name="action" value="allow_excluded_domain">
+                    <input type="hidden" name="domain" value="<?= h((string) $ex['domain']) ?>">
+                    <button class="btn secondary small" type="submit"
+                            title="Let the next Final/Admin import add this site again">Allow again</button>
+                  </form>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
     </div>
 
     <div class="card" style="margin-top:1rem">
