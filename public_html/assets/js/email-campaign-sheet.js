@@ -106,19 +106,30 @@
     });
   }
 
+  function saveFormOf(el) {
+    if (!el) return null;
+    if (el.form && el.form.matches && el.form.matches('[data-swe-save]')) return el.form;
+    return el.closest ? el.closest('[data-swe-save]') : null;
+  }
+
   function refreshRowSearchIndex(row) {
     if (!row) return;
-    var form = row.querySelector('[data-swe-save]');
-    if (!form) return;
-    var domainEl = form.querySelector('[name="domain"]');
+    var domainEl = row.querySelector('.swe-domain, [name="domain"]');
     var domain = String((domainEl && domainEl.value) || '').trim().toLowerCase();
-    var emails = ['email1', 'email2', 'email3', 'email4'].map(function (name) {
-      var el = form.querySelector('[name="' + name + '"]');
-      return String((el && el.value) || '').trim().toLowerCase();
+    var lang = String((row.querySelector('.swe-td-lang .swe-cell-text') || {}).textContent || '')
+      .trim().toLowerCase();
+    var emails = Array.prototype.map.call(row.querySelectorAll('[data-swe-email]'), function (el) {
+      return String(el.value || '').trim().toLowerCase();
     });
     var hasEmail = emails.some(function (e) { return e !== ''; });
-    row.setAttribute('data-search', [domain].concat(emails).join(' '));
+    row.setAttribute('data-search', [domain, lang].concat(emails).filter(Boolean).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
+    var status = row.querySelector('[data-swe-status], .swe-status-badge');
+    if (status && !row.classList.contains('camp-add-row')) {
+      status.classList.toggle('is-ready', hasEmail);
+      status.classList.toggle('is-open', !hasEmail);
+      status.textContent = hasEmail ? 'Ready' : 'Needs email';
+    }
   }
 
   function filterRows() {
@@ -290,7 +301,7 @@
     if (multi.length <= 1) return;
     e.preventDefault();
     applyEmailPaste(input, text);
-    var form = input.closest('[data-swe-save]');
+    var form = saveFormOf(input);
     var row = input.closest('[data-swe-row]');
     refreshRowSearchIndex(row);
     filterRows();
@@ -309,9 +320,9 @@
   document.addEventListener('input', function (e) {
     var input = e.target;
     if (!input || !input.matches || !input.matches('[data-swe-email], .swe-domain')) return;
-    var form = input.closest('[data-swe-save]');
+    var form = saveFormOf(input);
     if (!form) return;
-    refreshRowSearchIndex(form.closest('[data-swe-row]'));
+    refreshRowSearchIndex(input.closest('[data-swe-row]'));
     filterRows();
     scheduleAutosave(form);
     if (input.matches('[data-swe-email]') && String(input.value || '').trim() === '') {
@@ -322,7 +333,7 @@
   document.addEventListener('blur', function (e) {
     var input = e.target;
     if (!input || !input.matches || !input.matches('[data-swe-email], .swe-domain')) return;
-    var form = input.closest('[data-swe-save]');
+    var form = saveFormOf(input);
     if (!form) return;
     var prev = autosaveTimers.get(form);
     if (prev) {

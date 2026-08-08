@@ -304,81 +304,106 @@ if ($sheetId > 0) {
       </div>
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
-      <div class="table-wrap">
-        <table class="swe-table" id="camp-sheet-table">
+      <div class="table-wrap swe-sheet-wrap">
+        <table class="swe-table swe-sheet-table" id="camp-sheet-table">
           <thead>
             <tr>
-              <th class="swe-col-site">Site name</th>
-              <th class="swe-col-emails">Emails (up to 4)</th>
+              <th class="swe-col-site">Site</th>
+              <th class="swe-col-lang">Language</th>
+              <th class="swe-col-email">Email 1</th>
+              <th class="swe-col-email">Email 2</th>
+              <th class="swe-col-email">Email 3</th>
+              <th class="swe-col-email">Email 4</th>
+              <th class="swe-col-status">Status</th>
               <th class="swe-col-actions">Actions</th>
             </tr>
           </thead>
           <tbody id="camp-sheet-tbody">
-          <tr id="camp-add-row" class="camp-add-row" hidden>
-            <td colspan="3">
+          <tr id="camp-add-row" class="camp-add-row" hidden data-swe-emails>
+            <td class="swe-td-site">
               <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form"
                     autocomplete="off" data-show-processing="Adding site…">
                 <input type="hidden" name="action" value="save_row">
                 <input type="hidden" name="site_id" value="0">
                 <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
                 <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                <div class="swe-row-grid">
-                  <div class="swe-site-block">
-                    <label class="visually-hidden" for="camp_add_domain">Site name</label>
-                    <input id="camp_add_domain" class="swe-domain" name="domain" required
-                           placeholder="example.com" spellcheck="false" autocomplete="off"
-                           aria-label="Site name">
-                  </div>
-                  <div class="swe-emails" aria-label="Emails" data-swe-emails>
-                    <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
-                    <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
-                    <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
-                    <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
-                  </div>
-                  <div class="swe-row-actions">
-                    <button class="btn small" type="submit">Add row</button>
-                    <button class="btn secondary small" type="button" id="camp-add-cancel" data-camp-add-cancel>Cancel</button>
-                  </div>
-                </div>
               </form>
+              <label class="visually-hidden" for="camp_add_domain">Site</label>
+              <input id="camp_add_domain" class="swe-domain" form="camp-add-form" name="domain" required
+                     placeholder="example.com" spellcheck="false" autocomplete="off" aria-label="Site">
+            </td>
+            <td class="swe-td-lang"><span class="swe-cell-text muted">—</span></td>
+            <td class="swe-td-email">
+              <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+            </td>
+            <td class="swe-td-email">
+              <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+            </td>
+            <td class="swe-td-email">
+              <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+            </td>
+            <td class="swe-td-email">
+              <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+            </td>
+            <td class="swe-td-status"><span class="swe-status-badge is-open" data-swe-status>New</span></td>
+            <td class="swe-td-actions">
+              <div class="swe-row-actions">
+                <button class="btn small" type="submit" form="camp-add-form">Add row</button>
+                <button class="btn secondary small" type="button" id="camp-add-cancel" data-camp-add-cancel>Cancel</button>
+              </div>
             </td>
           </tr>
           <?php foreach ($rows as $r):
               $rid = (int) $r['id'];
+              $formId = 'camp-save-' . $rid;
               $domain = (string) $r['domain'];
+              $lang = trim((string) ($r['language'] ?? ''));
+              if ($lang === '') {
+                  $lang = '—';
+              }
               $e1 = (string) $r['email1'];
               $e2 = (string) $r['email2'];
               $e3 = (string) $r['email3'];
               $e4 = (string) $r['email4'];
               $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
-              $hay = mb_strtolower($domain . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
+              $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
               ?>
-            <tr data-swe-row data-search="<?= h($hay) ?>" data-site-id="<?= $rid ?>"
+            <tr data-swe-row data-swe-emails data-search="<?= h($hay) ?>" data-site-id="<?= $rid ?>"
                 data-has-email="<?= $hasEmail ? '1' : '0' ?>">
-              <td colspan="3">
-                <form method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
+              <td class="swe-td-site">
+                <form id="<?= h($formId) ?>" method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
                   <input type="hidden" name="action" value="save_row">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
                   <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
                   <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <div class="swe-row-grid">
-                    <div class="swe-site-block">
-                      <label class="visually-hidden">Site name</label>
-                      <input class="swe-domain" name="domain" value="<?= h($domain) ?>" required
-                             spellcheck="false" autocomplete="off" aria-label="Site name">
-                    </div>
-                    <div class="swe-emails" aria-label="Emails" data-swe-emails>
-                      <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
-                      <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
-                      <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
-                      <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
-                    </div>
-                    <div class="swe-row-actions">
-                      <button class="btn secondary small" type="submit" form="camp-remove-<?= $rid ?>"
-                              onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove row</button>
-                    </div>
-                  </div>
                 </form>
+                <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
+                <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
+                       value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site">
+              </td>
+              <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
+              <td class="swe-td-email">
+                <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+              </td>
+              <td class="swe-td-email">
+                <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+              </td>
+              <td class="swe-td-email">
+                <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+              </td>
+              <td class="swe-td-email">
+                <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+              </td>
+              <td class="swe-td-status">
+                <span class="swe-status-badge <?= $hasEmail ? 'is-ready' : 'is-open' ?>" data-swe-status>
+                  <?= $hasEmail ? 'Ready' : 'Needs email' ?>
+                </span>
+              </td>
+              <td class="swe-td-actions">
+                <div class="swe-row-actions">
+                  <button class="btn secondary small" type="submit" form="camp-remove-<?= $rid ?>"
+                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
+                </div>
                 <form id="camp-remove-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-remove hidden>
                   <input type="hidden" name="action" value="remove_site">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
