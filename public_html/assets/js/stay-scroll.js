@@ -9,10 +9,13 @@
  */
 (function () {
   'use strict';
+  if (window.__HF_STAY_SCROLL__) return;
+  window.__HF_STAY_SCROLL__ = true;
 
   var PATH_KEY = 'hf_stay_path';
   var Y_KEY = 'hf_stay_y';
   var FOCUS_KEY = 'hf_stay_focus';
+  var restoredOnce = false;
 
   function pageKey() {
     return String(location.pathname || '') + String(location.search || '');
@@ -39,8 +42,10 @@
   }
 
   function restore() {
+    if (restoredOnce) return false;
     var saved = readSaved();
     if (!saved.path || saved.path !== pageKey() || !isFinite(saved.y) || saved.y < 1) {
+      clearSaved();
       return false;
     }
     if ('scrollRestoration' in history) {
@@ -51,27 +56,19 @@
     if (saved.focus) {
       var el = document.getElementById(saved.focus);
       if (el && typeof el.focus === 'function') {
-        try { el.focus({ preventScroll: true }); } catch (err) {
-          try { el.focus(); window.scrollTo(0, top); } catch (err2) { /* ignore */ }
-        }
+        try { el.focus({ preventScroll: true }); } catch (err) { /* ignore */ }
       }
     }
+    restoredOnce = true;
+    // Clear after paint so a late layout shift can still re-apply once via rAF.
+    window.requestAnimationFrame(function () {
+      window.scrollTo(0, top);
+      clearSaved();
+    });
     return true;
   }
 
-  // Restore as early as this deferred/async script can (and again after load).
-  var restored = restore();
-  if (restored) {
-    document.addEventListener('DOMContentLoaded', function () {
-      restore();
-    });
-    window.addEventListener('load', function () {
-      restore();
-      clearSaved();
-    });
-  } else {
-    clearSaved();
-  }
+  restore();
 
   document.addEventListener(
     'submit',
@@ -154,16 +151,13 @@
         var label = visible ? 'Shown to team' : 'Hidden from team';
         var dot = btn.querySelector('.camp-hub-team-dot');
         btn.textContent = '';
-        if (dot) {
-          btn.appendChild(dot);
-          btn.appendChild(document.createTextNode(' ' + label));
-        } else {
-          var span = document.createElement('span');
-          span.className = 'camp-hub-team-dot';
-          span.setAttribute('aria-hidden', 'true');
-          btn.appendChild(span);
-          btn.appendChild(document.createTextNode(' ' + label));
+        if (!dot) {
+          dot = document.createElement('span');
+          dot.className = 'camp-hub-team-dot';
+          dot.setAttribute('aria-hidden', 'true');
         }
+        btn.appendChild(dot);
+        btn.appendChild(document.createTextNode(' ' + label));
       }
     }
 

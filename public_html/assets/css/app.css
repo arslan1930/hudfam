@@ -1029,6 +1029,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   vertical-align: top;
 }
 .swe-table tbody tr:last-child td { border-bottom: none; }
+/* Faster scrolling on long country sheets (skip off-screen row work). */
+.swe-table tbody tr[data-swe-row] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7.5rem;
+}
 .swe-col-site { width: 28%; }
 .swe-col-emails { width: auto; }
 .swe-row-form { margin: 0; }
