@@ -45,7 +45,7 @@ if ($sheetId > 0) {
         $sentFilter = '';
     }
     $pageNum = max(1, (int) get('p', 1));
-    $perPage = 1000;
+    $perPage = resolve_sheet_per_page();
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
@@ -55,6 +55,7 @@ if ($sheetId > 0) {
         if ($returnSent !== '0' && $returnSent !== '1') {
             $returnSent = '';
         }
+        $returnPerPage = resolve_sheet_per_page();
         $back = $campBase . '&sheet=' . $sheetId;
         if ($returnQ !== '') {
             $back .= '&q=' . rawurlencode($returnQ);
@@ -62,6 +63,7 @@ if ($sheetId > 0) {
         if ($returnSent !== '') {
             $back .= '&sent=' . $returnSent;
         }
+        $back = append_sheet_per_page_query($back, $returnPerPage);
         if ($returnP > 1) {
             $back .= '&p=' . $returnP;
         }
@@ -336,13 +338,14 @@ if ($sheetId > 0) {
     $sentStats = count_email_campaign_sent_stats($sheetId);
     $excludedCount = count_email_campaign_excluded_domains($sheetId);
     $excludedDomains = list_email_campaign_excluded_domains($sheetId, 200);
-    $formAction = $campBase . '&sheet=' . $sheetId;
+    $formAction = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
     $qs = http_build_query(array_filter([
         'page' => 'admin_emails_data',
         'folder' => 'email_campaigns',
         'sheet' => $sheetId,
         'q' => $q,
         'sent' => $sentFilter,
+        'per_page' => $perPage,
     ], static fn ($v) => $v !== '' && $v !== null));
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
     $projectName = email_campaign_sheet_project_name($sheet);
@@ -405,10 +408,10 @@ if ($sheetId > 0) {
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated (1,000 sites per page — sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated — choose how many rows per page with the Per page filter (sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-            Browse page by page — large sheets stay fast at <?= (int) $perPage ?> per page.
+            Browse page by page — currently <?= (int) $perPage ?> per page.
           </p>
           <p class="swe-sent-filters">
             <?php
@@ -418,7 +421,7 @@ if ($sheetId > 0) {
                 '1' => 'Emailed',
             ];
             foreach ($sentLinks as $val => $label):
-                $href = $formAction;
+                $href = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
                 if ($q !== '') {
                     $href .= '&q=' . rawurlencode($q);
                 }
@@ -436,6 +439,7 @@ if ($sheetId > 0) {
               <input type="hidden" name="action" value="clear_all_emailed">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
@@ -655,17 +659,26 @@ if ($sheetId > 0) {
         </p>
       </div>
       <?php endif; ?>
-      <?php if ($pages > 1 || $total > 0): ?>
       <div class="pagination" style="margin-top:0.85rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
         <?php if ($pageNum > 1): ?>
           <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a>
         <?php endif; ?>
+        <?php if ($pages > 1 || $total > 0): ?>
         <span class="muted">Page <?= (int) $pageNum ?> / <?= (int) $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?><?= $q !== '' ? ' matches' : '' ?></span>
+        <?php endif; ?>
         <?php if ($pageNum < $pages): ?>
           <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a>
         <?php endif; ?>
+        <?php
+        render_sheet_per_page_filter([
+            'page' => 'admin_emails_data',
+            'folder' => 'email_campaigns',
+            'sheet' => $sheetId,
+            'q' => $q,
+            'sent' => $sentFilter,
+        ], $perPage);
+        ?>
       </div>
-      <?php endif; ?>
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-bulk-add">

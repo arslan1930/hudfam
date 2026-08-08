@@ -1002,6 +1002,35 @@ try {
         ]));
     }
 
+    // Sitewide Per page filter helpers (100 / 250 / 500 / 1000).
+    unset($_SESSION['sheet_per_page'], $_GET['per_page'], $_POST['per_page']);
+    $defaultPp = resolve_sheet_per_page();
+    $_GET['per_page'] = '250';
+    $picked250 = resolve_sheet_per_page();
+    unset($_GET['per_page']);
+    $remembered = resolve_sheet_per_page();
+    $_GET['per_page'] = '9999';
+    $badClamped = resolve_sheet_per_page();
+    unset($_GET['per_page'], $_SESSION['sheet_per_page']);
+    $opts = sheet_per_page_options();
+    if ($defaultPp === 1000
+        && $picked250 === 250
+        && $remembered === 250
+        && $badClamped === 1000
+        && $opts === [100, 250, 500, 1000]
+        && normalize_sheet_per_page(500) === 500
+        && str_contains(append_sheet_per_page_query('index.php?page=x', 100), 'per_page=100')) {
+        pass('sheet per-page filter options + session remember');
+    } else {
+        fail('sheet per-page helpers: ' . json_encode([
+            'default' => $defaultPp,
+            'picked' => $picked250,
+            'remembered' => $remembered,
+            'bad' => $badClamped,
+            'opts' => $opts,
+        ]));
+    }
+
     db()->exec(
         "DELETE FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
         . " AND (domain LIKE 'txfcamp-bulk%' OR domain LIKE 'txfcamp-csv%' OR domain LIKE 'txfcamp-scale%')"

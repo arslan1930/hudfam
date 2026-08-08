@@ -385,7 +385,7 @@ function extracted_inventory_query(array $filters, int $pageNum = 1, int $per = 
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     $pageNum = max(1, $pageNum);
-    $per = max(1, min(200, $per));
+    $per = max(1, min(1000, $per));
     $offset = ($pageNum - 1) * $per;
     $stmt = db()->prepare(
         "SELECT e.*, u.username pushed_by_name, u.full_name pushed_by_full
