@@ -71,7 +71,7 @@ try {
             // Always re-filter against the country database — only brand-new sites may be saved.
             if (!$domains) {
                 // Hidden <input> newlines often become spaces in browsers — use textarea POST.
-                flash('error', 'Could not read the unique list. Click Filter against country again, then Add.');
+                flash('error', 'Could not read the unique list. Click Push to extract again, then Add.');
                 redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
             $filter = filter_domains_against_prospects($domains, $country);
@@ -184,7 +184,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → Filter against country removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder.</p>
+    <p class="muted">Paste sites → <strong>Push to extract</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
@@ -254,7 +254,7 @@ render_header('Filter & add', 'team');
   </div>
 
   <div class="actions-sticky">
-    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?> id="filter_submit">Filter against country</button>
+    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?> id="filter_submit">Push to extract</button>
   </div>
 </form>
 
