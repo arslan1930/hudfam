@@ -21,8 +21,10 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_departments' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
+        'admin_semrush_research' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'team_semrush_research' => ['team_semrush_sheet'],
         'team_extracting' => ['team_extract_batch'],
         'team_departments' => [],
         'team_admin_emails_delete' => [],
@@ -100,6 +102,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
+                'admin_semrush_research' => ['Semrush Research', 'Seed site names per country for Site Finding'],
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
                 'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
@@ -142,6 +145,12 @@ function render_header(string $title, string $panel = ''): void
                     $groups['Main']['team_prospect_batches'] = [
                         'Site adding history',
                         'Your daily adds',
+                    ];
+                }
+                if (!empty($toolSet['team_semrush_research'])) {
+                    $groups['Main']['team_semrush_research'] = [
+                        'Semrush Research',
+                        'Site names per country · edit + comments',
                     ];
                 }
                 if (!empty($toolSet['team_extracting'])) {
@@ -189,6 +198,7 @@ function render_header(string $title, string $panel = ''): void
                 'Main' => [
                     'team_dashboard' => ['Dashboard', 'Overview'],
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
+                    'team_semrush_research' => ['Semrush Research', 'Site names per country · edit + comments'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
                     'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],

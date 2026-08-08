@@ -21,6 +21,7 @@ require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/presence.php';
+require __DIR__ . '/includes/semrush_research.php';
 
 $errors = [];
 $ok = [];
@@ -49,6 +50,7 @@ try {
     ensure_order_schema();
     ensure_invoice_schema();
     ensure_task_presence_schema();
+    ensure_semrush_research_schema();
     pass('schemas ensured');
 } catch (Throwable $e) {
     fail('schema: ' . $e->getMessage());
@@ -85,6 +87,8 @@ db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%
 db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
+db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfsem-%'");
+db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-%'");
 
 // --- Login ---
 try {
@@ -1619,7 +1623,13 @@ try {
         $u = ['id' => $uid, 'username' => $uname, 'role' => 'team'];
         $pages = department_tool_pages_for_user($u);
         $expect = match ($slug) {
-            'site_finding' => ['team_prospect_check', 'team_prospect_batches', 'team_prospect_batch'],
+            'site_finding' => [
+                'team_prospect_check',
+                'team_prospect_batches',
+                'team_prospect_batch',
+                'team_semrush_research',
+                'team_semrush_sheet',
+            ],
             'site_extracting' => ['team_extracting', 'team_extract_batch'],
             'email_extracting' => ['team_sites_emails', 'team_admin_emails_delete'],
             'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_delete'],
@@ -1844,6 +1854,139 @@ try {
     db()->prepare('DELETE FROM task_presence WHERE task_key LIKE ?')->execute(['txfpresence:%']);
 } catch (Throwable $e) {
     fail('presence: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Semrush Research (site names per country) ---
+try {
+    seed_countries_if_empty(db());
+    // Isolated country: wipe any prior test residue, then own the sheet for this run.
+    $semCountry = 'Singapore';
+    db()->prepare('DELETE FROM semrush_sites WHERE country=?')->execute([$semCountry]);
+    db()->prepare('DELETE FROM semrush_sheet_comments WHERE country=?')->execute([$semCountry]);
+
+    $hubBefore = array_column(list_semrush_country_rows(), 'country');
+    if (!in_array($semCountry, $hubBefore, true)) {
+        pass('semrush hub hides country with no sites');
+    } else {
+        fail('semrush hub still lists empty Singapore');
+    }
+
+    $seed = add_semrush_domains(
+        $semCountry,
+        "txfsem-alpha.com\ntxfsem-beta.de\nnot a domain\ntxfsem-alpha.com",
+        $adminUser
+    );
+    if (!empty($seed['ok'])
+        && (int) ($seed['inserted'] ?? 0) === 2
+        && (int) ($seed['invalid'] ?? 0) >= 1
+        && (int) ($seed['total'] ?? 0) === 2) {
+        pass('semrush admin seed inserts unique site names');
+    } else {
+        fail('semrush seed: ' . json_encode($seed));
+    }
+
+    $hubCountries = array_column(list_semrush_country_rows(), 'country');
+    if (in_array($semCountry, $hubCountries, true)) {
+        pass('semrush country appears in hub after Admin seed');
+    } else {
+        fail('semrush hub missing Singapore after seed');
+    }
+
+    $domains = list_semrush_domains_for_country($semCountry);
+    sort($domains);
+    if ($domains === ['txfsem-alpha.com', 'txfsem-beta.de']) {
+        pass('semrush sheet lists site names only');
+    } else {
+        fail('semrush domains missing: ' . json_encode($domains));
+    }
+
+    $dup = add_semrush_domains($semCountry, "txfsem-alpha.com\ntxfsem-gamma.com", $adminUser);
+    if (!empty($dup['ok'])
+        && (int) ($dup['inserted'] ?? 0) === 1
+        && (int) ($dup['skipped'] ?? 0) >= 1
+        && (int) ($dup['total'] ?? 0) === 3) {
+        pass('semrush admin append skips duplicates');
+    } else {
+        fail('semrush append: ' . json_encode($dup));
+    }
+
+    $replace = set_semrush_domains_from_text(
+        $semCountry,
+        "txfsem-beta.de\ntxfsem-delta.at",
+        $teamUser
+    );
+    $after = list_semrush_domains_for_country($semCountry);
+    sort($after);
+    if (!empty($replace['ok'])
+        && $after === ['txfsem-beta.de', 'txfsem-delta.at']
+        && (int) ($replace['removed'] ?? 0) === 2
+        && (int) ($replace['inserted'] ?? 0) === 1) {
+        pass('semrush set replaces sheet list (team edit)');
+    } else {
+        fail('semrush set: ' . json_encode($replace) . ' domains=' . json_encode($after));
+    }
+
+    $c1 = add_semrush_comment($semCountry, 'txfsem-note from team', $teamUser);
+    $c2 = add_semrush_comment($semCountry, 'txfsem-note from admin', $adminUser);
+    $comments = list_semrush_comments($semCountry);
+    $bodies = array_column($comments, 'body');
+    if (!empty($c1['ok']) && !empty($c2['ok'])
+        && in_array('txfsem-note from team', $bodies, true)
+        && in_array('txfsem-note from admin', $bodies, true)) {
+        pass('semrush comments add for team and admin');
+    } else {
+        fail('semrush comments: ' . json_encode([$c1, $c2, $bodies]));
+    }
+
+    $teamDelOwn = delete_semrush_comment((int) ($c1['id'] ?? 0), $teamUser);
+    $teamDelAdmin = delete_semrush_comment((int) ($c2['id'] ?? 0), $teamUser);
+    if (!empty($teamDelOwn['ok']) && empty($teamDelAdmin['ok'])) {
+        pass('semrush team deletes own comment only');
+    } else {
+        fail('semrush comment ACL: own=' . json_encode($teamDelOwn) . ' other=' . json_encode($teamDelAdmin));
+    }
+    $adminDel = delete_semrush_comment((int) ($c2['id'] ?? 0), $adminUser);
+    if (!empty($adminDel['ok'])) {
+        pass('semrush admin can delete any comment');
+    } else {
+        fail('semrush admin delete comment: ' . json_encode($adminDel));
+    }
+
+    $empty = set_semrush_domains_from_text($semCountry, '', $teamUser);
+    $stillListed = in_array(
+        $semCountry,
+        array_column(list_semrush_country_rows(), 'country'),
+        true
+    );
+    if (!empty($empty['ok']) && (int) ($empty['total'] ?? -1) === 0 && !$stillListed) {
+        pass('semrush empty sheet hides country from hub');
+    } else {
+        fail('semrush empty hide: ' . json_encode($empty) . ' listed=' . ($stillListed ? '1' : '0'));
+    }
+
+    add_semrush_domains($semCountry, "txfsem-wipe.com", $adminUser);
+    add_semrush_comment($semCountry, 'txfsem-wipe comment', $teamUser);
+    $wipe = clear_semrush_country($semCountry);
+    $sitesLeft = count_semrush_sites_for_country($semCountry);
+    $commentsLeft = (int) db()->query(
+        'SELECT COUNT(*) FROM semrush_sheet_comments WHERE country=' . db()->quote($semCountry)
+    )->fetchColumn();
+    $listedAfterClear = in_array(
+        $semCountry,
+        array_column(list_semrush_country_rows(), 'country'),
+        true
+    );
+    if (!empty($wipe['ok']) && $sitesLeft === 0 && $commentsLeft === 0 && !$listedAfterClear) {
+        pass('semrush admin clear removes sites and comments');
+    } else {
+        fail('semrush clear: ' . json_encode($wipe)
+            . " sites=$sitesLeft comments=$commentsLeft listed=" . ($listedAfterClear ? '1' : '0'));
+    }
+
+    db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfsem-%'");
+    db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-%'");
+} catch (Throwable $e) {
+    fail('semrush: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";

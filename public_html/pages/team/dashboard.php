@@ -102,6 +102,9 @@ if ($deptScoped) {
         $toolCards[] = ['team_prospect_check', 'Filter & add', 'Paste → filter → add unique sites'];
         $toolCards[] = ['team_prospect_batches', 'Site adding history', 'Your daily adds'];
     }
+    if (!empty($toolSet['team_semrush_research'])) {
+        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'Site names per country · edit + comments'];
+    }
     if (!empty($toolSet['team_extracting'])) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
     }
@@ -176,7 +179,10 @@ render_header('Dashboard', 'team');
     <h1>Team dashboard</h1>
     <p class="muted">Filter new sites against a country database, then add only the unique ones. Existing country lists stay private.</p>
   </div>
-  <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_semrush_research">Semrush Research</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+  </div>
 </div>
 
 <?php render_dashboard_help('team'); ?>
@@ -185,6 +191,10 @@ render_header('Dashboard', 'team');
   <a class="launch-card" href="index.php?page=team_prospect_check">
     <h2>Filter &amp; add</h2>
     <p>Filter against the country database, then add only new unique sites.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_semrush_research">
+    <h2>Semrush Research</h2>
+    <p>Site names per country from Admin · edit, copy, undo, comments.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_extracting">
     <h2>Extracting sites</h2>

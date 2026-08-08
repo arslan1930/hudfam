@@ -443,3 +443,31 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   INDEX (invoice_id, sort_order),
   CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Semrush Research: Admin-seeded site names per country (Site Finding sheet)
+CREATE TABLE IF NOT EXISTS semrush_sites (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  country VARCHAR(100) NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_semrush_country_domain (country, domain),
+  INDEX (country),
+  INDEX (updated_at),
+  CONSTRAINT fk_semrush_site_user
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS semrush_sheet_comments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  country VARCHAR(100) NOT NULL,
+  body TEXT NOT NULL,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (country, created_at),
+  CONSTRAINT fk_semrush_comment_user
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
