@@ -62,10 +62,10 @@ if (!$dept) {
         <p class="muted">
           <?= $myDepartments
               ? 'Open a department to see work assigned to your team.'
-              : 'You are not assigned to a department yet. Ask Admin to add you.' ?>
+              : 'You are not assigned to a department yet. Ask Admin to add you — tools stay locked until then.' ?>
         </p>
       </div>
-      <?php if ($inCommunication): ?>
+      <?php if ($inCommunication && $myDepartments): ?>
         <div class="actions">
           <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
           <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
@@ -73,7 +73,22 @@ if (!$dept) {
       <?php endif; ?>
     </div>
 
-    <?php if ($inCommunication): ?>
+    <?php if (!$myDepartments && !$isAdminViewing): ?>
+    <div class="card">
+      <div class="empty-state">
+        <p>No departments yet.</p>
+        <p class="muted">
+          Admin assigns departments under Admin → Departments.
+          After you are added, your tasks and tools unlock automatically.
+        </p>
+      </div>
+    </div>
+    <?php
+    render_footer('team');
+    return;
+    endif; ?>
+
+    <?php if ($inCommunication && $myDepartments): ?>
     <div class="card" style="margin-bottom:1rem">
       <h2 style="margin-top:0">Communication tools</h2>
       <p class="help muted" style="margin-bottom:0.85rem">

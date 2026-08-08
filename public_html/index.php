@@ -38,6 +38,7 @@ if ($page === '' && current_user()) {
     if (is_admin()) {
         redirect('index.php?page=admin_dashboard');
     }
+    // Unassigned Team → waiting dashboard; department members → My departments.
     redirect(
         user_is_department_scoped($u)
             ? 'index.php?page=team_departments'
@@ -98,6 +99,24 @@ if ($cu && user_must_change_password($cu)) {
         flash('error', 'Change your password before continuing.');
         redirect('index.php?page=account_password');
     }
+}
+
+// Team with no department: waiting screen only (no tools until Admin assigns).
+$teamWaitingAllowed = [
+    'login',
+    'logout',
+    'account_password',
+    'team_dashboard',
+    'team_departments',
+];
+if (
+    $cu
+    && function_exists('team_user_awaits_department')
+    && team_user_awaits_department($cu)
+    && !in_array($page, $teamWaitingAllowed, true)
+) {
+    flash('error', 'Ask Admin to assign you to a department before using tools.');
+    redirect('index.php?page=team_dashboard');
 }
 
 // Department members only see assigned work + tools for their departments.

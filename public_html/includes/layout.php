@@ -163,7 +163,16 @@ function render_header(string $title, string $panel = ''): void
                     ];
                 }
             }
+        } elseif (function_exists('team_user_awaits_department') && team_user_awaits_department($user)) {
+            // Team login with no department yet — no tools until Admin assigns one.
+            $groups = [
+                'Main' => [
+                    'team_dashboard' => ['Dashboard', 'Waiting for department assignment'],
+                    'team_departments' => ['My departments', 'Ask Admin to assign you'],
+                ],
+            ];
         } else {
+            // Admin browsing Team UI (or non-scoped): full tool set.
             $groups = [
                 'Main' => [
                     'team_dashboard' => ['Dashboard', 'Overview'],

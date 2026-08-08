@@ -154,6 +154,17 @@ function user_is_department_scoped(array $user): bool
 }
 
 /**
+ * Team login with no department yet — tools stay locked until Admin assigns one.
+ */
+function team_user_awaits_department(array $user): bool
+{
+    if (($user['role'] ?? '') !== 'team') {
+        return false;
+    }
+    return !user_is_department_scoped($user);
+}
+
+/**
  * Extra Team page keys unlocked by department membership (beyond tasks/dashboard).
  *
  * @return list<string>

@@ -446,37 +446,39 @@ try {
         fail('campaign with-email upsert failed: ' . json_encode($withEmail));
     }
 
-    // Project name + Communication Team search visibility.
-    $sheetAt = create_email_campaign_sheet(
-        'Austria',
+    // Project name + Communication Team search visibility (fresh country each run).
+    db()->exec("DELETE FROM email_campaign_sheets WHERE name='Belgium'");
+    $sheetBe = create_email_campaign_sheet(
+        'Belgium',
         (int) $adminUser['id'],
-        'Alpine Outreach',
+        'Benelux Outreach',
         true
     );
-    $at = get_email_campaign_sheet($sheetAt);
-    if ($at && email_campaign_sheet_project_name($at) === 'Alpine Outreach'
-        && email_campaign_sheet_team_visible($at)) {
+    $setBe = update_email_campaign_sheet_settings($sheetBe, 'Benelux Outreach', true);
+    $be = get_email_campaign_sheet($sheetBe);
+    if (!empty($setBe['ok']) && $be && email_campaign_sheet_project_name($be) === 'Benelux Outreach'
+        && email_campaign_sheet_team_visible($be)) {
         pass('project sheet created with team search on');
     } else {
-        fail('project sheet: ' . json_encode($at));
+        fail('project sheet: ' . json_encode(['set' => $setBe, 'sheet' => $be]));
     }
-    $hide = update_email_campaign_sheet_settings($sheetAt, 'Alpine Outreach (paused)', false);
-    $at2 = get_email_campaign_sheet($sheetAt);
+    $hide = update_email_campaign_sheet_settings($sheetBe, 'Benelux Outreach (paused)', false);
+    $be2 = get_email_campaign_sheet($sheetBe);
     $visibleSheets = list_email_campaign_sheets(true);
     $visibleIds = array_map(static fn ($s) => (int) $s['id'], $visibleSheets);
     if (!empty($hide['ok'])
-        && email_campaign_sheet_project_name($at2 ?? []) === 'Alpine Outreach (paused)'
-        && !email_campaign_sheet_team_visible($at2 ?? [])
-        && !in_array($sheetAt, $visibleIds, true)) {
+        && email_campaign_sheet_project_name($be2 ?? []) === 'Benelux Outreach (paused)'
+        && !email_campaign_sheet_team_visible($be2 ?? [])
+        && !in_array($sheetBe, $visibleIds, true)) {
         pass('project search can be hidden from Communication Team');
     } else {
-        fail('hide project: ' . json_encode(['hide' => $hide, 'sheet' => $at2, 'visible' => $visibleIds]));
+        fail('hide project: ' . json_encode(['hide' => $hide, 'sheet' => $be2, 'visible' => $visibleIds]));
     }
-    upsert_email_campaign_row($sheetAt, 'txfcamp-hidden.at', [
-        'email1' => 'h@txfcamp-hidden.at', 'email2' => '', 'email3' => '', 'email4' => '',
+    upsert_email_campaign_row($sheetBe, 'txfcamp-hidden.be', [
+        'email1' => 'h@txfcamp-hidden.be', 'email2' => '', 'email3' => '', 'email4' => '',
     ]);
     $hiddenSuggest = search_email_campaign_suggestions_all('txfcamp-hidden', 10);
-    $scopedSuggest = search_email_campaign_suggestions($sheetAt, 'txfcamp-hidden', 10);
+    $scopedSuggest = search_email_campaign_suggestions($sheetBe, 'txfcamp-hidden', 10);
     if ($hiddenSuggest === [] && count($scopedSuggest) === 1) {
         pass('hidden sheet excluded from team-wide suggest; still searchable by id');
     } else {
@@ -520,6 +522,27 @@ try {
         } else {
             pass("$uname tools OK");
         }
+    }
+
+    // Unassigned Team user: waiting state, no tools.
+    $hash = password_hash('DeptTest9x', PASSWORD_DEFAULT);
+    db()->prepare(
+        "INSERT INTO users (username,password_hash,full_name,email,role,must_change_password,is_active)
+         VALUES ('unassigned',?,?,?, 'team', 0, 1)
+         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), must_change_password=0"
+    )->execute([$hash, 'Unassigned User', 'unassigned@test.local']);
+    $unUid = (int) db()->query("SELECT id FROM users WHERE username='unassigned'")->fetchColumn();
+    db()->prepare('DELETE FROM department_members WHERE user_id=?')->execute([$unUid]);
+    $unUser = ['id' => $unUid, 'username' => 'unassigned', 'role' => 'team'];
+    if (team_user_awaits_department($unUser) && !user_is_department_scoped($unUser)) {
+        pass('unassigned team awaits department');
+    } else {
+        fail('unassigned await flag wrong');
+    }
+    if (department_tool_pages_for_user($unUser) === []) {
+        pass('unassigned team has no tool pages');
+    } else {
+        fail('unassigned tools=' . implode(',', department_tool_pages_for_user($unUser)));
     }
 } catch (Throwable $e) {
     fail('departments: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());

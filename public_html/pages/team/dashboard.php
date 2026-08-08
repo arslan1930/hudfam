@@ -4,8 +4,35 @@ $uid = (int) $user['id'];
 ensure_departments_schema();
 
 $deptScoped = user_is_department_scoped($user);
+$awaitsDept = team_user_awaits_department($user);
 $myDepartments = $deptScoped ? list_departments_for_user($uid) : [];
 $myTasks = $deptScoped ? list_open_tasks_for_user($uid, 40) : [];
+
+if ($awaitsDept) {
+    render_header('Dashboard', 'team');
+    ?>
+    <div class="topbar">
+      <div>
+        <h1>Waiting for assignment</h1>
+        <p class="muted">Your Team login works, but you are not in a department yet.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <p>No department assigned.</p>
+        <p class="muted">
+          Ask Admin to add you to a department (Site Finding, Site Extracting, Email Extracting, or Communication).
+          Your tools will appear here after that.
+        </p>
+      </div>
+      <p class="actions" style="margin-top:1rem;justify-content:center">
+        <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
+      </p>
+    </div>
+    <?php
+    render_footer('team');
+    return;
+}
 
 if ($deptScoped) {
     render_header('Dashboard', 'team');
