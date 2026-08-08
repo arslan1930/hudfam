@@ -193,7 +193,6 @@ function render_header(string $title, string $panel = ''): void
         echo '<div class="nav-group-label">' . h($groupLabel) . '</div>';
         foreach ($links as $page => $meta) {
             $label = is_array($meta) ? (string) $meta[0] : (string) $meta;
-            $hint = is_array($meta) ? (string) ($meta[1] ?? '') : '';
             // Support "page&folder=slug" keys for department shortcuts
             $hrefPage = $page;
             $activePage = $page;
@@ -211,13 +210,9 @@ function render_header(string $title, string $panel = ''): void
                     $active = nav_is_active($activePage, $current) ? ' active' : '';
                 }
             }
-            $titleAttr = $hint !== '' ? ' title="' . h($hint) . '"' : '';
             $ariaCurrent = trim($active) !== '' ? ' aria-current="page"' : '';
-            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $titleAttr . $ariaCurrent . '>';
+            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $ariaCurrent . '>';
             echo '<span class="nav-label">' . h($label) . '</span>';
-            if ($hint !== '') {
-                echo '<span class="nav-hint">' . h($hint) . '</span>';
-            }
             echo '</a>';
         }
         echo '</div>';
