@@ -1011,11 +1011,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 
 /* Sites with emails — aligned sheet table (Site · Language · Emails · Status · Actions) */
 .swe-sheet-wrap {
-  background: #fff;
-  border: 1px solid var(--line, #e5e7eb);
-  border-radius: 0.75rem;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  padding: 0.15rem 0;
+  margin: 0 -0.15rem;
+}
+.card > .swe-sheet-wrap,
+.card .swe-sheet-wrap {
+  margin: 0;
 }
 .swe-table {
   width: 100%;
