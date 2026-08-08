@@ -405,6 +405,46 @@ try {
     } else {
         fail('admin last-email: ' . json_encode($rmAdmin) . " admin=$adminLeft final=$finalLeft");
     }
+
+    // New sheets use site+emails workflow (no blank placeholder rows; email required).
+    $sheetFr = create_email_campaign_sheet('France', (int) $adminUser['id']);
+    purge_blank_email_campaign_rows($sheetFr);
+    $blankCnt = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $sheetFr
+        . " AND LEFT(domain, 8)='__blank_'"
+    )->fetchColumn();
+    $noEmail = upsert_email_campaign_row($sheetFr, 'txfcamp-noemail.fr', [
+        'email1' => '', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    $withEmail = upsert_email_campaign_row($sheetFr, 'txfcamp-ok.fr', [
+        'email1' => 'a@txfcamp-ok.fr',
+        'email2' => 'b@txfcamp-ok.fr',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    if ($blankCnt === 0) {
+        pass('new campaign sheet has no blank placeholders');
+    } else {
+        fail("blank placeholders=$blankCnt");
+    }
+    if (empty($noEmail['ok'])) {
+        pass('campaign rejects site without emails');
+    } else {
+        fail('campaign allowed empty-email site');
+    }
+    if (!empty($withEmail['ok'])) {
+        $row = db()->query(
+            "SELECT email1, email2 FROM email_campaign_rows WHERE sheet_id=" . (int) $sheetFr
+            . " AND domain='txfcamp-ok.fr' LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC) ?: [];
+        if (($row['email1'] ?? '') === 'a@txfcamp-ok.fr' && ($row['email2'] ?? '') === 'b@txfcamp-ok.fr') {
+            pass('campaign site+2 emails saved');
+        } else {
+            fail('campaign emails=' . json_encode($row));
+        }
+    } else {
+        fail('campaign with-email upsert failed: ' . json_encode($withEmail));
+    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

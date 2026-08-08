@@ -158,7 +158,10 @@ function delete_email_campaign_sheet(int $id): bool
 function count_email_campaign_rows(int $sheetId): int
 {
     ensure_email_campaign_schema();
-    $stmt = db()->prepare('SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=?');
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM email_campaign_rows
+         WHERE sheet_id=? AND LEFT(domain, 8) <> '__blank_'"
+    );
     $stmt->execute([$sheetId]);
     return (int) $stmt->fetchColumn();
 }
@@ -170,44 +173,98 @@ function touch_email_campaign_sheet(int $sheetId): void
 }
 
 /**
+ * Remove legacy blank placeholder rows (old spreadsheet workflow).
+ */
+function purge_blank_email_campaign_rows(int $sheetId): int
+{
+    ensure_email_campaign_schema();
+    $st = db()->prepare(
+        "DELETE FROM email_campaign_rows WHERE sheet_id=? AND LEFT(domain, 8) = '__blank_'"
+    );
+    $st->execute([$sheetId]);
+    $n = $st->rowCount();
+    if ($n > 0) {
+        touch_email_campaign_sheet($sheetId);
+    }
+    return $n;
+}
+
+/**
  * @return list<array<string,mixed>>
  */
 function list_email_campaign_rows(int $sheetId): array
 {
     ensure_email_campaign_schema();
+    purge_blank_email_campaign_rows($sheetId);
     $stmt = db()->prepare(
-        'SELECT * FROM email_campaign_rows WHERE sheet_id=? ORDER BY id ASC'
+        "SELECT * FROM email_campaign_rows
+         WHERE sheet_id=? AND LEFT(domain, 8) <> '__blank_'
+         ORDER BY id ASC"
     );
     $stmt->execute([$sheetId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-}
-
-function add_blank_email_campaign_rows(int $sheetId, int $count = 1): int
-{
-    ensure_email_campaign_schema();
-    if (!get_email_campaign_sheet($sheetId)) {
-        throw new InvalidArgumentException('Sheet not found.');
-    }
-    $count = max(1, min(50, $count));
-    $ins = db()->prepare(
-        'INSERT INTO email_campaign_rows (sheet_id, domain, country, email1, email2, email3, email4)
-         VALUES (?, ?, ?, ?, ?, ?, ?)'
-    );
-    // Placeholder domains keep UNIQUE(sheet_id, domain) happy until Admin fills them.
-    $added = 0;
-    for ($i = 0; $i < $count; $i++) {
-        $placeholder = '__blank_' . $sheetId . '_' . bin2hex(random_bytes(4));
-        $ins->execute([$sheetId, $placeholder, '', '', '', '', '']);
-        $added++;
-    }
-    touch_email_campaign_sheet($sheetId);
-    return $added;
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    return expand_packed_email_slots_in_campaign_rows($rows);
 }
 
 /**
- * Save one row (site name + up to 4 emails). Blank placeholder domains become real sites.
+ * Expand packed multi-email cells into email1–4 (same rule as Sites with emails).
  *
- * @return array{ok:bool,error?:string,id?:int,domain?:string}
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function expand_packed_email_slots_in_campaign_rows(array $rows): array
+{
+    if ($rows === [] || !function_exists('email_slots_from_row')) {
+        return $rows;
+    }
+    $upd = db()->prepare(
+        'UPDATE email_campaign_rows
+         SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         WHERE id=?'
+    );
+    $out = [];
+    foreach ($rows as $row) {
+        $slots = email_slots_from_row($row);
+        $cur = [
+            (string) ($row['email1'] ?? ''),
+            (string) ($row['email2'] ?? ''),
+            (string) ($row['email3'] ?? ''),
+            (string) ($row['email4'] ?? ''),
+        ];
+        if ($slots !== $cur) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                try {
+                    $upd->execute([$slots[0], $slots[1], $slots[2], $slots[3], $id]);
+                } catch (Throwable $e) {
+                    // still show expanded values
+                }
+            }
+            $row['email1'] = $slots[0];
+            $row['email2'] = $slots[1];
+            $row['email3'] = $slots[2];
+            $row['email4'] = $slots[3];
+        }
+        $out[] = $row;
+    }
+    return $out;
+}
+
+/**
+ * @deprecated Blank placeholder rows are no longer used — sheets use Add site row.
+ */
+function add_blank_email_campaign_rows(int $sheetId, int $count = 1): int
+{
+    unset($count);
+    purge_blank_email_campaign_rows($sheetId);
+    return 0;
+}
+
+/**
+ * Save one site + up to 4 emails row (Sites with emails workflow).
+ * Clearing the last email deletes the whole row.
+ *
+ * @return array{ok:bool,error?:string,id?:int,domain?:string,row_deleted?:bool,emails?:list<string>}
  */
 function save_email_campaign_row(
     int $sheetId,
@@ -223,35 +280,23 @@ function save_email_campaign_row(
     if (!$existing) {
         return ['ok' => false, 'error' => 'Row not found.'];
     }
+    // Legacy blank placeholders: drop them instead of keeping spreadsheet empties.
+    if (str_starts_with((string) ($existing['domain'] ?? ''), '__blank_')) {
+        db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
+        return ['ok' => true, 'id' => $rowId, 'domain' => '', 'row_deleted' => true, 'emails' => []];
+    }
+
     $sheet = get_email_campaign_sheet($sheetId);
     $sheetCountry = $sheet ? email_campaign_sheet_country($sheet) : '';
 
     $domainRaw = trim($domainRaw);
-    // Empty site on a blank placeholder → leave as blank (no error).
-    $isPlaceholder = str_starts_with((string) $existing['domain'], '__blank_');
     if ($domainRaw === '') {
-        if ($isPlaceholder) {
-            $norm = normalize_email_slots($emails);
-            if (!$norm['ok']) {
-                return ['ok' => false, 'error' => (string) ($norm['error'] ?? 'Invalid email.')];
-            }
-            /** @var array{0:string,1:string,2:string,3:string} $slots */
-            $slots = $norm['slots'] ?? ['', '', '', ''];
-            db()->prepare(
-                'UPDATE email_campaign_rows
-                 SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
-                 WHERE id=? AND sheet_id=?'
-            )->execute([$sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
-            touch_email_campaign_sheet($sheetId);
-            return ['ok' => true, 'id' => $rowId, 'domain' => (string) $existing['domain']];
-        }
         return ['ok' => false, 'error' => 'Site name is required.'];
     }
 
     $host = extract_host_candidate($domainRaw);
     $domain = to_root_domain($host);
     if ($domain === '' || !function_exists('is_root_domain') || !is_root_domain($domain)) {
-        // Fallback if is_root_domain missing: accept non-empty root-like host
         if ($domain === '' || !str_contains($domain, '.')) {
             return ['ok' => false, 'error' => 'Enter a valid site name (root domain).'];
         }
@@ -262,6 +307,18 @@ function save_email_campaign_row(
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
+    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    if (!$hasEmail) {
+        db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
+        touch_email_campaign_sheet($sheetId);
+        return [
+            'ok' => true,
+            'id' => $rowId,
+            'domain' => $domain,
+            'row_deleted' => true,
+            'emails' => [],
+        ];
+    }
 
     $dup = db()->prepare(
         'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? AND id<>? LIMIT 1'
@@ -277,7 +334,14 @@ function save_email_campaign_row(
          WHERE id=? AND sheet_id=?'
     )->execute([$domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
     touch_email_campaign_sheet($sheetId);
-    return ['ok' => true, 'id' => $rowId, 'domain' => $domain];
+    return [
+        'ok' => true,
+        'id' => $rowId,
+        'domain' => $domain,
+        'row_deleted' => false,
+        'emails' => array_values(array_filter($slots, static fn ($e) => $e !== '')),
+        'slots' => $slots,
+    ];
 }
 
 /**
@@ -306,6 +370,10 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
+    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    if (!$hasEmail) {
+        return ['ok' => false, 'error' => 'Add at least one email — each site must have email data.'];
+    }
 
     $find = db()->prepare(
         'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
@@ -504,6 +572,19 @@ function import_email_campaign_sheet_from_swe(int $sheetId, string $sourceScope 
             $skipped++;
             continue;
         }
+        $slots = function_exists('email_slots_from_row')
+            ? email_slots_from_row($row)
+            : [
+                (string) ($row['email1'] ?? ''),
+                (string) ($row['email2'] ?? ''),
+                (string) ($row['email3'] ?? ''),
+                (string) ($row['email4'] ?? ''),
+            ];
+        // Same rule as Sites with emails: never import a site with empty emails.
+        if ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
+            $skipped++;
+            continue;
+        }
         $exists->execute([$sheetId, $domain]);
         $already = (int) $exists->fetchColumn() > 0;
         $ins->execute([
@@ -512,10 +593,10 @@ function import_email_campaign_sheet_from_swe(int $sheetId, string $sourceScope 
             (string) ($row['country'] ?? ''),
             (string) ($row['language'] ?? ''),
             (string) ($row['region'] ?? ''),
-            (string) ($row['email1'] ?? ''),
-            (string) ($row['email2'] ?? ''),
-            (string) ($row['email3'] ?? ''),
-            (string) ($row['email4'] ?? ''),
+            $slots[0],
+            $slots[1],
+            $slots[2],
+            $slots[3],
         ]);
         if ($already) {
             $updated++;
