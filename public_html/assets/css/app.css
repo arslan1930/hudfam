@@ -1111,7 +1111,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .swe-row-no-email .swe-domain {
   border-color: #f0b4b0;
 }
-.swe-col-actions { width: 6.5rem; }
+.swe-col-actions { width: 7.5rem; }
+.swe-row-actions .btn[data-swe-push-btn]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* Departments */
 .dept-task-table td { vertical-align: top; }

@@ -172,15 +172,43 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($sweBase);
     }
 
+    if ($action === 'push_site' && $isTeam) {
+        $siteId = (int) post('site_id');
+        $result = push_one_site_with_emails_team_to_admin($siteId, $sweUser);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (!$result['ok']) {
+                http_response_code(400);
+            }
+            $left = (int) ($result['site_count'] ?? count_sites_with_emails_for_country($countryName, 'team'));
+            echo json_encode($result + [
+                'ready_count' => count_sites_with_emails_ready_to_push($countryName),
+                'redirect' => $left < 1 ? $sweBase : null,
+            ]);
+            exit;
+        }
+        if (!$result['ok']) {
+            flash('error', (string) ($result['error'] ?? 'Could not push this site.'));
+            redirect($back);
+        }
+        flash(
+            'ok',
+            'Pushed ' . (string) ($result['domain'] ?? 'site')
+            . ' to Sites with emails - Admin · cleared from Team.'
+        );
+        $left = (int) ($result['site_count'] ?? 0);
+        redirect($left > 0 ? $back : $sweBase);
+    }
+
     if ($action === 'push_to_admin' && $isTeam) {
         $ready = count_sites_with_emails_ready_to_push($countryName);
         if ($ready < 1) {
             // Only when every site still has all 4 email boxes empty (nothing ready).
-            flash('error', 'All email boxes are empty. Fill at least one email on a site, then Push to Admin.');
+            flash('error', 'All email boxes are empty. Fill at least one email on a site, then Push.');
             redirect($back);
         }
         $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser);
-        $msg = 'Pushed ' . ((int) $pushed['pushed'] + (int) $pushed['updated'])
+        $msg = 'Pushed all ' . ((int) $pushed['pushed'] + (int) $pushed['updated'])
             . ' site(s) with emails to Sites with emails - Admin · ' . $pushed['country'];
         if ((int) $pushed['pushed'] > 0 || (int) $pushed['updated'] > 0) {
             $msg .= ' (' . (int) $pushed['pushed'] . ' new';
@@ -429,7 +457,7 @@ render_breadcrumbs($crumbs);
     <h1><?= label_with_info(
         $countryName,
         $isTeam
-            ? 'Add up to 4 emails per site (paste all four at once). Changes autosave. Push to Admin moves rows that have at least one email.'
+            ? 'Add emails (autosave). Push one site with its row button, or Push all sites that have at least one email.'
             : 'Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.'
     ) ?></h1>
     <p class="muted">
@@ -437,18 +465,18 @@ render_breadcrumbs($crumbs);
       <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
       · up to 4 emails each
       <?php if ($isTeam): ?>
-        · <?= (int) $readyToPush ?> ready to Push
+        · <span id="swe_ready_label"><?= (int) $readyToPush ?></span> ready to Push
       <?php endif; ?>
     </p>
   </div>
   <div class="actions">
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
-          onsubmit="return confirm('Push <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nThose rows will leave this Team working copy.');">
+          onsubmit="return confirm('Push ALL <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nThose rows will leave this Team working copy.');">
       <input type="hidden" name="action" value="push_to_admin">
       <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
-              title="<?= $readyToPush > 0 ? 'Push sites that have at least one email' : 'Add at least one email on a site first' ?>">
-        Push to Admin
+              title="<?= $readyToPush > 0 ? 'Push every site on this country that has at least one email' : 'Add at least one email on a site first' ?>">
+        Push all to Admin
       </button>
     </form>
     <?php endif; ?>
@@ -462,8 +490,8 @@ render_breadcrumbs($crumbs);
 <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 <?php if ($isTeam): ?>
 <p class="help">
-  Paste up to 4 emails into any email box (one per line or commas). Edits <strong>autosave</strong>.
-  <strong>Push to Admin</strong> sends sites that have at least one email.
+  Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
+  Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
 </p>
 <?php elseif ($isAdminAll): ?>
 <p class="help">
@@ -541,11 +569,25 @@ render_breadcrumbs($crumbs);
                   <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
                 </div>
                 <div class="swe-row-actions">
+                  <?php if ($isTeam): ?>
+                  <button class="btn small" type="submit" form="swe-push-<?= (int) $s['id'] ?>"
+                          data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
+                          title="<?= $hasEmail ? 'Push this site to Admin' : 'Add at least one email first' ?>"
+                          onclick="return confirm('Push <?= h($domain) ?> to Sites with emails - Admin?\n\nThis row will leave the Team working copy.');">Push</button>
+                  <?php endif; ?>
                   <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
                           onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove row</button>
                 </div>
               </div>
             </form>
+            <?php if ($isTeam): ?>
+            <form id="swe-push-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" data-swe-push hidden>
+              <input type="hidden" name="action" value="push_site">
+              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
+              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+            </form>
+            <?php endif; ?>
             <form id="swe-remove-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" data-swe-remove hidden>
               <input type="hidden" name="action" value="remove_site">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">

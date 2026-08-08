@@ -348,6 +348,106 @@ function add_sites_with_emails_domains_to_scope(
 }
 
 /**
+ * Team → Admin: push one site row (must have at least one email), then remove it from Team.
+ *
+ * @return array{ok:bool,error?:string,pushed?:int,updated?:int,cleared?:int,domain?:string,country?:string,site_count?:int}
+ */
+function push_one_site_with_emails_team_to_admin(int $siteId, array $user): array
+{
+    ensure_sites_with_emails_schema();
+    $team = swe_table('team');
+    $admin = swe_table('admin');
+    $uid = (int) ($user['id'] ?? 0) ?: null;
+
+    $sel = db()->prepare("SELECT * FROM {$team} WHERE id=? LIMIT 1");
+    $sel->execute([$siteId]);
+    $row = $sel->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Team working copy.'];
+    }
+
+    $country = trim((string) ($row['country'] ?? ''));
+    $canon = $country !== '' ? resolve_canonical_country($country) : null;
+    if ($canon) {
+        $country = $canon['name'];
+    }
+    $domain = trim((string) ($row['domain'] ?? ''));
+    if ($domain === '' || $country === '') {
+        return ['ok' => false, 'error' => 'Site row is incomplete.'];
+    }
+
+    $hasEmail = trim((string) ($row['email1'] ?? '')) !== ''
+        || trim((string) ($row['email2'] ?? '')) !== ''
+        || trim((string) ($row['email3'] ?? '')) !== ''
+        || trim((string) ($row['email4'] ?? '')) !== '';
+    if (!$hasEmail) {
+        return ['ok' => false, 'error' => 'Add at least one email before pushing this site.'];
+    }
+
+    $exists = db()->prepare("SELECT id FROM {$admin} WHERE country=? AND domain=? LIMIT 1");
+    $exists->execute([$country, $domain]);
+    $already = (int) $exists->fetchColumn() > 0;
+
+    $ins = db()->prepare(
+        "INSERT INTO {$admin}
+           (domain, country, language, region, email1, email2, email3, email4, extract_batch_id, pushed_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           email1 = VALUES(email1),
+           email2 = VALUES(email2),
+           email3 = VALUES(email3),
+           email4 = VALUES(email4),
+           language = IF(VALUES(language) <> '', VALUES(language), language),
+           region = IF(VALUES(region) <> '', VALUES(region), region),
+           extract_batch_id = COALESCE(VALUES(extract_batch_id), extract_batch_id),
+           pushed_by = VALUES(pushed_by),
+           updated_at = NOW()"
+    );
+    $ins->execute([
+        $domain,
+        $country,
+        (string) ($row['language'] ?? ''),
+        (string) ($row['region'] ?? ''),
+        (string) ($row['email1'] ?? ''),
+        (string) ($row['email2'] ?? ''),
+        (string) ($row['email3'] ?? ''),
+        (string) ($row['email4'] ?? ''),
+        $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
+        $uid,
+    ]);
+    sync_sites_with_emails_admin_row_to_all([
+        'domain' => $domain,
+        'country' => $country,
+        'language' => (string) ($row['language'] ?? ''),
+        'region' => (string) ($row['region'] ?? ''),
+        'email1' => (string) ($row['email1'] ?? ''),
+        'email2' => (string) ($row['email2'] ?? ''),
+        'email3' => (string) ($row['email3'] ?? ''),
+        'email4' => (string) ($row['email4'] ?? ''),
+        'extract_batch_id' => $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
+        'pushed_by' => $uid,
+    ]);
+
+    $del = db()->prepare("DELETE FROM {$team} WHERE id=?");
+    $del->execute([$siteId]);
+    $cleared = $del->rowCount();
+
+    if (function_exists('mark_admin_new_data')) {
+        mark_admin_new_data('emails_admin', 1, $country);
+    }
+
+    return [
+        'ok' => true,
+        'pushed' => $already ? 0 : 1,
+        'updated' => $already ? 1 : 0,
+        'cleared' => $cleared,
+        'domain' => $domain,
+        'country' => $country,
+        'site_count' => count_sites_with_emails_for_country($country, 'team'),
+    ];
+}
+
+/**
  * Team → Admin: copy rows that have at least one email into the admin archive,
  * then remove those rows from the Team working copy (sites without emails stay).
  *

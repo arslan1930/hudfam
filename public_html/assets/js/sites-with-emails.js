@@ -6,6 +6,7 @@
   var totalLabel = document.getElementById('swe_total_label');
   var searchInput = document.getElementById('swe-row-search');
   var pushBtn = document.getElementById('swe-push-btn');
+  var readyLabel = document.getElementById('swe_ready_label');
   var autosaveTimers = new WeakMap();
 
   function setStatus(msg, isError) {
@@ -159,25 +160,36 @@
     return n;
   }
 
-  function syncPushButton() {
+  function syncRowPushButton(row) {
+    if (!row) return;
+    var btn = row.querySelector('[data-swe-push-btn]');
+    if (!btn) return;
+    var hasEmail = row.getAttribute('data-has-email') === '1';
+    btn.disabled = !hasEmail;
+    btn.title = hasEmail ? 'Push this site to Admin' : 'Add at least one email first';
+  }
+
+  function syncPushButton(readyOverride) {
+    var ready = typeof readyOverride === 'number' ? readyOverride : countReadyRows();
+    if (readyLabel && typeof readyOverride !== 'number') {
+      // Page-local count only — keep label in sync with visible rows when possible
+      readyLabel.textContent = String(ready);
+    } else if (readyLabel && typeof readyOverride === 'number') {
+      readyLabel.textContent = String(ready);
+    }
     if (!pushBtn) return;
-    var ready = countReadyRows();
-    // Page may have more rows on other pages — only enable from server if already enabled,
-    // or enable when this page has at least one ready row.
-    var serverReady = !pushBtn.disabled || ready > 0;
     if (ready > 0) {
       pushBtn.disabled = false;
-      pushBtn.title = 'Push sites that have at least one email';
-    } else if (pushBtn.getAttribute('data-server-ready') === '1') {
-      // Keep server state when other pages may have ready rows
+      pushBtn.setAttribute('data-server-ready', '1');
+      pushBtn.title = 'Push every site on this country that has at least one email';
+    } else if (pushBtn.getAttribute('data-server-ready') === '1' && typeof readyOverride !== 'number') {
+      // Other pages may still have ready rows
       pushBtn.disabled = false;
-    }
-    // If server had none and this page still has none, stay disabled
-    if (ready < 1 && pushBtn.getAttribute('data-server-ready') !== '1') {
+    } else {
       pushBtn.disabled = true;
+      pushBtn.removeAttribute('data-server-ready');
       pushBtn.title = 'Add at least one email on a site first';
     }
-    void serverReady;
   }
 
   function refreshRowSearchIndex(row) {
@@ -193,6 +205,7 @@
     var hasEmail = emails.some(function (e) { return e !== ''; });
     row.setAttribute('data-search', [domain].concat(emails).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
+    syncRowPushButton(row);
     syncPushButton();
   }
 
@@ -383,7 +396,39 @@
     saveRowForm(form, { quiet: true });
   }, true);
 
-  // Remove row (ajax); row forms no longer have a Save submit
+  function postAjaxForm(form, failLabel) {
+    if (!form || form.getAttribute('data-busy') === '1') {
+      return Promise.resolve(null);
+    }
+    var body = new URLSearchParams(new FormData(form));
+    body.set('ajax', '1');
+    if (searchInput) body.set('q', String(searchInput.value || ''));
+    form.setAttribute('data-busy', '1');
+    return fetch(form.getAttribute('action') || window.location.href, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        Accept: 'application/json'
+      },
+      body: body.toString(),
+      credentials: 'same-origin'
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok || !data || data.ok === false) {
+            throw new Error((data && data.error) || failLabel);
+          }
+          return { data: data, siteId: body.get('site_id') };
+        });
+      })
+      .catch(function (err) {
+        setStatus(err.message || failLabel, true);
+        form.removeAttribute('data-busy');
+        return null;
+      });
+  }
+
+  // Push one / Remove row (ajax); row forms no longer have a Save submit
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form || !form.matches) return;
@@ -400,47 +445,66 @@
       return;
     }
 
-    if (!form.matches('[data-swe-remove]')) return;
-    e.preventDefault();
-    if (form.getAttribute('data-busy') === '1') return;
-    var body = new URLSearchParams(new FormData(form));
-    body.set('ajax', '1');
-    if (searchInput) body.set('q', String(searchInput.value || ''));
-    form.setAttribute('data-busy', '1');
-    fetch(form.getAttribute('action') || window.location.href, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        Accept: 'application/json'
-      },
-      body: body.toString(),
-      credentials: 'same-origin'
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok || !data || data.ok === false) {
-            throw new Error((data && data.error) || 'Remove failed');
-          }
-          return data;
-        });
-      })
-      .then(function (data) {
-        var id = body.get('site_id');
-        var row = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
-        if (row) row.remove();
+    if (form.matches('[data-swe-push]')) {
+      e.preventDefault();
+      // Flush pending autosave so emails are on the server before push
+      var row = document.querySelector('[data-swe-row][data-site-id="' + form.querySelector('[name="site_id"]').value + '"]');
+      var saveForm = row && row.querySelector('[data-swe-save]');
+      var flush = Promise.resolve(null);
+      if (saveForm) {
+        var t = autosaveTimers.get(saveForm);
+        if (t) {
+          window.clearTimeout(t);
+          autosaveTimers.delete(saveForm);
+        }
+        flush = saveRowForm(saveForm, { quiet: true });
+      }
+      flush.then(function () {
+        return postAjaxForm(form, 'Push failed');
+      }).then(function (result) {
+        if (!result) return;
+        var data = result.data;
+        var id = result.siteId;
+        var gone = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
+        if (gone) gone.remove();
         if (typeof data.site_count === 'number' && totalLabel) {
           totalLabel.textContent = String(data.site_count);
         }
-        setStatus('Removed complete row for ' + (data.domain || 'site') + '.');
+        if (typeof data.ready_count === 'number') {
+          syncPushButton(data.ready_count);
+        } else {
+          syncPushButton();
+        }
+        setStatus('Pushed ' + (data.domain || 'site') + ' to Admin · cleared from Team.');
         filterRows();
-        syncPushButton();
         if (data.redirect) {
           window.setTimeout(function () { window.location.href = data.redirect; }, 250);
+        } else {
+          form.removeAttribute('data-busy');
         }
-      })
-      .catch(function (err) {
-        setStatus(err.message || 'Could not remove.', true);
-        form.removeAttribute('data-busy');
       });
+      return;
+    }
+
+    if (!form.matches('[data-swe-remove]')) return;
+    e.preventDefault();
+    postAjaxForm(form, 'Remove failed').then(function (result) {
+      if (!result) return;
+      var data = result.data;
+      var id = result.siteId;
+      var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
+      if (rowEl) rowEl.remove();
+      if (typeof data.site_count === 'number' && totalLabel) {
+        totalLabel.textContent = String(data.site_count);
+      }
+      setStatus('Removed complete row for ' + (data.domain || 'site') + '.');
+      filterRows();
+      syncPushButton();
+      if (data.redirect) {
+        window.setTimeout(function () { window.location.href = data.redirect; }, 250);
+      } else {
+        form.removeAttribute('data-busy');
+      }
+    });
   });
 })();
