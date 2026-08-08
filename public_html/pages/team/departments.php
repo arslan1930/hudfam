@@ -125,7 +125,7 @@ if (!$dept) {
         </a>
         <a class="folder" href="index.php?page=team_email_campaigns_drafts">
           <h3>Campaign drafts</h3>
-          <p class="muted">Outreach / offers per project · one-click copy</p>
+          <p class="muted">Formatted outreach per project · copy for email</p>
         </a>
       </div>
     </div>
@@ -206,7 +206,7 @@ render_breadcrumbs([
     </a>
     <a class="folder" href="index.php?page=team_email_campaigns_drafts">
       <h3>Campaign drafts</h3>
-      <p class="muted">Outreach / offers per project · one-click copy</p>
+      <p class="muted">Formatted outreach per project · copy for email</p>
     </a>
   </div>
 </div>

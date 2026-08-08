@@ -193,7 +193,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
                     'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
-                    'team_email_campaigns_drafts' => ['Campaign drafts', 'Outreach / offers per project · one-click copy'],
+                    'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Site adding history', 'Your daily adds'],
                 ],
