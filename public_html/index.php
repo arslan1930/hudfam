@@ -16,6 +16,7 @@ require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/guides.php';
+require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -83,6 +84,7 @@ $routes = [
     'team_sites_emails' => 'pages/team/sites_emails.php',
     'team_admin_emails_delete' => 'pages/team/admin_emails_delete.php',
     'team_email_campaigns' => 'pages/team/email_campaigns.php',
+    'presence_ping' => 'pages/presence_ping.php',
 ];
 
 if (!isset($routes[$page])) {
@@ -108,6 +110,7 @@ $teamWaitingAllowed = [
     'account_password',
     'team_dashboard',
     'team_departments',
+    'presence_ping',
 ];
 if (
     $cu
@@ -126,6 +129,7 @@ $deptOnlyAllowed = [
     'account_password',
     'team_dashboard',
     'team_departments',
+    'presence_ping',
 ];
 if (
     $cu

@@ -20,6 +20,7 @@ require __DIR__ . '/includes/admin_new_data.php';
 require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
+require __DIR__ . '/includes/presence.php';
 
 $errors = [];
 $ok = [];
@@ -47,6 +48,7 @@ try {
     ensure_departments_schema();
     ensure_order_schema();
     ensure_invoice_schema();
+    ensure_task_presence_schema();
     pass('schemas ensured');
 } catch (Throwable $e) {
     fail('schema: ' . $e->getMessage());
@@ -961,6 +963,63 @@ try {
     logout_user();
 } catch (Throwable $e) {
     fail('password: ' . $e->getMessage());
+}
+
+// --- Task presence (advisory “Also here” chip) ---
+try {
+    $presenceKey = 'txfpresence:Germany';
+    db()->prepare('DELETE FROM task_presence WHERE task_key=?')->execute([$presenceKey]);
+
+    $alone = ping_task_presence($presenceKey, $adminUser, 45);
+    if (!empty($alone['ok']) && (int) ($alone['count'] ?? -1) === 0) {
+        pass('presence alone shows nobody else');
+    } else {
+        fail('presence alone should be empty');
+    }
+
+    $teamPing = ping_task_presence($presenceKey, $teamUser, 45);
+    $teamNames = array_column($teamPing['others'] ?? [], 'name');
+    $adminName = task_presence_display_name($adminUser);
+    if (!empty($teamPing['ok']) && (int) ($teamPing['count'] ?? 0) === 1
+        && in_array($adminName, $teamNames, true)) {
+        pass('presence teammate sees admin on same task');
+    } else {
+        fail('presence teammate should see admin');
+    }
+
+    $adminPing = ping_task_presence($presenceKey, $adminUser, 45);
+    $adminOthers = array_column($adminPing['others'] ?? [], 'id');
+    if (!empty($adminPing['ok'])
+        && in_array((int) $teamUser['id'], $adminOthers, true)
+        && !in_array((int) $adminUser['id'], $adminOthers, true)) {
+        pass('presence hides self and lists other user');
+    } else {
+        fail('presence self-hide / other-list failed');
+    }
+
+    $otherKey = 'txfpresence:France';
+    db()->prepare('DELETE FROM task_presence WHERE task_key=?')->execute([$otherKey]);
+    $fr = ping_task_presence($otherKey, $teamUser, 45);
+    if (!empty($fr['ok']) && (int) ($fr['count'] ?? -1) === 0) {
+        pass('presence scoped per task key');
+    } else {
+        fail('presence leaked across task keys');
+    }
+
+    db()->prepare(
+        'UPDATE task_presence SET last_seen_at = (NOW() - INTERVAL 120 SECOND)
+         WHERE task_key=? AND user_id=?'
+    )->execute([$presenceKey, (int) $teamUser['id']]);
+    $stale = ping_task_presence($presenceKey, $adminUser, 45);
+    if (!empty($stale['ok']) && (int) ($stale['count'] ?? -1) === 0) {
+        pass('presence drops stale teammates');
+    } else {
+        fail('presence stale rows still listed');
+    }
+
+    db()->prepare('DELETE FROM task_presence WHERE task_key LIKE ?')->execute(['txfpresence:%']);
+} catch (Throwable $e) {
+    fail('presence: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";

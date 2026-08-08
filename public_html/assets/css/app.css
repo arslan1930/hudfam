@@ -1,3 +1,42 @@
+/* Tiny “Also here” notice — advisory only, no locks */
+.task-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: 12rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.35rem;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 0.68rem;
+  font-weight: 550;
+  line-height: 1.15;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.task-presence[hidden] {
+  display: none !important;
+}
+.task-presence-dot {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: #2f6f4e;
+  flex: 0 0 auto;
+}
+.task-presence-label {
+  color: var(--muted, #6b7280);
+  font-weight: 600;
+}
+.task-presence-names {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  color: #374151;
+  font-weight: 600;
+}
+
 /* Global Processing / Loading overlay */
 .app-processing {
   position: fixed;

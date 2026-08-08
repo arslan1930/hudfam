@@ -587,6 +587,13 @@ render_breadcrumbs($crumbs);
     </p>
   </div>
   <div class="actions">
+    <?php
+    if ($isTeam) {
+        render_task_presence('swe_team:' . $countryName, 'Others on Sites with emails · ' . $countryName);
+    } elseif ($sweScope === 'admin') {
+        render_task_presence('swe_admin:' . $countryName, 'Others on Admin emails · ' . $countryName);
+    }
+    ?>
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
           data-show-processing="Pushing sites to Admin…"

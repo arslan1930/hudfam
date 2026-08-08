@@ -218,6 +218,7 @@ if ($sheetId > 0) {
         </p>
       </div>
       <div class="actions">
+        <?php render_task_presence('camp:' . $sheetId, 'Others on Email Sheet · ' . $sheetCountry); ?>
         <button type="button" class="btn" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
         <a class="btn secondary" href="#camp-bulk-add">Paste / import</a>
         <a class="btn secondary" href="<?= h($campBase) ?>">All projects</a>
