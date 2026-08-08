@@ -840,6 +840,29 @@ try {
         && !str_contains(strtolower($richBody), '<a ')
         && str_contains($plainFromHtml, 'Guest post offer')
         && str_contains($plainFromHtml, 'guest posts');
+    $tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    $imgSaved = save_email_campaign_draft(
+        $draftPid,
+        'With screenshot',
+        '<p>See screenshot:</p><img src="' . $tinyPng . '" alt="dot" onclick="evil()">'
+            . '<img src="https://evil.example/x.png" alt="remote">'
+            . '<img src="' . $tinyPng . '" alt="dot2">',
+        'custom',
+        0,
+        (int) $adminUser['id']
+    );
+    $imgRow = get_email_campaign_draft((int) ($imgSaved['id'] ?? 0));
+    $imgBody = (string) ($imgRow['body'] ?? '');
+    $imgCount = preg_match_all('/<\s*img\b/i', $imgBody);
+    $imgOk = !empty($imgSaved['ok'])
+        && $imgCount === 2
+        && str_contains($imgBody, 'data:image/png;base64,')
+        && !str_contains($imgBody, 'https://evil.example')
+        && !str_contains(strtolower($imgBody), 'onclick')
+        && str_contains(email_campaign_draft_html_to_plain($imgBody), '[image]');
+    $badRemoteOnly = sanitize_email_campaign_draft_html(
+        '<img src="https://evil.example/x.png" alt="x"><img src="javascript:alert(1)">'
+    );
     $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0));
     $left = count_email_campaign_drafts($draftPid);
     $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0));
@@ -848,11 +871,14 @@ try {
         && !empty($richSaved['ok'])
         && $keepsFormat
         && $sanitized === $richBody
+        && $imgOk
+        && $badRemoteOnly === ''
         && !empty($del['ok'])
-        && $left === 2
+        && $left === 3
         && empty($wrongProjectDel['ok'])) {
         pass('campaign drafts update/delete stay scoped to project');
         pass('campaign drafts keep bold/italic/underline/headings and strip unsafe HTML');
+        pass('campaign drafts keep compressed data-URI images and strip remote/unsafe imgs');
     } else {
         fail('campaign draft mutate: ' . json_encode([
             'updated' => $updated,
@@ -860,6 +886,11 @@ try {
             'rich' => $richSaved,
             'body' => $richBody,
             'keeps' => $keepsFormat,
+            'img' => $imgSaved,
+            'img_body' => mb_substr($imgBody, 0, 200),
+            'img_count' => $imgCount,
+            'img_ok' => $imgOk,
+            'remote' => $badRemoteOnly,
             'del' => $del,
             'left' => $left,
             'wrong' => $wrongProjectDel,

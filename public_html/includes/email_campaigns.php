@@ -2388,7 +2388,31 @@ function email_campaign_draft_category_label(string $category): string
  */
 function email_campaign_draft_allowed_tags(): array
 {
-    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3'];
+    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'img'];
+}
+
+/** Max inline images (compressed data URIs) per draft. */
+function email_campaign_draft_max_images(): int
+{
+    return 6;
+}
+
+/** Max characters for one data:image… src (≈1.5–2 MB compressed). */
+function email_campaign_draft_max_image_src_len(): int
+{
+    return 2500000;
+}
+
+function email_campaign_draft_is_safe_data_image_src(string $src): bool
+{
+    $src = trim(preg_replace('/\s+/', '', $src) ?? $src);
+    if ($src === '' || strlen($src) > email_campaign_draft_max_image_src_len()) {
+        return false;
+    }
+    return (bool) preg_match(
+        '#^data:image/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/]+=*$#',
+        $src
+    );
 }
 
 /** Convert plain outreach text into simple paragraph HTML. */
@@ -2422,11 +2446,12 @@ function email_campaign_draft_html_to_plain(string $html): string
     }
     $withBreaks = preg_replace(
         [
+            '/<\s*img\b[^>]*>/i',
             '/<\s*br\s*\/?\s*>/i',
             '/<\s*\/\s*(p|h1|h2|h3)\s*>/i',
             '/<\s*(p|h1|h2|h3)(\s[^>]*)?>/i',
         ],
-        ["\n", "\n", "\n"],
+        ["\n[image]\n", "\n", "\n", "\n"],
         $html
     ) ?? $html;
     $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -2436,8 +2461,8 @@ function email_campaign_draft_html_to_plain(string $html): string
 }
 
 /**
- * Keep only email-safe formatting tags. Plain text becomes paragraphs.
- * Scripts, styles, links, and attributes are stripped.
+ * Keep only email-safe formatting tags + compressed inline images.
+ * Scripts, styles, links, and unsafe attributes are stripped.
  * (Regex-based so it works without the PHP xml/DOM extension.)
  */
 function sanitize_email_campaign_draft_html(string $html): string
@@ -2462,6 +2487,42 @@ function sanitize_email_campaign_draft_html(string $html): string
         $html
     ) ?? $html;
 
+    // Pull out safe data-URI images before strip_tags (attributes would be wiped).
+    $images = [];
+    $maxImages = email_campaign_draft_max_images();
+    $html = preg_replace_callback(
+        '/<\s*img\b([^>]*)\/?\s*>/i',
+        static function (array $m) use (&$images, $maxImages): string {
+            if (count($images) >= $maxImages) {
+                return '';
+            }
+            $attrs = (string) ($m[1] ?? '');
+            $src = '';
+            if (preg_match('/\bsrc\s*=\s*("|\')(.*?)\1/is', $attrs, $sm)) {
+                $src = html_entity_decode((string) $sm[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            } elseif (preg_match('/\bsrc\s*=\s*([^\s>]+)/i', $attrs, $sm)) {
+                $src = html_entity_decode((string) $sm[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+            $src = trim(preg_replace('/\s+/', '', $src) ?? $src);
+            if (!email_campaign_draft_is_safe_data_image_src($src)) {
+                return '';
+            }
+            $alt = '';
+            if (preg_match('/\balt\s*=\s*("|\')(.*?)\1/is', $attrs, $am)) {
+                $alt = (string) $am[2];
+            }
+            $alt = trim(preg_replace('/\s+/', ' ', $alt) ?? $alt);
+            if (mb_strlen($alt) > 120) {
+                $alt = mb_substr($alt, 0, 120);
+            }
+            $token = '%%CAMPIMG' . count($images) . '%%';
+            $images[] = '<img src="' . htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '" alt="' . htmlspecialchars($alt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
+            return $token;
+        },
+        $html
+    ) ?? $html;
+
     // Keep only formatting tags; unwrap everything else (links, spans, divs…).
     $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3>');
 
@@ -2478,8 +2539,13 @@ function sanitize_email_campaign_draft_html(string $html): string
     // Self-close / normalize br.
     $html = preg_replace('/<\s*br\s*>/i', '<br>', $html) ?? $html;
 
+    foreach ($images as $i => $imgHtml) {
+        $html = str_replace('%%CAMPIMG' . $i . '%%', $imgHtml, $html);
+    }
+
     $html = trim($html);
-    if (email_campaign_draft_html_to_plain($html) === '') {
+    $hasImg = (bool) preg_match('/<\s*img\b/i', $html);
+    if (email_campaign_draft_html_to_plain($html) === '' && !$hasImg) {
         return '';
     }
     return $html;
@@ -2506,7 +2572,8 @@ function render_email_campaign_draft_editor(
     $safe = email_campaign_draft_body_html($bodyHtml);
     $emptyClass = $safe === '' ? ' is-empty' : '';
     ?>
-    <div class="camp-draft-editor" data-camp-draft-editor>
+    <div class="camp-draft-editor" data-camp-draft-editor
+         data-max-images="<?= (int) email_campaign_draft_max_images() ?>">
       <div class="camp-draft-toolbar" role="toolbar" aria-label="Text formatting">
         <button type="button" class="btn secondary small" data-camp-draft-cmd="bold" title="Bold"><strong>B</strong></button>
         <button type="button" class="btn secondary small" data-camp-draft-cmd="italic" title="Italic"><em>I</em></button>
@@ -2515,7 +2582,13 @@ function render_email_campaign_draft_editor(
         <button type="button" class="btn secondary small" data-camp-draft-cmd="h2" title="Heading">Heading</button>
         <button type="button" class="btn secondary small" data-camp-draft-cmd="h3" title="Subheading">Subhead</button>
         <button type="button" class="btn secondary small" data-camp-draft-cmd="p" title="Normal paragraph">Normal</button>
+        <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
+        <button type="button" class="btn secondary small" data-camp-draft-image title="Add image from computer">Image</button>
+        <input type="file" accept="image/*" multiple hidden data-camp-draft-image-input>
       </div>
+      <p class="help camp-draft-image-hint" style="margin:0;padding:0.35rem 0.65rem 0;font-size:0.8rem">
+        Paste a screenshot or add Image — compressed for email paste (max <?= (int) email_campaign_draft_max_images() ?>).
+      </p>
       <div class="camp-draft-surface<?= $emptyClass ?>"
            data-camp-draft-surface
            contenteditable="true"

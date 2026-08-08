@@ -1305,7 +1305,8 @@ if ($projectIdParam > 0) {
             <div class="camp-hub-field">
               <label for="admin_draft_body">Draft text</label>
               <p class="help" style="margin:0 0 0.45rem">
-                Bold / italic / underline / headings are kept when Communication copies into email.
+                Bold / italic / underline / headings / images are kept when Communication copies into email.
+                Paste a screenshot or use Image (auto-compressed).
               </p>
               <?php
               render_email_campaign_draft_editor(

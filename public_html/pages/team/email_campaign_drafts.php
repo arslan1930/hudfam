@@ -250,8 +250,9 @@ endif;
         · <?= h($projectName) ?>
       </h2>
       <p class="help" style="margin-top:0">
-        Format with <strong>bold</strong>, <em>italic</em>, <u>underline</u>, and headings.
-        <strong>Copy</strong> keeps that formatting when you paste into Gmail / Outlook.
+        Format with <strong>bold</strong>, <em>italic</em>, <u>underline</u>, headings, and images.
+        Paste a screenshot or use <strong>Image</strong> (auto-compressed).
+        <strong>Copy</strong> keeps formatting and pictures for Gmail / Outlook.
       </p>
       <form method="post" action="<?= h($formAction) ?>" class="camp-draft-form" autocomplete="off"
             data-show-processing="<?= $editDraft ? 'Updating draft…' : 'Saving draft…' ?>">

@@ -3841,8 +3841,24 @@ textarea:focus-visible {
 .camp-draft-surface.is-invalid {
   box-shadow: inset 0 0 0 1px var(--bad);
 }
+.camp-draft-surface.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--brand-2);
+  background: #f3f4f6;
+}
 .camp-draft-surface:focus {
   box-shadow: inset 0 0 0 1px var(--brand-2);
+}
+.camp-draft-rich img,
+.camp-draft-surface img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.45rem 0;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+.camp-draft-image-hint {
+  color: var(--muted);
 }
 .camp-draft-textarea-sync {
   display: none;
