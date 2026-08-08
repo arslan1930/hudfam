@@ -45,12 +45,27 @@ function ensure_email_campaign_schema(): void
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_email_campaign_sheet_domain (sheet_id, domain),
           INDEX (sheet_id),
+          INDEX idx_email_campaign_sheet_id (sheet_id, id),
           INDEX (domain),
           INDEX (country),
           CONSTRAINT fk_email_campaign_row_sheet
             FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+
+    // Older installs: composite index for paginated sheet browsing.
+    try {
+        $idx = $pdo->query('SHOW INDEX FROM email_campaign_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $haveIdx = [];
+        foreach ($idx as $row) {
+            $haveIdx[(string) ($row['Key_name'] ?? '')] = true;
+        }
+        if (empty($haveIdx['idx_email_campaign_sheet_id'])) {
+            $pdo->exec('ALTER TABLE email_campaign_rows ADD INDEX idx_email_campaign_sheet_id (sheet_id, id)');
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
 
     // Domains removed on purpose from a sheet — archive import must never re-add them.
     $pdo->exec(
@@ -154,14 +169,19 @@ function is_email_campaign_domain_excluded(int $sheetId, string $domainRaw): boo
 /**
  * @return list<array{id:int,domain:string,excluded_at:string}>
  */
-function list_email_campaign_excluded_domains(int $sheetId): array
+/**
+ * @return list<array{id:int,domain:string,excluded_at:string}>
+ */
+function list_email_campaign_excluded_domains(int $sheetId, int $limit = 200): array
 {
     ensure_email_campaign_schema();
+    $limit = max(1, min(2000, $limit));
     $st = db()->prepare(
-        'SELECT id, domain, excluded_at
+        "SELECT id, domain, excluded_at
          FROM email_campaign_excluded_domains
          WHERE sheet_id=?
-         ORDER BY domain ASC'
+         ORDER BY domain ASC
+         LIMIT {$limit}"
     );
     $st->execute([$sheetId]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -400,6 +420,63 @@ function count_email_campaign_rows(int $sheetId): int
     return (int) $stmt->fetchColumn();
 }
 
+/**
+ * Paginated Email Sheet rows — same model as Our database / Sites with emails.
+ * Never load 100K rows into one page; use page + optional site/email search.
+ *
+ * @param array{q?:string} $filters
+ * @return array{rows:list<array<string,mixed>>,total:int,pages:int,page:int,per_page:int}
+ */
+function email_campaign_rows_inventory_query(
+    int $sheetId,
+    array $filters = [],
+    int $page = 1,
+    int $perPage = 100
+): array {
+    ensure_email_campaign_schema();
+    purge_blank_email_campaign_rows($sheetId);
+
+    $page = max(1, $page);
+    $perPage = max(1, min(200, $perPage));
+    $q = trim((string) ($filters['q'] ?? ''));
+
+    $where = ["sheet_id = ?", "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($q !== '') {
+        $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
+        $like = '%' . $q . '%';
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    $whereSql = implode(' AND ', $where);
+
+    $count = db()->prepare("SELECT COUNT(*) FROM email_campaign_rows WHERE {$whereSql}");
+    $count->execute($params);
+    $total = (int) $count->fetchColumn();
+    $pages = max(1, (int) ceil($total / $perPage));
+    if ($page > $pages) {
+        $page = $pages;
+    }
+    $offset = ($page - 1) * $perPage;
+
+    $stmt = db()->prepare(
+        "SELECT * FROM email_campaign_rows
+         WHERE {$whereSql}
+         ORDER BY id ASC
+         LIMIT {$perPage} OFFSET {$offset}"
+    );
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $rows = expand_packed_email_slots_in_campaign_rows($rows);
+
+    return [
+        'rows' => $rows,
+        'total' => $total,
+        'pages' => $pages,
+        'page' => $page,
+        'per_page' => $perPage,
+    ];
+}
+
 function touch_email_campaign_sheet(int $sheetId): void
 {
     ensure_email_campaign_schema();
@@ -424,16 +501,21 @@ function purge_blank_email_campaign_rows(int $sheetId): int
 }
 
 /**
+ * All rows for a sheet (tests / small ops only). Prefer
+ * email_campaign_rows_inventory_query() for UI — sheets can reach 100K rows.
+ *
  * @return list<array<string,mixed>>
  */
-function list_email_campaign_rows(int $sheetId): array
+function list_email_campaign_rows(int $sheetId, int $hardLimit = 5000): array
 {
     ensure_email_campaign_schema();
     purge_blank_email_campaign_rows($sheetId);
+    $hardLimit = max(1, min(50000, $hardLimit));
     $stmt = db()->prepare(
         "SELECT * FROM email_campaign_rows
          WHERE sheet_id=? AND LEFT(domain, 8) <> '__blank_'
-         ORDER BY id ASC"
+         ORDER BY id ASC
+         LIMIT {$hardLimit}"
     );
     $stmt->execute([$sheetId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];

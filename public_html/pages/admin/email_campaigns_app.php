@@ -35,9 +35,21 @@ if ($sheetId > 0) {
         $sheetCountry = $canon['name'];
     }
 
+    $q = trim((string) get('q'));
+    $pageNum = max(1, (int) get('p', 1));
+    $perPage = 100;
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
+        $returnQ = trim((string) post('q'));
+        $returnP = max(1, (int) post('p', 1));
         $back = $campBase . '&sheet=' . $sheetId;
+        if ($returnQ !== '') {
+            $back .= '&q=' . rawurlencode($returnQ);
+        }
+        if ($returnP > 1) {
+            $back .= '&p=' . $returnP;
+        }
         $wantsJson = (string) post('ajax') === '1'
             || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
         $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson): void {
@@ -107,7 +119,10 @@ if ($sheetId > 0) {
                 } else {
                     flash('ok', $msg);
                 }
-                redirect($back);
+                // After bulk add, jump to last page so new rows are visible.
+                $totalAfter = count_email_campaign_rows($sheetId);
+                $lastPage = max(1, (int) ceil($totalAfter / $perPage));
+                redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
             }
             if ($action === 'import_file') {
                 $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
@@ -123,7 +138,9 @@ if ($sheetId > 0) {
                 } else {
                     flash('ok', $msg);
                 }
-                redirect($back);
+                $totalAfter = count_email_campaign_rows($sheetId);
+                $lastPage = max(1, (int) ceil($totalAfter / $perPage));
+                redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
             }
             if ($action === 'import') {
                 $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
@@ -143,7 +160,9 @@ if ($sheetId > 0) {
                 }
                 $msg .= '.';
                 flash('ok', $msg);
-                redirect($back);
+                $totalAfter = count_email_campaign_rows($sheetId);
+                $lastPage = max(1, (int) ceil($totalAfter / $perPage));
+                redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
             }
             if ($action === 'allow_excluded_domain') {
                 $domain = (string) post('domain');
@@ -188,13 +207,22 @@ if ($sheetId > 0) {
         }
     }
 
-    purge_blank_email_campaign_rows($sheetId);
-    $rows = list_email_campaign_rows($sheetId);
-    $filledCount = count($rows);
-    $excludedDomains = list_email_campaign_excluded_domains($sheetId);
-    $excludedCount = count($excludedDomains);
+    $inv = email_campaign_rows_inventory_query($sheetId, ['q' => $q], $pageNum, $perPage);
+    $rows = $inv['rows'];
+    $total = (int) $inv['total'];
+    $pages = (int) $inv['pages'];
+    $pageNum = (int) $inv['page'];
+    $sheetTotal = $q !== '' ? count_email_campaign_rows($sheetId) : $total;
+    $filledCount = $sheetTotal;
+    $excludedCount = count_email_campaign_excluded_domains($sheetId);
+    $excludedDomains = list_email_campaign_excluded_domains($sheetId, 200);
     $formAction = $campBase . '&sheet=' . $sheetId;
-    $q = trim((string) get('q'));
+    $qs = http_build_query(array_filter([
+        'page' => 'admin_emails_data',
+        'folder' => 'email_campaigns',
+        'sheet' => $sheetId,
+        'q' => $q,
+    ], static fn ($v) => $v !== '' && $v !== null));
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
     $projectName = email_campaign_sheet_project_name($sheet);
     $teamVisible = email_campaign_sheet_team_visible($sheet);
@@ -213,7 +241,8 @@ if ($sheetId > 0) {
         <p class="muted">
           <?= h($sheetCountry) ?> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          · Admin fills site + up to 4 emails · autosave ·
+          <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
+          · <?= (int) $perPage ?> per page · autosave ·
           Communication Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
         </p>
       </div>
@@ -253,10 +282,10 @@ if ($sheetId > 0) {
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Each row is one site with up to 4 emails. Use + Add site for a single row. Clearing the last email removes the site.') ?></h2>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated rows (not all 100K at once). Use + Add site for a single row. Clearing the last email removes the site.') ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-            Every site must keep at least one email.
+            Browse page by page — large sheets stay fast.
           </p>
         </div>
         <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
@@ -266,7 +295,7 @@ if ($sheetId > 0) {
             <input id="swe-row-search" type="search" placeholder="Search site or email…"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
                    <?= $filledCount < 1 && $q === '' ? 'disabled' : '' ?>
-                   title="Filter · Enter = next match">
+                   title="Filter this page · Enter = next match · Ctrl/Cmd+Enter = search all pages">
             <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
           </label>
         </div>
@@ -289,6 +318,8 @@ if ($sheetId > 0) {
                     autocomplete="off" data-show-processing="Adding site…">
                 <input type="hidden" name="action" value="save_row">
                 <input type="hidden" name="site_id" value="0">
+                <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
+                <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                 <div class="swe-row-grid">
                   <div class="swe-site-block">
                     <label class="visually-hidden" for="camp_add_domain">Site name</label>
@@ -326,6 +357,8 @@ if ($sheetId > 0) {
                 <form method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
                   <input type="hidden" name="action" value="save_row">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
+                  <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
+                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                   <div class="swe-row-grid">
                     <div class="swe-site-block">
                       <label class="visually-hidden">Site name</label>
@@ -347,6 +380,8 @@ if ($sheetId > 0) {
                 <form id="camp-remove-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-remove hidden>
                   <input type="hidden" name="action" value="remove_site">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
+                  <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
+                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                 </form>
               </td>
             </tr>
@@ -355,9 +390,9 @@ if ($sheetId > 0) {
         </table>
       </div>
       <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
-        No matching <strong>site + emails</strong> rows.
+        No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
       </p>
-      <?php if ($rows === []): ?>
+      <?php if ($rows === [] && $q === ''): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
         <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Final (new sites only)</strong>.</p>
@@ -365,6 +400,24 @@ if ($sheetId > 0) {
           <button type="button" class="btn" data-camp-add-toggle>+ Add site</button>
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
         </p>
+      </div>
+      <?php elseif ($rows === [] && $q !== ''): ?>
+      <div class="empty-state">
+        <p>No sites match “<?= h($q) ?>”.</p>
+        <p class="actions" style="justify-content:center;margin-top:0.75rem">
+          <a class="btn secondary" href="<?= h($formAction) ?>">Clear search</a>
+        </p>
+      </div>
+      <?php endif; ?>
+      <?php if ($pages > 1 || $total > 0): ?>
+      <div class="pagination" style="margin-top:0.85rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
+        <?php if ($pageNum > 1): ?>
+          <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a>
+        <?php endif; ?>
+        <span class="muted">Page <?= (int) $pageNum ?> / <?= (int) $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?><?= $q !== '' ? ' matches' : '' ?></span>
+        <?php if ($pageNum < $pages): ?>
+          <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
     </div>
@@ -434,6 +487,9 @@ if ($sheetId > 0) {
       <?php else: ?>
         <p class="help" style="margin-top:0">
           <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from archive import.
+          <?php if ($excludedCount > count($excludedDomains)): ?>
+            Showing first <?= count($excludedDomains) ?>.
+          <?php endif; ?>
         </p>
         <div class="table-wrap">
           <table class="extracted-country-table">
@@ -454,6 +510,8 @@ if ($sheetId > 0) {
                         data-show-processing="Allowing site again…">
                     <input type="hidden" name="action" value="allow_excluded_domain">
                     <input type="hidden" name="domain" value="<?= h((string) $ex['domain']) ?>">
+                    <input type="hidden" name="q" value="<?= h($q) ?>">
+                    <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                     <button class="btn secondary small" type="submit"
                             title="Let the next Final/Admin import add this site again">Allow again</button>
                   </form>

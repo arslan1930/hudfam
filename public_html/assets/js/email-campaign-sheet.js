@@ -145,11 +145,14 @@
       }
       meta.hidden = false;
       meta.textContent = !matchRows.length
-        ? '0 · Enter = next'
+        ? '0 · Enter = next · Ctrl+Enter = all pages'
         : (matchIndex >= 0
           ? (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails'
           : matchRows.length + ' · site + emails · Enter = next');
     }
+    document.querySelectorAll('[data-swe-q]').forEach(function (el) {
+      el.value = String(searchInput.value || '');
+    });
   }
 
   function jump(dir) {
@@ -176,6 +179,15 @@
     searchInput.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        var url = new URL(window.location.href);
+        var q = String(searchInput.value || '').trim();
+        if (q) url.searchParams.set('q', q);
+        else url.searchParams.delete('q');
+        url.searchParams.delete('p');
+        window.location.href = url.toString();
+        return;
+      }
       jump(e.shiftKey ? -1 : 1);
     });
     filterRows();
