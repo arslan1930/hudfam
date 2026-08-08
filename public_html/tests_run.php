@@ -627,17 +627,6 @@ try {
     } else {
         fail('allow again: ' . json_encode($imp4) . " bAgain=$bAgain");
     }
-
-    $impUpsert = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'upsert');
-    $emailA2 = (string) db()->query(
-        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
-        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
-    )->fetchColumn();
-    if ((int) ($impUpsert['updated'] ?? 0) >= 1 && $emailA2 === 'a2@txfcamp-nl-a.nl') {
-        pass('upsert mode updates emails on existing sheet rows');
-    } else {
-        fail('upsert: ' . json_encode($impUpsert) . " emailA2=$emailA2");
-    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

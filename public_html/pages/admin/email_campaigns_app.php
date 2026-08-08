@@ -127,15 +127,11 @@ if ($sheetId > 0) {
             }
             if ($action === 'import') {
                 $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
-                $mode = (string) post('import_mode') === 'upsert' ? 'upsert' : 'new_only';
-                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, $mode);
+                // Always new sites only — never update rows already on the sheet.
+                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'new_only');
                 $label = $source === 'admin' ? 'Sites with emails - Admin' : 'All sites with emails - Final';
-                $msg = 'Imported ' . $sheetCountry . ' from ' . $label
-                    . ($mode === 'new_only' ? ' (new sites only)' : ' (add + update existing)')
-                    . ': ' . (int) $result['imported'] . ' new';
-                if ($mode === 'upsert') {
-                    $msg .= ', ' . (int) $result['updated'] . ' updated';
-                }
+                $msg = 'Imported new sites into ' . $sheetCountry . ' from ' . $label . ': '
+                    . (int) $result['imported'] . ' new';
                 if ((int) ($result['skipped_existing'] ?? 0) > 0) {
                     $msg .= ', ' . (int) $result['skipped_existing'] . ' already on sheet';
                 }
@@ -410,31 +406,22 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Copy site + emails from Final or Admin into this sheet. Default is new sites only: skips sites already on the sheet, and never re-adds sites Team/Admin deleted from this sheet. Archives are not changed.') ?></h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites removed from this sheet are never re-added. Archives are not changed.') ?></h2>
       <p class="help">
-        Default: <strong>New sites only</strong> — adds what you don’t have yet.
-        Sites removed from this sheet are remembered and <strong>won’t come back</strong> from Final/Admin
-        (unless you Allow again below, or paste/+ Add them yourself).
+        Imports <strong>new sites only</strong> — skips anything already on the sheet, and never re-adds sites
+        that were removed (unless you Allow again below, or paste/+ Add them yourself).
       </p>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Importing from archive…"
-            onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?\n\nNew sites only skips existing rows and previously removed sites.\n\nFinal/Admin archives are not changed.');">
+            data-show-processing="Importing new sites…"
+            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites are not re-added.\n\nFinal/Admin archives are not changed.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
           <option value="admin_all">All sites with emails - Final</option>
           <option value="admin">Sites with emails - Admin</option>
         </select>
-        <label for="camp_import_mode" style="display:block;margin-top:0.75rem">Import mode</label>
-        <select id="camp_import_mode" name="import_mode">
-          <option value="new_only" selected>New sites only (recommended)</option>
-          <option value="upsert">Also update sites already on this sheet</option>
-        </select>
-        <p class="help" style="margin-top:0.35rem">
-          Both modes still skip previously removed sites. “Also update…” refreshes emails on sites that are still on the sheet.
-        </p>
         <p class="actions" style="margin-top:0.75rem">
-          <button class="btn" type="submit">Import into sheet</button>
+          <button class="btn" type="submit">Import new sites into sheet</button>
         </p>
       </form>
     </div>
