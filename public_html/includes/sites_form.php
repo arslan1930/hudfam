@@ -35,15 +35,9 @@ function render_typeahead_field(
     $reqMark = $required ? ' <span class="help">(required)</span>' : ($optional ? ' <span class="help">(optional)</span>' : '');
     $reqAttr = $required ? ' data-required="1"' : '';
 
+    // Always show the canonical value in the input (e.g. "Germany").
+    // Suggestion labels may include counts ("6 · Germany") for the dropdown only.
     $displayValue = $value;
-    if ($value !== '') {
-        foreach ($jsonItems as $it) {
-            if (strcasecmp((string) $it['value'], $value) === 0) {
-                $displayValue = (string) $it['label'];
-                break;
-            }
-        }
-    }
 
     $html = '<div class="typeahead' . ($extraClass !== '' ? ' ' . h($extraClass) : '') . '" data-typeahead'
         . $reqAttr . ' data-name="' . h($name) . '" ' . $attrs . '>';

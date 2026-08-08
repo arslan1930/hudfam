@@ -74,6 +74,27 @@ function ensure_departments_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
+    // Older installs may have department_tasks without assignee columns.
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM department_tasks')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $colSet = array_fill_keys(array_map('strval', $cols), true);
+        if (empty($colSet['assigned_to'])) {
+            $pdo->exec('ALTER TABLE department_tasks ADD COLUMN assigned_to INT NULL AFTER status');
+            $pdo->exec('ALTER TABLE department_tasks ADD INDEX (assigned_to)');
+        }
+        if (empty($colSet['due_date'])) {
+            $pdo->exec('ALTER TABLE department_tasks ADD COLUMN due_date DATE NULL AFTER created_by');
+        }
+        if (empty($colSet['status'])) {
+            $pdo->exec(
+                "ALTER TABLE department_tasks
+                 ADD COLUMN status ENUM('open','in_progress','done') NOT NULL DEFAULT 'open' AFTER notes"
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore — table may not exist yet on first boot
+    }
+
     seed_departments_if_empty();
 }
 
@@ -392,8 +413,22 @@ function save_department_task(
         }
     }
     if ($assignedTo !== null && $assignedTo > 0) {
+        $assignee = db()->prepare(
+            "SELECT id, role, is_active FROM users WHERE id=? LIMIT 1"
+        );
+        $assignee->execute([$assignedTo]);
+        $assigneeRow = $assignee->fetch(PDO::FETCH_ASSOC);
+        if (!$assigneeRow || (int) ($assigneeRow['is_active'] ?? 0) !== 1) {
+            return ['ok' => false, 'error' => 'Assignee user not found or inactive.'];
+        }
+        if (($assigneeRow['role'] ?? '') !== 'team') {
+            return ['ok' => false, 'error' => 'Tasks can only be assigned to Team users.'];
+        }
+        // Auto-add assignee to the department so tools unlock for them.
         if (!user_in_department($assignedTo, $departmentId)) {
-            return ['ok' => false, 'error' => 'Assignee must be a member of this department.'];
+            if (!add_department_member($departmentId, $assignedTo, $actor)) {
+                return ['ok' => false, 'error' => 'Could not add assignee to this department.'];
+            }
         }
     } else {
         $assignedTo = null;
@@ -401,33 +436,37 @@ function save_department_task(
 
     $actorId = (int) ($actor['id'] ?? 0) ?: null;
 
-    if ($taskId !== null && $taskId > 0) {
-        $existing = get_department_task($taskId);
-        if (!$existing || (int) $existing['department_id'] !== $departmentId) {
-            return ['ok' => false, 'error' => 'Task not found.'];
+    try {
+        if ($taskId !== null && $taskId > 0) {
+            $existing = get_department_task($taskId);
+            if (!$existing || (int) $existing['department_id'] !== $departmentId) {
+                return ['ok' => false, 'error' => 'Task not found.'];
+            }
+            db()->prepare(
+                'UPDATE department_tasks
+                 SET title=?, notes=?, status=?, assigned_to=?, due_date=?, updated_at=NOW()
+                 WHERE id=?'
+            )->execute([$title, $notes !== '' ? $notes : null, $status, $assignedTo, $due, $taskId]);
+            return ['ok' => true, 'id' => $taskId];
         }
-        db()->prepare(
-            'UPDATE department_tasks
-             SET title=?, notes=?, status=?, assigned_to=?, due_date=?, updated_at=NOW()
-             WHERE id=?'
-        )->execute([$title, $notes !== '' ? $notes : null, $status, $assignedTo, $due, $taskId]);
-        return ['ok' => true, 'id' => $taskId];
-    }
 
-    db()->prepare(
-        'INSERT INTO department_tasks
-           (department_id, title, notes, status, assigned_to, created_by, due_date)
-         VALUES (?,?,?,?,?,?,?)'
-    )->execute([
-        $departmentId,
-        $title,
-        $notes !== '' ? $notes : null,
-        $status,
-        $assignedTo,
-        $actorId,
-        $due,
-    ]);
-    return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+        db()->prepare(
+            'INSERT INTO department_tasks
+               (department_id, title, notes, status, assigned_to, created_by, due_date)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute([
+            $departmentId,
+            $title,
+            $notes !== '' ? $notes : null,
+            $status,
+            $assignedTo,
+            $actorId,
+            $due,
+        ]);
+        return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+    } catch (Throwable $e) {
+        return ['ok' => false, 'error' => 'Could not save task. Try again or run upgrade.php.'];
+    }
 }
 
 function delete_department_task(int $taskId): bool

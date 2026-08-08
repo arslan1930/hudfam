@@ -41,6 +41,9 @@ if ($addCountry !== '') {
         if ($addLanguage === '') {
             $addLanguage = $canonAdd['language'];
         }
+        $addLanguage = function_exists('normalize_site_language')
+            ? normalize_site_language($addLanguage, $addCountry)
+            : $addLanguage;
     }
 }
 
@@ -324,8 +327,9 @@ if (!$inCountry && !$emptyCountry) {
               'id' => 'add_country',
               'label' => 'Country',
               'required' => true,
+              'attrs' => 'data-fill-language="#add_language" data-fill-region="select[name=region]"',
           ]) ?>
-          <?= render_language_typeahead($addLanguage, ['id' => 'add_language']) ?>
+          <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
         </div>
         <div style="margin-top:0.9rem">
           <?= render_domains_paste_field('urls', $addRaw, [
@@ -622,9 +626,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
     <input type="hidden" name="action" value="add_sites">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">
-    <div class="form-grid">
-      <?= render_language_typeahead($addLanguage, ['id' => 'add_language']) ?>
-    </div>
+    <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
     <div style="margin-top:0.9rem">
       <?= render_domains_paste_field('urls', $addRaw, [
           'id' => 'urls',

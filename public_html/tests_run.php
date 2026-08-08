@@ -965,6 +965,70 @@ try {
     fail('password: ' . $e->getMessage());
 }
 
+// --- Language must not list country names (German ≠ Germany) ---
+try {
+    $langs = list_language_options();
+    $langLower = array_map('mb_strtolower', $langs);
+    if (in_array('german', $langLower, true) && !in_array('germany', $langLower, true)) {
+        pass('language options include German, not Germany');
+    } else {
+        fail('language options wrong: ' . implode(',', $langs));
+    }
+    if (normalize_site_language('Germany', 'Germany') === 'German'
+        && normalize_site_language('German', 'Germany') === 'German') {
+        pass('normalize_site_language maps country-name language to German');
+    } else {
+        fail('normalize_site_language failed');
+    }
+    if (is_country_name_used_as_language('Germany') && !is_country_name_used_as_language('German')) {
+        pass('country-name-as-language detector');
+    } else {
+        fail('country-name-as-language detector wrong');
+    }
+} catch (Throwable $e) {
+    fail('language options: ' . $e->getMessage());
+}
+
+// --- Department task assign to user (auto-add member) ---
+try {
+    ensure_departments_schema();
+    $dept = get_department_by_slug('email_extracting');
+    if (!$dept) {
+        fail('email_extracting department missing');
+    } else {
+        $assigneeId = (int) $teamUser['id'];
+        // Ensure not already a member so auto-add path is tested.
+        remove_department_member((int) $dept['id'], $assigneeId);
+        $saved = save_department_task(
+            (int) $dept['id'],
+            'txfdept-assign-task',
+            'assign test',
+            'open',
+            $assigneeId,
+            null,
+            $adminUser,
+            null
+        );
+        if (!empty($saved['ok']) && user_in_department($assigneeId, (int) $dept['id'])) {
+            pass('department task assigns user and auto-adds member');
+        } else {
+            fail('department assign failed: ' . json_encode($saved));
+        }
+        $task = get_department_task((int) ($saved['id'] ?? 0));
+        if ($task && (int) ($task['assigned_to'] ?? 0) === $assigneeId) {
+            pass('department task assigned_to persisted');
+        } else {
+            fail('department task assigned_to missing');
+        }
+        if (!empty($saved['id'])) {
+            delete_department_task((int) $saved['id']);
+        }
+        remove_department_member((int) $dept['id'], $assigneeId);
+    }
+} catch (Throwable $e) {
+    fail('department assign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Task presence (advisory “Also here” chip) ---
 try {
     $presenceKey = 'txfpresence:Germany';

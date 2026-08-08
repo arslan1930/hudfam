@@ -549,7 +549,57 @@ function distinct_site_languages(): array
 }
 
 /**
+ * True when a language value is actually a country name (e.g. "Germany").
+ * Demonyms like "German" are valid languages and return false.
+ */
+function is_country_name_used_as_language(string $language): bool
+{
+    $language = trim($language);
+    if ($language === '') {
+        return false;
+    }
+    foreach (list_countries(null, false) as $c) {
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $language) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Resolve a stored/posted language for a country.
+ * Never keeps a country name (Germany) as the language — maps to default (German).
+ */
+function normalize_site_language(string $language, string $country = ''): string
+{
+    $language = trim($language);
+    $country = trim($country);
+    if ($language !== '' && !is_country_name_used_as_language($language)) {
+        return $language;
+    }
+    if ($country !== '') {
+        $canon = resolve_canonical_country($country);
+        if ($canon) {
+            $fallback = trim((string) ($canon['language'] ?? ''));
+            if ($fallback !== '' && !is_country_name_used_as_language($fallback)) {
+                return $fallback;
+            }
+        }
+    }
+    if ($language !== '' && is_country_name_used_as_language($language)) {
+        $canon = resolve_canonical_country($language);
+        if ($canon) {
+            return trim((string) ($canon['language'] ?? ''));
+        }
+        return '';
+    }
+    return $language;
+}
+
+/**
  * Language labels for optional typeahead (country defaults + any already used on prospects).
+ * Never includes country names (fixes Language list showing "German" and "Germany").
  *
  * @return list<string>
  */
@@ -557,7 +607,7 @@ function list_language_options(): array
 {
     $set = [];
     foreach (list_countries(null, true) as $c) {
-        $lang = trim((string) ($c['default_language'] ?? ''));
+        $lang = normalize_site_language((string) ($c['default_language'] ?? ''), (string) ($c['name'] ?? ''));
         if ($lang !== '') {
             $set[$lang] = true;
         }
@@ -567,7 +617,7 @@ function list_language_options(): array
             "SELECT DISTINCT language FROM prospect_sites WHERE TRIM(language) <> '' ORDER BY language"
         )->fetchAll(PDO::FETCH_COLUMN);
         foreach ($rows as $lang) {
-            $lang = trim((string) $lang);
+            $lang = normalize_site_language((string) $lang);
             if ($lang !== '') {
                 $set[$lang] = true;
             }

@@ -27,6 +27,9 @@ if ($country !== '') {
     if ($language === '') {
         $language = $canonCountry['language'];
     }
+    $language = function_exists('normalize_site_language')
+        ? normalize_site_language($language, $country)
+        : $language;
 }
 
 try {
@@ -58,6 +61,9 @@ try {
             if ($language === '') {
                 $language = $canonCountry['language'];
             }
+            $language = function_exists('normalize_site_language')
+                ? normalize_site_language($language, $country)
+                : $language;
         }
 
         if ($country === '' || $canonCountry === null) {
@@ -210,9 +216,9 @@ render_header('Filter & add', 'team');
       <?= render_country_typeahead($country, [
           'id' => 'country',
           'label' => 'Country database',
-          'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]" data-reload-on-select="1"',
+          'attrs' => 'data-fill-language="#language" data-fill-region="select[name=region]" data-reload-on-select="1"',
       ]) ?>
-      <?= render_language_typeahead($language) ?>
+      <input type="hidden" name="language" id="language" value="<?= h($language) ?>">
       <div><label>Region</label>
         <select name="region">
           <option value="">—</option>

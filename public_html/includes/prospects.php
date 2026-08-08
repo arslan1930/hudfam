@@ -844,6 +844,9 @@ function add_prospect_domains(
     if ($language === '') {
         $language = $canon['language'];
     }
+    if (function_exists('normalize_site_language')) {
+        $language = normalize_site_language($language, $country);
+    }
 
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
     // Team/admin shared insert path: never insert domains already in this country folder.
@@ -959,6 +962,9 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     $region = $canon['region'];
     if ($language === '') {
         $language = $canon['language'];
+    }
+    if (function_exists('normalize_site_language')) {
+        $language = normalize_site_language($language, $country);
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
