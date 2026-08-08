@@ -472,7 +472,7 @@ render_breadcrumbs($crumbs);
   <div class="actions">
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
-          onsubmit="return confirm('Push ALL <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?\n\nThose rows will leave this Team working copy.');">
+          data-confirm-push-all="Push ALL <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?&#10;&#10;Those rows will leave this Team working copy.">
       <input type="hidden" name="action" value="push_to_admin">
       <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
               title="<?= $readyToPush > 0 ? 'Push every site on this country that has at least one email' : 'Add at least one email on a site first' ?>">

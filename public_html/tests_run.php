@@ -260,6 +260,71 @@ try {
     } else {
         fail('cleared count=' . ($result['cleared'] ?? 'missing'));
     }
+
+    // Four separate email slots must all land in Admin + Final.
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfpush-four.com','Germany','German','europe',
+                 'a@four.test','b@four.test','c@four.test','d@four.test')
+         ON DUPLICATE KEY UPDATE
+           email1=VALUES(email1), email2=VALUES(email2),
+           email3=VALUES(email3), email4=VALUES(email4)"
+    )->execute();
+    $fourPush = push_one_site_with_emails_team_to_admin(
+        (int) db()->query("SELECT id FROM sites_with_emails_team WHERE domain='txfpush-four.com' LIMIT 1")->fetchColumn(),
+        $teamUser
+    );
+    if (empty($fourPush['ok'])) {
+        fail('four-slot push failed: ' . ($fourPush['error'] ?? '?'));
+    } else {
+        pass('four-slot push ok');
+    }
+    $fourAdmin = db()->query(
+        "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin WHERE domain='txfpush-four.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $fourFinal = db()->query(
+        "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin_all WHERE domain='txfpush-four.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (($fourAdmin['email1'] ?? '') === 'a@four.test'
+        && ($fourAdmin['email2'] ?? '') === 'b@four.test'
+        && ($fourAdmin['email3'] ?? '') === 'c@four.test'
+        && ($fourAdmin['email4'] ?? '') === 'd@four.test') {
+        pass('admin kept all 4 emails');
+    } else {
+        fail('admin emails=' . json_encode($fourAdmin));
+    }
+    if (($fourFinal['email1'] ?? '') === 'a@four.test'
+        && ($fourFinal['email2'] ?? '') === 'b@four.test'
+        && ($fourFinal['email3'] ?? '') === 'c@four.test'
+        && ($fourFinal['email4'] ?? '') === 'd@four.test') {
+        pass('final kept all 4 emails');
+    } else {
+        fail('final emails=' . json_encode($fourFinal));
+    }
+
+    // Packed email1 (paste without JS split) expands into 4 slots on push.
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfpush-packed.com','Germany','German','europe',
+                 'p1@pack.test, p2@pack.test; p3@pack.test p4@pack.test','','','')
+         ON DUPLICATE KEY UPDATE
+           email1=VALUES(email1), email2='', email3='', email4=''"
+    )->execute();
+    $packedPush = push_sites_with_emails_team_to_admin('Germany', $teamUser);
+    pass('packed push: ' . json_encode($packedPush));
+    $packedAdmin = db()->query(
+        "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin WHERE domain='txfpush-packed.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (($packedAdmin['email1'] ?? '') === 'p1@pack.test'
+        && ($packedAdmin['email2'] ?? '') === 'p2@pack.test'
+        && ($packedAdmin['email3'] ?? '') === 'p3@pack.test'
+        && ($packedAdmin['email4'] ?? '') === 'p4@pack.test') {
+        pass('packed email1 expanded to 4 slots on admin');
+    } else {
+        fail('packed admin emails=' . json_encode($packedAdmin));
+    }
 } catch (Throwable $e) {
     fail('swe push: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

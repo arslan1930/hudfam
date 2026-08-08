@@ -316,6 +316,7 @@
         });
       })
       .then(function (data) {
+        form.removeAttribute('data-swe-dirty');
         var row = form.closest('[data-swe-row]');
         refreshRowSearchIndex(row);
         if (!opts.quiet) {
@@ -339,6 +340,7 @@
 
   function scheduleAutosave(form) {
     if (!form || !form.matches('[data-swe-save]')) return;
+    form.setAttribute('data-swe-dirty', '1');
     var prev = autosaveTimers.get(form);
     if (prev) window.clearTimeout(prev);
     var timer = window.setTimeout(function () {
@@ -346,6 +348,23 @@
       saveRowForm(form, { quiet: true });
     }, 400);
     autosaveTimers.set(form, timer);
+  }
+
+  /** Flush every row that still has pending edits so Push sees all 4 emails. */
+  function flushPendingAutosaves() {
+    var forms = document.querySelectorAll('form[data-swe-save]');
+    var jobs = [];
+    forms.forEach(function (form) {
+      var t = autosaveTimers.get(form);
+      if (t) {
+        window.clearTimeout(t);
+        autosaveTimers.delete(form);
+      }
+      if (t || form.getAttribute('data-swe-dirty') === '1' || form.getAttribute('data-busy') === '1') {
+        jobs.push(saveRowForm(form, { quiet: true }));
+      }
+    });
+    return Promise.all(jobs);
   }
 
   // × clear is handled by email-field-clear.js; its input event triggers autosave below.
@@ -366,7 +385,16 @@
     refreshRowSearchIndex(row);
     filterRows();
     setStatus('Pasted ' + Math.min(multi.length, 4) + ' email' + (multi.length === 1 ? '' : 's') + '.');
-    if (form) scheduleAutosave(form);
+    // Save immediately — do not wait for debounce, or Push can miss emails 2–4.
+    if (form) {
+      var prev = autosaveTimers.get(form);
+      if (prev) {
+        window.clearTimeout(prev);
+        autosaveTimers.delete(form);
+      }
+      form.setAttribute('data-swe-dirty', '1');
+      saveRowForm(form, { quiet: true });
+    }
   });
 
   // Autosave on every email / domain edit (also runs after × clear)
@@ -426,6 +454,30 @@
         form.removeAttribute('data-busy');
         return null;
       });
+  }
+
+  // Push all: flush every pending autosave first (otherwise only email1 may be on the server)
+  var pushAllForm = document.getElementById('swe-push-form');
+  if (pushAllForm) {
+    pushAllForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = pushAllForm.getAttribute('data-confirm-push-all')
+        || 'Push all sites with emails to Admin? Those rows will leave the Team working copy.';
+      if (readyLabel) {
+        msg = msg.replace(/ALL \d+ site\(s\)/, 'ALL ' + String(readyLabel.textContent || '').trim() + ' site(s)');
+      }
+      if (!window.confirm(msg)) return;
+      var btn = document.getElementById('swe-push-btn');
+      if (btn) btn.disabled = true;
+      setStatus('Saving emails before push…');
+      flushPendingAutosaves().then(function () {
+        // Native submit skips this listener — avoids a second confirm.
+        HTMLFormElement.prototype.submit.call(pushAllForm);
+      }).catch(function () {
+        if (btn) btn.disabled = false;
+        setStatus('Could not save emails before push.', true);
+      });
+    });
   }
 
   // Push one / Remove row (ajax); row forms no longer have a Save submit

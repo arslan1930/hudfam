@@ -210,6 +210,11 @@ function normalize_email_value(string $email): string
     if ($email === '') {
         return '';
     }
+    // Strip wrapping <angle brackets> / quotes from pasted values.
+    $email = trim($email, " \t\n\r\0\x0B\"'<>");
+    if ($email === '') {
+        return '';
+    }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return '';
     }
@@ -220,7 +225,55 @@ function normalize_email_value(string $email): string
 }
 
 /**
- * Compact up to 4 unique valid emails. Invalid non-empty values are rejected.
+ * Split a pasted/packed email cell into individual addresses
+ * (commas, semicolons, whitespace, or newlines).
+ *
+ * @return list<string>
+ */
+function split_email_cell(string $raw): array
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return [];
+    }
+    // Already a single address — keep as one token.
+    if (normalize_email_value($raw) !== '') {
+        return [$raw];
+    }
+    $parts = preg_split('/[\s,;]+/u', $raw) ?: [];
+    $out = [];
+    foreach ($parts as $p) {
+        $p = trim((string) $p);
+        if ($p !== '') {
+            $out[] = $p;
+        }
+    }
+    return $out;
+}
+
+/**
+ * Flatten email1…email4 (and any packed multi-email cells) into up to 4 slots.
+ *
+ * @param array<int|string,mixed> $emails
+ * @return list<string>
+ */
+function flatten_email_inputs(array $emails): array
+{
+    $flat = [];
+    foreach ($emails as $e) {
+        foreach (split_email_cell((string) $e) as $part) {
+            $flat[] = $part;
+            if (count($flat) >= 16) { // hard cap before normalize
+                break 2;
+            }
+        }
+    }
+    return $flat;
+}
+
+/**
+ * Compact up to 4 unique valid emails. Packed multi-email cells are split first.
+ * Invalid non-empty tokens are rejected.
  *
  * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $emails
  * @return array{ok:bool,slots?:array{0:string,1:string,2:string,3:string},error?:string}
@@ -230,11 +283,11 @@ function normalize_email_slots(array $emails): array
     $out = ['', '', '', ''];
     $i = 0;
     $seen = [];
-    foreach ($emails as $e) {
+    foreach (flatten_email_inputs($emails) as $raw) {
         if ($i >= 4) {
             break;
         }
-        $raw = trim((string) $e);
+        $raw = trim((string) $raw);
         if ($raw === '') {
             continue;
         }
@@ -250,6 +303,37 @@ function normalize_email_slots(array $emails): array
         $i++;
     }
     return ['ok' => true, 'slots' => $out];
+}
+
+/**
+ * Read email1–4 from a Team/Admin row and expand packed cells into 4 slots.
+ *
+ * @param array<string,mixed> $row
+ * @return array{0:string,1:string,2:string,3:string}
+ */
+function email_slots_from_row(array $row): array
+{
+    $norm = normalize_email_slots([
+        (string) ($row['email1'] ?? ''),
+        (string) ($row['email2'] ?? ''),
+        (string) ($row['email3'] ?? ''),
+        (string) ($row['email4'] ?? ''),
+    ]);
+    if (!empty($norm['ok']) && isset($norm['slots']) && is_array($norm['slots'])) {
+        return [
+            (string) ($norm['slots'][0] ?? ''),
+            (string) ($norm['slots'][1] ?? ''),
+            (string) ($norm['slots'][2] ?? ''),
+            (string) ($norm['slots'][3] ?? ''),
+        ];
+    }
+    // Fallback: keep email1 only if packed junk failed validation
+    return [
+        normalize_email_value((string) ($row['email1'] ?? '')),
+        normalize_email_value((string) ($row['email2'] ?? '')),
+        normalize_email_value((string) ($row['email3'] ?? '')),
+        normalize_email_value((string) ($row['email4'] ?? '')),
+    ];
 }
 
 /**
@@ -376,10 +460,8 @@ function push_one_site_with_emails_team_to_admin(int $siteId, array $user): arra
         return ['ok' => false, 'error' => 'Site row is incomplete.'];
     }
 
-    $hasEmail = trim((string) ($row['email1'] ?? '')) !== ''
-        || trim((string) ($row['email2'] ?? '')) !== ''
-        || trim((string) ($row['email3'] ?? '')) !== ''
-        || trim((string) ($row['email4'] ?? '')) !== '';
+    $slots = email_slots_from_row($row);
+    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     if (!$hasEmail) {
         return ['ok' => false, 'error' => 'Add at least one email before pushing this site.'];
     }
@@ -408,10 +490,10 @@ function push_one_site_with_emails_team_to_admin(int $siteId, array $user): arra
         $country,
         (string) ($row['language'] ?? ''),
         (string) ($row['region'] ?? ''),
-        (string) ($row['email1'] ?? ''),
-        (string) ($row['email2'] ?? ''),
-        (string) ($row['email3'] ?? ''),
-        (string) ($row['email4'] ?? ''),
+        $slots[0],
+        $slots[1],
+        $slots[2],
+        $slots[3],
         $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
         $uid,
     ]);
@@ -420,10 +502,10 @@ function push_one_site_with_emails_team_to_admin(int $siteId, array $user): arra
         'country' => $country,
         'language' => (string) ($row['language'] ?? ''),
         'region' => (string) ($row['region'] ?? ''),
-        'email1' => (string) ($row['email1'] ?? ''),
-        'email2' => (string) ($row['email2'] ?? ''),
-        'email3' => (string) ($row['email3'] ?? ''),
-        'email4' => (string) ($row['email4'] ?? ''),
+        'email1' => $slots[0],
+        'email2' => $slots[1],
+        'email3' => $slots[2],
+        'email4' => $slots[3],
         'extract_batch_id' => $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
         'pushed_by' => $uid,
     ]);
@@ -495,10 +577,8 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
     $skippedEmpty = 0;
     $pushedDomains = [];
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
-        $hasEmail = trim((string) ($row['email1'] ?? '')) !== ''
-            || trim((string) ($row['email2'] ?? '')) !== ''
-            || trim((string) ($row['email3'] ?? '')) !== ''
-            || trim((string) ($row['email4'] ?? '')) !== '';
+        $slots = email_slots_from_row($row);
+        $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
         if (!$hasEmail) {
             $skippedEmpty++;
             continue;
@@ -511,10 +591,10 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
             $country,
             (string) ($row['language'] ?? ''),
             (string) ($row['region'] ?? ''),
-            (string) ($row['email1'] ?? ''),
-            (string) ($row['email2'] ?? ''),
-            (string) ($row['email3'] ?? ''),
-            (string) ($row['email4'] ?? ''),
+            $slots[0],
+            $slots[1],
+            $slots[2],
+            $slots[3],
             $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
             $uid,
         ]);
@@ -523,10 +603,10 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
             'country' => $country,
             'language' => (string) ($row['language'] ?? ''),
             'region' => (string) ($row['region'] ?? ''),
-            'email1' => (string) ($row['email1'] ?? ''),
-            'email2' => (string) ($row['email2'] ?? ''),
-            'email3' => (string) ($row['email3'] ?? ''),
-            'email4' => (string) ($row['email4'] ?? ''),
+            'email1' => $slots[0],
+            'email2' => $slots[1],
+            'email3' => $slots[2],
+            'email4' => $slots[3],
             'extract_batch_id' => $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
             'pushed_by' => $uid,
         ]);
@@ -671,7 +751,72 @@ function sites_with_emails_inventory_query(
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    // Expand packed multi-email cells (e.g. all four pasted into email1) into email1–4.
+    $rows = expand_packed_email_slots_in_rows($rows, $scope);
     return ['rows' => $rows, 'total' => $total, 'pages' => $pages];
+}
+
+/**
+ * If a row has several addresses crammed into one cell, split into email1–4 and persist.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function expand_packed_email_slots_in_rows(array $rows, string $scope): array
+{
+    if ($rows === []) {
+        return $rows;
+    }
+    $scope = swe_normalize_scope($scope);
+    // Final is a mirror — heal Admin (then sync), otherwise heal the listed table.
+    $writeScope = $scope === 'admin_all' ? 'admin' : $scope;
+    $writeTable = swe_table($writeScope);
+    $upd = db()->prepare(
+        "UPDATE {$writeTable}
+         SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         WHERE country=? AND domain=?"
+    );
+    $out = [];
+    foreach ($rows as $row) {
+        $slots = email_slots_from_row($row);
+        $cur = [
+            (string) ($row['email1'] ?? ''),
+            (string) ($row['email2'] ?? ''),
+            (string) ($row['email3'] ?? ''),
+            (string) ($row['email4'] ?? ''),
+        ];
+        if ($slots !== $cur) {
+            $country = (string) ($row['country'] ?? '');
+            $domain = (string) ($row['domain'] ?? '');
+            if ($country !== '' && $domain !== '') {
+                try {
+                    $upd->execute([$slots[0], $slots[1], $slots[2], $slots[3], $country, $domain]);
+                    if ($writeScope === 'admin') {
+                        sync_sites_with_emails_admin_row_to_all([
+                            'domain' => $domain,
+                            'country' => $country,
+                            'language' => (string) ($row['language'] ?? ''),
+                            'region' => (string) ($row['region'] ?? ''),
+                            'email1' => $slots[0],
+                            'email2' => $slots[1],
+                            'email3' => $slots[2],
+                            'email4' => $slots[3],
+                            'extract_batch_id' => $row['extract_batch_id'] ?? null,
+                            'pushed_by' => $row['pushed_by'] ?? null,
+                        ]);
+                    }
+                } catch (Throwable $e) {
+                    // still return expanded values for display
+                }
+            }
+            $row['email1'] = $slots[0];
+            $row['email2'] = $slots[1];
+            $row['email3'] = $slots[2];
+            $row['email4'] = $slots[3];
+        }
+        $out[] = $row;
+    }
+    return $out;
 }
 
 function get_site_with_emails(int $id, string $scope = 'team'): ?array
