@@ -405,9 +405,15 @@
       var label = norm(it.label || it.value);
       var value = norm(it.value || '');
       var region = norm(it.region || '');
-      var hay = label + ' ' + value + ' ' + region;
-      if (label.indexOf(q) === 0 || value.indexOf(q) === 0) starts.push(it);
-      else if (hay.indexOf(q) !== -1) contains.push(it);
+      var lang = norm(it.lang || '');
+      // Match country name / region / default language quietly — do not show
+      // language in the selected field (avoids "German + Germany" confusion).
+      var hay = label + ' ' + value + ' ' + region + ' ' + lang;
+      if (value.indexOf(q) === 0 || label.indexOf(q) === 0 || lang.indexOf(q) === 0) {
+        starts.push(it);
+      } else if (hay.indexOf(q) !== -1) {
+        contains.push(it);
+      }
     });
     return starts.concat(contains).slice(0, 40);
   }
@@ -465,8 +471,9 @@
     function selectItem(it) {
       if (!it) return;
       hidden.value = it.value;
-      // Show "count · Country name" when available (never TLD-only labels).
-      input.value = it.label || it.value;
+      // Keep the typed field as the country/language name only.
+      // Dropdown may still show richer labels like "6 · Germany".
+      input.value = it.value || it.label || '';
       closeList();
       if (fillLangSel) {
         var langRoot = document.querySelector(fillLangSel);
@@ -481,7 +488,8 @@
             var wrap = langRoot.closest('[data-typeahead]');
             if (wrap) langInput = wrap.querySelector('[data-typeahead-input]');
           }
-          if (langHidden && it.lang && !String(langHidden.value || '').trim()) {
+          // Always sync language from the selected country (hidden or typeahead).
+          if (langHidden && it.lang) {
             langHidden.value = it.lang;
             if (langInput) langInput.value = it.lang;
           }
