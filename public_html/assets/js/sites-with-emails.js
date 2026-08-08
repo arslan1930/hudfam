@@ -91,6 +91,20 @@
     return Array.prototype.slice.call(root.querySelectorAll('[data-swe-email]'));
   }
 
+  function syncEmailClearButton(input) {
+    if (!input) return;
+    var wrap = input.closest('.swe-email-field');
+    if (!wrap) return;
+    var btn = wrap.querySelector('[data-swe-email-clear]');
+    var has = String(input.value || '').trim() !== '';
+    wrap.classList.toggle('has-value', has);
+    if (btn) btn.hidden = !has;
+  }
+
+  function syncEmailClearButtons(root) {
+    emailInputsIn(root || document).forEach(syncEmailClearButton);
+  }
+
   function parseEmailPaste(text) {
     var raw = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
     if (!raw) return [];
@@ -126,11 +140,13 @@
 
     if (emails.length === 1) {
       targetInput.value = emails[0];
+      syncEmailClearButton(targetInput);
       return true;
     }
 
     for (var i = 0; i < inputs.length; i++) {
       inputs[i].value = emails[i] || '';
+      syncEmailClearButton(inputs[i]);
     }
     return true;
   }
@@ -319,6 +335,32 @@
     autosaveTimers.set(form, timer);
   }
 
+  // Clear (×) inside each email box — deletes that email and autosaves
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-swe-email-clear]') : null;
+    if (!btn) return;
+    e.preventDefault();
+    var wrap = btn.closest('.swe-email-field');
+    var input = wrap && wrap.querySelector('[data-swe-email]');
+    if (!input) return;
+    input.value = '';
+    syncEmailClearButton(input);
+    input.focus();
+    var form = input.closest('[data-swe-save]');
+    var row = input.closest('[data-swe-row]');
+    refreshRowSearchIndex(row);
+    filterRows();
+    setStatus('Email cleared.');
+    if (form) {
+      var prev = autosaveTimers.get(form);
+      if (prev) {
+        window.clearTimeout(prev);
+        autosaveTimers.delete(form);
+      }
+      saveRowForm(form, { quiet: true });
+    }
+  });
+
   // Paste: fill up to 4 email boxes at once (no need to click each box)
   document.addEventListener('paste', function (e) {
     var input = e.target;
@@ -327,7 +369,10 @@
     var text = clip ? clip.getData('text') : '';
     if (!text) return;
     var multi = parseEmailPaste(text);
-    if (multi.length <= 1) return; // let normal single paste through
+    if (multi.length <= 1) {
+      window.setTimeout(function () { syncEmailClearButton(input); }, 0);
+      return; // let normal single paste through
+    }
     e.preventDefault();
     applyEmailPaste(input, text);
     var form = input.closest('[data-swe-save]');
@@ -342,12 +387,18 @@
   document.addEventListener('input', function (e) {
     var input = e.target;
     if (!input || !input.matches || !input.matches('[data-swe-email], .swe-domain')) return;
+    if (input.matches('[data-swe-email]')) syncEmailClearButton(input);
     var form = input.closest('[data-swe-save]');
-    if (!form) return;
+    if (!form) {
+      // Add-row form: only sync × visibility
+      return;
+    }
     refreshRowSearchIndex(form.closest('[data-swe-row]'));
     filterRows();
     scheduleAutosave(form);
   });
+
+  syncEmailClearButtons(document);
 
   document.addEventListener('blur', function (e) {
     var input = e.target;
