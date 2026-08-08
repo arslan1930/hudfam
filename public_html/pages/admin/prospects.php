@@ -544,11 +544,12 @@ $countryName = $emptyCountry ? '' : $sheet;
 $q = trim((string) get('q'));
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
+$perPage = 1000;
 $inv = prospect_inventory_query([
     'q' => $q,
     'country' => $countryName,
     'status' => $status,
-] + ($emptyCountry ? [] : []), $pageNum, 50);
+] + ($emptyCountry ? [] : []), $pageNum, $perPage);
 
 if ($emptyCountry) {
     $where = ["TRIM(p.country)=''"];
@@ -567,13 +568,13 @@ if ($emptyCountry) {
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
-    $pages = max(1, (int) ceil($total / 50));
-    $offset = ($pageNum - 1) * 50;
+    $pages = max(1, (int) ceil($total / $perPage));
+    $offset = ($pageNum - 1) * $perPage;
     $stmt = db()->prepare(
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full
          FROM prospect_sites p
          LEFT JOIN users u ON u.id = p.created_by
-         WHERE $whereSql ORDER BY p.created_at DESC LIMIT 50 OFFSET $offset"
+         WHERE $whereSql ORDER BY p.created_at DESC LIMIT {$perPage} OFFSET $offset"
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
@@ -609,7 +610,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
+    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database · <?= (int) $perPage ?> per page</p>
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>

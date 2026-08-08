@@ -45,7 +45,7 @@ if ($sheetId > 0) {
         $sentFilter = '';
     }
     $pageNum = max(1, (int) get('p', 1));
-    $perPage = 100;
+    $perPage = 1000;
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
@@ -405,10 +405,10 @@ if ($sheetId > 0) {
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated rows (not all 100K at once). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated (1,000 sites per page — sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-            Browse page by page — large sheets stay fast.
+            Browse page by page — large sheets stay fast at <?= (int) $perPage ?> per page.
           </p>
           <p class="swe-sent-filters">
             <?php

@@ -991,13 +991,13 @@ function email_campaign_rows_inventory_query(
     int $sheetId,
     array $filters = [],
     int $page = 1,
-    int $perPage = 100
+    int $perPage = 1000
 ): array {
     ensure_email_campaign_schema();
     purge_blank_email_campaign_rows($sheetId);
 
     $page = max(1, $page);
-    $perPage = max(1, min(200, $perPage));
+    $perPage = max(1, min(1000, $perPage));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1'
 

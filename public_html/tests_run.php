@@ -811,20 +811,30 @@ try {
     }
 
     // Paginated browse (Our database model) — never load all rows in UI.
+    // Default UI page size is 1,000; also verify smaller pages still work.
     $page1 = email_campaign_rows_inventory_query($bulkSheet, [], 1, 100);
     $page2 = email_campaign_rows_inventory_query($bulkSheet, [], 2, 100);
     $lastPageNum = (int) ceil((int) $page1['total'] / 100);
     $lastPage = email_campaign_rows_inventory_query($bulkSheet, [], $lastPageNum, 100);
     $searchHit = email_campaign_rows_inventory_query($bulkSheet, ['q' => 'txfcamp-scale500'], 1, 100);
+    $page1k = email_campaign_rows_inventory_query($bulkSheet, [], 1, 1000);
     $page1Ids = array_column($page1['rows'], 'id');
     $page2Ids = array_column($page2['rows'], 'id');
+    $remainder = (int) $page1['total'] % 100;
+    $expectLast = $remainder === 0 ? 100 : $remainder;
     if ((int) $page1['total'] >= 1200
+        && (int) $page1['per_page'] === 100
         && count($page1['rows']) === 100
+        && (int) $page2['page'] === 2
         && count($page2['rows']) === 100
         && array_intersect($page1Ids, $page2Ids) === []
         && (int) $lastPage['page'] === $lastPageNum
+        && count($lastPage['rows']) === $expectLast
         && (int) $searchHit['total'] === 1
-        && str_contains((string) ($searchHit['rows'][0]['domain'] ?? ''), 'scale500')) {
+        && str_contains((string) ($searchHit['rows'][0]['domain'] ?? ''), 'scale500')
+        && (int) $page1k['per_page'] === 1000
+        && count($page1k['rows']) === 1000
+        && (int) $page1k['pages'] >= 2) {
         pass('campaign sheet paginated inventory + search');
     } else {
         fail('campaign pagination: ' . json_encode([
@@ -832,8 +842,9 @@ try {
             'p1' => count($page1['rows']),
             'p2' => count($page2['rows']),
             'overlap' => count(array_intersect($page1Ids, $page2Ids)),
-            'last' => $lastPage['page'] ?? null,
+            'last' => [count($lastPage['rows']), $lastPage['page'], $lastPageNum, $expectLast],
             'search' => $searchHit['total'] ?? null,
+            'p1k' => [count($page1k['rows']), $page1k['per_page'] ?? null, $page1k['pages'] ?? null],
         ]));
     }
 
