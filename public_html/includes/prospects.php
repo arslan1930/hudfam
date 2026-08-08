@@ -1306,7 +1306,7 @@ function get_prospect_batch_items(int $batchId, int $limit = 50000): array
     return $stmt->fetchAll();
 }
 
-function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array
+function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 1000): array
 {
     ensure_prospect_schema();
     $where = ['1=1'];
@@ -1342,6 +1342,7 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     $pageNum = max(1, $pageNum);
+    $per = max(1, min(1000, $per));
     $offset = ($pageNum - 1) * $per;
     $stmt = db()->prepare(
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full

@@ -525,7 +525,7 @@ if ($sweScope !== 'admin' || ($sentFilter !== '0' && $sentFilter !== '1')) {
     $sentFilter = '';
 }
 $pageNum = max(1, (int) get('p', 1));
-$perPage = 100;
+$perPage = 1000;
 $inv = sites_with_emails_inventory_query([
     'country' => $countryName,
     'q' => $q,
@@ -576,6 +576,7 @@ render_breadcrumbs($crumbs);
     <p class="muted">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
       <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
+      · <?= (int) $perPage ?> per page
       · up to 4 emails each
       <?php if ($sentStats): ?>
         · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
@@ -677,7 +678,7 @@ render_breadcrumbs($crumbs);
 <div class="card">
   <div class="invoice-list-toolbar swe-list-toolbar">
     <div>
-      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Search matches site name or any email on that row.') ?></h2>
+      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Sheets can reach ~100K sites — browsed at 1,000 per page. Search matches site name or any email on that row.') ?></h2>
       <p class="help" style="margin:0.25rem 0 0">
         Search shows both columns together (site + its emails).
         <?php if ($sweScope === 'admin'): ?>
