@@ -60,6 +60,16 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $notes[] = 'countries OK';
         }
+        if (function_exists('repair_country_alias_folders')) {
+            $repair = repair_country_alias_folders(true);
+            if (($repair['removed_catalog'] ?? 0) > 0 || ($repair['merged'] ?? 0) > 0) {
+                $notes[] = 'merged demonym folders (e.g. German → Germany) · '
+                    . (int) ($repair['merged'] ?? 0) . ' row(s) · removed '
+                    . (int) ($repair['removed_catalog'] ?? 0) . ' fake country name(s)';
+            } else {
+                $notes[] = 'country aliases OK (no German/Spanish-style folders)';
+            }
+        }
 
         ensure_prospect_schema();
         $notes[] = 'prospect_sites (Our database) OK — unique per country + domain';

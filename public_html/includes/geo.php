@@ -67,6 +67,15 @@ function seed_countries_if_empty(PDO $pdo): void
 
 function list_countries(?string $region = null, bool $activeOnly = true): array
 {
+    // One-time repair: merge German → Germany (and similar demonym folders), drop fake catalog rows.
+    if (function_exists('repair_country_alias_folders')) {
+        try {
+            repair_country_alias_folders();
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
     $sql = 'SELECT * FROM countries WHERE 1=1';
     $params = [];
     if ($activeOnly) {
@@ -81,11 +90,15 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     // Never show duplicate country names (case/whitespace variants).
+    // Never show demonyms (German, Spanish, …) even if still in DB mid-repair.
     $out = [];
     $seen = [];
     foreach ($rows as $row) {
         $name = trim((string) ($row['name'] ?? ''));
         if ($name === '') {
+            continue;
+        }
+        if (function_exists('is_country_name_alias') && is_country_name_alias($name)) {
             continue;
         }
         $key = mb_strtolower($name);
@@ -140,6 +153,375 @@ function dedupe_countries_catalog(): int
         }
     }
     return $removed;
+}
+
+/**
+ * Language / demonym / mistaken labels that must never be country folders.
+ * Keys lowercase. Values = real catalog country names.
+ *
+ * @return array<string,string>
+ */
+function country_name_aliases(): array
+{
+    return [
+        // Germany (fixes "German" showing next to Germany)
+        'german' => 'Germany',
+        'deutschland' => 'Germany',
+        'deutchland' => 'Germany',
+        'federal republic of germany' => 'Germany',
+        // Austria
+        'austrian' => 'Austria',
+        'österreich' => 'Austria',
+        'osterreich' => 'Austria',
+        // Switzerland
+        'swiss' => 'Switzerland',
+        'schweiz' => 'Switzerland',
+        'suisse' => 'Switzerland',
+        'svizzera' => 'Switzerland',
+        // France
+        'french' => 'France',
+        'frankreich' => 'France',
+        // Spain
+        'spanish' => 'Spain',
+        'españa' => 'Spain',
+        'espana' => 'Spain',
+        // Italy
+        'italian' => 'Italy',
+        'italia' => 'Italy',
+        // Netherlands
+        'dutch' => 'Netherlands',
+        'holland' => 'Netherlands',
+        'the netherlands' => 'Netherlands',
+        // UK / US
+        'uk' => 'United Kingdom',
+        'u.k.' => 'United Kingdom',
+        'great britain' => 'United Kingdom',
+        'britain' => 'United Kingdom',
+        'england' => 'United Kingdom',
+        'british' => 'United Kingdom',
+        'english' => 'United Kingdom',
+        'usa' => 'United States',
+        'u.s.' => 'United States',
+        'u.s.a.' => 'United States',
+        'america' => 'United States',
+        'american' => 'United States',
+        // Others
+        'polish' => 'Poland',
+        'polska' => 'Poland',
+        'czech' => 'Czech Republic',
+        'czechia' => 'Czech Republic',
+        'belgian' => 'Belgium',
+        'swedish' => 'Sweden',
+        'norwegian' => 'Norway',
+        'danish' => 'Denmark',
+        'finnish' => 'Finland',
+        'portuguese' => 'Portugal',
+        'greek' => 'Greece',
+        'hungarian' => 'Hungary',
+        'romanian' => 'Romania',
+        'bulgarian' => 'Bulgaria',
+        'croatian' => 'Croatia',
+        'slovak' => 'Slovakia',
+        'slovenian' => 'Slovenia',
+        'irish' => 'Ireland',
+        'canadian' => 'Canada',
+        'australian' => 'Australia',
+        'japanese' => 'Japan',
+        'korean' => 'South Korea',
+        'brazilian' => 'Brazil',
+        'mexican' => 'Mexico',
+        'indian' => 'India',
+    ];
+}
+
+/**
+ * True when $name is a demonym/alias that maps to a different country.
+ */
+function is_country_name_alias(string $name): bool
+{
+    $key = mb_strtolower(trim($name));
+    if ($key === '') {
+        return false;
+    }
+    $aliases = country_name_aliases();
+    if (!isset($aliases[$key])) {
+        return false;
+    }
+    return strcasecmp($aliases[$key], trim($name)) !== 0;
+}
+
+/**
+ * Merge rows from one country label into another across a table that has country (+ optional domain).
+ *
+ * @return int rows changed (updated or deleted)
+ */
+function merge_country_label_rows(PDO $pdo, string $table, string $from, string $to): int
+{
+    $from = trim($from);
+    $to = trim($to);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        return 0;
+    }
+    try {
+        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
+        if (!$exists) {
+            return 0;
+        }
+        $cols = $pdo->query('SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('country', $cols, true)) {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $changed = 0;
+    $hasDomain = in_array('domain', $cols, true);
+
+    if ($hasDomain) {
+        $sel = $pdo->prepare("SELECT id, domain FROM `{$table}` WHERE TRIM(country)=?");
+        $find = $pdo->prepare("SELECT id FROM `{$table}` WHERE TRIM(country)=? AND domain=? LIMIT 1");
+        $upd = $pdo->prepare("UPDATE `{$table}` SET country=? WHERE id=?");
+        $del = $pdo->prepare("DELETE FROM `{$table}` WHERE id=?");
+        $sel->execute([$from]);
+        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $id = (int) $row['id'];
+            $domain = (string) ($row['domain'] ?? '');
+            $find->execute([$to, $domain]);
+            $existingId = (int) $find->fetchColumn();
+            if ($existingId > 0 && $existingId !== $id) {
+                $del->execute([$id]);
+            } else {
+                $upd->execute([$to, $id]);
+            }
+            $changed++;
+        }
+        return $changed;
+    }
+
+    $updAll = $pdo->prepare("UPDATE `{$table}` SET country=? WHERE TRIM(country)=?");
+    $updAll->execute([$to, $from]);
+    return (int) $updAll->rowCount();
+}
+
+/**
+ * Merge extract_batches when both alias and target country batches exist.
+ */
+function merge_extract_batch_country_label(PDO $pdo, string $from, string $to): int
+{
+    $from = trim($from);
+    $to = trim($to);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        return 0;
+    }
+    try {
+        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('extract_batches'))->fetchColumn()) {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $get = $pdo->prepare('SELECT id FROM extract_batches WHERE TRIM(country)=? LIMIT 1');
+    $get->execute([$from]);
+    $fromId = (int) $get->fetchColumn();
+    if ($fromId < 1) {
+        return 0;
+    }
+    $get->execute([$to]);
+    $toId = (int) $get->fetchColumn();
+
+    $changed = 0;
+    if ($toId < 1) {
+        $pdo->prepare('UPDATE extract_batches SET country=? WHERE id=?')->execute([$to, $fromId]);
+        return 1;
+    }
+
+    // Move sites into target batch; drop duplicates
+    try {
+        $sites = $pdo->prepare('SELECT id, domain FROM extract_batch_sites WHERE batch_id=?');
+        $find = $pdo->prepare('SELECT id FROM extract_batch_sites WHERE batch_id=? AND domain=? LIMIT 1');
+        $move = $pdo->prepare('UPDATE extract_batch_sites SET batch_id=? WHERE id=?');
+        $delSite = $pdo->prepare('DELETE FROM extract_batch_sites WHERE id=?');
+        $sites->execute([$fromId]);
+        foreach ($sites->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $find->execute([$toId, $row['domain']]);
+            if ((int) $find->fetchColumn() > 0) {
+                $delSite->execute([(int) $row['id']]);
+            } else {
+                $move->execute([$toId, (int) $row['id']]);
+            }
+            $changed++;
+        }
+        $cStmt = $pdo->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
+        $cStmt->execute([$toId]);
+        $cnt = (int) $cStmt->fetchColumn();
+        $pdo->prepare('UPDATE extract_batches SET site_count=?, updated_at=NOW() WHERE id=?')
+            ->execute([$cnt, $toId]);
+        $pdo->prepare('DELETE FROM extract_batches WHERE id=?')->execute([$fromId]);
+        $changed++;
+    } catch (Throwable $e) {
+        // ignore
+    }
+    return $changed;
+}
+
+/**
+ * Merge email campaign sheet named like an alias into the real country sheet.
+ */
+function merge_email_sheet_country_label(PDO $pdo, string $from, string $to): int
+{
+    $from = trim($from);
+    $to = trim($to);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        return 0;
+    }
+    try {
+        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('email_campaign_sheets'))->fetchColumn()) {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $get = $pdo->prepare('SELECT id FROM email_campaign_sheets WHERE TRIM(name)=? LIMIT 1');
+    $get->execute([$from]);
+    $fromId = (int) $get->fetchColumn();
+    if ($fromId < 1) {
+        return 0;
+    }
+    $get->execute([$to]);
+    $toId = (int) $get->fetchColumn();
+    $changed = 0;
+
+    if ($toId < 1) {
+        try {
+            $pdo->prepare('UPDATE email_campaign_sheets SET name=? WHERE id=?')->execute([$to, $fromId]);
+            $pdo->prepare('UPDATE email_campaign_rows SET country=? WHERE sheet_id=?')->execute([$to, $fromId]);
+            return 1;
+        } catch (Throwable $e) {
+            return 0;
+        }
+    }
+
+    try {
+        $rows = $pdo->prepare('SELECT id, domain FROM email_campaign_rows WHERE sheet_id=?');
+        $find = $pdo->prepare('SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1');
+        $move = $pdo->prepare('UPDATE email_campaign_rows SET sheet_id=?, country=? WHERE id=?');
+        $del = $pdo->prepare('DELETE FROM email_campaign_rows WHERE id=?');
+        $rows->execute([$fromId]);
+        foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $find->execute([$toId, $row['domain']]);
+            if ((int) $find->fetchColumn() > 0) {
+                $del->execute([(int) $row['id']]);
+            } else {
+                $move->execute([$toId, $to, (int) $row['id']]);
+            }
+            $changed++;
+        }
+        $pdo->prepare('DELETE FROM email_campaign_sheets WHERE id=?')->execute([$fromId]);
+        $changed++;
+    } catch (Throwable $e) {
+        // ignore
+    }
+    return $changed;
+}
+
+/**
+ * Merge demonym folders (German → Germany) in data + delete fake countries rows.
+ * Safe to call often (runs once per request unless $force).
+ *
+ * @return array{merged:int,removed_catalog:int}
+ */
+function repair_country_alias_folders(bool $force = false): array
+{
+    static $done = false;
+    if ($done && !$force) {
+        return ['merged' => 0, 'removed_catalog' => 0];
+    }
+    $done = true;
+
+    $pdo = db();
+    $aliases = country_name_aliases();
+    $merged = 0;
+    $removedCatalog = 0;
+
+    // Catalog lookup: lowercase real country name => canonical casing + region
+    $catalog = [];
+    try {
+        foreach ($pdo->query('SELECT id, name, region, default_language FROM countries')->fetchAll(PDO::FETCH_ASSOC) as $c) {
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $catalog[mb_strtolower($name)] = $c;
+        }
+    } catch (Throwable $e) {
+        return ['merged' => 0, 'removed_catalog' => 0];
+    }
+
+    $pairs = []; // fromLabel => toLabel
+    foreach ($aliases as $aliasKey => $targetName) {
+        $targetKey = mb_strtolower($targetName);
+        if (!isset($catalog[$targetKey])) {
+            continue; // target country not in catalog — skip
+        }
+        $to = trim((string) $catalog[$targetKey]['name']);
+
+        // Fake countries-table row named like the alias (e.g. name="German")
+        if (isset($catalog[$aliasKey])) {
+            $from = trim((string) $catalog[$aliasKey]['name']);
+            if (strcasecmp($from, $to) !== 0) {
+                $pairs[$from] = $to;
+            }
+        }
+        // Also merge common casings in data even if not in catalog
+        $pairs[ucfirst($aliasKey)] = $to;
+        $pairs[$aliasKey] = $to;
+    }
+
+    $dataTables = [
+        'prospect_sites',
+        'prospect_batches',
+        'extracted_sites',
+        'sites_with_emails_team',
+        'sites_with_emails_admin',
+        'sites_with_emails_admin_all',
+        'email_campaign_rows',
+        'order_items',
+        'order_clients',
+    ];
+
+    foreach ($pairs as $from => $to) {
+        if (strcasecmp($from, $to) === 0) {
+            continue;
+        }
+        foreach ($dataTables as $table) {
+            $merged += merge_country_label_rows($pdo, $table, $from, $to);
+        }
+        $merged += merge_extract_batch_country_label($pdo, $from, $to);
+        $merged += merge_email_sheet_country_label($pdo, $from, $to);
+    }
+
+    // Delete demonym rows from countries catalog (German, Spanish, …)
+    $del = $pdo->prepare('DELETE FROM countries WHERE id=?');
+    foreach ($catalog as $key => $row) {
+        if (!isset($aliases[$key])) {
+            continue;
+        }
+        $targetKey = mb_strtolower($aliases[$key]);
+        if ($targetKey === $key || !isset($catalog[$targetKey])) {
+            continue;
+        }
+        try {
+            $del->execute([(int) $row['id']]);
+            $removedCatalog++;
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
+    return ['merged' => $merged, 'removed_catalog' => $removedCatalog];
 }
 
 function countries_grouped(): array
@@ -235,6 +617,24 @@ function resolve_canonical_country(string $input): ?array
             // ignore
         }
     }
+
+    // Demonyms / mistakes first: German → Germany (never treat "German" as its own folder).
+    $aliases = country_name_aliases();
+    $aliasKey = mb_strtolower($input);
+    if (isset($aliases[$aliasKey])) {
+        $mapped = $aliases[$aliasKey];
+        foreach (list_countries(null, true) as $c) {
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($name !== '' && strcasecmp($name, $mapped) === 0) {
+                return [
+                    'name' => $name,
+                    'region' => (string) ($c['region'] ?? ''),
+                    'language' => (string) ($c['default_language'] ?? ''),
+                ];
+            }
+        }
+    }
+
     foreach (list_countries(null, true) as $c) {
         $name = trim((string) ($c['name'] ?? ''));
         if ($name !== '' && strcasecmp($name, $input) === 0) {
