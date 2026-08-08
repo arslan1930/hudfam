@@ -248,6 +248,9 @@ function render_footer(string $panel = ''): void
             $navVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/nav-shell.js') ?: time());
             $navPhp = app_url('asset.php?f=js/nav-shell.js&v=' . rawurlencode($navVersion));
             $navFile = asset_url('assets/js/nav-shell.js');
+            $procVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/app-processing.js') ?: time());
+            $procPhp = app_url('asset.php?f=js/app-processing.js&v=' . rawurlencode($procVersion));
+            $procFile = asset_url('assets/js/app-processing.js');
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
                 'panel' => $panel,
@@ -256,6 +259,8 @@ function render_footer(string $panel = ''): void
             ], JSON_UNESCAPED_UNICODE) . ';';
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
+            echo '<script src="' . h($procPhp) . '" defer></script>';
+            echo '<script src="' . h($procFile) . '" defer></script>';
             echo '<script src="' . h($jsPhp) . '" defer></script>';
             echo '<script src="' . h($jsFile) . '" defer></script>';
             echo '<script src="' . h($tipPhp) . '" defer></script>';
@@ -264,6 +269,13 @@ function render_footer(string $panel = ''): void
             echo '<script src="' . h($navFile) . '" defer></script>';
         }
         echo '</main></div>';
+        // Global Processing / Loading overlay (Admin + Team shell).
+        echo '<div id="app-processing" class="app-processing" hidden aria-busy="false" aria-live="assertive" role="alert">';
+        echo '<div class="app-processing-card">';
+        echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
+        echo '<p class="app-processing-msg" data-processing-msg>Processing…</p>';
+        echo '<p class="app-processing-sub muted">Please wait — do not close this page.</p>';
+        echo '</div></div>';
     }
     echo '</body></html>';
 }

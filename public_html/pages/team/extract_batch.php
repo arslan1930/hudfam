@@ -151,6 +151,7 @@ render_header('Extracting · ' . $country, 'team');
     </p>
   </div>
   <div class="actions">
+    <?php render_task_presence('extract:' . $country, 'Others extracting ' . $country); ?>
     <a class="btn secondary" href="index.php?page=team_extracting">All countries</a>
     <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Add more sites</a>
   </div>

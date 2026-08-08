@@ -187,6 +187,9 @@ render_header('Filter & add', 'team');
     <p class="muted">Paste sites → <strong>Push to extract</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder.</p>
   </div>
   <div class="actions">
+    <?php if ($country !== ''): ?>
+      <?php render_task_presence('prospect:' . $country, 'Others adding sites for ' . $country); ?>
+    <?php endif; ?>
     <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Site adding history</a>
   </div>

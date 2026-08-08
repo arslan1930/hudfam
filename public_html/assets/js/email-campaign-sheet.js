@@ -10,18 +10,31 @@
   var searchInput = document.getElementById('swe-row-search');
   var autosaveTimers = new WeakMap();
 
-  function setStatus(msg, isError) {
+  function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
     if (!msg) {
       statusEl.hidden = true;
       statusEl.textContent = '';
-      statusEl.classList.remove('is-error', 'is-ok');
+      statusEl.classList.remove('is-error', 'is-ok', 'is-loading');
       return;
     }
     statusEl.hidden = false;
     statusEl.textContent = msg;
     statusEl.classList.toggle('is-error', !!isError);
-    statusEl.classList.toggle('is-ok', !isError);
+    statusEl.classList.toggle('is-ok', !isError && !isLoading);
+    statusEl.classList.toggle('is-loading', !!isLoading && !isError);
+  }
+
+  function showProcessing(msg) {
+    if (window.AppProcessing && typeof window.AppProcessing.show === 'function') {
+      window.AppProcessing.show(msg);
+    }
+  }
+
+  function hideProcessing() {
+    if (window.AppProcessing && typeof window.AppProcessing.hide === 'function') {
+      window.AppProcessing.hide();
+    }
   }
 
   function emailInputsIn(root) {
@@ -355,11 +368,62 @@
 
     if (!form.matches('[data-swe-remove]')) return;
     e.preventDefault();
+    setStatus('Removing site…', false, true);
+    showProcessing('Removing site…');
     postAjaxForm(form, 'Remove failed').then(function (result) {
-      if (!result) return;
+      if (!result) {
+        hideProcessing();
+        return;
+      }
       removeRowFromDom(result.siteId, result.data.site_count);
       setStatus('Removed ' + (result.data.domain || 'site') + '.');
       form.removeAttribute('data-busy');
+      hideProcessing();
     });
   });
+
+  // Admin (+) add row: reveal inline site + 4 emails form
+  var addRow = document.getElementById('camp-add-row');
+  var addDomain = document.getElementById('camp_add_domain');
+  var emptyState = document.getElementById('camp-empty-state');
+
+  function openAddRow() {
+    if (!addRow) return;
+    addRow.hidden = false;
+    if (emptyState) emptyState.hidden = true;
+    if (addDomain) {
+      try { addDomain.focus({ preventScroll: false }); } catch (err) { addDomain.focus(); }
+      addDomain.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+
+  function closeAddRow() {
+    if (!addRow) return;
+    addRow.hidden = true;
+    var form = document.getElementById('camp-add-form');
+    if (form) form.reset();
+    if (emptyState && !document.querySelector('[data-swe-row]')) {
+      emptyState.hidden = false;
+    }
+  }
+
+  document.querySelectorAll('[data-camp-add-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (addRow && !addRow.hidden && document.activeElement === addDomain) {
+        closeAddRow();
+        return;
+      }
+      openAddRow();
+    });
+  });
+  document.querySelectorAll('[data-camp-add-cancel]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeAddRow();
+    });
+  });
+  if (window.location.hash === '#add-site') {
+    openAddRow();
+  }
 })();

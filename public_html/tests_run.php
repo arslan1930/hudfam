@@ -20,6 +20,7 @@ require __DIR__ . '/includes/admin_new_data.php';
 require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
+require __DIR__ . '/includes/presence.php';
 
 $errors = [];
 $ok = [];
@@ -47,6 +48,7 @@ try {
     ensure_departments_schema();
     ensure_order_schema();
     ensure_invoice_schema();
+    ensure_task_presence_schema();
     pass('schemas ensured');
 } catch (Throwable $e) {
     fail('schema: ' . $e->getMessage());
@@ -484,6 +486,149 @@ try {
     } else {
         fail('suggest visibility: all=' . json_encode($hiddenSuggest) . ' scoped=' . json_encode($scopedSuggest));
     }
+
+    // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
+    $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
+    $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
+        'Site name, Email 1, Email 2, Email 3, Email 4',
+        'txfcamp-bulk1.at, a1@txfcamp-bulk1.at, a2@txfcamp-bulk1.at',
+        'txfcamp-bulk2.at; b1@txfcamp-bulk2.at; b2@txfcamp-bulk2.at',
+        "txfcamp-bulk3.at\tc1@txfcamp-bulk3.at",
+        'txfcamp-bulk4.at d1@txfcamp-bulk4.at d2@txfcamp-bulk4.at',
+        '# comment ignored',
+        'not-a-domain, missing-at-sign',
+    ]));
+    $bulkCount = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND domain LIKE 'txfcamp-bulk%'"
+    )->fetchColumn();
+    if ((int) $paste['added'] === 4 && $bulkCount === 4 && (int) $paste['skipped'] >= 1) {
+        pass('campaign paste adds 4 formats and skips bad lines');
+    } else {
+        fail('campaign paste: ' . json_encode($paste) . " count=$bulkCount");
+    }
+
+    $csvPath = sys_get_temp_dir() . '/txfcamp-import-' . getmypid() . '.csv';
+    file_put_contents(
+        $csvPath,
+        "Site name,Email 1,Email 2,Email 3,Email 4\n"
+        . "txfcamp-csv1.at,c1@txfcamp-csv1.at,,, \n"
+        . "txfcamp-csv2.at,c2a@txfcamp-csv2.at,c2b@txfcamp-csv2.at,,\n"
+    );
+    $fromCsv = email_campaign_rows_text_from_file_path($csvPath, 'sites.csv');
+    $csvPaste = paste_email_campaign_rows($bulkSheet, $fromCsv);
+    @unlink($csvPath);
+    $csvCount = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND domain LIKE 'txfcamp-csv%'"
+    )->fetchColumn();
+    if ((int) $csvPaste['added'] === 2 && $csvCount === 2 && !str_contains($fromCsv, 'Site name')) {
+        pass('campaign CSV file import (header skipped)');
+    } else {
+        fail('campaign CSV: ' . json_encode(['text' => $fromCsv, 'paste' => $csvPaste, 'count' => $csvCount]));
+    }
+
+    // Scale check: 1200 pasted rows in one go.
+    $lines = ['Site name,Email 1'];
+    for ($i = 1; $i <= 1200; $i++) {
+        $lines[] = 'txfcamp-scale' . $i . '.at,s' . $i . '@txfcamp-scale.at';
+    }
+    $scale = paste_email_campaign_rows($bulkSheet, implode("\n", $lines));
+    $scaleCount = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND domain LIKE 'txfcamp-scale%'"
+    )->fetchColumn();
+    if ((int) $scale['added'] === 1200 && $scaleCount === 1200) {
+        pass('campaign paste 1200 rows');
+    } else {
+        fail('campaign scale: ' . json_encode($scale) . " count=$scaleCount");
+    }
+    db()->exec(
+        "DELETE FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND (domain LIKE 'txfcamp-bulk%' OR domain LIKE 'txfcamp-csv%' OR domain LIKE 'txfcamp-scale%')"
+    );
+
+    // New sites only + never re-add deleted (Final → Email Sheet).
+    db()->exec("DELETE FROM email_campaign_sheets WHERE name='Netherlands'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfcamp-nl-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfcamp-nl-%'");
+    $nlSheet = create_email_campaign_sheet('Netherlands', (int) $adminUser['id'], 'NL Outreach', false);
+    $seedFinal = db()->prepare(
+        "INSERT INTO sites_with_emails_admin_all
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?,?, 'Dutch', 'europe', ?, '', '', '')
+         ON DUPLICATE KEY UPDATE email1=VALUES(email1), email2='', email3='', email4=''"
+    );
+    foreach (
+        [
+            ['txfcamp-nl-a.nl', 'a@txfcamp-nl-a.nl'],
+            ['txfcamp-nl-b.nl', 'b@txfcamp-nl-b.nl'],
+            ['txfcamp-nl-c.nl', 'c@txfcamp-nl-c.nl'],
+        ] as [$dom, $em]
+    ) {
+        $seedFinal->execute([$dom, 'Netherlands', $em]);
+    }
+    $imp1 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $nlCount1 = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    if ((int) $imp1['imported'] === 3 && $nlCount1 === 3 && (int) ($imp1['updated'] ?? 0) === 0) {
+        pass('archive import new_only adds 3 sites');
+    } else {
+        fail('imp1: ' . json_encode($imp1) . " count=$nlCount1");
+    }
+
+    // Change Final email for A; re-import new_only must not update existing.
+    db()->prepare(
+        "UPDATE sites_with_emails_admin_all SET email1='a2@txfcamp-nl-a.nl'
+         WHERE domain='txfcamp-nl-a.nl' AND country='Netherlands'"
+    )->execute();
+    $imp2 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $emailA = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    if ((int) $imp2['imported'] === 0 && (int) ($imp2['skipped_existing'] ?? 0) >= 3
+        && $emailA === 'a@txfcamp-nl-a.nl') {
+        pass('new_only skips existing and does not update emails');
+    } else {
+        fail('imp2: ' . json_encode($imp2) . " emailA=$emailA");
+    }
+
+    $rowB = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-b.nl' LIMIT 1"
+    )->fetchColumn();
+    $delB = delete_email_campaign_row($nlSheet, $rowB);
+    $excludedB = is_email_campaign_domain_excluded($nlSheet, 'txfcamp-nl-b.nl');
+    $imp3 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $bBack = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-b.nl'"
+    )->fetchColumn();
+    if (!empty($delB['ok']) && $excludedB && (int) ($imp3['skipped_excluded'] ?? 0) >= 1 && $bBack === 0) {
+        pass('deleted site stays excluded from Final re-import');
+    } else {
+        fail('exclude: ' . json_encode([
+            'del' => $delB,
+            'excluded' => $excludedB,
+            'imp3' => $imp3,
+            'bBack' => $bBack,
+        ]));
+    }
+
+    clear_email_campaign_domain_exclusion($nlSheet, 'txfcamp-nl-b.nl');
+    $imp4 = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $bAgain = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-b.nl'"
+    )->fetchColumn();
+    if ((int) $imp4['imported'] >= 1 && $bAgain === 1) {
+        pass('Allow again lets Final import re-add site');
+    } else {
+        fail('allow again: ' . json_encode($imp4) . " bAgain=$bAgain");
+    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
@@ -621,6 +766,58 @@ try {
             pass('new Team push is unmarked and last in Admin list');
         } else {
             fail('new push: ' . json_encode($newPush) . " sent=$newSent last=$last order=" . json_encode($order));
+        }
+
+        // Clear up to here — redo a stretch (Admin only).
+        $clearUpto = clear_sites_with_emails_admin_emailed_up_to($idB);
+        $sentA = (int) db()->query(
+            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idA
+        )->fetchColumn();
+        $sentB = (int) db()->query(
+            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idB
+        )->fetchColumn();
+        $afterClearUpto = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE domain LIKE 'txfsent-%' AND email_sent=1"
+        )->fetchColumn();
+        if (!empty($clearUpto['ok']) && (int) ($clearUpto['cleared'] ?? 0) >= 2
+            && $sentA === 0 && $sentB === 0 && $afterClearUpto === 0) {
+            pass('clear up to here undoes Admin emailed marks');
+        } else {
+            fail('clear up to: ' . json_encode($clearUpto)
+                . " a=$sentA b=$sentB left=$afterClearUpto");
+        }
+
+        // Redo mark, then clear all emailed for a full resend restart.
+        mark_sites_with_emails_admin_emailed_up_to($idC);
+        set_site_with_emails_admin_email_sent(
+            (int) db()->query("SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-new.com' LIMIT 1")->fetchColumn(),
+            true
+        );
+        $clearAll = clear_all_sites_with_emails_admin_emailed('Germany');
+        $sentLeft = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE domain LIKE 'txfsent-%' AND email_sent=1"
+        )->fetchColumn();
+        if (!empty($clearAll['ok']) && (int) ($clearAll['cleared'] ?? 0) >= 3 && $sentLeft === 0) {
+            pass('clear all emailed resets Admin sheet for resend');
+        } else {
+            fail('clear all: ' . json_encode($clearAll) . " left=$sentLeft");
+        }
+
+        // Copy filters: not emailed vs emailed (Admin only).
+        set_site_with_emails_admin_email_sent($idA, true);
+        set_site_with_emails_admin_email_sent($idB, true);
+        set_site_with_emails_admin_email_sent($idC, false);
+        $copySent = collect_sites_with_emails_all_emails('Germany', 'admin', '1');
+        $copyUnsent = collect_sites_with_emails_all_emails('Germany', 'admin', '0');
+        $hasA = in_array('a2@txfsent-a.com', $copySent, true) || in_array('a@txfsent-a.com', $copySent, true);
+        $hasCUnsent = in_array('c@txfsent-c.com', $copyUnsent, true);
+        $cNotInSent = !in_array('c@txfsent-c.com', $copySent, true);
+        if ($hasA && $hasCUnsent && $cNotInSent) {
+            pass('copy emailed / not-emailed email lists split correctly');
+        } else {
+            fail('copy filters: sent=' . json_encode($copySent) . ' unsent=' . json_encode($copyUnsent));
         }
 
         // Sync must not invent sent state on Final (no column); domains still mirror.
@@ -766,6 +963,63 @@ try {
     logout_user();
 } catch (Throwable $e) {
     fail('password: ' . $e->getMessage());
+}
+
+// --- Task presence (advisory “Also here” chip) ---
+try {
+    $presenceKey = 'txfpresence:Germany';
+    db()->prepare('DELETE FROM task_presence WHERE task_key=?')->execute([$presenceKey]);
+
+    $alone = ping_task_presence($presenceKey, $adminUser, 45);
+    if (!empty($alone['ok']) && (int) ($alone['count'] ?? -1) === 0) {
+        pass('presence alone shows nobody else');
+    } else {
+        fail('presence alone should be empty');
+    }
+
+    $teamPing = ping_task_presence($presenceKey, $teamUser, 45);
+    $teamNames = array_column($teamPing['others'] ?? [], 'name');
+    $adminName = task_presence_display_name($adminUser);
+    if (!empty($teamPing['ok']) && (int) ($teamPing['count'] ?? 0) === 1
+        && in_array($adminName, $teamNames, true)) {
+        pass('presence teammate sees admin on same task');
+    } else {
+        fail('presence teammate should see admin');
+    }
+
+    $adminPing = ping_task_presence($presenceKey, $adminUser, 45);
+    $adminOthers = array_column($adminPing['others'] ?? [], 'id');
+    if (!empty($adminPing['ok'])
+        && in_array((int) $teamUser['id'], $adminOthers, true)
+        && !in_array((int) $adminUser['id'], $adminOthers, true)) {
+        pass('presence hides self and lists other user');
+    } else {
+        fail('presence self-hide / other-list failed');
+    }
+
+    $otherKey = 'txfpresence:France';
+    db()->prepare('DELETE FROM task_presence WHERE task_key=?')->execute([$otherKey]);
+    $fr = ping_task_presence($otherKey, $teamUser, 45);
+    if (!empty($fr['ok']) && (int) ($fr['count'] ?? -1) === 0) {
+        pass('presence scoped per task key');
+    } else {
+        fail('presence leaked across task keys');
+    }
+
+    db()->prepare(
+        'UPDATE task_presence SET last_seen_at = (NOW() - INTERVAL 120 SECOND)
+         WHERE task_key=? AND user_id=?'
+    )->execute([$presenceKey, (int) $teamUser['id']]);
+    $stale = ping_task_presence($presenceKey, $adminUser, 45);
+    if (!empty($stale['ok']) && (int) ($stale['count'] ?? -1) === 0) {
+        pass('presence drops stale teammates');
+    } else {
+        fail('presence stale rows still listed');
+    }
+
+    db()->prepare('DELETE FROM task_presence WHERE task_key LIKE ?')->execute(['txfpresence:%']);
+} catch (Throwable $e) {
+    fail('presence: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";

@@ -9,18 +9,31 @@
   var readyLabel = document.getElementById('swe_ready_label');
   var autosaveTimers = new WeakMap();
 
-  function setStatus(msg, isError) {
+  function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
     if (!msg) {
       statusEl.hidden = true;
       statusEl.textContent = '';
-      statusEl.classList.remove('is-error', 'is-ok');
+      statusEl.classList.remove('is-error', 'is-ok', 'is-loading');
       return;
     }
     statusEl.hidden = false;
     statusEl.textContent = msg;
     statusEl.classList.toggle('is-error', !!isError);
-    statusEl.classList.toggle('is-ok', !isError);
+    statusEl.classList.toggle('is-ok', !isError && !isLoading);
+    statusEl.classList.toggle('is-loading', !!isLoading && !isError);
+  }
+
+  function showProcessing(msg) {
+    if (window.AppProcessing && typeof window.AppProcessing.show === 'function') {
+      window.AppProcessing.show(msg);
+    }
+  }
+
+  function hideProcessing() {
+    if (window.AppProcessing && typeof window.AppProcessing.hide === 'function') {
+      window.AppProcessing.hide();
+    }
   }
 
   function copyText(text) {
@@ -47,12 +60,20 @@
     });
   }
 
-  if (copyBtn) {
-    copyBtn.addEventListener('click', function () {
-      var url = copyBtn.getAttribute('data-export-url');
+  function bindCopyEmailsButton(btn) {
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var url = btn.getAttribute('data-export-url');
       if (!url) return;
-      copyBtn.disabled = true;
-      setStatus('Loading emails…');
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      var wasDisabled = btn.disabled;
+      btn.disabled = true;
+      var loading =
+        label === 'not emailed' ? 'Loading not-emailed emails…'
+          : label === 'emailed' ? 'Loading emailed emails…'
+            : 'Loading emails…';
+      setStatus(loading, false, true);
+      showProcessing(loading);
       fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/plain' } })
         .then(function (res) {
           if (!res.ok) throw new Error('Could not load emails.');
@@ -60,19 +81,38 @@
         })
         .then(function (text) {
           text = String(text || '').replace(/\r\n/g, '\n').trim();
-          if (!text) throw new Error('No emails to copy yet.');
+          if (!text) {
+            throw new Error(
+              label === 'not emailed' ? 'No not-emailed emails to copy.'
+                : label === 'emailed' ? 'No emailed emails to copy.'
+                  : 'No emails to copy yet.'
+            );
+          }
           var lines = text.split('\n').filter(Boolean);
           return copyText(text).then(function () {
-            setStatus('Copied ' + lines.length + ' email' + (lines.length === 1 ? '' : 's') + '.');
+            var kind =
+              label === 'not emailed' ? ' not-emailed'
+                : label === 'emailed' ? ' emailed'
+                  : '';
+            setStatus(
+              'Copied ' + lines.length + kind + ' email' + (lines.length === 1 ? '' : 's') + '.'
+            );
           });
         })
         .catch(function (err) {
           setStatus(err.message || 'Copy failed.', true);
         })
         .then(function () {
-          copyBtn.disabled = false;
+          hideProcessing();
+          btn.disabled = wasDisabled;
         });
     });
+  }
+
+  document.querySelectorAll('[data-swe-copy-emails]').forEach(bindCopyEmailsButton);
+  // Legacy single-button id still present on some pages
+  if (copyBtn && !copyBtn.hasAttribute('data-swe-copy-emails')) {
+    bindCopyEmailsButton(copyBtn);
   }
 
   // Search: keep Site + Emails columns together (whole row)
@@ -469,11 +509,14 @@
       if (!window.confirm(msg)) return;
       var btn = document.getElementById('swe-push-btn');
       if (btn) btn.disabled = true;
-      setStatus('Saving emails before push…');
+      setStatus('Saving emails before push…', false, true);
+      showProcessing('Pushing sites to Admin…');
       flushPendingAutosaves().then(function () {
         // Native submit skips this listener — avoids a second confirm.
+        // Overlay stays up through the full-page navigation.
         HTMLFormElement.prototype.submit.call(pushAllForm);
       }).catch(function () {
+        hideProcessing();
         if (btn) btn.disabled = false;
         setStatus('Could not save emails before push.', true);
       });
@@ -511,10 +554,15 @@
         }
         flush = saveRowForm(saveForm, { quiet: true });
       }
+      setStatus('Pushing site…', false, true);
+      showProcessing('Pushing site to Admin…');
       flush.then(function () {
         return postAjaxForm(form, 'Push failed');
       }).then(function (result) {
-        if (!result) return;
+        if (!result) {
+          hideProcessing();
+          return;
+        }
         var data = result.data;
         var id = result.siteId;
         var gone = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
@@ -530,8 +578,10 @@
         setStatus('Pushed ' + (data.domain || 'site') + ' to Admin · cleared from Team.');
         filterRows();
         if (data.redirect) {
+          showProcessing('Loading…');
           window.setTimeout(function () { window.location.href = data.redirect; }, 250);
         } else {
+          hideProcessing();
           form.removeAttribute('data-busy');
         }
       });
@@ -540,8 +590,13 @@
 
     if (!form.matches('[data-swe-remove]')) return;
     e.preventDefault();
+    setStatus('Removing site…', false, true);
+    showProcessing('Removing site…');
     postAjaxForm(form, 'Remove failed').then(function (result) {
-      if (!result) return;
+      if (!result) {
+        hideProcessing();
+        return;
+      }
       var data = result.data;
       var id = result.siteId;
       var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
@@ -553,8 +608,10 @@
       filterRows();
       syncPushButton();
       if (data.redirect) {
+        showProcessing('Loading…');
         window.setTimeout(function () { window.location.href = data.redirect; }, 250);
       } else {
+        hideProcessing();
         form.removeAttribute('data-busy');
       }
     });
