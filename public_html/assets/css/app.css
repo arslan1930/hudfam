@@ -1279,6 +1279,26 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .camp-sheet-table .camp-col-site { min-width: 10rem; }
 .camp-sheet-table .camp-col-actions { width: 5.5rem; white-space: nowrap; }
+/* Admin Email Sheet: inline (+) add row + bulk paste/import */
+.camp-add-row > td {
+  background: #f7f8f6;
+  border-bottom: 1px solid var(--line);
+}
+.camp-add-row .swe-row-grid {
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+.camp-bulk-paste {
+  min-height: 14rem;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.camp-bulk-divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.25rem 0;
+}
 @media (max-width: 900px) {
   .camp-sheet-table .camp-cell { min-width: 6rem; }
 }

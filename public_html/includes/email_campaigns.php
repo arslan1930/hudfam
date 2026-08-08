@@ -527,66 +527,434 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
 }
 
 /**
- * Paste lines: site.com,email@x.com  OR  site.com email1 email2 …
+ * True when the first data cells look like a spreadsheet header, not a site row.
+ *
+ * @param list<string> $parts
+ */
+function email_campaign_bulk_line_is_header(array $parts): bool
+{
+    $first = mb_strtolower(trim((string) ($parts[0] ?? '')));
+    if ($first === '') {
+        return false;
+    }
+    if (preg_match(
+        '/^(site(\s*name)?|sites|domain|domains|url|urls|website|websites|host)$/u',
+        $first
+    )) {
+        return true;
+    }
+    $second = mb_strtolower(trim((string) ($parts[1] ?? '')));
+    return (bool) preg_match('/^e-?mails?\s*[1-4]?$/', $second);
+}
+
+/**
+ * Split one pasted / imported line into site + up to 4 emails.
+ *
+ * @return array{domain:string,emails:array{0:string,1:string,2:string,3:string}}|null
+ */
+function parse_email_campaign_bulk_line(string $line): ?array
+{
+    $line = trim($line);
+    if ($line === '' || str_starts_with($line, '#')) {
+        return null;
+    }
+    // Strip UTF-8 BOM if a pasted chunk still has it.
+    if (str_starts_with($line, "\xEF\xBB\xBF")) {
+        $line = substr($line, 3);
+    }
+
+    if (str_contains($line, "\t")) {
+        $parts = preg_split('/\t+/', $line) ?: [];
+    } elseif (substr_count($line, ';') >= 1 && substr_count($line, ';') >= substr_count($line, ',')) {
+        $parts = preg_split('/\s*;\s*/', $line) ?: [];
+    } elseif (str_contains($line, ',')) {
+        $parts = str_getcsv($line);
+    } else {
+        $parts = preg_split('/\s+/', $line) ?: [];
+    }
+    $parts = array_values(array_map(static fn ($p) => trim((string) $p), $parts));
+    // Drop trailing empties but keep middle blanks as empty email slots.
+    while ($parts !== [] && end($parts) === '') {
+        array_pop($parts);
+    }
+    if ($parts === [] || email_campaign_bulk_line_is_header($parts)) {
+        return null;
+    }
+
+    $domainRaw = (string) $parts[0];
+    $emails = array_slice($parts, 1, 4);
+    // If only one "email" cell but it holds several addresses, expand.
+    if (count($emails) === 1 && $emails[0] !== '' && function_exists('split_email_cell')) {
+        $split = split_email_cell($emails[0]);
+        if (count($split) > 1) {
+            $emails = array_slice($split, 0, 4);
+        }
+    }
+    while (count($emails) < 4) {
+        $emails[] = '';
+    }
+    return [
+        'domain' => $domainRaw,
+        'emails' => [(string) $emails[0], (string) $emails[1], (string) $emails[2], (string) $emails[3]],
+    ];
+}
+
+/**
+ * Paste / import lines: site.com,email@x.com  OR  site.com email1 email2 …
+ * Tuned for Admin bulk entry (1000+ rows).
  *
  * @return array{added:int,updated:int,skipped:int,errors:list<string>}
  */
 function paste_email_campaign_rows(int $sheetId, string $raw): array
 {
     ensure_email_campaign_schema();
-    if (!get_email_campaign_sheet($sheetId)) {
+    @set_time_limit(0);
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
         throw new InvalidArgumentException('Sheet not found.');
     }
-    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $sheetCountry = email_campaign_sheet_country($sheet);
+    $raw = str_replace(["\r\n", "\r"], "\n", (string) $raw);
+    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+        $raw = substr($raw, 3);
+    }
     $lines = preg_split('/\n+/', $raw) ?: [];
     $added = 0;
     $updated = 0;
     $skipped = 0;
+    /** @var list<string> $errors */
     $errors = [];
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if ($line === '' || str_starts_with($line, '#')) {
+
+    $pdo = db();
+    $find = $pdo->prepare(
+        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+    );
+    $upd = $pdo->prepare(
+        'UPDATE email_campaign_rows
+         SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         WHERE id=? AND sheet_id=?'
+    );
+    $ins = $pdo->prepare(
+        'INSERT INTO email_campaign_rows
+           (sheet_id, domain, country, email1, email2, email3, email4)
+         VALUES (?,?,?,?,?,?,?)'
+    );
+
+    $pdo->beginTransaction();
+    try {
+        foreach ($lines as $line) {
+            $parsed = parse_email_campaign_bulk_line((string) $line);
+            if ($parsed === null) {
+                continue; // blank, comment, or header
+            }
+            $domainRaw = $parsed['domain'];
+            $host = extract_host_candidate($domainRaw);
+            $domain = to_root_domain($host);
+            if ($domain === '' || (function_exists('is_root_domain') && !is_root_domain($domain))) {
+                if ($domain === '' || !str_contains($domain, '.')) {
+                    if (count($errors) < 25) {
+                        $errors[] = $domainRaw . ': Enter a valid site name (root domain).';
+                    }
+                    $skipped++;
+                    continue;
+                }
+            }
+            $norm = normalize_email_slots($parsed['emails']);
+            if (!$norm['ok']) {
+                if (count($errors) < 25) {
+                    $errors[] = $domainRaw . ': ' . (string) ($norm['error'] ?? 'Invalid email.');
+                }
+                $skipped++;
+                continue;
+            }
+            /** @var array{0:string,1:string,2:string,3:string} $slots */
+            $slots = $norm['slots'] ?? ['', '', '', ''];
+            $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+            if (!$hasEmail) {
+                if (count($errors) < 25) {
+                    $errors[] = $domainRaw . ': Add at least one email — each site must have email data.';
+                }
+                $skipped++;
+                continue;
+            }
+
+            $find->execute([$sheetId, $domain]);
+            $existingId = (int) $find->fetchColumn();
+            if ($existingId > 0) {
+                $upd->execute([
+                    $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId,
+                ]);
+                $updated++;
+            } else {
+                $ins->execute([
+                    $sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3],
+                ]);
+                $added++;
+            }
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    if ($added > 0 || $updated > 0) {
+        touch_email_campaign_sheet($sheetId);
+    }
+    return ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+}
+
+/**
+ * Read a CSV/TSV/TXT/.xlsx upload into paste-compatible text (site + up to 4 emails).
+ */
+function read_email_campaign_rows_upload(?array $file): string
+{
+    if (!$file || !is_array($file)) {
+        return '';
+    }
+    $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err === UPLOAD_ERR_NO_FILE) {
+        return '';
+    }
+    if ($err !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('File upload failed. Try again.');
+    }
+    $tmp = (string) ($file['tmp_name'] ?? '');
+    if ($tmp === '' || !is_uploaded_file($tmp)) {
+        throw new InvalidArgumentException('Upload missing on server.');
+    }
+    $size = (int) ($file['size'] ?? 0);
+    if ($size > 40 * 1024 * 1024) {
+        throw new InvalidArgumentException('File is too large (max 40 MB).');
+    }
+    $name = mb_strtolower((string) ($file['name'] ?? ''));
+    return email_campaign_rows_text_from_file_path($tmp, $name);
+}
+
+/**
+ * Convert a local CSV / TXT / XLSX path into paste text. Used by upload + tests.
+ */
+function email_campaign_rows_text_from_file_path(string $path, string $originalName = ''): string
+{
+    if ($path === '' || !is_file($path) || !is_readable($path)) {
+        throw new InvalidArgumentException('Could not read the file.');
+    }
+    $name = mb_strtolower($originalName !== '' ? $originalName : basename($path));
+    $ext = pathinfo($name, PATHINFO_EXTENSION);
+
+    if ($ext === 'xlsx') {
+        return read_email_campaign_xlsx_as_paste_text($path);
+    }
+    if ($ext === 'xls') {
+        throw new InvalidArgumentException(
+            'Old Excel .xls is not supported. Save as .xlsx or CSV (Excel → Save As → CSV UTF-8) and try again.'
+        );
+    }
+
+    $raw = (string) file_get_contents($path);
+    if ($raw === '') {
+        return '';
+    }
+    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+        $raw = substr($raw, 3);
+    }
+    // Binary leftovers (zip/xlsx misnamed as .csv)
+    if (str_starts_with($raw, 'PK')) {
+        return read_email_campaign_xlsx_as_paste_text($path);
+    }
+
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $firstLine = (string) strtok($raw, "\n");
+    $delimiter = ',';
+    $tabs = substr_count($firstLine, "\t");
+    $semis = substr_count($firstLine, ';');
+    $commas = substr_count($firstLine, ',');
+    if ($tabs > 0 && $tabs >= $commas && $tabs >= $semis) {
+        $delimiter = "\t";
+    } elseif ($semis > $commas) {
+        $delimiter = ';';
+    }
+
+    $fh = fopen($path, 'rb');
+    if (!$fh) {
+        throw new InvalidArgumentException('Could not read the uploaded file.');
+    }
+    $bom = fread($fh, 3);
+    if ($bom !== "\xEF\xBB\xBF") {
+        rewind($fh);
+    }
+    $out = [];
+    $rowNum = 0;
+    while (($row = fgetcsv($fh, 0, $delimiter)) !== false) {
+        $rowNum++;
+        if ($row === [null] || $row === false) {
             continue;
         }
-        // CSV / tab / multi-space
-        if (str_contains($line, ',') || str_contains($line, "\t")) {
-            $parts = preg_split('/[,\t]+/', $line) ?: [];
-        } else {
-            $parts = preg_split('/\s+/', $line) ?: [];
+        $parts = array_values(array_map(static fn ($c) => trim((string) $c), $row));
+        while ($parts !== [] && end($parts) === '') {
+            array_pop($parts);
         }
-        $parts = array_values(array_filter(array_map('trim', $parts), static fn ($p) => $p !== ''));
         if ($parts === []) {
-            $skipped++;
             continue;
         }
-        $domainRaw = (string) $parts[0];
+        if ($rowNum === 1 && email_campaign_bulk_line_is_header($parts)) {
+            continue;
+        }
+        $domain = (string) ($parts[0] ?? '');
+        if ($domain === '') {
+            continue;
+        }
         $emails = array_slice($parts, 1, 4);
         while (count($emails) < 4) {
             $emails[] = '';
         }
-        $before = db()->prepare(
-            'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
-        );
-        $host = extract_host_candidate($domainRaw);
-        $domain = to_root_domain($host);
-        $existed = false;
-        if ($domain !== '') {
-            $before->execute([$sheetId, $domain]);
-            $existed = (int) $before->fetchColumn() > 0;
-        }
-        $result = upsert_email_campaign_row($sheetId, $domainRaw, $emails);
-        if (!$result['ok']) {
-            $errors[] = $domainRaw . ': ' . (string) ($result['error'] ?? 'failed');
-            $skipped++;
-            continue;
-        }
-        if ($existed) {
-            $updated++;
-        } else {
-            $added++;
+        $out[] = $domain . ',' . implode(',', $emails);
+        if (count($out) >= 100000) {
+            break;
         }
     }
-    return ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+    fclose($fh);
+    return implode("\n", $out);
+}
+
+/**
+ * Minimal first-sheet .xlsx reader → paste text (site + up to 4 email columns).
+ * No external spreadsheet library required.
+ */
+function read_email_campaign_xlsx_as_paste_text(string $path): string
+{
+    if (!class_exists('ZipArchive')) {
+        throw new InvalidArgumentException(
+            'Excel (.xlsx) needs PHP ZipArchive. Save the file as CSV and import that instead.'
+        );
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        throw new InvalidArgumentException('Could not open the Excel file. Try exporting as CSV.');
+    }
+
+    $shared = [];
+    $ssXml = $zip->getFromName('xl/sharedStrings.xml');
+    if (is_string($ssXml) && $ssXml !== '') {
+        $sx = @simplexml_load_string($ssXml);
+        if ($sx !== false) {
+            $sx->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+            $siNodes = $sx->xpath('//m:si') ?: [];
+            foreach ($siNodes as $si) {
+                $texts = $si->xpath('.//m:t') ?: [];
+                $buf = '';
+                foreach ($texts as $t) {
+                    $buf .= (string) $t;
+                }
+                $shared[] = $buf;
+            }
+        }
+    }
+
+    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    if (!is_string($sheetXml) || $sheetXml === '') {
+        // Fallback: first worksheet_* path
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            $name = (string) ($stat['name'] ?? '');
+            if (preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name)) {
+                $sheetXml = (string) $zip->getFromIndex($i);
+                break;
+            }
+        }
+    }
+    $zip->close();
+    if (!is_string($sheetXml) || $sheetXml === '') {
+        throw new InvalidArgumentException('Excel file has no readable worksheet. Save as CSV and try again.');
+    }
+
+    $sheet = @simplexml_load_string($sheetXml);
+    if ($sheet === false) {
+        throw new InvalidArgumentException('Could not parse the Excel worksheet. Save as CSV and try again.');
+    }
+    $sheet->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+    $rowsXml = $sheet->xpath('//m:sheetData/m:row') ?: [];
+    $out = [];
+    $rowNum = 0;
+    foreach ($rowsXml as $rowXml) {
+        $rowNum++;
+        $cells = [];
+        foreach ($rowXml->xpath('./m:c') ?: [] as $c) {
+            $ref = (string) ($c['r'] ?? '');
+            if (!preg_match('/^([A-Z]+)/', $ref, $m)) {
+                continue;
+            }
+            $col = 0;
+            $letters = $m[1];
+            for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
+                $col = $col * 26 + (ord($letters[$i]) - 64);
+            }
+            $colIndex = $col - 1; // 0-based
+            if ($colIndex < 0 || $colIndex > 4) {
+                continue; // only site + 4 emails
+            }
+            $type = (string) ($c['t'] ?? '');
+            $v = (string) ($c->v ?? '');
+            if ($type === 's') {
+                $v = $shared[(int) $v] ?? '';
+            } elseif ($type === 'inlineStr') {
+                $tNodes = $c->xpath('.//m:t') ?: [];
+                $v = '';
+                foreach ($tNodes as $t) {
+                    $v .= (string) $t;
+                }
+            }
+            $cells[$colIndex] = trim($v);
+        }
+        if ($cells === []) {
+            continue;
+        }
+        $parts = [];
+        for ($i = 0; $i <= 4; $i++) {
+            $parts[$i] = (string) ($cells[$i] ?? '');
+        }
+        while ($parts !== [] && end($parts) === '') {
+            array_pop($parts);
+        }
+        if ($parts === []) {
+            continue;
+        }
+        if ($rowNum === 1 && email_campaign_bulk_line_is_header($parts)) {
+            continue;
+        }
+        $domain = (string) ($parts[0] ?? '');
+        if ($domain === '') {
+            continue;
+        }
+        $emails = array_slice($parts, 1, 4);
+        while (count($emails) < 4) {
+            $emails[] = '';
+        }
+        $out[] = $domain . ',' . implode(',', $emails);
+        if (count($out) >= 100000) {
+            break;
+        }
+    }
+    return implode("\n", $out);
+}
+
+/**
+ * Import Admin-uploaded CSV / Excel / TXT into a campaign sheet.
+ *
+ * @return array{added:int,updated:int,skipped:int,errors:list<string>,lines:int}
+ */
+function import_email_campaign_rows_from_upload(int $sheetId, ?array $file): array
+{
+    $text = read_email_campaign_rows_upload($file);
+    if (trim($text) === '') {
+        throw new InvalidArgumentException('Choose a CSV, Excel (.xlsx), or TXT file with site + emails.');
+    }
+    $lines = preg_split('/\n+/', trim($text)) ?: [];
+    $result = paste_email_campaign_rows($sheetId, $text);
+    $result['lines'] = count(array_filter($lines, static fn ($l) => trim((string) $l) !== ''));
+    return $result;
 }
 
 /**

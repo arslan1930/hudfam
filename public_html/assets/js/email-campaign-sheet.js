@@ -362,4 +362,49 @@
       form.removeAttribute('data-busy');
     });
   });
+
+  // Admin (+) add row: reveal inline site + 4 emails form
+  var addRow = document.getElementById('camp-add-row');
+  var addDomain = document.getElementById('camp_add_domain');
+  var emptyState = document.getElementById('camp-empty-state');
+
+  function openAddRow() {
+    if (!addRow) return;
+    addRow.hidden = false;
+    if (emptyState) emptyState.hidden = true;
+    if (addDomain) {
+      try { addDomain.focus({ preventScroll: false }); } catch (err) { addDomain.focus(); }
+      addDomain.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+
+  function closeAddRow() {
+    if (!addRow) return;
+    addRow.hidden = true;
+    var form = document.getElementById('camp-add-form');
+    if (form) form.reset();
+    if (emptyState && !document.querySelector('[data-swe-row]')) {
+      emptyState.hidden = false;
+    }
+  }
+
+  document.querySelectorAll('[data-camp-add-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (addRow && !addRow.hidden && document.activeElement === addDomain) {
+        closeAddRow();
+        return;
+      }
+      openAddRow();
+    });
+  });
+  document.querySelectorAll('[data-camp-add-cancel]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeAddRow();
+    });
+  });
+  if (window.location.hash === '#add-site') {
+    openAddRow();
+  }
 })();

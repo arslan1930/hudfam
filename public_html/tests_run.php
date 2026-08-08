@@ -484,6 +484,67 @@ try {
     } else {
         fail('suggest visibility: all=' . json_encode($hiddenSuggest) . ' scoped=' . json_encode($scopedSuggest));
     }
+
+    // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
+    $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
+    $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
+        'Site name, Email 1, Email 2, Email 3, Email 4',
+        'txfcamp-bulk1.at, a1@txfcamp-bulk1.at, a2@txfcamp-bulk1.at',
+        'txfcamp-bulk2.at; b1@txfcamp-bulk2.at; b2@txfcamp-bulk2.at',
+        "txfcamp-bulk3.at\tc1@txfcamp-bulk3.at",
+        'txfcamp-bulk4.at d1@txfcamp-bulk4.at d2@txfcamp-bulk4.at',
+        '# comment ignored',
+        'not-a-domain, missing-at-sign',
+    ]));
+    $bulkCount = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND domain LIKE 'txfcamp-bulk%'"
+    )->fetchColumn();
+    if ((int) $paste['added'] === 4 && $bulkCount === 4 && (int) $paste['skipped'] >= 1) {
+        pass('campaign paste adds 4 formats and skips bad lines');
+    } else {
+        fail('campaign paste: ' . json_encode($paste) . " count=$bulkCount");
+    }
+
+    $csvPath = sys_get_temp_dir() . '/txfcamp-import-' . getmypid() . '.csv';
+    file_put_contents(
+        $csvPath,
+        "Site name,Email 1,Email 2,Email 3,Email 4\n"
+        . "txfcamp-csv1.at,c1@txfcamp-csv1.at,,, \n"
+        . "txfcamp-csv2.at,c2a@txfcamp-csv2.at,c2b@txfcamp-csv2.at,,\n"
+    );
+    $fromCsv = email_campaign_rows_text_from_file_path($csvPath, 'sites.csv');
+    $csvPaste = paste_email_campaign_rows($bulkSheet, $fromCsv);
+    @unlink($csvPath);
+    $csvCount = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND domain LIKE 'txfcamp-csv%'"
+    )->fetchColumn();
+    if ((int) $csvPaste['added'] === 2 && $csvCount === 2 && !str_contains($fromCsv, 'Site name')) {
+        pass('campaign CSV file import (header skipped)');
+    } else {
+        fail('campaign CSV: ' . json_encode(['text' => $fromCsv, 'paste' => $csvPaste, 'count' => $csvCount]));
+    }
+
+    // Scale check: 1200 pasted rows in one go.
+    $lines = ['Site name,Email 1'];
+    for ($i = 1; $i <= 1200; $i++) {
+        $lines[] = 'txfcamp-scale' . $i . '.at,s' . $i . '@txfcamp-scale.at';
+    }
+    $scale = paste_email_campaign_rows($bulkSheet, implode("\n", $lines));
+    $scaleCount = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND domain LIKE 'txfcamp-scale%'"
+    )->fetchColumn();
+    if ((int) $scale['added'] === 1200 && $scaleCount === 1200) {
+        pass('campaign paste 1200 rows');
+    } else {
+        fail('campaign scale: ' . json_encode($scale) . " count=$scaleCount");
+    }
+    db()->exec(
+        "DELETE FROM email_campaign_rows WHERE sheet_id=" . (int) $bulkSheet
+        . " AND (domain LIKE 'txfcamp-bulk%' OR domain LIKE 'txfcamp-csv%' OR domain LIKE 'txfcamp-scale%')"
+    );
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

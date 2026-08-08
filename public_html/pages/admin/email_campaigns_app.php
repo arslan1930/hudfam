@@ -95,10 +95,30 @@ if ($sheetId > 0) {
             }
             if ($action === 'paste') {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
-                $msg = 'Pasted into ' . $sheetCountry . ': '
-                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated.';
+                $msg = 'Added to sheet: '
+                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
+                if ((int) ($result['skipped'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped'] . ' skipped';
+                }
+                $msg .= '.';
                 if ($result['errors'] !== []) {
-                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 5));
+                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 8));
+                    flash('error', $msg);
+                } else {
+                    flash('ok', $msg);
+                }
+                redirect($back);
+            }
+            if ($action === 'import_file') {
+                $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
+                $msg = 'Imported file into sheet: '
+                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
+                if ((int) ($result['skipped'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped'] . ' skipped';
+                }
+                $msg .= ' · ' . (int) ($result['lines'] ?? 0) . ' data line(s).';
+                if ($result['errors'] !== []) {
+                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 8));
                     flash('error', $msg);
                 } else {
                     flash('ok', $msg);
@@ -170,18 +190,24 @@ if ($sheetId > 0) {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info($projectName, 'Project Email Sheet for ' . $sheetCountry . '. Same site + up to 4 emails workflow as Sites with emails. When shown to Communication Team, they get a search bar named with this project.') ?></h1>
+        <h1><?= label_with_info($projectName, 'Project Email Sheet for ' . $sheetCountry . '. Admin adds all data: (+) one row, paste many sites + emails, or import CSV / Excel / TXT. When shown to Communication Team, they get a search bar named with this project.') ?></h1>
         <p class="muted">
           <?= h($sheetCountry) ?> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          · site + up to 4 emails · autosave ·
+          · Admin fills site + up to 4 emails · autosave ·
           Communication Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
         </p>
       </div>
       <div class="actions">
+        <button type="button" class="btn" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+        <a class="btn secondary" href="#camp-bulk-add">Paste / import</a>
         <a class="btn secondary" href="<?= h($campBase) ?>">All projects</a>
       </div>
     </div>
+    <p class="help">
+      Data on this sheet is added by <strong>Admin</strong>: use <strong>+ Add site</strong> for one row,
+      or paste / import hundreds or thousands of sites with emails below.
+    </p>
 
     <div class="card" style="margin-bottom:1rem">
       <h2 style="margin-top:0"><?= label_with_info('Project & Communication Team search', 'Project name labels the Communication Team search bar. Turn the search bar on or off for that team without deleting the sheet.') ?></h2>
@@ -205,22 +231,25 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card">
-      <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+      <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Each row is one site with up to 4 emails — same pattern as Sites with emails. Paste up to 4 emails into any box. Clearing the last email removes the site.') ?></h2>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Each row is one site with up to 4 emails. Use + Add site for a single row. Clearing the last email removes the site.') ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
             Every site must keep at least one email.
           </p>
         </div>
-        <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
-          <span class="visually-hidden">Search sites and emails</span>
-          <input id="swe-row-search" type="search" placeholder="Search site or email…"
-                 value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
-                 <?= $filledCount < 1 && $q === '' ? 'disabled' : '' ?>
-                 title="Filter · Enter = next match">
-          <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
-        </label>
+        <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
+          <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+          <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
+            <span class="visually-hidden">Search sites and emails</span>
+            <input id="swe-row-search" type="search" placeholder="Search site or email…"
+                   value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
+                   <?= $filledCount < 1 && $q === '' ? 'disabled' : '' ?>
+                   title="Filter · Enter = next match">
+            <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
+          </label>
+        </div>
       </div>
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
@@ -234,6 +263,32 @@ if ($sheetId > 0) {
             </tr>
           </thead>
           <tbody id="camp-sheet-tbody">
+          <tr id="camp-add-row" class="camp-add-row" hidden>
+            <td colspan="3">
+              <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form" autocomplete="off">
+                <input type="hidden" name="action" value="save_row">
+                <input type="hidden" name="site_id" value="0">
+                <div class="swe-row-grid">
+                  <div class="swe-site-block">
+                    <label class="visually-hidden" for="camp_add_domain">Site name</label>
+                    <input id="camp_add_domain" class="swe-domain" name="domain" required
+                           placeholder="example.com" spellcheck="false" autocomplete="off"
+                           aria-label="Site name">
+                  </div>
+                  <div class="swe-emails" aria-label="Emails" data-swe-emails>
+                    <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
+                    <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+                    <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+                    <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+                  </div>
+                  <div class="swe-row-actions">
+                    <button class="btn small" type="submit">Add row</button>
+                    <button class="btn secondary small" type="button" id="camp-add-cancel" data-camp-add-cancel>Cancel</button>
+                  </div>
+                </div>
+              </form>
+            </td>
+          </tr>
           <?php foreach ($rows as $r):
               $rid = (int) $r['id'];
               $domain = (string) $r['domain'];
@@ -282,55 +337,54 @@ if ($sheetId > 0) {
         No matching <strong>site + emails</strong> rows.
       </p>
       <?php if ($rows === []): ?>
-      <div class="empty-state">
+      <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
-        <p class="muted">Add a site + emails below, paste a list, or import from Final / Admin.</p>
+        <p class="muted">Admin adds data here: press <strong>+ Add site</strong>, paste a list, or import a CSV / Excel / TXT file.</p>
+        <p class="actions" style="justify-content:center;margin-top:0.75rem">
+          <button type="button" class="btn" data-camp-add-toggle>+ Add site</button>
+          <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
+        </p>
       </div>
       <?php endif; ?>
     </div>
 
-    <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Add site row', 'Same as Sites with emails: site name + up to 4 emails. At least one email is required.') ?></h2>
-      <p class="help">Site name + up to 4 emails. Paste all emails into any box. At least one email required.</p>
-      <form method="post" action="<?= h($formAction) ?>" class="swe-add-form" autocomplete="off">
-        <input type="hidden" name="action" value="save_row">
-        <input type="hidden" name="site_id" value="0">
-        <div class="form-grid" style="gap:0.65rem">
-          <div class="full">
-            <label for="camp_add_domain">Site name</label>
-            <input id="camp_add_domain" name="domain" required placeholder="example.com" spellcheck="false">
-          </div>
-          <div class="full" data-swe-emails>
-            <label>Emails (up to 4 — paste all at once into any box)</label>
-            <div class="swe-emails swe-emails-add">
-              <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
-              <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
-              <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
-              <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
-            </div>
-          </div>
-        </div>
-        <p class="actions" style="margin-top:0.85rem">
-          <button class="btn" type="submit">Add row</button>
-        </p>
-      </form>
-    </div>
+    <div class="card" style="margin-top:1rem" id="camp-bulk-add">
+      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email.') ?></h2>
+      <p class="help">
+        Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
+        (comma, tab, or semicolon). Header row is optional and skipped.
+        Built for large lists — paste or upload thousands of rows at once.
+      </p>
 
-    <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Paste site + emails', 'Bulk add. One line per site: site.com, email1, email2. Each line needs at least one email.') ?></h2>
-      <p class="help">One line per site for <strong><?= h($sheetCountry) ?></strong>: <code>site.com, hello@example.com</code></p>
-      <form method="post" action="<?= h($formAction) ?>">
+      <form method="post" action="<?= h($formAction) ?>" style="margin-top:0.85rem">
         <input type="hidden" name="action" value="paste">
-        <textarea name="paste_text" class="inventory-box" rows="6"
-                  placeholder="example.com, hello@example.com&#10;other.org contact@other.org sales@other.org"></textarea>
+        <label for="camp_paste_text">Paste sites + emails</label>
+        <textarea id="camp_paste_text" name="paste_text" class="inventory-box camp-bulk-paste" rows="14"
+                  placeholder="Site name, Email 1, Email 2, Email 3, Email 4&#10;example.com, hello@example.com, sales@example.com&#10;other.org, contact@other.org&#10;shop.de info@shop.de support@shop.de"></textarea>
         <p class="actions" style="margin-top:0.75rem">
           <button class="btn" type="submit">Add pasted rows</button>
         </p>
       </form>
+
+      <hr class="camp-bulk-divider">
+
+      <form method="post" action="<?= h($formAction) ?>" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="import_file">
+        <label for="camp_import_file">Import from CSV, Excel, or TXT</label>
+        <input id="camp_import_file" type="file" name="import_file" required
+               accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        <p class="help" style="margin-top:0.35rem">
+          Accepts <strong>.csv</strong>, <strong>.xlsx</strong> (Excel), and <strong>.txt</strong> / <strong>.tsv</strong>.
+          First columns = site + up to 4 emails. Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
+        </p>
+        <p class="actions" style="margin-top:0.75rem">
+          <button class="btn" type="submit">Import file into sheet</button>
+        </p>
+      </form>
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive (optional)', 'Copies this country’s sites that already have emails from Final or Admin. Empty-email sites are skipped.') ?></h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive (optional)', 'Optional shortcut: copy this country’s sites that already have emails from Final or Admin. Empty-email sites are skipped. Primary entry is still Admin paste / file / + Add site.') ?></h2>
       <p class="help">Copies only sites that have at least one email. Archives are not changed.</p>
       <form method="post" action="<?= h($formAction) ?>"
             onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?');">
@@ -458,9 +512,9 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Email campaign data', 'One Email Sheet per country with your project name. Creating a sheet can automatically add a Communication Team search bar for site + emails delete.') ?></h1>
+    <h1><?= label_with_info('Email campaign data', 'Create an Email Sheet per country. Admin adds all site + email data (+ Add site, paste, or CSV/Excel/TXT import). Optionally expose a Communication Team search bar.') ?></h1>
     <p class="muted">
-      One sheet per country — site + up to 4 emails.
+      One sheet per country — Admin fills site + up to 4 emails.
       Assign a <strong>project name</strong> and choose whether Communication Team gets that search bar.
     </p>
   </div>
@@ -550,10 +604,10 @@ render_breadcrumbs([
   </section>
 
   <section class="card" id="create-email-sheet">
-    <h2><?= label_with_info('Create an Email Sheet', 'Pick a country, assign a project name, and choose whether Communication Team gets a search bar for it.') ?></h2>
+    <h2><?= label_with_info('Create an Email Sheet', 'Pick a country and project name. After create, Admin adds all rows: + Add site, paste thousands of lines, or import CSV / Excel / TXT.') ?></h2>
     <p class="muted" style="margin-top:0">
-      Creating a sheet can automatically add a Communication Team search bar
-      titled with your project name (site + emails delete, same as before).
+      The sheet starts empty — Admin adds the data.
+      You can also turn on a Communication Team search bar titled with your project name.
     </p>
     <?php if (!$availableCountries): ?>
       <div class="empty-state">
