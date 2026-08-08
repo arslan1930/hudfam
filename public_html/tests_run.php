@@ -448,7 +448,13 @@ try {
         fail('campaign with-email upsert failed: ' . json_encode($withEmail));
     }
 
-    // Project name + Communication Team search visibility (fresh country each run).
+    // Project name + Communication Team search visibility (fresh project each run).
+    foreach (['Benelux Outreach', 'Benelux Outreach (paused)', 'TXF Multi Country Outreach', 'TXF Other Project DE'] as $pn) {
+        $oldP = get_email_campaign_project_by_name($pn);
+        if ($oldP) {
+            delete_email_campaign_project((int) $oldP['id']);
+        }
+    }
     db()->exec("DELETE FROM email_campaign_sheets WHERE name='Belgium'");
     $sheetBe = create_email_campaign_sheet(
         'Belgium',
@@ -468,13 +474,21 @@ try {
     $be2 = get_email_campaign_sheet($sheetBe);
     $visibleSheets = list_email_campaign_sheets(true);
     $visibleIds = array_map(static fn ($s) => (int) $s['id'], $visibleSheets);
+    $visibleProjects = list_email_campaign_projects(true);
+    $visibleProjectNames = array_map(static fn ($p) => (string) $p['name'], $visibleProjects);
     if (!empty($hide['ok'])
         && email_campaign_sheet_project_name($be2 ?? []) === 'Benelux Outreach (paused)'
         && !email_campaign_sheet_team_visible($be2 ?? [])
-        && !in_array($sheetBe, $visibleIds, true)) {
+        && !in_array($sheetBe, $visibleIds, true)
+        && !in_array('Benelux Outreach (paused)', $visibleProjectNames, true)) {
         pass('project search can be hidden from Communication Team');
     } else {
-        fail('hide project: ' . json_encode(['hide' => $hide, 'sheet' => $be2, 'visible' => $visibleIds]));
+        fail('hide project: ' . json_encode([
+            'hide' => $hide,
+            'sheet' => $be2,
+            'visible' => $visibleIds,
+            'visible_projects' => $visibleProjectNames,
+        ]));
     }
     upsert_email_campaign_row($sheetBe, 'txfcamp-hidden.be', [
         'email1' => 'h@txfcamp-hidden.be', 'email2' => '', 'email3' => '', 'email4' => '',
@@ -486,6 +500,81 @@ try {
     } else {
         fail('suggest visibility: all=' . json_encode($hiddenSuggest) . ' scoped=' . json_encode($scopedSuggest));
     }
+
+    // Multi-country project: Admin adds only chosen countries; each has its own data;
+    // Communication searches the whole project and deletes update that country sheet.
+    $multiPid = create_email_campaign_project(
+        'TXF Multi Country Outreach',
+        (int) $adminUser['id'],
+        true
+    );
+    $multiDe = add_email_campaign_country_to_project($multiPid, 'Germany', (int) $adminUser['id']);
+    $multiFr = add_email_campaign_country_to_project($multiPid, 'France', (int) $adminUser['id']);
+    $otherPid = create_email_campaign_project(
+        'TXF Other Project DE',
+        (int) $adminUser['id'],
+        false
+    );
+    $otherDe = add_email_campaign_country_to_project($otherPid, 'Germany', (int) $adminUser['id']);
+    upsert_email_campaign_row($multiDe, 'txfcamp-multi-de.com', [
+        'email1' => 'a@txfcamp-multi-de.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    upsert_email_campaign_row($multiFr, 'txfcamp-multi-fr.com', [
+        'email1' => 'b@txfcamp-multi-fr.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    upsert_email_campaign_row($otherDe, 'txfcamp-multi-de.com', [
+        'email1' => 'other@txfcamp-multi-de.com', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    $projSheets = list_email_campaign_sheets_for_project($multiPid);
+    $projCountries = array_map(static fn ($s) => (string) $s['country'], $projSheets);
+    sort($projCountries);
+    if ($multiDe !== $otherDe && $projCountries === ['France', 'Germany']) {
+        pass('project holds only Admin-added countries; same country can differ per project');
+    } else {
+        fail('multi project countries: ' . json_encode([
+            'countries' => $projCountries,
+            'multi_de' => $multiDe,
+            'other_de' => $otherDe,
+        ]));
+    }
+    $projSuggest = search_email_campaign_suggestions_for_project($multiPid, 'txfcamp-multi', 20);
+    $projDomains = array_map(static fn ($s) => (string) $s['domain'], $projSuggest);
+    sort($projDomains);
+    $hitDe = null;
+    foreach ($projSuggest as $hit) {
+        if (($hit['domain'] ?? '') === 'txfcamp-multi-de.com') {
+            $hitDe = $hit;
+            break;
+        }
+    }
+    if ($projDomains === ['txfcamp-multi-de.com', 'txfcamp-multi-fr.com']
+        && $hitDe
+        && (int) ($hitDe['sheet_id'] ?? 0) === $multiDe
+        && (string) ($hitDe['country'] ?? '') === 'Germany') {
+        pass('Communication project search covers all countries; hit carries country sheet_id');
+    } else {
+        fail('project suggest: ' . json_encode($projSuggest));
+    }
+    $delMulti = delete_email_campaign_row($multiDe, (int) ($hitDe['id'] ?? 0));
+    $stillOther = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $otherDe
+        . " AND domain='txfcamp-multi-de.com'"
+    )->fetchColumn();
+    $goneMulti = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $multiDe
+        . " AND domain='txfcamp-multi-de.com'"
+    )->fetchColumn();
+    if (!empty($delMulti['ok']) && $goneMulti === 0 && $stillOther === 1) {
+        pass('project delete updates only that country sheet; other project data kept');
+    } else {
+        fail('project delete isolation: ' . json_encode([
+            'del' => $delMulti,
+            'gone' => $goneMulti,
+            'other' => $stillOther,
+        ]));
+    }
+    delete_email_campaign_project($multiPid);
+    delete_email_campaign_project($otherPid);
 
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);

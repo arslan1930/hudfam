@@ -1,8 +1,8 @@
 <?php
 /**
  * Admin · Emails data · Email campaign data
- * One editable sheet per country (site + up to 4 emails — same workflow as Sites with emails).
- * Always connected to Communication Team super search.
+ * Project → many country sheets (Admin adds only the countries they need).
+ * Communication Team gets one search bar per project across all its countries.
  *
  * Expects: $user, $base (Emails data hub URL)
  */
@@ -12,11 +12,15 @@ seed_countries_if_empty(db());
 
 $campBase = $base . '&folder=email_campaigns';
 $sheetId = isset($sheetId) ? (int) $sheetId : (int) get('sheet');
+$projectIdParam = (int) get('project');
 $countryParam = (string) get('country');
 
-// Open by country name shortcut
+// Open by country name shortcut (optionally scoped to a project)
 if ($sheetId < 1 && $countryParam !== '') {
-    $byCountry = get_email_campaign_sheet_by_country($countryParam);
+    $byCountry = get_email_campaign_sheet_by_country(
+        $countryParam,
+        $projectIdParam > 0 ? $projectIdParam : null
+    );
     if ($byCountry) {
         redirect($campBase . '&sheet=' . (int) $byCountry['id']);
     }
@@ -194,9 +198,12 @@ if ($sheetId > 0) {
                 redirect($back);
             }
             if ($action === 'delete_sheet') {
+                $backProjectId = (int) ($sheet['project_id'] ?? 0);
                 delete_email_campaign_sheet($sheetId);
-                flash('ok', 'Deleted email sheet for ' . $sheetCountry . '.');
-                redirect($campBase);
+                flash('ok', 'Deleted ' . $sheetCountry . ' from the project.');
+                redirect($backProjectId > 0
+                    ? ($campBase . '&project=' . $backProjectId)
+                    : $campBase);
             }
         } catch (Throwable $e) {
             if ($wantsJson) {
@@ -226,58 +233,42 @@ if ($sheetId > 0) {
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
     $projectName = email_campaign_sheet_project_name($sheet);
     $teamVisible = email_campaign_sheet_team_visible($sheet);
+    $sheetProjectId = (int) ($sheet['project_id'] ?? 0);
+    $projectHref = $sheetProjectId > 0
+        ? ($campBase . '&project=' . $sheetProjectId)
+        : $campBase;
 
-    render_header('Email sheet · ' . $projectName, 'admin');
+    render_header($projectName . ' · ' . $sheetCountry, 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
         ['label' => 'Emails data', 'href' => $base],
         ['label' => 'Email campaign data', 'href' => $campBase],
-        ['label' => $projectName],
+        ['label' => $projectName, 'href' => $projectHref],
+        ['label' => $sheetCountry],
     ]);
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info($projectName, 'Project Email Sheet for ' . $sheetCountry . '. Admin adds all data: (+) one row, paste many sites + emails, or import CSV / Excel / TXT. When shown to Communication Team, they get a search bar named with this project.') ?></h1>
+        <h1><?= label_with_info($sheetCountry, 'Country sheet inside project “' . $projectName . '”. Data here is only for this country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.') ?></h1>
         <p class="muted">
-          <?= h($sheetCountry) ?> ·
+          Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
           <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
           · <?= (int) $perPage ?> per page · autosave ·
-          Communication Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
+          Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
         </p>
       </div>
       <div class="actions">
         <?php render_task_presence('camp:' . $sheetId, 'Others on Email Sheet · ' . $sheetCountry); ?>
         <button type="button" class="btn" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
         <a class="btn secondary" href="#camp-bulk-add">Paste / import</a>
-        <a class="btn secondary" href="<?= h($campBase) ?>">All projects</a>
+        <a class="btn secondary" href="<?= h($projectHref) ?>">Project countries</a>
       </div>
     </div>
     <p class="help">
-      Data on this sheet is added by <strong>Admin</strong>: use <strong>+ Add site</strong> for one row,
-      or paste / import hundreds or thousands of sites with emails below.
+      Admin fills <strong><?= h($sheetCountry) ?></strong> data for project <strong><?= h($projectName) ?></strong>.
+      Use <strong>+ Add site</strong>, paste, file import, or import from Final.
     </p>
-
-    <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0"><?= label_with_info('Project & Communication Team search', 'Project name labels the Communication Team search bar. Turn the search bar on or off for that team without deleting the sheet.') ?></h2>
-      <form method="post" action="<?= h($formAction) ?>" autocomplete="off">
-        <input type="hidden" name="action" value="save_settings">
-        <label for="camp_project_name">Project name</label>
-        <input id="camp_project_name" name="project_name" required maxlength="180"
-               value="<?= h($projectName) ?>" placeholder="e.g. Spring outreach DE">
-        <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.85rem">
-          <input type="checkbox" name="team_search_visible" value="1" <?= $teamVisible ? 'checked' : '' ?>>
-          Show search bar to Communication Team
-        </label>
-        <p class="help" style="margin-top:0.35rem">
-          When on, Communication Team sees a search bar titled <strong><?= h($projectName) ?></strong>
-          to find site + emails and delete (same actions as before).
-        </p>
-        <p class="actions" style="margin-top:0.85rem">
-          <button class="btn" type="submit">Save project settings</button>
-        </p>
-      </form>
-    </div>
 
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
@@ -525,14 +516,15 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Communication Team', 'When “Show search bar” is on, Communication Team gets a project search bar titled with this project name. Deletes there update this sheet.') ?></h2>
+      <h2><?= label_with_info('Communication Team', 'When the project search bar is on, Communication Team searches the whole project. Deleting a hit from this country updates this sheet only.') ?></h2>
       <p class="help">
         <?php if ($teamVisible): ?>
-          Communication Team sees a search bar named <strong><?= h($projectName) ?></strong>
-          (site + emails · delete both or remove only email).
+          Communication Team sees one search bar for project <strong><?= h($projectName) ?></strong>
+          covering every country in it. Deletes that match <strong><?= h($sheetCountry) ?></strong> update this sheet.
         <?php else: ?>
-          Communication Team search bar is <strong>hidden</strong> for this project.
-          Turn it on under Project &amp; Communication Team search above.
+          Communication Team search is <strong>hidden</strong> for this project.
+          Turn it on from
+          <a href="<?= h($projectHref) ?>">Project countries</a>.
         <?php endif; ?>
       </p>
     </div>
@@ -540,10 +532,10 @@ if ($sheetId > 0) {
     <div class="card" style="margin-top:1rem">
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Deleting Email Sheet…"
-            onsubmit="return confirm('Delete the <?= h($sheetCountry) ?> email sheet and all its rows?');">
+            data-show-processing="Deleting country sheet…"
+            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>” and delete all its rows?');">
         <input type="hidden" name="action" value="delete_sheet">
-        <button class="btn danger" type="submit">Delete country sheet</button>
+        <button class="btn danger" type="submit">Remove country from project</button>
       </form>
     </div>
     <?= email_field_clear_script_tag() ?>
@@ -553,40 +545,110 @@ if ($sheetId > 0) {
     return;
 }
 
-// --- List + create by country / project ---
+// --- Project detail (countries inside one project) + hub ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
+    $returnProjectId = (int) post('project_id');
+    $backProject = $returnProjectId > 0
+        ? ($campBase . '&project=' . $returnProjectId)
+        : $campBase;
     try {
-        if ($action === 'create') {
+        if ($action === 'create_project') {
             $projectName = trim((string) post('project_name'));
             if ($projectName === '') {
                 flash('error', 'Project name is required.');
-                redirect($campBase . '#create-email-sheet');
+                redirect($campBase . '#create-project');
+            }
+            if (get_email_campaign_project_by_name($projectName)) {
+                flash('error', 'A project named “' . $projectName . '” already exists. Open it to add countries.');
+                redirect($campBase . '#create-project');
             }
             $teamVisible = (string) post('team_search_visible') === '1';
-            $id = create_email_campaign_sheet(
-                (string) post('country'),
-                (int) ($user['id'] ?? 0),
+            $pid = create_email_campaign_project(
                 $projectName,
+                (int) ($user['id'] ?? 0),
                 $teamVisible
             );
-            $sheet = get_email_campaign_sheet($id);
-            $countryName = $sheet ? email_campaign_sheet_country($sheet) : (string) post('country');
-            $projectLabel = $sheet ? email_campaign_sheet_project_name($sheet) : $projectName;
-            purge_blank_email_campaign_rows($id);
-            $msg = 'Email sheet ready for ' . $countryName . ' · project “' . $projectLabel . '”.';
+            $firstCountry = trim((string) post('country'));
+            if ($firstCountry !== '') {
+                $sid = add_email_campaign_country_to_project(
+                    $pid,
+                    $firstCountry,
+                    (int) ($user['id'] ?? 0)
+                );
+                purge_blank_email_campaign_rows($sid);
+            }
+            $msg = 'Project “' . $projectName . '” ready.';
+            if ($firstCountry !== '') {
+                $msg .= ' Added ' . $firstCountry . '.';
+            }
             $msg .= $teamVisible
-                ? ' Communication Team search bar created.'
-                : ' Communication Team search bar is hidden (you can turn it on later).';
+                ? ' Communication Team search bar is on (covers all countries in this project).'
+                : ' Communication Team search bar is hidden (turn it on when ready).';
             flash('ok', $msg);
-            redirect($campBase . '&sheet=' . $id);
+            redirect($campBase . '&project=' . $pid);
         }
+        if ($action === 'add_country') {
+            $pid = (int) post('project_id');
+            $project = get_email_campaign_project($pid);
+            if (!$project) {
+                flash('error', 'Project not found.');
+                redirect($campBase);
+            }
+            $sid = add_email_campaign_country_to_project(
+                $pid,
+                (string) post('country'),
+                (int) ($user['id'] ?? 0)
+            );
+            purge_blank_email_campaign_rows($sid);
+            $sheet = get_email_campaign_sheet($sid);
+            $countryName = $sheet ? email_campaign_sheet_country($sheet) : (string) post('country');
+            flash('ok', 'Added ' . $countryName . ' to “' . (string) $project['name'] . '”. Open it to add site + emails.');
+            redirect($campBase . '&project=' . $pid);
+        }
+        if ($action === 'save_project_settings') {
+            $pid = (int) post('project_id');
+            $result = update_email_campaign_project_settings(
+                $pid,
+                (string) post('project_name'),
+                (string) post('team_search_visible') === '1'
+            );
+            if (empty($result['ok'])) {
+                flash('error', (string) ($result['error'] ?? 'Could not save project settings.'));
+            } else {
+                $vis = (string) post('team_search_visible') === '1'
+                    ? 'Communication Team search is ON for the whole project'
+                    : 'Communication Team search is OFF';
+                flash('ok', 'Saved project settings · ' . $vis . '.');
+            }
+            redirect($campBase . '&project=' . $pid);
+        }
+        if ($action === 'toggle_project_team_search') {
+            $pid = (int) post('project_id');
+            $visible = (string) post('team_search_visible') === '1';
+            $result = set_email_campaign_project_team_visible($pid, $visible);
+            $project = get_email_campaign_project($pid);
+            $label = $project ? (string) $project['name'] : 'project';
+            if (empty($result['ok'])) {
+                flash('error', (string) ($result['error'] ?? 'Could not update visibility.'));
+            } else {
+                flash('ok', $visible
+                    ? 'Showing “' . $label . '” search bar to Communication Team (all countries).'
+                    : 'Hid “' . $label . '” search bar from Communication Team.');
+            }
+            // Optional stay=1 keeps Admin on the project page after toggle.
+            redirect((string) post('stay') === '1' && $returnProjectId > 0
+                ? $backProject
+                : $campBase);
+        }
+        // Legacy sheet-level toggle from older bookmarks.
         if ($action === 'toggle_team_search') {
             $id = (int) post('id');
             $visible = (string) post('team_search_visible') === '1';
             $result = set_email_campaign_sheet_team_visible($id, $visible);
             $sheet = get_email_campaign_sheet($id);
-            $label = $sheet ? email_campaign_sheet_project_name($sheet) : 'sheet';
+            $label = $sheet ? email_campaign_sheet_project_name($sheet) : 'project';
+            $pid = $sheet ? (int) ($sheet['project_id'] ?? 0) : 0;
             if (empty($result['ok'])) {
                 flash('error', (string) ($result['error'] ?? 'Could not update visibility.'));
             } else {
@@ -594,39 +656,295 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? 'Showing “' . $label . '” search bar to Communication Team.'
                     : 'Hid “' . $label . '” search bar from Communication Team.');
             }
+            redirect($pid > 0 ? ($campBase . '&project=' . $pid) : $campBase);
+        }
+        if ($action === 'delete_country') {
+            $id = (int) post('id');
+            $sheet = get_email_campaign_sheet($id);
+            if (!$sheet) {
+                flash('error', 'Country sheet not found.');
+                redirect($backProject);
+            }
+            $pid = (int) ($sheet['project_id'] ?? 0);
+            $label = email_campaign_sheet_country($sheet);
+            delete_email_campaign_sheet($id);
+            flash('ok', 'Removed ' . $label . ' from the project.');
+            redirect($pid > 0 ? ($campBase . '&project=' . $pid) : $campBase);
+        }
+        if ($action === 'delete_project') {
+            $pid = (int) post('project_id');
+            $project = get_email_campaign_project($pid);
+            if (!$project) {
+                flash('error', 'Project not found.');
+            } else {
+                $label = (string) $project['name'];
+                delete_email_campaign_project($pid);
+                flash('ok', 'Deleted project “' . $label . '” and all its country sheets.');
+            }
             redirect($campBase);
+        }
+        // Legacy create (country + project in one step) → project then country.
+        if ($action === 'create') {
+            $projectName = trim((string) post('project_name'));
+            if ($projectName === '') {
+                flash('error', 'Project name is required.');
+                redirect($campBase . '#create-project');
+            }
+            $teamVisible = (string) post('team_search_visible') === '1';
+            $pid = create_email_campaign_project(
+                $projectName,
+                (int) ($user['id'] ?? 0),
+                $teamVisible
+            );
+            update_email_campaign_project_settings($pid, $projectName, $teamVisible);
+            $sid = add_email_campaign_country_to_project(
+                $pid,
+                (string) post('country'),
+                (int) ($user['id'] ?? 0)
+            );
+            purge_blank_email_campaign_rows($sid);
+            flash('ok', 'Project “' . $projectName . '” ready with '
+                . email_campaign_sheet_country(get_email_campaign_sheet($sid) ?: ['name' => (string) post('country')])
+                . '.');
+            redirect($campBase . '&sheet=' . $sid);
         }
         if ($action === 'delete') {
             $id = (int) post('id');
             $sheet = get_email_campaign_sheet($id);
             if (!$sheet) {
                 flash('error', 'Sheet not found.');
-            } else {
-                $label = email_campaign_sheet_project_name($sheet);
-                delete_email_campaign_sheet($id);
-                flash('ok', 'Deleted email sheet “' . $label . '”.');
+                redirect($campBase);
             }
-            redirect($campBase);
+            $pid = (int) ($sheet['project_id'] ?? 0);
+            $label = email_campaign_sheet_country($sheet);
+            delete_email_campaign_sheet($id);
+            flash('ok', 'Removed ' . $label . '.');
+            redirect($pid > 0 ? ($campBase . '&project=' . $pid) : $campBase);
         }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
-        redirect($campBase);
+        redirect($backProject);
     }
 }
 
-$sheets = list_email_campaign_sheets();
-$existingCountries = [];
-foreach ($sheets as $s) {
-    $existingCountries[mb_strtolower((string) $s['country'])] = true;
-}
-$allCountries = list_countries(null, true);
-$availableCountries = [];
-foreach ($allCountries as $c) {
-    $name = (string) $c['name'];
-    if (!isset($existingCountries[mb_strtolower($name)])) {
-        $availableCountries[] = $c;
+// --- Project page: countries Admin added to this project ---
+if ($projectIdParam > 0) {
+    $project = get_email_campaign_project($projectIdParam);
+    if (!$project) {
+        flash('error', 'Project not found.');
+        redirect($campBase);
     }
+    $projectName = (string) $project['name'];
+    $teamVisible = email_campaign_project_team_visible($project);
+    $countrySheets = list_email_campaign_sheets_for_project($projectIdParam);
+    $inProject = [];
+    foreach ($countrySheets as $s) {
+        $inProject[mb_strtolower((string) $s['country'])] = true;
+    }
+    $allCountries = list_countries(null, true);
+    $availableCountries = [];
+    foreach ($allCountries as $c) {
+        $name = (string) $c['name'];
+        if (!isset($inProject[mb_strtolower($name)])) {
+            $availableCountries[] = $c;
+        }
+    }
+    $projectForm = $campBase . '&project=' . $projectIdParam;
+    $countryCount = count($countrySheets);
+    $siteTotal = 0;
+    foreach ($countrySheets as $s) {
+        $siteTotal += (int) $s['row_count'];
+    }
+
+    render_header($projectName, 'admin');
+    render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+        ['label' => 'Emails data', 'href' => $base],
+        ['label' => 'Email campaign data', 'href' => $campBase],
+        ['label' => $projectName],
+    ]);
+    ?>
+    <div class="topbar">
+      <div>
+        <h1><?= label_with_info($projectName, 'This project holds only the countries you add. Each country has its own site + email data. Communication Team gets one search bar for the whole project.') ?></h1>
+        <p class="muted">
+          <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
+          · <?= (int) $siteTotal ?> site<?= (int) $siteTotal === 1 ? '' : 's' ?>
+          · Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
+        </p>
+      </div>
+      <div class="actions">
+        <?php if ($availableCountries): ?>
+          <a class="btn" href="#add-country">Add country</a>
+        <?php endif; ?>
+        <a class="btn secondary" href="<?= h($campBase) ?>">All projects</a>
+      </div>
+    </div>
+
+    <div class="orders-layout camp-hub-layout">
+      <section class="card camp-hub-list">
+        <div class="camp-hub-section-head">
+          <div>
+            <h2 style="margin:0"><?= label_with_info('Countries in this project', 'Open a country to edit its site + email rows. Same country can exist in another project with different data.') ?></h2>
+            <p class="help" style="margin:0.3rem 0 0">
+              Only countries you add appear here — not every country in the system.
+            </p>
+          </div>
+        </div>
+        <?php if (!$countrySheets): ?>
+          <div class="empty-state camp-hub-empty">
+            <p>No countries in this project yet.</p>
+            <p class="muted">Add a country on the right, then open it to fill site + emails.</p>
+            <?php if ($availableCountries): ?>
+            <p class="actions" style="justify-content:center;margin-top:0.75rem">
+              <a class="btn" href="#add-country">Add first country</a>
+            </p>
+            <?php endif; ?>
+          </div>
+        <?php else: ?>
+          <div class="invoice-list-toolbar camp-hub-toolbar">
+            <label class="sheet-search" for="camp-project-country-search">
+              <span class="visually-hidden">Search countries</span>
+              <input id="camp-project-country-search" type="search" placeholder="Find a country…"
+                     autocomplete="off" spellcheck="false" data-no-draft>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table class="extracted-country-table camp-hub-table" id="camp-project-country-table">
+              <thead>
+                <tr>
+                  <th>Country</th>
+                  <th class="num">Sites</th>
+                  <th class="num">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($countrySheets as $s):
+                  $cName = (string) $s['country'];
+                  $rowCount = (int) $s['row_count'];
+                  $hay = mb_strtolower($cName . ' ' . $rowCount . ' sites');
+                  ?>
+                <tr data-camp-country-row data-search="<?= h($hay) ?>">
+                  <td>
+                    <a class="extracted-country-link camp-hub-project"
+                       href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">
+                      <?= h($cName) ?>
+                    </a>
+                  </td>
+                  <td class="num">
+                    <span class="camp-hub-count" title="Sites with emails in this country sheet"><?= $rowCount ?></span>
+                  </td>
+                  <td class="num">
+                    <div class="camp-hub-row-actions">
+                      <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
+                      <form method="post" action="<?= h($projectForm) ?>"
+                            onsubmit="return confirm(<?= h(json_encode('Remove “' . $cName . '” from this project?', JSON_UNESCAPED_UNICODE)) ?>);">
+                        <input type="hidden" name="action" value="delete_country">
+                        <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                        <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                        <button class="btn secondary small" type="submit">Remove</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <script>
+          (function () {
+            var input = document.getElementById('camp-project-country-search');
+            if (!input) return;
+            input.addEventListener('input', function () {
+              var q = String(input.value || '').trim().toLowerCase();
+              document.querySelectorAll('[data-camp-country-row]').forEach(function (row) {
+                row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+              });
+            });
+          })();
+          </script>
+        <?php endif; ?>
+      </section>
+
+      <aside class="camp-hub-create">
+        <section class="card" id="add-country">
+          <div class="camp-hub-section-head">
+            <h2 style="margin:0"><?= label_with_info('Add a country', 'Creates an empty country sheet inside this project. Fill site + emails after opening it. The same country can live in another project with different data.') ?></h2>
+          </div>
+          <?php if (!$availableCountries): ?>
+            <div class="empty-state camp-hub-empty">
+              <p>Every country is already in this project.</p>
+            </div>
+          <?php else: ?>
+          <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" autocomplete="off"
+                data-show-processing="Adding country…">
+            <input type="hidden" name="action" value="add_country">
+            <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+            <div class="camp-hub-field">
+              <label for="add_camp_country">Country</label>
+              <p class="camp-hub-field-hint">Only countries not already in this project.</p>
+              <select id="add_camp_country" name="country" required>
+                <option value="">Select country…</option>
+                <?php foreach ($availableCountries as $c): ?>
+                  <option value="<?= h((string) $c['name']) ?>"><?= h((string) $c['name']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <p class="actions camp-hub-create-actions">
+              <button class="btn" type="submit">Add country</button>
+            </p>
+          </form>
+          <?php endif; ?>
+        </section>
+
+        <section class="card" style="margin-top:1rem" id="project-settings">
+          <div class="camp-hub-section-head">
+            <h2 style="margin:0"><?= label_with_info('Project & Communication Team', 'One search bar for Communication Team covers every country in this project. Deletes update the matching country sheet.') ?></h2>
+          </div>
+          <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" autocomplete="off"
+                data-show-processing="Saving project…">
+            <input type="hidden" name="action" value="save_project_settings">
+            <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+            <div class="camp-hub-field">
+              <label for="edit_camp_project">Project name</label>
+              <input id="edit_camp_project" name="project_name" required maxlength="180"
+                     value="<?= h($projectName) ?>">
+            </div>
+            <div class="camp-hub-field camp-hub-field-check">
+              <label class="camp-hub-check">
+                <input type="checkbox" name="team_search_visible" value="1" <?= $teamVisible ? 'checked' : '' ?>>
+                <span>
+                  <strong>Show search bar to Communication Team</strong>
+                  <span class="camp-hub-field-hint">They search the whole project; deletes update the country sheet that matched.</span>
+                </span>
+              </label>
+            </div>
+            <p class="actions camp-hub-create-actions">
+              <button class="btn" type="submit">Save project settings</button>
+            </p>
+          </form>
+        </section>
+
+        <section class="card" style="margin-top:1rem">
+          <h2>Danger zone</h2>
+          <form method="post" action="<?= h($projectForm) ?>"
+                data-show-processing="Deleting project…"
+                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets inside it?', JSON_UNESCAPED_UNICODE)) ?>);">
+            <input type="hidden" name="action" value="delete_project">
+            <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+            <button class="btn danger" type="submit">Delete whole project</button>
+          </form>
+        </section>
+      </aside>
+    </div>
+    <?php
+    render_footer('admin');
+    return;
 }
+
+// --- Hub: list / create projects ---
+$projects = list_email_campaign_projects();
+$allCountries = list_countries(null, true);
 
 render_header('Email campaign data', 'admin');
 render_breadcrumbs([
@@ -634,43 +952,41 @@ render_breadcrumbs([
     ['label' => 'Emails data', 'href' => $base],
     ['label' => 'Email campaign data'],
 ]);
-$sheetCount = count($sheets);
+$projectCount = count($projects);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Email campaign data', 'Create one Email Sheet per country. Admin adds site + emails. Optionally show a Communication Team search bar named after your project.') ?></h1>
+    <h1><?= label_with_info('Email campaign data', 'Create a project, then add only the countries you need. Each country keeps its own site + email data. Share the project with Communication Team as one search bar across all its countries.') ?></h1>
     <p class="muted">
-      Your working lists for outreach — one sheet per country, named by project.
+      Projects hold country sheets — Admin chooses which countries go in each project.
     </p>
   </div>
   <div class="actions">
-    <?php if ($availableCountries): ?>
-      <a class="btn" href="#create-email-sheet">Create Email Sheet</a>
-    <?php endif; ?>
+    <a class="btn" href="#create-project">Create project</a>
     <a class="btn secondary" href="<?= h($base) ?>">All folders</a>
   </div>
 </div>
 
-<ol class="camp-hub-steps" aria-label="How Email Sheets work">
+<ol class="camp-hub-steps" aria-label="How Email campaign projects work">
   <li>
     <span class="camp-hub-step-num">1</span>
     <div>
-      <strong>Create a sheet</strong>
-      <span>Choose a country and give it a project name.</span>
+      <strong>Create a project</strong>
+      <span>Name it, optionally add a first country.</span>
     </div>
   </li>
   <li>
     <span class="camp-hub-step-num">2</span>
     <div>
-      <strong>Add sites + emails</strong>
-      <span>Open the sheet, then add rows, paste, or import from Final.</span>
+      <strong>Add countries</strong>
+      <span>Only countries you add get a sheet — each with its own data.</span>
     </div>
   </li>
   <li>
     <span class="camp-hub-step-num">3</span>
     <div>
-      <strong>Share with team (optional)</strong>
-      <span>Turn on Communication Team search when you’re ready.</span>
+      <strong>Share with Communication</strong>
+      <span>One project search bar; deletes update the matching country sheet.</span>
     </div>
   </li>
 </ol>
@@ -679,22 +995,20 @@ $sheetCount = count($sheets);
   <section class="card camp-hub-list">
     <div class="camp-hub-section-head">
       <div>
-        <h2 style="margin:0"><?= label_with_info('Your Email Sheets', 'Open a project to add or edit site + email rows. Use Team search to show or hide the Communication Team bar.') ?></h2>
+        <h2 style="margin:0"><?= label_with_info('Your projects', 'Open a project to manage its countries. Team search shows or hides the Communication Team bar for the whole project.') ?></h2>
         <p class="help" style="margin:0.3rem 0 0">
-          <?= (int) $sheetCount ?> project<?= $sheetCount === 1 ? '' : 's' ?>
-          · click a project name or <strong>Open</strong> to work on it
+          <?= (int) $projectCount ?> project<?= $projectCount === 1 ? '' : 's' ?>
+          · click a name or <strong>Open</strong>
         </p>
       </div>
     </div>
-    <?php if (!$sheets): ?>
+    <?php if (!$projects): ?>
       <div class="empty-state camp-hub-empty">
-        <p>No Email Sheets yet.</p>
-        <p class="muted">Start on the right: pick a country, name the project, then create the sheet.</p>
-        <?php if ($availableCountries): ?>
+        <p>No projects yet.</p>
+        <p class="muted">Create a project on the right, then add the countries you need.</p>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
-          <a class="btn" href="#create-email-sheet">Create your first sheet</a>
+          <a class="btn" href="#create-project">Create your first project</a>
         </p>
-        <?php endif; ?>
       </div>
     <?php else: ?>
       <div class="invoice-list-toolbar camp-hub-toolbar">
@@ -709,36 +1023,43 @@ $sheetCount = count($sheets);
           <thead>
             <tr>
               <th>Project</th>
-              <th>Country</th>
+              <th>Countries</th>
               <th class="num">Sites</th>
               <th>Team search</th>
               <th class="num">Actions</th>
             </tr>
           </thead>
           <tbody>
-          <?php foreach ($sheets as $s):
-              $cName = (string) $s['country'];
-              $pName = (string) $s['project_name'];
-              $visible = !empty($s['team_search_visible']);
-              $rowCount = (int) $s['row_count'];
-              $hay = mb_strtolower($pName . ' ' . $cName . ' ' . $rowCount . ' sites');
+          <?php foreach ($projects as $p):
+              $pName = (string) $p['name'];
+              $visible = !empty($p['team_search_visible']);
+              $rowCount = (int) $p['row_count'];
+              $cCount = (int) $p['country_count'];
+              $countries = $p['countries'] ?? [];
+              $countryPreview = $countries !== []
+                  ? implode(', ', array_slice($countries, 0, 4)) . (count($countries) > 4 ? '…' : '')
+                  : '—';
+              $hay = mb_strtolower($pName . ' ' . implode(' ', $countries) . ' ' . $rowCount . ' sites');
               ?>
             <tr data-camp-country-row data-search="<?= h($hay) ?>">
               <td>
-                <a class="extracted-country-link camp-hub-project" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">
+                <a class="extracted-country-link camp-hub-project"
+                   href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">
                   <?= h($pName) ?>
                 </a>
               </td>
               <td>
-                <span class="camp-hub-country"><?= h($cName) ?></span>
+                <span class="camp-hub-country" title="<?= h(implode(', ', $countries)) ?>">
+                  <?= (int) $cCount ?> · <?= h($countryPreview) ?>
+                </span>
               </td>
               <td class="num">
-                <span class="camp-hub-count" title="Sites with emails on this sheet"><?= $rowCount ?></span>
+                <span class="camp-hub-count" title="Sites across all countries in this project"><?= $rowCount ?></span>
               </td>
               <td>
                 <form method="post" action="<?= h($campBase) ?>" class="camp-hub-team-form">
-                  <input type="hidden" name="action" value="toggle_team_search">
-                  <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                  <input type="hidden" name="action" value="toggle_project_team_search">
+                  <input type="hidden" name="project_id" value="<?= (int) $p['id'] ?>">
                   <input type="hidden" name="team_search_visible" value="<?= $visible ? '0' : '1' ?>">
                   <button class="camp-hub-team-btn <?= $visible ? 'is-on' : 'is-off' ?>" type="submit"
                           title="<?= $visible ? 'Hide from Communication Team' : 'Show to Communication Team' ?>">
@@ -749,11 +1070,11 @@ $sheetCount = count($sheets);
               </td>
               <td class="num">
                 <div class="camp-hub-row-actions">
-                  <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
+                  <a class="btn small" href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">Open</a>
                   <form method="post" action="<?= h($campBase) ?>"
-                        onsubmit="return confirm(<?= h(json_encode('Delete sheet “' . $pName . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                        onsubmit="return confirm(<?= h(json_encode('Delete project “' . $pName . '” and all its countries?', JSON_UNESCAPED_UNICODE)) ?>);">
+                    <input type="hidden" name="action" value="delete_project">
+                    <input type="hidden" name="project_id" value="<?= (int) $p['id'] ?>">
                     <button class="btn secondary small" type="submit">Delete</button>
                   </form>
                 </div>
@@ -778,30 +1099,34 @@ $sheetCount = count($sheets);
     <?php endif; ?>
   </section>
 
-  <section class="card camp-hub-create" id="create-email-sheet">
+  <section class="card camp-hub-create" id="create-project">
     <div class="camp-hub-section-head">
-      <h2 style="margin:0"><?= label_with_info('Create an Email Sheet', 'Pick a country and project name. The sheet starts empty — then Admin adds site + emails inside it.') ?></h2>
-      <p class="help" style="margin:0.3rem 0 0">Takes about a minute. You add the sites after creating.</p>
+      <h2 style="margin:0"><?= label_with_info('Create a project', 'Name the project, optionally pick a first country, then add more countries inside the project. Communication Team gets one search bar for the whole project when enabled.') ?></h2>
+      <p class="help" style="margin:0.3rem 0 0">You can add more countries after creating.</p>
     </div>
-    <?php if (!$availableCountries): ?>
-      <div class="empty-state camp-hub-empty">
-        <p>Every country already has a sheet.</p>
-        <p class="muted">Open an existing project on the left to keep working.</p>
-      </div>
-    <?php else: ?>
     <form method="post" action="<?= h($campBase) ?>" class="camp-hub-create-form" autocomplete="off"
-          data-show-processing="Creating Email Sheet…">
-      <input type="hidden" name="action" value="create">
+          data-show-processing="Creating project…">
+      <input type="hidden" name="action" value="create_project">
+
+      <div class="camp-hub-field">
+        <label for="new_camp_project">
+          <span class="camp-hub-field-step">1</span>
+          Project name
+        </label>
+        <p class="camp-hub-field-hint">Title of the Communication Team search bar when shared.</p>
+        <input id="new_camp_project" name="project_name" required maxlength="180"
+               placeholder="e.g. Q2 EU outreach">
+      </div>
 
       <div class="camp-hub-field">
         <label for="new_camp_country">
-          <span class="camp-hub-field-step">1</span>
-          Country
+          <span class="camp-hub-field-step">2</span>
+          First country <span class="muted">(optional)</span>
         </label>
-        <p class="camp-hub-field-hint">One Email Sheet per country.</p>
-        <select id="new_camp_country" name="country" required>
-          <option value="">Select country…</option>
-          <?php foreach ($availableCountries as $c): ?>
+        <p class="camp-hub-field-hint">Starts an empty country sheet. Add more countries inside the project.</p>
+        <select id="new_camp_country" name="country">
+          <option value="">Add later…</option>
+          <?php foreach ($allCountries as $c): ?>
             <option value="<?= h((string) $c['name']) ?>">
               <?= h((string) $c['name']) ?>
             </option>
@@ -809,31 +1134,20 @@ $sheetCount = count($sheets);
         </select>
       </div>
 
-      <div class="camp-hub-field">
-        <label for="new_camp_project">
-          <span class="camp-hub-field-step">2</span>
-          Project name
-        </label>
-        <p class="camp-hub-field-hint">Shown to you and (if enabled) as the Communication Team search title.</p>
-        <input id="new_camp_project" name="project_name" required maxlength="180"
-               placeholder="e.g. Q2 Germany outreach">
-      </div>
-
       <div class="camp-hub-field camp-hub-field-check">
         <label class="camp-hub-check">
           <input type="checkbox" name="team_search_visible" value="1" checked>
           <span>
             <strong>Show search bar to Communication Team</strong>
-            <span class="camp-hub-field-hint">Uncheck to keep this sheet Admin-only for now.</span>
+            <span class="camp-hub-field-hint">One bar for the whole project · uncheck to keep Admin-only for now.</span>
           </span>
         </label>
       </div>
 
       <p class="actions camp-hub-create-actions">
-        <button class="btn" type="submit">Create Email Sheet</button>
+        <button class="btn" type="submit">Create project</button>
       </p>
     </form>
-    <?php endif; ?>
   </section>
 </div>
 <?php
