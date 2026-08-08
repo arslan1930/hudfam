@@ -36,12 +36,31 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'set_status') {
         $taskId = (int) post('task_id');
+        $status = (string) post('status');
+        $wantsJson = (string) post('ajax') === '1'
+            || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
         $task = get_department_task($taskId);
         if (!$task || (int) $task['department_id'] !== (int) $dept['id']) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'error' => 'Task not found.']);
+                exit;
+            }
             flash('error', 'Task not found.');
             redirect($back);
         }
-        update_department_task_status($taskId, (string) post('status'));
+        update_department_task_status($taskId, $status);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => true,
+                'task_id' => $taskId,
+                'status' => $status,
+                'message' => 'Status updated.',
+            ]);
+            exit;
+        }
         flash('ok', 'Status updated.');
         redirect($back);
     }
@@ -238,10 +257,11 @@ render_breadcrumbs([
           </td>
           <td><?= h($assignee !== '' ? $assignee : 'Whole department') ?></td>
           <td>
-            <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>" class="inline-form">
+            <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
+                  class="inline-form" data-stay-ajax>
               <input type="hidden" name="action" value="set_status">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
-              <select name="status" onchange="this.form.submit()">
+              <select name="status" data-stay-ajax-change aria-label="Task status">
                 <?php foreach (['open' => 'Open', 'in_progress' => 'In progress', 'done' => 'Done'] as $val => $lab): ?>
                   <option value="<?= h($val) ?>" <?= (string) $t['status'] === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
                 <?php endforeach; ?>

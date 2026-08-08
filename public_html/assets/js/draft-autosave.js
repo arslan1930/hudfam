@@ -208,6 +208,29 @@
     bar.hidden = false;
   }
 
+  function shouldBindForm(form) {
+    if (!form) return false;
+    if (form.getAttribute('data-draft-bound') === '1') return false;
+    if (form.hasAttribute('data-no-draft')) return false;
+    // Row sheets already autosave their own way — binding hundreds of forms lags scrolling/typing.
+    if (form.hasAttribute('data-swe-save')) return false;
+    if (form.hasAttribute('data-stay-ajax')) return false;
+    if (form.hasAttribute('data-swe-mark')
+      || form.hasAttribute('data-swe-mark-upto')
+      || form.hasAttribute('data-swe-clear-upto')
+      || form.hasAttribute('data-swe-clear-all-emailed')
+      || form.hasAttribute('data-swe-remove')
+      || form.hasAttribute('data-swe-push')) {
+      return false;
+    }
+    if (form.hasAttribute('hidden') || form.hidden) return false;
+    // Action-only forms (hidden fields + button) have nothing useful to draft.
+    var editable = form.querySelector(
+      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), textarea, select'
+    );
+    return !!editable;
+  }
+
   function bindForm(form, index) {
     form.setAttribute('data-draft-bound', '1');
     form.addEventListener('input', function (e) {
@@ -235,6 +258,7 @@
     var restoredAny = false;
     restoring = true;
     forms.forEach(function (form, index) {
+      if (!shouldBindForm(form)) return;
       bindForm(form, index);
       try {
         var raw = localStorage.getItem(formStorageKey(form, index));

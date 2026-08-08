@@ -43,7 +43,6 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
     $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
@@ -52,8 +51,15 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
+    // One stylesheet URL (asset.php) — avoid loading CSS twice (parse cost / jank).
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
-    echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
+    // Early scroll restore after same-page POST actions (before paint when possible).
+    echo '<script>';
+    echo '(function(){try{var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
+    echo 'if(p&&y&&p===location.pathname+location.search){var t=parseInt(y,10)||0;if(t>0){';
+    echo 'if("scrollRestoration" in history)history.scrollRestoration="manual";';
+    echo 'window.scrollTo(0,t);}}}catch(e){}})();';
+    echo '</script>';
     echo '</head><body>';
 
     if (!$user || $panel === '') {
@@ -234,18 +240,7 @@ function render_footer(string $panel = ''): void
         render_project_credit();
         if ($panel === 'admin' || $panel === 'team') {
             $user = current_user();
-            $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
-            $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
-            $jsFile = asset_url('assets/js/draft-autosave.js');
-            $tipVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/info-tips.js') ?: time());
-            $tipPhp = app_url('asset.php?f=js/info-tips.js&v=' . rawurlencode($tipVersion));
-            $tipFile = asset_url('assets/js/info-tips.js');
-            $navVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/nav-shell.js') ?: time());
-            $navPhp = app_url('asset.php?f=js/nav-shell.js&v=' . rawurlencode($navVersion));
-            $navFile = asset_url('assets/js/nav-shell.js');
-            $procVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/app-processing.js') ?: time());
-            $procPhp = app_url('asset.php?f=js/app-processing.js&v=' . rawurlencode($procVersion));
-            $procFile = asset_url('assets/js/app-processing.js');
+            // Load each global script once (dual asset.php + /assets/ URLs ran listeners twice and lagged scroll).
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
                 'panel' => $panel,
@@ -254,14 +249,11 @@ function render_footer(string $panel = ''): void
             ], JSON_UNESCAPED_UNICODE) . ';';
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
-            echo '<script src="' . h($procPhp) . '" defer></script>';
-            echo '<script src="' . h($procFile) . '" defer></script>';
-            echo '<script src="' . h($jsPhp) . '" defer></script>';
-            echo '<script src="' . h($jsFile) . '" defer></script>';
-            echo '<script src="' . h($tipPhp) . '" defer></script>';
-            echo '<script src="' . h($tipFile) . '" defer></script>';
-            echo '<script src="' . h($navPhp) . '" defer></script>';
-            echo '<script src="' . h($navFile) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/stay-scroll.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/info-tips.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/nav-shell.js')) . '" defer></script>';
         }
         echo '</main></div>';
         // Global Processing / Loading overlay (Admin + Team shell).

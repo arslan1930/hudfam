@@ -170,7 +170,18 @@ if ($sheetId > 0) {
             }
             if ($action === 'allow_excluded_domain') {
                 $domain = (string) post('domain');
-                if (clear_email_campaign_domain_exclusion($sheetId, $domain)) {
+                $ok = clear_email_campaign_domain_exclusion($sheetId, $domain);
+                if ($wantsJson) {
+                    $jsonOut([
+                        'ok' => $ok,
+                        'domain' => normalize_email_campaign_domain($domain),
+                        'error' => $ok ? null : 'That site was not on the excluded list.',
+                        'message' => $ok
+                            ? ('Allowed “' . normalize_email_campaign_domain($domain) . '” again.')
+                            : 'That site was not on the excluded list.',
+                    ], $ok ? 200 : 404);
+                }
+                if ($ok) {
                     flash(
                         'ok',
                         'Allowed “' . normalize_email_campaign_domain($domain) . '” again. '
@@ -498,7 +509,7 @@ if ($sheetId > 0) {
                 <td class="muted"><?= h((string) $ex['excluded_at']) ?></td>
                 <td class="num">
                   <form method="post" action="<?= h($formAction) ?>" style="display:inline"
-                        data-show-processing="Allowing site again…">
+                        data-stay-ajax data-stay-remove-row>
                     <input type="hidden" name="action" value="allow_excluded_domain">
                     <input type="hidden" name="domain" value="<?= h((string) $ex['domain']) ?>">
                     <input type="hidden" name="q" value="<?= h($q) ?>">
@@ -552,6 +563,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $backProject = $returnProjectId > 0
         ? ($campBase . '&project=' . $returnProjectId)
         : $campBase;
+    $hubWantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    $hubJson = static function (array $payload, int $code = 200) use ($hubWantsJson): void {
+        if (!$hubWantsJson) {
+            return;
+        }
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload);
+        exit;
+    };
     try {
         if ($action === 'create_project') {
             $projectName = trim((string) post('project_name'));
@@ -630,8 +652,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $project = get_email_campaign_project($pid);
             $label = $project ? (string) $project['name'] : 'project';
             if (empty($result['ok'])) {
+                $hubJson([
+                    'ok' => false,
+                    'error' => (string) ($result['error'] ?? 'Could not update visibility.'),
+                ], 400);
                 flash('error', (string) ($result['error'] ?? 'Could not update visibility.'));
             } else {
+                $hubJson([
+                    'ok' => true,
+                    'team_search_visible' => $visible,
+                    'project_id' => $pid,
+                    'project_name' => $label,
+                    'message' => $visible
+                        ? ('Showing “' . $label . '” search bar to Communication Team (all countries).')
+                        : ('Hid “' . $label . '” search bar from Communication Team.'),
+                ]);
                 flash('ok', $visible
                     ? 'Showing “' . $label . '” search bar to Communication Team (all countries).'
                     : 'Hid “' . $label . '” search bar from Communication Team.');
@@ -1057,7 +1092,8 @@ $projectCount = count($projects);
                 <span class="camp-hub-count" title="Sites across all countries in this project"><?= $rowCount ?></span>
               </td>
               <td>
-                <form method="post" action="<?= h($campBase) ?>" class="camp-hub-team-form">
+                <form method="post" action="<?= h($campBase) ?>" class="camp-hub-team-form"
+                      data-stay-ajax data-stay-team-toggle>
                   <input type="hidden" name="action" value="toggle_project_team_search">
                   <input type="hidden" name="project_id" value="<?= (int) $p['id'] ?>">
                   <input type="hidden" name="team_search_visible" value="<?= $visible ? '0' : '1' ?>">
