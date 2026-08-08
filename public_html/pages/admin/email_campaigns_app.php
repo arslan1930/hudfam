@@ -363,7 +363,7 @@ if ($sheetId > 0) {
       <?php if ($rows === []): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
-        <p class="muted">Admin adds data here: press <strong>+ Add site</strong>, paste a list, or import a CSV / Excel / TXT file.</p>
+        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Final (new sites only)</strong>.</p>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
           <button type="button" class="btn" data-camp-add-toggle>+ Add site</button>
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
