@@ -70,11 +70,15 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $countryName = $sheet;
     $returnQ = trim((string) post('q'));
     $returnP = max(1, (int) (post('p') ?: 1));
+    $returnSent = (string) post('sent');
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
     $back = $sweBase . '&country=' . rawurlencode($countryName);
     if ($returnQ !== '') {
         $back .= '&q=' . rawurlencode($returnQ);
+    }
+    if ($returnSent === '0' || $returnSent === '1') {
+        $back .= '&sent=' . $returnSent;
     }
     if ($returnP > 1) {
         $back .= '&p=' . $returnP;
@@ -162,6 +166,55 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('ok', 'Removed ' . (int) $result['removed'] . ' site(s).');
         if (count_sites_with_emails_for_country($countryName, $sweScope) < 1) {
             redirect($sweBase);
+        }
+        redirect($back);
+    }
+
+    // Campaign progress — Admin only (Final stays a neutral duplicate archive).
+    if ($action === 'mark_email_sent' && $sweScope === 'admin') {
+        $siteId = (int) post('site_id');
+        $sent = (string) post('email_sent') === '1';
+        $result = set_site_with_emails_admin_email_sent($siteId, $sent);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (!$result['ok']) {
+                http_response_code(400);
+            }
+            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
+            exit;
+        }
+        if (!$result['ok']) {
+            flash('error', (string) ($result['error'] ?? 'Could not update sent mark.'));
+        } else {
+            flash(
+                'ok',
+                ($sent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
+                . (string) ($result['domain'] ?? 'site')
+            );
+        }
+        redirect($back);
+    }
+
+    if ($action === 'mark_emailed_up_to' && $sweScope === 'admin') {
+        $siteId = (int) post('site_id');
+        $result = mark_sites_with_emails_admin_emailed_up_to($siteId);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (!$result['ok']) {
+                http_response_code(400);
+            }
+            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
+            exit;
+        }
+        if (!$result['ok']) {
+            flash('error', (string) ($result['error'] ?? 'Could not mark checkpoint.'));
+        } else {
+            flash(
+                'ok',
+                'Marked emailed up to ' . (string) ($result['domain'] ?? 'site')
+                . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked.'
+                . ' Final archive stays unchanged.'
+            );
         }
         redirect($back);
     }
@@ -416,16 +469,22 @@ if (!$inCountry) {
 // --- Country detail ---
 $countryName = $sheet;
 $q = trim((string) get('q'));
+$sentFilter = (string) get('sent'); // Admin only: '', '0' (not sent), '1' (sent)
+if ($sweScope !== 'admin' || ($sentFilter !== '0' && $sentFilter !== '1')) {
+    $sentFilter = '';
+}
 $pageNum = max(1, (int) get('p', 1));
 $perPage = 100;
 $inv = sites_with_emails_inventory_query([
     'country' => $countryName,
     'q' => $q,
+    'sent' => $sentFilter,
 ], $pageNum, $perPage, $sweScope);
 $rows = $inv['rows'];
 $total = $inv['total'];
 $pages = $inv['pages'];
 $countryTotal = count_sites_with_emails_for_country($countryName, $sweScope);
+$sentStats = ($sweScope === 'admin') ? count_sites_with_emails_sent_stats($countryName) : null;
 $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0;
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $csvUrl = $listBase . '&export=csv';
@@ -435,6 +494,7 @@ $qs = http_build_query(array_filter([
     'folder' => $sweFolder,
     'country' => $countryName,
     'q' => $q,
+    'sent' => $sentFilter,
 ], static fn ($v) => $v !== '' && $v !== null));
 
 render_header($sweLabel . ' · ' . $countryName, $swePanel);
@@ -462,8 +522,12 @@ render_breadcrumbs($crumbs);
     ) ?></h1>
     <p class="muted">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
-      <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
+      <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
       · up to 4 emails each
+      <?php if ($sentStats): ?>
+        · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
+        · <span id="swe_sent_label"><?= (int) $sentStats['sent'] ?></span> emailed
+      <?php endif; ?>
       <?php if ($isTeam): ?>
         · <span id="swe_ready_label"><?= (int) $readyToPush ?></span> ready to Push
       <?php endif; ?>
@@ -495,14 +559,14 @@ render_breadcrumbs($crumbs);
 </p>
 <?php elseif ($isAdminAll): ?>
 <p class="help">
-  Synced Admin mirror. Search finds a <strong>site + its emails</strong> together.
-  Edits stay in sync with Sites with emails - Admin · Clear an email with Backspace (autosaves) · Remove deletes the whole row.
+  Neutral duplicate archive (mirror of Admin). No campaign “emailed” marks here.
+  Search finds a <strong>site + its emails</strong> together.
 </p>
 <?php else: ?>
 <p class="help">
-  Final archive. Search finds a <strong>site + its emails</strong> together.
-  Clear an email with Backspace (autosaves) · Remove deletes the whole row.
-  Changes sync to All sites with emails - Final.
+  Working archive from Team Push. Mark sites you’ve already emailed — use
+  <strong>Mark emailed up to here</strong> as a checkpoint. New Team pushes stay unmarked.
+  Emailed marks stay on Admin only; <strong>Final stays neutral</strong>.
 </p>
 <?php endif; ?>
 
@@ -512,12 +576,36 @@ render_breadcrumbs($crumbs);
       <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Search matches site name or any email on that row.') ?></h2>
       <p class="help" style="margin:0.25rem 0 0">
         Search shows both columns together (site + its emails).
-        <?php if ($isAdmin): ?>
+        <?php if ($sweScope === 'admin'): ?>
+          Oldest first · new Team sites appear at the bottom · emailed rows are highlighted.
+        <?php elseif ($isAdmin): ?>
           Edit or Backspace to clear an email · Remove deletes the complete row.
         <?php else: ?>
           Paste up to 4 emails at once · autosave · Remove deletes the row.
         <?php endif; ?>
       </p>
+      <?php if ($sweScope === 'admin'): ?>
+      <p class="swe-sent-filters">
+        <?php
+        $sentLinks = [
+            '' => 'All',
+            '0' => 'Not emailed',
+            '1' => 'Emailed',
+        ];
+        foreach ($sentLinks as $val => $label):
+            $href = $listBase;
+            if ($q !== '') {
+                $href .= '&q=' . rawurlencode($q);
+            }
+            if ($val !== '') {
+                $href .= '&sent=' . $val;
+            }
+            $active = $sentFilter === (string) $val;
+            ?>
+          <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
+        <?php endforeach; ?>
+      </p>
+      <?php endif; ?>
     </div>
     <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
       <span class="visually-hidden">Search sites and emails</span>
@@ -546,21 +634,30 @@ render_breadcrumbs($crumbs);
           $e3 = (string) $s['email3'];
           $e4 = (string) $s['email4'];
           $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
+          $isEmailed = $sweScope === 'admin' && (int) ($s['email_sent'] ?? 0) === 1;
           $hay = mb_strtolower($domain . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
           ?>
         <tr data-swe-row data-search="<?= h($hay) ?>" data-site-id="<?= (int) $s['id'] ?>"
-            data-has-email="<?= $hasEmail ? '1' : '0' ?>">
+            data-has-email="<?= $hasEmail ? '1' : '0' ?>"
+            data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
+            class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
           <td colspan="3">
             <form method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
               <input type="hidden" name="action" value="save_row">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <?php if ($sentFilter !== ''): ?>
+              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
               <div class="swe-row-grid">
                 <div class="swe-site-block">
                   <label class="visually-hidden">Site name</label>
                   <input class="swe-domain" name="domain" value="<?= h($domain) ?>" required
                          spellcheck="false" autocomplete="off" aria-label="Site name">
+                  <?php if ($isEmailed): ?>
+                    <span class="swe-emailed-badge" title="Email already sent">Emailed</span>
+                  <?php endif; ?>
                 </div>
                 <div class="swe-emails" aria-label="Emails" data-swe-emails>
                   <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
@@ -575,6 +672,18 @@ render_breadcrumbs($crumbs);
                           title="<?= $hasEmail ? 'Push this site to Admin' : 'Add at least one email first' ?>"
                           onclick="return confirm('Push <?= h($domain) ?> to Sites with emails - Admin?\n\nThis row will leave the Team working copy.');">Push</button>
                   <?php endif; ?>
+                  <?php if ($sweScope === 'admin'): ?>
+                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
+                          form="swe-mark-<?= (int) $s['id'] ?>"
+                          title="<?= $isEmailed ? 'Clear emailed mark' : 'Mark this site as emailed' ?>">
+                    <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
+                  </button>
+                  <button class="btn secondary small" type="submit" form="swe-upto-<?= (int) $s['id'] ?>"
+                          title="Mark every site from the top of this list through this row as emailed"
+                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older/earlier site in <?= h($countryName) ?> up to this row will be marked emailed.\n\nFinal archive stays unchanged.');">
+                    Mark up to here
+                  </button>
+                  <?php endif; ?>
                   <button class="btn secondary small" type="submit" form="swe-remove-<?= (int) $s['id'] ?>"
                           onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove row</button>
                 </div>
@@ -588,11 +697,35 @@ render_breadcrumbs($crumbs);
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
             </form>
             <?php endif; ?>
+            <?php if ($sweScope === 'admin'): ?>
+            <form id="swe-mark-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" hidden>
+              <input type="hidden" name="action" value="mark_email_sent">
+              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
+              <input type="hidden" name="q" value="<?= h($q) ?>">
+              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <?php if ($sentFilter !== ''): ?>
+              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+            </form>
+            <form id="swe-upto-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" hidden>
+              <input type="hidden" name="action" value="mark_emailed_up_to">
+              <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
+              <input type="hidden" name="q" value="<?= h($q) ?>">
+              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <?php if ($sentFilter !== ''): ?>
+              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+            </form>
+            <?php endif; ?>
             <form id="swe-remove-<?= (int) $s['id'] ?>" method="post" action="<?= h($listBase) ?>" data-swe-remove hidden>
               <input type="hidden" name="action" value="remove_site">
               <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+              <?php if ($sentFilter !== ''): ?>
+              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
             </form>
           </td>
         </tr>
@@ -604,17 +737,30 @@ render_breadcrumbs($crumbs);
     No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
   </p>
 
-  <?php if (!$rows && $q === ''): ?>
+  <?php if (!$rows && $q === '' && $sentFilter === ''): ?>
   <div class="empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
       <p class="muted">Push from Extracting Results to fill site names here.</p>
     <?php elseif ($isAdminAll): ?>
       <p>No mirrored sites in this country yet.</p>
-      <p class="muted">They sync here from Sites with emails - Admin.</p>
+      <p class="muted">They sync here from Sites with emails - Admin. Final stays a neutral backup (no emailed marks).</p>
     <?php else: ?>
-      <p>No final sites in this country yet.</p>
+      <p>No sites in this country yet.</p>
       <p class="muted">Waiting for Team to Push from Sites with emails - Team.</p>
+    <?php endif; ?>
+  </div>
+  <?php elseif (!$rows && ($q !== '' || $sentFilter !== '')): ?>
+  <div class="empty-state">
+    <?php if ($sentFilter === '0'): ?>
+      <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+      <p class="muted">New Team pushes appear here until you mark them emailed.</p>
+    <?php elseif ($sentFilter === '1'): ?>
+      <p>No emailed sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+      <p class="muted">Use “Mark emailed” or “Mark up to here” while working the campaign.</p>
+    <?php else: ?>
+      <p>No matching sites.</p>
+      <p class="muted">Try a different search, or clear the filter.</p>
     <?php endif; ?>
   </div>
   <?php endif; ?>

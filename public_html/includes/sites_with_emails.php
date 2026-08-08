@@ -77,6 +77,27 @@ function ensure_sites_with_emails_schema(): void
     $pdo->exec(swe_create_table_sql('sites_with_emails_admin'));
     $pdo->exec(swe_create_table_sql('sites_with_emails_admin_all'));
 
+    // Campaign progress lives only on Admin — Final stays a neutral duplicate archive.
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM sites_with_emails_admin')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['email_sent'])) {
+            $pdo->exec(
+                'ALTER TABLE sites_with_emails_admin
+                 ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0 AFTER email4,
+                 ADD INDEX idx_swe_admin_email_sent (country, email_sent)'
+            );
+        }
+        if (!isset($have['email_sent_at'])) {
+            $pdo->exec(
+                'ALTER TABLE sites_with_emails_admin
+                 ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent'
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore migration hiccups
+    }
+
     // Legacy single table → migrate into Team working copy once.
     try {
         $legacy = $pdo->query("SHOW TABLES LIKE 'sites_with_emails'")->fetchColumn();
@@ -719,11 +740,13 @@ function sites_with_emails_inventory_query(
     string $scope = 'team'
 ): array {
     ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
     $table = swe_table($scope);
     $page = max(1, $page);
     $perPage = max(1, min(500, $perPage));
     $country = trim((string) ($filters['country'] ?? ''));
     $q = trim((string) ($filters['q'] ?? ''));
+    $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1' — Admin only
 
     $where = ['country = ?'];
     $params = [$country];
@@ -731,6 +754,10 @@ function sites_with_emails_inventory_query(
         $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
         $like = '%' . $q . '%';
         array_push($params, $like, $like, $like, $like, $like);
+    }
+    if ($scope === 'admin' && ($sentFilter === '0' || $sentFilter === '1')) {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
     }
     $whereSql = implode(' AND ', $where);
 
@@ -743,10 +770,13 @@ function sites_with_emails_inventory_query(
     }
     $offset = ($page - 1) * $perPage;
 
+    // Admin campaign list: oldest first so new Team pushes land at the bottom (unsent).
+    $order = $scope === 'admin' ? 'id ASC' : 'id DESC';
+
     $stmt = db()->prepare(
         "SELECT * FROM {$table}
          WHERE {$whereSql}
-         ORDER BY id DESC
+         ORDER BY {$order}
          LIMIT {$perPage} OFFSET {$offset}"
     );
     $stmt->execute($params);
@@ -754,6 +784,89 @@ function sites_with_emails_inventory_query(
     // Expand packed multi-email cells (e.g. all four pasted into email1) into email1–4.
     $rows = expand_packed_email_slots_in_rows($rows, $scope);
     return ['rows' => $rows, 'total' => $total, 'pages' => $pages];
+}
+
+/**
+ * @return array{total:int,sent:int,unsent:int}
+ */
+function count_sites_with_emails_sent_stats(string $country): array
+{
+    ensure_sites_with_emails_schema();
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN email_sent=1 THEN 1 ELSE 0 END), 0) AS sent
+         FROM sites_with_emails_admin
+         WHERE country=?"
+    );
+    $stmt->execute([$country]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $total = (int) ($row['total'] ?? 0);
+    $sent = (int) ($row['sent'] ?? 0);
+    return [
+        'total' => $total,
+        'sent' => $sent,
+        'unsent' => max(0, $total - $sent),
+    ];
+}
+
+/**
+ * Mark one Admin row emailed / not emailed. Does not touch Final.
+ *
+ * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool}
+ */
+function set_site_with_emails_admin_email_sent(int $siteId, bool $sent): array
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
+    }
+    if ($sent) {
+        db()->prepare(
+            'UPDATE sites_with_emails_admin
+             SET email_sent=1, email_sent_at=NOW()
+             WHERE id=?'
+        )->execute([$siteId]);
+    } else {
+        db()->prepare(
+            'UPDATE sites_with_emails_admin
+             SET email_sent=0, email_sent_at=NULL
+             WHERE id=?'
+        )->execute([$siteId]);
+    }
+    return [
+        'ok' => true,
+        'domain' => (string) $row['domain'],
+        'email_sent' => $sent,
+    ];
+}
+
+/**
+ * Checkpoint: mark every Admin row in this country with id <= $siteId as emailed.
+ * Final stays neutral (no email_sent column / no sync of this flag).
+ *
+ * @return array{ok:bool,error?:string,marked?:int,domain?:string,country?:string}
+ */
+function mark_sites_with_emails_admin_emailed_up_to(int $siteId): array
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
+    }
+    $country = (string) $row['country'];
+    $st = db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
+         WHERE country=? AND id<=? AND email_sent=0'
+    );
+    $st->execute([$country, $siteId]);
+    return [
+        'ok' => true,
+        'marked' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'country' => $country,
+    ];
 }
 
 /**

@@ -77,9 +77,9 @@ db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR do
 db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
-db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
-db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
+db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
+db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
+db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
 db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
@@ -486,6 +486,157 @@ try {
     }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Admin emailed checkpoint (Final stays neutral) ---
+try {
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfsent-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfsent-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfsent-%'");
+
+    $finalCols = db()->query('SHOW COLUMNS FROM sites_with_emails_admin_all')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $adminCols = db()->query('SHOW COLUMNS FROM sites_with_emails_admin')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    if (in_array('email_sent', $adminCols, true) && in_array('email_sent_at', $adminCols, true)) {
+        pass('Admin has email_sent columns');
+    } else {
+        fail('Admin missing email_sent columns: ' . json_encode($adminCols));
+    }
+    if (!in_array('email_sent', $finalCols, true) && !in_array('email_sent_at', $finalCols, true)) {
+        pass('Final has no email_sent columns');
+    } else {
+        fail('Final incorrectly has sent columns: ' . json_encode($finalCols));
+    }
+
+    $insSent = db()->prepare(
+        "INSERT INTO sites_with_emails_admin
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?,?, 'German', 'europe', ?, '', '', '')"
+    );
+    foreach (
+        [
+            ['txfsent-a.com', 'a@txfsent-a.com'],
+            ['txfsent-b.com', 'b@txfsent-b.com'],
+            ['txfsent-c.com', 'c@txfsent-c.com'],
+        ] as [$dom, $em]
+    ) {
+        $insSent->execute([$dom, 'Germany', $em]);
+    }
+    sync_sites_with_emails_admin_to_all('Germany');
+
+    $ids = db()->query(
+        "SELECT id, domain FROM sites_with_emails_admin
+         WHERE domain LIKE 'txfsent-%' ORDER BY id ASC"
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if (count($ids) !== 3) {
+        fail('txfsent seed count=' . count($ids));
+    } else {
+        $idA = (int) $ids[0]['id'];
+        $idB = (int) $ids[1]['id'];
+        $idC = (int) $ids[2]['id'];
+
+        $one = set_site_with_emails_admin_email_sent($idA, true);
+        $rowA = get_site_with_emails($idA, 'admin');
+        if (!empty($one['ok']) && (int) ($rowA['email_sent'] ?? 0) === 1) {
+            pass('mark one Admin site emailed');
+        } else {
+            fail('mark one: ' . json_encode($one));
+        }
+
+        $upto = mark_sites_with_emails_admin_emailed_up_to($idB);
+        $stats = count_sites_with_emails_sent_stats('Germany');
+        $sentRows = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE domain LIKE 'txfsent-%' AND email_sent=1"
+        )->fetchColumn();
+        $unsentC = (int) db()->query(
+            "SELECT email_sent FROM sites_with_emails_admin WHERE id=" . (int) $idC
+        )->fetchColumn();
+        if (!empty($upto['ok']) && $sentRows === 2 && (int) $unsentC === 0
+            && (int) ($stats['sent'] ?? 0) >= 2) {
+            pass('mark up to here leaves newer rows unmarked');
+        } else {
+            fail('mark up to: ' . json_encode([
+                'upto' => $upto,
+                'sentRows' => $sentRows,
+                'c' => $unsentC,
+                'stats' => $stats,
+            ]));
+        }
+
+        $filterSent = sites_with_emails_inventory_query(
+            ['country' => 'Germany', 'sent' => '1'],
+            1,
+            100,
+            'admin'
+        );
+        $filterUnsent = sites_with_emails_inventory_query(
+            ['country' => 'Germany', 'sent' => '0'],
+            1,
+            100,
+            'admin'
+        );
+        $sentDomains = array_column($filterSent['rows'] ?? [], 'domain');
+        $unsentDomains = array_column($filterUnsent['rows'] ?? [], 'domain');
+        if (in_array('txfsent-a.com', $sentDomains, true)
+            && in_array('txfsent-b.com', $sentDomains, true)
+            && in_array('txfsent-c.com', $unsentDomains, true)
+            && !in_array('txfsent-c.com', $sentDomains, true)) {
+            pass('Admin sent filter splits emailed / not emailed');
+        } else {
+            fail('sent filter: sent=' . json_encode($sentDomains) . ' unsent=' . json_encode($unsentDomains));
+        }
+
+        // Re-push updating an already-emailed Admin row must keep email_sent=1.
+        db()->prepare(
+            "INSERT INTO sites_with_emails_team
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsent-a.com','Germany','German','europe','a2@txfsent-a.com','','','')"
+        )->execute();
+        $repush = push_sites_with_emails_team_to_admin('Germany', $teamUser);
+        $afterRepush = (int) db()->query(
+            "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetchColumn();
+        if (!empty($repush['updated']) && $afterRepush === 1) {
+            pass('Team re-push keeps Admin emailed mark');
+        } else {
+            fail('re-push sent flag: ' . json_encode($repush) . " sent=$afterRepush");
+        }
+
+        // Brand-new Team push lands unmarked at bottom.
+        db()->prepare(
+            "INSERT INTO sites_with_emails_team
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsent-new.com','Germany','German','europe','n@txfsent-new.com','','','')"
+        )->execute();
+        $newPush = push_sites_with_emails_team_to_admin('Germany', $teamUser);
+        $newSent = (int) db()->query(
+            "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-new.com' LIMIT 1"
+        )->fetchColumn();
+        $order = db()->query(
+            "SELECT domain FROM sites_with_emails_admin
+             WHERE domain LIKE 'txfsent-%' ORDER BY id ASC"
+        )->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $last = (string) (end($order) ?: '');
+        if (!empty($newPush['pushed']) && $newSent === 0 && $last === 'txfsent-new.com') {
+            pass('new Team push is unmarked and last in Admin list');
+        } else {
+            fail('new push: ' . json_encode($newPush) . " sent=$newSent last=$last order=" . json_encode($order));
+        }
+
+        // Sync must not invent sent state on Final (no column); domains still mirror.
+        sync_sites_with_emails_admin_to_all('Germany');
+        $finalMirror = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txfsent-%'"
+        )->fetchColumn();
+        $finalColsAfter = db()->query('SHOW COLUMNS FROM sites_with_emails_admin_all')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        if ($finalMirror >= 4 && !in_array('email_sent', $finalColsAfter, true)) {
+            pass('Final mirrors domains without email_sent');
+        } else {
+            fail("Final mirror=$finalMirror cols=" . json_encode($finalColsAfter));
+        }
+    }
+} catch (Throwable $e) {
+    fail('admin emailed checkpoint: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Departments ACL ---
