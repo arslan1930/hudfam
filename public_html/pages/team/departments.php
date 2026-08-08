@@ -88,6 +88,7 @@ if (!$dept) {
         <div class="actions">
           <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
           <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
+          <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
         </div>
       <?php endif; ?>
     </div>
@@ -121,6 +122,10 @@ if (!$dept) {
         <a class="folder" href="index.php?page=team_email_campaigns">
           <h3>Campaign search</h3>
           <p class="muted">Email campaign sheets · all countries</p>
+        </a>
+        <a class="folder" href="index.php?page=team_email_campaigns_drafts">
+          <h3>Campaign drafts</h3>
+          <p class="muted">Outreach / offers per project · one-click copy</p>
         </a>
       </div>
     </div>
@@ -178,6 +183,7 @@ render_breadcrumbs([
     <?php if ($isCommunicationDept): ?>
       <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
       <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
+      <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All my departments</a>
   </div>
@@ -187,7 +193,7 @@ render_breadcrumbs([
 <div class="card" style="margin-bottom:1rem">
   <h2 style="margin-top:0">Communication tools</h2>
   <p class="help muted" style="margin-bottom:0.85rem">
-    Use the dedicated search pages for Admin emails and campaign sheets.
+    Search sheets to clean emails, or open drafts to copy outreach text per project.
   </p>
   <div class="folders">
     <a class="folder" href="index.php?page=team_admin_emails_delete">
@@ -197,6 +203,10 @@ render_breadcrumbs([
     <a class="folder" href="index.php?page=team_email_campaigns">
       <h3>Campaign search</h3>
       <p class="muted">Email campaign sheets · all countries</p>
+    </a>
+    <a class="folder" href="index.php?page=team_email_campaigns_drafts">
+      <h3>Campaign drafts</h3>
+      <p class="muted">Outreach / offers per project · one-click copy</p>
     </a>
   </div>
 </div>

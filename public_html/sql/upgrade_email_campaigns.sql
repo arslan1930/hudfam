@@ -42,3 +42,23 @@ CREATE TABLE IF NOT EXISTS email_campaign_rows (
 --   ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0 AFTER email4,
 --   ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent,
 --   ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent);
+
+-- Communication / Admin: reusable outreach drafts per project
+CREATE TABLE IF NOT EXISTS email_campaign_drafts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'custom',
+  title VARCHAR(180) NOT NULL,
+  body MEDIUMTEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (project_id),
+  INDEX idx_email_campaign_draft_cat (project_id, category),
+  INDEX (updated_at),
+  CONSTRAINT fk_email_campaign_draft_project
+    FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_email_campaign_draft_user
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

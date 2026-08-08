@@ -114,6 +114,9 @@ if ($deptScoped) {
     if (!empty($toolSet['team_email_campaigns'])) {
         $toolCards[] = ['team_email_campaigns', 'Campaign search', 'Email campaign sheets · all countries'];
     }
+    if (!empty($toolSet['team_email_campaigns_drafts'])) {
+        $toolCards[] = ['team_email_campaigns_drafts', 'Campaign drafts', 'Outreach / offers per project · one-click copy'];
+    }
     ?>
     <?php if ($toolCards): ?>
     <div class="card" style="margin-top:1rem">
@@ -198,6 +201,10 @@ render_header('Dashboard', 'team');
   <a class="launch-card" href="index.php?page=team_email_campaigns">
     <h2>Campaign search</h2>
     <p>Super search Email campaign sheets across all countries.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_email_campaigns_drafts">
+    <h2>Campaign drafts</h2>
+    <p>Save outreach / offers per project · copy with one click.</p>
   </a>
   <a class="launch-card" href="index.php?page=team_departments">
     <h2>My departments</h2>

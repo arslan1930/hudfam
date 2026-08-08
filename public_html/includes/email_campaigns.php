@@ -166,6 +166,28 @@ function ensure_email_campaign_schema(): void
     } catch (Throwable $e) {
         // ignore migration hiccups
     }
+
+    // Communication Team / Admin: reusable outreach text per project.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_drafts (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          project_id INT NOT NULL,
+          category VARCHAR(40) NOT NULL DEFAULT 'custom',
+          title VARCHAR(180) NOT NULL,
+          body MEDIUMTEXT NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          created_by INT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX (project_id),
+          INDEX idx_email_campaign_draft_cat (project_id, category),
+          INDEX (updated_at),
+          CONSTRAINT fk_email_campaign_draft_project
+            FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE,
+          CONSTRAINT fk_email_campaign_draft_user
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
 }
 
 /**
@@ -2326,4 +2348,153 @@ function render_email_campaign_super_search(
         <?php
     }
     echo '<script src="' . h(script_asset_url('js/email-campaign-search.js')) . '" defer></script>';
+}
+
+/**
+ * Fixed categories for Communication outreach drafts (per project).
+ *
+ * @return array<string,string> slug => label
+ */
+function email_campaign_draft_categories(): array
+{
+    return [
+        'first_outreach' => 'First outreach',
+        'follow_up' => 'Follow-up',
+        'offer' => 'Offer / pricing',
+        'reply' => 'Reply',
+        'soft_no' => 'Soft no / later',
+        'custom' => 'Custom',
+    ];
+}
+
+function normalize_email_campaign_draft_category(string $category): string
+{
+    $category = strtolower(trim($category));
+    $cats = email_campaign_draft_categories();
+    return isset($cats[$category]) ? $category : 'custom';
+}
+
+function email_campaign_draft_category_label(string $category): string
+{
+    $cats = email_campaign_draft_categories();
+    $slug = normalize_email_campaign_draft_category($category);
+    return $cats[$slug] ?? 'Custom';
+}
+
+function get_email_campaign_draft(int $draftId): ?array
+{
+    ensure_email_campaign_schema();
+    if ($draftId < 1) {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT * FROM email_campaign_drafts WHERE id=? LIMIT 1');
+    $stmt->execute([$draftId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_drafts(int $projectId, ?string $category = null): array
+{
+    ensure_email_campaign_schema();
+    if ($projectId < 1) {
+        return [];
+    }
+    $sql = 'SELECT * FROM email_campaign_drafts WHERE project_id=?';
+    $params = [$projectId];
+    if ($category !== null && $category !== '') {
+        $sql .= ' AND category=?';
+        $params[] = normalize_email_campaign_draft_category($category);
+    }
+    $sql .= ' ORDER BY category ASC, sort_order ASC, title ASC, id ASC';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function count_email_campaign_drafts(int $projectId): int
+{
+    ensure_email_campaign_schema();
+    if ($projectId < 1) {
+        return 0;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=?');
+    $stmt->execute([$projectId]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Create or update a project draft.
+ *
+ * @return array{ok:bool,error?:string,id?:int}
+ */
+function save_email_campaign_draft(
+    int $projectId,
+    string $title,
+    string $body,
+    string $category = 'custom',
+    int $draftId = 0,
+    int $actorId = 0
+): array {
+    ensure_email_campaign_schema();
+    if (!get_email_campaign_project($projectId)) {
+        return ['ok' => false, 'error' => 'Project not found.'];
+    }
+    $title = trim($title);
+    if ($title === '') {
+        return ['ok' => false, 'error' => 'Draft title is required.'];
+    }
+    if (mb_strlen($title) > 180) {
+        $title = mb_substr($title, 0, 180);
+    }
+    $body = trim(str_replace(["\r\n", "\r"], "\n", $body));
+    if ($body === '') {
+        return ['ok' => false, 'error' => 'Draft text is required.'];
+    }
+    $category = normalize_email_campaign_draft_category($category);
+
+    if ($draftId > 0) {
+        $existing = get_email_campaign_draft($draftId);
+        if (!$existing || (int) ($existing['project_id'] ?? 0) !== $projectId) {
+            return ['ok' => false, 'error' => 'Draft not found in this project.'];
+        }
+        db()->prepare(
+            'UPDATE email_campaign_drafts
+             SET category=?, title=?, body=?, updated_at=NOW()
+             WHERE id=? AND project_id=?'
+        )->execute([$category, $title, $body, $draftId, $projectId]);
+        return ['ok' => true, 'id' => $draftId];
+    }
+
+    db()->prepare(
+        'INSERT INTO email_campaign_drafts (project_id, category, title, body, created_by)
+         VALUES (?,?,?,?,?)'
+    )->execute([
+        $projectId,
+        $category,
+        $title,
+        $body,
+        $actorId > 0 ? $actorId : null,
+    ]);
+    return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+}
+
+/**
+ * @return array{ok:bool,error?:string,title?:string}
+ */
+function delete_email_campaign_draft(int $projectId, int $draftId): array
+{
+    ensure_email_campaign_schema();
+    $draft = get_email_campaign_draft($draftId);
+    if (!$draft || (int) ($draft['project_id'] ?? 0) !== $projectId) {
+        return ['ok' => false, 'error' => 'Draft not found in this project.'];
+    }
+    db()->prepare('DELETE FROM email_campaign_drafts WHERE id=? AND project_id=?')
+        ->execute([$draftId, $projectId]);
+    return [
+        'ok' => true,
+        'title' => (string) ($draft['title'] ?? 'Draft'),
+    ];
 }
