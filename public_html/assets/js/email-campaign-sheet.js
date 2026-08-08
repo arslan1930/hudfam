@@ -10,18 +10,31 @@
   var searchInput = document.getElementById('swe-row-search');
   var autosaveTimers = new WeakMap();
 
-  function setStatus(msg, isError) {
+  function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
     if (!msg) {
       statusEl.hidden = true;
       statusEl.textContent = '';
-      statusEl.classList.remove('is-error', 'is-ok');
+      statusEl.classList.remove('is-error', 'is-ok', 'is-loading');
       return;
     }
     statusEl.hidden = false;
     statusEl.textContent = msg;
     statusEl.classList.toggle('is-error', !!isError);
-    statusEl.classList.toggle('is-ok', !isError);
+    statusEl.classList.toggle('is-ok', !isError && !isLoading);
+    statusEl.classList.toggle('is-loading', !!isLoading && !isError);
+  }
+
+  function showProcessing(msg) {
+    if (window.AppProcessing && typeof window.AppProcessing.show === 'function') {
+      window.AppProcessing.show(msg);
+    }
+  }
+
+  function hideProcessing() {
+    if (window.AppProcessing && typeof window.AppProcessing.hide === 'function') {
+      window.AppProcessing.hide();
+    }
   }
 
   function emailInputsIn(root) {
@@ -355,11 +368,17 @@
 
     if (!form.matches('[data-swe-remove]')) return;
     e.preventDefault();
+    setStatus('Removing site…', false, true);
+    showProcessing('Removing site…');
     postAjaxForm(form, 'Remove failed').then(function (result) {
-      if (!result) return;
+      if (!result) {
+        hideProcessing();
+        return;
+      }
       removeRowFromDom(result.siteId, result.data.site_count);
       setStatus('Removed ' + (result.data.domain || 'site') + '.');
       form.removeAttribute('data-busy');
+      hideProcessing();
     });
   });
 

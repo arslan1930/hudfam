@@ -265,7 +265,8 @@ if ($sheetId > 0) {
           <tbody id="camp-sheet-tbody">
           <tr id="camp-add-row" class="camp-add-row" hidden>
             <td colspan="3">
-              <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form" autocomplete="off">
+              <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form"
+                    autocomplete="off" data-show-processing="Adding site…">
                 <input type="hidden" name="action" value="save_row">
                 <input type="hidden" name="site_id" value="0">
                 <div class="swe-row-grid">
@@ -356,7 +357,8 @@ if ($sheetId > 0) {
         Built for large lists — paste or upload thousands of rows at once.
       </p>
 
-      <form method="post" action="<?= h($formAction) ?>" style="margin-top:0.85rem">
+      <form method="post" action="<?= h($formAction) ?>" style="margin-top:0.85rem"
+            data-show-processing="Adding pasted sites…">
         <input type="hidden" name="action" value="paste">
         <label for="camp_paste_text">Paste sites + emails</label>
         <textarea id="camp_paste_text" name="paste_text" class="inventory-box camp-bulk-paste" rows="14"
@@ -368,7 +370,8 @@ if ($sheetId > 0) {
 
       <hr class="camp-bulk-divider">
 
-      <form method="post" action="<?= h($formAction) ?>" enctype="multipart/form-data">
+      <form method="post" action="<?= h($formAction) ?>" enctype="multipart/form-data"
+            data-show-processing="Importing file…">
         <input type="hidden" name="action" value="import_file">
         <label for="camp_import_file">Import from CSV, Excel, or TXT</label>
         <input id="camp_import_file" type="file" name="import_file" required
@@ -387,6 +390,7 @@ if ($sheetId > 0) {
       <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive (optional)', 'Optional shortcut: copy this country’s sites that already have emails from Final or Admin. Empty-email sites are skipped. Primary entry is still Admin paste / file / + Add site.') ?></h2>
       <p class="help">Copies only sites that have at least one email. Archives are not changed.</p>
       <form method="post" action="<?= h($formAction) ?>"
+            data-show-processing="Importing from archive…"
             onsubmit="return confirm('Import <?= h($sheetCountry) ?> into this sheet?');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
@@ -416,6 +420,7 @@ if ($sheetId > 0) {
     <div class="card" style="margin-top:1rem">
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
+            data-show-processing="Deleting Email Sheet…"
             onsubmit="return confirm('Delete the <?= h($sheetCountry) ?> email sheet and all its rows?');">
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Delete country sheet</button>
@@ -614,7 +619,8 @@ render_breadcrumbs([
         <p>Every country already has a sheet.</p>
       </div>
     <?php else: ?>
-    <form method="post" action="<?= h($campBase) ?>" autocomplete="off">
+    <form method="post" action="<?= h($campBase) ?>" autocomplete="off"
+          data-show-processing="Creating Email Sheet…">
       <input type="hidden" name="action" value="create">
       <label for="new_camp_country">Country</label>
       <select id="new_camp_country" name="country" required>
