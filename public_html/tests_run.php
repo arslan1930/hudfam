@@ -445,6 +445,43 @@ try {
     } else {
         fail('campaign with-email upsert failed: ' . json_encode($withEmail));
     }
+
+    // Project name + Communication Team search visibility.
+    $sheetAt = create_email_campaign_sheet(
+        'Austria',
+        (int) $adminUser['id'],
+        'Alpine Outreach',
+        true
+    );
+    $at = get_email_campaign_sheet($sheetAt);
+    if ($at && email_campaign_sheet_project_name($at) === 'Alpine Outreach'
+        && email_campaign_sheet_team_visible($at)) {
+        pass('project sheet created with team search on');
+    } else {
+        fail('project sheet: ' . json_encode($at));
+    }
+    $hide = update_email_campaign_sheet_settings($sheetAt, 'Alpine Outreach (paused)', false);
+    $at2 = get_email_campaign_sheet($sheetAt);
+    $visibleSheets = list_email_campaign_sheets(true);
+    $visibleIds = array_map(static fn ($s) => (int) $s['id'], $visibleSheets);
+    if (!empty($hide['ok'])
+        && email_campaign_sheet_project_name($at2 ?? []) === 'Alpine Outreach (paused)'
+        && !email_campaign_sheet_team_visible($at2 ?? [])
+        && !in_array($sheetAt, $visibleIds, true)) {
+        pass('project search can be hidden from Communication Team');
+    } else {
+        fail('hide project: ' . json_encode(['hide' => $hide, 'sheet' => $at2, 'visible' => $visibleIds]));
+    }
+    upsert_email_campaign_row($sheetAt, 'txfcamp-hidden.at', [
+        'email1' => 'h@txfcamp-hidden.at', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    $hiddenSuggest = search_email_campaign_suggestions_all('txfcamp-hidden', 10);
+    $scopedSuggest = search_email_campaign_suggestions($sheetAt, 'txfcamp-hidden', 10);
+    if ($hiddenSuggest === [] && count($scopedSuggest) === 1) {
+        pass('hidden sheet excluded from team-wide suggest; still searchable by id');
+    } else {
+        fail('suggest visibility: all=' . json_encode($hiddenSuggest) . ' scoped=' . json_encode($scopedSuggest));
+    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

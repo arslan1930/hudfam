@@ -118,7 +118,12 @@
       }
       selectedBox.hidden = false;
       if (selDomain) selDomain.textContent = selected.domain || '';
-      if (selCountry) selCountry.textContent = selected.country || '';
+      if (selCountry) {
+        var bits = [];
+        if (selected.projectName) bits.push(selected.projectName);
+        if (selected.country && selected.country !== selected.projectName) bits.push(selected.country);
+        selCountry.textContent = bits.join(' · ');
+      }
       if (selEmails) {
         selEmails.innerHTML = '';
         var emails = selected.emails || [];
@@ -153,6 +158,7 @@
         sheetId: item.sheet_id || sheetId,
         domain: item.domain,
         country: item.country,
+        projectName: item.project_name || sheetName || '',
         emails: (item.emails || []).slice(),
         matchType: item.match_type || 'domain',
         focusEmail: item.match_type === 'email' ? item.matched_value : null

@@ -1,8 +1,8 @@
 <?php
 /**
  * Email campaign sheets (Emails DATA → Email campaign data).
- * One sheet per country. Communication Team uses one super search across all countries;
- * updates apply to the matching country sheet row.
+ * One sheet per country with an admin-assigned project name.
+ * Each sheet can expose its own Communication Team search bar (site + emails delete).
  */
 
 function ensure_email_campaign_schema(): void
@@ -17,11 +17,14 @@ function ensure_email_campaign_schema(): void
         "CREATE TABLE IF NOT EXISTS email_campaign_sheets (
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(180) NOT NULL,
+          project_name VARCHAR(180) NOT NULL DEFAULT '',
+          team_search_visible TINYINT(1) NOT NULL DEFAULT 1,
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_email_campaign_sheet_name (name),
           INDEX (updated_at),
+          INDEX (team_search_visible),
           CONSTRAINT fk_email_campaign_sheet_user
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
@@ -48,6 +51,31 @@ function ensure_email_campaign_schema(): void
             FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+
+    // Older installs: add project name + team visibility.
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_sheets')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['project_name'])) {
+            $pdo->exec(
+                "ALTER TABLE email_campaign_sheets
+                 ADD COLUMN project_name VARCHAR(180) NOT NULL DEFAULT '' AFTER name"
+            );
+        }
+        if (!isset($have['team_search_visible'])) {
+            $pdo->exec(
+                "ALTER TABLE email_campaign_sheets
+                 ADD COLUMN team_search_visible TINYINT(1) NOT NULL DEFAULT 1 AFTER project_name"
+            );
+        }
+        $pdo->exec(
+            "UPDATE email_campaign_sheets
+             SET project_name = name
+             WHERE TRIM(project_name) = ''"
+        );
+    } catch (Throwable $e) {
+        // ignore migration hiccups
+    }
 }
 
 /**
@@ -59,12 +87,30 @@ function email_campaign_sheet_country(array $sheet): string
 }
 
 /**
- * @return list<array{id:int,name:string,country:string,region:string,language:string,row_count:int,with_emails:int,created_at:?string,updated_at:?string}>
+ * Admin-assigned project label shown on the Communication Team search bar.
  */
-function list_email_campaign_sheets(): array
+function email_campaign_sheet_project_name(array $sheet): string
+{
+    $project = trim((string) ($sheet['project_name'] ?? ''));
+    if ($project !== '') {
+        return $project;
+    }
+    return email_campaign_sheet_country($sheet);
+}
+
+function email_campaign_sheet_team_visible(array $sheet): bool
+{
+    return (int) ($sheet['team_search_visible'] ?? 1) === 1;
+}
+
+/**
+ * @param bool|null $onlyTeamVisible true = only sheets shown to Communication Team
+ * @return list<array{id:int,name:string,country:string,project_name:string,team_search_visible:bool,region:string,language:string,row_count:int,with_emails:int,created_at:?string,updated_at:?string}>
+ */
+function list_email_campaign_sheets(?bool $onlyTeamVisible = null): array
 {
     ensure_email_campaign_schema();
-    $sql = "SELECT s.id, s.name, s.created_at, s.updated_at,
+    $sql = "SELECT s.id, s.name, s.project_name, s.team_search_visible, s.created_at, s.updated_at,
                    COALESCE(SUM(CASE WHEN r.id IS NOT NULL AND LEFT(r.domain, 8) <> '__blank_' THEN 1 ELSE 0 END), 0) AS row_count,
                    COALESCE(SUM(
                      CASE WHEN r.id IS NOT NULL AND LEFT(r.domain, 8) <> '__blank_'
@@ -72,18 +118,29 @@ function list_email_campaign_sheets(): array
                           THEN 1 ELSE 0 END
                    ), 0) AS with_emails
             FROM email_campaign_sheets s
-            LEFT JOIN email_campaign_rows r ON r.sheet_id = s.id
-            GROUP BY s.id, s.name, s.created_at, s.updated_at
-            ORDER BY s.name ASC";
+            LEFT JOIN email_campaign_rows r ON r.sheet_id = s.id";
+    if ($onlyTeamVisible === true) {
+        $sql .= ' WHERE s.team_search_visible = 1';
+    } elseif ($onlyTeamVisible === false) {
+        $sql .= ' WHERE s.team_search_visible = 0';
+    }
+    $sql .= ' GROUP BY s.id, s.name, s.project_name, s.team_search_visible, s.created_at, s.updated_at
+              ORDER BY s.project_name ASC, s.name ASC';
     $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
     $out = [];
     foreach ($rows as $row) {
         $country = (string) $row['name'];
         $canon = resolve_canonical_country($country);
+        $project = trim((string) ($row['project_name'] ?? ''));
+        if ($project === '') {
+            $project = $canon ? $canon['name'] : $country;
+        }
         $out[] = [
             'id' => (int) $row['id'],
             'name' => $canon ? $canon['name'] : $country,
             'country' => $canon ? $canon['name'] : $country,
+            'project_name' => $project,
+            'team_search_visible' => (int) ($row['team_search_visible'] ?? 1) === 1,
             'region' => $canon ? (string) $canon['region'] : '',
             'language' => $canon ? (string) $canon['language'] : '',
             'row_count' => (int) $row['row_count'],
@@ -116,20 +173,39 @@ function get_email_campaign_sheet_by_country(string $country): ?array
 
 /**
  * Create (or return existing) country sheet. One sheet per country.
+ * Assigns a project name and optionally exposes a Communication Team search bar.
  */
-function create_email_campaign_sheet(string $country, int $actorId = 0): int
-{
+function create_email_campaign_sheet(
+    string $country,
+    int $actorId = 0,
+    string $projectName = '',
+    bool $teamSearchVisible = true
+): int {
     ensure_email_campaign_schema();
     $canon = require_canonical_country($country);
     $name = $canon['name'];
+    $project = trim($projectName);
+    if ($project === '') {
+        $project = $name;
+    }
+    if (mb_strlen($project) > 180) {
+        $project = mb_substr($project, 0, 180);
+    }
     $existing = get_email_campaign_sheet_by_country($name);
     if ($existing) {
+        // One sheet per country — return existing; edit project/visibility on the sheet page.
         return (int) $existing['id'];
     }
     try {
         db()->prepare(
-            'INSERT INTO email_campaign_sheets (name, created_by) VALUES (?, ?)'
-        )->execute([$name, $actorId > 0 ? $actorId : null]);
+            'INSERT INTO email_campaign_sheets (name, project_name, team_search_visible, created_by)
+             VALUES (?, ?, ?, ?)'
+        )->execute([
+            $name,
+            $project,
+            $teamSearchVisible ? 1 : 0,
+            $actorId > 0 ? $actorId : null,
+        ]);
     } catch (PDOException $e) {
         $again = get_email_campaign_sheet_by_country($name);
         if ($again) {
@@ -140,11 +216,61 @@ function create_email_campaign_sheet(string $country, int $actorId = 0): int
     return (int) db()->lastInsertId();
 }
 
-/** @deprecated Sheets are country-named; renaming is not used. */
+/**
+ * Update project name and whether Communication Team sees this sheet’s search bar.
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function update_email_campaign_sheet_settings(
+    int $sheetId,
+    string $projectName,
+    bool $teamSearchVisible
+): array {
+    ensure_email_campaign_schema();
+    if (!get_email_campaign_sheet($sheetId)) {
+        return ['ok' => false, 'error' => 'Sheet not found.'];
+    }
+    $project = trim($projectName);
+    if ($project === '') {
+        return ['ok' => false, 'error' => 'Project name is required.'];
+    }
+    if (mb_strlen($project) > 180) {
+        $project = mb_substr($project, 0, 180);
+    }
+    db()->prepare(
+        'UPDATE email_campaign_sheets
+         SET project_name=?, team_search_visible=?, updated_at=NOW()
+         WHERE id=?'
+    )->execute([$project, $teamSearchVisible ? 1 : 0, $sheetId]);
+    return ['ok' => true];
+}
+
+function set_email_campaign_sheet_team_visible(int $sheetId, bool $visible): array
+{
+    ensure_email_campaign_schema();
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
+        return ['ok' => false, 'error' => 'Sheet not found.'];
+    }
+    return update_email_campaign_sheet_settings(
+        $sheetId,
+        email_campaign_sheet_project_name($sheet),
+        $visible
+    );
+}
+
+/** @deprecated Use update_email_campaign_sheet_settings() for project name. */
 function rename_email_campaign_sheet(int $id, string $name): void
 {
-    // no-op kept for safety — country sheets keep canonical country names
-    unset($id, $name);
+    $sheet = get_email_campaign_sheet($id);
+    if (!$sheet) {
+        return;
+    }
+    update_email_campaign_sheet_settings(
+        $id,
+        $name !== '' ? $name : email_campaign_sheet_project_name($sheet),
+        email_campaign_sheet_team_visible($sheet)
+    );
 }
 
 function delete_email_campaign_sheet(int $id): bool
@@ -623,60 +749,61 @@ function get_email_campaign_row(int $rowId, ?int $sheetId = null): ?array
 }
 
 /**
- * Live suggestions: always return site name + emails together.
- *
- * @return list<array{
- *   id:int,domain:string,country:string,emails:list<string>,
- *   match_type:string,matched_value:string,label:string
- * }>
- */
-/**
  * Live suggestions within one country sheet.
  *
  * @return list<array{
- *   id:int,sheet_id:int,domain:string,country:string,emails:list<string>,
+ *   id:int,sheet_id:int,domain:string,country:string,project_name:string,emails:list<string>,
  *   match_type:string,matched_value:string,label:string
  * }>
  */
 function search_email_campaign_suggestions(int $sheetId, string $q, int $limit = 20): array
 {
-    return search_email_campaign_suggestions_scoped($q, $limit, $sheetId);
+    return search_email_campaign_suggestions_scoped($q, $limit, $sheetId, false);
 }
 
 /**
- * Super search across all country campaign sheets.
- * Results always include site name + emails + country; actions update that sheet row.
+ * Search across Communication Team–visible sheets only.
  *
  * @return list<array{
- *   id:int,sheet_id:int,domain:string,country:string,emails:list<string>,
+ *   id:int,sheet_id:int,domain:string,country:string,project_name:string,emails:list<string>,
  *   match_type:string,matched_value:string,label:string
  * }>
  */
 function search_email_campaign_suggestions_all(string $q, int $limit = 20): array
 {
-    return search_email_campaign_suggestions_scoped($q, $limit, null);
+    return search_email_campaign_suggestions_scoped($q, $limit, null, true);
 }
 
 /**
  * @return list<array{
- *   id:int,sheet_id:int,domain:string,country:string,emails:list<string>,
+ *   id:int,sheet_id:int,domain:string,country:string,project_name:string,emails:list<string>,
  *   match_type:string,matched_value:string,label:string
  * }>
  */
-function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?int $sheetId = null): array
-{
+function search_email_campaign_suggestions_scoped(
+    string $q,
+    int $limit = 20,
+    ?int $sheetId = null,
+    bool $onlyTeamVisible = false
+): array {
     ensure_email_campaign_schema();
     $q = trim(mb_strtolower($q));
     if ($q === '' || mb_strlen($q) < 2) {
         return [];
     }
-    if ($sheetId !== null && !get_email_campaign_sheet($sheetId)) {
-        return [];
+    if ($sheetId !== null) {
+        $sheet = get_email_campaign_sheet($sheetId);
+        if (!$sheet) {
+            return [];
+        }
+        if ($onlyTeamVisible && !email_campaign_sheet_team_visible($sheet)) {
+            return [];
+        }
     }
     $limit = max(1, min(40, $limit));
     $like = '%' . $q . '%';
     $sql = "SELECT r.id, r.sheet_id, r.domain, r.country, r.email1, r.email2, r.email3, r.email4,
-                   s.name AS sheet_country
+                   s.name AS sheet_country, s.project_name
             FROM email_campaign_rows r
             INNER JOIN email_campaign_sheets s ON s.id = r.sheet_id
             WHERE LEFT(r.domain, 8) <> '__blank_'
@@ -684,11 +811,14 @@ function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?i
                 r.domain LIKE ?
                 OR r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?
                 OR s.name LIKE ?
+                OR s.project_name LIKE ?
               )";
-    $params = [$like, $like, $like, $like, $like, $like];
+    $params = [$like, $like, $like, $like, $like, $like, $like];
     if ($sheetId !== null) {
         $sql .= ' AND r.sheet_id = ?';
         $params[] = $sheetId;
+    } elseif ($onlyTeamVisible) {
+        $sql .= ' AND s.team_search_visible = 1';
     }
     $sql .= " ORDER BY
            CASE
@@ -697,7 +827,7 @@ function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?i
              WHEN r.email1 = ? OR r.email2 = ? OR r.email3 = ? OR r.email4 = ? THEN 2
              ELSE 3
            END,
-           s.name ASC, r.domain ASC
+           s.project_name ASC, s.name ASC, r.domain ASC
          LIMIT {$limit}";
     $params = array_merge($params, [$q, $q . '%', $q, $q, $q, $q]);
     $stmt = db()->prepare($sql);
@@ -709,6 +839,10 @@ function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?i
         $country = trim((string) ($row['country'] ?? ''));
         if ($country === '') {
             $country = (string) ($row['sheet_country'] ?? '');
+        }
+        $project = trim((string) ($row['project_name'] ?? ''));
+        if ($project === '') {
+            $project = $country;
         }
         $emails = [];
         foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
@@ -732,6 +866,10 @@ function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?i
                 $matchType = 'country';
                 $matched = $country;
             }
+            if ($matchType === 'domain' && str_contains(mb_strtolower($project), $q)) {
+                $matchType = 'project';
+                $matched = $project;
+            }
         }
         $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
         $out[] = [
@@ -739,10 +877,11 @@ function search_email_campaign_suggestions_scoped(string $q, int $limit = 20, ?i
             'sheet_id' => (int) $row['sheet_id'],
             'domain' => $domain,
             'country' => $country,
+            'project_name' => $project,
             'emails' => $emails,
             'match_type' => $matchType,
             'matched_value' => $matched,
-            'label' => $domain . ' · ' . $emailPreview . ' · ' . $country,
+            'label' => $domain . ' · ' . $emailPreview . ' · ' . $project,
         ];
     }
     return $out;
@@ -856,56 +995,72 @@ function user_in_communication_team(array $user): bool
 
 
 /**
- * Render Communication Team super search across all country campaign sheets.
+ * Render Communication Team search bars (one per visible project sheet).
  */
 function render_email_campaign_search_panels(?int $onlySheetId = null, string $postBase = 'index.php?page=team_email_campaigns'): void
 {
-    // $onlySheetId kept for BC; super search always covers all countries (or one if set).
-    unset($onlySheetId);
-    render_email_campaign_super_search($postBase);
+    render_email_campaign_super_search($postBase, $onlySheetId);
 }
 
-function render_email_campaign_super_search(string $postBase = 'index.php?page=team_email_campaigns'): void
-{
+/**
+ * One search bar per Admin-created sheet that is marked visible to Communication Team.
+ * Each bar is titled with the admin-assigned project name; delete site+emails as before.
+ */
+function render_email_campaign_super_search(
+    string $postBase = 'index.php?page=team_email_campaigns',
+    ?int $onlySheetId = null
+): void {
     ensure_email_campaign_schema();
-    $sheets = list_email_campaign_sheets();
-    $totalSites = 0;
-    foreach ($sheets as $s) {
-        $totalSites += (int) $s['row_count'];
+    $sheets = list_email_campaign_sheets(true);
+    if ($onlySheetId !== null && $onlySheetId > 0) {
+        $sheets = array_values(array_filter(
+            $sheets,
+            static fn (array $s): bool => (int) $s['id'] === $onlySheetId
+        ));
     }
-    $uid = 'camp-super-' . substr(md5($postBase), 0, 6);
     if ($sheets === []) {
         echo '<div class="card"><div class="empty-state">';
-        echo '<p>No country email sheets yet.</p>';
-        echo '<p class="muted">When Admin creates an Email Sheet for a country under Emails DATA → Email campaign data, you can search it here.</p>';
+        echo '<p>No project search bars are available yet.</p>';
+        echo '<p class="muted">When Admin creates an Email Sheet and turns on “Show to Communication Team”, a search bar appears here with that project name.</p>';
         echo '</div></div>';
         return;
     }
-    ?>
+
+    foreach ($sheets as $s) {
+        $sid = (int) $s['id'];
+        $project = (string) $s['project_name'];
+        $country = (string) $s['country'];
+        $sites = (int) $s['row_count'];
+        $uid = 'camp-sheet-' . $sid;
+        $suggestUrl = $postBase . '&ajax=suggest&sheet_id=' . $sid;
+        ?>
   <div class="card camp-search-card" style="margin-bottom:1rem"
        data-camp-search
-       data-sheet-id="0"
-       data-sheet-name="All countries"
-       data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
+       data-sheet-id="<?= $sid ?>"
+       data-sheet-name="<?= h($project) ?>"
+       data-suggest-url="<?= h($suggestUrl) ?>"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0"><?= label_with_info('Super search · all countries', 'Type a site or email. Pick a result, choose delete both or remove only email, then press Enter and confirm. If you remove the last email on a site, the whole site row is deleted too.') ?></h2>
+    <h2 style="margin-top:0"><?= label_with_info(
+        $project,
+        'Project search bar for this Email Sheet. Search site + emails, then delete both or remove only email (same as before). Removing the last email also deletes the site row.'
+    ) ?></h2>
     <p class="help muted" style="margin-top:0">
-      <?= count($sheets) ?> countr<?= count($sheets) === 1 ? 'y' : 'ies' ?> ·
-      <?= (int) $totalSites ?> site<?= (int) $totalSites === 1 ? '' : 's' ?> ·
-      search site or email across every country sheet · updates that country’s row
+      <?= h($country) ?> ·
+      <?= $sites ?> site<?= $sites === 1 ? '' : 's' ?> ·
+      search site or email · delete both or remove only email
     </p>
-    <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions across every country sheet. Site name and emails always appear together.') ?></label>
+    <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions for this project sheet. Site name and emails always appear together.') ?></label>
     <div class="swe-admin-delete-search">
       <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-camp-q
-             placeholder="Type site or email (all countries)…"
+             placeholder="Type site or email in <?= h($project) ?>…"
              autocomplete="off" spellcheck="false" data-no-draft
-             title="Type to search all countries · Arrow keys · Enter to select / confirm">
+             title="Type to search this project · Arrow keys · Enter to select / confirm">
       <ul class="swe-admin-delete-suggest" data-camp-suggest hidden></ul>
     </div>
     <p class="help camp-status" data-camp-status hidden></p>
     <div class="swe-admin-delete-selected" data-camp-selected hidden>
       <h3 style="margin-top:1rem">Selected</h3>
-      <p class="help">Site name and emails stay together. Action updates the matching country sheet.</p>
+      <p class="help">Site name and emails stay together. Action updates this project sheet.</p>
       <div class="swe-admin-delete-panel">
         <div>
           <div class="muted" style="font-size:0.82rem">Site name</div>
@@ -939,6 +1094,7 @@ function render_email_campaign_super_search(string $postBase = 'index.php?page=t
       </div>
     </div>
   </div>
-    <?php
+        <?php
+    }
     echo '<script src="' . h(script_asset_url('js/email-campaign-search.js')) . '" defer></script>';
 }

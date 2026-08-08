@@ -1,6 +1,6 @@
 <?php
 /**
- * Communication Team · super search across all country email campaign sheets.
+ * Communication Team · one search bar per Admin project sheet (site + emails delete).
  */
 $user = require_team();
 ensure_email_campaign_schema();
@@ -12,15 +12,26 @@ if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
 
 $base = 'index.php?page=team_email_campaigns';
 
-// JSON suggest — all countries
+// JSON suggest — one project sheet (or all visible if sheet_id omitted)
 if ((string) get('ajax') === 'suggest') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $q = (string) get('q');
+    $sheetId = (int) get('sheet_id');
+    if ($sheetId > 0) {
+        $sheet = get_email_campaign_sheet($sheetId);
+        if (!$sheet || !email_campaign_sheet_team_visible($sheet)) {
+            echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
+            exit;
+        }
+        $suggestions = search_email_campaign_suggestions($sheetId, $q, 25);
+    } else {
+        $suggestions = search_email_campaign_suggestions_all($q, 25);
+    }
     echo json_encode([
         'ok' => true,
         'q' => $q,
-        'suggestions' => search_email_campaign_suggestions_all($q, 25),
+        'suggestions' => $suggestions,
     ]);
     exit;
 }
@@ -57,9 +68,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $sheet = $sid > 0 ? get_email_campaign_sheet($sid) : null;
     if (!$sheet) {
-        $json(['ok' => false, 'error' => 'Country email sheet not found.'], 404);
+        $json(['ok' => false, 'error' => 'Project email sheet not found.'], 404);
+    }
+    if (!email_campaign_sheet_team_visible($sheet)) {
+        $json(['ok' => false, 'error' => 'This project search bar is hidden by Admin.'], 403);
     }
     $countryName = email_campaign_sheet_country($sheet);
+    $projectName = email_campaign_sheet_project_name($sheet);
 
     if ($action === 'delete_row') {
         $result = delete_email_campaign_row($sid, $rowId);
@@ -68,9 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $json([
             'ok' => true,
-            'message' => 'Deleted ' . (string) $result['domain'] . ' from ' . $countryName . ' sheet.',
+            'message' => 'Deleted ' . (string) $result['domain'] . ' from ' . $projectName . '.',
             'domain' => (string) $result['domain'],
             'country' => $countryName,
+            'project_name' => $projectName,
             'mode' => 'row',
         ]);
     }
@@ -83,14 +99,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rowDeleted = !empty($result['row_deleted']);
         $msg = $rowDeleted
             ? 'Removed last email from ' . (string) $result['domain']
-                . ' (' . $countryName . ') · site row deleted (no empty-email sites).'
+                . ' (' . $projectName . ') · site row deleted (no empty-email sites).'
             : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
-                . ' (' . $countryName . '). Site name kept.';
+                . ' (' . $projectName . '). Site name kept.';
         $json([
             'ok' => true,
             'message' => $msg,
             'domain' => (string) $result['domain'],
             'country' => $countryName,
+            'project_name' => $projectName,
             'emails' => $result['emails'] ?? [],
             'removed' => (string) ($result['removed'] ?? ''),
             'row_id' => $rowId,
@@ -103,6 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
+$visibleCount = count(list_email_campaign_sheets(true));
+
 render_header('Campaign search', 'team');
 render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
@@ -111,11 +130,12 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Campaign search', 'Searches all country Email Sheets created by Admin. Results show site + email + country. Enter confirms your chosen action on that country sheet row.') ?></h1>
+    <h1><?= label_with_info('Campaign search', 'One search bar per Admin project sheet that is shown to Communication Team. Search site + email, then delete both or remove only email.') ?></h1>
     <p class="muted">
-      One super search across <strong>all country sheets</strong> from Admin → Emails data → Email campaign data.
-      Results show <strong>site name + email + country</strong>. Choose delete both or remove only email, then press
-      <strong>Enter</strong> (confirm first). Removing the <strong>last</strong> email also deletes the site row.
+      <?= (int) $visibleCount ?> project search bar<?= (int) $visibleCount === 1 ? '' : 's' ?>
+      from Admin → Emails data → Email campaign data.
+      Each bar is named with the <strong>project name</strong> Admin assigned.
+      Delete both or remove only email — removing the <strong>last</strong> email also deletes the site row.
     </p>
   </div>
 </div>
