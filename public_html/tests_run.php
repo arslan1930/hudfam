@@ -721,6 +721,21 @@ try {
             fail('clear all: ' . json_encode($clearAll) . " left=$sentLeft");
         }
 
+        // Copy filters: not emailed vs emailed (Admin only).
+        set_site_with_emails_admin_email_sent($idA, true);
+        set_site_with_emails_admin_email_sent($idB, true);
+        set_site_with_emails_admin_email_sent($idC, false);
+        $copySent = collect_sites_with_emails_all_emails('Germany', 'admin', '1');
+        $copyUnsent = collect_sites_with_emails_all_emails('Germany', 'admin', '0');
+        $hasA = in_array('a2@txfsent-a.com', $copySent, true) || in_array('a@txfsent-a.com', $copySent, true);
+        $hasCUnsent = in_array('c@txfsent-c.com', $copyUnsent, true);
+        $cNotInSent = !in_array('c@txfsent-c.com', $copySent, true);
+        if ($hasA && $hasCUnsent && $cNotInSent) {
+            pass('copy emailed / not-emailed email lists split correctly');
+        } else {
+            fail('copy filters: sent=' . json_encode($copySent) . ' unsent=' . json_encode($copyUnsent));
+        }
+
         // Sync must not invent sent state on Final (no column); domains still mirror.
         sync_sites_with_emails_admin_to_all('Germany');
         $finalMirror = (int) db()->query(

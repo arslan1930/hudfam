@@ -61,7 +61,11 @@ if ($inCountry && (string) get('export') !== '') {
         stream_sites_with_emails_csv($sheet, $sweScope);
     }
     if ($mode === 'emails') {
-        stream_sites_with_emails_emails_plain($sheet, $sweScope);
+        $sentExport = (string) get('sent');
+        if ($sweScope !== 'admin' || ($sentExport !== '0' && $sentExport !== '1')) {
+            $sentExport = null;
+        }
+        stream_sites_with_emails_emails_plain($sheet, $sweScope, $sentExport);
     }
 }
 
@@ -536,6 +540,8 @@ $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
+$emailsExportUnsentUrl = $emailsExportUrl . '&sent=0';
+$emailsExportSentUrl = $emailsExportUrl . '&sent=1';
 $qs = http_build_query(array_filter([
     'page' => $isAdmin ? 'admin_emails_data' : 'team_sites_emails',
     'folder' => $sweFolder,
@@ -591,9 +597,36 @@ render_breadcrumbs($crumbs);
       </button>
     </form>
     <?php endif; ?>
-    <button type="button" class="btn secondary" id="swe_copy_emails"
+    <?php if ($sweScope === 'admin'): ?>
+    <div class="swe-copy-group" role="group" aria-label="Copy emails by sent status">
+      <button type="button" class="btn secondary" data-swe-copy-emails
+              data-export-url="<?= h($emailsExportUnsentUrl) ?>"
+              data-copy-label="not emailed"
+              title="Copy emails from sites not marked emailed yet"
+              <?= ($sentStats && (int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
+        Copy not emailed
+      </button>
+      <button type="button" class="btn secondary" data-swe-copy-emails
+              data-export-url="<?= h($emailsExportSentUrl) ?>"
+              data-copy-label="emailed"
+              title="Copy emails from sites already marked emailed"
+              <?= ($sentStats && (int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
+        Copy emailed
+      </button>
+      <button type="button" class="btn secondary" id="swe_copy_emails" data-swe-copy-emails
+              data-export-url="<?= h($emailsExportUrl) ?>"
+              data-copy-label="all"
+              title="Copy every email on this Admin country sheet"
+              <?= $countryTotal > 0 ? '' : 'disabled' ?>>
+        Copy all emails
+      </button>
+    </div>
+    <?php else: ?>
+    <button type="button" class="btn secondary" id="swe_copy_emails" data-swe-copy-emails
             data-export-url="<?= h($emailsExportUrl) ?>"
+            data-copy-label="all"
             <?= $countryTotal > 0 ? '' : 'disabled' ?>>Copy all emails</button>
+    <?php endif; ?>
     <a class="btn secondary" href="<?= h($csvUrl) ?>">Download CSV / Excel</a>
     <a class="btn secondary" href="<?= h($sweBase) ?>">All countries</a>
   </div>

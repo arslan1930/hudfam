@@ -47,12 +47,19 @@
     });
   }
 
-  if (copyBtn) {
-    copyBtn.addEventListener('click', function () {
-      var url = copyBtn.getAttribute('data-export-url');
+  function bindCopyEmailsButton(btn) {
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var url = btn.getAttribute('data-export-url');
       if (!url) return;
-      copyBtn.disabled = true;
-      setStatus('Loading emails…');
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      var wasDisabled = btn.disabled;
+      btn.disabled = true;
+      var loading =
+        label === 'not emailed' ? 'Loading not-emailed emails…'
+          : label === 'emailed' ? 'Loading emailed emails…'
+            : 'Loading emails…';
+      setStatus(loading);
       fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/plain' } })
         .then(function (res) {
           if (!res.ok) throw new Error('Could not load emails.');
@@ -60,19 +67,37 @@
         })
         .then(function (text) {
           text = String(text || '').replace(/\r\n/g, '\n').trim();
-          if (!text) throw new Error('No emails to copy yet.');
+          if (!text) {
+            throw new Error(
+              label === 'not emailed' ? 'No not-emailed emails to copy.'
+                : label === 'emailed' ? 'No emailed emails to copy.'
+                  : 'No emails to copy yet.'
+            );
+          }
           var lines = text.split('\n').filter(Boolean);
           return copyText(text).then(function () {
-            setStatus('Copied ' + lines.length + ' email' + (lines.length === 1 ? '' : 's') + '.');
+            var kind =
+              label === 'not emailed' ? ' not-emailed'
+                : label === 'emailed' ? ' emailed'
+                  : '';
+            setStatus(
+              'Copied ' + lines.length + kind + ' email' + (lines.length === 1 ? '' : 's') + '.'
+            );
           });
         })
         .catch(function (err) {
           setStatus(err.message || 'Copy failed.', true);
         })
         .then(function () {
-          copyBtn.disabled = false;
+          btn.disabled = wasDisabled;
         });
     });
+  }
+
+  document.querySelectorAll('[data-swe-copy-emails]').forEach(bindCopyEmailsButton);
+  // Legacy single-button id still present on some pages
+  if (copyBtn && !copyBtn.hasAttribute('data-swe-copy-emails')) {
+    bindCopyEmailsButton(copyBtn);
   }
 
   // Search: keep Site + Emails columns together (whole row)
