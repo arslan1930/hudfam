@@ -214,6 +214,77 @@ try {
     } else {
         fail("team swe txfpush-* count=$swe");
     }
+
+    // Push auto-route: country TLDs → own folders; generic TLDs stay in selected country.
+    db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfroute-%'");
+    $routePush = push_extract_results_to_extracted(
+        implode("\n", [
+            'txfroute-stay.com',
+            'txfroute-stay.net',
+            'txfroute-stay.eu',
+            'txfroute-de.de',
+            'txfroute-at.at',
+            'txfroute-ch.ch',
+            'txfroute-fr.fr',
+            'https://www.txfroute-uk.co.uk/path',
+        ]),
+        'Germany',
+        $teamUser,
+        'German',
+        'europe',
+        $batchId
+    );
+    $inDe = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Germany' AND domain LIKE 'txfroute-%'"
+    )->fetchColumn();
+    $inAt = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $inCh = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Switzerland' AND domain='txfroute-ch.ch'"
+    )->fetchColumn();
+    $inFr = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='France' AND domain='txfroute-fr.fr'"
+    )->fetchColumn();
+    $inUk = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='United Kingdom' AND domain='txfroute-uk.co.uk'"
+    )->fetchColumn();
+    $sweAt = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $mapOk = country_for_push_domain('shop.de', 'Germany') === 'Germany'
+        && country_for_push_domain('shop.at', 'Germany') === 'Austria'
+        && country_for_push_domain('shop.ch', 'Germany') === 'Switzerland'
+        && country_for_push_domain('shop.com', 'Germany') === 'Germany'
+        && country_for_push_domain('shop.eu', 'France') === 'France';
+    if ((int) ($routePush['inserted'] ?? 0) >= 5
+        && $inDe === 4 // .com + .net + .eu + .de
+        && $inAt === 1
+        && $inCh === 1
+        && $inFr === 1
+        && $inUk === 1
+        && $sweAt === 1
+        && $mapOk
+        && count($routePush['by_country'] ?? []) >= 4) {
+        pass('extract push routes country TLDs; generic TLDs stay in selected country');
+    } else {
+        fail('extract TLD route: ' . json_encode([
+            'push' => [
+                'inserted' => $routePush['inserted'] ?? null,
+                'by_country' => array_keys($routePush['by_country'] ?? []),
+            ],
+            'de' => $inDe,
+            'at' => $inAt,
+            'ch' => $inCh,
+            'fr' => $inFr,
+            'uk' => $inUk,
+            'swe_at' => $sweAt,
+            'map' => $mapOk,
+        ]));
+    }
+    db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfroute-%'");
 } catch (Throwable $e) {
     fail('extracting: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
