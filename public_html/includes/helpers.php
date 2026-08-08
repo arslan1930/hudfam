@@ -26,6 +26,23 @@ function h(?string $value): string
 }
 
 /**
+ * Hidden multi-line POST field (domain lists, notes, etc.).
+ * Never put multi-line values in <input type="hidden"> — browsers turn
+ * newlines in attribute values into spaces, which breaks domain parsing.
+ */
+function render_hidden_multiline(string $name, string $value, array $opts = []): string
+{
+    $id = trim((string) ($opts['id'] ?? ''));
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $class = trim('visually-hidden ' . $extraClass);
+    return '<textarea name="' . h($name) . '"'
+        . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ' class="' . h($class) . '" aria-hidden="true" tabindex="-1">'
+        . h($value)
+        . '</textarea>';
+}
+
+/**
  * Web path of the folder that contains index.php ('' at domain root, '/subdir' otherwise).
  * Fixes broken CSS/JS when the app is not at the domain root on Hostinger.
  */

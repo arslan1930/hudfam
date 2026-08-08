@@ -330,17 +330,15 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="language" value="<?= h($language) ?>">
         <input type="hidden" name="region" value="<?= h($region) ?>">
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
-        <input type="hidden" name="notes" value="<?= h($notes) ?>">
+        <?= render_hidden_multiline('notes', $notes) ?>
         <?php
-          // Must be a textarea (not input[type=hidden]): browsers turn newlines in
-          // attribute values into spaces, which broke Add and showed a false “already in DB” error.
           $uniqueText = implode("\n", $result['new']);
           $uniquePreview = implode("\n", array_slice($result['new'], 0, 5000));
           if (count($result['new']) > 5000) {
               $uniquePreview .= "\n… +" . (count($result['new']) - 5000) . ' more';
           }
         ?>
-        <textarea name="domains" class="visually-hidden" aria-hidden="true" tabindex="-1"><?= h($uniqueText) ?></textarea>
+        <?= render_hidden_multiline('domains', $uniqueText) ?>
         <textarea class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in <?= h($country) ?> yet. Clicking add merges only these new sites into the existing <?= h($country) ?> database.

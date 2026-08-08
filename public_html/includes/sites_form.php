@@ -48,6 +48,7 @@ function render_typeahead_field(
     $html = '<div class="typeahead' . ($extraClass !== '' ? ' ' . h($extraClass) : '') . '" data-typeahead'
         . $reqAttr . ' data-name="' . h($name) . '" ' . $attrs . '>';
     $html .= '<label for="' . h($id) . '_q">' . h($label) . $reqMark . '</label>';
+    // Single-line values only (country/language names). Multi-line lists must use render_hidden_multiline().
     $html .= '<input type="hidden" name="' . h($name) . '" id="' . h($id) . '" value="' . h($value) . '" data-typeahead-value'
         . ($required ? ' required' : '') . '>';
     $html .= '<div class="typeahead-control">';
