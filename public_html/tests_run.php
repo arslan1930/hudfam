@@ -753,6 +753,160 @@ try {
     delete_email_campaign_project($barBeta);
     delete_email_campaign_project($barHidden);
 
+    // Communication / Admin project drafts (categories + one-click copy library).
+    foreach (['TXF Drafts Alpha', 'TXF Drafts Hidden'] as $pn) {
+        $oldP = get_email_campaign_project_by_name($pn);
+        if ($oldP) {
+            delete_email_campaign_project((int) $oldP['id']);
+        }
+    }
+    $draftPid = create_email_campaign_project('TXF Drafts Alpha', (int) $adminUser['id'], true);
+    $draftHiddenPid = create_email_campaign_project('TXF Drafts Hidden', (int) $adminUser['id'], false);
+    $saved = save_email_campaign_draft(
+        $draftPid,
+        'First outreach DE',
+        "Hi,\n\nWould you like a guest post?\n\nBest,",
+        'first_outreach',
+        0,
+        (int) $adminUser['id']
+    );
+    $savedOffer = save_email_campaign_draft(
+        $draftPid,
+        'Pricing offer',
+        "Hello,\n\nOur offer is …\n\nThanks,",
+        'offer',
+        0,
+        (int) $adminUser['id']
+    );
+    $badEmpty = save_email_campaign_draft($draftPid, 'Empty body', '   ', 'custom', 0, (int) $adminUser['id']);
+    $allDrafts = list_email_campaign_drafts($draftPid);
+    $offerOnly = list_email_campaign_drafts($draftPid, 'offer');
+    $hiddenDraft = save_email_campaign_draft(
+        $draftHiddenPid,
+        'Hidden project draft',
+        'Should not appear when project is hidden from team.',
+        'reply',
+        0,
+        (int) $adminUser['id']
+    );
+    $visibleProjects = list_email_campaign_projects(true);
+    $visibleNames = array_map(static fn ($p) => (string) $p['name'], $visibleProjects);
+    if (!empty($saved['ok']) && !empty($savedOffer['ok']) && empty($badEmpty['ok'])
+        && count($allDrafts) === 2
+        && count($offerOnly) === 1
+        && (string) ($offerOnly[0]['title'] ?? '') === 'Pricing offer'
+        && email_campaign_draft_category_label('first_outreach') === 'First outreach'
+        && in_array('TXF Drafts Alpha', $visibleNames, true)
+        && !in_array('TXF Drafts Hidden', $visibleNames, true)
+        && !empty($hiddenDraft['ok'])) {
+        pass('campaign drafts save/list by category; hidden projects stay out of team list');
+    } else {
+        fail('campaign drafts: ' . json_encode([
+            'saved' => $saved,
+            'offer' => $savedOffer,
+            'bad' => $badEmpty,
+            'all' => count($allDrafts),
+            'offer_only' => $offerOnly,
+            'visible' => $visibleNames,
+        ]));
+    }
+    $updated = save_email_campaign_draft(
+        $draftPid,
+        'Pricing offer v2',
+        "Hello,\n\nUpdated offer…\n\nThanks,",
+        'offer',
+        (int) ($savedOffer['id'] ?? 0),
+        (int) $adminUser['id']
+    );
+    $afterUpdate = get_email_campaign_draft((int) ($savedOffer['id'] ?? 0));
+    $richSaved = save_email_campaign_draft(
+        $draftPid,
+        'Rich format sample',
+        '<h2 onclick="x()">Guest post offer</h2><p>Hi <strong>there</strong>, we can do <em>guest posts</em> and <u>niche edits</u>.</p><script>alert(1)</script><a href="https://evil.example">click</a>',
+        'offer',
+        0,
+        (int) $adminUser['id']
+    );
+    $richRow = get_email_campaign_draft((int) ($richSaved['id'] ?? 0));
+    $richBody = (string) ($richRow['body'] ?? '');
+    $sanitized = sanitize_email_campaign_draft_html($richBody);
+    $plainFromHtml = email_campaign_draft_html_to_plain($richBody);
+    $keepsFormat = str_contains($richBody, '<strong>')
+        && str_contains($richBody, '<em>')
+        && str_contains($richBody, '<u>')
+        && str_contains($richBody, '<h2>')
+        && !str_contains(strtolower($richBody), '<script')
+        && !str_contains(strtolower($richBody), 'onclick')
+        && !str_contains(strtolower($richBody), '<a ')
+        && str_contains($plainFromHtml, 'Guest post offer')
+        && str_contains($plainFromHtml, 'guest posts');
+    $tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    $imgSaved = save_email_campaign_draft(
+        $draftPid,
+        'With screenshot',
+        '<p>See screenshot:</p><img src="' . $tinyPng . '" alt="dot" onclick="evil()">'
+            . '<img src="https://evil.example/x.png" alt="remote">'
+            . '<img src="' . $tinyPng . '" alt="dot2">',
+        'custom',
+        0,
+        (int) $adminUser['id']
+    );
+    $imgRow = get_email_campaign_draft((int) ($imgSaved['id'] ?? 0));
+    $imgBody = (string) ($imgRow['body'] ?? '');
+    $imgCount = preg_match_all('/<\s*img\b/i', $imgBody);
+    $imgOk = !empty($imgSaved['ok'])
+        && $imgCount === 2
+        && str_contains($imgBody, 'data:image/png;base64,')
+        && !str_contains($imgBody, 'https://evil.example')
+        && !str_contains(strtolower($imgBody), 'onclick')
+        && str_contains(email_campaign_draft_html_to_plain($imgBody), '[image]');
+    $badRemoteOnly = sanitize_email_campaign_draft_html(
+        '<img src="https://evil.example/x.png" alt="x"><img src="javascript:alert(1)">'
+    );
+    $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0));
+    $left = count_email_campaign_drafts($draftPid);
+    $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0));
+    if (!empty($updated['ok'])
+        && (string) ($afterUpdate['title'] ?? '') === 'Pricing offer v2'
+        && !empty($richSaved['ok'])
+        && $keepsFormat
+        && $sanitized === $richBody
+        && $imgOk
+        && $badRemoteOnly === ''
+        && !empty($del['ok'])
+        && $left === 3
+        && empty($wrongProjectDel['ok'])) {
+        pass('campaign drafts update/delete stay scoped to project');
+        pass('campaign drafts keep bold/italic/underline/headings and strip unsafe HTML');
+        pass('campaign drafts keep compressed data-URI images and strip remote/unsafe imgs');
+    } else {
+        fail('campaign draft mutate: ' . json_encode([
+            'updated' => $updated,
+            'after' => $afterUpdate,
+            'rich' => $richSaved,
+            'body' => $richBody,
+            'keeps' => $keepsFormat,
+            'img' => $imgSaved,
+            'img_body' => mb_substr($imgBody, 0, 200),
+            'img_count' => $imgCount,
+            'img_ok' => $imgOk,
+            'remote' => $badRemoteOnly,
+            'del' => $del,
+            'left' => $left,
+            'wrong' => $wrongProjectDel,
+        ]));
+    }
+    delete_email_campaign_project($draftPid);
+    $goneWithProject = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=" . (int) $draftPid
+    )->fetchColumn();
+    delete_email_campaign_project($draftHiddenPid);
+    if ($goneWithProject === 0) {
+        pass('deleting project cascades campaign drafts');
+    } else {
+        fail("draft cascade left=$goneWithProject");
+    }
+
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
     $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
@@ -1340,7 +1494,7 @@ try {
             'site_finding' => ['team_prospect_check', 'team_prospect_batches', 'team_prospect_batch'],
             'site_extracting' => ['team_extracting', 'team_extract_batch'],
             'email_extracting' => ['team_sites_emails', 'team_admin_emails_delete'],
-            'communication' => ['team_email_campaigns', 'team_admin_emails_delete'],
+            'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_delete'],
         };
         $missing = array_diff($expect, $pages);
         if ($missing) {

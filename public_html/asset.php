@@ -15,6 +15,7 @@ $allowed = [
     'js/admin-emails-delete.js' => 'application/javascript; charset=utf-8',
     'js/email-campaign-sheet.js' => 'application/javascript; charset=utf-8',
     'js/email-campaign-search.js' => 'application/javascript; charset=utf-8',
+    'js/email-campaign-drafts.js' => 'application/javascript; charset=utf-8',
     'js/email-field-clear.js' => 'application/javascript; charset=utf-8',
     'js/app-processing.js' => 'application/javascript; charset=utf-8',
     'js/task-presence.js' => 'application/javascript; charset=utf-8',

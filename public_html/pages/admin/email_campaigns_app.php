@@ -889,6 +889,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             redirect($campBase . '&project=' . $pid);
         }
+        if ($action === 'save_draft') {
+            $pid = (int) post('project_id');
+            $draftId = (int) post('draft_id');
+            $result = save_email_campaign_draft(
+                $pid,
+                (string) post('title'),
+                (string) post('body'),
+                (string) post('category'),
+                $draftId,
+                (int) ($user['id'] ?? 0)
+            );
+            if (empty($result['ok'])) {
+                flash('error', (string) ($result['error'] ?? 'Could not save draft.'));
+            } else {
+                flash('ok', $draftId > 0 ? 'Updated Communication draft.' : 'Saved Communication draft for this project.');
+            }
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
+        if ($action === 'delete_draft') {
+            $pid = (int) post('project_id');
+            $result = delete_email_campaign_draft($pid, (int) post('draft_id'));
+            flash(
+                !empty($result['ok']) ? 'ok' : 'error',
+                !empty($result['ok'])
+                    ? ('Deleted draft “' . (string) ($result['title'] ?? 'draft') . '”.')
+                    : (string) ($result['error'] ?? 'Could not delete draft.')
+            );
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
         if ($action === 'toggle_project_team_search') {
             $pid = (int) post('project_id');
             $visible = (string) post('team_search_visible') === '1';
@@ -1034,6 +1063,14 @@ if ($projectIdParam > 0) {
     foreach ($countrySheets as $s) {
         $siteTotal += (int) $s['row_count'];
     }
+    $draftCategories = email_campaign_draft_categories();
+    $projectDrafts = list_email_campaign_drafts($projectIdParam);
+    $editDraftId = (int) get('edit_draft');
+    $editDraft = $editDraftId > 0 ? get_email_campaign_draft($editDraftId) : null;
+    if ($editDraft && (int) ($editDraft['project_id'] ?? 0) !== $projectIdParam) {
+        $editDraft = null;
+        $editDraftId = 0;
+    }
 
     render_header($projectName, 'admin');
     render_breadcrumbs([
@@ -1178,7 +1215,7 @@ if ($projectIdParam > 0) {
 
         <section class="card" style="margin-top:1rem" id="project-settings">
           <div class="camp-hub-section-head">
-            <h2 style="margin:0"><?= label_with_info('Project & Communication Team', 'One search bar for Communication Team covers every country in this project. Deletes update the matching country sheet.') ?></h2>
+            <h2 style="margin:0"><?= label_with_info('Project & Communication Team', 'One search bar for Communication Team covers every country in this project. Deletes update the matching country sheet. Drafts below are the reusable outreach texts for this project only.') ?></h2>
           </div>
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" autocomplete="off"
                 data-show-processing="Saving project…">
@@ -1194,7 +1231,7 @@ if ($projectIdParam > 0) {
                 <input type="checkbox" name="team_search_visible" value="1" <?= $teamVisible ? 'checked' : '' ?>>
                 <span>
                   <strong>Show search bar to Communication Team</strong>
-                  <span class="camp-hub-field-hint">They search the whole project; deletes update the country sheet that matched.</span>
+                  <span class="camp-hub-field-hint">They search the whole project; deletes update the country sheet that matched. Drafts stay available when the project is shown.</span>
                 </span>
               </label>
             </div>
@@ -1204,11 +1241,97 @@ if ($projectIdParam > 0) {
           </form>
         </section>
 
+        <section class="card" style="margin-top:1rem" id="project-drafts">
+          <div class="camp-hub-section-head">
+            <h2 style="margin:0"><?= label_with_info('Communication drafts', 'Reusable outreach / offer / reply text for this project only. Communication Team copies these with one click when the project is shown to them.') ?></h2>
+            <p class="help" style="margin:0.3rem 0 0">
+              <?= count($projectDrafts) ?> draft<?= count($projectDrafts) === 1 ? '' : 's' ?> · seed starter text here or let Communication add their own
+            </p>
+          </div>
+          <?php if ($projectDrafts): ?>
+          <ul class="camp-admin-drafts-list">
+            <?php foreach ($projectDrafts as $d):
+                $did = (int) $d['id'];
+                ?>
+              <li>
+                <div class="camp-admin-draft-meta">
+                  <strong><?= h((string) $d['title']) ?></strong>
+                  <span class="muted" style="font-size:0.82rem">
+                    <?= h(email_campaign_draft_category_label((string) $d['category'])) ?>
+                  </span>
+                </div>
+                <div class="actions">
+                  <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
+                  <form method="post" action="<?= h($projectForm) ?>"
+                        onsubmit="return confirm(<?= h(json_encode('Delete draft “' . (string) $d['title'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                    <input type="hidden" name="action" value="delete_draft">
+                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                    <input type="hidden" name="draft_id" value="<?= $did ?>">
+                    <button class="btn danger small" type="submit">Delete</button>
+                  </form>
+                </div>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+          <?php else: ?>
+          <p class="muted" style="margin:0.65rem 0 0">No drafts yet for this project.</p>
+          <?php endif; ?>
+
+          <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" style="margin-top:1rem"
+                autocomplete="off" data-show-processing="Saving draft…">
+            <input type="hidden" name="action" value="save_draft">
+            <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+            <input type="hidden" name="draft_id" value="<?= $editDraft ? (int) $editDraft['id'] : 0 ?>">
+            <h3 style="margin:0 0 0.55rem;font-size:0.98rem">
+              <?= $editDraft ? 'Edit draft' : 'Add draft' ?>
+            </h3>
+            <div class="camp-hub-field">
+              <label for="admin_draft_title">Title</label>
+              <input id="admin_draft_title" name="title" required maxlength="180"
+                     value="<?= h((string) ($editDraft['title'] ?? '')) ?>"
+                     placeholder="e.g. First outreach">
+            </div>
+            <div class="camp-hub-field">
+              <label for="admin_draft_category">Category</label>
+              <select id="admin_draft_category" name="category" required>
+                <?php
+                $adminSelCat = normalize_email_campaign_draft_category((string) ($editDraft['category'] ?? 'first_outreach'));
+                foreach ($draftCategories as $slug => $label):
+                    ?>
+                  <option value="<?= h($slug) ?>" <?= $adminSelCat === $slug ? 'selected' : '' ?>><?= h($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="camp-hub-field">
+              <label for="admin_draft_body">Draft text</label>
+              <p class="help" style="margin:0 0 0.45rem">
+                Bold / italic / underline / headings / images are kept when Communication copies into email.
+                Paste a screenshot or use Image (auto-compressed).
+              </p>
+              <?php
+              render_email_campaign_draft_editor(
+                  'admin_draft_body',
+                  'body',
+                  (string) ($editDraft['body'] ?? ''),
+                  ['placeholder' => "Hi,\n\n…"]
+              );
+              ?>
+            </div>
+            <p class="actions camp-hub-create-actions">
+              <button class="btn" type="submit"><?= $editDraft ? 'Update draft' : 'Save draft' ?></button>
+              <?php if ($editDraft): ?>
+                <a class="btn secondary" href="<?= h($projectForm) ?>#project-drafts">Cancel</a>
+              <?php endif; ?>
+            </p>
+          </form>
+        </section>
+
         <section class="card" style="margin-top:1rem">
           <h2>Danger zone</h2>
+          <p class="muted">Deletes this project and all of its country sheets, contacts, and drafts. This cannot be undone.</p>
           <form method="post" action="<?= h($projectForm) ?>"
                 data-show-processing="Deleting project…"
-                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets inside it?', JSON_UNESCAPED_UNICODE)) ?>);">
+                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?', JSON_UNESCAPED_UNICODE)) ?>);">
             <input type="hidden" name="action" value="delete_project">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <button class="btn danger" type="submit">Delete whole project</button>
@@ -1216,6 +1339,7 @@ if ($projectIdParam > 0) {
         </section>
       </aside>
     </div>
+    <script src="<?= h(script_asset_url('js/email-campaign-drafts.js')) ?>" defer></script>
     <?php
     render_footer('admin');
     return;

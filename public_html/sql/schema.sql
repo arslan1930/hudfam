@@ -219,15 +219,35 @@ CREATE TABLE IF NOT EXISTS admin_data_seen (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Email campaign projects (Admin) → country sheets → Communication search + drafts
+CREATE TABLE IF NOT EXISTS email_campaign_projects (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(180) NOT NULL,
+  team_search_visible TINYINT(1) NOT NULL DEFAULT 1,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_email_campaign_project_name (name),
+  INDEX (team_search_visible),
+  INDEX (updated_at),
+  CONSTRAINT fk_email_campaign_project_user
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Email campaign sheets (Emails DATA → Communication Team search)
 CREATE TABLE IF NOT EXISTS email_campaign_sheets (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(180) NOT NULL,
+  project_id INT NULL,
+  project_name VARCHAR(180) NOT NULL DEFAULT '',
+  team_search_visible TINYINT(1) NOT NULL DEFAULT 1,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_email_campaign_sheet_name (name),
+  UNIQUE KEY uniq_email_campaign_project_country (project_id, name),
   INDEX (updated_at),
+  INDEX (team_search_visible),
+  INDEX (project_id),
   CONSTRAINT fk_email_campaign_sheet_user
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -255,6 +275,26 @@ CREATE TABLE IF NOT EXISTS email_campaign_rows (
   INDEX (country),
   CONSTRAINT fk_email_campaign_row_sheet
     FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Communication / Admin: reusable outreach drafts per Email campaign project
+CREATE TABLE IF NOT EXISTS email_campaign_drafts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  category VARCHAR(40) NOT NULL DEFAULT 'custom',
+  title VARCHAR(180) NOT NULL,
+  body MEDIUMTEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (project_id),
+  INDEX idx_email_campaign_draft_cat (project_id, category),
+  INDEX (updated_at),
+  CONSTRAINT fk_email_campaign_draft_project
+    FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_email_campaign_draft_user
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Office departments (Admin assigns members + tasks)
