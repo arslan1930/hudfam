@@ -575,85 +575,135 @@ render_breadcrumbs([
     ['label' => 'Emails data', 'href' => $base],
     ['label' => 'Email campaign data'],
 ]);
+$sheetCount = count($sheets);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Email campaign data', 'Create an Email Sheet per country. Admin adds all site + email data (+ Add site, paste, or CSV/Excel/TXT import). Optionally expose a Communication Team search bar.') ?></h1>
+    <h1><?= label_with_info('Email campaign data', 'Create one Email Sheet per country. Admin adds site + emails. Optionally show a Communication Team search bar named after your project.') ?></h1>
     <p class="muted">
-      One sheet per country — Admin fills site + up to 4 emails.
-      Assign a <strong>project name</strong> and choose whether Communication Team gets that search bar.
+      Your working lists for outreach — one sheet per country, named by project.
     </p>
   </div>
   <div class="actions">
+    <?php if ($availableCountries): ?>
+      <a class="btn" href="#create-email-sheet">Create Email Sheet</a>
+    <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All folders</a>
   </div>
 </div>
 
-<div class="orders-layout">
-  <section class="card">
-    <h2><?= label_with_info('Project sheets', 'Open a project to edit site + email rows. Toggle Communication Team search per sheet.') ?></h2>
+<ol class="camp-hub-steps" aria-label="How Email Sheets work">
+  <li>
+    <span class="camp-hub-step-num">1</span>
+    <div>
+      <strong>Create a sheet</strong>
+      <span>Choose a country and give it a project name.</span>
+    </div>
+  </li>
+  <li>
+    <span class="camp-hub-step-num">2</span>
+    <div>
+      <strong>Add sites + emails</strong>
+      <span>Open the sheet, then add rows, paste, or import from Final.</span>
+    </div>
+  </li>
+  <li>
+    <span class="camp-hub-step-num">3</span>
+    <div>
+      <strong>Share with team (optional)</strong>
+      <span>Turn on Communication Team search when you’re ready.</span>
+    </div>
+  </li>
+</ol>
+
+<div class="orders-layout camp-hub-layout">
+  <section class="card camp-hub-list">
+    <div class="camp-hub-section-head">
+      <div>
+        <h2 style="margin:0"><?= label_with_info('Your Email Sheets', 'Open a project to add or edit site + email rows. Use Team search to show or hide the Communication Team bar.') ?></h2>
+        <p class="help" style="margin:0.3rem 0 0">
+          <?= (int) $sheetCount ?> project<?= $sheetCount === 1 ? '' : 's' ?>
+          · click a project name or <strong>Open</strong> to work on it
+        </p>
+      </div>
+    </div>
     <?php if (!$sheets): ?>
-      <div class="empty-state">
-        <p>No project sheets yet.</p>
-        <p class="muted">Create an Email Sheet on the right with a project name, then add site + emails.</p>
+      <div class="empty-state camp-hub-empty">
+        <p>No Email Sheets yet.</p>
+        <p class="muted">Start on the right: pick a country, name the project, then create the sheet.</p>
+        <?php if ($availableCountries): ?>
+        <p class="actions" style="justify-content:center;margin-top:0.75rem">
+          <a class="btn" href="#create-email-sheet">Create your first sheet</a>
+        </p>
+        <?php endif; ?>
       </div>
     <?php else: ?>
-      <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+      <div class="invoice-list-toolbar camp-hub-toolbar">
         <label class="sheet-search" for="camp-country-search">
           <span class="visually-hidden">Search projects</span>
-          <input id="camp-country-search" type="search" placeholder="Search project or country…"
+          <input id="camp-country-search" type="search" placeholder="Find a project or country…"
                  autocomplete="off" spellcheck="false" data-no-draft>
         </label>
       </div>
-      <table class="extracted-country-table" id="camp-country-table">
-        <thead>
-          <tr>
-            <th>Project</th>
-            <th>Country</th>
-            <th class="num">Sites</th>
-            <th>Team search</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($sheets as $s):
-            $cName = (string) $s['country'];
-            $pName = (string) $s['project_name'];
-            $visible = !empty($s['team_search_visible']);
-            $hay = mb_strtolower($pName . ' ' . $cName . ' ' . (int) $s['row_count'] . ' sites');
-            ?>
-          <tr data-camp-country-row data-search="<?= h($hay) ?>">
-            <td>
-              <a class="extracted-country-link" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">
-                <?= h($pName) ?>
-              </a>
-            </td>
-            <td class="muted"><?= h($cName) ?></td>
-            <td class="num"><?= (int) $s['row_count'] ?></td>
-            <td>
-              <form method="post" action="<?= h($campBase) ?>" style="display:inline">
-                <input type="hidden" name="action" value="toggle_team_search">
-                <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
-                <input type="hidden" name="team_search_visible" value="<?= $visible ? '0' : '1' ?>">
-                <button class="btn secondary small" type="submit"
-                        title="<?= $visible ? 'Hide from Communication Team' : 'Show to Communication Team' ?>">
-                  <?= $visible ? 'Shown' : 'Hidden' ?>
-                </button>
-              </form>
-            </td>
-            <td class="num">
-              <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
-              <form method="post" action="<?= h($campBase) ?>" style="display:inline"
-                    onsubmit="return confirm(<?= h(json_encode('Delete sheet “' . $pName . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
-                <button class="btn secondary small" type="submit">Delete</button>
-              </form>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="extracted-country-table camp-hub-table" id="camp-country-table">
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Country</th>
+              <th class="num">Sites</th>
+              <th>Team search</th>
+              <th class="num">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php foreach ($sheets as $s):
+              $cName = (string) $s['country'];
+              $pName = (string) $s['project_name'];
+              $visible = !empty($s['team_search_visible']);
+              $rowCount = (int) $s['row_count'];
+              $hay = mb_strtolower($pName . ' ' . $cName . ' ' . $rowCount . ' sites');
+              ?>
+            <tr data-camp-country-row data-search="<?= h($hay) ?>">
+              <td>
+                <a class="extracted-country-link camp-hub-project" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">
+                  <?= h($pName) ?>
+                </a>
+              </td>
+              <td>
+                <span class="camp-hub-country"><?= h($cName) ?></span>
+              </td>
+              <td class="num">
+                <span class="camp-hub-count" title="Sites with emails on this sheet"><?= $rowCount ?></span>
+              </td>
+              <td>
+                <form method="post" action="<?= h($campBase) ?>" class="camp-hub-team-form">
+                  <input type="hidden" name="action" value="toggle_team_search">
+                  <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                  <input type="hidden" name="team_search_visible" value="<?= $visible ? '0' : '1' ?>">
+                  <button class="camp-hub-team-btn <?= $visible ? 'is-on' : 'is-off' ?>" type="submit"
+                          title="<?= $visible ? 'Hide from Communication Team' : 'Show to Communication Team' ?>">
+                    <span class="camp-hub-team-dot" aria-hidden="true"></span>
+                    <?= $visible ? 'Shown to team' : 'Hidden from team' ?>
+                  </button>
+                </form>
+              </td>
+              <td class="num">
+                <div class="camp-hub-row-actions">
+                  <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
+                  <form method="post" action="<?= h($campBase) ?>"
+                        onsubmit="return confirm(<?= h(json_encode('Delete sheet “' . $pName . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+                    <button class="btn secondary small" type="submit">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
       <script>
       (function () {
         var input = document.getElementById('camp-country-search');
@@ -669,41 +719,59 @@ render_breadcrumbs([
     <?php endif; ?>
   </section>
 
-  <section class="card" id="create-email-sheet">
-    <h2><?= label_with_info('Create an Email Sheet', 'Pick a country and project name. After create, Admin adds all rows: + Add site, paste thousands of lines, or import CSV / Excel / TXT.') ?></h2>
-    <p class="muted" style="margin-top:0">
-      The sheet starts empty — Admin adds the data.
-      You can also turn on a Communication Team search bar titled with your project name.
-    </p>
+  <section class="card camp-hub-create" id="create-email-sheet">
+    <div class="camp-hub-section-head">
+      <h2 style="margin:0"><?= label_with_info('Create an Email Sheet', 'Pick a country and project name. The sheet starts empty — then Admin adds site + emails inside it.') ?></h2>
+      <p class="help" style="margin:0.3rem 0 0">Takes about a minute. You add the sites after creating.</p>
+    </div>
     <?php if (!$availableCountries): ?>
-      <div class="empty-state">
+      <div class="empty-state camp-hub-empty">
         <p>Every country already has a sheet.</p>
+        <p class="muted">Open an existing project on the left to keep working.</p>
       </div>
     <?php else: ?>
-    <form method="post" action="<?= h($campBase) ?>" autocomplete="off"
+    <form method="post" action="<?= h($campBase) ?>" class="camp-hub-create-form" autocomplete="off"
           data-show-processing="Creating Email Sheet…">
       <input type="hidden" name="action" value="create">
-      <label for="new_camp_country">Country</label>
-      <select id="new_camp_country" name="country" required>
-        <option value="">Select country…</option>
-        <?php foreach ($availableCountries as $c): ?>
-          <option value="<?= h((string) $c['name']) ?>">
-            <?= h((string) $c['name']) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
-      <label for="new_camp_project" style="margin-top:0.85rem;display:block">Project name</label>
-      <input id="new_camp_project" name="project_name" required maxlength="180"
-             placeholder="e.g. Q2 Germany outreach">
-      <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.85rem">
-        <input type="checkbox" name="team_search_visible" value="1" checked>
-        Show search bar to Communication Team
-      </label>
-      <p class="help" style="margin-top:0.35rem">
-        Uncheck to keep the sheet Admin-only until you’re ready.
-      </p>
-      <p class="actions" style="margin-top:1rem">
-        <button class="btn" type="submit">Create an Email Sheet</button>
+
+      <div class="camp-hub-field">
+        <label for="new_camp_country">
+          <span class="camp-hub-field-step">1</span>
+          Country
+        </label>
+        <p class="camp-hub-field-hint">One Email Sheet per country.</p>
+        <select id="new_camp_country" name="country" required>
+          <option value="">Select country…</option>
+          <?php foreach ($availableCountries as $c): ?>
+            <option value="<?= h((string) $c['name']) ?>">
+              <?= h((string) $c['name']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <div class="camp-hub-field">
+        <label for="new_camp_project">
+          <span class="camp-hub-field-step">2</span>
+          Project name
+        </label>
+        <p class="camp-hub-field-hint">Shown to you and (if enabled) as the Communication Team search title.</p>
+        <input id="new_camp_project" name="project_name" required maxlength="180"
+               placeholder="e.g. Q2 Germany outreach">
+      </div>
+
+      <div class="camp-hub-field camp-hub-field-check">
+        <label class="camp-hub-check">
+          <input type="checkbox" name="team_search_visible" value="1" checked>
+          <span>
+            <strong>Show search bar to Communication Team</strong>
+            <span class="camp-hub-field-hint">Uncheck to keep this sheet Admin-only for now.</span>
+          </span>
+        </label>
+      </div>
+
+      <p class="actions camp-hub-create-actions">
+        <button class="btn" type="submit">Create Email Sheet</button>
       </p>
     </form>
     <?php endif; ?>
