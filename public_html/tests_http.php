@@ -120,7 +120,7 @@ if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id=
 }
 
 // Assets
-foreach (['/asset.php?f=css/app.css', '/asset.php?f=js/nav-shell.js', '/asset.php?f=js/sites-with-emails.js'] as $path) {
+foreach (['/asset.php?f=css/app.css', '/asset.php?f=js/nav-shell.js', '/asset.php?f=js/sites-with-emails.js', '/asset.php?f=js/password-toggle.js'] as $path) {
     $r = req('GET', $base . $path);
     if ($r['status'] === 200 && strlen($r['body']) > 50) {
         pass('asset ' . $path);

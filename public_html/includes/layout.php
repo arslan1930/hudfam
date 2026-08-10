@@ -281,6 +281,8 @@ function render_footer(string $panel = ''): void
         echo '<p class="app-processing-sub muted">Please wait — do not close this page.</p>';
         echo '</div></div>';
     }
+    // Show/Hide on every password field (login, change password, admin users, …).
+    echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
     echo '</body></html>';
 }
 
