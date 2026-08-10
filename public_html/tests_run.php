@@ -221,6 +221,61 @@ try {
     } else {
         fail("prospect Germany txftest-* count=$cnt expected >=2");
     }
+
+    // Admin can edit / delete Site adding history for a teammate day.
+    $histBatchId = (int) ($added['batch_id'] ?? 0);
+    if ($histBatchId < 1) {
+        $histBatchId = (int) db()->query(
+            "SELECT b.id FROM prospect_batches b
+             JOIN prospect_batch_items i ON i.batch_id=b.id
+             WHERE i.domain LIKE 'txftest-%' AND b.country='Germany'
+             ORDER BY b.id DESC LIMIT 1"
+        )->fetchColumn();
+    }
+    if ($histBatchId > 0) {
+        $setHist = set_prospect_batch_domains_from_text(
+            $histBatchId,
+            "txftest-finance-de.com\ntxftest-edited-de.com",
+            false
+        );
+        $histDomains = get_prospect_batch_domains($histBatchId);
+        sort($histDomains);
+        if (!empty($setHist['ok'])
+            && $histDomains === ['txftest-edited-de.com', 'txftest-finance-de.com']
+            && (int) ($setHist['removed'] ?? 0) >= 1
+            && (int) ($setHist['inserted'] ?? 0) >= 1) {
+            pass('admin edit site adding history replaces day list');
+        } else {
+            fail('admin edit history: ' . json_encode($setHist) . ' domains=' . json_encode($histDomains));
+        }
+        $stillInDb = (int) db()->query(
+            "SELECT COUNT(*) FROM prospect_sites WHERE country='Germany' AND domain LIKE 'txftest-%'"
+        )->fetchColumn();
+        if ($stillInDb >= 2) {
+            pass('history edit without also_remove keeps Our database');
+        } else {
+            fail("history edit stripped Our database count=$stillInDb");
+        }
+        $meta = update_prospect_batch_meta($histBatchId, 'txftest-note admin edit', 'Germany');
+        $batchRow = get_prospect_batch($histBatchId);
+        if (!empty($meta['ok']) && ($batchRow['notes'] ?? '') === 'txftest-note admin edit') {
+            pass('admin update site adding history notes');
+        } else {
+            fail('history meta: ' . json_encode([$meta, $batchRow['notes'] ?? null]));
+        }
+        $delHist = delete_prospect_batch($histBatchId, false);
+        $gone = get_prospect_batch($histBatchId);
+        $dbAfterDel = (int) db()->query(
+            "SELECT COUNT(*) FROM prospect_sites WHERE country='Germany' AND domain LIKE 'txftest-%'"
+        )->fetchColumn();
+        if (!empty($delHist['ok']) && !$gone && $dbAfterDel >= 2) {
+            pass('admin delete history day keeps Our database by default');
+        } else {
+            fail('delete history: ' . json_encode([$delHist, 'gone' => (bool) $gone, 'db' => $dbAfterDel]));
+        }
+    } else {
+        fail('admin history edit: no batch_id from add_prospect_domains');
+    }
 } catch (Throwable $e) {
     fail('prospects: ' . $e->getMessage());
 }
