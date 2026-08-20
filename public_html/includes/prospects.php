@@ -161,6 +161,9 @@ function is_known_public_suffix(string $suffix): bool
     if (in_array($suffix, known_multi_part_tlds(), true)) {
         return true;
     }
+    if (in_array($suffix, known_platform_public_suffixes(), true)) {
+        return true;
+    }
     if (!str_contains($suffix, '.')) {
         return is_known_tld($suffix);
     }
@@ -172,6 +175,31 @@ function is_known_public_suffix(string $suffix): bool
         && in_array($parts[0], known_country_sld_labels(), true);
 }
 
+/**
+ * Multi-tenant / platform public suffixes — keep utilfox.vercel.app, not vercel.app.
+ *
+ * @return list<string>
+ */
+function known_platform_public_suffixes(): array
+{
+    return [
+        'vercel.app',
+        'github.io',
+        'herokuapp.com',
+        'netlify.app',
+        'pages.dev',
+        'workers.dev',
+        'web.app',
+        'firebaseapp.com',
+        'azurewebsites.net',
+        'myshopify.com',
+        'blogspot.com',
+        'wordpress.com',
+        'tumblr.com',
+        'gitlab.io',
+    ];
+}
+
 function domain_public_suffix(string $host): string
 {
     $host = strtolower(trim($host));
@@ -181,6 +209,9 @@ function domain_public_suffix(string $host): string
         return '';
     }
     $two = $parts[$n - 2] . '.' . $parts[$n - 1];
+    if (in_array($two, known_platform_public_suffixes(), true)) {
+        return $two;
+    }
     if (in_array($two, known_multi_part_tlds(), true)) {
         return $two;
     }
@@ -242,6 +273,27 @@ function extract_host_candidate(string $raw): string
     if ($s === '') {
         return '';
     }
+    // Strip attention-box reason tags: "junk  # has_spaces"
+    if (preg_match('/^(.*)\s+#\s+[a-z0-9_]+\s*$/i', $s, $m)) {
+        $s = trim($m[1]);
+    }
+    // Markdown link: [text](https://example.com/x)
+    if (preg_match('/\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i', $s, $m)) {
+        $s = $m[1];
+    } elseif (preg_match('/href\s*=\s*["\']\s*(https?:\/\/[^"\']+)["\']/i', $s, $m)) {
+        $s = $m[1];
+    } elseif (preg_match('#(https?://[^\s<>"\']+)#i', $s, $m)) {
+        // Line with surrounding junk but a clear URL
+        $s = $m[1];
+    }
+    // Excel-style "domain\tnotes" — keep first column if it looks like a host/URL
+    if (str_contains($s, "\t")) {
+        $first = trim(explode("\t", $s, 2)[0]);
+        if ($first !== '') {
+            $s = $first;
+        }
+    }
+
     $s = preg_replace('/^[\s\'"\[<\(]+/', '', $s) ?? $s;
     $s = preg_replace('/[\s\'"\]>\)]+$/', '', $s) ?? $s;
 

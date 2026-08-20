@@ -170,7 +170,7 @@ try {
     $parsedMessy = parse_domain_list_strict($messy);
     $expectRoots = [
         'google.com',
-        'vercel.app',
+        'utilfox.vercel.app',
         'toolszen.com',
         'techxform.com',
         'seolinkbuildings.com',
@@ -203,6 +203,52 @@ try {
         pass('analyze https URL with query string → root domain');
     } else {
         fail('analyze query URL: ' . json_encode($q));
+    }
+
+    // Platform suffixes must keep the tenant label (not collapse to vercel.app / github.io).
+    $v = analyze_pasted_domain_line('ttps://utilfox.vercel.app/data-tools/url-cleaner');
+    if (!empty($v['ok']) && ($v['domain'] ?? '') === 'utilfox.vercel.app') {
+        pass('platform vercel.app keeps utilfox.vercel.app');
+    } else {
+        fail('platform vercel: ' . json_encode($v));
+    }
+    $gio = analyze_pasted_domain_line('https://alice.github.io/project/');
+    if (!empty($gio['ok']) && ($gio['domain'] ?? '') === 'alice.github.io') {
+        pass('platform github.io keeps alice.github.io');
+    } else {
+        fail('platform github.io: ' . json_encode($gio));
+    }
+    $barePlatform = to_root_domain('vercel.app');
+    if ($barePlatform === '') {
+        pass('bare platform suffix vercel.app rejected as root');
+    } else {
+        fail('bare vercel.app should reject, got=' . $barePlatform);
+    }
+
+    // Messy extract: markdown, href, Excel tab, attention reason tag.
+    $md = analyze_pasted_domain_line('[Site](https://www.example.com/path)');
+    if (!empty($md['ok']) && ($md['domain'] ?? '') === 'example.com') {
+        pass('markdown link → example.com');
+    } else {
+        fail('markdown: ' . json_encode($md));
+    }
+    $href = analyze_pasted_domain_line('<a href="https://shop.example.co.uk/x">x</a>');
+    if (!empty($href['ok']) && ($href['domain'] ?? '') === 'example.co.uk') {
+        pass('href attribute → example.co.uk');
+    } else {
+        fail('href: ' . json_encode($href));
+    }
+    $tab = analyze_pasted_domain_line("blog.example.com\tnotes from sheet");
+    if (!empty($tab['ok']) && ($tab['domain'] ?? '') === 'example.com') {
+        pass('Excel tab first column → example.com');
+    } else {
+        fail('tab: ' . json_encode($tab));
+    }
+    $attn = analyze_pasted_domain_line('https://www.example.org/x  # has_path');
+    if (!empty($attn['ok']) && ($attn['domain'] ?? '') === 'example.org') {
+        pass('attention # reason strip → example.org');
+    } else {
+        fail('attention strip: ' . json_encode($attn));
     }
 } catch (Throwable $e) {
     fail('clean https: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());

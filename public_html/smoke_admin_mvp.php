@@ -785,6 +785,19 @@ if (!str_contains($sitesFormJs, 'readyText')
 } else {
     ok('sites-form.js Ready/attention clean split');
 }
+if (!str_contains($sitesFormJs, 'PLATFORM_PUBLIC_SUFFIXES')
+    || !str_contains($sitesFormJs, 'vercel.app')) {
+    fail('sites-form.js missing platform public suffixes');
+} else {
+    ok('sites-form.js platform public suffixes');
+}
+$prospectsPhp = (string) @file_get_contents(__DIR__ . '/includes/prospects.php');
+if (!str_contains($prospectsPhp, 'known_platform_public_suffixes')
+    || !str_contains($prospectsPhp, 'vercel.app')) {
+    fail('prospects.php missing known_platform_public_suffixes');
+} else {
+    ok('prospects.php platform public suffixes');
+}
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
