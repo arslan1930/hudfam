@@ -181,6 +181,19 @@ if (!str_contains($usersPage, 'user_deactivation_residue') || !str_contains($use
 } else {
     ok('users.php deactivate residue messaging');
 }
+$indexRoutes = file_get_contents($root . '/index.php') ?: '';
+foreach (['admin_account', 'forgot_password', 'reset_password', 'verify_email'] as $route) {
+    if (!str_contains($indexRoutes, "'{$route}'")) {
+        fail("index.php missing route {$route}");
+    } else {
+        ok("route {$route}");
+    }
+}
+if (!str_contains(file_get_contents($root . '/sql/schema.sql') ?: '', 'email_verified_at')) {
+    fail('schema.sql missing email_verified_at');
+} else {
+    ok('schema.sql email_verified_at');
+}
 
 $invoiceManual = file_get_contents($root . '/pages/admin/invoice_manual.php') ?: '';
 if (!str_contains($invoiceManual, "post('action') === 'create_blank'")) {

@@ -111,6 +111,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
+                'admin_account' => ['Account', 'Email verify · password'],
             ],
         ];
     } else {
