@@ -342,9 +342,11 @@ render_header('Order · ' . $client['name'], 'admin');
             data-row id="row-<?= $id ?>">
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
           <td class="col-site">
-            <div class="site-cell">
+            <div class="site-cell open-site-cell" data-open-site-cell>
               <input class="cell-input" type="text" name="site_name[<?= $id ?>]"
-                     value="<?= h($row['site_name']) ?>" placeholder="site.com" autocomplete="off">
+                     value="<?= h($row['site_name']) ?>" placeholder="site.com" autocomplete="off"
+                     data-open-site-host>
+              <?= render_open_site_anchor((string) $row['site_name'], ['class' => 'order-open-site']) ?>
               <input class="cell-input cell-note" type="text" name="site_note[<?= $id ?>]"
                      value="<?= h((string) ($row['site_note'] ?? '')) ?>"
                      placeholder="note…" maxlength="255" autocomplete="off"
@@ -376,10 +378,13 @@ render_header('Order · ' . $client['name'], 'admin');
                    data-decided placeholder="0.00" autocomplete="off">
           </td>
           <td class="col-live">
-            <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
-                   value="<?= h($row['live_url']) ?>"
-                   placeholder="<?= $isPlacement ? 'site.com (required)' : '(empty until live)' ?>"
-                   data-live autocomplete="off">
+            <div class="open-site-cell order-live-cell" data-open-site-cell>
+              <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
+                     value="<?= h($row['live_url']) ?>"
+                     placeholder="<?= $isPlacement ? 'site.com (required)' : '(empty until live)' ?>"
+                     data-live data-open-site-host autocomplete="off">
+              <?= render_open_site_anchor((string) $row['live_url'], ['class' => 'order-open-site', 'label' => 'Open']) ?>
+            </div>
           </td>
           <td class="col-paid">
             <?php if ($paid): ?>
@@ -817,4 +822,5 @@ render_header('Order · ' . $client['name'], 'admin');
   });
 })();
 </script>
+<?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>

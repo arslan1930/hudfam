@@ -476,6 +476,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
         data-search="<?= h(mb_strtolower($domain)) ?>"
       >
         <span class="extracted-plain-domain"><?= h($domain) ?></span>
+        <?= render_open_site_anchor($domain, ['class' => 'extracted-open-site']) ?>
         <form method="post" class="extracted-plain-remove" action="<?= h($listBase) ?>"
               data-remove-site
               onsubmit="return confirm(<?= h(json_encode('Remove ' . $domain . '?', JSON_UNESCAPED_UNICODE)) ?>);">
@@ -544,4 +545,5 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 <?php endif; ?>
 
 <script src="<?= h(script_asset_url('js/extracted-admin.js')) ?>" defer></script>
+<?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>
