@@ -2168,6 +2168,64 @@ try {
     } else {
         fail('department temp task for status check failed');
     }
+
+    // D-2: remove member clears open assignees; done keeps history
+    $assigneeId = (int) ($teamUser['id'] ?? 0);
+    if ($assigneeId > 0 && $dept) {
+        remove_department_member((int) $dept['id'], $assigneeId);
+        $openSave = save_department_task(
+            (int) $dept['id'],
+            'D2 open assigned',
+            '',
+            'open',
+            $assigneeId,
+            null,
+            $adminUser,
+            null
+        );
+        $doneSave = save_department_task(
+            (int) $dept['id'],
+            'D2 done assigned',
+            '',
+            'done',
+            $assigneeId,
+            null,
+            $adminUser,
+            null
+        );
+        $cleared = clear_open_department_task_assignees((int) $dept['id'], $assigneeId);
+        remove_department_member((int) $dept['id'], $assigneeId);
+        $openLeft = 0;
+        $doneLeft = 0;
+        if (!empty($openSave['id'])) {
+            $openLeft = (int) db()->query(
+                'SELECT assigned_to FROM department_tasks WHERE id=' . (int) $openSave['id']
+            )->fetchColumn();
+        }
+        if (!empty($doneSave['id'])) {
+            $doneLeft = (int) db()->query(
+                'SELECT assigned_to FROM department_tasks WHERE id=' . (int) $doneSave['id']
+            )->fetchColumn();
+        }
+        if ($cleared >= 1 && $openLeft === 0 && $doneLeft === $assigneeId) {
+            pass('remove member clears open assignee; done kept');
+        } else {
+            fail("clear assignee cleared=$cleared openLeft=$openLeft doneLeft=$doneLeft");
+        }
+        if (!empty($openSave['id'])) {
+            delete_department_task((int) $openSave['id']);
+        }
+        if (!empty($doneSave['id'])) {
+            delete_department_task((int) $doneSave['id']);
+        }
+        if (!empty($openSave['added_member'])) {
+            pass('assign task reports added_member');
+        } else {
+            fail('assign task missing added_member flag');
+        }
+    } else {
+        fail('D-2 assignee missing');
+    }
 } catch (Throwable $e) {
     fail('department assign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
