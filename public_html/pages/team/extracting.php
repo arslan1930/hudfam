@@ -21,7 +21,11 @@ render_header('Extracting sites', 'team');
     <p class="muted">Countries with sites in their <strong>Sites list</strong> appear here. Empty countries hide when you open this page (and are removed after 1 hour) until Filter &amp; add brings them back.</p>
   </div>
   <div class="actions">
-    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+    <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
+      <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+    <?php else: ?>
+      <span class="muted" style="align-self:center">Sites arrive from Site Finding (Filter &amp; add).</span>
+    <?php endif; ?>
   </div>
 </div>
 <?= guide_extracting() ?>
@@ -58,7 +62,11 @@ render_header('Extracting sites', 'team');
         Country batches stay empty until a teammate filters and adds new unique sites.
         Those sites land in the admin country database and here under <strong>Sites list</strong>.
       </p>
-      <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add sites</a>
+      <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
+        <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add sites</a>
+      <?php else: ?>
+        <p class="help" style="margin:0">Ask Site Finding to Filter &amp; add — then countries appear here.</p>
+      <?php endif; ?>
     </div>
   </div>
 </div>

@@ -120,7 +120,10 @@ try {
                             $msg .= ' · saved despite TLD mismatch warning';
                         }
                         flash('ok', $msg . '.');
-                        if (!empty($added['extract_batch_id'])) {
+                        // Only jump to Extracting when that tool is unlocked for this user.
+                        if (!empty($added['extract_batch_id'])
+                            && function_exists('team_page_unlocked')
+                            && team_page_unlocked($user, 'team_extract_batch')) {
                             redirect('index.php?page=team_extract_batch&id=' . (int) $added['extract_batch_id']);
                         }
                         $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
@@ -196,9 +199,15 @@ render_header('Filter & add', 'team');
     <?php if ($country !== ''): ?>
       <?php render_task_presence('prospect:' . $country, 'Others adding sites for ' . $country); ?>
     <?php endif; ?>
-    <a class="btn" href="index.php?page=team_semrush_research">Semrush Research</a>
-    <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Site adding history</a>
+    <?php if (team_page_unlocked($user, 'team_semrush_research')): ?>
+      <a class="btn" href="index.php?page=team_semrush_research">Semrush Research</a>
+    <?php endif; ?>
+    <?php if (team_page_unlocked($user, 'team_extracting')): ?>
+      <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
+    <?php endif; ?>
+    <?php if (team_page_unlocked($user, 'team_prospect_batches')): ?>
+      <a class="btn secondary" href="index.php?page=team_prospect_batches">Site adding history</a>
+    <?php endif; ?>
   </div>
 </div>
 <?= guide_filter_add() ?>
