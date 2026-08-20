@@ -228,13 +228,15 @@ function render_header(string $title, string $panel = ''): void
                 $hrefPage = $page;
             }
             $active = '';
-            if ($current === $activePage) {
-                if (str_contains($page, 'folder=')) {
-                    parse_str(substr($page, strpos($page, '&') + 1), $qs);
-                    $active = ((string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')) ? ' active' : '';
-                } else {
-                    $active = nav_is_active($activePage, $current) ? ' active' : '';
-                }
+            if (str_contains($page, 'folder=')) {
+                parse_str(substr($page, strpos($page, '&') + 1), $qs);
+                $active = (
+                    $current === $activePage
+                    && (string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')
+                ) ? ' active' : '';
+            } else {
+                // Use aliases so child routes (order sheet, invoice view, Semrush sheet, …) light the parent.
+                $active = nav_is_active($activePage, $current) ? ' active' : '';
             }
             $ariaCurrent = trim($active) !== '' ? ' aria-current="page"' : '';
             echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $ariaCurrent . '>';

@@ -270,5 +270,12 @@ if (!str_contains($orderSheet, 'yearNow') && !str_contains($orderSheet, 'date(\'
     ok('order sheet dynamic year range');
 }
 
+$layoutNav = file_get_contents($root . '/includes/layout.php') ?: '';
+if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
+    fail('layout nav does not use aliases for child routes');
+} else {
+    ok('layout nav uses aliases for child routes');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

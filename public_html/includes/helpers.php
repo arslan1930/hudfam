@@ -211,7 +211,15 @@ function require_csrf(): void
     }
     flash('error', 'Invalid or missing security token. Refresh the page and try again.');
     $ref = (string) ($_SERVER['HTTP_REFERER'] ?? '');
-    if ($ref !== '' && str_contains($ref, 'index.php')) {
+    $refHost = (string) (parse_url($ref, PHP_URL_HOST) ?? '');
+    $ownHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
+    if (
+        $ref !== ''
+        && $refHost !== ''
+        && $ownHost !== ''
+        && strcasecmp($refHost, $ownHost) === 0
+        && str_contains($ref, 'index.php')
+    ) {
         redirect($ref);
     }
     redirect('index.php?page=admin_dashboard');

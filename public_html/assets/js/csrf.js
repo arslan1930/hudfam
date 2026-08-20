@@ -61,6 +61,11 @@
       return body;
     }
     if (typeof body === 'string') {
+      var trimmed = body.replace(/^\s+/, '');
+      // Do not corrupt JSON request bodies — header token is enough.
+      if (trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[') {
+        return body;
+      }
       if (body.indexOf('_csrf=') !== -1) return body;
       return body + (body ? '&' : '') + '_csrf=' + encodeURIComponent(t);
     }

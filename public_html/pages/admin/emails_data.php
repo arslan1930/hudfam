@@ -47,7 +47,7 @@ if ($folder === '') {
         $allWithEmails += (int) $r['with_emails'];
     }
     $allCountryCount = count($allCountryRows);
-    $archiveDrift = $sweTotal > 0 && $allTotal !== $sweTotal;
+    $archiveDrift = $allTotal !== $sweTotal;
 
     $campaignSheets = list_email_campaign_sheets();
     $campaignSheetCount = count($campaignSheets);
