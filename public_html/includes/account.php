@@ -235,6 +235,29 @@ function mark_admin_email_verified(int $userId): void
     )->execute([$userId]);
 }
 
+/**
+ * Another active admin already uses this email (case-insensitive).
+ * Used by Admin → Users so email login / password reset stay unambiguous.
+ */
+function admin_email_taken_by_other(string $email, int $excludeId = 0): bool
+{
+    ensure_account_schema();
+    $email = trim($email);
+    if ($email === '') {
+        return false;
+    }
+    $stmt = db()->prepare(
+        "SELECT id FROM users
+         WHERE role='admin' AND is_active=1
+           AND email <> ''
+           AND LOWER(TRIM(email)) = LOWER(?)
+           AND id <> ?
+         LIMIT 1"
+    );
+    $stmt->execute([$email, $excludeId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function set_user_password(int $userId, string $password): void
 {
     db()->prepare('UPDATE users SET password_hash=? WHERE id=?')

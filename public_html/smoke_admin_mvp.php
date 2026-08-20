@@ -118,6 +118,27 @@ if (!str_contains($usersPage, 'cannot deactivate your own account')) {
 } else {
     ok('users.php self-deactivate guard');
 }
+if (!str_contains($usersPage, 'email_verified_at=NULL')) {
+    fail('users.php missing email verify clear on email change');
+} else {
+    ok('users.php clears email_verified_at when admin email changes');
+}
+if (!str_contains($usersPage, 'users_stash_form_draft') || !str_contains($usersPage, 'users_take_form_draft')) {
+    fail('users.php missing form draft preserve');
+} else {
+    ok('users.php form draft on validation failure');
+}
+if (!str_contains($usersPage, 'User not found')) {
+    fail('users.php missing invalid edit handling');
+} else {
+    ok('users.php invalid edit redirect');
+}
+$accountLib = file_get_contents($root . '/includes/account.php') ?: '';
+if (!str_contains($accountLib, 'function admin_email_taken_by_other')) {
+    fail('account.php missing admin_email_taken_by_other');
+} else {
+    ok('admin_email_taken_by_other helper');
+}
 
 $invoiceManual = file_get_contents($root . '/pages/admin/invoice_manual.php') ?: '';
 if (!str_contains($invoiceManual, "post('action') === 'create_blank'")) {

@@ -1,6 +1,37 @@
 <?php
 $me = require_admin();
 ensure_users_auth_schema();
+if (function_exists('ensure_account_schema')) {
+    ensure_account_schema();
+}
+
+/**
+ * Stash Users form fields after validation failure (never store password).
+ *
+ * @param array<string,mixed> $fields
+ */
+function users_stash_form_draft(int $id, array $fields): void
+{
+    unset($fields['password'], $fields['_csrf'], $fields['action']);
+    $_SESSION['users_form_draft'] = [
+        'id' => $id,
+        'fields' => $fields,
+    ];
+}
+
+/**
+ * @return array<string,mixed>|null
+ */
+function users_take_form_draft(int $id): ?array
+{
+    $draft = $_SESSION['users_form_draft'] ?? null;
+    unset($_SESSION['users_form_draft']);
+    if (!is_array($draft) || (int) ($draft['id'] ?? -1) !== $id) {
+        return null;
+    }
+    $fields = $draft['fields'] ?? null;
+    return is_array($fields) ? $fields : null;
+}
 
 $revealedTemp = null;
 if (!empty($_SESSION['revealed_temp_password']) && is_array($_SESSION['revealed_temp_password'])) {
@@ -20,13 +51,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $password = (string) post('password');
     $myId = (int) ($me['id'] ?? 0);
 
-    if ($username === '') {
-        flash('error', 'Username required.');
+    $draftFields = [
+        'username' => $username,
+        'full_name' => $full,
+        'email' => $email,
+        'phone' => $phone,
+        'contact_details' => $contact,
+        'role' => $role,
+        'is_active' => $active,
+    ];
+    $fail = static function (string $message) use ($id, $draftFields): void {
+        users_stash_form_draft($id, $draftFields);
+        flash('error', $message);
         redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+    };
+
+    if ($username === '') {
+        $fail('Username required.');
     }
     if ($role === 'admin' && $full === '') {
-        flash('error', 'Admins need a unique full name.');
-        redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+        $fail('Admins need a unique full name.');
+    }
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $fail('Enter a valid email address.');
     }
 
     $existing = null;
@@ -43,12 +90,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     // Self-lockout guards
     if ($id > 0 && $id === $myId) {
         if ($active === 0) {
-            flash('error', 'You cannot deactivate your own account.');
-            redirect('index.php?page=admin_users&edit=' . $id);
+            $fail('You cannot deactivate your own account.');
         }
         if ($role !== 'admin') {
-            flash('error', 'You cannot demote your own admin account.');
-            redirect('index.php?page=admin_users&edit=' . $id);
+            $fail('You cannot demote your own admin account.');
         }
     }
 
@@ -61,8 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                 "SELECT COUNT(*) FROM users WHERE role='admin' AND is_active=1 AND id<>" . (int) $id
             )->fetchColumn();
             if ($cnt < 1) {
-                flash('error', 'Cannot remove the last active admin.');
-                redirect('index.php?page=admin_users&edit=' . $id);
+                $fail('Cannot remove the last active admin.');
             }
         }
     }
@@ -73,9 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
         );
         $dup->execute([$full, $id]);
         if ($dup->fetchColumn()) {
-            flash('error', 'Another admin already uses this full name. Each admin needs a unique name.');
-            redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+            $fail('Another admin already uses this full name. Each admin needs a unique name.');
         }
+    }
+
+    if ($role === 'admin' && $email !== '' && admin_email_taken_by_other($email, $id)) {
+        $fail('Another active admin already uses this email. Admin emails must be unique for login and password reset.');
     }
 
     $settingPassword = $password !== '' || $id === 0;
@@ -84,23 +131,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     }
     if ($settingPassword && $password !== '') {
         if (strlen($password) < 8) {
-            flash('error', 'Password must be at least 8 characters.');
-            redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+            $fail('Password must be at least 8 characters.');
         }
         if (in_array($password, known_weak_passwords(), true)) {
-            flash('error', 'Do not use demo default passwords (admin123 / team123).');
-            redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+            $fail('Do not use demo default passwords (admin123 / team123).');
         }
     }
+
+    $oldEmail = trim((string) ($existing['email'] ?? ''));
+    $emailChanged = $id > 0 && strcasecmp($oldEmail, $email) !== 0;
+    // Changing an admin's email must re-verify (same as Admin → Account).
+    $clearEmailVerify = $role === 'admin' && $emailChanged;
 
     try {
         if ($id) {
             if ($password !== '') {
                 // Editing your own password: apply immediately (no forced re-change).
                 $mustChange = ($id === $myId) ? 0 : 1;
-                db()->prepare(
-                    'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=? WHERE id=?'
-                )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $mustChange, $id]);
+                if ($clearEmailVerify) {
+                    db()->prepare(
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=?, email_verified_at=NULL WHERE id=?'
+                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $mustChange, $id]);
+                } else {
+                    db()->prepare(
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=? WHERE id=?'
+                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $mustChange, $id]);
+                }
                 if ($id === $myId) {
                     clear_must_change_password_flag($id);
                     flash('ok', 'User updated. Your new password is active now.');
@@ -108,11 +164,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                     flash('ok', 'User updated. They must change the password on next login.');
                 }
             } else {
-                db()->prepare(
-                    'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
-                )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
+                if ($clearEmailVerify) {
+                    db()->prepare(
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, email_verified_at=NULL WHERE id=?'
+                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
+                } else {
+                    db()->prepare(
+                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
+                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
+                }
                 flash('ok', 'User updated.');
             }
+            unset($_SESSION['users_form_draft']);
             redirect('index.php?page=admin_users');
         }
 
@@ -126,10 +189,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
             'username' => $username,
             'password' => $password,
         ];
+        unset($_SESSION['users_form_draft']);
         flash('ok', 'User created. Copy the temporary password below (shown once). They must change it on first login.');
         redirect('index.php?page=admin_users');
     } catch (PDOException $e) {
-        flash('error', 'Could not save (username must be unique).');
+        users_stash_form_draft($id, $draftFields);
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        if ($sqlState === '23000' || str_contains($e->getMessage(), 'Duplicate')) {
+            flash('error', 'Could not save — username must be unique.');
+        } else {
+            flash('error', 'Could not save. Try again or pick a different username.');
+        }
         redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
     }
 }
@@ -139,8 +209,28 @@ $edit = null;
 if ($editId) {
     $s = db()->prepare('SELECT * FROM users WHERE id=?');
     $s->execute([$editId]);
-    $edit = $s->fetch();
+    $edit = $s->fetch() ?: null;
+    if (!$edit) {
+        flash('error', 'User not found.');
+        redirect('index.php?page=admin_users');
+    }
 }
+
+$form = $edit ?: [
+    'id' => 0,
+    'username' => '',
+    'full_name' => '',
+    'email' => '',
+    'phone' => '',
+    'contact_details' => '',
+    'role' => 'team',
+    'is_active' => 1,
+];
+$draft = users_take_form_draft($editId);
+if ($draft) {
+    $form = array_merge($form, $draft);
+}
+
 $users = db()->query('SELECT * FROM users ORDER BY role, full_name, username')->fetchAll();
 $admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
 
@@ -242,24 +332,24 @@ render_header('Admins & users', 'admin');
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="id" value="<?= (int)($edit['id'] ?? 0) ?>">
     <label>Username</label>
-    <input name="username" value="<?= h($edit['username'] ?? '') ?>" required>
-    <label>Full name <?= ($edit['role'] ?? '') === 'admin' || !isset($edit) ? '(unique for admins)' : '' ?></label>
-    <input name="full_name" value="<?= h($edit['full_name'] ?? '') ?>">
+    <input name="username" value="<?= h($form['username'] ?? '') ?>" required>
+    <label>Full name <?= (($form['role'] ?? '') === 'admin' || !$edit) ? '(unique for admins)' : '' ?></label>
+    <input name="full_name" value="<?= h($form['full_name'] ?? '') ?>">
     <label>Email</label>
-    <input name="email" value="<?= h($edit['email'] ?? '') ?>" type="email">
+    <input name="email" value="<?= h($form['email'] ?? '') ?>" type="email">
     <label>Phone</label>
-    <input name="phone" value="<?= h($edit['phone'] ?? '') ?>">
+    <input name="phone" value="<?= h($form['phone'] ?? '') ?>">
     <label>Contact details</label>
-    <textarea name="contact_details" rows="2" placeholder="Slack, secondary email, working hours…"><?= h($edit['contact_details'] ?? '') ?></textarea>
+    <textarea name="contact_details" rows="2" placeholder="Slack, secondary email, working hours…"><?= h($form['contact_details'] ?? '') ?></textarea>
     <label>Role</label>
     <select name="role">
-      <option value="team" <?= ($edit['role'] ?? '')==='team'?'selected':'' ?>>team</option>
-      <option value="admin" <?= ($edit['role'] ?? '')==='admin'?'selected':'' ?>>admin</option>
+      <option value="team" <?= ($form['role'] ?? '')==='team'?'selected':'' ?>>team</option>
+      <option value="admin" <?= ($form['role'] ?? '')==='admin'?'selected':'' ?>>admin</option>
     </select>
     <label>Password <?= $edit ? '(blank = keep)' : '(min 8 chars; blank = generate)' ?></label>
     <input type="password" name="password" autocomplete="new-password" minlength="8">
-    <p class="help">Passwords must be at least 8 characters (not demo defaults).</p>
-    <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !$edit || !empty($edit['is_active']) ? 'checked' : '' ?>> Active</label>
+    <p class="help">Passwords must be at least 8 characters (not demo defaults). Admin emails must be unique.</p>
+    <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !empty($form['is_active']) ? 'checked' : '' ?>> Active</label>
     <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
   </form>
 </div>
