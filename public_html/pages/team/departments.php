@@ -170,9 +170,32 @@ if (!$dept) {
 
 $deptId = (int) $dept['id'];
 $statusFilter = (string) get('status');
-$tasks = list_department_tasks($deptId, $statusFilter);
+$assigneeFilter = (string) get('assignee');
+if (!in_array($assigneeFilter, ['', 'all', 'mine', 'unassigned'], true)) {
+    $assigneeFilter = '';
+}
+if ($assigneeFilter === 'all') {
+    $assigneeFilter = '';
+}
+$tasks = list_department_tasks($deptId, $statusFilter, $uid, $assigneeFilter);
 $stats = department_stats($deptId);
 $isCommunicationDept = (string) $dept['slug'] === 'communication';
+
+$deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter): string {
+    $params = array_merge([
+        'folder' => (string) $dept['slug'],
+        'status' => $statusFilter,
+        'assignee' => $assigneeFilter,
+    ], $overrides);
+    $href = $base . '&folder=' . rawurlencode((string) $params['folder']);
+    if (($params['status'] ?? '') !== '') {
+        $href .= '&status=' . rawurlencode((string) $params['status']);
+    }
+    if (($params['assignee'] ?? '') !== '') {
+        $href .= '&assignee=' . rawurlencode((string) $params['assignee']);
+    }
+    return $href;
+};
 
 render_header((string) $dept['name'], 'team');
 render_breadcrumbs([
@@ -234,15 +257,26 @@ render_breadcrumbs([
           'done' => 'Done',
       ];
       foreach ($statusLinks as $val => $lab):
-          $href = $base . '&folder=' . rawurlencode((string) $dept['slug']);
-          if ($val !== '') {
-              $href .= '&status=' . rawurlencode($val);
-          }
+          $href = $deptFolderUrl(['status' => $val]);
           $active = $statusFilter === $val ? ' active-soft' : '';
           ?>
         <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
       <?php endforeach; ?>
     </div>
+  </div>
+  <div class="actions" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.35rem">
+    <?php
+    $assigneeLinks = [
+        '' => 'Everyone',
+        'mine' => 'Mine',
+        'unassigned' => 'Unassigned',
+    ];
+    foreach ($assigneeLinks as $val => $lab):
+        $href = $deptFolderUrl(['assignee' => $val]);
+        $active = $assigneeFilter === $val ? ' active-soft' : '';
+        ?>
+      <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
+    <?php endforeach; ?>
   </div>
 
   <?php if (!$tasks): ?>
@@ -266,11 +300,14 @@ render_breadcrumbs([
               ? (string) $t['assigned_name']
               : (string) ($t['assigned_username'] ?? '');
           $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
+          $overdue = department_task_is_overdue($t);
+          $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
           ?>
-        <tr class="<?= $mine ? 'dept-task-mine' : '' ?>">
+        <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>>
           <td>
             <strong><?= h((string) $t['title']) ?></strong>
             <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+            <?php if ($overdue): ?><span class="badge">Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
               <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
             <?php endif; ?>
@@ -289,7 +326,7 @@ render_breadcrumbs([
               </select>
             </form>
           </td>
-          <td class="muted"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>

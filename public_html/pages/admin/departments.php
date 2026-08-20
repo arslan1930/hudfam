@@ -202,13 +202,36 @@ foreach ($allTeam as $u) {
     }
 }
 $statusFilter = (string) get('status');
-$tasks = list_department_tasks($deptId, $statusFilter);
+$assigneeFilter = (string) get('assignee');
+if (!in_array($assigneeFilter, ['', 'all', 'mine', 'unassigned', 'assigned'], true)) {
+    $assigneeFilter = '';
+}
+if ($assigneeFilter === 'all') {
+    $assigneeFilter = '';
+}
+$tasks = list_department_tasks($deptId, $statusFilter, (int) ($user['id'] ?? 0), $assigneeFilter);
 $editTaskId = (int) get('edit_task');
 $editTask = $editTaskId ? get_department_task($editTaskId) : null;
 if ($editTask && (int) $editTask['department_id'] !== $deptId) {
     $editTask = null;
 }
 $stats = department_stats($deptId);
+
+$deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter): string {
+    $params = array_merge([
+        'folder' => (string) $dept['slug'],
+        'status' => $statusFilter,
+        'assignee' => $assigneeFilter,
+    ], $overrides);
+    $href = $base . '&folder=' . rawurlencode((string) $params['folder']);
+    if (($params['status'] ?? '') !== '') {
+        $href .= '&status=' . rawurlencode((string) $params['status']);
+    }
+    if (($params['assignee'] ?? '') !== '') {
+        $href .= '&assignee=' . rawurlencode((string) $params['assignee']);
+    }
+    return $href;
+};
 
 render_header((string) $dept['name'], 'admin');
 render_breadcrumbs([
@@ -311,15 +334,26 @@ render_breadcrumbs([
           'done' => 'Done',
       ];
       foreach ($statusLinks as $val => $lab):
-          $href = $base . '&folder=' . rawurlencode((string) $dept['slug']);
-          if ($val !== '') {
-              $href .= '&status=' . rawurlencode($val);
-          }
+          $href = $deptFolderUrl(['status' => $val]);
           $active = $statusFilter === $val ? ' active-soft' : '';
           ?>
         <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
       <?php endforeach; ?>
     </div>
+  </div>
+  <div class="actions" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.35rem">
+    <?php
+    $assigneeLinks = [
+        '' => 'Everyone',
+        'unassigned' => 'Unassigned',
+        'assigned' => 'Assigned',
+    ];
+    foreach ($assigneeLinks as $val => $lab):
+        $href = $deptFolderUrl(['assignee' => $val]);
+        $active = $assigneeFilter === $val ? ' active-soft' : '';
+        ?>
+      <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
+    <?php endforeach; ?>
   </div>
 
   <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>" class="dept-task-form">
@@ -408,10 +442,12 @@ render_breadcrumbs([
           $assignee = trim((string) ($t['assigned_name'] ?? '')) !== ''
               ? (string) $t['assigned_name']
               : (string) ($t['assigned_username'] ?? '');
+          $overdue = department_task_is_overdue($t);
           ?>
-        <tr>
+        <tr<?= $overdue ? ' class="dept-task-overdue"' : '' ?>>
           <td>
             <strong><?= h((string) $t['title']) ?></strong>
+            <?php if ($overdue): ?><span class="badge">Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
               <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
             <?php endif; ?>
@@ -430,9 +466,9 @@ render_breadcrumbs([
               </select>
             </form>
           </td>
-          <td class="muted"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
           <td class="actions">
-            <a href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;edit_task=<?= (int) $t['id'] ?>">Edit</a>
+            <a href="<?= h($deptFolderUrl()) ?>&amp;edit_task=<?= (int) $t['id'] ?>">Edit</a>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form"
                   onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">

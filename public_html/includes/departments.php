@@ -374,12 +374,15 @@ function department_stats(int $departmentId): array
 }
 
 /**
+ * @param array{status?:string,assignee?:string,for_user_id?:int} $opts
+ *        assignee: ''|all|mine|unassigned|whole
  * @return list<array<string,mixed>>
  */
 function list_department_tasks(
     int $departmentId,
     string $status = '',
-    ?int $forUserId = null
+    ?int $forUserId = null,
+    string $assigneeFilter = ''
 ): array {
     ensure_departments_schema();
     $where = ['t.department_id = ?'];
@@ -388,9 +391,16 @@ function list_department_tasks(
         $where[] = 't.status = ?';
         $params[] = $status;
     }
-    if ($forUserId !== null) {
-        // Members see all department tasks; optional filter for "assigned to me"
-        // kept as membership gate outside this function.
+    if ($assigneeFilter === 'mine' && $forUserId !== null && $forUserId > 0) {
+        $where[] = 't.assigned_to = ?';
+        $params[] = $forUserId;
+    } elseif ($assigneeFilter === 'unassigned') {
+        $where[] = 't.assigned_to IS NULL';
+    } elseif ($assigneeFilter === 'whole') {
+        // Explicit whole-department tasks (no personal assignee).
+        $where[] = 't.assigned_to IS NULL';
+    } elseif ($assigneeFilter === 'assigned') {
+        $where[] = 't.assigned_to IS NOT NULL';
     }
     $whereSql = implode(' AND ', $where);
     $stmt = db()->prepare(
@@ -405,11 +415,31 @@ function list_department_tasks(
          WHERE {$whereSql}
          ORDER BY
            FIELD(t.status, 'open', 'in_progress', 'done'),
+           CASE
+             WHEN t.status IN ('open','in_progress')
+              AND t.due_date IS NOT NULL
+              AND t.due_date < CURDATE() THEN 0
+             ELSE 1
+           END,
            t.due_date IS NULL, t.due_date ASC,
            t.id DESC"
     );
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/** True when an open/in_progress task is past its due date. */
+function department_task_is_overdue(array $task): bool
+{
+    $status = (string) ($task['status'] ?? '');
+    if (!in_array($status, ['open', 'in_progress'], true)) {
+        return false;
+    }
+    $due = trim((string) ($task['due_date'] ?? ''));
+    if ($due === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
+        return false;
+    }
+    return $due < date('Y-m-d');
 }
 
 function get_department_task(int $taskId): ?array
