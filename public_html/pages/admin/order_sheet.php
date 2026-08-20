@@ -97,6 +97,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $items = list_order_items($clientId);
 $display = order_sheet_display_rows($items);
 $unpaidLiveCount = count_order_client_unpaid_live($clientId);
+$countryCatalog = [];
+try {
+    seed_countries_if_empty(db());
+    foreach (list_countries(null, true) as $cRow) {
+        $nm = trim((string) ($cRow['name'] ?? ''));
+        if ($nm !== '') {
+            $countryCatalog[] = $nm;
+        }
+    }
+} catch (Throwable $e) {
+    $countryCatalog = [];
+}
 
 $totalOwner = 0.0;
 $totalDecided = 0.0;
@@ -350,7 +362,8 @@ render_header('Order · ' . $client['name'], 'admin');
           <td class="col-country">
             <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
                    value="<?= h((string) ($row['country'] ?? '')) ?>"
-                   placeholder=".de .nl .com …" autocomplete="off">
+                   list="order-country-list"
+                   placeholder="Country…" autocomplete="off">
           </td>
           <td class="col-price">
             <input class="cell-input cell-money" type="text" inputmode="decimal"
@@ -450,14 +463,24 @@ render_header('Order · ' . $client['name'], 'admin');
     </table>
   </div>
   <p class="help" style="margin:0.75rem 0 0" id="sheet-bottom">
-    Country boxes stay empty for you to type (placeholder reminder: .de .nl …).
+    Country fields suggest catalog countries (you can still type freely).
     Under each site name you can leave a short <strong>note…</strong> reminder, or leave it empty.
     <strong>Banner / Textlink</strong> stays empty by default; choose only when needed. For those rows, LIVE URL must be filled like the site name, and set start + end months (invoice text uses that period).
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
     An order counts as <strong>completed</strong> only when LIVE URL is filled — then Owner and Decided prices cannot be empty (Decided must be &gt; 0).
     Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (only after LIVE URL is filled; click again to undo).
     Remove asks for confirmation before deleting a row.
+    <?php if ($siteCount >= 200): ?>
+      <br>This sheet has <?= (int) $siteCount ?> sites — use sheet search to jump to rows before editing.
+    <?php endif; ?>
   </p>
+  <?php if ($countryCatalog): ?>
+  <datalist id="order-country-list">
+    <?php foreach ($countryCatalog as $cname): ?>
+      <option value="<?= h($cname) ?>"></option>
+    <?php endforeach; ?>
+  </datalist>
+  <?php endif; ?>
   <div class="actions-sticky">
     <button class="btn large" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add site</button>
@@ -767,6 +790,18 @@ render_header('Order · ' . $client['name'], 'admin');
       e.stopPropagation();
       jumpToMatch(e.shiftKey ? -1 : 1);
     }
+  });
+
+  // Unsaved-changes warning (skip after intentional submit).
+  var dirty = false;
+  var submitting = false;
+  form.addEventListener('input', function () { dirty = true; }, true);
+  form.addEventListener('change', function () { dirty = true; }, true);
+  form.addEventListener('submit', function () { submitting = true; });
+  window.addEventListener('beforeunload', function (e) {
+    if (!dirty || submitting) return;
+    e.preventDefault();
+    e.returnValue = '';
   });
 })();
 </script>

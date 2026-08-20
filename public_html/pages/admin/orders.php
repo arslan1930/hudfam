@@ -61,11 +61,19 @@ if (!in_array($sort, ['name', 'updated', 'unpaid'], true)) {
 }
 $q = trim((string) get('q'));
 
-$clients = list_order_clients([
+$clientsAll = list_order_clients([
     'filter' => $filter,
     'sort' => $sort,
     'q' => $q,
 ]);
+$perPage = 50;
+$pageNum = max(1, (int) get('p', 1));
+$totalClients = count($clientsAll);
+$totalPages = max(1, (int) ceil($totalClients / $perPage));
+if ($pageNum > $totalPages) {
+    $pageNum = $totalPages;
+}
+$clients = array_slice($clientsAll, ($pageNum - 1) * $perPage, $perPage);
 
 $listBase = 'index.php?page=admin_orders';
 $qs = static function (array $overrides) use ($filter, $sort, $q, $listBase): string {
@@ -73,11 +81,12 @@ $qs = static function (array $overrides) use ($filter, $sort, $q, $listBase): st
         'filter' => $filter,
         'sort' => $sort,
         'q' => $q,
+        'p' => 1,
     ], $overrides);
     $bits = [];
     foreach ($params as $k => $v) {
         $v = (string) $v;
-        if ($v === '' || ($k === 'filter' && $v === 'all') || ($k === 'sort' && $v === 'name')) {
+        if ($v === '' || ($k === 'filter' && $v === 'all') || ($k === 'sort' && $v === 'name') || ($k === 'p' && $v === '1')) {
             continue;
         }
         $bits[] = rawurlencode($k) . '=' . rawurlencode($v);
@@ -196,6 +205,18 @@ render_header('Order management', 'admin');
           </li>
         <?php endforeach; ?>
       </ul>
+      <?php if ($totalPages > 1): ?>
+      <p class="muted" style="margin-top:0.85rem">
+        Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>
+        · <?= (int) $totalClients ?> client<?= $totalClients === 1 ? '' : 's' ?>
+        <?php if ($pageNum > 1): ?>
+          · <a href="<?= h($qs(['p' => $pageNum - 1])) ?>">Previous</a>
+        <?php endif; ?>
+        <?php if ($pageNum < $totalPages): ?>
+          · <a href="<?= h($qs(['p' => $pageNum + 1])) ?>">Next</a>
+        <?php endif; ?>
+      </p>
+      <?php endif; ?>
     <?php endif; ?>
   </section>
 

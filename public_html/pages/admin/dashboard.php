@@ -26,13 +26,16 @@ try {
     $recent = [];
 }
 $orderClientCount = 0;
+$orderUnpaidLive = 0;
 $invoiceCount = 0;
 $extractedCount = 0;
 try {
-    ensure_order_schema();
-    $orderClientCount = (int) db()->query('SELECT COUNT(*) FROM order_clients')->fetchColumn();
+    $omStats = order_management_dashboard_stats();
+    $orderClientCount = (int) ($omStats['clients'] ?? 0);
+    $orderUnpaidLive = (int) ($omStats['unpaid_live'] ?? 0);
 } catch (Throwable $e) {
     $orderClientCount = 0;
+    $orderUnpaidLive = 0;
 }
 try {
     ensure_invoice_schema();
@@ -103,9 +106,9 @@ render_header('Dashboard', 'admin');
     <p>Admin archive, Final mirror, and campaign sheets.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
-     data-search="order management client sheets sites prices profit live url">
+     data-search="order management client sheets sites prices profit live url unpaid invoice">
     <h2>Order management</h2>
-    <p>Client sheets — sites, prices, profit, live URL.</p>
+    <p><?= (int) $orderClientCount ?> active client<?= (int) $orderClientCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — sheets, prices, profit.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_invoices" data-dashboard-item
      data-search="invoices generate printable blank draft done payment">
