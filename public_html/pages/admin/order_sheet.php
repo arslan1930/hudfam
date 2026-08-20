@@ -22,7 +22,8 @@ if ($download === 'csv' || $download === 'xls' || $download === 'excel') {
 }
 
 $months = order_month_names();
-$yearOptions = range(2018, 2030);
+$yearNow = (int) date('Y');
+$yearOptions = range(2018, max(2030, $yearNow + 2));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');

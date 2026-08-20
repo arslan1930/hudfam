@@ -185,45 +185,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// --- Hub: Extracted Sites only (emails live under Emails data) ---
+// --- Hub: skip one-card hop — land on country list ---
 if ($folder === '') {
-    $countryRows = list_extracted_country_rows();
-    $extractedTotal = 0;
-    foreach ($countryRows as $r) {
-        $extractedTotal += (int) $r['total'];
-    }
-    $countryCount = count($countryRows);
-
-    render_header('Extracted Sites', 'admin');
-    ?>
-    <?php render_breadcrumbs([
-        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Extracted Sites'],
-    ]); ?>
-    <div class="topbar">
-      <div>
-        <h1><?= label_with_info('Extracted Sites', 'Filled when Team pushes Extracting Results.') ?></h1>
-        <p class="muted">
-          New URLs from Team Push.
-          Email archives are under <a href="index.php?page=admin_emails_data">Emails data</a>.
-        </p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="folders">
-        <a class="folder" href="<?= h($sitesListUrl) ?>">
-          <h3>Extracted Sites</h3>
-          <p class="muted">
-            <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
-            · <?= (int) $extractedTotal ?> URL<?= (int) $extractedTotal === 1 ? '' : 's' ?>
-          </p>
-        </a>
-      </div>
-    </div>
-    <?php
-    render_footer('admin');
-    return;
+    redirect($sitesListUrl);
 }
 
 // --- Folder: Extracted Sites → country rows ---
@@ -239,7 +203,6 @@ if ($folder === 'extracted_sites' && !$inCountry) {
     ?>
     <?php render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted'],
         ['label' => 'Extracted Sites'],
     ]); ?>
     <div class="topbar">
@@ -250,9 +213,6 @@ if ($folder === 'extracted_sites' && !$inCountry) {
           <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?> ·
           <?= (int) $grandTotal ?> URL<?= (int) $grandTotal === 1 ? '' : 's' ?>
         </p>
-      </div>
-      <div class="actions">
-        <a class="btn secondary" href="index.php?page=admin_extracted">All folders</a>
       </div>
     </div>
 
@@ -444,7 +404,6 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted'],
     ['label' => 'Extracted Sites', 'href' => $sitesListUrl],
     ['label' => $countryName],
 ]); ?>
@@ -472,17 +431,21 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 <p class="help" id="extracted_copy_status" hidden></p>
 
 <div class="card">
-  <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+  <div class="invoice-list-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
     <h2 style="margin:0">URLs</h2>
     <?php if ($countryTotal > 0): ?>
-    <label class="sheet-search extracted-url-search" for="extracted-url-search">
-      <span class="visually-hidden">Search URLs</span>
-      <input id="extracted-url-search" type="search" placeholder="Search…"
-             value="<?= h($q) ?>"
-             autocomplete="off" spellcheck="false" data-no-draft
-             title="Type to filter this page · Enter = next match · Shift+Enter = previous">
-      <span class="sheet-search-meta muted" data-extracted-url-search-meta hidden></span>
-    </label>
+    <div class="actions" style="margin-left:auto;align-items:center;flex-wrap:wrap;gap:0.45rem">
+      <label class="sheet-search extracted-url-search" for="extracted-url-search" style="margin:0">
+        <span class="visually-hidden">Search URLs</span>
+        <input id="extracted-url-search" type="search" placeholder="Search…"
+               value="<?= h($q) ?>"
+               autocomplete="off" spellcheck="false" data-no-draft
+               title="Type to filter this page · Enter = next match · Shift+Enter = previous · or use Search all pages">
+        <span class="sheet-search-meta muted" data-extracted-url-search-meta hidden></span>
+      </label>
+      <button type="button" class="btn secondary small" id="extracted_search_all_pages"
+              title="Search every page in this country (enables Remove matching)">Search all pages</button>
+    </div>
     <?php endif; ?>
   </div>
 

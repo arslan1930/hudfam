@@ -303,5 +303,12 @@
     });
     filterUrls();
   }
+
+  var searchAllBtn = document.getElementById('extracted_search_all_pages');
+  if (searchAllBtn) {
+    searchAllBtn.addEventListener('click', function () {
+      searchAllPages();
+    });
+  }
 })();
 

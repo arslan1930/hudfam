@@ -19,6 +19,15 @@ if (function_exists('clear_admin_new_data')) {
     clear_admin_new_data('emails_admin', $user);
 }
 
+// Optional repair: Admin→Final archive sync (not automatic on every hub GET).
+if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'repair_final_archive') {
+    $result = sync_sites_with_emails_admin_to_all();
+    $up = (int) ($result['upserted'] ?? 0);
+    $rm = (int) ($result['removed'] ?? 0);
+    flash('ok', 'Final archive repaired · synced ' . $up . ' · removed ' . $rm . ' stale.');
+    redirect($base);
+}
+
 // --- Hub ---
 if ($folder === '') {
     $sweCountryRows = list_sites_with_emails_country_rows('admin');
@@ -30,12 +39,6 @@ if ($folder === '') {
     }
     $sweCountryCount = count($sweCountryRows);
 
-    if ($sweTotal > 0) {
-        $allCount = count_sites_with_emails('admin_all');
-        if ($allCount !== $sweTotal) {
-            sync_sites_with_emails_admin_to_all();
-        }
-    }
     $allCountryRows = list_sites_with_emails_country_rows('admin_all');
     $allTotal = 0;
     $allWithEmails = 0;
@@ -44,6 +47,7 @@ if ($folder === '') {
         $allWithEmails += (int) $r['with_emails'];
     }
     $allCountryCount = count($allCountryRows);
+    $archiveDrift = $sweTotal > 0 && $allTotal !== $sweTotal;
 
     $campaignSheets = list_email_campaign_sheets();
     $campaignSheetCount = count($campaignSheets);
@@ -74,6 +78,20 @@ if ($folder === '') {
           You create country sheets under <strong>Email campaign data</strong>.
         </p>
       </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($archiveDrift): ?>
+    <div class="card" style="margin-bottom:1rem">
+      <p style="margin:0 0 0.65rem">
+        Final archive count (<strong><?= (int) $allTotal ?></strong>) differs from Sites with emails - Admin
+        (<strong><?= (int) $sweTotal ?></strong>).
+      </p>
+      <form method="post" action="<?= h($base) ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="repair_final_archive">
+        <button class="btn secondary" type="submit">Repair Final archive</button>
+      </form>
     </div>
     <?php endif; ?>
 
