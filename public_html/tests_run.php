@@ -1834,6 +1834,42 @@ try {
     } else {
         fail("order item id=$itemId");
     }
+
+    // OM-1: unique client name
+    try {
+        create_order_client('Test Client GmbH', 'dup', (int) $adminUser['id']);
+        fail('duplicate client name allowed');
+    } catch (InvalidArgumentException $e) {
+        if (str_contains($e->getMessage(), 'already exists')) {
+            pass('duplicate client name rejected');
+        } else {
+            fail('duplicate client message=' . $e->getMessage());
+        }
+    }
+
+    // OM-1: paid requires LIVE URL
+    try {
+        set_order_item_paid((int) $itemId, (int) $clientId, true);
+        fail('mark paid without LIVE allowed');
+    } catch (InvalidArgumentException $e) {
+        if (str_contains($e->getMessage(), 'LIVE URL')) {
+            pass('mark paid without LIVE rejected');
+        } else {
+            fail('mark paid without LIVE message=' . $e->getMessage());
+        }
+    }
+    db()->prepare('UPDATE order_items SET live_url=?, decided_price=? WHERE id=?')
+        ->execute(['https://example.com/txforder-site', 10.00, $itemId]);
+    set_order_item_paid((int) $itemId, (int) $clientId, true);
+    $paidRow = db()->prepare('SELECT is_paid FROM order_items WHERE id=?');
+    $paidRow->execute([$itemId]);
+    if ((int) $paidRow->fetchColumn() === 1) {
+        pass('mark paid with LIVE works');
+    } else {
+        fail('mark paid with LIVE failed');
+    }
+    set_order_item_paid((int) $itemId, (int) $clientId, false);
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
 

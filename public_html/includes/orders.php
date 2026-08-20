@@ -215,14 +215,64 @@ function order_is_paid(array $row): bool
     return (int) ($row['is_paid'] ?? 0) === 1;
 }
 
+/**
+ * Mark / unmark a site row paid.
+ * Marking paid requires a LIVE URL (completed order).
+ */
 function set_order_item_paid(int $itemId, int $clientId, bool $paid): void
 {
     ensure_order_schema();
+    if ($paid) {
+        $stmt = db()->prepare(
+            "SELECT live_url FROM order_items
+             WHERE id=? AND client_id=? AND row_type='site' LIMIT 1"
+        );
+        $stmt->execute([$itemId, $clientId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new InvalidArgumentException('Order row not found.');
+        }
+        if (trim((string) ($row['live_url'] ?? '')) === '') {
+            throw new InvalidArgumentException(
+                'Fill LIVE URL before marking a row as paid (completed orders only).'
+            );
+        }
+    }
     db()->prepare(
         'UPDATE order_items SET is_paid=?, updated_at=NOW()
          WHERE id=? AND client_id=? AND row_type=\'site\''
     )->execute([$paid ? 1 : 0, $itemId, $clientId]);
     db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+}
+
+/** True if another client already uses this name (case-sensitive DB unique). */
+function order_client_name_taken(string $name, int $excludeId = 0): bool
+{
+    ensure_order_schema();
+    $name = trim($name);
+    if ($name === '') {
+        return false;
+    }
+    $stmt = db()->prepare(
+        'SELECT id FROM order_clients WHERE name=? AND id<>? LIMIT 1'
+    );
+    $stmt->execute([$name, $excludeId]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/** Invoices still linked to this order client (before delete orphans them). */
+function count_invoices_for_order_client(int $clientId): int
+{
+    if ($clientId <= 0) {
+        return 0;
+    }
+    try {
+        $stmt = db()->prepare('SELECT COUNT(*) FROM invoices WHERE client_id=?');
+        $stmt->execute([$clientId]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
 }
 
 /**
@@ -269,6 +319,9 @@ function create_order_client(string $name, string $notes, ?int $createdBy): int
     if ($name === '') {
         throw new InvalidArgumentException('Client name is required.');
     }
+    if (order_client_name_taken($name)) {
+        throw new InvalidArgumentException('A client named “' . $name . '” already exists.');
+    }
     $stmt = db()->prepare(
         'INSERT INTO order_clients (name, notes, created_by) VALUES (?,?,?)'
     );
@@ -282,6 +335,9 @@ function update_order_client(int $id, string $name, string $notes): void
     $name = trim($name);
     if ($name === '') {
         throw new InvalidArgumentException('Client name is required.');
+    }
+    if (order_client_name_taken($name, $id)) {
+        throw new InvalidArgumentException('A client named “' . $name . '” already exists.');
     }
     db()->prepare(
         'UPDATE order_clients SET name=?, notes=?, updated_at=NOW() WHERE id=?'

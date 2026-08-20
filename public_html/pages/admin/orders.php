@@ -18,8 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$client) {
                 flash('error', 'Client not found.');
             } else {
+                $invCount = count_invoices_for_order_client($id);
                 delete_order_client($id);
-                flash('ok', 'Deleted sheet for “' . $client['name'] . '”. Linked invoices (if any) stay; their client link is cleared.');
+                $msg = 'Deleted sheet for “' . $client['name'] . '”.';
+                if ($invCount > 0) {
+                    $msg .= ' ' . $invCount . ' invoice(s) kept; client link cleared.';
+                }
+                flash('ok', $msg);
             }
             redirect('index.php?page=admin_orders');
         }
@@ -65,7 +70,13 @@ render_header('Order management', 'admin');
       <ul class="order-client-list" id="order-client-list">
         <?php foreach ($clients as $c):
             $searchHay = mb_strtolower(trim((string) ($c['name'] ?? '') . ' ' . (string) ($c['notes'] ?? '')));
-            $deleteMsg = 'Delete sheet for ' . $c['name'] . '?\n\nInvoices for this client (if any) are kept; their client link is cleared.';
+            $invCount = count_invoices_for_order_client((int) $c['id']);
+            $deleteMsg = 'Delete sheet for ' . $c['name'] . '?';
+            if ($invCount > 0) {
+                $deleteMsg .= "\n\n" . $invCount . ' invoice(s) will be kept, but their client link will be cleared.';
+            } else {
+                $deleteMsg .= "\n\nInvoices for this client (if any) are kept; their client link is cleared.";
+            }
             ?>
           <li class="order-client-row" data-order-client-row data-search="<?= h($searchHay) ?>">
             <div class="order-client-main">
@@ -76,10 +87,16 @@ render_header('Order management', 'admin');
                 <span><?= (int) $c['item_count'] ?> site<?= (int) $c['item_count'] === 1 ? '' : 's' ?></span>
                 <span class="order-meta-done"><?= (int) $c['completed_count'] ?> completed</span>
                 <span class="order-meta-done">Completed profit <?= h(format_money($c['completed_profit'])) ?></span>
+                <?php if ($invCount > 0): ?>
+                  <span><?= (int) $invCount ?> invoice<?= (int) $invCount === 1 ? '' : 's' ?></span>
+                <?php endif; ?>
               </div>
             </div>
             <div class="order-client-actions">
               <a class="btn small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">Open sheet</a>
+              <?php if ($invCount > 0): ?>
+                <a class="btn secondary small" href="index.php?page=admin_invoices">Invoices</a>
+              <?php endif; ?>
               <form method="post" onsubmit="return confirm(<?= h(json_encode($deleteMsg, JSON_UNESCAPED_UNICODE)) ?>);"
                     action="index.php?page=admin_orders">
                 <?= csrf_field() ?>
