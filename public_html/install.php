@@ -4,6 +4,7 @@
  * Open https://yourdomain.com/install.php then delete this file.
  */
 session_start();
+require_once __DIR__ . '/includes/helpers.php';
 $error = '';
 $done = false;
 
@@ -134,7 +135,7 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
       <p class="help"><strong>Delete install.php now</strong> for security.</p>
     <?php else: ?>
       <p class="muted">Enter MySQL details from Hostinger hPanel → Databases.</p>
-      <?php if ($error): ?><ul class="messages"><li class="error"><?= htmlspecialchars($error) ?></li></ul><?php endif; ?>
+      <?php if ($error): render_alert_box('error', $error); endif; ?>
       <form method="post">
         <label>App name</label>
         <input name="app_name" value="TechxForm">

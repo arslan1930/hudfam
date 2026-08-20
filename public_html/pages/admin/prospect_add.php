@@ -75,7 +75,7 @@ render_header('Add sites', 'admin');
 
 <?= guide_admin_add() ?>
 
-<form class="card" method="post">
+<form class="card" method="post" action="index.php?page=admin_prospect_add">
   <div class="form-grid">
     <?= render_country_typeahead($country) ?>
     <?= render_language_typeahead($language) ?>
