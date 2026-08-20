@@ -28,6 +28,25 @@ function known_weak_passwords(): array
     return ['admin123', 'team123'];
 }
 
+/**
+ * One-time temporary password for Admin → Users (create / generate-on-edit).
+ * Mixed alphabet, no ambiguous 0/O/I/l/1; never a known demo default.
+ */
+function generate_temp_password(int $length = 14): string
+{
+    $length = max(12, min(64, $length));
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+    $n = strlen($alphabet);
+    $out = '';
+    for ($i = 0; $i < $length; $i++) {
+        $out .= $alphabet[random_int(0, $n - 1)];
+    }
+    if (in_array($out, known_weak_passwords(), true)) {
+        return generate_temp_password($length);
+    }
+    return $out;
+}
+
 function current_user(): ?array
 {
     return $_SESSION['user'] ?? null;
