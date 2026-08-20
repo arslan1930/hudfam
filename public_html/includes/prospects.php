@@ -297,7 +297,7 @@ function extract_host_candidate(string $raw): string
     $s = preg_replace('/^[\s\'"\[<\(]+/', '', $s) ?? $s;
     $s = preg_replace('/[\s\'"\]>\)]+$/', '', $s) ?? $s;
 
-    // Prefer parse_url for full https://…/path?#… pastes (Filter & add Clean errors).
+    // Prefer parse_url for full https://…/path?#… pastes (Filter & add Clean to root domains).
     $probe = $s;
     if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $probe) && str_contains($probe, '.')) {
         if (preg_match('~^[a-z0-9.-]+(/|\?|#|$)~i', $probe)) {
@@ -1058,7 +1058,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     $parsed = parse_domain_list_strict($raw);
     if ($parsed['invalid_count'] > 0) {
         throw new InvalidArgumentException(
-            'Remove invalid lines first (use Clean errors). Paste root domains only, e.g. example.com or my-site.co.uk — no https, paths, or subdomains.'
+            'Remove invalid lines first (use Clean to root domains). Paste root domains only, e.g. example.com or my-site.co.uk — no https, paths, or subdomains.'
         );
     }
     /** @var array<string,string> $rows domain => url (empty for root-domain paste) */

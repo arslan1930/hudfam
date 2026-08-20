@@ -148,7 +148,7 @@ try {
 
 $country = 'Germany';
 
-// --- Clean errors / https:// paste → root domains (Filter & add) ---
+// --- Clean to root domains / https:// paste → root domains (Filter & add) ---
 try {
     $messy = implode("\n", [
         'https://mail.google.com/mail/u/6/#inbox',

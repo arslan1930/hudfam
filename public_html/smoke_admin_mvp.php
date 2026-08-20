@@ -128,6 +128,25 @@ if (!str_contains($usersPage, 'users_stash_form_draft') || !str_contains($usersP
 } else {
     ok('users.php form draft on validation failure');
 }
+if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPage = 50')) {
+    fail('users.php missing 50/page pagination');
+} else {
+    ok('users.php 50/page pagination');
+}
+$invoicesAdminPage = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+if (!str_contains($invoicesAdminPage, '$perPage = 50')
+    || !str_contains($invoicesAdminPage, '$invoiceListQs')
+    || !str_contains($invoicesAdminPage, 'Previous')) {
+    fail('invoices.php missing 50/page pagination');
+} else {
+    ok('invoices.php 50/page pagination');
+}
+$adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
+if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
+    fail('Admin Our database still says Clean errors');
+} else {
+    ok('Admin Our database uses Clean to root domains wording');
+}
 if (!str_contains($usersPage, 'User not found')) {
     fail('users.php missing invalid edit handling');
 } else {
