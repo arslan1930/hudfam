@@ -130,11 +130,11 @@ function guide_filter_add(): string
     return render_page_purpose(
         'Filter & add — new unique sites only',
         'Paste a list and compare it privately against the existing country database. Existing URLs stay hidden; only new unique sites are shown so you can add them.',
-        'Select country → Paste → Filter → Add. New sites go into the country database and Extracting sites → Sites list.',
+        'Select country → Paste → Filter unique sites → Add or Separate. Send/Add to country only after Filter.',
         [
             'Select an existing country database (Germany, Spain, …).',
-            'Paste root domains and Filter — duplicates are removed without showing the private country list.',
-            'Add only the remaining new unique sites — they join the country database and that country’s Extracting Sites list.',
+            'Paste root domains and Filter unique sites — duplicates are removed without showing the private country list.',
+            'Add only the remaining new unique sites — or Separate all under that unique list to Send one ending at a time. Separate before Filter is Copy/Delete only.',
         ]
     );
 }

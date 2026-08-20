@@ -2709,6 +2709,33 @@ try {
     fail('tld separate: ' . $e->getMessage());
 }
 
+// --- Filter gate: Separate/Add only after Filter unique sites ---
+try {
+    prospect_filter_gate_clear();
+    if (prospect_filter_gate_allows('Germany', ['alpha.de'])) {
+        fail('gate should deny before Filter');
+    } else {
+        pass('gate denies before Filter');
+    }
+    prospect_filter_gate_set('Germany', ['alpha.de', 'beta.com']);
+    if (prospect_filter_gate_allows('Germany', ['alpha.de'])
+        && prospect_filter_gate_allows('Germany', ['beta.com'])
+        && !prospect_filter_gate_allows('Germany', ['gamma.de'])
+        && !prospect_filter_gate_allows('Spain', ['alpha.de'])) {
+        pass('gate allows only filtered unique for that country');
+    } else {
+        fail('gate allow/deny unexpected');
+    }
+    prospect_filter_gate_clear();
+    if (!prospect_filter_gate_allows('Germany', ['alpha.de'])) {
+        pass('gate clear blocks send');
+    } else {
+        fail('gate still open after clear');
+    }
+} catch (Throwable $e) {
+    fail('filter gate: ' . $e->getMessage());
+}
+
 // --- Admin Users U-1: unique email + verify reset ---
 try {
     ensure_account_schema();

@@ -216,7 +216,7 @@
         sendBtn.type = 'submit';
         sendBtn.className = 'btn';
         sendBtn.textContent = sendLabel;
-        sendBtn.title = 'Filter against country, add unique sites, push to Extracting Sites list';
+        sendBtn.title = 'Add unique sites that already passed Filter unique sites';
         form.appendChild(sendBtn);
 
         form.addEventListener('submit', function (e) {
@@ -249,7 +249,7 @@
           var suffix = tld === 'other' ? 'other' : ('.' + tld);
           if (!window.confirm(
             'Send ' + n + ' ' + suffix + ' site(s) to ' + cInput.value
-              + '?\n\nAlready-known sites are skipped. Unique sites are added and go to Extracting Sites list.'
+              + '?\n\nThese sites already passed Filter unique sites. Already-known sites are skipped again as a safety check.'
               + '\n\nIf this ending looks wrong for ' + cInput.value + ', you are confirming you still want to add them.'
           )) {
             e.preventDefault();

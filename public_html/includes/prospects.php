@@ -836,6 +836,69 @@ function filter_domains_against_prospects(array $domains, string $country = ''):
 }
 
 /**
+ * After Filter unique sites: remember which domains passed for this country.
+ * Add / Separate Send may only save domains from this set (workflow gate).
+ *
+ * @param list<string> $uniqueDomains
+ */
+function prospect_filter_gate_set(string $country, array $uniqueDomains): void
+{
+    $country = trim($country);
+    $allowed = [];
+    foreach ($uniqueDomains as $d) {
+        $n = normalize_domain((string) $d);
+        if ($n !== '') {
+            $allowed[$n] = true;
+        }
+    }
+    $_SESSION['prospect_filter_gate'] = [
+        'country' => $country,
+        'allowed' => $allowed,
+        'at' => time(),
+    ];
+}
+
+function prospect_filter_gate_clear(): void
+{
+    unset($_SESSION['prospect_filter_gate']);
+}
+
+/**
+ * True when $country matches the last Filter run and every domain is in that unique set.
+ *
+ * @param list<string> $domains
+ */
+function prospect_filter_gate_allows(string $country, array $domains): bool
+{
+    $gate = $_SESSION['prospect_filter_gate'] ?? null;
+    if (!is_array($gate)) {
+        return false;
+    }
+    $country = trim($country);
+    if ($country === '' || ($gate['country'] ?? '') !== $country) {
+        return false;
+    }
+    $at = (int) ($gate['at'] ?? 0);
+    if ($at < 1 || (time() - $at) > 7200) {
+        return false;
+    }
+    $allowed = $gate['allowed'] ?? null;
+    if (!is_array($allowed)) {
+        return false;
+    }
+    if (!$domains) {
+        return false;
+    }
+    foreach ($domains as $d) {
+        $n = normalize_domain((string) $d);
+        if ($n === '' || empty($allowed[$n])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * Plain domain names for Filter Box 1. Optionally scoped to one country database.
  *
  * @return array{domains:string[],total:int,truncated:bool}

@@ -864,10 +864,20 @@ if (!preg_match('/<\/form>\s*.*?data-tld-separate/s', $prospectCheckSf)
         && !str_contains($prospectCheckSf, '$pasteCanSend')) {
     // PHP source has $pasteCanSend variable
 }
-if (!str_contains($prospectCheckSf, '$pasteCanSend')) {
-    fail('paste TLD workspace missing $pasteCanSend outside filter form');
+if (!str_contains($prospectCheckSf, '$pasteCanSend')
+    || !str_contains($prospectCheckSf, '$pasteCanSend = false')
+    || !str_contains($prospectCheckSf, 'prospect_filter_gate_allows')
+    || !str_contains($prospectCheckSf, 'Filter unique sites first')) {
+    fail('paste Separate must not Send before Filter unique sites (gate)');
 } else {
-    ok('paste TLD Send gated by country outside filter form');
+    ok('paste Separate Send gated until Filter unique sites');
+}
+$prospectsLib = file_get_contents($root . '/includes/prospects.php') ?: '';
+if (!str_contains($prospectsLib, 'function prospect_filter_gate_set')
+    || !str_contains($prospectsLib, 'function prospect_filter_gate_allows')) {
+    fail('prospects.php missing Filter gate helpers');
+} else {
+    ok('prospect Filter gate helpers');
 }
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {

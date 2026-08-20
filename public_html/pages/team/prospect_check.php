@@ -93,11 +93,20 @@ try {
                 ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
                 : $raw;
         } elseif ($action === 'add_new' || $action === 'send_tld_column') {
-            // Option A: re-filter against the country database — only brand-new sites may be saved.
+            // Must Filter unique sites first — Separate Send / Add cannot skip that step.
             if (!$domains) {
                 flash('error', 'Could not read the domain list. Separate again or Filter, then retry.');
                 redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
+            if (!prospect_filter_gate_allows($country, $domains)) {
+                flash(
+                    'error',
+                    'Filter unique sites first. Separate and Add only work on domains that passed Filter for '
+                    . $country . '.'
+                );
+                redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+            }
+            // Option A: re-filter against the country database — only brand-new sites may be saved.
             $filter = filter_domains_against_prospects($domains, $country);
             $selected = $filter['new'];
             $already = count($filter['existing']);
@@ -146,6 +155,7 @@ try {
                             $msg .= ' · sent from TLD column';
                         }
                         flash('ok', $msg . '.');
+                        prospect_filter_gate_clear();
                         // Only jump to Extracting when that tool is unlocked for this user.
                         if (!empty($added['extract_batch_id'])
                             && function_exists('team_page_unlocked')
@@ -170,6 +180,7 @@ try {
             $raw = implode("\n", $result['new']);
             $skippedN = count($result['existing']);
             $uniqueN = count($result['new']);
+            prospect_filter_gate_set($country, $result['new']);
             if ($uniqueN > 0) {
                 flash(
                     'ok',
@@ -213,6 +224,12 @@ $tldGroups = ($result && !empty($result['new']))
     : [];
 $sendBtnLabel = $canSendExtracting ? 'Send to Extracting' : 'Add to country';
 
+// Drop a stale Filter gate when the selected country no longer matches.
+$gateCountry = (string) (($_SESSION['prospect_filter_gate'] ?? [])['country'] ?? '');
+if ($gateCountry !== '' && $country !== '' && $gateCountry !== $country) {
+    prospect_filter_gate_clear();
+}
+
 $stepPaste = !$result ? 'active' : 'done';
 $stepFilter = $result ? 'active' : '';
 $stepAdd = ($result && $result['new']) ? 'active' : '';
@@ -226,7 +243,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Filter</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder. Use <strong>Separate all</strong> to split by domain ending (.es, .com, …).</p>
+    <p class="muted">Paste sites → <strong>Filter unique sites</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add or <strong>Separate all</strong> (Send) under the unique list. Separate before Filter can only Copy/Delete.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -319,8 +336,9 @@ render_header('Filter & add', 'team');
 </form>
 
 <?php
-  // TLD workspace lives OUTSIDE #filter_form so Send can use its own POST form (no nested forms).
-  $pasteCanSend = ($country !== '');
+  // Paste Separate: Copy/Delete only. Send/Add requires Filter unique sites first
+  // (results Separate below has data-can-send=1 after Filter).
+  $pasteCanSend = false;
 ?>
 <div class="card tld-separate-card"
      data-tld-separate
@@ -340,8 +358,8 @@ render_header('Filter & add', 'team');
       Separate all
     </button>
     <span class="muted" style="font-size:0.88rem">
-      One ending at a time — Copy, Delete, or <?= h($sendBtnLabel) ?> that list only
-      <?= $pasteCanSend ? '' : ' (select a country first to send)' ?>
+      One ending at a time — Copy or Delete here. <?= h($sendBtnLabel) ?> only after
+      <strong>Filter unique sites</strong> (under New unique sites)
     </span>
     <p class="help tld-separate-status" data-tld-status hidden></p>
   </div>
@@ -436,7 +454,7 @@ render_header('Filter & add', 'team');
         <textarea id="unique_domains_preview" class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in <?= h($country) ?> yet. Clicking add merges only these new sites into the existing <?= h($country) ?> database.
-          Already-known sites stay skipped. Or <strong>Separate all</strong> below to work by domain ending.
+          Already-known sites stay skipped. Or <strong>Separate all</strong> below to Send/Add one domain ending at a time (only after Filter).
         </p>
         <?php if (!empty($tldCheck['warn'])): ?>
           <label class="tld-confirm">
@@ -470,7 +488,7 @@ render_header('Filter & add', 'team');
             Separate all
           </button>
           <span class="muted" style="font-size:0.88rem">
-            One ending at a time — Copy, Delete, or <?= h($sendBtnLabel) ?> (filters known sites first)
+            One ending at a time — Copy, Delete, or <?= h($sendBtnLabel) ?> (passed Filter unique sites)
           </span>
           <p class="help tld-separate-status" data-tld-status hidden></p>
         </div>
