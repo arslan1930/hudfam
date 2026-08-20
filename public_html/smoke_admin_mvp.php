@@ -600,5 +600,20 @@ foreach ([
 }
 ok('tests_run Team T-1–T-5 coverage needles');
 
+$httpSmoke = file_get_contents($root . '/tests_http.php') ?: '';
+if (str_contains($httpSmoke, 'curl_init')) {
+    fail('tests_http.php still requires ext-curl (curl_init)');
+} elseif (!str_contains($httpSmoke, 'file_get_contents') || !str_contains($httpSmoke, 'stream_context_create')) {
+    fail('tests_http.php missing stream-based HTTP client');
+} else {
+    ok('tests_http.php uses streams (no ext-curl)');
+}
+if (!str_contains($httpSmoke, 'Waiting for assignment')
+    || !str_contains($httpSmoke, 'admin_extracted&folder=extracted_sites')) {
+    fail('tests_http.php missing waiting-dashboard / extracted-folder asserts');
+} else {
+    ok('tests_http.php ACL + extracted hub asserts');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
