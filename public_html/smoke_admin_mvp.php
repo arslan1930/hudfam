@@ -879,6 +879,18 @@ if (!str_contains($prospectsLib, 'function prospect_filter_gate_set')
 } else {
     ok('prospect Filter gate helpers');
 }
+if (!str_contains($prospectsLib, 'function filter_domains_routed_against_prospects')
+    || !str_contains($prospectsLib, 'route_domains_by_country_tld')) {
+    fail('prospects.php missing routed Filter helper');
+} else {
+    ok('prospect routed Filter helper');
+}
+if (!str_contains($prospectCheckSf, 'filter_domains_routed_against_prospects')
+    || !str_contains($prospectCheckSf, 'TLD → country')) {
+    fail('Filter & add missing routed Filter/Add path');
+} else {
+    ok('Filter & add uses routed per-country de-dupe');
+}
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {
     fail('geo.php missing group_domains_by_tld');

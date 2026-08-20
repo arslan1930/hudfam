@@ -106,8 +106,8 @@ try {
                 );
                 redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
-            // Option A: re-filter against the country database — only brand-new sites may be saved.
-            $filter = filter_domains_against_prospects($domains, $country);
+            // Route by TLD, then drop duplicates against each destination Our database.
+            $filter = filter_domains_routed_against_prospects($domains, $country);
             $selected = $filter['new'];
             $already = count($filter['existing']);
             $result = [
@@ -115,40 +115,66 @@ try {
                 'new' => $selected,
                 'invalid' => 0,
                 'total_input' => (int) $filter['total_input'],
+                'by_country' => $filter['by_country'] ?? [],
             ];
             $raw = implode("\n", $selected);
             if (!$selected) {
-                flash('ok', 'No new unique sites — all ' . (int) $already . ' domain(s) are already in ' . $country . '. Paste a different list.');
+                flash(
+                    'ok',
+                    'No new unique sites — all ' . (int) $already
+                    . ' domain(s) are already in the destination country database(s). Paste a different list.'
+                );
             } else {
-                $tldGate = analyze_country_tld_match($selected, $country);
+                $destCount = 0;
+                foreach (($filter['by_country'] ?? []) as $bucket) {
+                    if (!empty($bucket['new'])) {
+                        $destCount++;
+                    }
+                }
+                // Multi-country routing handles .at/.ch/… — skip selected-country TLD warn.
+                $tldGate = $destCount > 1
+                    ? ['warn' => false]
+                    : analyze_country_tld_match($selected, $country);
                 $acked = post('confirm_tld_mismatch') === '1';
-                if ($tldGate['warn'] && !$acked) {
+                if (!empty($tldGate['warn']) && !$acked) {
                     flash('error', 'Country/TLD mismatch warning: confirm the checkbox before adding to ' . $country . ', or change the country.');
                     $tldCheck = $tldGate;
                 } else {
                     $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
                     if ((int) $added['inserted'] < 1) {
-                        flash('ok', 'No new unique sites were added — they are already in ' . $country . '.');
+                        flash('ok', 'No new unique sites were added — they are already in the destination country database(s).');
                         $result['new'] = [];
                         $raw = '';
                     } else {
-                        $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s) into ' . $country;
+                        $parts = [];
+                        foreach (($added['by_country'] ?? []) as $dest => $info) {
+                            $n = (int) ($info['inserted'] ?? 0);
+                            if ($n > 0) {
+                                $parts[] = $n . ' → ' . $dest;
+                            }
+                        }
+                        $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s)';
+                        if ($parts) {
+                            $msg .= ' (' . implode(', ', $parts) . ')';
+                        } else {
+                            $msg .= ' into ' . $country;
+                        }
                         if (!empty($added['extract_batch_id'])) {
                             if (function_exists('team_page_unlocked')
                                 && team_page_unlocked($user, 'team_extract_batch')) {
-                                $msg .= ' · also added to Extracting sites → Sites list';
+                                $msg .= ' · also added to Extracting sites → Sites list (per country)';
                             } else {
-                                $msg .= ' · saved for the Extracting team (Sites list)';
+                                $msg .= ' · saved for the Extracting team (Sites list, per country)';
                             }
                         }
                         if (!empty($added['batch_id'])) {
                             $msg .= ' · saved in today’s history';
                         }
-                        $skippedTotal = $already + (int) $added['skipped'];
+                        $skippedTotal = (int) $added['skipped'];
                         if ($skippedTotal > 0) {
-                            $msg .= ' · Skipped ' . $skippedTotal . ' already in this country';
+                            $msg .= ' · Skipped ' . $skippedTotal . ' already in destination country database(s)';
                         }
-                        if ($tldGate['warn']) {
+                        if (!empty($tldGate['warn'])) {
                             $msg .= ' · saved despite TLD mismatch warning';
                         }
                         if ($action === 'send_tld_column') {
@@ -175,23 +201,31 @@ try {
         } elseif (!$domains) {
             flash('error', 'Paste at least one root domain under “Paste new sites”.');
         } else {
-            // Filter: drop sites already in this country; keep only unique for add.
-            $result = filter_domains_against_prospects($domains, $country);
+            // Filter: route by TLD, drop sites already in each destination country.
+            $result = filter_domains_routed_against_prospects($domains, $country);
             $raw = implode("\n", $result['new']);
             $skippedN = count($result['existing']);
             $uniqueN = count($result['new']);
             prospect_filter_gate_set($country, $result['new']);
+            $routeBits = [];
+            foreach (($result['by_country'] ?? []) as $dest => $bucket) {
+                $n = count($bucket['new'] ?? []);
+                if ($n > 0) {
+                    $routeBits[] = $n . ' → ' . $dest;
+                }
+            }
             if ($uniqueN > 0) {
-                flash(
-                    'ok',
-                    'Filtered against ' . $country . ': removed ' . $skippedN
-                    . ' already in database · ' . $uniqueN . ' unique site(s) ready to add.'
-                );
+                $msg = 'Filtered (TLD → country): removed ' . $skippedN
+                    . ' already in destination database(s) · ' . $uniqueN . ' unique site(s) ready to add';
+                if ($routeBits) {
+                    $msg .= ' (' . implode(', ', $routeBits) . ')';
+                }
+                flash('ok', $msg . '.');
             } else {
                 flash(
                     'ok',
-                    'Filtered against ' . $country . ': all ' . $skippedN
-                    . ' domain(s) are already in this country. Nothing new to add.'
+                    'Filtered (TLD → country): all ' . $skippedN
+                    . ' domain(s) are already in the destination country database(s). Nothing new to add.'
                 );
             }
             // refresh private count after filter (domains stay hidden from teammates)
@@ -243,7 +277,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Filter unique sites</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add or <strong>Separate all</strong> (Send) under the unique list. Separate before Filter can only Copy/Delete.</p>
+    <p class="muted">Paste sites → <strong>Filter unique sites</strong> routes by TLD (.at→Austria, .ch→Switzerland, …) and removes duplicates in each destination Our database → Add puts unique sites into those country folders and Extracting Sites lists. Separate before Filter can only Copy/Delete.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -395,8 +429,20 @@ render_header('Filter & add', 'team');
   <h2>Results · <?= h($country) ?></h2>
   <p class="muted" style="margin:0">
     Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in this country <strong><?= count($result['existing']) ?></strong> ·
+    Already in destination country database(s) <strong><?= count($result['existing']) ?></strong> ·
     Unique <strong><?= count($result['new']) ?></strong>
+    <?php
+      $routeSummary = [];
+      foreach (($result['by_country'] ?? []) as $dest => $bucket) {
+          $n = count($bucket['new'] ?? []);
+          if ($n > 0) {
+              $routeSummary[] = $n . ' → ' . $dest;
+          }
+      }
+      if ($routeSummary):
+    ?>
+      · <?= h(implode(', ', $routeSummary)) ?>
+    <?php endif; ?>
   </p>
 </div>
 
@@ -424,12 +470,12 @@ render_header('Filter & add', 'team');
       <div class="empty-state" style="min-height:10rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
         <p class="muted" style="margin:0;max-width:18rem">
           <strong><?= count($result['existing']) ?></strong> site<?= count($result['existing']) === 1 ? '' : 's' ?>
-          from your paste already exist in <?= h($country) ?> and were skipped.<br>
+          from your paste already exist in the destination country database(s) and were skipped.<br>
           Existing country URLs stay hidden for privacy.
         </p>
       </div>
     <?php else: ?>
-      <div class="empty-state"><p>Nothing skipped — all pasted domains are new for this country.</p></div>
+      <div class="empty-state"><p>Nothing skipped — all pasted domains are new for their destination countries.</p></div>
     <?php endif; ?>
   </div>
   <div class="card panel-ok">
@@ -453,8 +499,10 @@ render_header('Filter & add', 'team');
         <?= render_hidden_multiline('domains', $uniqueText) ?>
         <textarea id="unique_domains_preview" class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
         <p class="help">
-          These are <strong>not</strong> in <?= h($country) ?> yet. Clicking add merges only these new sites into the existing <?= h($country) ?> database.
-          Already-known sites stay skipped. Or <strong>Separate all</strong> below to Send/Add one domain ending at a time (only after Filter).
+          These are <strong>not</strong> in their destination country Our database yet
+          (TLD routing: .at→Austria, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
+          Add merges them into the correct country folders and Extracting Sites lists.
+          Or <strong>Separate all</strong> below to Send/Add one domain ending at a time.
         </p>
         <?php if (!empty($tldCheck['warn'])): ?>
           <label class="tld-confirm">

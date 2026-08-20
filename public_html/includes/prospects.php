@@ -836,6 +836,80 @@ function filter_domains_against_prospects(array $domains, string $country = ''):
 }
 
 /**
+ * Route domains by TLD (same rules as Extracting Results Push), then drop
+ * duplicates against each destination country’s Our database.
+ *
+ * Generic TLDs (.com, .net, .eu, …) and unknown TLDs stay in $selectedCountry.
+ * Country TLDs (.de, .at, .ch, …) go to their primary country folder.
+ *
+ * @param list<string> $domains
+ * @return array{
+ *   existing:list<string>,
+ *   new:list<string>,
+ *   invalid:int,
+ *   total_input:int,
+ *   by_country:array<string, array{new:list<string>,existing:list<string>}>,
+ *   routed_groups:array<string, list<string>>
+ * }
+ */
+function filter_domains_routed_against_prospects(array $domains, string $selectedCountry): array
+{
+    ensure_prospect_schema();
+    $selected = require_canonical_country($selectedCountry);
+    $selectedName = $selected['name'];
+
+    $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
+    if ($domains === []) {
+        return [
+            'existing' => [],
+            'new' => [],
+            'invalid' => 0,
+            'total_input' => 0,
+            'by_country' => [],
+            'routed_groups' => [],
+        ];
+    }
+
+    if (!function_exists('route_domains_by_country_tld')) {
+        require_once __DIR__ . '/geo.php';
+    }
+    $groups = route_domains_by_country_tld($domains, $selectedName);
+
+    $byCountry = [];
+    $allNew = [];
+    $allExisting = [];
+    foreach ($groups as $dest => $list) {
+        $destCanon = resolve_canonical_country((string) $dest);
+        $destName = $destCanon['name'] ?? $selectedName;
+        $check = filter_domains_against_prospects($list, $destName);
+        $byCountry[$destName] = [
+            'new' => $check['new'],
+            'existing' => $check['existing'],
+        ];
+        foreach ($check['new'] as $d) {
+            $allNew[$d] = true;
+        }
+        foreach ($check['existing'] as $d) {
+            $allExisting[$d] = true;
+        }
+    }
+
+    // Domains already present in their destination must not appear as "new".
+    foreach (array_keys($allExisting) as $d) {
+        unset($allNew[$d]);
+    }
+
+    return [
+        'existing' => array_keys($allExisting),
+        'new' => array_keys($allNew),
+        'invalid' => 0,
+        'total_input' => count($domains),
+        'by_country' => $byCountry,
+        'routed_groups' => $groups,
+    ];
+}
+
+/**
  * After Filter unique sites: remember which domains passed for this country.
  * Add / Separate Send may only save domains from this set (workflow gate).
  *
@@ -965,9 +1039,17 @@ function get_or_create_prospect_batch(
 }
 
 /**
- * Insert new prospect domains into old inventory + dated batch (both sides).
+ * Insert unique domains into Our database + Extracting Sites list.
+ * Country TLDs are routed to their destination folders (same as Push);
+ * each destination is de-duplicated against that country’s Our database.
  *
- * @return array{inserted:int,skipped:int,batch_id:int|null,extract_batch_id:int|null}
+ * @return array{
+ *   inserted:int,
+ *   skipped:int,
+ *   batch_id:int|null,
+ *   extract_batch_id:int|null,
+ *   by_country:array<string, array{inserted:int,skipped:int,extract_batch_id:int|null}>
+ * }
  */
 function add_prospect_domains(
     array $domains,
@@ -987,7 +1069,7 @@ function add_prospect_domains(
     }
 
     $canon = require_canonical_country($country);
-    $country = $canon['name'];
+    $selectedCountry = $canon['name'];
     if ($region === '') {
         $region = $canon['region'];
     }
@@ -995,31 +1077,34 @@ function add_prospect_domains(
         $language = $canon['language'];
     }
     if (function_exists('normalize_site_language')) {
-        $language = normalize_site_language($language, $country);
+        $language = normalize_site_language($language, $selectedCountry);
     }
 
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
-    // Team/admin shared insert path: never insert domains already in this country folder.
-    $check = filter_domains_against_prospects($domains, $country);
-    $toAdd = $check['new'];
-    $skipped = count($check['existing']);
-    if (!$toAdd) {
-        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null, 'extract_batch_id' => null];
+    $routed = filter_domains_routed_against_prospects($domains, $selectedCountry);
+    $byCountryUnique = $routed['by_country'] ?? [];
+
+    $empty = [
+        'inserted' => 0,
+        'skipped' => count($routed['existing'] ?? []),
+        'batch_id' => null,
+        'extract_batch_id' => null,
+        'by_country' => [],
+    ];
+    $hasAnyNew = false;
+    foreach ($byCountryUnique as $bucket) {
+        if (!empty($bucket['new'])) {
+            $hasAnyNew = true;
+            break;
+        }
     }
-    // Defensive: ignore any domain that somehow remained in $domains but is not "new".
-    $toAdd = array_values(array_intersect($toAdd, $domains));
-    if (!$toAdd) {
-        return ['inserted' => 0, 'skipped' => $skipped, 'batch_id' => null, 'extract_batch_id' => null];
+    if (!$hasAnyNew) {
+        return $empty;
     }
 
-    $batchId = get_or_create_prospect_batch(
-        (int) $user['id'],
-        $country,
-        $language,
-        $region,
-        $niche,
-        $notes
-    );
+    if (!function_exists('add_domains_to_extract_sites')) {
+        require_once __DIR__ . '/extracting.php';
+    }
 
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, country, language, region, niche, notes, status, created_by)
@@ -1029,66 +1114,144 @@ function add_prospect_domains(
         'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
     );
-    $inserted = 0;
-    /** @var list<array{domain:string,prospect_site_id:int|null}> $insertedRows */
-    $insertedRows = [];
-    db()->beginTransaction();
-    try {
-        $n = 0;
-        foreach ($toAdd as $d) {
-            try {
-                $ins->execute([$d, $country, $language, $region, $niche, $notes, $user['id']]);
-                $siteId = (int) db()->lastInsertId();
-                $insItem->execute([$batchId, $d, $siteId ?: null]);
-                $inserted++;
-                $insertedRows[] = ['domain' => $d, 'prospect_site_id' => $siteId ?: null];
-            } catch (PDOException $e) {
-                $skipped++;
-            }
-            $n++;
-            if ($n % 250 === 0) {
-                db()->commit();
-                db()->beginTransaction();
-            }
-        }
-        $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
-        $cnt->execute([$batchId]);
-        $siteCount = (int) $cnt->fetchColumn();
-        db()->prepare(
-            'UPDATE prospect_batches SET site_count=?, country=?, language=?, region=?, niche=?, notes=?, updated_at=NOW() WHERE id=?'
-        )->execute([$siteCount, $country, $language, $region, $niche, $notes, $batchId]);
-        db()->commit();
-    } catch (Throwable $e) {
-        if (db()->inTransaction()) {
-            db()->rollBack();
-        }
-        throw $e;
-    }
 
-    // Path 2: also copy new sites into Extracting sites → Sites list (per country batch).
-    $extractBatchId = null;
-    if ($insertedRows) {
-        if (!function_exists('add_domains_to_extract_sites')) {
-            require_once __DIR__ . '/extracting.php';
+    $totalInserted = 0;
+    $totalSkipped = count($routed['existing'] ?? []);
+    $byCountryOut = [];
+    $primaryBatchId = null;
+    $primaryExtractId = null;
+    $selectedExtractId = null;
+    $selectedBatchId = null;
+
+    foreach ($byCountryUnique as $destName => $bucket) {
+        $toAdd = array_values($bucket['new'] ?? []);
+        $destSkipped = count($bucket['existing'] ?? []);
+        if ($toAdd === []) {
+            if ($destSkipped > 0) {
+                $byCountryOut[$destName] = [
+                    'inserted' => 0,
+                    'skipped' => $destSkipped,
+                    'extract_batch_id' => null,
+                ];
+            }
+            continue;
         }
+
+        $destCanon = resolve_canonical_country((string) $destName) ?? $canon;
+        $destCountry = $destCanon['name'];
+        $destRegion = $destCountry === $selectedCountry
+            ? $region
+            : (string) ($destCanon['region'] ?? '');
+        $destLanguage = $destCountry === $selectedCountry
+            ? $language
+            : (string) ($destCanon['language'] ?? '');
+        if (function_exists('normalize_site_language')) {
+            $destLanguage = normalize_site_language($destLanguage, $destCountry);
+        }
+
+        $batchId = get_or_create_prospect_batch(
+            (int) $user['id'],
+            $destCountry,
+            $destLanguage,
+            $destRegion,
+            $niche,
+            $notes
+        );
+
+        $inserted = 0;
+        /** @var list<array{domain:string,prospect_site_id:int|null}> $insertedRows */
+        $insertedRows = [];
+        db()->beginTransaction();
         try {
-            $extract = add_domains_to_extract_sites($insertedRows, $user, $country, $language, $region);
-            $extractBatchId = !empty($extract['batch_id']) ? (int) $extract['batch_id'] : null;
+            $n = 0;
+            foreach ($toAdd as $d) {
+                try {
+                    $ins->execute([
+                        $d,
+                        $destCountry,
+                        $destLanguage,
+                        $destRegion,
+                        $niche,
+                        $notes,
+                        $user['id'],
+                    ]);
+                    $siteId = (int) db()->lastInsertId();
+                    $insItem->execute([$batchId, $d, $siteId ?: null]);
+                    $inserted++;
+                    $insertedRows[] = ['domain' => $d, 'prospect_site_id' => $siteId ?: null];
+                } catch (PDOException $e) {
+                    $destSkipped++;
+                    $totalSkipped++;
+                }
+                $n++;
+                if ($n % 250 === 0) {
+                    db()->commit();
+                    db()->beginTransaction();
+                }
+            }
+            $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+            $cnt->execute([$batchId]);
+            $siteCount = (int) $cnt->fetchColumn();
+            db()->prepare(
+                'UPDATE prospect_batches SET site_count=?, country=?, language=?, region=?, niche=?, notes=?, updated_at=NOW() WHERE id=?'
+            )->execute([$siteCount, $destCountry, $destLanguage, $destRegion, $niche, $notes, $batchId]);
+            db()->commit();
         } catch (Throwable $e) {
-            // Inventory insert already succeeded — do not fail the whole add.
-            $extractBatchId = null;
+            if (db()->inTransaction()) {
+                db()->rollBack();
+            }
+            throw $e;
         }
-    }
 
-    if ($inserted > 0 && function_exists('mark_admin_new_data')) {
-        mark_admin_new_data('our_database', $inserted, $country);
+        $extractBatchId = null;
+        if ($insertedRows) {
+            try {
+                $extract = add_domains_to_extract_sites(
+                    $insertedRows,
+                    $user,
+                    $destCountry,
+                    $destLanguage,
+                    $destRegion
+                );
+                $extractBatchId = !empty($extract['batch_id']) ? (int) $extract['batch_id'] : null;
+            } catch (Throwable $e) {
+                $extractBatchId = null;
+            }
+        }
+
+        if ($inserted > 0 && function_exists('mark_admin_new_data')) {
+            mark_admin_new_data('our_database', $inserted, $destCountry);
+        }
+
+        $totalInserted += $inserted;
+        $byCountryOut[$destCountry] = [
+            'inserted' => $inserted,
+            'skipped' => $destSkipped,
+            'extract_batch_id' => $extractBatchId,
+        ];
+
+        if ($primaryBatchId === null && $inserted > 0) {
+            $primaryBatchId = $batchId;
+        }
+        if ($primaryExtractId === null && $extractBatchId) {
+            $primaryExtractId = $extractBatchId;
+        }
+        if ($destCountry === $selectedCountry) {
+            if ($inserted > 0) {
+                $selectedBatchId = $batchId;
+            }
+            if ($extractBatchId) {
+                $selectedExtractId = $extractBatchId;
+            }
+        }
     }
 
     return [
-        'inserted' => $inserted,
-        'skipped' => $skipped,
-        'batch_id' => $batchId,
-        'extract_batch_id' => $extractBatchId,
+        'inserted' => $totalInserted,
+        'skipped' => $totalSkipped,
+        'batch_id' => $selectedBatchId ?? $primaryBatchId,
+        'extract_batch_id' => $selectedExtractId ?? $primaryExtractId,
+        'by_country' => $byCountryOut,
     ];
 }
 

@@ -129,12 +129,12 @@ function guide_filter_add(): string
 {
     return render_page_purpose(
         'Filter & add — new unique sites only',
-        'Paste a list and compare it privately against the existing country database. Existing URLs stay hidden; only new unique sites are shown so you can add them.',
-        'Select country → Paste → Filter unique sites → Add or Separate. Send/Add to country only after Filter.',
+        'Paste a list and compare it privately against each destination country’s Our database. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country. Existing URLs stay hidden; only new unique sites are shown.',
+        'Select country → Paste → Filter unique sites (TLD route + per-country de-dupe) → Add or Separate. Extractors only see unique sites per country Sites list.',
         [
-            'Select an existing country database (Germany, Spain, …).',
-            'Paste root domains and Filter unique sites — duplicates are removed without showing the private country list.',
-            'Add only the remaining new unique sites — or Separate all under that unique list to Send one ending at a time. Separate before Filter is Copy/Delete only.',
+            'Select an existing country database (Germany, Spain, …) as the starting folder for generic TLDs.',
+            'Paste root domains and Filter unique sites — .at/.ch/… go to Austria/Switzerland/… and duplicates in those Our databases are removed.',
+            'Add only the remaining unique sites — each country folder and that country’s Extracting Sites list get only what is new there. Separate before Filter is Copy/Delete only.',
         ]
     );
 }
@@ -150,6 +150,7 @@ function guide_extracting(): string
             'Those sites appear here under Sites list for that country (editable textarea; edits autosave).',
             'Sites list tools: Copy, Undo, and Redo while you stay on this page.',
             'Paste into Extracting Results → Clean to root domains (Ready vs Needs attention) → Push uses Ready only. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country.',
+            'Sites list is filled only with domains that were unique in that country’s Our database after Filter & add (TLD-routed).',
             'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
         ]
     );

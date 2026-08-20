@@ -156,6 +156,9 @@ function add_domains_to_extract_sites(
         return ['batch_id' => 0, 'added' => 0];
     }
 
+    // Caller must already de-dupe against this country’s Our database
+    // (filter_domains_routed_against_prospects / add_prospect_domains). Do not
+    // re-check prospect_sites here — rows were often just inserted there.
     $batchId = get_or_create_extract_batch($country, $user, $language, $region);
     $ins = db()->prepare(
         'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
