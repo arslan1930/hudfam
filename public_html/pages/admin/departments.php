@@ -224,6 +224,21 @@ $editTask = $editTaskId ? get_department_task($editTaskId) : null;
 if ($editTask && (int) $editTask['department_id'] !== $deptId) {
     $editTask = null;
 }
+// Keep historical assignee visible in the edit dropdown (removed / inactive).
+if ($editTask && (int) ($editTask['assigned_to'] ?? 0) > 0) {
+    $editAssigneeId = (int) $editTask['assigned_to'];
+    $choiceIds = array_map(static fn ($u) => (int) $u['id'], $assigneeChoices);
+    if (!in_array($editAssigneeId, $choiceIds, true)) {
+        $hist = db()->prepare(
+            'SELECT id, username, full_name, email, is_active FROM users WHERE id=? LIMIT 1'
+        );
+        $hist->execute([$editAssigneeId]);
+        $histRow = $hist->fetch(PDO::FETCH_ASSOC);
+        if ($histRow) {
+            $assigneeChoices[] = $histRow;
+        }
+    }
+}
 $stats = department_stats($deptId);
 
 $deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter, $taskQ, $pageNum): string {
@@ -351,7 +366,7 @@ render_breadcrumbs([
           'done' => 'Done',
       ];
       foreach ($statusLinks as $val => $lab):
-          $href = $deptFolderUrl(['status' => $val]);
+          $href = $deptFolderUrl(['status' => $val, 'p' => 1]);
           $active = $statusFilter === $val ? ' active-soft' : '';
           ?>
         <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
@@ -410,13 +425,20 @@ render_breadcrumbs([
           <option value="0">Whole department</option>
           <?php foreach ($assigneeChoices as $m):
               $isMember = in_array((int) $m['id'], $memberIds, true);
+              $inactive = (int) ($m['is_active'] ?? 1) !== 1;
               $name = trim(((string) ($m['full_name'] ?? '')) !== ''
                   ? (string) $m['full_name']
                   : (string) $m['username']);
+              $suffix = '';
+              if ($inactive) {
+                  $suffix = ' (inactive)';
+              } elseif (!$isMember) {
+                  $suffix = ' (add to department)';
+              }
               ?>
             <option value="<?= (int) $m['id'] ?>"
               <?= $editTask && (int) ($editTask['assigned_to'] ?? 0) === (int) $m['id'] ? 'selected' : '' ?>>
-              <?= h($name) ?><?= $isMember ? '' : ' (add to department)' ?>
+              <?= h($name) ?><?= h($suffix) ?>
             </option>
           <?php endforeach; ?>
         </select>
@@ -456,7 +478,17 @@ render_breadcrumbs([
   <h2>Tasks</h2>
   <?php if (!$tasks): ?>
   <div class="empty-state">
-    <p>No tasks<?= $statusFilter !== '' ? ' with this status' : ' yet' ?>.</p>
+    <p><?php
+      if ($taskQ !== '') {
+          echo 'No tasks match this search.';
+      } elseif ($assigneeFilter !== '') {
+          echo 'No tasks with this assignee filter.';
+      } elseif ($statusFilter !== '') {
+          echo 'No tasks with this status.';
+      } else {
+          echo 'No tasks yet.';
+      }
+    ?></p>
   </div>
   <?php else: ?>
   <div class="table-wrap">
@@ -477,10 +509,10 @@ render_breadcrumbs([
               : (string) ($t['assigned_username'] ?? '');
           $overdue = department_task_is_overdue($t);
           ?>
-        <tr<?= $overdue ? ' class="dept-task-overdue"' : '' ?>>
+        <tr<?= $overdue ? ' class="dept-task-overdue"' : '' ?> data-due="<?= h((string) ($t['due_date'] ?? '')) ?>">
           <td>
             <strong><?= h((string) $t['title']) ?></strong>
-            <?php if ($overdue): ?><span class="badge">Overdue</span><?php endif; ?>
+            <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
               <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
             <?php endif; ?>
@@ -499,9 +531,7 @@ render_breadcrumbs([
               </select>
             </form>
           </td>
-          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
-          <td class="actions">
-            <a href="<?= h($deptFolderUrl()) ?>&amp;edit_task=<?= (int) $t['id'] ?>">Edit</a>
+          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form"
                   onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">
@@ -530,4 +560,39 @@ render_breadcrumbs([
   <?php endif; ?>
   <?php endif; ?>
 </div>
+<script>
+(function () {
+  function syncOverdue(sel) {
+    var tr = sel.closest('tr');
+    if (!tr) return;
+    var status = String(sel.value || '');
+    var due = String(tr.getAttribute('data-due') || '');
+    var today = new Date();
+    var ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var overdue = (status === 'open' || status === 'in_progress') && due !== '' && due < ymd;
+    tr.classList.toggle('dept-task-overdue', overdue);
+    var dueCell = tr.querySelector('[data-due-cell]');
+    if (dueCell) dueCell.classList.toggle('dept-due-overdue', overdue);
+    var badge = tr.querySelector('[data-overdue-badge]');
+    if (overdue && !badge) {
+      var strong = tr.querySelector('td strong');
+      if (strong) {
+        var span = document.createElement('span');
+        span.className = 'badge';
+        span.setAttribute('data-overdue-badge', '');
+        span.textContent = 'Overdue';
+        strong.insertAdjacentElement('afterend', span);
+        strong.insertAdjacentText('afterend', ' ');
+      }
+    } else if (!overdue && badge) {
+      badge.remove();
+    }
+  }
+  document.addEventListener('change', function (e) {
+    var sel = e.target;
+    if (!sel || sel.name !== 'status' || !sel.matches || !sel.matches('[data-stay-ajax-change]')) return;
+    syncOverdue(sel);
+  });
+})();
+</script>
 <?php render_footer('admin'); ?>

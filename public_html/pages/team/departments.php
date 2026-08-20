@@ -274,7 +274,7 @@ render_breadcrumbs([
           'done' => 'Done',
       ];
       foreach ($statusLinks as $val => $lab):
-          $href = $deptFolderUrl(['status' => $val]);
+          $href = $deptFolderUrl(['status' => $val, 'p' => 1]);
           $active = $statusFilter === $val ? ' active-soft' : '';
           ?>
         <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
@@ -314,7 +314,17 @@ render_breadcrumbs([
 
   <?php if (!$tasks): ?>
   <div class="empty-state">
-    <p>No tasks<?= $statusFilter !== '' ? ' with this status' : ' assigned yet' ?>.</p>
+    <p><?php
+      if ($taskQ !== '') {
+          echo 'No tasks match this search.';
+      } elseif ($assigneeFilter !== '') {
+          echo 'No tasks with this assignee filter.';
+      } elseif ($statusFilter !== '') {
+          echo 'No tasks with this status.';
+      } else {
+          echo 'No tasks assigned yet.';
+      }
+    ?></p>
   </div>
   <?php else: ?>
   <div class="table-wrap">
@@ -336,11 +346,11 @@ render_breadcrumbs([
           $overdue = department_task_is_overdue($t);
           $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
           ?>
-        <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>>
+        <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?> data-due="<?= h((string) ($t['due_date'] ?? '')) ?>">
           <td>
             <strong><?= h((string) $t['title']) ?></strong>
             <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
-            <?php if ($overdue): ?><span class="badge">Overdue</span><?php endif; ?>
+            <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
               <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
             <?php endif; ?>
@@ -359,7 +369,7 @@ render_breadcrumbs([
               </select>
             </form>
           </td>
-          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -379,4 +389,39 @@ render_breadcrumbs([
   <?php endif; ?>
   <?php endif; ?>
 </div>
+<script>
+(function () {
+  function syncOverdue(sel) {
+    var tr = sel.closest('tr');
+    if (!tr) return;
+    var status = String(sel.value || '');
+    var due = String(tr.getAttribute('data-due') || '');
+    var today = new Date();
+    var ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var overdue = (status === 'open' || status === 'in_progress') && due !== '' && due < ymd;
+    tr.classList.toggle('dept-task-overdue', overdue);
+    var dueCell = tr.querySelector('[data-due-cell]');
+    if (dueCell) dueCell.classList.toggle('dept-due-overdue', overdue);
+    var badge = tr.querySelector('[data-overdue-badge]');
+    if (overdue && !badge) {
+      var strong = tr.querySelector('td strong');
+      if (strong) {
+        var span = document.createElement('span');
+        span.className = 'badge';
+        span.setAttribute('data-overdue-badge', '');
+        span.textContent = 'Overdue';
+        strong.insertAdjacentElement('afterend', span);
+        strong.insertAdjacentText('afterend', ' ');
+      }
+    } else if (!overdue && badge) {
+      badge.remove();
+    }
+  }
+  document.addEventListener('change', function (e) {
+    var sel = e.target;
+    if (!sel || sel.name !== 'status' || !sel.matches || !sel.matches('[data-stay-ajax-change]')) return;
+    syncOverdue(sel);
+  });
+})();
+</script>
 <?php render_footer('team'); ?>

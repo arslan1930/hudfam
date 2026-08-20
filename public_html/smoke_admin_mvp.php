@@ -363,17 +363,99 @@ if (!str_contains($adminDepts, "\$statusFilter === \$val ? ' active-soft' : ''")
 } else {
     ok('admin departments status filter active state');
 }
+if (!str_contains($adminDepts, 'clear_open_department_task_assignees')
+    && !str_contains(file_get_contents($root . '/includes/departments.php') ?: '', 'function clear_open_department_task_assignees')) {
+    fail('missing clear_open_department_task_assignees helper');
+} else {
+    ok('departments clear open assignees helper');
+}
+if (!str_contains($adminDepts, 'dept-task-search') || !str_contains($adminDepts, '$perPage = 50')) {
+    fail('admin departments missing task search/pagination');
+} else {
+    ok('admin departments task search + pagination');
+}
+if (!str_contains($adminDepts, 'Unassigned') || !str_contains($adminDepts, 'Assigned')) {
+    fail('admin departments missing assignee filters');
+} else {
+    ok('admin departments assignee filters');
+}
 $teamDepts = file_get_contents($root . '/pages/team/departments.php') ?: '';
 if (!str_contains($teamDepts, 'csrf_field()')) {
     fail('team departments missing csrf_field');
 } else {
     ok('team departments csrf_field');
 }
+if (!str_contains($teamDepts, "'mine' => 'Mine'")) {
+    fail('team departments missing Mine filter');
+} else {
+    ok('team departments Mine filter');
+}
 if (!str_contains($adminDepts, 'Invalid status') || !str_contains($teamDepts, 'Invalid status')) {
     fail('department status update missing failure handling');
 } else {
     ok('department status update failure handling');
 }
+if (!str_contains($teamDepts, 'dept-task-overdue') && !str_contains($adminDepts, 'dept-task-overdue')) {
+    fail('departments missing overdue row class');
+} else {
+    ok('departments overdue styling');
+}
+
+$deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
+foreach ([
+    'clear_open_department_task_assignees',
+    'department_task_is_overdue',
+    'departments_dashboard_stats',
+] as $fn) {
+    if (!str_contains($deptLib, "function {$fn}")) {
+        fail("departments.php missing {$fn}");
+    }
+}
+ok('departments helpers for D-1–D-4');
+
+$dashPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+if (!str_contains($dashPage, 'departments_dashboard_stats')
+    || !str_contains($dashPage, 'team awaiting assignment')) {
+    fail('dashboard missing departments live stats');
+} else {
+    ok('dashboard departments live stats');
+}
+
+$legacyTasks = file_get_contents($root . '/pages/admin/tasks.php') ?: '';
+if (!str_contains($legacyTasks, 'admin_departments') || !str_contains($legacyTasks, 'redirect(')) {
+    fail('legacy admin_tasks does not redirect to Departments');
+} else {
+    ok('legacy admin_tasks redirects to Departments');
+}
+if (!str_contains($indexFull, "'admin_tasks'")) {
+    fail('index.php missing admin_tasks route for legacy redirect');
+} else {
+    ok('index.php admin_tasks legacy route');
+}
+
+$extractSites = file_get_contents($root . '/pages/admin/extract_sites.php') ?: '';
+if (str_contains($extractSites, 'page=admin_tasks')) {
+    fail('extract_sites still links to admin_tasks');
+} elseif (!str_contains($extractSites, 'admin_departments')) {
+    fail('extract_sites missing Departments CTA');
+} else {
+    ok('extract_sites CTA points at Departments');
+}
+
+$testsFull = file_get_contents($root . '/tests_run.php') ?: '';
+foreach ([
+    'department invalid status rejected',
+    'remove member clears open assignee',
+    'department assignee filters mine/unassigned',
+    'department overdue helper',
+    'departments dashboard stats',
+    'edit keeps historical assignee after remove',
+] as $needle) {
+    if (!str_contains($testsFull, $needle)) {
+        fail("tests_run.php missing Departments coverage: {$needle}");
+    }
+}
+ok('tests_run Departments coverage needles');
 
 $layoutNav = file_get_contents($root . '/includes/layout.php') ?: '';
 if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
