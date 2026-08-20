@@ -271,6 +271,7 @@ function render_footer(string $panel = ''): void
             echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/info-tips.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/nav-shell.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
         }
         echo '</main></div>';
         // Global Processing / Loading overlay (Admin + Team shell).

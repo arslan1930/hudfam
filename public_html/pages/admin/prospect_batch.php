@@ -1,8 +1,6 @@
 <?php
 $user = require_admin();
-if (function_exists('clear_admin_new_data')) {
-    clear_admin_new_data('our_database', $user);
-}
+// Do not clear Our database "New" from history — only Our database pages should.
 $id = (int) get('id');
 $batch = get_prospect_batch($id);
 if (!$batch) {
