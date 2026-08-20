@@ -428,16 +428,22 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
     /** @var array<string,string> $rows domain => original url (or empty) */
     $rows = [];
+    $invalid = 0;
+    $dupesInPaste = 0;
+    $blank = 0;
     foreach ($parts as $part) {
         $part = trim($part);
         if ($part === '') {
+            $blank++;
             continue;
         }
         $domain = normalize_domain($part);
         if ($domain === '' || !str_contains($domain, '.')) {
+            $invalid++;
             continue;
         }
         if (isset($rows[$domain])) {
+            $dupesInPaste++;
             continue;
         }
         $url = '';
@@ -448,7 +454,16 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     }
 
     if ($rows === []) {
-        return ['inserted' => 0, 'updated' => 0, 'total' => 0, 'batch_id' => null, 'country' => $country];
+        return [
+            'inserted' => 0,
+            'updated' => 0,
+            'total' => 0,
+            'batch_id' => null,
+            'country' => $country,
+            'invalid' => $invalid,
+            'dupes_in_paste' => $dupesInPaste,
+            'blank' => $blank,
+        ];
     }
 
     $batchId = get_or_create_prospect_batch(
@@ -529,7 +544,273 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         'total' => count($rows),
         'batch_id' => $batchId,
         'country' => $country,
+        'invalid' => $invalid,
+        'dupes_in_paste' => $dupesInPaste,
+        'blank' => $blank,
     ];
+}
+
+/**
+ * Match a country name against the catalog (case-insensitive).
+ *
+ * @return array{name:string,region:string,language:string}|null
+ */
+function resolve_canonical_country(string $country): ?array
+{
+    $country = trim($country);
+    if ($country === '') {
+        return null;
+    }
+    foreach (list_countries(null, true) as $c) {
+        if (strcasecmp((string) $c['name'], $country) === 0) {
+            return [
+                'name' => (string) $c['name'],
+                'region' => (string) ($c['region'] ?? ''),
+                'language' => (string) ($c['default_language'] ?? ''),
+            ];
+        }
+    }
+    return null;
+}
+
+/**
+ * Delete one site from Our database only (history rows left intact — policy A).
+ *
+ * @return array<string,mixed>|null
+ */
+function delete_prospect_site_by_id(int $id): ?array
+{
+    ensure_prospect_schema();
+    $stmt = db()->prepare('SELECT * FROM prospect_sites WHERE id=? LIMIT 1');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return null;
+    }
+    db()->prepare('DELETE FROM prospect_sites WHERE id=?')->execute([$id]);
+    return $row;
+}
+
+/**
+ * Remove domains from one country folder by pasted list (Our DB only).
+ *
+ * @return array{removed:int,not_found:int,invalid:int,country:string}
+ */
+function remove_prospect_sites_by_list(string $country, string $raw): array
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    $country = trim($country);
+    if ($country === '') {
+        throw new InvalidArgumentException('Open a country folder first, then remove by list.');
+    }
+    $canon = resolve_canonical_country($country);
+    if ($canon) {
+        $country = $canon['name'];
+    } else {
+        $chk = db()->prepare('SELECT 1 FROM prospect_sites WHERE TRIM(country)=? LIMIT 1');
+        $chk->execute([$country]);
+        if (!$chk->fetchColumn()) {
+            throw new InvalidArgumentException('Select an existing country folder.');
+        }
+    }
+
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
+    $domains = [];
+    $invalid = 0;
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $d = normalize_domain($part);
+        if ($d === '' || !str_contains($d, '.')) {
+            $invalid++;
+            continue;
+        }
+        $domains[$d] = true;
+    }
+    $list = array_keys($domains);
+    if ($list === []) {
+        return ['removed' => 0, 'not_found' => 0, 'invalid' => $invalid, 'country' => $country];
+    }
+
+    $removed = 0;
+    $notFound = 0;
+    $chunkSize = 400;
+    for ($i = 0, $n = count($list); $i < $n; $i += $chunkSize) {
+        $chunk = array_slice($list, $i, $chunkSize);
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $params = array_merge([$country], $chunk);
+        $sel = db()->prepare(
+            "SELECT domain FROM prospect_sites WHERE TRIM(country)=? AND domain IN ({$placeholders})"
+        );
+        $sel->execute($params);
+        $found = $sel->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $foundSet = array_fill_keys($found, true);
+        foreach ($chunk as $d) {
+            if (!isset($foundSet[$d])) {
+                $notFound++;
+            }
+        }
+        if ($found === []) {
+            continue;
+        }
+        $ph2 = implode(',', array_fill(0, count($found), '?'));
+        $delParams = array_merge([$country], $found);
+        $del = db()->prepare(
+            "DELETE FROM prospect_sites WHERE TRIM(country)=? AND domain IN ({$ph2})"
+        );
+        $del->execute($delParams);
+        $removed += $del->rowCount();
+    }
+
+    return [
+        'removed' => $removed,
+        'not_found' => $notFound,
+        'invalid' => $invalid,
+        'country' => $country,
+    ];
+}
+
+/**
+ * Global domain/url search across all country folders.
+ *
+ * @return list<array<string,mixed>>
+ */
+function search_prospect_sites_global(string $q, int $limit = 200): array
+{
+    ensure_prospect_schema();
+    $q = trim($q);
+    if ($q === '') {
+        return [];
+    }
+    $limit = max(1, min(500, $limit));
+    $host = normalize_domain($q);
+    $like = '%' . $q . '%';
+    $hostLike = $host !== '' ? '%' . $host . '%' : $like;
+    $stmt = db()->prepare(
+        "SELECT p.*, u.username AS added_by_name, u.full_name AS added_by_full
+         FROM prospect_sites p
+         LEFT JOIN users u ON u.id = p.created_by
+         WHERE p.domain LIKE ? OR p.url LIKE ? OR p.domain LIKE ? OR p.url LIKE ?
+         ORDER BY
+           CASE
+             WHEN p.domain = ? THEN 0
+             WHEN p.domain = ? THEN 1
+             WHEN p.domain LIKE ? THEN 2
+             ELSE 3
+           END,
+           p.country ASC,
+           p.domain ASC
+         LIMIT {$limit}"
+    );
+    $exact = $host !== '' ? $host : $q;
+    $stmt->execute([
+        $like,
+        $like,
+        $hostLike,
+        $hostLike,
+        $exact,
+        $q,
+        $exact . '%',
+    ]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
+ * Domains for copy/export under the same filters as the inventory table.
+ *
+ * @return array{domains:string[],total:int,capped:bool,cap:int}
+ */
+function list_prospect_domains_for_export(array $filters, int $cap = 20000): array
+{
+    ensure_prospect_schema();
+    $cap = max(100, min(50000, $cap));
+    $where = ['1=1'];
+    $params = [];
+    $q = trim((string) ($filters['q'] ?? ''));
+    if ($q !== '') {
+        $host = normalize_domain($q);
+        if ($host !== '' && $host !== strtolower($q)) {
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ? OR p.domain = ? OR p.domain LIKE ?)';
+            $like = '%' . $q . '%';
+            $hostLike = '%' . $host . '%';
+            array_push($params, $like, $like, $like, $like, $host, $hostLike);
+        } else {
+            $like = '%' . $q . '%';
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
+            array_push($params, $like, $like, $like, $like);
+        }
+    }
+    if (array_key_exists('country', $filters)) {
+        $country = (string) $filters['country'];
+        if ($country === '') {
+            $where[] = "TRIM(p.country)=''";
+        } else {
+            $where[] = 'TRIM(p.country) = ?';
+            $params[] = trim($country);
+        }
+    }
+    if (!empty($filters['language'])) {
+        $where[] = 'p.language = ?';
+        $params[] = (string) $filters['language'];
+    }
+    if (!empty($filters['status'])) {
+        $where[] = 'p.status = ?';
+        $params[] = (string) $filters['status'];
+    }
+    if (!empty($filters['created_by'])) {
+        $where[] = 'p.created_by = ?';
+        $params[] = (int) $filters['created_by'];
+    }
+    $whereSql = implode(' AND ', $where);
+    $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
+    $count->execute($params);
+    $total = (int) $count->fetchColumn();
+    $stmt = db()->prepare(
+        "SELECT p.domain FROM prospect_sites p WHERE $whereSql ORDER BY p.domain ASC LIMIT {$cap}"
+    );
+    $stmt->execute($params);
+    $domains = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    return [
+        'domains' => $domains,
+        'total' => $total,
+        'capped' => $total > $cap,
+        'cap' => $cap,
+    ];
+}
+
+/**
+ * Update language / status / notes for one site (domain + country immutable).
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function update_prospect_site_meta(int $id, string $language, string $status, string $notes): array
+{
+    ensure_prospect_schema();
+    $stmt = db()->prepare('SELECT id FROM prospect_sites WHERE id=? LIMIT 1');
+    $stmt->execute([$id]);
+    if (!$stmt->fetchColumn()) {
+        return ['ok' => false, 'error' => 'Site not found.'];
+    }
+    $statuses = array_keys(prospect_statuses());
+    if ($status !== '' && !in_array($status, $statuses, true)) {
+        return ['ok' => false, 'error' => 'Invalid status.'];
+    }
+    if ($status === '') {
+        $status = 'new';
+    }
+    $language = trim($language);
+    $notes = trim(str_replace(["\r\n", "\r"], "\n", $notes));
+    if (mb_strlen($notes) > 2000) {
+        $notes = mb_substr($notes, 0, 2000);
+    }
+    db()->prepare(
+        'UPDATE prospect_sites SET language=?, status=?, notes=?, updated_at=NOW() WHERE id=?'
+    )->execute([$language, $status, $notes, $id]);
+    return ['ok' => true];
 }
 
 function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = ''): array
@@ -870,13 +1151,27 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
     $params = [];
     $q = trim((string) ($filters['q'] ?? ''));
     if ($q !== '') {
-        $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
-        array_push($params, $like, $like, $like);
+        // Prefer matching stored domain when the query looks like a URL.
+        $host = normalize_domain($q);
+        if ($host !== '' && $host !== strtolower($q)) {
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ? OR p.domain = ? OR p.domain LIKE ?)';
+            $like = '%' . $q . '%';
+            $hostLike = '%' . $host . '%';
+            array_push($params, $like, $like, $like, $like, $host, $hostLike);
+        } else {
+            $like = '%' . $q . '%';
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
+            array_push($params, $like, $like, $like, $like);
+        }
     }
-    if (!empty($filters['country'])) {
-        $where[] = 'p.country = ?';
-        $params[] = $filters['country'];
+    if (array_key_exists('country', $filters) && $filters['country'] !== null && $filters['country'] !== false) {
+        $country = (string) $filters['country'];
+        if ($country === '') {
+            $where[] = "TRIM(p.country)=''";
+        } else {
+            $where[] = 'TRIM(p.country) = ?';
+            $params[] = trim($country);
+        }
     }
     if (!empty($filters['language'])) {
         $where[] = 'p.language = ?';

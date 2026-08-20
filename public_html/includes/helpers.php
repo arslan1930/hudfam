@@ -129,8 +129,17 @@ function status_label(string $status): string
 function badge(string $status): string
 {
     $label = status_label($status);
-    $cls = preg_replace('/[^a-z0-9_-]/i', '', $status) ?: 'unknown';
+    $cls = preg_replace('/[^a-zA-Z0-9_-]/', '', $status) ?: 'unknown';
     return '<span class="badge ' . h($cls) . '">' . h($label) . '</span>';
+}
+
+/** JSON-encode a string for safe use inside a JS expression (e.g. confirm(...)). */
+function js_string(string $value): string
+{
+    return (string) json_encode(
+        $value,
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE
+    );
 }
 
 function money_or_dash($value): string
@@ -172,13 +181,13 @@ function render_glossary(string $panel): void
     echo '<div class="glossary card" role="note">';
     echo '<h2 class="glossary-title">How this works</h2>';
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Our database</dt><dd>One shared list of unique website domains (URLs).</dd></div>';
-    echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
-    echo '<div><dt>Add history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
+    echo '<div><dt>Our database</dt><dd>Country folders — one list of unique website domains (sites) per country.</dd></div>';
+    echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in that country → save only new ones.</dd></div>';
+    echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
     if ($panel === 'admin') {
-        echo '<div><dt>Your job</dt><dd>Add URLs to the database and manage Team users.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Add sites to country folders, clean Our database, and manage Team users.</dd></div>';
     } else {
-        echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Filter new sites against a country database and add the unique ones.</dd></div>';
     }
     echo '</dl></div>';
 }

@@ -30,12 +30,22 @@ try {
         } else {
             $result = admin_add_urls_to_database($raw, $user, $country, $language);
             if ($result['total'] <= 0) {
-                flash('error', 'No valid URLs/domains found. Example: https://example.com or example.com');
+                $msg = 'No valid sites found. Example: https://example.com or example.com';
+                if ((int) ($result['invalid'] ?? 0) > 0) {
+                    $msg .= ' · ' . (int) $result['invalid'] . ' invalid line(s) skipped';
+                }
+                flash('error', $msg);
             } else {
-                $msg = 'Saved ' . (int) $result['total'] . ' URL(s) to ' . $result['country'] . '.';
+                $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
                 $msg .= ' New: ' . (int) $result['inserted'] . '.';
                 if ((int) $result['updated'] > 0) {
                     $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+                }
+                if ((int) ($result['invalid'] ?? 0) > 0) {
+                    $msg .= ' Invalid skipped: ' . (int) $result['invalid'] . '.';
+                }
+                if ((int) ($result['dupes_in_paste'] ?? 0) > 0) {
+                    $msg .= ' Dupes in paste skipped: ' . (int) $result['dupes_in_paste'] . '.';
                 }
                 flash('ok', $msg);
                 redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
