@@ -75,6 +75,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $returnQ = trim((string) post('q'));
     $returnP = max(1, (int) (post('p') ?: 1));
     $returnSent = (string) post('sent');
+    $returnPerPage = resolve_sheet_per_page();
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
     $back = $sweBase . '&country=' . rawurlencode($countryName);
@@ -84,6 +85,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($returnSent === '0' || $returnSent === '1') {
         $back .= '&sent=' . $returnSent;
     }
+    $back = append_sheet_per_page_query($back, $returnPerPage);
     if ($returnP > 1) {
         $back .= '&p=' . $returnP;
     }
@@ -525,7 +527,7 @@ if ($sweScope !== 'admin' || ($sentFilter !== '0' && $sentFilter !== '1')) {
     $sentFilter = '';
 }
 $pageNum = max(1, (int) get('p', 1));
-$perPage = 100;
+$perPage = resolve_sheet_per_page();
 $inv = sites_with_emails_inventory_query([
     'country' => $countryName,
     'q' => $q,
@@ -538,17 +540,20 @@ $countryTotal = count_sites_with_emails_for_country($countryName, $sweScope);
 $sentStats = ($sweScope === 'admin') ? count_sites_with_emails_sent_stats($countryName) : null;
 $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0;
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
+$listBase = append_sheet_per_page_query($listBase, $perPage);
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
 $emailsExportUnsentUrl = $emailsExportUrl . '&sent=0';
 $emailsExportSentUrl = $emailsExportUrl . '&sent=1';
-$qs = http_build_query(array_filter([
+$qsBase = [
     'page' => $isAdmin ? 'admin_emails_data' : 'team_sites_emails',
     'folder' => $sweFolder,
     'country' => $countryName,
     'q' => $q,
     'sent' => $sentFilter,
-], static fn ($v) => $v !== '' && $v !== null));
+    'per_page' => $perPage,
+];
+$qs = http_build_query(array_filter($qsBase, static fn ($v) => $v !== '' && $v !== null));
 
 render_header($sweLabel . ' · ' . $countryName, $swePanel);
 $crumbs = $isAdmin
@@ -576,6 +581,7 @@ render_breadcrumbs($crumbs);
     <p class="muted">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
       <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
+      · <?= (int) $perPage ?> per page
       · up to 4 emails each
       <?php if ($sentStats): ?>
         · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
@@ -677,7 +683,7 @@ render_breadcrumbs($crumbs);
 <div class="card">
   <div class="invoice-list-toolbar swe-list-toolbar">
     <div>
-      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Search matches site name or any email on that row.') ?></h2>
+      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Sheets can reach ~100K sites — choose how many rows per page with the Per page filter. Search matches site name or any email on that row.') ?></h2>
       <p class="help" style="margin:0.25rem 0 0">
         Search shows both columns together (site + its emails).
         <?php if ($sweScope === 'admin'): ?>
@@ -697,7 +703,8 @@ render_breadcrumbs($crumbs);
             '1' => 'Emailed',
         ];
         foreach ($sentLinks as $val => $label):
-            $href = $listBase;
+            $href = $sweBase . '&country=' . rawurlencode($countryName);
+            $href = append_sheet_per_page_query($href, $perPage);
             if ($q !== '') {
                 $href .= '&q=' . rawurlencode($q);
             }
@@ -715,6 +722,7 @@ render_breadcrumbs($crumbs);
           <input type="hidden" name="action" value="clear_all_emailed">
           <input type="hidden" name="q" value="<?= h($q) ?>">
           <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+          <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
           <?php if ($sentFilter !== ''): ?>
           <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
           <?php endif; ?>
@@ -925,18 +933,28 @@ render_breadcrumbs($crumbs);
   <?php endif; ?>
 
   <div class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
-    <div>
+    <div class="actions" style="margin:0;gap:0.65rem;flex-wrap:wrap;align-items:center">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <?php if ($rows || $q !== ''): ?>
         <span class="muted">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
       <?php endif; ?>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <?php
+      render_sheet_per_page_filter([
+          'page' => $isAdmin ? 'admin_emails_data' : 'team_sites_emails',
+          'folder' => $sweFolder,
+          'country' => $countryName,
+          'q' => $q,
+          'sent' => $sentFilter,
+      ], $perPage);
+      ?>
     </div>
     <?php if ($countryTotal > 0): ?>
     <form method="post" action="<?= h($listBase) ?>"
           data-show-processing="Removing all sites…"
           onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> sites from <?= h($countryName) ?>?');">
       <input type="hidden" name="action" value="remove_all">
+      <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
       <button class="btn secondary small danger" type="submit">Remove all</button>
     </form>
     <?php endif; ?>

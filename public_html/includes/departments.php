@@ -203,6 +203,8 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_prospect_check';
                 $pages[] = 'team_prospect_batches';
                 $pages[] = 'team_prospect_batch';
+                $pages[] = 'team_semrush_research';
+                $pages[] = 'team_semrush_sheet';
             } elseif ($slug === 'site_extracting') {
                 $pages[] = 'team_extracting';
                 $pages[] = 'team_extract_batch';
@@ -211,6 +213,7 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_admin_emails_delete';
             } elseif ($slug === 'communication') {
                 $pages[] = 'team_email_campaigns';
+                $pages[] = 'team_email_campaigns_drafts';
                 $pages[] = 'team_admin_emails_delete';
             }
         }
@@ -224,10 +227,10 @@ function department_tool_pages_for_user(array $user): array
 function department_tools_help(string $slug): string
 {
     return match ($slug) {
-        'site_finding' => 'Members also get Filter & add and Site adding history (not only tasks).',
+        'site_finding' => 'Members also get Filter & add, Semrush Research, and Site adding history (not only tasks).',
         'site_extracting' => 'Members also get Extracting sites / Results + Push (not only tasks).',
         'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
-        'communication' => 'Members also get Sites with emails – Admin search and Email campaign search.',
+        'communication' => 'Members also get Admin emails search, Campaign search, and Campaign drafts.',
         default => 'Members see this department’s tasks (and tools from any other departments you assign).',
     };
 }
