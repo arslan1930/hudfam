@@ -162,6 +162,8 @@ try {
             $old['domains'] = [];
         }
     }
+} catch (InvalidArgumentException $e) {
+    flash('error', $e->getMessage());
 } catch (Throwable $e) {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try Filter again.');
 }

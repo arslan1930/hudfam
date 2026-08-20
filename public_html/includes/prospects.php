@@ -478,12 +478,28 @@ function ensure_prospect_schema(): void
           notes TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_user_batch_date (user_id, batch_date),
+          UNIQUE KEY uniq_user_batch_date_country (user_id, batch_date, country),
           INDEX (batch_date),
           INDEX (user_id),
           CONSTRAINT fk_pbatch_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Migrate older installs: one batch per user/day → per user/day/country.
+    try {
+        $idx = $pdo->query("SHOW INDEX FROM prospect_batches WHERE Key_name='uniq_user_batch_date'")->fetchAll();
+        if ($idx) {
+            $pdo->exec('ALTER TABLE prospect_batches DROP INDEX uniq_user_batch_date');
+        }
+        $idx2 = $pdo->query("SHOW INDEX FROM prospect_batches WHERE Key_name='uniq_user_batch_date_country'")->fetchAll();
+        if (!$idx2) {
+            $pdo->exec(
+                'ALTER TABLE prospect_batches
+                 ADD UNIQUE KEY uniq_user_batch_date_country (user_id, batch_date, country)'
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore — may already be migrated or empty
+    }
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS prospect_batch_items (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -804,7 +820,7 @@ function list_prospect_domain_names(int $maxDisplay = 25000, string $country = '
 }
 
 /**
- * Get or create a dated batch for a user (one row per user per calendar day).
+ * Get or create a dated batch for a user (one row per user per calendar day per country).
  */
 function get_or_create_prospect_batch(
     int $userId,
@@ -817,8 +833,11 @@ function get_or_create_prospect_batch(
 ): int {
     ensure_prospect_schema();
     $date = $batchDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $batchDate) ? $batchDate : date('Y-m-d');
-    $stmt = db()->prepare('SELECT id FROM prospect_batches WHERE user_id=? AND batch_date=? LIMIT 1');
-    $stmt->execute([$userId, $date]);
+    $country = trim($country);
+    $stmt = db()->prepare(
+        'SELECT id FROM prospect_batches WHERE user_id=? AND batch_date=? AND country=? LIMIT 1'
+    );
+    $stmt->execute([$userId, $date, $country]);
     $id = (int) $stmt->fetchColumn();
     if ($id) {
         return $id;

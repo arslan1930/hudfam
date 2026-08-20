@@ -157,7 +157,7 @@ render_breadcrumbs([
     <p class="help" id="semrush_list_status" hidden></p>
   </div>
   <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem"
-        onsubmit="return confirm('Clear ALL site names and comments for <?= h($country) ?>? Extracted Sites stay unchanged.');">
+        onsubmit="return confirm(<?= h(json_encode('Clear ALL site names and comments for ' . $country . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="clear_all">
     <button class="btn danger small" type="submit">Clear country</button>

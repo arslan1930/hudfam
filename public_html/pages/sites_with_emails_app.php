@@ -387,10 +387,10 @@ if (!$inCountry) {
         <?php if ($isAdmin): ?>
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
-          <?php if (team_page_unlocked($user, 'team_admin_emails_delete')): ?>
+          <?php if (team_page_unlocked($sweUser, 'team_admin_emails_delete')): ?>
             <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
           <?php endif; ?>
-          <?php if (team_page_unlocked($user, 'team_extracting')): ?>
+          <?php if (team_page_unlocked($sweUser, 'team_extracting')): ?>
             <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
           <?php endif; ?>
         <?php endif; ?>
