@@ -122,7 +122,7 @@ render_header('Users', 'admin');
     <div class="users-list-head">
       <div>
         <h2 id="users-list-title">People</h2>
-        <p class="muted users-list-hint">Click Edit to change a person. Team members also have Add history.</p>
+        <p class="muted users-list-hint">Click Edit to change a person. Team members also have Site adding history.</p>
       </div>
       <div class="users-filters" role="tablist" aria-label="Filter by role">
         <a class="users-filter<?= $filter === 'all' ? ' active' : '' ?>" href="index.php?page=admin_users">All (<?= count($users) ?>)</a>
@@ -172,7 +172,7 @@ render_header('Users', 'admin');
                 <?= $isEditing ? 'Editing…' : 'Edit' ?>
               </a>
               <?php if ($u['role'] === 'team'): ?>
-                <a class="btn secondary small" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Add history</a>
+                <a class="btn secondary small" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">History</a>
               <?php endif; ?>
             </div>
           </li>

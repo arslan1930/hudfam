@@ -950,9 +950,85 @@ a.folder[hidden],
 .checkbox-list { max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 0.5rem; }
 .checkbox-list label { font-weight: 500; display: flex; gap: 0.5rem; align-items: flex-start; }
 .checkbox-list input { width: auto; margin-top: 0.2rem; }
+
+/* —— Password show/hide —— */
+.password-field {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.password-field input {
+  width: 100%;
+  padding-right: 4.25rem;
+  box-sizing: border-box;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--brand-2);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.password-toggle:hover { background: #eef2f7; }
+
+/* —— Danger buttons —— */
+.btn.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(139, 46, 46, 0.18);
+}
+.btn.danger:hover { filter: brightness(1.05); }
+
+/* —— Site adding history editable paste —— */
+.domains-paste-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+.domains-paste-head label { margin: 0; }
+.sites-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+#history_list_status.is-error { color: var(--bad); }
+
+/* —— Collapsible dashboard guide —— */
+.panel-guide-wrap {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.panel-guide-wrap > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--brand-deep);
+}
+.panel-guide-wrap[open] > summary { margin-bottom: 0.55rem; }
+.panel-guide-wrap .panel-guide { margin: 0; padding: 0; border: 0; box-shadow: none; background: transparent; }
+.panel-guide-wrap .panel-guide h2 { display: none; }
+
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 0.15rem; }
   .panel-guide-grid { grid-template-columns: 1fr; }
+  .sites-list-actions { margin-left: 0; width: 100%; }
 }
+

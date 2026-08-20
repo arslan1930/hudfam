@@ -103,7 +103,7 @@ render_header('Filter & add', 'team');
     <p class="muted">Pick a country database → paste domains → remove ones already in that country → add only unique sites.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Site adding history</a>
     <a class="btn secondary" href="index.php?page=team_prospects">Country folders</a>
   </div>
 </div>

@@ -47,17 +47,17 @@ try {
     flash('error', 'Could not save URLs. ' . $errorDetail);
 }
 
-render_header('Add URLs', 'admin');
+render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Add URLs', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
-    ['label' => 'Add URLs'],
+    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add URLs<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste URLs into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
+    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste sites into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -68,12 +68,12 @@ render_header('Add URLs', 'admin');
 </div>
 
 <?= render_page_purpose(
-    'Add URLs into a country database',
-    'Each country folder has its own list of URLs.',
-    'Choose the country, paste URLs, click Save. They appear only in that country’s folder.',
+    'Add sites into a country database',
+    'Each country folder has its own list of sites.',
+    'Choose the country, paste sites, click Save. They appear only in that country’s folder.',
     [
         'Select country.',
-        'Paste URLs (one per line).',
+        'Paste sites (one per line).',
         'Save — then open that country folder to review.',
     ]
 ) ?>

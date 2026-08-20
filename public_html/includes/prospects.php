@@ -714,6 +714,155 @@ function get_prospect_batch_items(int $batchId, int $limit = 50000): array
     return $stmt->fetchAll();
 }
 
+/**
+ * Replace the domains on one Site adding history day (Admin edit/autosave).
+ *
+ * @return array{ok:bool,error?:string,total?:int,inserted?:int,removed?:int,db_removed?:int,domains?:string[]}
+ */
+function set_prospect_batch_domains_from_text(int $batchId, string $raw, bool $alsoRemoveFromDatabase = false): array
+{
+    ensure_prospect_schema();
+    $batch = get_prospect_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Site adding history day not found.'];
+    }
+    $domains = parse_domain_list($raw);
+
+    $existingItems = get_prospect_batch_items($batchId);
+    $existingByDomain = [];
+    foreach ($existingItems as $item) {
+        $existingByDomain[(string) $item['domain']] = $item;
+    }
+    $newSet = array_fill_keys($domains, true);
+    $toRemove = array_values(array_filter(
+        array_keys($existingByDomain),
+        static fn ($d) => !isset($newSet[$d])
+    ));
+    $toAdd = array_values(array_filter(
+        $domains,
+        static fn ($d) => !isset($existingByDomain[$d])
+    ));
+
+    $pdo = db();
+    $dbRemoved = 0;
+    if ($toRemove !== []) {
+        $placeholders = implode(',', array_fill(0, count($toRemove), '?'));
+        $params = array_merge([$batchId], $toRemove);
+        $pdo->prepare(
+            "DELETE FROM prospect_batch_items WHERE batch_id=? AND domain IN ({$placeholders})"
+        )->execute($params);
+
+        if ($alsoRemoveFromDatabase) {
+            $country = trim((string) ($batch['country'] ?? ''));
+            if ($country !== '') {
+                $del = $pdo->prepare('DELETE FROM prospect_sites WHERE country=? AND domain=?');
+                foreach ($toRemove as $domain) {
+                    $del->execute([$country, $domain]);
+                    $dbRemoved += $del->rowCount();
+                }
+            }
+        }
+    }
+
+    $ins = $pdo->prepare(
+        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id)
+         VALUES (?,?,NULL)
+         ON DUPLICATE KEY UPDATE domain=VALUES(domain)'
+    );
+    foreach ($toAdd as $domain) {
+        $ins->execute([$batchId, $domain]);
+    }
+
+    $pdo->prepare(
+        'UPDATE prospect_batches SET site_count=?, updated_at=NOW() WHERE id=?'
+    )->execute([count($domains), $batchId]);
+
+    return [
+        'ok' => true,
+        'total' => count($domains),
+        'inserted' => count($toAdd),
+        'removed' => count($toRemove),
+        'db_removed' => $dbRemoved,
+        'domains' => $domains,
+    ];
+}
+
+/**
+ * Delete one Site adding history day (Admin).
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,db_removed?:int,batch_date?:string}
+ */
+function delete_prospect_batch(int $batchId, bool $alsoRemoveFromDatabase = false): array
+{
+    ensure_prospect_schema();
+    $batch = get_prospect_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Site adding history day not found.'];
+    }
+    $items = get_prospect_batch_items($batchId);
+    $dbRemoved = 0;
+    if ($alsoRemoveFromDatabase) {
+        $country = trim((string) ($batch['country'] ?? ''));
+        if ($country !== '') {
+            $del = db()->prepare('DELETE FROM prospect_sites WHERE country=? AND domain=?');
+            foreach ($items as $item) {
+                $del->execute([$country, (string) $item['domain']]);
+                $dbRemoved += $del->rowCount();
+            }
+        }
+    }
+    $n = count($items);
+    db()->prepare('DELETE FROM prospect_batches WHERE id=?')->execute([$batchId]);
+    return [
+        'ok' => true,
+        'cleared' => $n,
+        'db_removed' => $dbRemoved,
+        'batch_date' => (string) ($batch['batch_date'] ?? ''),
+    ];
+}
+
+/**
+ * Update notes (and optional country label) on a history day.
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function update_prospect_batch_meta(int $batchId, string $notes, ?string $country = null): array
+{
+    ensure_prospect_schema();
+    $batch = get_prospect_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Site adding history day not found.'];
+    }
+    $notes = trim(str_replace(["\r\n", "\r"], "\n", $notes));
+    if (mb_strlen($notes) > 2000) {
+        $notes = mb_substr($notes, 0, 2000);
+    }
+    if ($country !== null) {
+        $country = trim($country);
+        if ($country !== '') {
+            $matched = '';
+            foreach (list_countries(null, true) as $c) {
+                if (strcasecmp((string) $c['name'], $country) === 0) {
+                    $matched = (string) $c['name'];
+                    break;
+                }
+            }
+            if ($matched === '') {
+                return ['ok' => false, 'error' => 'Select an existing country.'];
+            }
+            $country = $matched;
+        }
+        db()->prepare(
+            'UPDATE prospect_batches SET notes=?, country=?, updated_at=NOW() WHERE id=?'
+        )->execute([$notes, $country, $batchId]);
+    } else {
+        db()->prepare(
+            'UPDATE prospect_batches SET notes=?, updated_at=NOW() WHERE id=?'
+        )->execute([$notes, $batchId]);
+    }
+    return ['ok' => true];
+}
+
 function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array
 {
     ensure_prospect_schema();

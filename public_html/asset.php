@@ -9,6 +9,8 @@
 $allowed = [
     'css/app.css' => 'text/css; charset=utf-8',
     'js/searchable-select.js' => 'application/javascript; charset=utf-8',
+    'js/password-toggle.js' => 'application/javascript; charset=utf-8',
+    'js/prospect-batch-sheet.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',
 ];
 

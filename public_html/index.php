@@ -16,6 +16,10 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 $page = (string) ($_GET['page'] ?? '');
 if ($page === '' && current_user()) {
+    $u = current_user();
+    if (user_must_change_password($u)) {
+        redirect('index.php?page=account_password');
+    }
     redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
 }
 if ($page === '') {
@@ -26,6 +30,7 @@ if ($page === '') {
 $routes = [
     'login' => 'pages/login.php',
     'logout' => 'pages/logout.php',
+    'account_password' => 'pages/account_password.php',
 
     'admin_dashboard' => 'pages/admin/dashboard.php',
     'admin_prospects' => 'pages/admin/prospects.php',
@@ -46,6 +51,16 @@ if (!isset($routes[$page])) {
     http_response_code(404);
     echo 'Page not found.';
     exit;
+}
+
+// Must change weak/default password before using the app.
+$cu = current_user();
+if ($cu && user_must_change_password($cu)) {
+    $passwordAllowed = ['login', 'logout', 'account_password'];
+    if (!in_array($page, $passwordAllowed, true)) {
+        flash('error', 'Change your password before continuing.');
+        redirect('index.php?page=account_password');
+    }
 }
 
 require __DIR__ . '/' . $routes[$page];

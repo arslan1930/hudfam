@@ -16,9 +16,9 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
-        'team_prospects' => ['team_prospect_form'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'account_password' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -36,7 +36,6 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
     $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
@@ -45,8 +44,8 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
+    // One stylesheet URL (asset.php) — avoid loading CSS twice.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
-    echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
     echo '</head><body>';
 
     if (!$user || $panel === '') {
@@ -68,9 +67,9 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_prospects' => ['Our database', 'Country folders → URLs'],
-                'admin_prospect_add' => ['Add URLs', 'Paste into a country database'],
-                'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
+                'admin_prospects' => ['Our database', 'Country folders → sites'],
+                'admin_prospect_add' => ['Add sites', 'Paste into a country database'],
+                'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
                 'admin_users' => ['Users', 'Add & edit who can log in'],
             ],
         ];
@@ -79,8 +78,7 @@ function render_header(string $title, string $panel = ''): void
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
                 'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
-                'team_prospects' => ['Our database', 'Country folders → URLs'],
-                'team_prospect_batches' => ['Add history', 'Your daily adds'],
+                'team_prospect_batches' => ['Site adding history', 'Your daily adds'],
             ],
         ];
     }
@@ -104,6 +102,7 @@ function render_header(string $title, string $panel = ''): void
     }
 
     echo '<div class="nav-group nav-group-end">';
+    echo '<a href="index.php?page=account_password">Change password</a>';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
     echo '</nav></aside><main class="main">';
@@ -119,6 +118,7 @@ function render_footer(string $panel = ''): void
         echo '</main></div>';
     }
     echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
+    echo '<script src="' . h(script_url('js/password-toggle.js')) . '" defer></script>';
     // Move Actions menus to <body> + position:fixed so table/card overflow cannot clip options.
     echo '<script>(function(){';
     echo 'function placeMenu(details){';
