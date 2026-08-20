@@ -76,11 +76,15 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $returnQ = trim((string) get('q'));
     }
     $returnP = max(1, (int) (post('p') ?: get('p', 1)));
+    $returnPerPage = resolve_sheet_per_page();
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
 
-    $countryReturnUrl = static function () use ($sitesListUrl, $countryName, $returnQ, $returnP): string {
-        $url = $sitesListUrl . '&country=' . rawurlencode($countryName);
+    $countryReturnUrl = static function () use ($sitesListUrl, $countryName, $returnQ, $returnP, $returnPerPage): string {
+        $url = append_sheet_per_page_query(
+            $sitesListUrl . '&country=' . rawurlencode($countryName),
+            $returnPerPage
+        );
         if ($returnQ !== '') {
             $url .= '&q=' . rawurlencode($returnQ);
         }
@@ -411,7 +415,7 @@ if ($folder === 'extracted_sites' && !$inCountry) {
 $countryName = $sheet;
 $q = trim((string) get('q'));
 $pageNum = max(1, (int) get('p', 1));
-$perPage = 250;
+$perPage = resolve_sheet_per_page();
 $inv = extracted_inventory_query([
     'q' => $q,
     'country' => $countryName,
@@ -423,13 +427,17 @@ $countryTotal = count_extracted_sites_for_country($countryName);
 $searchMatchCount = $q !== '' ? count_extracted_sites_matching($countryName, $q) : 0;
 $exportUrl = $sitesListUrl . '&country=' . rawurlencode($countryName) . '&export=domains';
 $downloadUrl = $sitesListUrl . '&country=' . rawurlencode($countryName) . '&export=download';
-$listBase = $sitesListUrl . '&country=' . rawurlencode($countryName);
+$listBase = append_sheet_per_page_query(
+    $sitesListUrl . '&country=' . rawurlencode($countryName),
+    $perPage
+);
 
 $qs = http_build_query(array_filter([
     'page' => 'admin_extracted',
     'folder' => 'extracted_sites',
     'country' => $countryName,
     'q' => $q,
+    'per_page' => $perPage,
 ], static fn ($v) => $v !== '' && $v !== null));
 
 render_header('Extracted Sites · ' . $countryName, 'admin');
@@ -519,14 +527,23 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   </ol>
   <p class="help sheet-search-empty" data-extracted-url-search-empty hidden>No URLs on this page match your search.</p>
   <div class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
-    <div>
+    <div class="actions" style="margin:0;gap:0.65rem;flex-wrap:wrap;align-items:center">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <span class="muted">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <?php
+      render_sheet_per_page_filter([
+          'page' => 'admin_extracted',
+          'folder' => 'extracted_sites',
+          'country' => $countryName,
+          'q' => $q,
+      ], $perPage);
+      ?>
     </div>
     <form method="post" action="<?= h($listBase) ?>"
           onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> URLs from <?= h($countryName) ?>?');">
       <input type="hidden" name="action" value="remove_all">
+      <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
       <button class="btn secondary small danger" type="submit">Remove all</button>
     </form>
   </div>

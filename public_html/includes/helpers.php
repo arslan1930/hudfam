@@ -310,3 +310,82 @@ function render_workflow(array $steps): void
     }
     echo '</ol>';
 }
+
+/**
+ * Allowed rows-per-page choices for country / campaign sheets (sitewide).
+ *
+ * @return list<int>
+ */
+function sheet_per_page_options(): array
+{
+    return [100, 250, 500, 1000];
+}
+
+function sheet_per_page_default(): int
+{
+    return 1000;
+}
+
+function normalize_sheet_per_page(int $n): int
+{
+    return in_array($n, sheet_per_page_options(), true) ? $n : sheet_per_page_default();
+}
+
+/**
+ * Resolve rows-per-page from GET/POST, remembering the choice in session.
+ */
+function resolve_sheet_per_page(): int
+{
+    $raw = get('per_page', '');
+    if ($raw === '' || $raw === null) {
+        $raw = post('per_page', '');
+    }
+    if ($raw !== '' && $raw !== null) {
+        $n = normalize_sheet_per_page((int) $raw);
+        $_SESSION['sheet_per_page'] = $n;
+        return $n;
+    }
+    if (isset($_SESSION['sheet_per_page'])) {
+        return normalize_sheet_per_page((int) $_SESSION['sheet_per_page']);
+    }
+    return sheet_per_page_default();
+}
+
+/** Append &per_page=N to a relative app URL (idempotent). */
+function append_sheet_per_page_query(string $url, int $perPage): string
+{
+    $perPage = normalize_sheet_per_page($perPage);
+    if (preg_match('/([?&])per_page=\d+/', $url)) {
+        return preg_replace('/([?&])per_page=\d+/', '${1}per_page=' . $perPage, $url) ?? $url;
+    }
+    return $url . (str_contains($url, '?') ? '&' : '?') . 'per_page=' . $perPage;
+}
+
+/**
+ * GET filter: “Per page” select. Resets to page 1 when changed.
+ *
+ * @param array<string, scalar|null> $baseQuery query params without p / per_page
+ */
+function render_sheet_per_page_filter(array $baseQuery, int $current): void
+{
+    $current = normalize_sheet_per_page($current);
+    echo '<form class="sheet-per-page-filter" method="get" action="index.php">';
+    foreach ($baseQuery as $key => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $k = (string) $key;
+        if ($k === 'p' || $k === 'per_page') {
+            continue;
+        }
+        echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
+    }
+    echo '<label for="sheet_per_page_select">Per page</label>';
+    echo '<select id="sheet_per_page_select" name="per_page" onchange="this.form.submit()" title="How many rows to show on each page">';
+    foreach (sheet_per_page_options() as $n) {
+        echo '<option value="' . (int) $n . '"' . ($n === $current ? ' selected' : '') . '>'
+            . (int) $n
+            . '</option>';
+    }
+    echo '</select></form>';
+}

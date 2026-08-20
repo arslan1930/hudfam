@@ -64,11 +64,14 @@ function ensure_email_campaign_schema(): void
           email2 VARCHAR(255) NOT NULL DEFAULT '',
           email3 VARCHAR(255) NOT NULL DEFAULT '',
           email4 VARCHAR(255) NOT NULL DEFAULT '',
+          email_sent TINYINT(1) NOT NULL DEFAULT 0,
+          email_sent_at TIMESTAMP NULL DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_email_campaign_sheet_domain (sheet_id, domain),
           INDEX (sheet_id),
           INDEX idx_email_campaign_sheet_id (sheet_id, id),
+          INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent),
           INDEX (domain),
           INDEX (country),
           CONSTRAINT fk_email_campaign_row_sheet
@@ -76,8 +79,23 @@ function ensure_email_campaign_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
-    // Older installs: composite index for paginated sheet browsing.
+    // Older installs: composite index for paginated sheet browsing + emailed checkpoint columns.
     try {
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['email_sent'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_rows
+                 ADD COLUMN email_sent TINYINT(1) NOT NULL DEFAULT 0 AFTER email4,
+                 ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent)'
+            );
+        }
+        if (!isset($have['email_sent_at'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_rows
+                 ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent'
+            );
+        }
         $idx = $pdo->query('SHOW INDEX FROM email_campaign_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $haveIdx = [];
         foreach ($idx as $row) {
@@ -85,6 +103,17 @@ function ensure_email_campaign_schema(): void
         }
         if (empty($haveIdx['idx_email_campaign_sheet_id'])) {
             $pdo->exec('ALTER TABLE email_campaign_rows ADD INDEX idx_email_campaign_sheet_id (sheet_id, id)');
+        }
+        if (empty($haveIdx['idx_email_campaign_sheet_sent']) && isset($have['email_sent'])) {
+            // Column may have existed without index on very old installs.
+            try {
+                $pdo->exec(
+                    'ALTER TABLE email_campaign_rows
+                     ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent)'
+                );
+            } catch (Throwable $e) {
+                // ignore duplicate index
+            }
         }
     } catch (Throwable $e) {
         // ignore
@@ -137,6 +166,28 @@ function ensure_email_campaign_schema(): void
     } catch (Throwable $e) {
         // ignore migration hiccups
     }
+
+    // Communication Team / Admin: reusable outreach text per project.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_drafts (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          project_id INT NOT NULL,
+          category VARCHAR(40) NOT NULL DEFAULT 'custom',
+          title VARCHAR(180) NOT NULL,
+          body MEDIUMTEXT NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          created_by INT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX (project_id),
+          INDEX idx_email_campaign_draft_cat (project_id, category),
+          INDEX (updated_at),
+          CONSTRAINT fk_email_campaign_draft_project
+            FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE,
+          CONSTRAINT fk_email_campaign_draft_user
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
 }
 
 /**
@@ -813,24 +864,164 @@ function count_email_campaign_rows(int $sheetId): int
 }
 
 /**
+ * @return array{total:int,sent:int,unsent:int}
+ */
+function count_email_campaign_sent_stats(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN email_sent=1 THEN 1 ELSE 0 END), 0) AS sent
+         FROM email_campaign_rows
+         WHERE sheet_id=? AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $stmt->execute([$sheetId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $total = (int) ($row['total'] ?? 0);
+    $sent = (int) ($row['sent'] ?? 0);
+    return [
+        'total' => $total,
+        'sent' => $sent,
+        'unsent' => max(0, $total - $sent),
+    ];
+}
+
+/**
+ * Mark one campaign sheet row emailed / not emailed.
+ *
+ * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int}
+ */
+function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent): array
+{
+    ensure_email_campaign_schema();
+    $row = get_email_campaign_row($rowId, $sheetId);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
+    }
+    if ($sent) {
+        db()->prepare(
+            'UPDATE email_campaign_rows
+             SET email_sent=1, email_sent_at=NOW()
+             WHERE id=? AND sheet_id=?'
+        )->execute([$rowId, $sheetId]);
+    } else {
+        db()->prepare(
+            'UPDATE email_campaign_rows
+             SET email_sent=0, email_sent_at=NULL
+             WHERE id=? AND sheet_id=?'
+        )->execute([$rowId, $sheetId]);
+    }
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'domain' => (string) $row['domain'],
+        'email_sent' => $sent,
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
+ * Checkpoint: mark every row on this sheet with id <= $rowId as emailed.
+ *
+ * @return array{ok:bool,error?:string,marked?:int,domain?:string,sheet_id?:int}
+ */
+function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
+{
+    ensure_email_campaign_schema();
+    $row = get_email_campaign_row($rowId, $sheetId);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
+         WHERE sheet_id=? AND id<=? AND email_sent=0
+           AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $st->execute([$sheetId, $rowId]);
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'marked' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
+ * Undo checkpoint: clear emailed marks on every row on this sheet with id <= $rowId.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,domain?:string,sheet_id?:int}
+ */
+function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
+{
+    ensure_email_campaign_schema();
+    $row = get_email_campaign_row($rowId, $sheetId);
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email_sent=0, email_sent_at=NULL
+         WHERE sheet_id=? AND id<=? AND email_sent=1
+           AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $st->execute([$sheetId, $rowId]);
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
+ * Clear every emailed mark on one Email campaign sheet so Admin can resend and re-track.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,sheet_id?:int}
+ */
+function clear_all_email_campaign_emailed(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    if (!get_email_campaign_sheet($sheetId)) {
+        return ['ok' => false, 'error' => 'Sheet not found.'];
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email_sent=0, email_sent_at=NULL
+         WHERE sheet_id=? AND email_sent=1
+           AND LEFT(domain, 8) <> '__blank_'"
+    );
+    $st->execute([$sheetId]);
+    touch_email_campaign_sheet($sheetId);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'sheet_id' => $sheetId,
+    ];
+}
+
+/**
  * Paginated Email Sheet rows — same model as Our database / Sites with emails.
  * Never load 100K rows into one page; use page + optional site/email search.
  *
- * @param array{q?:string} $filters
+ * @param array{q?:string,sent?:string} $filters sent: '', '0', '1'
  * @return array{rows:list<array<string,mixed>>,total:int,pages:int,page:int,per_page:int}
  */
 function email_campaign_rows_inventory_query(
     int $sheetId,
     array $filters = [],
     int $page = 1,
-    int $perPage = 100
+    int $perPage = 1000
 ): array {
     ensure_email_campaign_schema();
     purge_blank_email_campaign_rows($sheetId);
 
     $page = max(1, $page);
-    $perPage = max(1, min(200, $perPage));
+    $perPage = max(1, min(1000, $perPage));
     $q = trim((string) ($filters['q'] ?? ''));
+    $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1'
 
     $where = ["sheet_id = ?", "LEFT(domain, 8) <> '__blank_'"];
     $params = [$sheetId];
@@ -838,6 +1029,10 @@ function email_campaign_rows_inventory_query(
         $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
         $like = '%' . $q . '%';
         array_push($params, $like, $like, $like, $like, $like);
+    }
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
     }
     $whereSql = implode(' AND ', $where);
 
@@ -2153,4 +2348,377 @@ function render_email_campaign_super_search(
         <?php
     }
     echo '<script src="' . h(script_asset_url('js/email-campaign-search.js')) . '" defer></script>';
+}
+
+/**
+ * Fixed categories for Communication outreach drafts (per project).
+ *
+ * @return array<string,string> slug => label
+ */
+function email_campaign_draft_categories(): array
+{
+    return [
+        'first_outreach' => 'First outreach',
+        'follow_up' => 'Follow-up',
+        'offer' => 'Offer / pricing',
+        'reply' => 'Reply',
+        'soft_no' => 'Soft no / later',
+        'custom' => 'Custom',
+    ];
+}
+
+function normalize_email_campaign_draft_category(string $category): string
+{
+    $category = strtolower(trim($category));
+    $cats = email_campaign_draft_categories();
+    return isset($cats[$category]) ? $category : 'custom';
+}
+
+function email_campaign_draft_category_label(string $category): string
+{
+    $cats = email_campaign_draft_categories();
+    $slug = normalize_email_campaign_draft_category($category);
+    return $cats[$slug] ?? 'Custom';
+}
+
+/**
+ * Tags Communication may use in draft bodies (email-safe formatting).
+ *
+ * @return list<string>
+ */
+function email_campaign_draft_allowed_tags(): array
+{
+    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'img'];
+}
+
+/** Max inline images (compressed data URIs) per draft. */
+function email_campaign_draft_max_images(): int
+{
+    return 6;
+}
+
+/** Max characters for one data:image… src (≈1.5–2 MB compressed). */
+function email_campaign_draft_max_image_src_len(): int
+{
+    return 2500000;
+}
+
+function email_campaign_draft_is_safe_data_image_src(string $src): bool
+{
+    $src = trim(preg_replace('/\s+/', '', $src) ?? $src);
+    if ($src === '' || strlen($src) > email_campaign_draft_max_image_src_len()) {
+        return false;
+    }
+    return (bool) preg_match(
+        '#^data:image/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/]+=*$#',
+        $src
+    );
+}
+
+/** Convert plain outreach text into simple paragraph HTML. */
+function email_campaign_draft_plain_to_html(string $plain): string
+{
+    $plain = trim(str_replace(["\r\n", "\r"], "\n", $plain));
+    if ($plain === '') {
+        return '';
+    }
+    $parts = preg_split("/\n{2,}/", $plain) ?: [];
+    $out = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '') {
+            continue;
+        }
+        $out[] = '<p>' . nl2br(h($part), false) . '</p>';
+    }
+    return implode('', $out);
+}
+
+/** Strip draft HTML down to plain text (clipboard / empty checks). */
+function email_campaign_draft_html_to_plain(string $html): string
+{
+    $html = trim(str_replace(["\r\n", "\r"], "\n", $html));
+    if ($html === '') {
+        return '';
+    }
+    if (!preg_match('/<[a-zA-Z][^>]*>/', $html)) {
+        return $html;
+    }
+    $withBreaks = preg_replace(
+        [
+            '/<\s*img\b[^>]*>/i',
+            '/<\s*br\s*\/?\s*>/i',
+            '/<\s*\/\s*(p|h1|h2|h3)\s*>/i',
+            '/<\s*(p|h1|h2|h3)(\s[^>]*)?>/i',
+        ],
+        ["\n[image]\n", "\n", "\n", "\n"],
+        $html
+    ) ?? $html;
+    $text = html_entity_decode(strip_tags($withBreaks), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
+    $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+    return trim($text);
+}
+
+/**
+ * Keep only email-safe formatting tags + compressed inline images.
+ * Scripts, styles, links, and unsafe attributes are stripped.
+ * (Regex-based so it works without the PHP xml/DOM extension.)
+ */
+function sanitize_email_campaign_draft_html(string $html): string
+{
+    $html = trim(str_replace(["\r\n", "\r"], "\n", $html));
+    if ($html === '') {
+        return '';
+    }
+    if (!preg_match('/<[a-zA-Z][^>]*>/', $html)) {
+        return email_campaign_draft_plain_to_html($html);
+    }
+
+    // Drop dangerous blocks entirely (content included).
+    $html = preg_replace(
+        '/<\s*(script|style|iframe|object|embed|noscript)\b[^>]*>.*?<\s*\/\s*\1\s*>/is',
+        '',
+        $html
+    ) ?? $html;
+    $html = preg_replace(
+        '/<\s*(script|style|iframe|object|embed|meta|link|noscript)\b[^>]*\/?\s*>/is',
+        '',
+        $html
+    ) ?? $html;
+
+    // Pull out safe data-URI images before strip_tags (attributes would be wiped).
+    $images = [];
+    $maxImages = email_campaign_draft_max_images();
+    $html = preg_replace_callback(
+        '/<\s*img\b([^>]*)\/?\s*>/i',
+        static function (array $m) use (&$images, $maxImages): string {
+            if (count($images) >= $maxImages) {
+                return '';
+            }
+            $attrs = (string) ($m[1] ?? '');
+            $src = '';
+            if (preg_match('/\bsrc\s*=\s*("|\')(.*?)\1/is', $attrs, $sm)) {
+                $src = html_entity_decode((string) $sm[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            } elseif (preg_match('/\bsrc\s*=\s*([^\s>]+)/i', $attrs, $sm)) {
+                $src = html_entity_decode((string) $sm[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+            $src = trim(preg_replace('/\s+/', '', $src) ?? $src);
+            if (!email_campaign_draft_is_safe_data_image_src($src)) {
+                return '';
+            }
+            $alt = '';
+            if (preg_match('/\balt\s*=\s*("|\')(.*?)\1/is', $attrs, $am)) {
+                $alt = (string) $am[2];
+            }
+            $alt = trim(preg_replace('/\s+/', ' ', $alt) ?? $alt);
+            if (mb_strlen($alt) > 120) {
+                $alt = mb_substr($alt, 0, 120);
+            }
+            $token = '%%CAMPIMG' . count($images) . '%%';
+            $images[] = '<img src="' . htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '" alt="' . htmlspecialchars($alt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
+            return $token;
+        },
+        $html
+    ) ?? $html;
+
+    // Keep only formatting tags; unwrap everything else (links, spans, divs…).
+    $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3>');
+
+    // Strip attributes from remaining tags (onclick, style, href, etc.).
+    $html = preg_replace('/<\s*([a-z0-9]+)\b[^>]*>/i', '<$1>', $html) ?? $html;
+    $html = preg_replace('/<\s*\/\s*([a-z0-9]+)\s*>/i', '</$1>', $html) ?? $html;
+
+    // Normalize aliases for consistent email paste.
+    $html = preg_replace('/<\s*b\s*>/i', '<strong>', $html) ?? $html;
+    $html = preg_replace('/<\s*\/\s*b\s*>/i', '</strong>', $html) ?? $html;
+    $html = preg_replace('/<\s*i\s*>/i', '<em>', $html) ?? $html;
+    $html = preg_replace('/<\s*\/\s*i\s*>/i', '</em>', $html) ?? $html;
+
+    // Self-close / normalize br.
+    $html = preg_replace('/<\s*br\s*>/i', '<br>', $html) ?? $html;
+
+    foreach ($images as $i => $imgHtml) {
+        $html = str_replace('%%CAMPIMG' . $i . '%%', $imgHtml, $html);
+    }
+
+    $html = trim($html);
+    $hasImg = (bool) preg_match('/<\s*img\b/i', $html);
+    if (email_campaign_draft_html_to_plain($html) === '' && !$hasImg) {
+        return '';
+    }
+    return $html;
+}
+
+/** Safe HTML for rendering a stored draft (legacy plain text supported). */
+function email_campaign_draft_body_html(string $body): string
+{
+    return sanitize_email_campaign_draft_html($body);
+}
+
+/**
+ * Rich-text editor markup (toolbar + contenteditable + hidden textarea).
+ *
+ * @param array{placeholder?:string,rows?:int} $opts
+ */
+function render_email_campaign_draft_editor(
+    string $textareaId,
+    string $name,
+    string $bodyHtml,
+    array $opts = []
+): void {
+    $placeholder = (string) ($opts['placeholder'] ?? 'Write your outreach…');
+    $safe = email_campaign_draft_body_html($bodyHtml);
+    $emptyClass = $safe === '' ? ' is-empty' : '';
+    ?>
+    <div class="camp-draft-editor" data-camp-draft-editor
+         data-max-images="<?= (int) email_campaign_draft_max_images() ?>">
+      <div class="camp-draft-toolbar" role="toolbar" aria-label="Text formatting">
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="bold" title="Bold"><strong>B</strong></button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="italic" title="Italic"><em>I</em></button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="underline" title="Underline"><span style="text-decoration:underline">U</span></button>
+        <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="h2" title="Heading">Heading</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="h3" title="Subheading">Subhead</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="p" title="Normal paragraph">Normal</button>
+        <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
+        <button type="button" class="btn secondary small" data-camp-draft-image title="Add image from computer">Image</button>
+        <input type="file" accept="image/*" multiple hidden data-camp-draft-image-input>
+      </div>
+      <p class="help camp-draft-image-hint" style="margin:0;padding:0.35rem 0.65rem 0;font-size:0.8rem">
+        Paste a screenshot or add Image — compressed for email paste (max <?= (int) email_campaign_draft_max_images() ?>).
+      </p>
+      <div class="camp-draft-surface<?= $emptyClass ?>"
+           data-camp-draft-surface
+           contenteditable="true"
+           role="textbox"
+           aria-multiline="true"
+           aria-label="Draft text"
+           data-placeholder="<?= h($placeholder) ?>"><?= $safe ?></div>
+      <textarea id="<?= h($textareaId) ?>"
+                name="<?= h($name) ?>"
+                class="camp-draft-textarea-sync"
+                data-camp-draft-sync
+                hidden><?= h($safe) ?></textarea>
+    </div>
+    <?php
+}
+
+function get_email_campaign_draft(int $draftId): ?array
+{
+    ensure_email_campaign_schema();
+    if ($draftId < 1) {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT * FROM email_campaign_drafts WHERE id=? LIMIT 1');
+    $stmt->execute([$draftId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_drafts(int $projectId, ?string $category = null): array
+{
+    ensure_email_campaign_schema();
+    if ($projectId < 1) {
+        return [];
+    }
+    $sql = 'SELECT * FROM email_campaign_drafts WHERE project_id=?';
+    $params = [$projectId];
+    if ($category !== null && $category !== '') {
+        $sql .= ' AND category=?';
+        $params[] = normalize_email_campaign_draft_category($category);
+    }
+    $sql .= ' ORDER BY category ASC, sort_order ASC, title ASC, id ASC';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+function count_email_campaign_drafts(int $projectId): int
+{
+    ensure_email_campaign_schema();
+    if ($projectId < 1) {
+        return 0;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=?');
+    $stmt->execute([$projectId]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Create or update a project draft.
+ *
+ * @return array{ok:bool,error?:string,id?:int}
+ */
+function save_email_campaign_draft(
+    int $projectId,
+    string $title,
+    string $body,
+    string $category = 'custom',
+    int $draftId = 0,
+    int $actorId = 0
+): array {
+    ensure_email_campaign_schema();
+    if (!get_email_campaign_project($projectId)) {
+        return ['ok' => false, 'error' => 'Project not found.'];
+    }
+    $title = trim($title);
+    if ($title === '') {
+        return ['ok' => false, 'error' => 'Draft title is required.'];
+    }
+    if (mb_strlen($title) > 180) {
+        $title = mb_substr($title, 0, 180);
+    }
+    $body = sanitize_email_campaign_draft_html($body);
+    if ($body === '') {
+        return ['ok' => false, 'error' => 'Draft text is required.'];
+    }
+    $category = normalize_email_campaign_draft_category($category);
+
+    if ($draftId > 0) {
+        $existing = get_email_campaign_draft($draftId);
+        if (!$existing || (int) ($existing['project_id'] ?? 0) !== $projectId) {
+            return ['ok' => false, 'error' => 'Draft not found in this project.'];
+        }
+        db()->prepare(
+            'UPDATE email_campaign_drafts
+             SET category=?, title=?, body=?, updated_at=NOW()
+             WHERE id=? AND project_id=?'
+        )->execute([$category, $title, $body, $draftId, $projectId]);
+        return ['ok' => true, 'id' => $draftId];
+    }
+
+    db()->prepare(
+        'INSERT INTO email_campaign_drafts (project_id, category, title, body, created_by)
+         VALUES (?,?,?,?,?)'
+    )->execute([
+        $projectId,
+        $category,
+        $title,
+        $body,
+        $actorId > 0 ? $actorId : null,
+    ]);
+    return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+}
+
+/**
+ * @return array{ok:bool,error?:string,title?:string}
+ */
+function delete_email_campaign_draft(int $projectId, int $draftId): array
+{
+    ensure_email_campaign_schema();
+    $draft = get_email_campaign_draft($draftId);
+    if (!$draft || (int) ($draft['project_id'] ?? 0) !== $projectId) {
+        return ['ok' => false, 'error' => 'Draft not found in this project.'];
+    }
+    db()->prepare('DELETE FROM email_campaign_drafts WHERE id=? AND project_id=?')
+        ->execute([$draftId, $projectId]);
+    return [
+        'ok' => true,
+        'title' => (string) ($draft['title'] ?? 'Draft'),
+    ];
 }
