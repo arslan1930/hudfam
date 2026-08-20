@@ -1,4 +1,8 @@
 <?php
+/**
+ * Our database browsing is Admin-only on this MVP.
+ * Team uses Filter & add; keep routes so old bookmarks redirect cleanly.
+ */
 $user = require_team();
 if (($user['role'] ?? '') === 'team') {
     flash('error', 'Our database is only available to Admin.');

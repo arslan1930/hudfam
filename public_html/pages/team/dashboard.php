@@ -150,5 +150,9 @@ if ($topCountry === '' && $openTasks !== [] && trim((string) ($openTasks[0]['cou
     <h2>Add emails</h2>
     <p>2–4 emails under each extracted site.</p>
   </a>
+  <a class="launch-card" href="index.php?page=team_prospect_batches">
+    <h2>Site adding history</h2>
+    <p>Your daily batches of new sites.</p>
+  </a>
 </div>
 <?php render_footer('team'); ?>

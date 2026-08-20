@@ -64,16 +64,24 @@ render_header('Added sites', 'admin');
   <?php endif; ?>
 </form>
 
+<?php if (!$schemaOk): ?>
+<ul class="messages"><li class="error">
+  Prospect history tables are missing or broken<?= $schemaError !== '' ? ': ' . h($schemaError) : '.' ?>
+  Open <a href="upgrade.php">upgrade.php</a> once, then reload.
+</li></ul>
+<?php endif; ?>
+
 <div class="card">
   <h2 style="margin-top:0">Daily adds</h2>
   <?php if ($batches): ?>
+  <div class="table-wrap">
   <table>
     <thead>
       <tr>
         <th>Date</th>
         <th>Person</th>
         <th>Sites</th>
-        <th>Country / lang</th>
+        <th>Country</th>
         <th></th>
       </tr>
     </thead>
@@ -108,6 +116,7 @@ render_header('Added sites', 'admin');
     <?php endforeach; ?>
     </tbody>
   </table>
+  </div>
   <?php else: ?>
   <div class="empty-state"><p>No adds yet<?= $personLabel !== '' ? ' for ' . h($personLabel) : '' ?>.</p></div>
   <?php endif; ?>

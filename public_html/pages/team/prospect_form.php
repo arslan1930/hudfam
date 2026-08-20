@@ -1,4 +1,7 @@
 <?php
+/**
+ * Team single-site form removed from Team nav — Admin owns Our database.
+ */
 $user = require_team();
 if (($user['role'] ?? '') === 'team') {
     flash('error', 'Our database is only available to Admin. Use Filter & add.');

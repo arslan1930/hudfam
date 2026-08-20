@@ -1,5 +1,5 @@
--- TechxForm simple schema: users + Our database + add history only.
--- Catalog / Emails / Orders / Published / Projects are not part of the app.
+-- TechxForm schema: users + Our database + add history + Order management.
+-- Legacy Catalog / Emails / Published / Projects are not part of the app.
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,

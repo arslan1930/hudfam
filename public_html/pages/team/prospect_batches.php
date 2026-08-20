@@ -1,11 +1,15 @@
 <?php
 $user = require_team();
-// Admins see all batches; team sees own (admins collaborating may want all — show all for admin, own for team)
+// Team sees own batches; admins browsing Team panel see all.
 $batches = [];
+$schemaOk = true;
+$schemaError = '';
 try {
     $batches = is_admin($user) ? list_prospect_batches(null, 100) : list_prospect_batches((int) $user['id'], 100);
 } catch (Throwable $e) {
-    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Dated batches.');
+    $schemaOk = false;
+    $schemaError = $e->getMessage();
+    flash('error', 'Prospects database tables are missing or broken. Ask Admin to open upgrade.php once, then reload.');
 }
 
 render_header('Added sites', 'team');
@@ -21,6 +25,12 @@ render_header('Added sites', 'team');
 <div class="date-legend" aria-label="Date highlights">
   <span class="date-legend-item"><span class="date-legend-swatch holiday" aria-hidden="true"></span> Sunday · holiday</span>
 </div>
+
+<?php if (!$schemaOk): ?>
+<ul class="messages"><li class="error">
+  Could not load history<?= $schemaError !== '' ? ': ' . h($schemaError) : '.' ?>
+</li></ul>
+<?php endif; ?>
 
 <div class="card">
   <?php if ($batches): ?>

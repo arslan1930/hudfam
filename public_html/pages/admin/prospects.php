@@ -97,7 +97,7 @@ if (!$inCountry && !$emptyCountry) {
       <input type="search" id="folder_search_admin" data-folder-search placeholder="e.g. Germany, Austria…" autocomplete="off">
     </div>
     <?php foreach ($byRegion as $regionLabel => $list): ?>
-      <div class="card">
+      <div class="card" data-folder-group>
         <h2><?= h($regionLabel) ?></h2>
         <div class="folders" style="margin-top:0.7rem">
           <?php foreach ($list as $f): ?>
@@ -117,7 +117,16 @@ if (!$inCountry && !$emptyCountry) {
     <?php endforeach; ?>
     </div>
     <?php if (!$folders): ?>
-      <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
+      <div class="card empty-state">
+        <p>
+          <?= $langFilter !== ''
+              ? 'No countries use the language “' . h($langFilter) . '”.'
+              : 'No countries configured. Run upgrade.php once.' ?>
+        </p>
+        <?php if ($langFilter !== ''): ?>
+          <a class="btn secondary" href="index.php?page=admin_prospects">Show all countries</a>
+        <?php endif; ?>
+      </div>
     <?php endif; ?>
     <?php
     render_footer('admin');

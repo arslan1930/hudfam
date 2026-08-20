@@ -126,6 +126,21 @@ render_header('Sites add by admin', 'admin');
   <?php endif; ?>
 </form>
 
+<script>
+(function () {
+  var country = document.getElementById('country');
+  var lang = document.getElementById('language');
+  if (!country || !lang) return;
+  country.addEventListener('change', function () {
+    var opt = country.options[country.selectedIndex];
+    if (!opt || !opt.dataset.lang) return;
+    if (lang.value) return;
+    lang.value = opt.dataset.lang;
+    lang.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+})();
+</script>
+
 <?php if ($errorDetail !== ''): ?>
   <div class="card"><p class="help">Technical detail: <?= h($errorDetail) ?></p></div>
 <?php endif; ?>

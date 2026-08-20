@@ -44,7 +44,6 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
     $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
@@ -53,8 +52,8 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
+    // One stylesheet URL (asset.php) — avoid loading CSS twice.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
-    echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
     echo '</head><body>';
 
     if (!$user || $panel === '') {
@@ -64,6 +63,14 @@ function render_header(string $title, string $panel = ''): void
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
     $current = current_route_page();
     $roleLabel = $panel === 'admin' ? 'Admin' : 'Team';
+    $flashes = get_flashes();
+    $clearDraft = false;
+    foreach ($flashes as $flash) {
+        if (($flash['type'] ?? '') === 'ok') {
+            $clearDraft = true;
+            break;
+        }
+    }
 
     echo '<div class="shell"><aside class="sidebar">';
     echo '<a class="brand" href="' . h($home) . '">';
@@ -126,21 +133,61 @@ function render_header(string $title, string $panel = ''): void
     }
 
     echo '<div class="nav-group nav-group-end">';
+    echo '<a href="index.php?page=account_password">Change password</a>';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
-    echo '</nav></aside><main class="main">';
-    foreach (get_flashes() as $flash) {
-        $cls = $flash['type'] === 'error' ? 'error' : '';
-        echo '<ul class="messages"><li class="' . h($cls) . '">' . h($flash['message']) . '</li></ul>';
+    echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    foreach ($flashes as $flash) {
+        render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }
 }
 
 function render_footer(string $panel = ''): void
 {
     if (current_user() && $panel !== '') {
+        render_project_credit();
+        if ($panel === 'admin' || $panel === 'team') {
+            $user = current_user();
+            $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
+            $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
+            $jsFile = asset_url('assets/js/draft-autosave.js');
+            $tipVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/info-tips.js') ?: time());
+            $tipPhp = app_url('asset.php?f=js/info-tips.js&v=' . rawurlencode($tipVersion));
+            $tipFile = asset_url('assets/js/info-tips.js');
+            echo '<script>';
+            echo 'window.TXF_DRAFT=' . json_encode([
+                'panel' => $panel,
+                'userId' => (int) ($user['id'] ?? 0),
+                'clearDraft' => false,
+            ], JSON_UNESCAPED_UNICODE) . ';';
+            echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
+            echo '</script>';
+            echo '<script src="' . h($jsPhp) . '" defer></script>';
+            echo '<script src="' . h($jsFile) . '" defer></script>';
+            echo '<script src="' . h($tipPhp) . '" defer></script>';
+            echo '<script src="' . h($tipFile) . '" defer></script>';
+        }
         echo '</main></div>';
     }
     echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
     echo '<script src="' . h(script_url('js/live-clock.js')) . '" defer></script>';
     echo '</body></html>';
+}
+
+/** Footer credit: TechxForm is a project of Teqnowebs. */
+function render_project_credit(): void
+{
+    $app = 'TechxForm';
+    try {
+        $app = (string) (app_config()['app_name'] ?? 'TechxForm');
+    } catch (Throwable $e) {
+        $app = 'TechxForm';
+    }
+    if ($app === '') {
+        $app = 'TechxForm';
+    }
+    echo '<p class="project-credit">';
+    echo h($app) . ' is a project of ';
+    echo '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
+    echo '</p>';
 }

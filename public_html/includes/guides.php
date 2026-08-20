@@ -37,9 +37,9 @@ function render_admin_panel_guide(): string
         . '<p><strong>How:</strong> Open a country and add sites into that folder (global uniqueness still applies).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Add history</h3>'
+        . '<h3>2. Site adding history</h3>'
         . '<p><strong>What:</strong> Who added which sites, by day.</p>'
-        . '<p><strong>How:</strong> Open a day to see the domains that person added.</p>'
+        . '<p><strong>How:</strong> Open a day to edit, copy/cut, or delete that history.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Users</h3>'
@@ -70,14 +70,14 @@ function render_team_panel_guide(): string
         . '<p><strong>How:</strong> Select country (save into) → Paste → Filter (all countries) → Add unique.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Our database</h3>'
-        . '<p><strong>What:</strong> Country folders shared with Admin.</p>'
-        . '<p><strong>How:</strong> Open a country folder to browse that country’s URLs.</p>'
+        . '<h3>2. Site adding history</h3>'
+        . '<p><strong>What:</strong> Your daily batches of new sites (read-only).</p>'
+        . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>3. Add history</h3>'
-        . '<p><strong>What:</strong> Your daily batches of new sites.</p>'
-        . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
+        . '<h3>3. Change password</h3>'
+        . '<p><strong>What:</strong> Keep your login secure.</p>'
+        . '<p><strong>How:</strong> Use Change password in the sidebar (required after demo passwords).</p>'
         . '</article>'
         . '</div>'
         . '<div class="panel-guide-flow">'
@@ -122,8 +122,8 @@ function guide_filter_add(): string
 function guide_add_history(): string
 {
     return render_page_purpose(
-        'Add history — who added what',
-        'Daily record of domains added by each person.',
+        'Site adding history — who added what',
+        'Daily record of domains added by each person. Admins can edit or delete a day; Team views their own days read-only.',
         'Open a date/person to see the exact domains saved that day.',
         []
     );
