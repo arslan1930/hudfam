@@ -182,9 +182,20 @@
             if (!window.confirm(
               'Send ' + n + ' ' + suffix + ' site(s) to ' + country
                 + '?\n\nAlready-known sites are skipped. Unique sites are added and go to Extracting Sites list.'
+                + '\n\nIf this ending looks wrong for ' + country + ', you are confirming you still want to add them.'
             )) {
               e.preventDefault();
+              return;
             }
+            // Option A path may soft-warn on country/TLD mismatch — confirm dialog is the ack.
+            var ack = form.querySelector('input[name="confirm_tld_mismatch"]');
+            if (!ack) {
+              ack = document.createElement('input');
+              ack.type = 'hidden';
+              ack.name = 'confirm_tld_mismatch';
+              form.appendChild(ack);
+            }
+            ack.value = '1';
           });
           actions.appendChild(form);
         }
