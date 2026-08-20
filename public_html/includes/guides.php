@@ -194,8 +194,8 @@ function guide_admin_users(): string
 {
     return render_page_purpose(
         'Users — who can log in',
-        'Create Admin and Team accounts.',
-        'Team users can open Filter & add and grow Our database. Admins can add sites and view all history.',
+        'Create Admin and Team accounts. Temporary passwords are shown once; teammates must change them on first login.',
+        'Assign Team users under Departments so they unlock tools. Admin email login needs a unique address (verify under Account). You cannot deactivate or demote yourself, or remove the last active admin.',
         []
     );
 }
