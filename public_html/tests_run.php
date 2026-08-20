@@ -90,6 +90,16 @@ db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
 db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfsem-%'");
 db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-%'");
 
+// Ensure seed logins match what this suite expects (local DBs may still use demo hashes).
+db()->prepare('UPDATE users SET password_hash=?, must_change_password=0 WHERE username=?')->execute([
+    password_hash('TestAdmin9x', PASSWORD_DEFAULT),
+    'admin',
+]);
+db()->prepare('UPDATE users SET password_hash=?, must_change_password=0 WHERE username=?')->execute([
+    password_hash('TestTeam8z', PASSWORD_DEFAULT),
+    'teammate',
+]);
+
 // --- Login ---
 try {
     if (!attempt_login('admin', 'TestAdmin9x')) {
@@ -221,6 +231,23 @@ try {
     } else {
         fail("prospect Germany txftest-* count=$cnt expected >=2");
     }
+
+    // Admin Add sites path (strict root domains + country folder save).
+    $paste = "https://www.txfadd-site-a.com/blog\ntxfadd-site-b.de\nnot a domain\ntxfadd-site-a.com";
+    $parsed = parse_domain_list_strict($paste);
+    if ($parsed['invalid_count'] >= 1 && in_array('txfadd-site-a.com', $parsed['valid'], true)) {
+        pass('parse_domain_list_strict flags invalid + keeps roots');
+    } else {
+        fail('parse_domain_list_strict unexpected: ' . json_encode($parsed));
+    }
+    $adminAdd = admin_add_urls_to_database(implode("\n", $parsed['valid']), $adminUser, $country, 'German');
+    if ((int) $adminAdd['total'] >= 2 && (int) $adminAdd['inserted'] >= 2) {
+        pass('admin_add_urls_to_database inserted=' . (int) $adminAdd['inserted']);
+    } else {
+        fail('admin_add_urls_to_database: ' . json_encode($adminAdd));
+    }
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfadd-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfadd-%'");
 } catch (Throwable $e) {
     fail('prospects: ' . $e->getMessage());
 }
@@ -1809,6 +1836,78 @@ try {
     }
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
+
+    // Generate from an unpaid LIVE sheet row, then mark paid.
+    $genClientId = create_order_client('Test Client Invoice Gen', 'invoice gen test', (int) $adminUser['id']);
+    $genItemId = add_order_item((int) $genClientId, 'txforder-live.com', 4, 2026);
+    db()->prepare(
+        'UPDATE order_items SET decided_price=?, live_url=?, is_paid=0 WHERE id=?'
+    )->execute([40.00, 'https://example.com/txforder-live', $genItemId]);
+    $invoiceable = list_invoiceable_order_items((int) $genClientId);
+    if (count($invoiceable) < 1) {
+        fail('invoiceable rows missing for generate test');
+    } else {
+        $lines = build_invoice_lines_from_orders($invoiceable, false);
+        $genId = create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_id' => (int) $genClientId,
+            'client_name' => 'Test Client Invoice Gen',
+            'bill_to_name' => 'Test Client Invoice Gen',
+            'bill_to_address' => 'Test Street 1',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Topurlz',
+            'company_bic' => 'TESTBIC',
+            'company_iban' => 'TESTIBAN',
+            'company_phone' => '',
+            'company_address' => '',
+            'company_reg_no' => '',
+            'vat_note' => '',
+        ], $lines, (int) $adminUser['id']);
+        $genInv = get_invoice($genId);
+        if ($genInv && (float) $genInv['total_amount'] > 0) {
+            pass('generated invoice id=' . $genId . ' total=' . $genInv['total_amount']);
+        } else {
+            fail('generated invoice missing/zero');
+        }
+        mark_invoice_payment_received($genId);
+        $paidRow = db()->prepare('SELECT is_paid FROM order_items WHERE id=?');
+        $paidRow->execute([$genItemId]);
+        if ((int) $paidRow->fetchColumn() === 1 && invoice_is_paid(get_invoice($genId))) {
+            pass('mark paid sets invoice + sheet row');
+        } else {
+            fail('mark paid did not update invoice/sheet');
+        }
+    }
+
+    // Blank invoice: zero total cannot be Done.
+    $blankId = create_blank_invoice((int) $adminUser['id']);
+    try {
+        update_blank_invoice($blankId, [
+            'invoice_date' => date('Y-m-d'),
+            'admin_note' => '',
+            'bill_to_name' => 'Blank',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Topurlz',
+            'company_bic' => '',
+            'company_iban' => '',
+            'company_phone' => '',
+            'company_address' => '',
+            'company_reg_no' => '',
+            'vat_note' => '',
+        ], [['description' => 'Line', 'amount' => 0, 'qty' => 1]], 'done');
+        fail('blank zero-total Done should be blocked');
+    } catch (Throwable $e) {
+        pass('blank zero-total Done blocked');
+    }
 } catch (Throwable $e) {
     fail('orders/invoices: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
