@@ -99,9 +99,42 @@ $routes = [
     'presence_ping' => 'pages/presence_ping.php',
 ];
 
+// Legacy page names → current tools (avoid blank 404 for old bookmarks).
+$legacyPageRedirects = [
+    'team_extract_queue' => 'index.php?page=team_extracting',
+    'team_extract_work' => 'index.php?page=team_extracting',
+    'team_extract_emails' => 'index.php?page=team_sites_emails',
+    'team_extract_submit' => 'index.php?page=team_extracting',
+    'team_extract_final' => 'index.php?page=team_extracting',
+    'admin_extract_sites' => 'index.php?page=admin_extracted&folder=extracted_sites',
+    'admin_extract_emails' => 'index.php?page=admin_emails_data',
+];
+if (isset($legacyPageRedirects[$page])) {
+    flash('ok', 'That page moved — opened the current tool instead.');
+    redirect($legacyPageRedirects[$page]);
+}
+
 if (!isset($routes[$page])) {
     http_response_code(404);
-    echo 'Page not found.';
+    $home = 'index.php?page=login';
+    if ($cu = current_user()) {
+        if (is_admin()) {
+            $home = 'index.php?page=admin_dashboard';
+        } elseif (user_is_department_scoped($cu)) {
+            $home = 'index.php?page=team_departments';
+        } else {
+            $home = 'index.php?page=team_dashboard';
+        }
+    }
+    $homeLabel = current_user() ? 'Go to dashboard' : 'Sign in';
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<title>Page not found · TechxForm</title>'
+        . '<link rel="stylesheet" href="' . h(stylesheet_url()) . '">'
+        . '</head><body class="auth-body"><div class="auth-card" style="max-width:28rem;margin:3rem auto;padding:1.5rem">'
+        . '<h1>Page not found</h1>'
+        . '<p class="muted">That link is missing or was renamed.</p>'
+        . '<p><a class="btn" href="' . h($home) . '">' . h($homeLabel) . '</a></p>'
+        . '</div></body></html>';
     exit;
 }
 
@@ -159,9 +192,14 @@ if (
 }
 
 // CSRF: every Admin and Team POST (forms + AJAX) must carry a valid token.
+// Also protect Change password (forced-change path is not admin_/team_ prefixed).
 if (
     ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
-    && (str_starts_with($page, 'admin_') || str_starts_with($page, 'team_'))
+    && (
+        str_starts_with($page, 'admin_')
+        || str_starts_with($page, 'team_')
+        || $page === 'account_password'
+    )
 ) {
     require_csrf();
 }
