@@ -2277,6 +2277,13 @@ try {
         }
         remove_department_member((int) $dept['id'], $uidMine);
     }
+
+    $dash = departments_dashboard_stats();
+    if (isset($dash['departments'], $dash['members'], $dash['open_tasks'], $dash['unassigned_team'])) {
+        pass('departments dashboard stats');
+    } else {
+        fail('departments dashboard stats missing keys');
+    }
 } catch (Throwable $e) {
     fail('department assign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

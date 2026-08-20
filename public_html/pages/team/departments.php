@@ -177,15 +177,26 @@ if (!in_array($assigneeFilter, ['', 'all', 'mine', 'unassigned'], true)) {
 if ($assigneeFilter === 'all') {
     $assigneeFilter = '';
 }
-$tasks = list_department_tasks($deptId, $statusFilter, $uid, $assigneeFilter);
+$taskQ = trim((string) get('q'));
+$tasksAll = list_department_tasks($deptId, $statusFilter, $uid, $assigneeFilter, $taskQ);
+$perPage = 50;
+$pageNum = max(1, (int) get('p', 1));
+$totalTasks = count($tasksAll);
+$totalPages = max(1, (int) ceil($totalTasks / $perPage));
+if ($pageNum > $totalPages) {
+    $pageNum = $totalPages;
+}
+$tasks = array_slice($tasksAll, ($pageNum - 1) * $perPage, $perPage);
 $stats = department_stats($deptId);
 $isCommunicationDept = (string) $dept['slug'] === 'communication';
 
-$deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter): string {
+$deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter, $taskQ, $pageNum): string {
     $params = array_merge([
         'folder' => (string) $dept['slug'],
         'status' => $statusFilter,
         'assignee' => $assigneeFilter,
+        'q' => $taskQ,
+        'p' => $pageNum,
     ], $overrides);
     $href = $base . '&folder=' . rawurlencode((string) $params['folder']);
     if (($params['status'] ?? '') !== '') {
@@ -193,6 +204,12 @@ $deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $sta
     }
     if (($params['assignee'] ?? '') !== '') {
         $href .= '&assignee=' . rawurlencode((string) $params['assignee']);
+    }
+    if (trim((string) ($params['q'] ?? '')) !== '') {
+        $href .= '&q=' . rawurlencode((string) $params['q']);
+    }
+    if ((int) ($params['p'] ?? 1) > 1) {
+        $href .= '&p=' . (int) $params['p'];
     }
     return $href;
 };
@@ -272,12 +289,28 @@ render_breadcrumbs([
         'unassigned' => 'Unassigned',
     ];
     foreach ($assigneeLinks as $val => $lab):
-        $href = $deptFolderUrl(['assignee' => $val]);
+        $href = $deptFolderUrl(['assignee' => $val, 'p' => 1]);
         $active = $assigneeFilter === $val ? ' active-soft' : '';
         ?>
       <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
     <?php endforeach; ?>
   </div>
+  <form method="get" action="index.php" class="actions" style="margin-bottom:0.85rem;flex-wrap:wrap;gap:0.45rem;align-items:center">
+    <input type="hidden" name="page" value="team_departments">
+    <input type="hidden" name="folder" value="<?= h((string) $dept['slug']) ?>">
+    <?php if ($statusFilter !== ''): ?>
+      <input type="hidden" name="status" value="<?= h($statusFilter) ?>">
+    <?php endif; ?>
+    <?php if ($assigneeFilter !== ''): ?>
+      <input type="hidden" name="assignee" value="<?= h($assigneeFilter) ?>">
+    <?php endif; ?>
+    <label class="sheet-search" for="dept-task-search" style="margin:0">
+      <span class="visually-hidden">Search tasks</span>
+      <input id="dept-task-search" type="search" name="q" value="<?= h($taskQ) ?>"
+             placeholder="Search tasks…" autocomplete="off" spellcheck="false" data-no-draft>
+    </label>
+    <button class="btn secondary small" type="submit">Search</button>
+  </form>
 
   <?php if (!$tasks): ?>
   <div class="empty-state">
@@ -332,6 +365,18 @@ render_breadcrumbs([
       </tbody>
     </table>
   </div>
+  <?php if ($totalPages > 1): ?>
+  <p class="muted" style="margin-top:0.85rem">
+    Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>
+    · <?= (int) $totalTasks ?> task<?= $totalTasks === 1 ? '' : 's' ?>
+    <?php if ($pageNum > 1): ?>
+      · <a href="<?= h($deptFolderUrl(['p' => $pageNum - 1])) ?>">Previous</a>
+    <?php endif; ?>
+    <?php if ($pageNum < $totalPages): ?>
+      · <a href="<?= h($deptFolderUrl(['p' => $pageNum + 1])) ?>">Next</a>
+    <?php endif; ?>
+  </p>
+  <?php endif; ?>
   <?php endif; ?>
 </div>
 <?php render_footer('team'); ?>

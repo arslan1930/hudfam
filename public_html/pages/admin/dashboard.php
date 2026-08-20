@@ -29,6 +29,9 @@ $orderClientCount = 0;
 $orderUnpaidLive = 0;
 $invoiceCount = 0;
 $extractedCount = 0;
+$deptOpenTasks = 0;
+$deptMembers = 0;
+$deptUnassignedTeam = 0;
 try {
     $omStats = order_management_dashboard_stats();
     $orderClientCount = (int) ($omStats['clients'] ?? 0);
@@ -36,6 +39,16 @@ try {
 } catch (Throwable $e) {
     $orderClientCount = 0;
     $orderUnpaidLive = 0;
+}
+try {
+    $deptStats = departments_dashboard_stats();
+    $deptOpenTasks = (int) ($deptStats['open_tasks'] ?? 0);
+    $deptMembers = (int) ($deptStats['members'] ?? 0);
+    $deptUnassignedTeam = (int) ($deptStats['unassigned_team'] ?? 0);
+} catch (Throwable $e) {
+    $deptOpenTasks = 0;
+    $deptMembers = 0;
+    $deptUnassignedTeam = 0;
 }
 try {
     ensure_invoice_schema();
@@ -93,7 +106,7 @@ render_header('Dashboard', 'admin');
   <a class="launch-card" href="index.php?page=admin_departments" data-dashboard-item
      data-search="departments site finding extracting email communication team assign tasks office">
     <h2>Departments</h2>
-    <p>Site Finding · Site Extracting · Email Extracting · Communication Team.</p>
+    <p><?= (int) $deptOpenTasks ?> open task<?= (int) $deptOpenTasks === 1 ? '' : 's' ?> · <?= (int) $deptMembers ?> member<?= (int) $deptMembers === 1 ? '' : 's' ?><?php if ($deptUnassignedTeam > 0): ?> · <?= (int) $deptUnassignedTeam ?> team awaiting assignment<?php endif; ?>.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_extracted" data-dashboard-item
      data-search="extracted urls extracted sites countries copy edit remove push">

@@ -38,7 +38,7 @@ if (!$inCountry) {
     <?php if (!$folders): ?>
       <div class="card empty-state">
         <p>No extraction activity yet. Assign Team 1 a task to submit sites into Block 1.</p>
-        <a class="btn" href="index.php?page=admin_tasks">Assign tasks</a>
+        <a class="btn" href="index.php?page=admin_departments">Assign via Departments</a>
       </div>
     <?php else: ?>
       <?php foreach ($byRegion as $regionLabel => $list): ?>
