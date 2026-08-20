@@ -76,7 +76,11 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$inCommunication = user_in_communication_team($user);
+$canAdminEmailsSearch = team_page_unlocked($user, 'team_admin_emails_delete');
+$canSitesEmails = team_page_unlocked($user, 'team_sites_emails');
+$canCampaigns = team_page_unlocked($user, 'team_email_campaigns');
+$canCampaignDrafts = team_page_unlocked($user, 'team_email_campaigns_drafts');
+$showEmailCommShortcuts = $canAdminEmailsSearch || $canSitesEmails || $canCampaigns || $canCampaignDrafts;
 
 if (!$dept) {
     render_header('My departments', 'team');
@@ -94,11 +98,20 @@ if (!$dept) {
               : 'You are not assigned to a department yet. Ask Admin to add you — tools stay locked until then.' ?>
         </p>
       </div>
-      <?php if ($inCommunication && $myDepartments): ?>
+      <?php if ($showEmailCommShortcuts && $myDepartments): ?>
         <div class="actions">
-          <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
-          <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
-          <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+          <?php if ($canSitesEmails): ?>
+            <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+          <?php endif; ?>
+          <?php if ($canAdminEmailsSearch): ?>
+            <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+          <?php endif; ?>
+          <?php if ($canCampaigns): ?>
+            <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
+          <?php endif; ?>
+          <?php if ($canCampaignDrafts): ?>
+            <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+          <?php endif; ?>
         </div>
       <?php endif; ?>
     </div>
@@ -118,25 +131,37 @@ if (!$dept) {
     return;
     endif; ?>
 
-    <?php if ($inCommunication && $myDepartments): ?>
+    <?php if ($showEmailCommShortcuts && $myDepartments): ?>
     <div class="card" style="margin-bottom:1rem">
-      <h2 style="margin-top:0">Communication tools</h2>
+      <h2 style="margin-top:0">Email &amp; Communication tools</h2>
       <p class="help muted" style="margin-bottom:0.85rem">
-        Open a dedicated search page — keeps this departments view focused on tasks.
+        Shortcuts for unlocked tools — keeps this departments view focused on tasks.
       </p>
       <div class="folders">
+        <?php if ($canSitesEmails): ?>
+        <a class="folder" href="index.php?page=team_sites_emails">
+          <h3>Sites with emails - Team</h3>
+          <p class="muted">Add emails · Push final list to Admin</p>
+        </a>
+        <?php endif; ?>
+        <?php if ($canAdminEmailsSearch): ?>
         <a class="folder" href="index.php?page=team_admin_emails_delete">
           <h3>Admin emails search</h3>
           <p class="muted">Sites with emails - Admin · all countries</p>
         </a>
+        <?php endif; ?>
+        <?php if ($canCampaigns): ?>
         <a class="folder" href="index.php?page=team_email_campaigns">
           <h3>Campaign search</h3>
           <p class="muted">Email campaign sheets · all countries</p>
         </a>
+        <?php endif; ?>
+        <?php if ($canCampaignDrafts): ?>
         <a class="folder" href="index.php?page=team_email_campaigns_drafts">
           <h3>Campaign drafts</h3>
           <p class="muted">Formatted outreach per project · copy for email</p>
         </a>
+        <?php endif; ?>
       </div>
     </div>
     <?php endif; ?>
@@ -189,6 +214,7 @@ if ($pageNum > $totalPages) {
 $tasks = array_slice($tasksAll, ($pageNum - 1) * $perPage, $perPage);
 $stats = department_stats($deptId);
 $isCommunicationDept = (string) $dept['slug'] === 'communication';
+$isEmailExtractingDept = (string) $dept['slug'] === 'email_extracting';
 
 $deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter, $taskQ, $pageNum): string {
     $params = array_merge([
@@ -230,34 +256,76 @@ render_breadcrumbs([
     </p>
   </div>
   <div class="actions">
-    <?php if ($isCommunicationDept): ?>
-      <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
-      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
-      <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+    <?php if ($isEmailExtractingDept): ?>
+      <?php if ($canSitesEmails): ?>
+        <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+      <?php endif; ?>
+      <?php if ($canAdminEmailsSearch): ?>
+        <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+      <?php endif; ?>
+    <?php elseif ($isCommunicationDept): ?>
+      <?php if ($canAdminEmailsSearch): ?>
+        <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+      <?php endif; ?>
+      <?php if ($canCampaigns): ?>
+        <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
+      <?php endif; ?>
+      <?php if ($canCampaignDrafts): ?>
+        <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+      <?php endif; ?>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All my departments</a>
   </div>
 </div>
 
-<?php if ($isCommunicationDept): ?>
+<?php if ($isEmailExtractingDept && ($canSitesEmails || $canAdminEmailsSearch)): ?>
+<div class="card" style="margin-bottom:1rem">
+  <h2 style="margin-top:0">Email Extracting tools</h2>
+  <p class="help muted" style="margin-bottom:0.85rem">
+    Add emails on the Team sheet, then Push to Admin. Search Admin to clean emails after push.
+  </p>
+  <div class="folders">
+    <?php if ($canSitesEmails): ?>
+    <a class="folder" href="index.php?page=team_sites_emails">
+      <h3>Sites with emails - Team</h3>
+      <p class="muted">Add emails · Push final list to Admin</p>
+    </a>
+    <?php endif; ?>
+    <?php if ($canAdminEmailsSearch): ?>
+    <a class="folder" href="index.php?page=team_admin_emails_delete">
+      <h3>Admin emails search</h3>
+      <p class="muted">Sites with emails - Admin · all countries</p>
+    </a>
+    <?php endif; ?>
+  </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isCommunicationDept && ($canAdminEmailsSearch || $canCampaigns || $canCampaignDrafts)): ?>
 <div class="card" style="margin-bottom:1rem">
   <h2 style="margin-top:0">Communication tools</h2>
   <p class="help muted" style="margin-bottom:0.85rem">
     Search sheets to clean emails, or open drafts to copy outreach text per project.
   </p>
   <div class="folders">
+    <?php if ($canAdminEmailsSearch): ?>
     <a class="folder" href="index.php?page=team_admin_emails_delete">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
     </a>
+    <?php endif; ?>
+    <?php if ($canCampaigns): ?>
     <a class="folder" href="index.php?page=team_email_campaigns">
       <h3>Campaign search</h3>
       <p class="muted">Email campaign sheets · all countries</p>
     </a>
+    <?php endif; ?>
+    <?php if ($canCampaignDrafts): ?>
     <a class="folder" href="index.php?page=team_email_campaigns_drafts">
       <h3>Campaign drafts</h3>
       <p class="muted">Formatted outreach per project · copy for email</p>
     </a>
+    <?php endif; ?>
   </div>
 </div>
 <?php endif; ?>
