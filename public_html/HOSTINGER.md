@@ -6,11 +6,21 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 
 | Admin | Team |
 |-------|------|
-| Dashboard | Dashboard |
-| Our database | Filter & add |
-| Add URLs | Our database |
-| Add history | Add history |
-| Users | |
+| Dashboard | Dashboard (tasks on top) |
+| **Sites Data** → Countries | Filter & add |
+| **Sites Data** → Sites add by admin | Added sites |
+| **Sites Data** → Added sites | |
+| **Extracting Sites with Emails** → Extracted sites | **Extraction** → Submit / Claim / Paste / Emails |
+| **Extracting Sites with Emails** → Extracted sites with Emails | |
+| Users (includes Tasks + work type) | |
+| Account | |
+
+## Admin email & password reset
+
+1. In `config.php` set `app_url` (https://your-domain.com) and `mail_from` (an address on your domain).
+2. Optional: Hostinger SMTP (`smtp.hostinger.com`, port 465, ssl) if `mail()` fails.
+3. Admin → **Account** → save email → **Send verification** → open link.
+4. Login → **Forgot password?** works only for verified Admin emails. Team passwords are set by Admin on Users.
 
 ## Deploy (important — wipe old files)
 
@@ -44,9 +54,9 @@ public_html/
   asset.php
   .htaccess
   assets/css/app.css
-  includes/   (auth, db, geo, guides, helpers, layout, prospects only)
-  pages/admin/ (dashboard, prospects, prospect_add, prospect_batches, prospect_batch, users)
-  pages/team/  (dashboard, prospect_check, prospects, prospect_form, prospect_batches, prospect_batch)
+  includes/   (auth, db, geo, guides, helpers, layout, prospects, extract, account, mail)
+  pages/admin/ (dashboard, prospects*, users, tasks, account, extract_sites, extract_emails)
+  pages/team/  (dashboard, prospect*, tasks, extract_submit, extract_queue, extract_work, extract_final, extract_emails)
   sql/
 ```
 

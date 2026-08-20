@@ -1,91 +1,68 @@
 <?php
-$user = require_admin();
-
-$listUrl = 'index.php?page=admin_prospect_batches';
-$filterUser = (int) (get('user') ?: 0);
-$schemaOk = true;
-$schemaError = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = (string) post('action');
-    if ($action === 'delete_day') {
-        $id = (int) post('id');
-        $alsoDb = (string) post('also_remove_db') === '1';
-        $batch = get_prospect_batch($id);
-        $result = delete_prospect_batch($id, $alsoDb);
-        if (empty($result['ok'])) {
-            flash('error', (string) ($result['error'] ?? 'Could not delete.'));
-        } else {
-            $msg = 'Deleted history day ' . (string) ($result['batch_date'] ?? '')
-                . ' (' . (int) ($result['cleared'] ?? 0) . ' site(s)).';
-            if ((int) ($result['db_removed'] ?? 0) > 0) {
-                $msg .= ' Also removed ' . (int) $result['db_removed'] . ' from Our database.';
-            }
-            flash('ok', $msg);
-        }
-        $redir = $listUrl;
-        $uid = (int) ($batch['user_id'] ?? $filterUser);
-        if ($uid > 0) {
-            $redir .= '&user=' . $uid;
-        }
-        redirect($redir);
-    }
-    flash('error', 'Unknown action.');
-    redirect($listUrl);
+require_admin();
+$userFilter = (int) get('user');
+if ($userFilter < 0) {
+    $userFilter = 0;
 }
-
-$batches = [];
+$userFilterRow = null;
+if ($userFilter > 0) {
+    $stmt = db()->prepare('SELECT id, username, full_name, role FROM users WHERE id=? LIMIT 1');
+    $stmt->execute([$userFilter]);
+    $userFilterRow = $stmt->fetch() ?: null;
+    if (!$userFilterRow) {
+        $userFilter = 0;
+    }
+}
+$batches = list_prospect_batches($userFilter > 0 ? $userFilter : null, 150);
+$missed = [];
 try {
-    $batches = list_prospect_batches($filterUser > 0 ? $filterUser : null, 200);
+    $missed = list_team_missed_work_days(21);
 } catch (Throwable $e) {
-    $schemaOk = false;
-    $schemaError = $e->getMessage();
+    $missed = [];
 }
-
-$filterName = '';
-if ($filterUser > 0) {
-    foreach ($batches as $b) {
-        if ((int) $b['user_id'] === $filterUser) {
-            $filterName = (string) ($b['full_name'] ?: $b['username']);
-            break;
-        }
-    }
-    if ($filterName === '') {
-        try {
-            $u = db()->prepare('SELECT full_name, username FROM users WHERE id=? LIMIT 1');
-            $u->execute([$filterUser]);
-            $row = $u->fetch(PDO::FETCH_ASSOC);
-            if ($row) {
-                $filterName = (string) ($row['full_name'] ?: $row['username']);
-            }
-        } catch (Throwable $e) {
-            // ignore
-        }
-    }
-}
-
-render_header('Site adding history', 'admin');
+$personLabel = $userFilterRow
+    ? trim((string) (($userFilterRow['full_name'] ?: '') !== '' ? $userFilterRow['full_name'] : $userFilterRow['username']))
+    : '';
+$people = array_merge(list_team_users(false), list_admin_users(false));
+render_header('Added sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Site adding history'],
+    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => 'Added sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Site adding history</h1>
-    <p class="muted">
-      Who added how many sites each day.
-      <?php if ($filterName !== ''): ?>
-        · showing <strong><?= h($filterName) ?></strong>
-        · <a href="<?= h($listUrl) ?>">Show all</a>
-      <?php else: ?>
-        Open a day to edit, copy/cut, or delete.
-      <?php endif; ?>
-    </p>
+    <h1>Added sites</h1>
+    <p class="muted">Who added how many sites each day<?= $personLabel !== '' ? ' · ' . h($personLabel) : '' ?>.</p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
+  <a class="btn secondary" href="index.php?page=admin_prospects">Countries</a>
 </div>
-<?= guide_add_history() ?>
+
+<div class="date-legend" aria-label="Date highlights">
+  <span class="date-legend-item"><span class="date-legend-swatch holiday" aria-hidden="true"></span> Sunday · holiday</span>
+  <span class="date-legend-item"><span class="date-legend-swatch no-work" aria-hidden="true"></span> No sites submitted (workday)</span>
+</div>
+
+<form class="card filters" method="get" style="margin-bottom:1rem">
+  <input type="hidden" name="page" value="admin_prospect_batches">
+  <div>
+    <label>Person</label>
+    <select name="user" data-searchable="1">
+      <option value="">Everyone</option>
+      <?php foreach ($people as $p): ?>
+        <option value="<?= (int) $p['id'] ?>" <?= $userFilter === (int) $p['id'] ? 'selected' : '' ?>>
+          <?= h(($p['full_name'] ?: $p['username']) . ' · ' . $p['role']) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <button class="btn" type="submit">Filter</button>
+  <?php if ($userFilter > 0): ?>
+    <a class="btn secondary" href="index.php?page=admin_prospect_batches">Clear</a>
+    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $userFilter ?>">Countries · <?= h($personLabel) ?></a>
+  <?php endif; ?>
+</form>
 
 <?php if (!$schemaOk): ?>
 <ul class="messages"><li class="error">
@@ -95,6 +72,7 @@ render_header('Site adding history', 'admin');
 <?php endif; ?>
 
 <div class="card">
+  <h2 style="margin-top:0">Daily adds</h2>
   <?php if ($batches): ?>
   <div class="table-wrap">
   <table>
@@ -108,21 +86,31 @@ render_header('Site adding history', 'admin');
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($batches as $b): ?>
-      <tr>
-        <td><strong><?= h($b['batch_date']) ?></strong></td>
+    <?php foreach ($batches as $b):
+        $ymd = (string) $b['batch_date'];
+        $isSunday = is_sunday_holiday_date($ymd);
+        $weekday = batch_weekday_label($ymd);
+        $rowClass = $isSunday ? 'row-holiday' : '';
+        $countryName = canonicalize_country_name(trim((string) ($b['country'] ?? '')));
+    ?>
+      <tr class="<?= h($rowClass) ?>">
+        <td>
+          <strong><?= h($ymd) ?></strong>
+          <?php if ($weekday !== ''): ?>
+            <span class="day-meta"><?= h($weekday) ?><?= $isSunday ? ' · holiday' : '' ?></span>
+          <?php endif; ?>
+          <?php if ($isSunday): ?>
+            <span class="badge holiday">Holiday</span>
+          <?php endif; ?>
+        </td>
         <td><?= h($b['full_name'] ?: $b['username']) ?></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
-        <td><?= h($b['country'] ?: '—') ?></td>
+        <td><?= h($countryName !== '' ? $countryName : '—') ?> · <?= h($b['language'] ?: '—') ?></td>
         <td class="actions">
-          <a class="btn small" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $b['id'] ?>">Edit</a>
-          <form method="post" action="<?= h($listUrl) ?><?= $filterUser > 0 ? '&amp;user=' . $filterUser : '' ?>"
-                style="display:inline"
-                onsubmit="return confirm('Delete history day <?= h($b['batch_date']) ?> for <?= h($b['full_name'] ?: $b['username']) ?>?');">
-            <input type="hidden" name="action" value="delete_day">
-            <input type="hidden" name="id" value="<?= (int) $b['id'] ?>">
-            <button class="btn danger small" type="submit">Delete</button>
-          </form>
+          <a class="btn small" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $b['id'] ?>">View</a>
+          <?php if ($countryName !== ''): ?>
+            <a class="btn small secondary" href="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>&amp;created_by=<?= (int) $b['user_id'] ?>">In DB</a>
+          <?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>
@@ -130,9 +118,46 @@ render_header('Site adding history', 'admin');
   </table>
   </div>
   <?php else: ?>
-  <div class="empty-state">
-    <p><?= $filterUser > 0 ? 'No history days for this teammate.' : 'No adds yet.' ?></p>
-  </div>
+  <div class="empty-state"><p>No adds yet<?= $personLabel !== '' ? ' for ' . h($personLabel) : '' ?>.</p></div>
   <?php endif; ?>
 </div>
+
+<?php if ($userFilter <= 0): ?>
+<div class="card">
+  <h2 style="margin-top:0">No work days</h2>
+  <p class="muted">Active teammates with no sites submitted on a workday (last 21 days). Sundays are holidays and are not listed here.</p>
+  <?php if ($missed): ?>
+  <?php
+    $missedShown = array_slice($missed, 0, 100);
+    $missedExtra = count($missed) - count($missedShown);
+  ?>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Person</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($missedShown as $m): ?>
+      <tr class="row-no-work">
+        <td>
+          <strong><?= h($m['miss_date']) ?></strong>
+          <span class="day-meta"><?= h($m['weekday']) ?></span>
+        </td>
+        <td><?= h($m['full_name'] ?: $m['username']) ?></td>
+        <td><span class="badge no-work">No sites submitted</span></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php if ($missedExtra > 0): ?>
+    <p class="muted">Showing 100 of <?= (int) count($missed) ?> missed days.</p>
+  <?php endif; ?>
+  <?php else: ?>
+  <p class="muted" style="margin:0">Everyone active submitted sites on each workday in this period — or there are no active teammates yet.</p>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 <?php render_footer('admin'); ?>

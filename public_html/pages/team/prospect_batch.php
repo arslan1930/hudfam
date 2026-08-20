@@ -7,13 +7,13 @@ if (!$batch) {
     redirect('index.php?page=team_prospect_batches');
 }
 if (!is_admin($user) && (int) $batch['user_id'] !== (int) $user['id']) {
-    flash('error', 'You can only view your own site adding history.');
+    flash('error', 'You can only view your own added sites.');
     redirect('index.php?page=team_prospect_batches');
 }
 $domains = get_prospect_batch_domains($id);
 $isAdmin = is_admin($user);
 
-render_header('Site adding history · ' . $batch['batch_date'], 'team');
+render_header('Added sites · ' . $batch['batch_date'], 'team');
 ?>
 <div class="topbar">
   <div>
@@ -21,7 +21,7 @@ render_header('Site adding history · ' . $batch['batch_date'], 'team');
     <p class="muted"><?= (int) $batch['site_count'] ?> site(s) · <?= h($batch['country'] ?: '—') ?> · <?= h($batch['language'] ?: '—') ?></p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">My history</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Added sites</a>
     <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
     <?php if ($isAdmin): ?>
       <a class="btn" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $id ?>">Edit / delete (Admin)</a>

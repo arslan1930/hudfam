@@ -27,6 +27,10 @@ render_header('Login');
       <input type="password" name="password" required>
       <p style="margin-top:1.1rem"><button class="btn" type="submit">Sign in</button></p>
     </form>
+    <p class="help" style="margin-top:1rem">
+      <a href="index.php?page=forgot_password">Forgot password?</a>
+      <span class="muted"> (Admin only · verified email)</span>
+    </p>
   </div>
   <?php render_project_credit(); ?>
 </div>

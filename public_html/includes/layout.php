@@ -16,9 +16,17 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
+        'admin_extract_sites' => [],
+        'admin_extract_emails' => [],
+        'admin_users' => ['admin_tasks'],
+        'admin_account' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
-        'account_password' => [],
+        'team_dashboard' => ['team_tasks'],
+        'team_extract_submit' => [],
+        'team_extract_queue' => ['team_extract_work'],
+        'team_extract_final' => [],
+        'team_extract_emails' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -75,18 +83,33 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_prospects' => ['Our database', 'Country folders → sites'],
-                'admin_prospect_add' => ['Add sites', 'Paste into a country database'],
-                'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
-                'admin_users' => ['Users', 'Add & edit who can log in'],
+            ],
+            'Sites Data' => [
+                'admin_prospects' => ['Countries', 'Browse country folders'],
+                'admin_prospect_add' => ['Sites add by admin', 'Paste into a country'],
+                'admin_prospect_batches' => ['Added sites', 'Who added what, by day'],
+            ],
+            'Extracting Sites with Emails' => [
+                'admin_extract_sites' => ['Extracted sites', 'Block 1 queue + Block 2 final'],
+                'admin_extract_emails' => ['Extracted sites with Emails', 'Emails under each site'],
+            ],
+            'People' => [
+                'admin_users' => ['Users', 'Accounts & assign tasks'],
+                'admin_account' => ['Account', 'Email & password'],
             ],
         ];
     } else {
         $groups = [
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
-                'team_prospect_batches' => ['Site adding history', 'Your daily adds'],
+                'team_prospect_check' => ['Filter & add', 'Paste → add unique'],
+                'team_prospect_batches' => ['Added sites', 'Your daily adds'],
+            ],
+            'Extraction' => [
+                'team_extract_submit' => ['Submit for extraction', 'Block 1 · Team 1'],
+                'team_extract_queue' => ['Claim & extract', 'Open Block 1 batch'],
+                'team_extract_final' => ['Paste extracted', 'Block 2 · final list'],
+                'team_extract_emails' => ['Add emails', 'Emails per site'],
             ],
         ];
     }
@@ -147,40 +170,7 @@ function render_footer(string $panel = ''): void
         echo '</main></div>';
     }
     echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
-    echo '<script src="' . h(script_url('js/password-toggle.js')) . '" defer></script>';
-    // Move Actions menus to <body> + position:fixed so table/card overflow cannot clip options.
-    echo '<script>(function(){';
-    echo 'function placeMenu(details){';
-    echo 'var menu=details._menu||details.querySelector(".more-actions-menu");';
-    echo 'var btn=details.querySelector("summary");';
-    echo 'if(!menu||!btn)return;';
-    echo 'if(menu.parentNode!==document.body){details._menu=menu;details._menuHome=menu.parentNode;document.body.appendChild(menu);}';
-    echo 'menu.hidden=false;';
-    echo 'var r=btn.getBoundingClientRect();var mw=Math.max(180,menu.offsetWidth||180);';
-    echo 'var left=Math.min(Math.max(8,r.right-mw),window.innerWidth-mw-8);';
-    echo 'var top=r.bottom+6;';
-    echo 'if(top+menu.offsetHeight>window.innerHeight-8){top=Math.max(8,r.top-menu.offsetHeight-6);}';
-    echo 'menu.style.left=left+"px";menu.style.top=top+"px";';
-    echo '}';
-    echo 'function restoreMenu(details){';
-    echo 'var menu=details._menu;if(!menu||!details._menuHome)return;';
-    echo 'menu.hidden=true;menu.style.left="";menu.style.top="";';
-    echo 'details._menuHome.appendChild(menu);';
-    echo '}';
-    echo 'document.addEventListener("toggle",function(e){';
-    echo 'var t=e.target;if(!t||!t.classList||!t.classList.contains("more-actions"))return;';
-    echo 'if(t.open){document.querySelectorAll("details.more-actions[open]").forEach(function(d){if(d!==t){d.removeAttribute("open");restoreMenu(d);}});placeMenu(t);}';
-    echo 'else{restoreMenu(t);}';
-    echo '},true);';
-    echo 'document.addEventListener("click",function(e){';
-    echo 'var open=document.querySelector("details.more-actions[open]");if(!open)return;';
-    echo 'var menu=open._menu||open.querySelector(".more-actions-menu");';
-    echo 'if(open.contains(e.target)||(menu&&menu.contains(e.target)))return;';
-    echo 'open.removeAttribute("open");restoreMenu(open);';
-    echo '});';
-    echo 'window.addEventListener("resize",function(){var o=document.querySelector("details.more-actions[open]");if(o)placeMenu(o);});';
-    echo 'window.addEventListener("scroll",function(){var o=document.querySelector("details.more-actions[open]");if(o)placeMenu(o);},true);';
-    echo '})();</script>';
+    echo '<script src="' . h(script_url('js/live-clock.js')) . '" defer></script>';
     echo '</body></html>';
 }
 

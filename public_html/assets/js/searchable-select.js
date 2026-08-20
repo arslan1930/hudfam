@@ -1,9 +1,6 @@
 /**
  * Enhance <select data-searchable> into type-to-search comboboxes.
  * Keeps the native <select> in the form for submit + change events.
- *
- * data-allow-custom="1" lets the user keep a typed value that is not in the
- * list (used for Language, which is optional and free text).
  */
 (function () {
   'use strict';
@@ -34,7 +31,6 @@
   function enhance(select) {
     if (!select || select.dataset.searchEnhanced === '1') return;
     select.dataset.searchEnhanced = '1';
-    var allowCustom = select.dataset.allowCustom === '1';
 
     var wrap = document.createElement('div');
     wrap.className = 'ss-wrap';
@@ -45,14 +41,13 @@
     select.setAttribute('aria-hidden', 'true');
 
     var input = document.createElement('input');
-    input.type = 'text';
+    input.type = 'search';
     input.className = 'ss-input';
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.setAttribute('role', 'combobox');
     input.setAttribute('aria-autocomplete', 'list');
     input.setAttribute('aria-expanded', 'false');
-    if (select.dataset.placeholder) input.placeholder = select.dataset.placeholder;
     if (select.id) {
       input.id = select.id + '_search';
       var lab = document.querySelector('label[for="' + select.id + '"]');
@@ -79,8 +74,11 @@
     }
 
     function syncInputFromSelect() {
-      var label = selectedLabel();
-      input.value = select.value === '' ? '' : label;
+      input.value = selectedLabel();
+      if (select.value === '') {
+        input.placeholder = selectedLabel() || 'Type to search…';
+        if (selectedLabel().indexOf('—') === 0) input.value = '';
+      }
     }
 
     function setExpanded(open) {
@@ -122,7 +120,7 @@
       if (!filtered.length) {
         var empty = document.createElement('div');
         empty.className = 'ss-empty';
-        empty.textContent = allowCustom ? 'No match — press Enter to keep what you typed' : 'No matches';
+        empty.textContent = 'No matches';
         list.appendChild(empty);
       }
       setExpanded(true);
@@ -134,32 +132,6 @@
       select.dispatchEvent(new Event('change', { bubbles: true }));
       syncInputFromSelect();
       setExpanded(false);
-    }
-
-    /** Keep a typed value that is not in the list (Language). */
-    function commitCustom(text) {
-      text = text.trim();
-      if (text === '') {
-        select.value = '';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        return;
-      }
-      var existing = null;
-      items.forEach(function (it) {
-        if (!it.disabled && it.label.toLowerCase() === text.toLowerCase()) existing = it;
-      });
-      if (existing) {
-        pick(existing);
-        return;
-      }
-      var opt = document.createElement('option');
-      opt.value = text;
-      opt.textContent = text;
-      opt.dataset.custom = '1';
-      select.appendChild(opt);
-      select.value = text;
-      items = optionList(select);
-      select.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     function moveActive(delta) {
@@ -194,10 +166,6 @@
         if (!list.hidden && activeIdx >= 0 && filtered[activeIdx]) {
           e.preventDefault();
           pick(filtered[activeIdx]);
-        } else if (allowCustom) {
-          e.preventDefault();
-          commitCustom(input.value);
-          setExpanded(false);
         }
       } else if (e.key === 'Escape') {
         setExpanded(false);
@@ -208,18 +176,14 @@
     input.addEventListener('blur', function () {
       setTimeout(function () {
         setExpanded(false);
+        // If typed text matches an option exactly, select it; else revert
         var typed = input.value.trim().toLowerCase();
         var hit = null;
         items.forEach(function (it) {
           if (!it.disabled && it.label.toLowerCase() === typed) hit = it;
         });
-        if (hit) {
-          pick(hit);
-        } else if (allowCustom) {
-          commitCustom(input.value);
-        } else {
-          syncInputFromSelect();
-        }
+        if (hit) pick(hit);
+        else syncInputFromSelect();
       }, 120);
     });
 
@@ -231,37 +195,29 @@
     (root || document).querySelectorAll('select[data-searchable]').forEach(enhance);
   }
 
-  /** Live-filter country folder cards by typing in [data-folder-search]. */
+  /** Filter country folder cards by typing in [data-folder-search] */
   function enhanceFolderSearch(root) {
     (root || document).querySelectorAll('[data-folder-search]').forEach(function (input) {
       if (input.dataset.folderEnhanced === '1') return;
       input.dataset.folderEnhanced = '1';
-      var scope = document.querySelector('[data-folder-scope]') || document;
-      var counter = document.querySelector('[data-folder-count]');
-
-      function apply() {
+      var scope = input.closest('[data-folder-scope]') || document;
+      input.addEventListener('input', function () {
         var q = input.value.trim().toLowerCase();
-        var shown = 0;
         scope.querySelectorAll('a.folder').forEach(function (a) {
-          var hay = ((a.dataset.search || '') + ' ' + (a.textContent || '')).toLowerCase();
-          var show = !q || hay.indexOf(q) !== -1;
-          a.hidden = !show;
-          if (show) shown++;
+          var text = (a.textContent || '').toLowerCase();
+          var show = !q || text.indexOf(q) !== -1;
+          a.style.display = show ? '' : 'none';
+          var card = a.closest('.card');
+          // hide empty region cards
+          if (card) {
+            var any = false;
+            card.querySelectorAll('a.folder').forEach(function (f) {
+              if (f.style.display !== 'none') any = true;
+            });
+            card.style.display = any ? '' : 'none';
+          }
         });
-        scope.querySelectorAll('[data-folder-group]').forEach(function (card) {
-          var any = false;
-          card.querySelectorAll('a.folder').forEach(function (f) {
-            if (!f.hidden) any = true;
-          });
-          card.hidden = !any;
-        });
-        var empty = document.querySelector('[data-folder-empty]');
-        if (empty) empty.hidden = shown !== 0;
-        if (counter) counter.textContent = String(shown);
-      }
-
-      input.addEventListener('input', apply);
-      apply();
+      });
     });
   }
 

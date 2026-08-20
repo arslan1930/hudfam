@@ -7,7 +7,7 @@ $user = require_admin();
 $id = (int) get('id');
 $batch = get_prospect_batch($id);
 if (!$batch) {
-    flash('error', 'Site adding history day not found.');
+    flash('error', 'Added sites day not found.');
     redirect('index.php?page=admin_prospect_batches');
 }
 
@@ -91,10 +91,12 @@ $sitesText = implode("\n", $domains);
 $total = count($domains);
 $person = $batch['full_name'] ?: $batch['username'];
 
-render_header('Site adding history · ' . $batch['batch_date'], 'admin');
-render_breadcrumbs([
+render_header('Added sites · ' . $batch['batch_date'], 'admin');
+?>
+<?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Site adding history', 'href' => $listUrl],
+    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => 'Added sites', 'href' => 'index.php?page=admin_prospect_batches'],
     ['label' => $batch['batch_date'] . ' · ' . $person],
 ]);
 ?>
@@ -109,70 +111,43 @@ render_breadcrumbs([
     </p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="<?= h($listUrl) ?>&amp;user=<?= (int) $batch['user_id'] ?>">This teammate</a>
-    <a class="btn secondary" href="<?= h($listUrl) ?>">All history</a>
-    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Inventory by person</a>
+    <a class="btn secondary" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $batch['user_id'] ?>">This teammate</a>
+    <a class="btn secondary" href="index.php?page=admin_prospect_batches">All added sites</a>
+    <?php
+      $batchCountry = canonicalize_country_name(trim((string) ($batch['country'] ?? '')));
+      if ($batchCountry !== ''):
+    ?>
+      <a class="btn" href="index.php?page=admin_prospects&amp;country=<?= urlencode($batchCountry) ?>&amp;created_by=<?= (int) $batch['user_id'] ?>">Countries · <?= h($batchCountry) ?></a>
+    <?php else: ?>
+      <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Countries · this person</a>
+    <?php endif; ?>
   </div>
 </div>
 
 <div class="card">
-  <h2 style="margin:0 0 0.45rem">Sites added this day</h2>
-  <p class="help" style="margin-top:0">
-    Edit this teammate’s daily history list. Changes <strong>autosave</strong>.
-    Cut/copy with your keyboard; <strong>Undo</strong>/<strong>Redo</strong> while you stay on this page.
-    By default only history changes — Our database is untouched unless you check the option below.
-  </p>
-  <div
-    class="domains-paste"
-    id="history_sites_shell"
-    data-post-url="<?= h($base) ?>"
-  >
-    <div class="domains-paste-head">
-      <label for="history_sites_text">Sites</label>
-      <div class="sites-list-actions">
-        <button type="button" class="btn secondary small" id="history_undo_btn" disabled>Undo</button>
-        <button type="button" class="btn secondary small" id="history_redo_btn" disabled>Redo</button>
-        <button type="button" class="btn secondary small" id="history_copy_all">Copy all</button>
-      </div>
-    </div>
-    <textarea
-      id="history_sites_text"
-      class="inventory-box"
-      rows="16"
-      spellcheck="false"
-      aria-label="Site adding history domains"
-      data-no-draft
-    ><?= h($sitesText) ?></textarea>
-    <p class="muted" style="margin:0.35rem 0 0">
-      <span id="history_footer_count"><?= (int) $total ?> site<?= $total === 1 ? '' : 's' ?></span>
-      <span id="history_autosave_label" class="help" style="margin-left:0.5rem"></span>
-    </p>
-    <p class="help" id="history_list_status" hidden></p>
-  </div>
-  <label style="font-weight:500;margin-top:0.75rem;display:flex;gap:0.45rem;align-items:flex-start">
-    <input type="checkbox" id="history_also_remove_db" value="1" style="margin-top:0.2rem">
-    <span>When removing sites from this list, also delete them from <strong>Our database</strong> for <?= h($batch['country'] ?: 'this country') ?>.</span>
-  </label>
-</div>
-
-<div class="card" style="margin-top:1rem">
-  <h2 style="margin:0 0 0.45rem">Day details</h2>
-  <form method="post" action="<?= h($base) ?>" autocomplete="off">
-    <input type="hidden" name="action" value="save_meta">
-    <div class="form-grid">
-      <div>
-        <label for="history_country">Country</label>
-        <?= render_country_select('country', (string) ($batch['country'] ?? ''), 'history_country', false, 'Optional country') ?>
-      </div>
-      <div class="full">
-        <label for="history_notes">Notes</label>
-        <textarea id="history_notes" name="notes" rows="2"><?= h((string) ($batch['notes'] ?? '')) ?></textarea>
-      </div>
-    </div>
-    <p class="actions" style="margin-top:0.85rem">
-      <button class="btn" type="submit">Save details</button>
-    </p>
-  </form>
+  <?php if (!empty($batch['notes'])): ?>
+    <p class="help"><?= h($batch['notes']) ?></p>
+  <?php endif; ?>
+  <p class="help">Saved in Countries and in this teammate’s daily add history.</p>
+  <?php if ($domains): ?>
+    <textarea class="inventory-box" rows="16" readonly><?= h(implode("\n", $domains)) ?></textarea>
+    <details style="margin-top:1rem">
+      <summary>Added timestamps</summary>
+      <table style="margin-top:0.75rem">
+        <thead><tr><th>Domain</th><th>Added at</th></tr></thead>
+        <tbody>
+        <?php foreach ($items as $item): ?>
+          <tr>
+            <td><?= h($item['domain']) ?></td>
+            <td><?= h((string) $item['created_at']) ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </details>
+  <?php else: ?>
+    <p class="muted">No domains recorded for this day.</p>
+  <?php endif; ?>
 </div>
 
 <div class="card" style="margin-top:1rem">
