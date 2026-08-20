@@ -10,6 +10,7 @@ session_start();
 require __DIR__ . '/includes/helpers.php';
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
+require __DIR__ . '/includes/account.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
@@ -2635,6 +2636,50 @@ try {
     }
 } catch (Throwable $e) {
     fail('tld separate: ' . $e->getMessage());
+}
+
+// --- Admin Users U-1: unique email + verify reset ---
+try {
+    ensure_account_schema();
+    $u1a = 'u1_admin_a_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    $u1b = 'u1_admin_b_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    $sharedEmail = $u1a . '@example.test';
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password, email_verified_at)
+         VALUES (?,?,?,?, 'admin', 1, 0, NOW())"
+    )->execute([$u1a, password_hash('TestAdmin8z', PASSWORD_DEFAULT), 'U1 Admin A', $sharedEmail]);
+    $idA = (int) db()->lastInsertId();
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'admin', 1, 0)"
+    )->execute([$u1b, password_hash('TestAdmin8z', PASSWORD_DEFAULT), 'U1 Admin B', 'other-' . $sharedEmail]);
+    $idB = (int) db()->lastInsertId();
+
+    if (admin_email_taken_by_other($sharedEmail, $idA)) {
+        fail('admin_email_taken_by_other true for self email');
+    } elseif (!admin_email_taken_by_other($sharedEmail, $idB)) {
+        fail('admin_email_taken_by_other missed other admin email');
+    } elseif (!admin_email_taken_by_other(strtoupper($sharedEmail), 0)) {
+        fail('admin_email_taken_by_other not case-insensitive');
+    } else {
+        pass('admin_email_taken_by_other detects active admin duplicates');
+    }
+
+    // Simulate Users save clearing verify when email changes.
+    $newEmail = 'changed-' . $sharedEmail;
+    db()->prepare(
+        'UPDATE users SET email=?, email_verified_at=NULL WHERE id=? AND role=\'admin\''
+    )->execute([$newEmail, $idA]);
+    $rowA = load_user_by_id($idA);
+    if ($rowA && empty($rowA['email_verified_at']) && strcasecmp((string) $rowA['email'], $newEmail) === 0) {
+        pass('admin email change clears email_verified_at');
+    } else {
+        fail('email_verified_at not cleared after email change');
+    }
+
+    db()->prepare('DELETE FROM users WHERE id IN (?,?)')->execute([$idA, $idB]);
+} catch (Throwable $e) {
+    fail('users U-1: ' . $e->getMessage());
 }
 
 echo "\n==== SUMMARY ====\n";
