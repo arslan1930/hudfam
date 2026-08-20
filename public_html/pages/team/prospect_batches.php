@@ -1,23 +1,33 @@
 <?php
 $user = require_team();
-// Admins see all batches; team sees own (admins collaborating may want all — show all for admin, own for team)
+// Team sees own batches; admins browsing Team panel see all.
 $batches = [];
+$schemaOk = true;
+$schemaError = '';
 try {
     $batches = is_admin($user) ? list_prospect_batches(null, 100) : list_prospect_batches((int) $user['id'], 100);
 } catch (Throwable $e) {
-    flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then reload Dated batches.');
+    $schemaOk = false;
+    $schemaError = $e->getMessage();
+    flash('error', 'Prospects database tables are missing or broken. Ask Admin to open upgrade.php once, then reload.');
 }
 
-render_header('Add history', 'team');
+render_header('Site adding history', 'team');
 ?>
 <div class="topbar">
   <div>
-    <h1>Add history</h1>
-    <p class="muted">Sites you added, saved by day. They are also in Our database.</p>
+    <h1>Site adding history</h1>
+    <p class="muted">Sites you added, saved by day. (Our database is Admin-only.)</p>
   </div>
   <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
 </div>
 <?= guide_add_history() ?>
+
+<?php if (!$schemaOk): ?>
+<ul class="messages"><li class="error">
+  Could not load history<?= $schemaError !== '' ? ': ' . h($schemaError) : '.' ?>
+</li></ul>
+<?php endif; ?>
 
 <div class="card">
   <?php if ($batches): ?>

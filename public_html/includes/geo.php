@@ -87,6 +87,102 @@ function countries_grouped(): array
     return $grouped;
 }
 
+/**
+ * Every language we know about: country defaults + anything already saved on a site.
+ *
+ * @return list<string>
+ */
+function list_all_languages(): array
+{
+    $langs = [];
+    foreach (list_countries(null, true) as $c) {
+        $lang = trim((string) ($c['default_language'] ?? ''));
+        if ($lang !== '') {
+            $langs[$lang] = true;
+        }
+    }
+    try {
+        $rows = db()->query(
+            "SELECT DISTINCT language FROM prospect_sites WHERE TRIM(language) <> '' ORDER BY language"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($rows as $lang) {
+            $lang = trim((string) $lang);
+            if ($lang !== '') {
+                $langs[$lang] = true;
+            }
+        }
+    } catch (Throwable $e) {
+        // prospect_sites may not exist yet on a fresh install
+    }
+    $out = array_keys($langs);
+    sort($out, SORT_NATURAL | SORT_FLAG_CASE);
+    return $out;
+}
+
+/**
+ * Type-to-search country picker. Countries are grouped by region.
+ *
+ * @param string $placeholder Text shown for the empty option.
+ */
+function render_country_select(
+    string $name = 'country',
+    string $selected = '',
+    string $id = '',
+    bool $required = false,
+    string $placeholder = 'All countries'
+): string {
+    $id = $id !== '' ? $id : $name;
+    $html = '<select data-searchable="1" data-placeholder="Type a country…" name="' . h($name) . '" id="' . h($id) . '"'
+        . ($required ? ' required' : '') . '>';
+    $html .= '<option value="">' . h($placeholder) . '</option>';
+    foreach (countries_grouped() as $block) {
+        if (empty($block['countries'])) {
+            continue;
+        }
+        $html .= '<optgroup label="' . h((string) $block['label']) . '">';
+        foreach ($block['countries'] as $c) {
+            $nameC = (string) $c['name'];
+            $lang = trim((string) ($c['default_language'] ?? ''));
+            $html .= '<option value="' . h($nameC) . '"'
+                . ' data-lang="' . h($lang) . '"'
+                . ' data-region="' . h((string) $c['region']) . '"'
+                . (strcasecmp($selected, $nameC) === 0 ? ' selected' : '') . '>'
+                . h($nameC) . '</option>';
+        }
+        $html .= '</optgroup>';
+    }
+    return $html . '</select>';
+}
+
+/**
+ * Type-to-search language picker. Language is optional, so a value that is not
+ * in the list can still be typed and kept.
+ */
+function render_language_select(
+    string $name = 'language',
+    string $selected = '',
+    string $id = '',
+    bool $allowCustom = true,
+    string $placeholder = 'Any language'
+): string {
+    $id = $id !== '' ? $id : $name;
+    $languages = list_all_languages();
+    $selected = trim($selected);
+    if ($selected !== '' && !in_array($selected, $languages, true)) {
+        $languages[] = $selected;
+    }
+    $html = '<select data-searchable="1" data-placeholder="Type a language…"'
+        . ($allowCustom ? ' data-allow-custom="1"' : '')
+        . ' name="' . h($name) . '" id="' . h($id) . '">';
+    $html .= '<option value="">' . h($placeholder) . '</option>';
+    foreach ($languages as $lang) {
+        $html .= '<option value="' . h($lang) . '"'
+            . (strcasecmp($selected, $lang) === 0 ? ' selected' : '') . '>'
+            . h($lang) . '</option>';
+    }
+    return $html . '</select>';
+}
+
 function distinct_site_languages(): array
 {
     $rows = db()->query(

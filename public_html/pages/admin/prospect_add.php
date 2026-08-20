@@ -7,7 +7,6 @@ $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
-$countryGroups = countries_grouped();
 
 // Prefill language from country default
 if ($country !== '' && $language === '') {
@@ -48,17 +47,17 @@ try {
     flash('error', 'Could not save URLs. ' . $errorDetail);
 }
 
-render_header('Add URLs', 'admin');
+render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Add URLs', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
-    ['label' => 'Add URLs'],
+    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Add URLs<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste URLs into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
+    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste sites into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -69,12 +68,12 @@ render_header('Add URLs', 'admin');
 </div>
 
 <?= render_page_purpose(
-    'Add URLs into a country database',
-    'Each country folder has its own list of URLs.',
-    'Choose the country, paste URLs, click Save. They appear only in that country’s folder.',
+    'Add sites into a country database',
+    'Each country folder has its own list of sites.',
+    'Choose the country, paste sites, click Save. They appear only in that country’s folder.',
     [
         'Select country.',
-        'Paste URLs (one per line).',
+        'Paste sites (one per line).',
         'Save — then open that country folder to review.',
     ]
 ) ?>
@@ -82,26 +81,12 @@ render_header('Add URLs', 'admin');
 <form class="card" method="post" action="index.php?page=admin_prospect_add">
   <div class="form-grid">
     <div>
-      <label for="country">Country <span class="help">(required)</span></label>
-      <select id="country" name="country" required>
-        <option value="">— Select country —</option>
-        <?php foreach ($countryGroups as $regionCode => $block): ?>
-          <?php if (empty($block['countries'])) {
-              continue;
-          } ?>
-          <optgroup label="<?= h($block['label']) ?>">
-            <?php foreach ($block['countries'] as $c): ?>
-              <option value="<?= h($c['name']) ?>" <?= $country === $c['name'] ? 'selected' : '' ?>>
-                <?= h($c['name']) ?>
-              </option>
-            <?php endforeach; ?>
-          </optgroup>
-        <?php endforeach; ?>
-      </select>
+      <label for="country">Country <span class="help">(required — type to search)</span></label>
+      <?= render_country_select('country', $country, 'country', true, '— Select country —') ?>
     </div>
     <div>
-      <label for="language">Language</label>
-      <input id="language" name="language" value="<?= h($language) ?>" placeholder="optional default">
+      <label for="language">Language <span class="help">(optional — type to search or enter your own)</span></label>
+      <?= render_language_select('language', $language, 'language') ?>
     </div>
   </div>
   <label for="urls" style="margin-top:0.9rem">URLs / domains</label>
@@ -114,6 +99,21 @@ render_header('Add URLs', 'admin');
     <button class="btn" type="submit">Save to country database</button>
   </p>
 </form>
+
+<script>
+(function () {
+  var country = document.getElementById('country');
+  var lang = document.getElementById('language');
+  if (!country || !lang) return;
+  country.addEventListener('change', function () {
+    var opt = country.options[country.selectedIndex];
+    if (!opt || !opt.dataset.lang) return;
+    if (lang.value) return;
+    lang.value = opt.dataset.lang;
+    lang.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+})();
+</script>
 
 <?php if ($errorDetail !== ''): ?>
   <div class="card"><p class="help">Technical detail: <?= h($errorDetail) ?></p></div>
