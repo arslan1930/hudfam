@@ -165,6 +165,7 @@ foreach (
         'team_sites_emails' => ['Sites with emails'],
         'team_admin_emails_delete' => ['Admin emails search'],
         'team_email_campaigns' => ['Campaign search'],
+        'team_email_campaigns_drafts' => ['Campaign drafts'],
     ] as $page => $needles
 ) {
     $r = req('GET', $base . '/index.php?page=' . $page);

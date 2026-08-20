@@ -4,6 +4,17 @@ ensure_invoice_schema();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson): void {
+        if (!$wantsJson) {
+            return;
+        }
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload);
+        exit;
+    };
     try {
         if ($action === 'delete') {
             $id = (int) post('id');
@@ -20,14 +31,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int) post('id');
             $inv = get_invoice($id);
             if (!$inv) {
+                $jsonOut(['ok' => false, 'error' => 'Invoice not found.'], 404);
                 flash('error', 'Invoice not found.');
             } else {
                 mark_invoice_payment_received($id);
-                if (invoice_is_manual($inv)) {
-                    flash('ok', 'Blank invoice ' . $inv['invoice_number'] . ' marked paid.');
-                } else {
-                    flash('ok', 'Invoice ' . $inv['invoice_number'] . ' marked paid — linked sheet rows set to Paid.');
-                }
+                $msg = invoice_is_manual($inv)
+                    ? ('Blank invoice ' . $inv['invoice_number'] . ' marked paid.')
+                    : ('Invoice ' . $inv['invoice_number'] . ' marked paid — linked sheet rows set to Paid.');
+                $jsonOut([
+                    'ok' => true,
+                    'id' => $id,
+                    'paid' => true,
+                    'message' => $msg,
+                ]);
+                flash('ok', $msg);
             }
             redirect('index.php?page=admin_invoices');
         }
@@ -38,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('index.php?page=admin_invoices#inv-' . $id);
         }
     } catch (Throwable $e) {
+        $jsonOut(['ok' => false, 'error' => $e->getMessage()], 400);
         flash('error', $e->getMessage());
         redirect('index.php?page=admin_invoices');
     }
@@ -168,6 +186,7 @@ render_header('Invoices', 'admin');
                 <span class="invoice-pay-badge is-draft" title="Still needs data — open and Save as done when ready">Draft</span>
               <?php else: ?>
                 <form method="post" class="inline" action="index.php?page=admin_invoices"
+                      data-stay-ajax data-stay-mark-paid
                       onsubmit="return confirm(<?= h(json_encode(
                           'Confirm this invoice is paid?' . "\n\n"
                           . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
