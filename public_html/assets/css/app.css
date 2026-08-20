@@ -3530,6 +3530,63 @@ table.extracted-country-table th {
   font-weight: 650;
 }
 
+/* Semrush Research comments */
+.semrush-comment-list {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.semrush-comment-list li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.7rem 0.85rem;
+}
+.semrush-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+.semrush-comment-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+.semrush-comment-delete {
+  margin: 0.45rem 0 0;
+}
+
+/* Rows-per-page filter (sitewide sheet lists) */
+.sheet-per-page-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.sheet-per-page-filter label {
+  margin: 0;
+  font-weight: 650;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+.sheet-per-page-filter select {
+  min-width: 5.5rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 650;
+}
+
 /* Pagination / sheet footers */
 .pagination,
 .card .pagination {
