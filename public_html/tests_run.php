@@ -2603,6 +2603,40 @@ try {
     fail('team panels helpers: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+// --- Site Finding TLD Separate all ---
+try {
+    $grouped = group_domains_by_tld([
+        'alpha.es',
+        'beta.com',
+        'gamma.com',
+        'delta.com.es',
+        'epsilon.pe',
+        'zeta.cl',
+        'https://www.again.es/path',
+    ]);
+    if (
+        isset($grouped['es'], $grouped['com'], $grouped['com.es'], $grouped['pe'], $grouped['cl'])
+        && count($grouped['es']) === 2
+        && count($grouped['com']) === 2
+        && count($grouped['com.es']) === 1
+        && count($grouped['pe']) === 1
+        && count($grouped['cl']) === 1
+        && in_array('again.es', $grouped['es'], true)
+    ) {
+        pass('group_domains_by_tld splits es/com/com.es/pe/cl');
+    } else {
+        fail('tld groups: ' . json_encode($grouped));
+    }
+    $empty = group_domains_by_tld([]);
+    if ($empty === []) {
+        pass('group_domains_by_tld empty input');
+    } else {
+        fail('empty groups=' . json_encode($empty));
+    }
+} catch (Throwable $e) {
+    fail('tld separate: ' . $e->getMessage());
+}
+
 echo "\n==== SUMMARY ====\n";
 echo 'passed: ' . count($ok) . "\n";
 echo 'failed: ' . count($errors) . "\n";

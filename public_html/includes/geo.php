@@ -1094,6 +1094,49 @@ function domain_tld_suffix(string $domain): string
 }
 
 /**
+ * Group root domains by public suffix for Site Finding “Separate all”.
+ * Keys are suffixes (es, com, com.es, …); empty/unknown → "other".
+ * Groups are sorted by count descending; domains sorted within each group.
+ *
+ * @param list<string> $domains
+ * @return array<string, list<string>>
+ */
+function group_domains_by_tld(array $domains): array
+{
+    $groups = [];
+    foreach ($domains as $raw) {
+        $d = strtolower(trim((string) $raw));
+        if ($d === '') {
+            continue;
+        }
+        if (function_exists('normalize_domain')) {
+            $norm = normalize_domain($d);
+            if ($norm !== '') {
+                $d = $norm;
+            }
+        } elseif (function_exists('extract_host_candidate')) {
+            $host = extract_host_candidate($d);
+            if ($host !== '') {
+                $d = $host;
+            }
+        }
+        $tld = domain_tld_suffix($d);
+        if ($tld === '') {
+            $tld = 'other';
+        }
+        $groups[$tld][$d] = $d;
+    }
+    $out = [];
+    foreach ($groups as $tld => $set) {
+        $list = array_values($set);
+        sort($list, SORT_STRING);
+        $out[$tld] = $list;
+    }
+    uasort($out, static fn (array $a, array $b): int => count($b) <=> count($a));
+    return $out;
+}
+
+/**
  * Soft check: do these domains look like they belong to $country?
  * Generic TLDs (.com etc.) are ignored. Never hard-blocks — UI warns + confirm.
  * Warns when match on country-specific TLDs is under 70% (and enough signal).

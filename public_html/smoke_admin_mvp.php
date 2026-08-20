@@ -615,5 +615,37 @@ if (!str_contains($httpSmoke, 'Waiting for assignment')
     ok('tests_http.php ACL + extracted hub asserts');
 }
 
+$prospectCheckSf = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
+if (!str_contains($prospectCheckSf, 'Separate all')
+    || !str_contains($prospectCheckSf, 'data-tld-separate')
+    || !str_contains($prospectCheckSf, 'send_tld_column')) {
+    fail('Filter & add missing Separate all / send_tld_column UI');
+} else {
+    ok('Filter & add Separate all UI');
+}
+$geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
+if (!str_contains($geoLib, 'function group_domains_by_tld')) {
+    fail('geo.php missing group_domains_by_tld');
+} else {
+    ok('group_domains_by_tld helper');
+}
+if (!is_file($root . '/assets/js/tld-separate.js')) {
+    fail('missing assets/js/tld-separate.js');
+} else {
+    ok('file assets/js/tld-separate.js');
+}
+$assetSf = file_get_contents($root . '/asset.php') ?: '';
+if (!str_contains($assetSf, 'js/tld-separate.js')) {
+    fail('asset.php missing tld-separate.js allowlist');
+} else {
+    ok('asset allowlist js/tld-separate.js');
+}
+$testsSf = file_get_contents($root . '/tests_run.php') ?: '';
+if (!str_contains($testsSf, 'group_domains_by_tld splits')) {
+    fail('tests_run.php missing TLD separate coverage');
+} else {
+    ok('tests_run TLD separate coverage');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
