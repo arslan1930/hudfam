@@ -154,6 +154,22 @@ if (!str_contains($usersPage, 'generate_temp')) {
 } else {
     ok('users.php generate temporary password on edit');
 }
+if (!str_contains($usersPage, 'Must change pwd') || !str_contains($usersPage, 'Departments')) {
+    fail('users.php missing must-change / departments columns');
+} else {
+    ok('users.php must-change and departments columns');
+}
+if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_role')) {
+    fail('users.php missing search/role filters');
+} else {
+    ok('users.php search and role filters');
+}
+$guidesLib = file_get_contents($root . '/includes/guides.php') ?: '';
+if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
+    fail('guide_admin_users still stale');
+} else {
+    ok('guide_admin_users updated');
+}
 
 $invoiceManual = file_get_contents($root . '/pages/admin/invoice_manual.php') ?: '';
 if (!str_contains($invoiceManual, "post('action') === 'create_blank'")) {

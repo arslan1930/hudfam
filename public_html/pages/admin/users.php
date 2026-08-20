@@ -263,8 +263,64 @@ if ($draft) {
     $form = array_merge($form, $draft);
 }
 
-$users = db()->query('SELECT * FROM users ORDER BY role, full_name, username')->fetchAll();
+
+$q = trim((string) get('q'));
+$roleFilter = (string) get('role');
+if (!in_array($roleFilter, ['admin', 'team'], true)) {
+    $roleFilter = '';
+}
+$activeFilter = (string) get('active');
+if (!in_array($activeFilter, ['0', '1'], true)) {
+    $activeFilter = '';
+}
+
+$sql = 'SELECT * FROM users WHERE 1=1';
+$params = [];
+if ($q !== '') {
+    $sql .= ' AND (username LIKE ? OR full_name LIKE ? OR email LIKE ? OR phone LIKE ?)';
+    $like = '%' . $q . '%';
+    $params = array_merge($params, [$like, $like, $like, $like]);
+}
+if ($roleFilter !== '') {
+    $sql .= ' AND role=?';
+    $params[] = $roleFilter;
+}
+if ($activeFilter !== '') {
+    $sql .= ' AND is_active=?';
+    $params[] = (int) $activeFilter;
+}
+$sql .= ' ORDER BY role, full_name, username';
+if ($params) {
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $users = $stmt->fetchAll();
+} else {
+    $users = db()->query($sql)->fetchAll();
+}
 $admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
+
+$deptByUser = [];
+if (function_exists('ensure_departments_schema')) {
+    try {
+        ensure_departments_schema();
+        $deptRows = db()->query(
+            'SELECT m.user_id, d.name
+             FROM department_members m
+             INNER JOIN departments d ON d.id = m.department_id
+             WHERE d.is_active = 1
+             ORDER BY d.sort_order ASC, d.name ASC'
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        foreach ($deptRows as $row) {
+            $uid = (int) ($row['user_id'] ?? 0);
+            if ($uid < 1) {
+                continue;
+            }
+            $deptByUser[$uid][] = (string) ($row['name'] ?? '');
+        }
+    } catch (Throwable $e) {
+        $deptByUser = [];
+    }
+}
 
 render_header('Admins & users', 'admin');
 ?>
@@ -316,7 +372,7 @@ render_header('Admins & users', 'admin');
 <div class="card">
   <h2>Admin directory</h2>
   <table>
-    <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Phone</th><th>Contact details</th><th>Active</th></tr></thead>
+    <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Phone</th><th>Contact details</th><th>Active</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($admins as $u): ?>
       <tr>
@@ -326,9 +382,10 @@ render_header('Admins & users', 'admin');
         <td><?= h(($u['phone'] ?? '') !== '' ? $u['phone'] : '—') ?></td>
         <td class="help"><?= h(($u['contact_details'] ?? '') !== '' ? $u['contact_details'] : '—') ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
+        <td class="actions"><a href="index.php?page=admin_users&edit=<?= (int) $u['id'] ?>">Edit</a></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$admins): ?><tr><td colspan="6" class="muted">No admins yet.</td></tr><?php endif; ?>
+    <?php if (!$admins): ?><tr><td colspan="7" class="muted">No admins<?= ($q !== '' || $roleFilter !== '' || $activeFilter !== '') ? ' match these filters' : ' yet' ?>.</td></tr><?php endif; ?>
     </tbody>
   </table>
 </div>
@@ -336,24 +393,75 @@ render_header('Admins & users', 'admin');
 <div class="grid" style="grid-template-columns:1.2fr 1fr">
 <div class="card">
   <h2>All users</h2>
+  <form method="get" action="index.php" class="users-filters" style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:end;margin:0 0 1rem">
+    <input type="hidden" name="page" value="admin_users">
+    <?php if ($editId): ?><input type="hidden" name="edit" value="<?= (int) $editId ?>"><?php endif; ?>
+    <div>
+      <label for="users_q">Search</label>
+      <input id="users_q" name="q" value="<?= h($q) ?>" placeholder="Username, name, email…" style="min-width:12rem">
+    </div>
+    <div>
+      <label for="users_role">Role</label>
+      <select id="users_role" name="role">
+        <option value="" <?= $roleFilter === '' ? 'selected' : '' ?>>All</option>
+        <option value="admin" <?= $roleFilter === 'admin' ? 'selected' : '' ?>>admin</option>
+        <option value="team" <?= $roleFilter === 'team' ? 'selected' : '' ?>>team</option>
+      </select>
+    </div>
+    <div>
+      <label for="users_active">Active</label>
+      <select id="users_active" name="active">
+        <option value="" <?= $activeFilter === '' ? 'selected' : '' ?>>All</option>
+        <option value="1" <?= $activeFilter === '1' ? 'selected' : '' ?>>Yes</option>
+        <option value="0" <?= $activeFilter === '0' ? 'selected' : '' ?>>No</option>
+      </select>
+    </div>
+    <button class="btn secondary" type="submit">Filter</button>
+    <?php if ($q !== '' || $roleFilter !== '' || $activeFilter !== ''): ?>
+      <a class="btn secondary" href="index.php?page=admin_users<?= $editId ? '&edit=' . (int) $editId : '' ?>">Clear</a>
+    <?php endif; ?>
+  </form>
+  <p class="muted" style="margin:0 0 0.75rem"><?= count($users) ?> user<?= count($users) === 1 ? '' : 's' ?></p>
   <table>
-    <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Contact</th><th>Active</th><th></th></tr></thead>
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Contact</th>
+        <th>Departments</th>
+        <th>Must change pwd</th>
+        <th>Active</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
     <?php foreach ($users as $u): ?>
+      <?php
+        $uid = (int) $u['id'];
+        $depts = $deptByUser[$uid] ?? [];
+        $deptLabel = $depts ? implode(', ', $depts) : '—';
+      ?>
       <tr>
         <td><?= h($u['username']) ?></td>
         <td><?= h($u['full_name'] ?: '—') ?></td>
         <td><span class="badge"><?= h($u['role']) ?></span></td>
         <td class="help"><?= h($u['email'] ?: '—') ?><?= !empty($u['phone']) ? ' · ' . h($u['phone']) : '' ?></td>
+        <td class="help"><?= h($deptLabel) ?></td>
+        <td><?= !empty($u['must_change_password']) ? 'Yes' : 'No' ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
         <td class="actions">
-          <a href="index.php?page=admin_users&edit=<?= (int)$u['id'] ?>">Edit</a>
+          <a href="index.php?page=admin_users&edit=<?= $uid ?>">Edit</a>
           <?php if ($u['role'] === 'team'): ?>
-            <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $u['id'] ?>">Site adding history</a>
+            <a href="index.php?page=admin_departments">Departments</a>
+            <a href="index.php?page=admin_prospect_batches&amp;user=<?= $uid ?>">Site adding history</a>
           <?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>
+    <?php if (!$users): ?>
+      <tr><td colspan="8" class="muted">No users match these filters.</td></tr>
+    <?php endif; ?>
     </tbody>
   </table>
 </div>
@@ -382,6 +490,16 @@ render_header('Admins & users', 'admin');
     <input type="password" name="password" id="users_password" autocomplete="new-password" minlength="8"
            data-editing-other="<?= ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0)) ? '1' : '0' ?>">
     <p class="help">Passwords must be at least 8 characters (not demo defaults). Admin emails must be unique.</p>
+    <?php if ($edit && ($edit['role'] ?? '') === 'team'): ?>
+      <p class="help">
+        Departments:
+        <?php
+          $editDepts = $deptByUser[(int) $edit['id']] ?? [];
+          echo $editDepts ? h(implode(', ', $editDepts)) : 'none yet';
+        ?>
+        · <a href="index.php?page=admin_departments">Assign in Departments</a>
+      </p>
+    <?php endif; ?>
     <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !empty($form['is_active']) ? 'checked' : '' ?>> Active</label>
     <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
   </form>
