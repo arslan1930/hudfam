@@ -548,9 +548,13 @@ if ($sheetId > 0) {
                   <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
                   <?php endif; ?>
                 </form>
-                <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
-                <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
-                       value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site">
+                <div class="swe-site-cell open-site-cell" data-open-site-cell>
+                  <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
+                  <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
+                         value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site"
+                         data-open-site-host>
+                  <?= render_open_site_anchor($domain) ?>
+                </div>
               </td>
               <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
               <td class="swe-td-email">
@@ -808,6 +812,7 @@ if ($sheetId > 0) {
     </div>
     <?= email_field_clear_script_tag() ?>
     <script src="<?= h(script_asset_url('js/email-campaign-sheet.js')) ?>" defer></script>
+    <?= open_site_script_tag() ?>
     <?php
     render_footer('admin');
     return;

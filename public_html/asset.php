@@ -12,6 +12,7 @@ $allowed = [
     'js/extract-sites-list.js' => 'application/javascript; charset=utf-8',
     'js/extracted-admin.js' => 'application/javascript; charset=utf-8',
     'js/sites-with-emails.js' => 'application/javascript; charset=utf-8',
+    'js/open-site.js' => 'application/javascript; charset=utf-8',
     'js/admin-emails-delete.js' => 'application/javascript; charset=utf-8',
     'js/email-campaign-sheet.js' => 'application/javascript; charset=utf-8',
     'js/email-campaign-search.js' => 'application/javascript; charset=utf-8',

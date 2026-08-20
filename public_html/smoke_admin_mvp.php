@@ -671,7 +671,29 @@ if (!str_contains($sweCss, 'swe-open-site') || !str_contains($sweCss, 'swe-open-
     fail('app.css missing SWE Open site styles');
 } else {
     ok('SWE Open site CSS');
+
+$openSiteJs = file_get_contents($root . '/assets/js/open-site.js') ?: '';
+if (!str_contains($openSiteJs, 'OpenSite') || !str_contains($openSiteJs, 'normalizeSiteHost')) {
+    fail('open-site.js missing shared Open helpers');
+} else {
+    ok('open-site.js shared helpers');
 }
+$campApp = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
+$extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
+$orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
+if (!str_contains($campApp, 'render_open_site_anchor')
+    || !str_contains($extractedPg, 'render_open_site_anchor')
+    || !str_contains($orderSheet, 'render_open_site_anchor')
+    || !str_contains($orderSheet, 'data-open-site-host')) {
+    fail('Open site parity missing on Campaigns / Extracted / Orders');
+} else {
+    ok('Open site parity on Campaigns / Extracted / Orders');
+}
+if (!str_contains(file_get_contents($root . '/asset.php') ?: '', "'js/open-site.js'")) {
+    fail('asset.php missing open-site.js allowlist');
+} else {
+    ok('asset allowlist open-site.js');
+}}
 
 $sitesEmailsPage = file_get_contents($root . '/pages/team/sites_emails.php') ?: '';
 if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {

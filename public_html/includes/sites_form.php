@@ -238,3 +238,64 @@ function sites_form_script_tag(): string
 {
     return '<script src="' . h(script_asset_url('js/sites-form.js')) . '" defer></script>';
 }
+
+/**
+ * https:// URL for opening a domain or full URL in a new tab, or '' if not openable.
+ */
+function open_site_url_for_domain(string $domain): string
+{
+    $raw = trim($domain);
+    if ($raw === '') {
+        return '';
+    }
+    // Full URLs (order LIVE links, etc.) — open as given after light cleanup.
+    if (preg_match('#^https?://#i', $raw)) {
+        $raw = preg_replace('/\s+/', '', $raw) ?? $raw;
+        return $raw;
+    }
+    $host = function_exists('extract_host_candidate')
+        ? extract_host_candidate($raw)
+        : strtolower($raw);
+    $root = function_exists('to_root_domain') ? to_root_domain($host) : $host;
+    if ($root !== '' && (!function_exists('is_root_domain') || is_root_domain($root))) {
+        return 'https://' . $root;
+    }
+    $host = strtolower(trim(preg_replace('#^www\.#i', '', $host) ?? $host));
+    if ($host === '' || !str_contains($host, '.') || preg_match('/\s/', $host)) {
+        return '';
+    }
+    if (!preg_match('/^[a-z0-9.-]+$/', $host)) {
+        return '';
+    }
+    return 'https://' . $host;
+}
+
+/**
+ * Compact Open link (optionally next to an editable host input).
+ *
+ * @param array{class?:string,label?:string} $opts
+ */
+function render_open_site_anchor(string $domain, array $opts = []): string
+{
+    $label = (string) ($opts['label'] ?? 'Open');
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $url = open_site_url_for_domain($domain);
+    $class = trim('swe-open-site open-site-link ' . $extraClass);
+    if ($url === '') {
+        return '<a class="' . h($class) . ' is-disabled" data-open-site href="#" tabindex="-1" aria-disabled="true"'
+            . ' data-open-host="' . h(strtolower(trim($domain))) . '"'
+            . ' title="Fix the site name (needs a valid domain) before opening"'
+            . ' aria-label="Site name invalid — cannot open">' . h($label) . '</a>';
+    }
+    $host = preg_replace('#^https://#i', '', $url) ?? $url;
+    return '<a class="' . h($class) . '" data-open-site href="' . h($url) . '"'
+        . ' data-open-host="' . h($host) . '"'
+        . ' target="_blank" rel="noopener noreferrer"'
+        . ' title="Open ' . h($host) . ' in a new tab"'
+        . ' aria-label="Open ' . h($host) . ' in a new tab">' . h($label) . '</a>';
+}
+
+function open_site_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/open-site.js')) . '" defer></script>';
+}
