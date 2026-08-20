@@ -374,15 +374,50 @@ function department_stats(int $departmentId): array
 }
 
 /**
- * @param array{status?:string,assignee?:string,for_user_id?:int} $opts
- *        assignee: ''|all|mine|unassigned|whole
+ * Admin dashboard summary for Departments.
+ *
+ * @return array{departments:int,members:int,open_tasks:int,unassigned_team:int}
+ */
+function departments_dashboard_stats(): array
+{
+    ensure_departments_schema();
+    $departments = (int) db()->query(
+        'SELECT COUNT(*) FROM departments WHERE is_active=1'
+    )->fetchColumn();
+    $members = (int) db()->query(
+        'SELECT COUNT(DISTINCT user_id) FROM department_members'
+    )->fetchColumn();
+    $open = (int) db()->query(
+        "SELECT COUNT(*) FROM department_tasks t
+         INNER JOIN departments d ON d.id = t.department_id AND d.is_active=1
+         WHERE t.status IN ('open','in_progress')"
+    )->fetchColumn();
+    $unassigned = (int) db()->query(
+        "SELECT COUNT(*) FROM users u
+         WHERE u.role='team' AND u.is_active=1
+           AND NOT EXISTS (
+             SELECT 1 FROM department_members m WHERE m.user_id = u.id
+           )"
+    )->fetchColumn();
+    return [
+        'departments' => $departments,
+        'members' => $members,
+        'open_tasks' => $open,
+        'unassigned_team' => $unassigned,
+    ];
+}
+
+/**
+ * @param array{status?:string,assignee?:string,for_user_id?:int,q?:string} $opts
+ *        assignee: ''|all|mine|unassigned|whole|assigned
  * @return list<array<string,mixed>>
  */
 function list_department_tasks(
     int $departmentId,
     string $status = '',
     ?int $forUserId = null,
-    string $assigneeFilter = ''
+    string $assigneeFilter = '',
+    string $q = ''
 ): array {
     ensure_departments_schema();
     $where = ['t.department_id = ?'];
@@ -401,6 +436,13 @@ function list_department_tasks(
         $where[] = 't.assigned_to IS NULL';
     } elseif ($assigneeFilter === 'assigned') {
         $where[] = 't.assigned_to IS NOT NULL';
+    }
+    $q = trim($q);
+    if ($q !== '') {
+        $where[] = '(t.title LIKE ? OR IFNULL(t.notes, \'\') LIKE ?)';
+        $like = '%' . $q . '%';
+        $params[] = $like;
+        $params[] = $like;
     }
     $whereSql = implode(' AND ', $where);
     $stmt = db()->prepare(
