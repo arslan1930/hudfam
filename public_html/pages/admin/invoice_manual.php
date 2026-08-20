@@ -35,6 +35,7 @@ render_header('Blank invoice', 'admin');
 <div class="card" style="max-width:36rem">
   <p>Create a blank invoice now? You will be taken to the invoice to enter bill-to details, line items, and prices.</p>
   <form method="post" action="index.php?page=admin_invoice_manual" style="margin-top:1rem">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="create_blank">
     <p class="actions">
       <button class="btn" type="submit">Create blank invoice</button>

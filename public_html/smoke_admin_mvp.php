@@ -202,5 +202,37 @@ if (!str_contains($adminSemrush, 'semrush_sheet_url($dest, true)')
     ok('admin semrush uses Admin sheet URLs');
 }
 
+$helpers = file_get_contents($root . '/includes/helpers.php') ?: '';
+foreach (['csrf_token', 'csrf_field', 'csrf_token_valid', 'require_csrf'] as $fn) {
+    if (!str_contains($helpers, "function {$fn}")) {
+        fail("helpers missing {$fn}");
+    } else {
+        ok("helpers {$fn}");
+    }
+}
+$indexFull = file_get_contents($root . '/index.php') ?: '';
+if (!str_contains($indexFull, 'require_csrf()') || !str_contains($indexFull, "str_starts_with(\$page, 'admin_')")) {
+    fail('index.php missing Admin CSRF gate');
+} else {
+    ok('index.php Admin CSRF gate');
+}
+if (!is_file($root . '/assets/js/csrf.js')) {
+    fail('missing assets/js/csrf.js');
+} else {
+    ok('file assets/js/csrf.js');
+}
+$assetFull = file_get_contents($root . '/asset.php') ?: '';
+if (!str_contains($assetFull, 'js/csrf.js')) {
+    fail('asset.php missing csrf.js allowlist');
+} else {
+    ok('asset allowlist js/csrf.js');
+}
+$layoutFull = file_get_contents($root . '/includes/layout.php') ?: '';
+if (!str_contains($layoutFull, 'csrf-token') || !str_contains($layoutFull, 'csrf.js')) {
+    fail('layout missing csrf meta or script');
+} else {
+    ok('layout csrf meta + script');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

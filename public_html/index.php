@@ -152,4 +152,12 @@ if (
     }
 }
 
+// CSRF: every Admin POST (forms + AJAX) must carry a valid token.
+if (
+    ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
+    && str_starts_with($page, 'admin_')
+) {
+    require_csrf();
+}
+
 require __DIR__ . '/' . $routes[$page];

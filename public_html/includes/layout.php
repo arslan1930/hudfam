@@ -49,6 +49,9 @@ function render_header(string $title, string $panel = ''): void
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+    if ($user) {
+        echo '<meta name="csrf-token" content="' . h(csrf_token()) . '">';
+    }
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
@@ -266,6 +269,9 @@ function render_footer(string $panel = ''): void
             ], JSON_UNESCAPED_UNICODE) . ';';
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
+            if ($panel === 'admin') {
+                echo '<script src="' . h(script_asset_url('js/csrf.js')) . '"></script>';
+            }
             echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/stay-scroll.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';
