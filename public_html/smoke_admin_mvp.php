@@ -798,6 +798,12 @@ if (!str_contains($prospectCheckSf, 'Filter unique sites')
 } else {
     ok('Filter & add CTA says Filter unique sites');
 }
+if (!str_contains($prospectCheckSf, 'saved for the Extracting team')
+    || !str_contains($prospectCheckSf, 'Clean to root domains')) {
+    fail('Filter & add missing ACL-aware Extracting flash / Clean wording');
+} else {
+    ok('Filter & add ACL-aware Extracting flash');
+}
 if (!str_contains($prospectCheckSf, 'data-tld-workspace')
     || !str_contains($prospectCheckSf, 'data-tld-rail')
     || !str_contains($prospectCheckSf, 'data-tld-panel')) {

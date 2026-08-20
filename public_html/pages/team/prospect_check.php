@@ -88,7 +88,7 @@ try {
         if ($country === '' || $canonCountry === null) {
             // error already flashed
         } elseif ($parsed['invalid_count'] > 0 && $action !== 'add_new' && $action !== 'send_tld_column') {
-            flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+            flash('error', 'Remove invalid lines first (Clean to root domains). Root domains only — e.g. example.com or my-site.co.uk.');
             $raw = $parsed['valid_text'] !== ''
                 ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
                 : $raw;
@@ -125,7 +125,12 @@ try {
                     } else {
                         $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s) into ' . $country;
                         if (!empty($added['extract_batch_id'])) {
-                            $msg .= ' · also added to Extracting sites → Sites list';
+                            if (function_exists('team_page_unlocked')
+                                && team_page_unlocked($user, 'team_extract_batch')) {
+                                $msg .= ' · also added to Extracting sites → Sites list';
+                            } else {
+                                $msg .= ' · saved for the Extracting team (Sites list)';
+                            }
                         }
                         if (!empty($added['batch_id'])) {
                             $msg .= ' · saved in today’s history';
