@@ -689,6 +689,10 @@ render_breadcrumbs($crumbs);
               title="Open sites from the top of this page in new tabs">
         Open first 10
       </button>
+      <button type="button" class="btn secondary" data-swe-open-continue hidden
+              title="Open the next batch of sites">
+        Open next 10
+      </button>
     </div>
     <a class="btn secondary" href="<?= h($csvUrl) ?>">Download CSV / Excel</a>
     <a class="btn secondary" href="<?= h($sweBase) ?>">All countries</a>
@@ -698,7 +702,7 @@ render_breadcrumbs($crumbs);
 <?php if ($isTeam): ?>
 <p class="help">
   Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-  Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page.
+  Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
   <?php if ($pushConflictCount > 0): ?>
     <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before overwriting those emails.

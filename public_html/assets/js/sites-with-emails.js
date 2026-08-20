@@ -854,6 +854,33 @@
     return out;
   }
 
+  /** Open large goals in batches of 10 to reduce popup-blocker friction. */
+  var OPEN_BATCH_SIZE = 10;
+  var openBatchState = null; // { goal: number, offset: number, urls: string[] }
+  var OPEN_COUNT_STORAGE_KEY = 'swe-open-count';
+
+  function clearOpenBatchState() {
+    openBatchState = null;
+    syncOpenContinueButton();
+  }
+
+  function syncOpenContinueButton() {
+    var cont = document.querySelector('[data-swe-open-continue]');
+    if (!cont) return;
+    if (!openBatchState || openBatchState.offset >= openBatchState.goal) {
+      cont.hidden = true;
+      cont.disabled = true;
+      return;
+    }
+    var left = openBatchState.goal - openBatchState.offset;
+    var next = Math.min(OPEN_BATCH_SIZE, left);
+    cont.hidden = false;
+    cont.disabled = false;
+    cont.textContent = 'Open next ' + next;
+    cont.title = 'Open the next ' + next + ' of '
+      + openBatchState.goal + ' sites (' + openBatchState.offset + ' already opened)';
+  }
+
   function syncOpenBulkButton() {
     var select = document.querySelector('[data-swe-open-count]');
     var btn = document.querySelector('[data-swe-open-bulk]');
@@ -865,16 +892,122 @@
       btn.disabled = true;
       btn.textContent = 'No sites to open';
       btn.title = 'No openable sites on this page';
+      clearOpenBatchState();
       return;
     }
     btn.disabled = false;
     if (take < choice) {
       btn.textContent = 'Open all ' + take;
-      btn.title = 'Open all ' + take + ' openable site' + (take === 1 ? '' : 's') + ' on this page';
+      btn.title = 'Open all ' + take + ' openable site' + (take === 1 ? '' : 's')
+        + ' on this page'
+        + (take > OPEN_BATCH_SIZE ? ' (in batches of ' + OPEN_BATCH_SIZE + ')' : '');
     } else {
       btn.textContent = 'Open first ' + choice;
-      btn.title = 'Open the first ' + choice + ' sites on this page in new tabs';
+      btn.title = 'Open the first ' + choice + ' sites on this page in new tabs'
+        + (choice > OPEN_BATCH_SIZE ? ' (batches of ' + OPEN_BATCH_SIZE + ')' : '');
     }
+    // Keep an in-progress batch aligned with the current visible eligible list.
+    if (openBatchState) {
+      openBatchState.goal = Math.min(openBatchState.goal, eligible.length);
+      openBatchState.urls = eligible.slice(0, openBatchState.goal).map(function (e) {
+        return e.url;
+      });
+      if (openBatchState.offset > openBatchState.goal) {
+        openBatchState.offset = openBatchState.goal;
+      }
+      if (openBatchState.offset >= openBatchState.goal || openBatchState.goal < 1) {
+        clearOpenBatchState();
+      } else {
+        syncOpenContinueButton();
+      }
+    }
+  }
+
+  function openUrlBatch(urls) {
+    var opened = 0;
+    for (var i = 0; i < urls.length; i++) {
+      var w = window.open(urls[i], '_blank');
+      if (w) {
+        try { w.opener = null; } catch (err) {}
+        opened++;
+      }
+    }
+    return opened;
+  }
+
+  function reportOpenBatch(opened, attempted, goal, offsetAfter, isContinue) {
+    var remaining = Math.max(0, goal - offsetAfter);
+    if (opened === 0) {
+      setStatus(
+        'Could not open tabs — allow popups for this site, then try again.',
+        true
+      );
+      return;
+    }
+    if (opened < attempted) {
+      setStatus(
+        'Opened ' + opened + ' of ' + attempted
+          + ' in this batch — allow popups, then use Open next.',
+        true
+      );
+      return;
+    }
+    if (remaining > 0) {
+      setStatus(
+        'Opened ' + offsetAfter + ' of ' + goal
+          + ' · click Open next ' + Math.min(OPEN_BATCH_SIZE, remaining) + ' to continue.'
+      );
+    } else if (goal <= OPEN_BATCH_SIZE && !isContinue) {
+      setStatus(
+        goal === attempted
+          ? (attempted === 1 ? 'Opened 1 site in a new tab.' : ('Opened ' + attempted + ' sites in new tabs.'))
+          : ('Opened ' + offsetAfter + ' sites in new tabs.')
+      );
+    } else {
+      setStatus('Opened all ' + goal + ' sites in new tabs.');
+    }
+  }
+
+  function startOrContinueOpen(fromContinue) {
+    var select = document.querySelector('[data-swe-open-count]');
+    var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+    var eligible = listEligibleOpenRows();
+
+    if (!fromContinue) {
+      var take = Math.min(choice, eligible.length);
+      if (take < 1) {
+        setStatus('No sites to open on this page.', true);
+        clearOpenBatchState();
+        syncOpenBulkButton();
+        return;
+      }
+      openBatchState = {
+        goal: take,
+        offset: 0,
+        urls: eligible.slice(0, take).map(function (e) { return e.url; })
+      };
+    }
+
+    if (!openBatchState || openBatchState.offset >= openBatchState.goal) {
+      clearOpenBatchState();
+      syncOpenBulkButton();
+      return;
+    }
+
+    var start = openBatchState.offset;
+    var end = Math.min(start + OPEN_BATCH_SIZE, openBatchState.goal);
+    var slice = openBatchState.urls.slice(start, end);
+    var opened = openUrlBatch(slice);
+    // Advance by attempted length so "Open next" still moves forward if some popups blocked;
+    // user can re-run first N if needed. Partial opens still report accurately.
+    openBatchState.offset = end;
+    reportOpenBatch(opened, slice.length, openBatchState.goal, openBatchState.offset, !!fromContinue);
+    if (openBatchState.offset >= openBatchState.goal) {
+      clearOpenBatchState();
+    } else {
+      syncOpenContinueButton();
+    }
+    syncOpenBulkButton();
   }
 
   document.addEventListener('click', function (e) {
@@ -887,50 +1020,36 @@
 
   var openCountSelect = document.querySelector('[data-swe-open-count]');
   var openBulkBtn = document.querySelector('[data-swe-open-bulk]');
+  var openContinueBtn = document.querySelector('[data-swe-open-continue]');
   if (openCountSelect) {
-    openCountSelect.addEventListener('change', syncOpenBulkButton);
+    try {
+      var saved = window.sessionStorage && sessionStorage.getItem(OPEN_COUNT_STORAGE_KEY);
+      if (saved && openCountSelect.querySelector('option[value="' + saved + '"]')) {
+        openCountSelect.value = saved;
+      }
+    } catch (err) {}
+    openCountSelect.addEventListener('change', function () {
+      clearOpenBatchState();
+      try {
+        if (window.sessionStorage) {
+          sessionStorage.setItem(OPEN_COUNT_STORAGE_KEY, String(openCountSelect.value || '10'));
+        }
+      } catch (err2) {}
+      syncOpenBulkButton();
+    });
   }
   if (openBulkBtn) {
     openBulkBtn.addEventListener('click', function () {
-      var select = document.querySelector('[data-swe-open-count]');
-      var choice = select ? (parseInt(select.value, 10) || 10) : 10;
-      var eligible = listEligibleOpenRows();
-      var take = Math.min(choice, eligible.length);
-      if (take < 1) {
-        setStatus('No sites to open on this page.', true);
-        syncOpenBulkButton();
-        return;
-      }
-      var opened = 0;
-      for (var i = 0; i < take; i++) {
-        var w = window.open(eligible[i].url, '_blank');
-        if (w) {
-          try { w.opener = null; } catch (err) {}
-          opened++;
-        }
-      }
-      if (opened === take) {
-        setStatus(
-          take < choice
-            ? ('Opened all ' + opened + ' site' + (opened === 1 ? '' : 's') + ' in new tabs.')
-            : ('Opened first ' + opened + ' sites in new tabs.')
-        );
-      } else if (opened > 0) {
-        setStatus(
-          'Opened ' + opened + ' of ' + take
-            + ' — allow popups for this site, then try again.',
-          true
-        );
-      } else {
-        setStatus(
-          'Could not open tabs — allow popups for this site, then try again.',
-          true
-        );
-      }
-      syncOpenBulkButton();
+      startOrContinueOpen(false);
+    });
+  }
+  if (openContinueBtn) {
+    openContinueBtn.addEventListener('click', function () {
+      startOrContinueOpen(true);
     });
   }
 
   document.querySelectorAll('[data-swe-row]').forEach(refreshOpenLink);
   syncOpenBulkButton();
+  syncOpenContinueButton();
 })();
