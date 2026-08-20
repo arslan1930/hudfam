@@ -216,6 +216,11 @@ if (!str_contains($indexFull, 'require_csrf()') || !str_contains($indexFull, "st
 } else {
     ok('index.php Admin CSRF gate');
 }
+if (!str_contains($indexFull, "\$page === 'team_departments'")) {
+    fail('index.php missing Team Departments CSRF gate');
+} else {
+    ok('index.php Team Departments CSRF gate');
+}
 if (!is_file($root . '/assets/js/csrf.js')) {
     fail('missing assets/js/csrf.js');
 } else {
@@ -340,6 +345,34 @@ if (!str_contains($invoiceGenerate, 'csrf_field()')) {
     fail('invoice_generate missing csrf_field');
 } else {
     ok('invoice_generate csrf_field');
+}
+
+$adminDepts = file_get_contents($root . '/pages/admin/departments.php') ?: '';
+if (!str_contains($adminDepts, 'csrf_field()')) {
+    fail('admin departments missing csrf_field');
+} else {
+    ok('admin departments csrf_field');
+}
+if (!str_contains($adminDepts, 'json_encode(') || !str_contains($adminDepts, 'Remove ')) {
+    fail('admin departments remove confirm not json_encode-safe');
+} else {
+    ok('admin departments safe remove confirm');
+}
+if (!str_contains($adminDepts, "\$statusFilter === \$val ? ' active-soft' : ''")) {
+    fail('admin departments status filter missing active-soft for all tabs');
+} else {
+    ok('admin departments status filter active state');
+}
+$teamDepts = file_get_contents($root . '/pages/team/departments.php') ?: '';
+if (!str_contains($teamDepts, 'csrf_field()')) {
+    fail('team departments missing csrf_field');
+} else {
+    ok('team departments csrf_field');
+}
+if (!str_contains($adminDepts, 'Invalid status') || !str_contains($teamDepts, 'Invalid status')) {
+    fail('department status update missing failure handling');
+} else {
+    ok('department status update failure handling');
 }
 
 $layoutNav = file_get_contents($root . '/includes/layout.php') ?: '';

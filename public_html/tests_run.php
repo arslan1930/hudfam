@@ -2146,6 +2146,28 @@ try {
         }
         remove_department_member((int) $dept['id'], $assigneeId);
     }
+
+    // D-1: invalid status rejected
+    $tmpTask = save_department_task(
+        (int) $dept['id'],
+        'D1 status check',
+        '',
+        'open',
+        null,
+        null,
+        $adminUser,
+        null
+    );
+    if (!empty($tmpTask['id'])) {
+        if (!update_department_task_status((int) $tmpTask['id'], 'nope')) {
+            pass('department invalid status rejected');
+        } else {
+            fail('department invalid status accepted');
+        }
+        delete_department_task((int) $tmpTask['id']);
+    } else {
+        fail('department temp task for status check failed');
+    }
 } catch (Throwable $e) {
     fail('department assign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

@@ -94,7 +94,17 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Task not found.');
             redirect($back);
         }
-        update_department_task_status($taskId, $status);
+        $updated = update_department_task_status($taskId, $status);
+        if (!$updated) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode(['ok' => false, 'error' => 'Invalid status.']);
+                exit;
+            }
+            flash('error', 'Invalid status.');
+            redirect($back);
+        }
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
@@ -228,8 +238,9 @@ render_breadcrumbs([
         <td class="muted"><?= h((string) ($m['email'] ?: '—')) ?></td>
         <td>
           <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>#members"
-                onsubmit="return confirm('Remove <?= h((string) $m['username']) ?> from <?= h((string) $dept['name']) ?>?');"
+                onsubmit="return confirm(<?= h(json_encode('Remove ' . (string) $m['username'] . ' from ' . (string) $dept['name'] . '?', JSON_UNESCAPED_UNICODE)) ?>);"
                 class="inline-form">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="remove_member">
             <input type="hidden" name="user_id" value="<?= (int) $m['id'] ?>">
             <button class="btn secondary small" type="submit">Remove</button>
@@ -246,6 +257,7 @@ render_breadcrumbs([
   <?php if ($available): ?>
   <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>#members"
         class="dept-add-member" style="margin-top:0.85rem">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_member">
     <label for="dept_add_user">Add team member</label>
     <div class="actions" style="align-items:flex-end;gap:0.5rem;flex-wrap:wrap">
@@ -272,14 +284,27 @@ render_breadcrumbs([
   <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
     <h2 style="margin:0"><?= $editTask ? 'Edit task' : 'Assign work' ?></h2>
     <div class="actions">
-      <a class="btn secondary small<?= $statusFilter === '' ? ' active-soft' : '' ?>" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>">All</a>
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;status=open">Open</a>
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;status=in_progress">In progress</a>
-      <a class="btn secondary small" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;status=done">Done</a>
+      <?php
+      $statusLinks = [
+          '' => 'All',
+          'open' => 'Open',
+          'in_progress' => 'In progress',
+          'done' => 'Done',
+      ];
+      foreach ($statusLinks as $val => $lab):
+          $href = $base . '&folder=' . rawurlencode((string) $dept['slug']);
+          if ($val !== '') {
+              $href .= '&status=' . rawurlencode($val);
+          }
+          $active = $statusFilter === $val ? ' active-soft' : '';
+          ?>
+        <a class="btn secondary small<?= $active ?>" href="<?= h($href) ?>"><?= h($lab) ?></a>
+      <?php endforeach; ?>
     </div>
   </div>
 
   <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>" class="dept-task-form">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="save_task">
     <input type="hidden" name="task_id" value="<?= $editTask ? (int) $editTask['id'] : 0 ?>">
     <div class="form-grid" style="grid-template-columns:1.4fr 1fr 1fr;gap:0.65rem">
@@ -376,6 +401,7 @@ render_breadcrumbs([
           <td>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form" data-stay-ajax>
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="set_status">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
               <select name="status" data-stay-ajax-change aria-label="Task status">
@@ -390,7 +416,8 @@ render_breadcrumbs([
             <a href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>&amp;edit_task=<?= (int) $t['id'] ?>">Edit</a>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form"
-                  onsubmit="return confirm('Delete this task?');">
+                  onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="delete_task">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
               <button class="btn secondary small danger" type="submit">Delete</button>
