@@ -248,7 +248,7 @@ function extract_host_candidate(string $raw): string
     // Prefer parse_url for full https://…/path?#… pastes (Filter & add Clean errors).
     $probe = $s;
     if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $probe) && str_contains($probe, '.')) {
-        if (preg_match('#^[a-z0-9.-]+(/|\?|#|$)#i', $probe)) {
+        if (preg_match('~^[a-z0-9.-]+(/|\?|#|$)~i', $probe)) {
             $probe = 'https://' . $probe;
         }
     }
