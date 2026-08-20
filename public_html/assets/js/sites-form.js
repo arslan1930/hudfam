@@ -95,10 +95,29 @@
     return !!(tld && VALID_TLDS[String(tld).toLowerCase()]);
   }
 
+  /** Platform hosts that look like TLDs but must keep the tenant label (utilfox.vercel.app). */
+  var PLATFORM_PUBLIC_SUFFIXES = {
+    'vercel.app': 1,
+    'github.io': 1,
+    'herokuapp.com': 1,
+    'netlify.app': 1,
+    'pages.dev': 1,
+    'workers.dev': 1,
+    'web.app': 1,
+    'firebaseapp.com': 1,
+    'azurewebsites.net': 1,
+    'myshopify.com': 1,
+    'blogspot.com': 1,
+    'wordpress.com': 1,
+    'tumblr.com': 1,
+    'gitlab.io': 1
+  };
+
   function isKnownPublicSuffix(suffix) {
     suffix = String(suffix || '').toLowerCase();
     if (!suffix) return false;
     if (MULTI_TLDS[suffix]) return true;
+    if (PLATFORM_PUBLIC_SUFFIXES[suffix]) return true;
     if (suffix.indexOf('.') === -1) return isKnownTld(suffix);
     var parts = suffix.split('.').filter(Boolean);
     if (parts.length !== 2) return false;
@@ -109,6 +128,7 @@
     var parts = host.split('.').filter(Boolean);
     if (parts.length < 2) return '';
     var two = parts[parts.length - 2] + '.' + parts[parts.length - 1];
+    if (PLATFORM_PUBLIC_SUFFIXES[two]) return two;
     if (MULTI_TLDS[two]) return two;
     // Heuristic: keep multi-part country suffixes (com.pl, com.pk, co.uk, …)
     var sld = parts[parts.length - 2];
@@ -137,11 +157,33 @@
   }
 
   /**
-   * Pull a hostname out of a messy paste (https, path, port, www, user@host).
+   * Pull a hostname out of a messy paste (https, path, port, www, user@host,
+   * markdown links, href=, Excel tabs, attention-box "# reason" tags).
    */
   function extractHostCandidate(raw) {
     var s = String(raw || '').trim();
     if (!s) return '';
+    // Strip attention-box reason tags: "junk  # has_spaces"
+    var attMatch = s.match(/^(.*)\s+#\s+[a-z0-9_]+\s*$/i);
+    if (attMatch) s = String(attMatch[1] || '').trim();
+    // Markdown link: [text](https://example.com/x)
+    var mdMatch = s.match(/\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i);
+    if (mdMatch) {
+      s = mdMatch[1];
+    } else {
+      var hrefMatch = s.match(/href\s*=\s*["']\s*(https?:\/\/[^"']+)["']/i);
+      if (hrefMatch) {
+        s = hrefMatch[1];
+      } else {
+        var urlInJunk = s.match(/(https?:\/\/[^\s<>"']+)/i);
+        if (urlInJunk) s = urlInJunk[1];
+      }
+    }
+    // Excel-style "domain\tnotes" — keep first column
+    if (s.indexOf('\t') !== -1) {
+      var firstCol = s.split('\t')[0].trim();
+      if (firstCol) s = firstCol;
+    }
     s = s.replace(/^[\s'"\[<\(]+/, '').replace(/[\s'"\]>\)]+$/, '');
     if (!s) return '';
     // Prefer URL parser when the browser can read the token (handles https://…/path?#…).
