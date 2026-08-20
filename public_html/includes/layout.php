@@ -101,7 +101,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
-                'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
+                'admin_prospect_batches' => ['Site adding history', 'Edit · delete · who added what by day'],
                 'admin_semrush_research' => ['Semrush Research', 'Site Finding copy · Extracting Push + optional seed'],
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
                 'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
@@ -281,6 +281,8 @@ function render_footer(string $panel = ''): void
         echo '<p class="app-processing-sub muted">Please wait — do not close this page.</p>';
         echo '</div></div>';
     }
+    // Show/Hide on every password field (login, change password, admin users, …).
+    echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
     echo '</body></html>';
 }
 

@@ -11,6 +11,7 @@ if (!is_admin($user) && (int) $batch['user_id'] !== (int) $user['id']) {
     redirect('index.php?page=team_prospect_batches');
 }
 $domains = get_prospect_batch_domains($id);
+$isAdmin = is_admin($user);
 
 render_header('Batch ' . $batch['batch_date'], 'team');
 ?>
@@ -22,13 +23,21 @@ render_header('Batch ' . $batch['batch_date'], 'team');
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">My batches</a>
     <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
+    <?php if ($isAdmin): ?>
+      <a class="btn" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $id ?>">Edit / delete (Admin)</a>
+    <?php endif; ?>
   </div>
 </div>
 <div class="card">
   <?php if ($batch['notes']): ?>
     <p class="help"><?= h($batch['notes']) ?></p>
   <?php endif; ?>
-  <p class="help">These are the sites you added on this day.</p>
+  <p class="help">
+    These are the sites added on this day.
+    <?php if ($isAdmin): ?>
+      Use <strong>Edit / delete (Admin)</strong> to change the list (copy, cut, undo) or remove the day.
+    <?php endif; ?>
+  </p>
   <?php if ($domains): ?>
     <textarea class="inventory-box" rows="18" readonly><?= h(implode("\n", $domains)) ?></textarea>
   <?php else: ?>
