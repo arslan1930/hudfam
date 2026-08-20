@@ -728,6 +728,13 @@ render_header('Order · ' . $client['name'], 'admin');
   }
 
   var form = document.getElementById('order-sheet-form');
+  // Unsaved-changes warning state (declared early so submit validation can reset it).
+  var dirty = false;
+  var submitting = false;
+  var isDraftIgnored = function (el) {
+    return !!(el && el.closest && el.closest('[data-no-draft]'));
+  };
+
   form.addEventListener('submit', function (e) {
     var bad = null;
     document.querySelectorAll('[data-row]').forEach(function (row) {
@@ -751,7 +758,10 @@ render_header('Order · ' . $client['name'], 'admin');
     if (bad) {
       e.preventDefault();
       e.stopPropagation();
+      submitting = false;
+      return;
     }
+    submitting = true;
   });
   form.addEventListener('input', function (e) {
     refresh();
@@ -792,12 +802,14 @@ render_header('Order · ' . $client['name'], 'admin');
     }
   });
 
-  // Unsaved-changes warning (skip after intentional submit).
-  var dirty = false;
-  var submitting = false;
-  form.addEventListener('input', function () { dirty = true; }, true);
-  form.addEventListener('change', function () { dirty = true; }, true);
-  form.addEventListener('submit', function () { submitting = true; });
+  form.addEventListener('input', function (e) {
+    if (isDraftIgnored(e.target)) return;
+    dirty = true;
+  }, true);
+  form.addEventListener('change', function (e) {
+    if (isDraftIgnored(e.target)) return;
+    dirty = true;
+  }, true);
   window.addEventListener('beforeunload', function (e) {
     if (!dirty || submitting) return;
     e.preventDefault();

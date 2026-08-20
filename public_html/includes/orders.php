@@ -585,11 +585,13 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         }
     }
 
+    // Paid only applies to completed (LIVE) rows — clearing LIVE also clears paid.
     db()->prepare(
         'UPDATE order_items
          SET site_name=?, site_note=?, placement_type=?, country=?,
              order_month=?, period_end_month=?, order_year=?,
-             owner_price=?, decided_price=?, live_url=?, updated_at=NOW()
+             owner_price=?, decided_price=?, live_url=?,
+             is_paid=IF(? = \'\', 0, is_paid), updated_at=NOW()
          WHERE id=? AND client_id=? AND row_type=\'site\''
     )->execute([
         $siteName,
@@ -601,6 +603,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $year,
         $ownerPrice,
         $decidedPrice,
+        $liveUrl,
         $liveUrl,
         $itemId,
         $clientId,

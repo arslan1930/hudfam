@@ -290,6 +290,11 @@ if (!str_contains($orderSheet, 'csrf_field()')) {
 } else {
     ok('order sheet csrf_field');
 }
+if (!str_contains($orderSheet, 'data-no-draft') || !str_contains($orderSheet, 'isDraftIgnored')) {
+    fail('order sheet dirty ignore for search missing');
+} else {
+    ok('order sheet search does not mark dirty');
+}
 if (!str_contains($orderSheet, 'order-country-list') || !str_contains($orderSheet, '<datalist')) {
     fail('order sheet missing country datalist');
 } else {
@@ -323,12 +328,19 @@ foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_ord
 ok('orders helpers for OM-1–4');
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
 }
 ok('tests_run OM coverage needles');
+
+$invoiceGenerate = file_get_contents($root . '/pages/admin/invoice_generate.php') ?: '';
+if (!str_contains($invoiceGenerate, 'csrf_field()')) {
+    fail('invoice_generate missing csrf_field');
+} else {
+    ok('invoice_generate csrf_field');
+}
 
 $layoutNav = file_get_contents($root . '/includes/layout.php') ?: '';
 if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {

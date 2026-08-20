@@ -114,6 +114,7 @@ render_header('Generate invoice', 'admin');
 
 <?php if ($client): ?>
 <form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate">
+  <?= csrf_field() ?>
   <input type="hidden" name="action" value="generate">
   <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
 

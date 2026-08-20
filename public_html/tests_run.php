@@ -1868,6 +1868,33 @@ try {
     } else {
         fail('mark paid with LIVE failed');
     }
+
+    // Clearing LIVE on save must also clear paid.
+    update_order_item((int) $itemId, (int) $clientId, [
+        'site_name' => 'txforder-site.com',
+        'owner_price' => 50,
+        'decided_price' => 80,
+        'live_url' => '',
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
+    $clearedPaid = db()->prepare('SELECT is_paid, live_url FROM order_items WHERE id=?');
+    $clearedPaid->execute([$itemId]);
+    $cleared = $clearedPaid->fetch(PDO::FETCH_ASSOC) ?: [];
+    if ((int) ($cleared['is_paid'] ?? 1) === 0 && trim((string) ($cleared['live_url'] ?? 'x')) === '') {
+        pass('clearing LIVE also clears paid');
+    } else {
+        fail('clearing LIVE left paid=' . json_encode($cleared));
+    }
+    // Restore unpaid LIVE for OM-2 metrics
+    update_order_item((int) $itemId, (int) $clientId, [
+        'site_name' => 'txforder-site.com',
+        'owner_price' => 50,
+        'decided_price' => 80,
+        'live_url' => 'https://example.com/live-om',
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
     set_order_item_paid((int) $itemId, (int) $clientId, false);
 
     // OM-2: unpaid LIVE metrics
