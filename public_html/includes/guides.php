@@ -149,7 +149,7 @@ function guide_extracting(): string
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country (editable textarea; edits autosave).',
             'Sites list tools: Copy, Undo, and Redo while you stay on this page.',
-            'Paste sites into Extracting Results and Push — country TLDs (.de, .at, .ch, …) go to their own folders; .com/.net/.eu stay in the selected country.',
+            'Paste into Extracting Results → Clean to root domains (Ready vs Needs attention) → Push uses Ready only. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country.',
             'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
         ]
     );
