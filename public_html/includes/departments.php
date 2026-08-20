@@ -315,6 +315,44 @@ function remove_department_member(int $departmentId, int $userId): bool
 }
 
 /**
+ * Clear assignee on open/in_progress tasks for a user in one department.
+ * Done tasks keep their historical assignee.
+ *
+ * @return int number of tasks updated
+ */
+function clear_open_department_task_assignees(int $departmentId, int $userId): int
+{
+    ensure_departments_schema();
+    if ($departmentId <= 0 || $userId <= 0) {
+        return 0;
+    }
+    $stmt = db()->prepare(
+        "UPDATE department_tasks
+         SET assigned_to=NULL, updated_at=NOW()
+         WHERE department_id=? AND assigned_to=?
+           AND status IN ('open','in_progress')"
+    );
+    $stmt->execute([$departmentId, $userId]);
+    return (int) $stmt->rowCount();
+}
+
+/** Count open/in_progress tasks assigned to this user in the department. */
+function count_open_department_tasks_for_assignee(int $departmentId, int $userId): int
+{
+    ensure_departments_schema();
+    if ($departmentId <= 0 || $userId <= 0) {
+        return 0;
+    }
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM department_tasks
+         WHERE department_id=? AND assigned_to=?
+           AND status IN ('open','in_progress')"
+    );
+    $stmt->execute([$departmentId, $userId]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
  * @return array{member_count:int,open_tasks:int,total_tasks:int}
  */
 function department_stats(int $departmentId): array
@@ -384,7 +422,7 @@ function get_department_task(int $taskId): ?array
 }
 
 /**
- * @return array{ok:bool,error?:string,id?:int}
+ * @return array{ok:bool,error?:string,id?:int,added_member?:bool}
  */
 function save_department_task(
     int $departmentId,
@@ -415,6 +453,7 @@ function save_department_task(
             return ['ok' => false, 'error' => 'Due date must be YYYY-MM-DD.'];
         }
     }
+    $addedMember = false;
     if ($assignedTo !== null && $assignedTo > 0) {
         $assignee = db()->prepare(
             "SELECT id, role, is_active FROM users WHERE id=? LIMIT 1"
@@ -432,6 +471,7 @@ function save_department_task(
             if (!add_department_member($departmentId, $assignedTo, $actor)) {
                 return ['ok' => false, 'error' => 'Could not add assignee to this department.'];
             }
+            $addedMember = true;
         }
     } else {
         $assignedTo = null;
@@ -450,7 +490,7 @@ function save_department_task(
                  SET title=?, notes=?, status=?, assigned_to=?, due_date=?, updated_at=NOW()
                  WHERE id=?'
             )->execute([$title, $notes !== '' ? $notes : null, $status, $assignedTo, $due, $taskId]);
-            return ['ok' => true, 'id' => $taskId];
+            return ['ok' => true, 'id' => $taskId, 'added_member' => $addedMember];
         }
 
         db()->prepare(
@@ -466,7 +506,7 @@ function save_department_task(
             $actorId,
             $due,
         ]);
-        return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+        return ['ok' => true, 'id' => (int) db()->lastInsertId(), 'added_member' => $addedMember];
     } catch (Throwable $e) {
         return ['ok' => false, 'error' => 'Could not save task. Try again or run upgrade.php.'];
     }

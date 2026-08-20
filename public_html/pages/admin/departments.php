@@ -36,8 +36,16 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'remove_member') {
         $uid = (int) post('user_id');
+        $openAssigned = count_open_department_tasks_for_assignee((int) $dept['id'], $uid);
+        $cleared = clear_open_department_task_assignees((int) $dept['id'], $uid);
         remove_department_member((int) $dept['id'], $uid);
-        flash('ok', 'Member removed.');
+        $msg = 'Member removed.';
+        if ($cleared > 0) {
+            $msg .= ' Cleared assignee on ' . $cleared . ' open task' . ($cleared === 1 ? '' : 's') . '.';
+        } elseif ($openAssigned > 0) {
+            $msg .= ' Open tasks were already unassigned.';
+        }
+        flash('ok', $msg);
         redirect($back . '#members');
     }
 
@@ -68,12 +76,13 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $who = $label;
             }
-            flash(
-                'ok',
-                $taskId > 0
-                    ? ('Task updated · assigned to ' . $who . '.')
-                    : ('Task assigned to ' . $who . ' in ' . $dept['name'] . '.')
-            );
+            $msg = $taskId > 0
+                ? ('Task updated · assigned to ' . $who . '.')
+                : ('Task assigned to ' . $who . ' in ' . $dept['name'] . '.');
+            if (!empty($result['added_member'])) {
+                $msg .= ' Added ' . $who . ' to this department (tools unlocked).';
+            }
+            flash('ok', $msg);
         }
         redirect($back);
     }
@@ -231,14 +240,24 @@ render_breadcrumbs([
       <tr><th>Name</th><th>Username</th><th>Email</th><th></th></tr>
     </thead>
     <tbody>
-    <?php foreach ($members as $m): ?>
-      <tr>
-        <td><?= h((string) ($m['full_name'] ?: '—')) ?></td>
+    <?php foreach ($members as $m):
+        $openForMember = count_open_department_tasks_for_assignee($deptId, (int) $m['id']);
+        $inactive = (int) ($m['is_active'] ?? 1) !== 1;
+        $removeMsg = 'Remove ' . (string) $m['username'] . ' from ' . (string) $dept['name'] . '?';
+        if ($openForMember > 0) {
+            $removeMsg .= "\n\n" . $openForMember . ' open task(s) assigned to them will become unassigned (done tasks keep history).';
+        }
+        ?>
+      <tr<?= $inactive ? ' class="muted"' : '' ?>>
+        <td>
+          <?= h((string) ($m['full_name'] ?: '—')) ?>
+          <?php if ($inactive): ?><span class="badge">Inactive</span><?php endif; ?>
+        </td>
         <td><?= h((string) $m['username']) ?></td>
         <td class="muted"><?= h((string) ($m['email'] ?: '—')) ?></td>
         <td>
           <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>#members"
-                onsubmit="return confirm(<?= h(json_encode('Remove ' . (string) $m['username'] . ' from ' . (string) $dept['name'] . '?', JSON_UNESCAPED_UNICODE)) ?>);"
+                onsubmit="return confirm(<?= h(json_encode($removeMsg, JSON_UNESCAPED_UNICODE)) ?>);"
                 class="inline-form">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="remove_member">
