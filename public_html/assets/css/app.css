@@ -3951,3 +3951,32 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* Password show/hide (password-toggle.js) */
+.password-field {
+  position: relative;
+  display: block;
+}
+.password-field input[type="password"],
+.password-field input[type="text"] {
+  width: 100%;
+  padding-right: 4.5rem;
+  box-sizing: border-box;
+}
+.password-toggle {
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--line, #d0d5dd);
+  background: #fff;
+  color: var(--brand-deep, #1a3a4a);
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.password-toggle:hover {
+  background: #f5f7fa;
+}

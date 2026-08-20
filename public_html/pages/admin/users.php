@@ -1,5 +1,13 @@
 <?php
-require_admin();
+$me = require_admin();
+ensure_users_auth_schema();
+
+$revealedTemp = null;
+if (!empty($_SESSION['revealed_temp_password']) && is_array($_SESSION['revealed_temp_password'])) {
+    $revealedTemp = $_SESSION['revealed_temp_password'];
+    unset($_SESSION['revealed_temp_password']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $id = (int) post('id');
     $username = trim((string) post('username'));
@@ -10,59 +18,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $phone = trim((string) post('phone'));
     $contact = trim((string) post('contact_details'));
     $password = (string) post('password');
+    $myId = (int) ($me['id'] ?? 0);
 
     if ($username === '') {
         flash('error', 'Username required.');
-    } elseif ($role === 'admin' && $full === '') {
+        redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+    }
+    if ($role === 'admin' && $full === '') {
         flash('error', 'Admins need a unique full name.');
-    } else {
-        // Enforce unique full name among admins
-        if ($role === 'admin' && $full !== '') {
-            $dup = db()->prepare(
-                "SELECT id FROM users WHERE role='admin' AND full_name=? AND id<>? LIMIT 1"
-            );
-            $dup->execute([$full, $id]);
-            if ($dup->fetchColumn()) {
-                flash('error', 'Another admin already uses this full name. Each admin needs a unique name.');
-                redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
-            }
-        }
-        try {
-            ensure_users_auth_schema();
-            if ($id) {
-                if ($password !== '') {
-                    if (in_array($password, known_weak_passwords(), true)) {
-                        flash('error', 'Do not use demo default passwords (admin123 / team123).');
-                        redirect('index.php?page=admin_users&edit=' . $id);
-                    }
-                    db()->prepare(
-                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=1 WHERE id=?'
-                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $id]);
-                } else {
-                    db()->prepare(
-                        'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
-                    )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
-                }
-                flash('ok', 'User updated.' . ($password !== '' ? ' They must change the password on next login.' : ''));
-            } else {
-                if ($password === '') {
-                    $password = bin2hex(random_bytes(5));
-                }
-                if (in_array($password, known_weak_passwords(), true)) {
-                    flash('error', 'Do not use demo default passwords (admin123 / team123).');
-                    redirect('index.php?page=admin_users');
-                }
-                db()->prepare(
-                    'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, is_active, must_change_password)
-                     VALUES (?,?,?,?,?,?,?,?,1)'
-                )->execute([$username, password_hash($password, PASSWORD_DEFAULT), $full, $email, $phone, $contact, $role, $active]);
-                flash('ok', 'User created. Temporary password: ' . $password . ' (must change on first login)');
-            }
-        } catch (PDOException $e) {
-            flash('error', 'Could not save (username must be unique).');
+        redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+    }
+
+    $existing = null;
+    if ($id > 0) {
+        $s = db()->prepare('SELECT * FROM users WHERE id=? LIMIT 1');
+        $s->execute([$id]);
+        $existing = $s->fetch() ?: null;
+        if (!$existing) {
+            flash('error', 'User not found.');
+            redirect('index.php?page=admin_users');
         }
     }
-    redirect('index.php?page=admin_users');
+
+    // Self-lockout guards
+    if ($id > 0 && $id === $myId) {
+        if ($active === 0) {
+            flash('error', 'You cannot deactivate your own account.');
+            redirect('index.php?page=admin_users&edit=' . $id);
+        }
+        if ($role !== 'admin') {
+            flash('error', 'You cannot demote your own admin account.');
+            redirect('index.php?page=admin_users&edit=' . $id);
+        }
+    }
+
+    // Last active admin guard
+    if ($id > 0 && $existing) {
+        $wasActiveAdmin = ($existing['role'] ?? '') === 'admin' && (int) ($existing['is_active'] ?? 0) === 1;
+        $willBeActiveAdmin = $role === 'admin' && $active === 1;
+        if ($wasActiveAdmin && !$willBeActiveAdmin) {
+            $cnt = (int) db()->query(
+                "SELECT COUNT(*) FROM users WHERE role='admin' AND is_active=1 AND id<>" . (int) $id
+            )->fetchColumn();
+            if ($cnt < 1) {
+                flash('error', 'Cannot remove the last active admin.');
+                redirect('index.php?page=admin_users&edit=' . $id);
+            }
+        }
+    }
+
+    if ($role === 'admin' && $full !== '') {
+        $dup = db()->prepare(
+            "SELECT id FROM users WHERE role='admin' AND full_name=? AND id<>? LIMIT 1"
+        );
+        $dup->execute([$full, $id]);
+        if ($dup->fetchColumn()) {
+            flash('error', 'Another admin already uses this full name. Each admin needs a unique name.');
+            redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+        }
+    }
+
+    $settingPassword = $password !== '' || $id === 0;
+    if ($id === 0 && $password === '') {
+        $password = bin2hex(random_bytes(5));
+    }
+    if ($settingPassword && $password !== '') {
+        if (strlen($password) < 8) {
+            flash('error', 'Password must be at least 8 characters.');
+            redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+        }
+        if (in_array($password, known_weak_passwords(), true)) {
+            flash('error', 'Do not use demo default passwords (admin123 / team123).');
+            redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+        }
+    }
+
+    try {
+        if ($id) {
+            if ($password !== '') {
+                db()->prepare(
+                    'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=1 WHERE id=?'
+                )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $id]);
+            } else {
+                db()->prepare(
+                    'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
+                )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
+            }
+            flash('ok', 'User updated.' . ($password !== '' ? ' They must change the password on next login.' : ''));
+            redirect('index.php?page=admin_users');
+        }
+
+        db()->prepare(
+            'INSERT INTO users (username, password_hash, full_name, email, phone, contact_details, role, is_active, must_change_password)
+             VALUES (?,?,?,?,?,?,?,?,1)'
+        )->execute([$username, password_hash($password, PASSWORD_DEFAULT), $full, $email, $phone, $contact, $role, $active]);
+        $newId = (int) db()->lastInsertId();
+        $_SESSION['revealed_temp_password'] = [
+            'user_id' => $newId,
+            'username' => $username,
+            'password' => $password,
+        ];
+        flash('ok', 'User created. Copy the temporary password below (shown once). They must change it on first login.');
+        redirect('index.php?page=admin_users');
+    } catch (PDOException $e) {
+        flash('error', 'Could not save (username must be unique).');
+        redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+    }
 }
 
 $editId = (int) get('edit');
@@ -77,6 +138,10 @@ $admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
 
 render_header('Admins & users', 'admin');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+    ['label' => 'Users'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Users</h1>
@@ -84,6 +149,39 @@ render_header('Admins & users', 'admin');
   </div>
 </div>
 <?= guide_admin_users() ?>
+
+<?php if ($revealedTemp): ?>
+<div class="card" style="border-color:var(--accent, #2a7a4b)">
+  <h2>Temporary password (shown once)</h2>
+  <p class="muted">Copy this now — it will not appear again after you leave this page.</p>
+  <p><strong>User:</strong> <?= h((string) ($revealedTemp['username'] ?? '')) ?></p>
+  <p><strong>Password:</strong>
+    <code id="temp-password-reveal"><?= h((string) ($revealedTemp['password'] ?? '')) ?></code>
+  </p>
+  <p class="actions">
+    <button type="button" class="btn secondary" id="copy-temp-password">Copy password</button>
+  </p>
+</div>
+<script>
+(function () {
+  var btn = document.getElementById('copy-temp-password');
+  var el = document.getElementById('temp-password-reveal');
+  if (!btn || !el) return;
+  btn.addEventListener('click', function () {
+    var text = el.textContent || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = 'Copied';
+      }).catch(function () {
+        btn.textContent = 'Select and copy manually';
+      });
+    } else {
+      btn.textContent = 'Select and copy manually';
+    }
+  });
+})();
+</script>
+<?php endif; ?>
 
 <div class="card">
   <h2>Admin directory</h2>
@@ -149,8 +247,9 @@ render_header('Admins & users', 'admin');
       <option value="team" <?= ($edit['role'] ?? '')==='team'?'selected':'' ?>>team</option>
       <option value="admin" <?= ($edit['role'] ?? '')==='admin'?'selected':'' ?>>admin</option>
     </select>
-    <label>Password <?= $edit ? '(blank = keep)' : '' ?></label>
-    <input type="password" name="password">
+    <label>Password <?= $edit ? '(blank = keep)' : '(min 8 chars; blank = generate)' ?></label>
+    <input type="password" name="password" autocomplete="new-password" minlength="8">
+    <p class="help">Passwords must be at least 8 characters (not demo defaults).</p>
     <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !$edit || !empty($edit['is_active']) ? 'checked' : '' ?>> Active</label>
     <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
   </form>

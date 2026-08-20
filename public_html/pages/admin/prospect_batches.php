@@ -1,9 +1,28 @@
 <?php
 $user = require_admin();
-if (function_exists('clear_admin_new_data')) {
-    clear_admin_new_data('our_database', $user);
+ensure_prospect_schema();
+
+$filterUserId = (int) get('user');
+if ($filterUserId < 1) {
+    $filterUserId = 0;
 }
-$batches = list_prospect_batches(null, 150);
+$filterUser = null;
+if ($filterUserId > 0) {
+    $stmt = db()->prepare('SELECT id, username, full_name, role FROM users WHERE id=? LIMIT 1');
+    $stmt->execute([$filterUserId]);
+    $filterUser = $stmt->fetch() ?: null;
+    if (!$filterUser) {
+        flash('error', 'User not found.');
+        redirect('index.php?page=admin_prospect_batches');
+    }
+}
+
+$batches = list_prospect_batches($filterUserId > 0 ? $filterUserId : null, 150);
+$filterLabel = '';
+if ($filterUser) {
+    $filterLabel = trim((string) ($filterUser['full_name'] ?: $filterUser['username']));
+}
+
 render_header('Site adding history', 'admin');
 ?>
 <?php render_breadcrumbs([
@@ -13,9 +32,19 @@ render_header('Site adding history', 'admin');
 <div class="topbar">
   <div>
     <h1>Site adding history</h1>
-    <p class="muted">Who added how many sites each day.</p>
+    <p class="muted">
+      Who added how many sites each day.
+      <?php if ($filterUser): ?>
+        · Showing <strong><?= h($filterLabel) ?></strong>
+      <?php endif; ?>
+    </p>
   </div>
-  <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
+  <div class="actions">
+    <?php if ($filterUser): ?>
+      <a class="btn secondary" href="index.php?page=admin_prospect_batches">All history</a>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
+  </div>
 </div>
 <?= guide_add_history() ?>
 
@@ -44,7 +73,9 @@ render_header('Site adding history', 'admin');
     </tbody>
   </table>
   <?php else: ?>
-  <div class="empty-state"><p>No adds yet.</p></div>
+  <div class="empty-state">
+    <p><?= $filterUser ? 'No adds for this person yet.' : 'No adds yet.' ?></p>
+  </div>
   <?php endif; ?>
 </div>
 <?php render_footer('admin'); ?>
