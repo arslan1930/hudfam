@@ -50,7 +50,17 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Task not found.');
             redirect($back);
         }
-        update_department_task_status($taskId, $status);
+        $updated = update_department_task_status($taskId, $status);
+        if (!$updated) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode(['ok' => false, 'error' => 'Invalid status.']);
+                exit;
+            }
+            flash('error', 'Invalid status.');
+            redirect($back);
+        }
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
@@ -269,6 +279,7 @@ render_breadcrumbs([
           <td>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form" data-stay-ajax>
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="set_status">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
               <select name="status" data-stay-ajax-change aria-label="Task status">
