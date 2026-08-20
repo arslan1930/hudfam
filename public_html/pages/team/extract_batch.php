@@ -210,21 +210,30 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>② Extracting Results</h2>
     <p class="help">
-      Paste extracted sites, then <strong>Push</strong>.
+      Paste extracted sites, <strong>Clean to root domains</strong> if needed, then <strong>Push</strong>.
+      <strong>Push uses the Ready list only</strong> (Needs attention stays aside).
       Country TLDs auto-route (<strong>.de</strong>→Germany, <strong>.at</strong>→Austria, <strong>.ch</strong>→Switzerland, …).
       Generic TLDs (<strong>.com</strong>, <strong>.net</strong>, <strong>.eu</strong>, …) stay in <strong><?= h($country) ?></strong>.
       Sites go to Extracted Sites + Sites with emails - Team in each destination country.
     </p>
-    <form method="post">
+    <form method="post" id="extract_results_form">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="push_results">
-      <textarea class="inventory-box" name="results_text" rows="16" placeholder="Paste sites…&#10;example.com&#10;shop.de&#10;blog.fr"><?= h($resultsText) ?></textarea>
+      <?= render_domains_paste_field('results_text', $resultsText, [
+          'id' => 'results_text',
+          'label' => 'Results (Ready root domains)',
+          'rows' => 16,
+          'class' => 'inventory-box',
+          'placeholder' => "Paste sites…\nexample.com\nshop.de\nblog.fr",
+      ]) ?>
       <div class="actions-sticky" style="margin-top:0.75rem">
-        <button class="btn large" type="submit">Push</button>
+        <button class="btn large" type="submit"
+                title="Push Ready domains to Extracted Sites and Sites with emails - Team">Push</button>
       </div>
     </form>
   </div>
 </div>
 
 <script src="<?= h(script_asset_url('js/extract-sites-list.js')) ?>" defer></script>
+<?= sites_form_script_tag() ?>
 <?php render_footer('team'); ?>

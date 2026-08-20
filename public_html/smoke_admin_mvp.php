@@ -591,6 +591,13 @@ if (str_contains($extractBatchT, 'Clean errors') || str_contains($extractBatchT,
 } else {
     ok('Extracting help omits fake Clean errors');
 }
+if (!str_contains($extractBatchT, 'Clean to root domains')
+    || !str_contains($extractBatchT, 'data-domains-attention')
+    || !str_contains($extractBatchT, 'sites_form_script_tag')) {
+    fail('Extracting Results missing Clean Ready/attention UI');
+} else {
+    ok('Extracting Results Clean Ready/attention');
+}
 $guidesPhp = file_get_contents($root . '/includes/guides.php') ?: '';
 if (str_contains($guidesPhp, 'Backspace delete')
     || str_contains($guidesPhp, 'Open links in new tabs')) {
