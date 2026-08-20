@@ -186,6 +186,7 @@ render_header('Order · ' . $client['name'], 'admin');
   <summary>Edit client name / notes</summary>
   <form method="post" style="margin-top:0.85rem"
         action="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="rename">
     <div class="form-grid">
       <div>
@@ -205,6 +206,7 @@ render_header('Order · ' . $client['name'], 'admin');
 
 <form method="post" id="order-sheet-form" class="card order-sheet-card"
       action="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">
+  <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <div class="order-sheet-toolbar">
@@ -357,6 +359,8 @@ render_header('Order · ' . $client['name'], 'admin');
             <?php else: ?>
               <button class="btn-paid" type="submit"
                       data-paid=""
+                      title="<?= $done ? 'Mark this completed row as paid' : 'Fill LIVE URL before marking paid' ?>"
+                      <?= $done ? '' : 'disabled' ?>
                       onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_paid';">
                 Paid
               </button>
@@ -431,7 +435,7 @@ render_header('Order · ' . $client['name'], 'admin');
     <strong>Banner / Textlink</strong> stays empty by default; choose only when needed. For those rows, LIVE URL must be filled like the site name, and set start + end months (invoice text uses that period).
     Month is the month name; use <strong>Mark year end</strong> for a full-width year break and a fresh January row.
     An order counts as <strong>completed</strong> only when LIVE URL is filled — then Owner and Decided prices cannot be empty (Decided must be &gt; 0).
-    Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (click again to undo).
+    Click <strong>Paid</strong> next to LIVE URL to mark that row as paid (only after LIVE URL is filled; click again to undo).
     Remove asks for confirmation before deleting a row.
   </p>
   <div class="actions-sticky">
@@ -501,6 +505,13 @@ render_header('Order · ' . $client['name'], 'admin');
         row.classList.add('is-completed');
       } else {
         row.classList.remove('is-completed');
+      }
+      var paidBtn = row.querySelector('.btn-paid:not(.is-paid)');
+      if (paidBtn) {
+        paidBtn.disabled = !live;
+        paidBtn.title = live
+          ? 'Mark this completed row as paid'
+          : 'Fill LIVE URL before marking paid';
       }
       var cell = row.querySelector('[data-profit]');
       if (cell) {
