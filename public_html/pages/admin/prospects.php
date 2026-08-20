@@ -18,21 +18,35 @@ $nonEmptyOnly = (string) get('nonempty') === '1';
 $sortByCount = (string) get('sort') !== 'name'; // default: count desc
 $editId = (int) get('edit');
 
-// Canonicalize / reject unknown country (not _none / all / empty folders view)
+// Canonicalize known countries; allow leftover country names that exist in data
+// (folders list can include sites whose country is not in the catalog yet).
 if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
     $canonSheet = resolve_canonical_country($sheet);
-    if ($canonSheet === null) {
-        flash('error', 'That country folder is not in the country list.');
-        redirect('index.php?page=admin_prospects');
-    }
-    if ($canonSheet['name'] !== $sheet) {
-        $redir = 'index.php?page=admin_prospects&country=' . urlencode($canonSheet['name']);
-        if ($filterUser > 0) {
-            $redir .= '&created_by=' . $filterUser;
+    if ($canonSheet !== null) {
+        if ($canonSheet['name'] !== $sheet) {
+            $redir = 'index.php?page=admin_prospects&country=' . urlencode($canonSheet['name']);
+            if ($filterUser > 0) {
+                $redir .= '&created_by=' . $filterUser;
+            }
+            redirect($redir);
         }
-        redirect($redir);
+        $sheet = $canonSheet['name'];
+    } else {
+        $exists = false;
+        try {
+            $chk = db()->prepare(
+                'SELECT 1 FROM prospect_sites WHERE TRIM(country)=? LIMIT 1'
+            );
+            $chk->execute([trim($sheet)]);
+            $exists = (bool) $chk->fetchColumn();
+        } catch (Throwable $e) {
+            $exists = false;
+        }
+        if (!$exists) {
+            flash('error', 'That country folder is not in the country list and has no sites.');
+            redirect('index.php?page=admin_prospects');
+        }
     }
-    $sheet = $canonSheet['name'];
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
 
@@ -51,8 +65,6 @@ if ($filterUser > 0) {
         $filterUser = 0;
     }
 }
-
-$returnQs = null; // reserved
 
 // ——— POST actions ———
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -93,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $removeCountry = trim((string) post('country'));
         $raw = (string) post('remove_text');
         try {
-            if ($removeCountry === '' || resolve_canonical_country($removeCountry) === null) {
+            if ($removeCountry === '') {
                 flash('error', 'Open a country folder first, then remove by list.');
                 redirect('index.php?page=admin_prospects');
             }

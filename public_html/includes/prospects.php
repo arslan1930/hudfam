@@ -600,11 +600,20 @@ function remove_prospect_sites_by_list(string $country, string $raw): array
 {
     ensure_prospect_schema();
     @set_time_limit(0);
-    $canon = resolve_canonical_country($country);
-    if (!$canon) {
-        throw new InvalidArgumentException('Select an existing country folder.');
+    $country = trim($country);
+    if ($country === '') {
+        throw new InvalidArgumentException('Open a country folder first, then remove by list.');
     }
-    $country = $canon['name'];
+    $canon = resolve_canonical_country($country);
+    if ($canon) {
+        $country = $canon['name'];
+    } else {
+        $chk = db()->prepare('SELECT 1 FROM prospect_sites WHERE TRIM(country)=? LIMIT 1');
+        $chk->execute([$country]);
+        if (!$chk->fetchColumn()) {
+            throw new InvalidArgumentException('Select an existing country folder.');
+        }
+    }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
     $parts = preg_split('/[\n,\t;]+/', $raw) ?: [];
@@ -1134,9 +1143,18 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
     $params = [];
     $q = trim((string) ($filters['q'] ?? ''));
     if ($q !== '') {
-        $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
-        array_push($params, $like, $like, $like, $like);
+        // Prefer matching stored domain when the query looks like a URL.
+        $host = normalize_domain($q);
+        if ($host !== '' && $host !== strtolower($q)) {
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ? OR p.domain = ? OR p.domain LIKE ?)';
+            $like = '%' . $q . '%';
+            $hostLike = '%' . $host . '%';
+            array_push($params, $like, $like, $like, $like, $host, $hostLike);
+        } else {
+            $like = '%' . $q . '%';
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
+            array_push($params, $like, $like, $like, $like);
+        }
     }
     if (array_key_exists('country', $filters) && $filters['country'] !== null && $filters['country'] !== false) {
         $country = (string) $filters['country'];
