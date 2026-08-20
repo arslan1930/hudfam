@@ -1,5 +1,7 @@
 (function () {
   'use strict';
+  if (window.__HF_NAV_SHELL__) return;
+  window.__HF_NAV_SHELL__ = true;
 
   var body = document.body;
   var toggle = document.querySelector('[data-nav-toggle]');

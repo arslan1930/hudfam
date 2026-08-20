@@ -544,11 +544,12 @@ $countryName = $emptyCountry ? '' : $sheet;
 $q = trim((string) get('q'));
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
+$perPage = resolve_sheet_per_page();
 $inv = prospect_inventory_query([
     'q' => $q,
     'country' => $countryName,
     'status' => $status,
-] + ($emptyCountry ? [] : []), $pageNum, 50);
+] + ($emptyCountry ? [] : []), $pageNum, $perPage);
 
 if ($emptyCountry) {
     $where = ["TRIM(p.country)=''"];
@@ -567,13 +568,13 @@ if ($emptyCountry) {
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
-    $pages = max(1, (int) ceil($total / 50));
-    $offset = ($pageNum - 1) * 50;
+    $pages = max(1, (int) ceil($total / $perPage));
+    $offset = ($pageNum - 1) * $perPage;
     $stmt = db()->prepare(
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full
          FROM prospect_sites p
          LEFT JOIN users u ON u.id = p.created_by
-         WHERE $whereSql ORDER BY p.created_at DESC LIMIT 50 OFFSET $offset"
+         WHERE $whereSql ORDER BY p.created_at DESC LIMIT {$perPage} OFFSET $offset"
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
@@ -589,6 +590,7 @@ $qs = http_build_query(array_filter([
     'country' => $emptyCountry ? '_none' : $countryName,
     'q' => $q,
     'status' => $status,
+    'per_page' => $perPage,
 ], static fn ($v) => $v !== '' && $v !== null));
 
 if (!$emptyCountry && $addCountry === '') {
@@ -609,7 +611,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database</p>
+    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database · choose rows per page below</p>
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
@@ -655,6 +657,14 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       <?php endforeach; ?>
     </select>
   </div>
+  <div>
+    <label for="prospects_per_page">Per page</label>
+    <select id="prospects_per_page" name="per_page">
+      <?php foreach (sheet_per_page_options() as $n): ?>
+        <option value="<?= (int) $n ?>" <?= (int) $perPage === (int) $n ? 'selected' : '' ?>><?= (int) $n ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
   <button class="btn" type="submit">Filter</button>
 </form>
 
@@ -682,10 +692,18 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       <?php endif; ?>
     </div>
   <?php else: ?>
-    <div class="actions" style="margin-top:0.8rem">
+    <div class="actions" style="margin-top:0.8rem;align-items:center;gap:0.65rem;flex-wrap:wrap">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span>Page <?= $pageNum ?> / <?= $pages ?></span>
+      <span>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <?php
+      render_sheet_per_page_filter([
+          'page' => 'admin_prospects',
+          'country' => $emptyCountry ? '_none' : $countryName,
+          'q' => $q,
+          'status' => $status,
+      ], $perPage);
+      ?>
     </div>
   <?php endif; ?>
 </div>

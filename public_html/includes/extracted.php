@@ -200,9 +200,18 @@ function read_extracted_sites_upload(?array $file): string
 }
 
 /**
- * Push pasted extracting-results domains into admin Extracted URLs for one country.
+ * Push pasted extracting-results domains into Admin Extracted Sites (+ Team SWE).
+ * Country TLDs (.de, .at, .ch, .fr, …) auto-route to their own country folders.
+ * Generic TLDs (.com, .net, .eu, …) stay in the selected batch country.
  *
- * @return array{inserted:int,skipped:int,invalid:int,country:string,domains:list<string>}
+ * @return array{
+ *   inserted:int,
+ *   skipped:int,
+ *   invalid:int,
+ *   country:string,
+ *   domains:list<string>,
+ *   by_country:array<string, array{inserted:int,skipped:int,domains:list<string>}>
+ * }
  */
 function push_extract_results_to_extracted(
     string $raw,
@@ -213,32 +222,81 @@ function push_extract_results_to_extracted(
     ?int $extractBatchId = null
 ): array {
     $parsed = parse_extracted_sites_input($raw);
-    $added = add_extracted_domains_to_country(
-        $parsed['valid'],
-        $country,
-        $user,
-        $language,
-        $region,
-        'Pushed from Extracting Results · ' . trim($country),
-        $extractBatchId
-    );
-    // Site names also go to Sites with emails - Team (emails filled there, then Team Push → Admin).
-    if ($parsed['valid'] !== [] && function_exists('add_sites_with_emails_domains')) {
-        add_sites_with_emails_domains(
-            $parsed['valid'],
-            $country,
+    $selected = require_canonical_country($country);
+    $selectedName = $selected['name'];
+    $groups = route_domains_by_country_tld($parsed['valid'], $selectedName);
+
+    $totalInserted = 0;
+    $totalSkipped = 0;
+    $allDomains = [];
+    $byCountry = [];
+
+    foreach ($groups as $destCountry => $domains) {
+        if ($domains === []) {
+            continue;
+        }
+        $destCanon = resolve_canonical_country($destCountry) ?? $selected;
+        $destName = $destCanon['name'];
+        $destLang = $destName === $selectedName
+            ? ($language !== '' ? $language : $destCanon['language'])
+            : $destCanon['language'];
+        $destRegion = $destName === $selectedName
+            ? ($region !== '' ? $region : $destCanon['region'])
+            : $destCanon['region'];
+
+        $note = $destName === $selectedName
+            ? ('Pushed from Extracting Results · ' . $selectedName)
+            : ('Pushed from Extracting Results · routed by TLD from ' . $selectedName);
+
+        $added = add_extracted_domains_to_country(
+            $domains,
+            $destName,
             $user,
-            $language,
-            $region,
+            $destLang,
+            $destRegion,
+            $note,
             $extractBatchId
         );
+        if (function_exists('add_sites_with_emails_domains')) {
+            add_sites_with_emails_domains(
+                $domains,
+                $destName,
+                $user,
+                $destLang,
+                $destRegion,
+                $extractBatchId
+            );
+        }
+
+        // Site Finding copy: same country/TLD buckets, append + skip duplicates.
+        $semrush = ['inserted' => 0, 'skipped' => 0];
+        if (function_exists('add_semrush_domain_list')) {
+            $semrush = add_semrush_domain_list($destName, $domains, $user);
+        }
+
+        $ins = (int) $added['inserted'];
+        $skip = (int) $added['skipped'];
+        $totalInserted += $ins;
+        $totalSkipped += $skip;
+        foreach ($added['domains'] as $d) {
+            $allDomains[] = $d;
+        }
+        $byCountry[$destName] = [
+            'inserted' => $ins,
+            'skipped' => $skip,
+            'domains' => $added['domains'],
+            'semrush_inserted' => (int) ($semrush['inserted'] ?? 0),
+            'semrush_skipped' => (int) ($semrush['skipped'] ?? 0),
+        ];
     }
+
     return [
-        'inserted' => (int) $added['inserted'],
-        'skipped' => (int) $added['skipped'],
+        'inserted' => $totalInserted,
+        'skipped' => $totalSkipped,
         'invalid' => (int) $parsed['invalid_count'],
-        'country' => (string) $added['country'],
-        'domains' => $added['domains'],
+        'country' => $selectedName,
+        'domains' => $allDomains,
+        'by_country' => $byCountry,
     ];
 }
 
@@ -385,7 +443,7 @@ function extracted_inventory_query(array $filters, int $pageNum = 1, int $per = 
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     $pageNum = max(1, $pageNum);
-    $per = max(1, min(200, $per));
+    $per = max(1, min(1000, $per));
     $offset = ($pageNum - 1) * $per;
     $stmt = db()->prepare(
         "SELECT e.*, u.username pushed_by_name, u.full_name pushed_by_full

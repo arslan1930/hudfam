@@ -85,7 +85,7 @@ function render_team_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracting sites</h3>'
         . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
-        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> → Extracted Sites + Sites with emails - Team.</p>'
+        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> → country TLDs route to their folders; generic TLDs stay in the selected country (Extracted Sites + Sites with emails - Team).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Sites with emails - Team</h3>'
@@ -149,7 +149,7 @@ function guide_extracting(): string
             'Teammate uses Filter & add and saves new unique sites.',
             'Those sites appear here under Sites list for that country.',
             'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
-            'Paste sites into Extracting Results and Push — they go to Extracted Sites and Sites with emails - Team for that country.',
+            'Paste sites into Extracting Results and Push — country TLDs (.de, .at, .ch, …) go to their own folders; .com/.net/.eu stay in the selected country.',
             'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
         ]
     );
