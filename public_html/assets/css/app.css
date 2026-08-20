@@ -3530,6 +3530,63 @@ table.extracted-country-table th {
   font-weight: 650;
 }
 
+/* Semrush Research comments */
+.semrush-comment-list {
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.semrush-comment-list li {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.7rem 0.85rem;
+}
+.semrush-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+.semrush-comment-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+.semrush-comment-delete {
+  margin: 0.45rem 0 0;
+}
+
+/* Rows-per-page filter (sitewide sheet lists) */
+.sheet-per-page-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.sheet-per-page-filter label {
+  margin: 0;
+  font-weight: 650;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+.sheet-per-page-filter select {
+  min-width: 5.5rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-weight: 650;
+}
+
 /* Pagination / sheet footers */
 .pagination,
 .card .pagination {
@@ -3661,6 +3718,236 @@ textarea:focus-visible {
     justify-content: flex-start;
   }
   .camp-hub-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Communication Team · campaign drafts (per project) */
+.camp-drafts-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.camp-drafts-project-list {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.camp-drafts-project-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 650;
+}
+.camp-drafts-project-link:hover {
+  border-color: #9ca3af;
+  background: #f9fafb;
+  text-decoration: none;
+}
+.camp-drafts-project-link.is-active {
+  border-color: var(--brand-2);
+  background: #eef0f3;
+  box-shadow: inset 3px 0 0 var(--brand-2);
+}
+.camp-drafts-project-name {
+  min-width: 0;
+  word-break: break-word;
+}
+.camp-drafts-project-count {
+  flex: 0 0 auto;
+  min-width: 1.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  text-align: center;
+  color: var(--muted);
+}
+.camp-drafts-filters {
+  margin-top: 0.65rem;
+}
+.camp-drafts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+.camp-draft-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 12rem;
+}
+.camp-draft-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem 0.65rem;
+}
+.camp-draft-title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.3;
+  color: var(--brand-deep);
+}
+.camp-draft-preview {
+  margin: 0;
+  flex: 1 1 auto;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  max-height: 10rem;
+  overflow: auto;
+}
+.camp-draft-rich p,
+.camp-draft-surface p {
+  margin: 0 0 0.55rem;
+}
+.camp-draft-rich p:last-child,
+.camp-draft-surface p:last-child {
+  margin-bottom: 0;
+}
+.camp-draft-rich h1,
+.camp-draft-rich h2,
+.camp-draft-rich h3,
+.camp-draft-surface h1,
+.camp-draft-surface h2,
+.camp-draft-surface h3 {
+  margin: 0 0 0.45rem;
+  line-height: 1.25;
+  color: var(--brand-deep);
+  font-weight: 750;
+}
+.camp-draft-rich h1,
+.camp-draft-surface h1 { font-size: 1.2rem; }
+.camp-draft-rich h2,
+.camp-draft-surface h2 { font-size: 1.08rem; }
+.camp-draft-rich h3,
+.camp-draft-surface h3 { font-size: 0.98rem; }
+.camp-draft-card-actions {
+  margin-top: auto;
+}
+.camp-draft-delete-form {
+  display: inline;
+  margin: 0;
+}
+.camp-draft-copy-status {
+  margin: 0;
+}
+.camp-draft-copy-status.is-error {
+  color: var(--bad);
+}
+.camp-draft-editor {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.camp-draft-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--line);
+  background: #f9fafb;
+}
+.camp-draft-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+  margin: 0 0.15rem;
+}
+.camp-draft-surface {
+  min-height: 14rem;
+  padding: 0.75rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  outline: none;
+  overflow: auto;
+}
+.camp-draft-surface.is-empty:before {
+  content: attr(data-placeholder);
+  white-space: pre-wrap;
+  color: var(--muted);
+  pointer-events: none;
+}
+.camp-draft-surface.is-invalid {
+  box-shadow: inset 0 0 0 1px var(--bad);
+}
+.camp-draft-surface.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--brand-2);
+  background: #f3f4f6;
+}
+.camp-draft-surface:focus {
+  box-shadow: inset 0 0 0 1px var(--brand-2);
+}
+.camp-draft-rich img,
+.camp-draft-surface img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.45rem 0;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+.camp-draft-image-hint {
+  color: var(--muted);
+}
+.camp-draft-textarea-sync {
+  display: none;
+}
+.camp-admin-drafts-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.camp-admin-drafts-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.camp-admin-draft-meta {
+  min-width: 0;
+}
+.camp-admin-draft-meta strong {
+  display: block;
+  color: var(--brand-deep);
+}
+@media (max-width: 900px) {
+  .camp-drafts-layout {
     grid-template-columns: 1fr;
   }
 }

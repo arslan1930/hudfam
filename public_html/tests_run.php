@@ -21,6 +21,7 @@ require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/presence.php';
+require __DIR__ . '/includes/semrush_research.php';
 
 $errors = [];
 $ok = [];
@@ -49,6 +50,7 @@ try {
     ensure_order_schema();
     ensure_invoice_schema();
     ensure_task_presence_schema();
+    ensure_semrush_research_schema();
     pass('schemas ensured');
 } catch (Throwable $e) {
     fail('schema: ' . $e->getMessage());
@@ -85,6 +87,8 @@ db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%
 db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
+db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfsem-%'");
+db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-%'");
 
 // --- Login ---
 try {
@@ -99,11 +103,99 @@ try {
     } else {
         pass('bad login rejected');
     }
+
+    // Admin may sign in with account email; Team may not.
+    db()->prepare("UPDATE users SET email=? WHERE username='admin'")
+        ->execute(['admin.login@txf-test.local']);
+    db()->prepare("UPDATE users SET email=? WHERE username='teammate'")
+        ->execute(['teammate.login@txf-test.local']);
+    logout_user();
+    $adminEmailOk = attempt_login('Admin.Login@txf-test.local', 'TestAdmin9x');
+    $adminEmailUser = current_user();
+    logout_user();
+    $teamEmailBlocked = !attempt_login('teammate.login@txf-test.local', 'TestTeam8z');
+    logout_user();
+    $teamUserOk = attempt_login('teammate', 'TestTeam8z');
+    logout_user();
+    if ($adminEmailOk
+        && ($adminEmailUser['role'] ?? '') === 'admin'
+        && ($adminEmailUser['username'] ?? '') === 'admin'
+        && $teamEmailBlocked
+        && $teamUserOk) {
+        pass('admin email login allowed; team email login blocked');
+    } else {
+        fail('email login ACL: ' . json_encode([
+            'admin_email' => $adminEmailOk,
+            'admin_user' => $adminEmailUser,
+            'team_email_blocked' => $teamEmailBlocked,
+            'team_username' => $teamUserOk,
+        ]));
+    }
 } catch (Throwable $e) {
     fail('login: ' . $e->getMessage());
 }
 
 $country = 'Germany';
+
+// --- Clean errors / https:// paste → root domains (Filter & add) ---
+try {
+    $messy = implode("\n", [
+        'https://mail.google.com/mail/u/6/#inbox',
+        'https://mail.google.com/mail/u/3/#inbox',
+        'https://mail.google.com/mail/u/3/#inbox',
+        'https://mail.google.com/mail/u/4/#inbox',
+        'https://mail.google.com/mail/u/9/#inbox',
+        'ttps://utilfox.vercel.app/data-tools/url-cleaner',
+        'https://utilfox.vercel.app/data-tools/url-cleaner',
+        'https://utilfox.vercel.app/data-tools/data-deduplication',
+        'https://members.toolszen.com/page/semrush',
+        'https://techxform.com/index.php?page=team_extract_queue&country=Italy',
+        'https://seolinkbuildings.com/publisher/websites',
+        'https://guruhitech.com/',
+        'https://www.letemps.ch/',
+        'https://cloudconvert.com/png-to-webp',
+        'https://seolinkbuildings.com/login',
+    ]);
+    $parsedMessy = parse_domain_list_strict($messy);
+    $expectRoots = [
+        'google.com',
+        'vercel.app',
+        'toolszen.com',
+        'techxform.com',
+        'seolinkbuildings.com',
+        'guruhitech.com',
+        'letemps.ch',
+        'cloudconvert.com',
+    ];
+    sort($expectRoots);
+    $got = $parsedMessy['valid'];
+    sort($got);
+    if ((int) ($parsedMessy['invalid_count'] ?? -1) === 0 && $got === $expectRoots) {
+        pass('clean https paste → unique root domains (guruhitech.com etc.)');
+    } else {
+        fail('clean https paste: ' . json_encode([
+            'got' => $got,
+            'expect' => $expectRoots,
+            'invalid' => $parsedMessy['invalid'] ?? [],
+        ]));
+    }
+    $g = analyze_pasted_domain_line('https://guruhitech.com/');
+    if (!empty($g['ok']) && ($g['domain'] ?? '') === 'guruhitech.com' && !empty($g['fixed'])) {
+        pass('analyze https://guruhitech.com/ → guruhitech.com');
+    } else {
+        fail('analyze guruhitech: ' . json_encode($g));
+    }
+    $q = analyze_pasted_domain_line(
+        'https://techxform.com/index.php?page=team_extract_queue&country=Italy'
+    );
+    if (!empty($q['ok']) && ($q['domain'] ?? '') === 'techxform.com') {
+        pass('analyze https URL with query string → root domain');
+    } else {
+        fail('analyze query URL: ' . json_encode($q));
+    }
+} catch (Throwable $e) {
+    fail('clean https: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
 
 // --- Our database ---
 try {
@@ -186,6 +278,148 @@ try {
     } else {
         fail("team swe txfpush-* count=$swe");
     }
+
+    // Push auto-route: country TLDs → own folders; generic TLDs stay in selected country.
+    // Also mirrors site names into Semrush Research (append + skip duplicates).
+    db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-route%'");
+    $routePush = push_extract_results_to_extracted(
+        implode("\n", [
+            'txfroute-stay.com',
+            'txfroute-stay.net',
+            'txfroute-stay.eu',
+            'txfroute-de.de',
+            'txfroute-at.at',
+            'txfroute-ch.ch',
+            'txfroute-fr.fr',
+            'https://www.txfroute-uk.co.uk/path',
+        ]),
+        'Germany',
+        $teamUser,
+        'German',
+        'europe',
+        $batchId
+    );
+    $inDe = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Germany' AND domain LIKE 'txfroute-%'"
+    )->fetchColumn();
+    $inAt = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $inCh = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Switzerland' AND domain='txfroute-ch.ch'"
+    )->fetchColumn();
+    $inFr = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='France' AND domain='txfroute-fr.fr'"
+    )->fetchColumn();
+    $inUk = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='United Kingdom' AND domain='txfroute-uk.co.uk'"
+    )->fetchColumn();
+    $sweAt = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $semDe = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Germany' AND domain LIKE 'txfroute-%'"
+    )->fetchColumn();
+    $semAt = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $semCh = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Switzerland' AND domain='txfroute-ch.ch'"
+    )->fetchColumn();
+    $semUk = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='United Kingdom' AND domain='txfroute-uk.co.uk'"
+    )->fetchColumn();
+    $mapOk = country_for_push_domain('shop.de', 'Germany') === 'Germany'
+        && country_for_push_domain('shop.at', 'Germany') === 'Austria'
+        && country_for_push_domain('shop.ch', 'Germany') === 'Switzerland'
+        && country_for_push_domain('shop.com', 'Germany') === 'Germany'
+        && country_for_push_domain('shop.eu', 'France') === 'France';
+    if ((int) ($routePush['inserted'] ?? 0) >= 5
+        && $inDe === 4 // .com + .net + .eu + .de
+        && $inAt === 1
+        && $inCh === 1
+        && $inFr === 1
+        && $inUk === 1
+        && $sweAt === 1
+        && $mapOk
+        && count($routePush['by_country'] ?? []) >= 4) {
+        pass('extract push routes country TLDs; generic TLDs stay in selected country');
+    } else {
+        fail('extract TLD route: ' . json_encode([
+            'push' => [
+                'inserted' => $routePush['inserted'] ?? null,
+                'by_country' => array_keys($routePush['by_country'] ?? []),
+            ],
+            'de' => $inDe,
+            'at' => $inAt,
+            'ch' => $inCh,
+            'fr' => $inFr,
+            'uk' => $inUk,
+            'swe_at' => $sweAt,
+            'map' => $mapOk,
+        ]));
+    }
+    if ($semDe === 4 && $semAt === 1 && $semCh === 1 && $semUk === 1
+        && (int) (($routePush['by_country']['Austria']['semrush_inserted'] ?? 0)) === 1) {
+        pass('extract push also appends Semrush Research with same TLD countries');
+    } else {
+        fail('extract→semrush mirror: ' . json_encode([
+            'sem_de' => $semDe,
+            'sem_at' => $semAt,
+            'sem_ch' => $semCh,
+            'sem_uk' => $semUk,
+            'by' => $routePush['by_country'] ?? null,
+        ]));
+    }
+    $routeAgain = push_extract_results_to_extracted(
+        "txfroute-at.at\ntxfroute-new.de",
+        'Germany',
+        $teamUser,
+        'German',
+        'europe',
+        $batchId
+    );
+    $semAtAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    $semNewDe = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Germany' AND domain='txfroute-new.de'"
+    )->fetchColumn();
+    if ($semAtAfter === 1 && $semNewDe === 1
+        && (int) (($routeAgain['by_country']['Austria']['semrush_skipped'] ?? 0)) === 1
+        && (int) (($routeAgain['by_country']['Germany']['semrush_inserted'] ?? 0)) === 1) {
+        pass('extract→semrush append skips duplicates');
+    } else {
+        fail('extract→semrush skip: ' . json_encode($routeAgain['by_country'] ?? null));
+    }
+    add_semrush_comment('Austria', 'txfsem-route note', $teamUser);
+    $clearAt = clear_semrush_country('Austria');
+    $semAtCleared = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sites WHERE country='Austria' AND domain LIKE 'txfroute-%'"
+    )->fetchColumn();
+    $commentsAt = (int) db()->query(
+        "SELECT COUNT(*) FROM semrush_sheet_comments WHERE country='Austria' AND body LIKE 'txfsem-route%'"
+    )->fetchColumn();
+    $extractedAtKept = (int) db()->query(
+        "SELECT COUNT(*) FROM extracted_sites WHERE country='Austria' AND domain='txfroute-at.at'"
+    )->fetchColumn();
+    if (!empty($clearAt['ok']) && $semAtCleared === 0 && $commentsAt === 0 && $extractedAtKept === 1) {
+        pass('semrush clear country deletes sites+comments; Extracted Sites kept');
+    } else {
+        fail('semrush clear vs extracted: ' . json_encode([
+            'clear' => $clearAt,
+            'sem' => $semAtCleared,
+            'comments' => $commentsAt,
+            'extracted' => $extractedAtKept,
+        ]));
+    }
+    db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfroute-%'");
+    db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-route%'");
 } catch (Throwable $e) {
     fail('extracting: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
@@ -753,6 +987,160 @@ try {
     delete_email_campaign_project($barBeta);
     delete_email_campaign_project($barHidden);
 
+    // Communication / Admin project drafts (categories + one-click copy library).
+    foreach (['TXF Drafts Alpha', 'TXF Drafts Hidden'] as $pn) {
+        $oldP = get_email_campaign_project_by_name($pn);
+        if ($oldP) {
+            delete_email_campaign_project((int) $oldP['id']);
+        }
+    }
+    $draftPid = create_email_campaign_project('TXF Drafts Alpha', (int) $adminUser['id'], true);
+    $draftHiddenPid = create_email_campaign_project('TXF Drafts Hidden', (int) $adminUser['id'], false);
+    $saved = save_email_campaign_draft(
+        $draftPid,
+        'First outreach DE',
+        "Hi,\n\nWould you like a guest post?\n\nBest,",
+        'first_outreach',
+        0,
+        (int) $adminUser['id']
+    );
+    $savedOffer = save_email_campaign_draft(
+        $draftPid,
+        'Pricing offer',
+        "Hello,\n\nOur offer is …\n\nThanks,",
+        'offer',
+        0,
+        (int) $adminUser['id']
+    );
+    $badEmpty = save_email_campaign_draft($draftPid, 'Empty body', '   ', 'custom', 0, (int) $adminUser['id']);
+    $allDrafts = list_email_campaign_drafts($draftPid);
+    $offerOnly = list_email_campaign_drafts($draftPid, 'offer');
+    $hiddenDraft = save_email_campaign_draft(
+        $draftHiddenPid,
+        'Hidden project draft',
+        'Should not appear when project is hidden from team.',
+        'reply',
+        0,
+        (int) $adminUser['id']
+    );
+    $visibleProjects = list_email_campaign_projects(true);
+    $visibleNames = array_map(static fn ($p) => (string) $p['name'], $visibleProjects);
+    if (!empty($saved['ok']) && !empty($savedOffer['ok']) && empty($badEmpty['ok'])
+        && count($allDrafts) === 2
+        && count($offerOnly) === 1
+        && (string) ($offerOnly[0]['title'] ?? '') === 'Pricing offer'
+        && email_campaign_draft_category_label('first_outreach') === 'First outreach'
+        && in_array('TXF Drafts Alpha', $visibleNames, true)
+        && !in_array('TXF Drafts Hidden', $visibleNames, true)
+        && !empty($hiddenDraft['ok'])) {
+        pass('campaign drafts save/list by category; hidden projects stay out of team list');
+    } else {
+        fail('campaign drafts: ' . json_encode([
+            'saved' => $saved,
+            'offer' => $savedOffer,
+            'bad' => $badEmpty,
+            'all' => count($allDrafts),
+            'offer_only' => $offerOnly,
+            'visible' => $visibleNames,
+        ]));
+    }
+    $updated = save_email_campaign_draft(
+        $draftPid,
+        'Pricing offer v2',
+        "Hello,\n\nUpdated offer…\n\nThanks,",
+        'offer',
+        (int) ($savedOffer['id'] ?? 0),
+        (int) $adminUser['id']
+    );
+    $afterUpdate = get_email_campaign_draft((int) ($savedOffer['id'] ?? 0));
+    $richSaved = save_email_campaign_draft(
+        $draftPid,
+        'Rich format sample',
+        '<h2 onclick="x()">Guest post offer</h2><p>Hi <strong>there</strong>, we can do <em>guest posts</em> and <u>niche edits</u>.</p><script>alert(1)</script><a href="https://evil.example">click</a>',
+        'offer',
+        0,
+        (int) $adminUser['id']
+    );
+    $richRow = get_email_campaign_draft((int) ($richSaved['id'] ?? 0));
+    $richBody = (string) ($richRow['body'] ?? '');
+    $sanitized = sanitize_email_campaign_draft_html($richBody);
+    $plainFromHtml = email_campaign_draft_html_to_plain($richBody);
+    $keepsFormat = str_contains($richBody, '<strong>')
+        && str_contains($richBody, '<em>')
+        && str_contains($richBody, '<u>')
+        && str_contains($richBody, '<h2>')
+        && !str_contains(strtolower($richBody), '<script')
+        && !str_contains(strtolower($richBody), 'onclick')
+        && !str_contains(strtolower($richBody), '<a ')
+        && str_contains($plainFromHtml, 'Guest post offer')
+        && str_contains($plainFromHtml, 'guest posts');
+    $tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    $imgSaved = save_email_campaign_draft(
+        $draftPid,
+        'With screenshot',
+        '<p>See screenshot:</p><img src="' . $tinyPng . '" alt="dot" onclick="evil()">'
+            . '<img src="https://evil.example/x.png" alt="remote">'
+            . '<img src="' . $tinyPng . '" alt="dot2">',
+        'custom',
+        0,
+        (int) $adminUser['id']
+    );
+    $imgRow = get_email_campaign_draft((int) ($imgSaved['id'] ?? 0));
+    $imgBody = (string) ($imgRow['body'] ?? '');
+    $imgCount = preg_match_all('/<\s*img\b/i', $imgBody);
+    $imgOk = !empty($imgSaved['ok'])
+        && $imgCount === 2
+        && str_contains($imgBody, 'data:image/png;base64,')
+        && !str_contains($imgBody, 'https://evil.example')
+        && !str_contains(strtolower($imgBody), 'onclick')
+        && str_contains(email_campaign_draft_html_to_plain($imgBody), '[image]');
+    $badRemoteOnly = sanitize_email_campaign_draft_html(
+        '<img src="https://evil.example/x.png" alt="x"><img src="javascript:alert(1)">'
+    );
+    $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0));
+    $left = count_email_campaign_drafts($draftPid);
+    $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0));
+    if (!empty($updated['ok'])
+        && (string) ($afterUpdate['title'] ?? '') === 'Pricing offer v2'
+        && !empty($richSaved['ok'])
+        && $keepsFormat
+        && $sanitized === $richBody
+        && $imgOk
+        && $badRemoteOnly === ''
+        && !empty($del['ok'])
+        && $left === 3
+        && empty($wrongProjectDel['ok'])) {
+        pass('campaign drafts update/delete stay scoped to project');
+        pass('campaign drafts keep bold/italic/underline/headings and strip unsafe HTML');
+        pass('campaign drafts keep compressed data-URI images and strip remote/unsafe imgs');
+    } else {
+        fail('campaign draft mutate: ' . json_encode([
+            'updated' => $updated,
+            'after' => $afterUpdate,
+            'rich' => $richSaved,
+            'body' => $richBody,
+            'keeps' => $keepsFormat,
+            'img' => $imgSaved,
+            'img_body' => mb_substr($imgBody, 0, 200),
+            'img_count' => $imgCount,
+            'img_ok' => $imgOk,
+            'remote' => $badRemoteOnly,
+            'del' => $del,
+            'left' => $left,
+            'wrong' => $wrongProjectDel,
+        ]));
+    }
+    delete_email_campaign_project($draftPid);
+    $goneWithProject = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=" . (int) $draftPid
+    )->fetchColumn();
+    delete_email_campaign_project($draftHiddenPid);
+    if ($goneWithProject === 0) {
+        pass('deleting project cascades campaign drafts');
+    } else {
+        fail("draft cascade left=$goneWithProject");
+    }
+
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
     $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
@@ -811,20 +1199,30 @@ try {
     }
 
     // Paginated browse (Our database model) — never load all rows in UI.
+    // Default UI page size is 1,000; also verify smaller pages still work.
     $page1 = email_campaign_rows_inventory_query($bulkSheet, [], 1, 100);
     $page2 = email_campaign_rows_inventory_query($bulkSheet, [], 2, 100);
     $lastPageNum = (int) ceil((int) $page1['total'] / 100);
     $lastPage = email_campaign_rows_inventory_query($bulkSheet, [], $lastPageNum, 100);
     $searchHit = email_campaign_rows_inventory_query($bulkSheet, ['q' => 'txfcamp-scale500'], 1, 100);
+    $page1k = email_campaign_rows_inventory_query($bulkSheet, [], 1, 1000);
     $page1Ids = array_column($page1['rows'], 'id');
     $page2Ids = array_column($page2['rows'], 'id');
+    $remainder = (int) $page1['total'] % 100;
+    $expectLast = $remainder === 0 ? 100 : $remainder;
     if ((int) $page1['total'] >= 1200
+        && (int) $page1['per_page'] === 100
         && count($page1['rows']) === 100
+        && (int) $page2['page'] === 2
         && count($page2['rows']) === 100
         && array_intersect($page1Ids, $page2Ids) === []
         && (int) $lastPage['page'] === $lastPageNum
+        && count($lastPage['rows']) === $expectLast
         && (int) $searchHit['total'] === 1
-        && str_contains((string) ($searchHit['rows'][0]['domain'] ?? ''), 'scale500')) {
+        && str_contains((string) ($searchHit['rows'][0]['domain'] ?? ''), 'scale500')
+        && (int) $page1k['per_page'] === 1000
+        && count($page1k['rows']) === 1000
+        && (int) $page1k['pages'] >= 2) {
         pass('campaign sheet paginated inventory + search');
     } else {
         fail('campaign pagination: ' . json_encode([
@@ -832,8 +1230,38 @@ try {
             'p1' => count($page1['rows']),
             'p2' => count($page2['rows']),
             'overlap' => count(array_intersect($page1Ids, $page2Ids)),
-            'last' => $lastPage['page'] ?? null,
+            'last' => [count($lastPage['rows']), $lastPage['page'], $lastPageNum, $expectLast],
             'search' => $searchHit['total'] ?? null,
+            'p1k' => [count($page1k['rows']), $page1k['per_page'] ?? null, $page1k['pages'] ?? null],
+        ]));
+    }
+
+    // Sitewide Per page filter helpers (100 / 250 / 500 / 1000).
+    unset($_SESSION['sheet_per_page'], $_GET['per_page'], $_POST['per_page']);
+    $defaultPp = resolve_sheet_per_page();
+    $_GET['per_page'] = '250';
+    $picked250 = resolve_sheet_per_page();
+    unset($_GET['per_page']);
+    $remembered = resolve_sheet_per_page();
+    $_GET['per_page'] = '9999';
+    $badClamped = resolve_sheet_per_page();
+    unset($_GET['per_page'], $_SESSION['sheet_per_page']);
+    $opts = sheet_per_page_options();
+    if ($defaultPp === 1000
+        && $picked250 === 250
+        && $remembered === 250
+        && $badClamped === 1000
+        && $opts === [100, 250, 500, 1000]
+        && normalize_sheet_per_page(500) === 500
+        && str_contains(append_sheet_per_page_query('index.php?page=x', 100), 'per_page=100')) {
+        pass('sheet per-page filter options + session remember');
+    } else {
+        fail('sheet per-page helpers: ' . json_encode([
+            'default' => $defaultPp,
+            'picked' => $picked250,
+            'remembered' => $remembered,
+            'bad' => $badClamped,
+            'opts' => $opts,
         ]));
     }
 
@@ -1326,10 +1754,16 @@ try {
         $u = ['id' => $uid, 'username' => $uname, 'role' => 'team'];
         $pages = department_tool_pages_for_user($u);
         $expect = match ($slug) {
-            'site_finding' => ['team_prospect_check', 'team_prospect_batches', 'team_prospect_batch'],
+            'site_finding' => [
+                'team_prospect_check',
+                'team_prospect_batches',
+                'team_prospect_batch',
+                'team_semrush_research',
+                'team_semrush_sheet',
+            ],
             'site_extracting' => ['team_extracting', 'team_extract_batch'],
             'email_extracting' => ['team_sites_emails', 'team_admin_emails_delete'],
-            'communication' => ['team_email_campaigns', 'team_admin_emails_delete'],
+            'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_delete'],
         };
         $missing = array_diff($expect, $pages);
         if ($missing) {
@@ -1551,6 +1985,139 @@ try {
     db()->prepare('DELETE FROM task_presence WHERE task_key LIKE ?')->execute(['txfpresence:%']);
 } catch (Throwable $e) {
     fail('presence: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Semrush Research (site names per country) ---
+try {
+    seed_countries_if_empty(db());
+    // Isolated country: wipe any prior test residue, then own the sheet for this run.
+    $semCountry = 'Singapore';
+    db()->prepare('DELETE FROM semrush_sites WHERE country=?')->execute([$semCountry]);
+    db()->prepare('DELETE FROM semrush_sheet_comments WHERE country=?')->execute([$semCountry]);
+
+    $hubBefore = array_column(list_semrush_country_rows(), 'country');
+    if (!in_array($semCountry, $hubBefore, true)) {
+        pass('semrush hub hides country with no sites');
+    } else {
+        fail('semrush hub still lists empty Singapore');
+    }
+
+    $seed = add_semrush_domains(
+        $semCountry,
+        "txfsem-alpha.com\ntxfsem-beta.de\nnot a domain\ntxfsem-alpha.com",
+        $adminUser
+    );
+    if (!empty($seed['ok'])
+        && (int) ($seed['inserted'] ?? 0) === 2
+        && (int) ($seed['invalid'] ?? 0) >= 1
+        && (int) ($seed['total'] ?? 0) === 2) {
+        pass('semrush admin seed inserts unique site names');
+    } else {
+        fail('semrush seed: ' . json_encode($seed));
+    }
+
+    $hubCountries = array_column(list_semrush_country_rows(), 'country');
+    if (in_array($semCountry, $hubCountries, true)) {
+        pass('semrush country appears in hub after Admin seed');
+    } else {
+        fail('semrush hub missing Singapore after seed');
+    }
+
+    $domains = list_semrush_domains_for_country($semCountry);
+    sort($domains);
+    if ($domains === ['txfsem-alpha.com', 'txfsem-beta.de']) {
+        pass('semrush sheet lists site names only');
+    } else {
+        fail('semrush domains missing: ' . json_encode($domains));
+    }
+
+    $dup = add_semrush_domains($semCountry, "txfsem-alpha.com\ntxfsem-gamma.com", $adminUser);
+    if (!empty($dup['ok'])
+        && (int) ($dup['inserted'] ?? 0) === 1
+        && (int) ($dup['skipped'] ?? 0) >= 1
+        && (int) ($dup['total'] ?? 0) === 3) {
+        pass('semrush admin append skips duplicates');
+    } else {
+        fail('semrush append: ' . json_encode($dup));
+    }
+
+    $replace = set_semrush_domains_from_text(
+        $semCountry,
+        "txfsem-beta.de\ntxfsem-delta.at",
+        $teamUser
+    );
+    $after = list_semrush_domains_for_country($semCountry);
+    sort($after);
+    if (!empty($replace['ok'])
+        && $after === ['txfsem-beta.de', 'txfsem-delta.at']
+        && (int) ($replace['removed'] ?? 0) === 2
+        && (int) ($replace['inserted'] ?? 0) === 1) {
+        pass('semrush set replaces sheet list (team edit)');
+    } else {
+        fail('semrush set: ' . json_encode($replace) . ' domains=' . json_encode($after));
+    }
+
+    $c1 = add_semrush_comment($semCountry, 'txfsem-note from team', $teamUser);
+    $c2 = add_semrush_comment($semCountry, 'txfsem-note from admin', $adminUser);
+    $comments = list_semrush_comments($semCountry);
+    $bodies = array_column($comments, 'body');
+    if (!empty($c1['ok']) && !empty($c2['ok'])
+        && in_array('txfsem-note from team', $bodies, true)
+        && in_array('txfsem-note from admin', $bodies, true)) {
+        pass('semrush comments add for team and admin');
+    } else {
+        fail('semrush comments: ' . json_encode([$c1, $c2, $bodies]));
+    }
+
+    $teamDelOwn = delete_semrush_comment((int) ($c1['id'] ?? 0), $teamUser);
+    $teamDelAdmin = delete_semrush_comment((int) ($c2['id'] ?? 0), $teamUser);
+    if (!empty($teamDelOwn['ok']) && empty($teamDelAdmin['ok'])) {
+        pass('semrush team deletes own comment only');
+    } else {
+        fail('semrush comment ACL: own=' . json_encode($teamDelOwn) . ' other=' . json_encode($teamDelAdmin));
+    }
+    $adminDel = delete_semrush_comment((int) ($c2['id'] ?? 0), $adminUser);
+    if (!empty($adminDel['ok'])) {
+        pass('semrush admin can delete any comment');
+    } else {
+        fail('semrush admin delete comment: ' . json_encode($adminDel));
+    }
+
+    $empty = set_semrush_domains_from_text($semCountry, '', $teamUser);
+    $stillListed = in_array(
+        $semCountry,
+        array_column(list_semrush_country_rows(), 'country'),
+        true
+    );
+    if (!empty($empty['ok']) && (int) ($empty['total'] ?? -1) === 0 && !$stillListed) {
+        pass('semrush empty sheet hides country from hub');
+    } else {
+        fail('semrush empty hide: ' . json_encode($empty) . ' listed=' . ($stillListed ? '1' : '0'));
+    }
+
+    add_semrush_domains($semCountry, "txfsem-wipe.com", $adminUser);
+    add_semrush_comment($semCountry, 'txfsem-wipe comment', $teamUser);
+    $wipe = clear_semrush_country($semCountry);
+    $sitesLeft = count_semrush_sites_for_country($semCountry);
+    $commentsLeft = (int) db()->query(
+        'SELECT COUNT(*) FROM semrush_sheet_comments WHERE country=' . db()->quote($semCountry)
+    )->fetchColumn();
+    $listedAfterClear = in_array(
+        $semCountry,
+        array_column(list_semrush_country_rows(), 'country'),
+        true
+    );
+    if (!empty($wipe['ok']) && $sitesLeft === 0 && $commentsLeft === 0 && !$listedAfterClear) {
+        pass('semrush admin clear removes sites and comments');
+    } else {
+        fail('semrush clear: ' . json_encode($wipe)
+            . " sites=$sitesLeft comments=$commentsLeft listed=" . ($listedAfterClear ? '1' : '0'));
+    }
+
+    db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfsem-%'");
+    db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-%'");
+} catch (Throwable $e) {
+    fail('semrush: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";
