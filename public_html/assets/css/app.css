@@ -1507,6 +1507,8 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .dept-task-table td { vertical-align: top; }
 .dept-task-table .inline-form { margin: 0; display: inline; }
 .dept-task-mine td { background: #f7faf7; }
+.dept-task-overdue td { background: #fdf2f2; }
+.dept-due-overdue { color: var(--bad); font-weight: 650; }
 .dept-add-member select { min-width: 16rem; max-width: 100%; }
 .dept-task-form textarea { width: 100%; min-height: 4.5rem; }
 

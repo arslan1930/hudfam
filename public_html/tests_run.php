@@ -2226,6 +2226,57 @@ try {
     } else {
         fail('D-2 assignee missing');
     }
+
+    // D-3: assignee filter + overdue helper
+    if ($dept) {
+        $uidMine = (int) ($teamUser['id'] ?? 0);
+        $mineTask = save_department_task(
+            (int) $dept['id'],
+            'D3 mine',
+            '',
+            'open',
+            $uidMine,
+            date('Y-m-d', strtotime('-2 days')),
+            $adminUser,
+            null
+        );
+        $wholeTask = save_department_task(
+            (int) $dept['id'],
+            'D3 whole',
+            '',
+            'open',
+            null,
+            null,
+            $adminUser,
+            null
+        );
+        $mineList = list_department_tasks((int) $dept['id'], '', $uidMine, 'mine');
+        $unList = list_department_tasks((int) $dept['id'], '', $uidMine, 'unassigned');
+        $mineIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $mineList);
+        $unIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $unList);
+        $mineOk = !empty($mineTask['id']) && in_array((int) $mineTask['id'], $mineIds, true)
+            && (empty($wholeTask['id']) || !in_array((int) $wholeTask['id'], $mineIds, true));
+        $unOk = !empty($wholeTask['id']) && in_array((int) $wholeTask['id'], $unIds, true)
+            && (empty($mineTask['id']) || !in_array((int) $mineTask['id'], $unIds, true));
+        if ($mineOk && $unOk) {
+            pass('department assignee filters mine/unassigned');
+        } else {
+            fail('assignee filters mineOk=' . ($mineOk ? '1' : '0') . ' unOk=' . ($unOk ? '1' : '0'));
+        }
+        $row = get_department_task((int) ($mineTask['id'] ?? 0));
+        if ($row && department_task_is_overdue($row)) {
+            pass('department overdue helper');
+        } else {
+            fail('department overdue helper failed');
+        }
+        if (!empty($mineTask['id'])) {
+            delete_department_task((int) $mineTask['id']);
+        }
+        if (!empty($wholeTask['id'])) {
+            delete_department_task((int) $wholeTask['id']);
+        }
+        remove_department_member((int) $dept['id'], $uidMine);
+    }
 } catch (Throwable $e) {
     fail('department assign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
