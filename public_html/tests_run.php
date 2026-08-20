@@ -2736,6 +2736,155 @@ try {
     fail('filter gate: ' . $e->getMessage());
 }
 
+// --- Routed Filter/Add: DE/AT/CH + .com per destination Our database ---
+try {
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfroute-add-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfroute-add-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfroute-add-%'");
+
+    // Seed duplicates in destination folders (not only Germany).
+    add_prospect_domains(
+        ['txfroute-add-dup.de'],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'seed de'
+    );
+    add_prospect_domains(
+        ['txfroute-add-dup.at'],
+        $adminUser,
+        'Austria',
+        'German',
+        'europe',
+        '',
+        'seed at'
+    );
+    add_prospect_domains(
+        ['txfroute-add-dup.ch'],
+        $adminUser,
+        'Switzerland',
+        'German',
+        'europe',
+        '',
+        'seed ch'
+    );
+
+    $routed = filter_domains_routed_against_prospects(
+        [
+            'txfroute-add-new.de',
+            'txfroute-add-dup.de',
+            'txfroute-add-new.at',
+            'txfroute-add-dup.at',
+            'txfroute-add-new.ch',
+            'txfroute-add-dup.ch',
+            'txfroute-add-new.com',
+        ],
+        'Germany'
+    );
+    $newSet = $routed['new'] ?? [];
+    $existSet = $routed['existing'] ?? [];
+    $by = $routed['by_country'] ?? [];
+    if (
+        in_array('txfroute-add-new.de', $newSet, true)
+        && in_array('txfroute-add-new.at', $newSet, true)
+        && in_array('txfroute-add-new.ch', $newSet, true)
+        && in_array('txfroute-add-new.com', $newSet, true)
+        && in_array('txfroute-add-dup.de', $existSet, true)
+        && in_array('txfroute-add-dup.at', $existSet, true)
+        && in_array('txfroute-add-dup.ch', $existSet, true)
+        && in_array('txfroute-add-new.at', $by['Austria']['new'] ?? [], true)
+        && in_array('txfroute-add-new.ch', $by['Switzerland']['new'] ?? [], true)
+        && in_array('txfroute-add-new.com', $by['Germany']['new'] ?? [], true)
+        && !in_array('txfroute-add-dup.at', $newSet, true)
+    ) {
+        pass('routed filter splits DE/AT/CH + .com and drops destination dupes');
+    } else {
+        fail('routed filter unexpected: ' . json_encode($routed));
+    }
+
+    $addedRoute = add_prospect_domains(
+        $newSet,
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        'Route test',
+        'routed add'
+    );
+    $de = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Germany' AND domain IN ('txfroute-add-new.de','txfroute-add-new.com')"
+    )->fetchColumn();
+    $at = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain='txfroute-add-new.at'"
+    )->fetchColumn();
+    $ch = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Switzerland' AND domain='txfroute-add-new.ch'"
+    )->fetchColumn();
+    $wrongAtInDe = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Germany' AND domain='txfroute-add-new.at'"
+    )->fetchColumn();
+
+    $exDe = 0;
+    $exAt = 0;
+    $exCh = 0;
+    if (function_exists('get_or_create_extract_batch')) {
+        $idDe = get_or_create_extract_batch('Germany', $adminUser, 'German', 'europe');
+        $idAt = get_or_create_extract_batch('Austria', $adminUser, 'German', 'europe');
+        $idCh = get_or_create_extract_batch('Switzerland', $adminUser, 'German', 'europe');
+        $st = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=? AND domain=?');
+        $st->execute([$idDe, 'txfroute-add-new.de']);
+        $exDe = (int) $st->fetchColumn();
+        $st->execute([$idDe, 'txfroute-add-new.com']);
+        $exDe += (int) $st->fetchColumn();
+        $st->execute([$idAt, 'txfroute-add-new.at']);
+        $exAt = (int) $st->fetchColumn();
+        $st->execute([$idCh, 'txfroute-add-new.ch']);
+        $exCh = (int) $st->fetchColumn();
+    }
+
+    $atInserted = (int) (($addedRoute['by_country']['Austria']['inserted'] ?? 0));
+    $chInserted = (int) (($addedRoute['by_country']['Switzerland']['inserted'] ?? 0));
+    $deInserted = (int) (($addedRoute['by_country']['Germany']['inserted'] ?? 0));
+
+    if (
+        (int) ($addedRoute['inserted'] ?? 0) >= 4
+        && $de === 2
+        && $at === 1
+        && $ch === 1
+        && $wrongAtInDe === 0
+        && $exDe === 2
+        && $exAt === 1
+        && $exCh === 1
+        && $atInserted === 1
+        && $chInserted === 1
+        && $deInserted === 2
+    ) {
+        pass('routed add saves per destination Our DB + Extracting Sites lists');
+    } else {
+        fail('routed add unexpected: ' . json_encode([
+            'added' => $addedRoute,
+            'de' => $de,
+            'at' => $at,
+            'ch' => $ch,
+            'wrongAtInDe' => $wrongAtInDe,
+            'exDe' => $exDe,
+            'exAt' => $exAt,
+            'exCh' => $exCh,
+            'atInserted' => $atInserted,
+            'chInserted' => $chInserted,
+            'deInserted' => $deInserted,
+        ]));
+    }
+
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfroute-add-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfroute-add-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfroute-add-%'");
+} catch (Throwable $e) {
+    fail('routed filter/add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Admin Users U-1: unique email + verify reset ---
 try {
     ensure_account_schema();
