@@ -288,6 +288,7 @@
     document.querySelectorAll('[data-swe-q]').forEach(function (el) {
       el.value = String(searchInput.value || '');
     });
+    if (typeof syncOpenBulkButton === 'function') syncOpenBulkButton();
   }
 
   function jump(dir) {
@@ -451,6 +452,9 @@
     var form = saveFormOf(input);
     if (!form) return;
     refreshRowSearchIndex(input.closest('[data-swe-row]'));
+    if (input.matches('.swe-domain')) {
+      refreshOpenLink(input.closest('[data-swe-row]'));
+    }
     filterRows();
     scheduleAutosave(form);
     if (input.matches('[data-swe-email]') && String(input.value || '').trim() === '') {
@@ -765,4 +769,287 @@
       }
     });
   });
+
+  // --- Open site(s) in new tabs (row Open + Open first 10–50) ---
+  function normalizeSiteHost(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    s = s.replace(/^[\s'"\[<\(]+/, '').replace(/[\s'"\]>\)]+$/, '');
+    try {
+      var probe = s;
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(probe) && probe.indexOf('.') !== -1) {
+        if (/^[a-z0-9.-]+(\/|\?|#|$)/i.test(probe)) probe = 'https://' + probe;
+      }
+      probe = probe.replace(/^(?:h?ttps?|tps?):\/\//i, 'https://');
+      var u = new URL(probe);
+      if (u.hostname) s = u.hostname;
+    } catch (err) {
+      s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+      if (s.indexOf('//') === 0) s = s.slice(2);
+      s = s.split('/')[0].split('?')[0].split('#')[0];
+    }
+    if (s.indexOf('@') !== -1) s = s.split('@').pop() || '';
+    s = String(s).toLowerCase();
+    if (s.indexOf(':') !== -1 && s.indexOf(']') === -1) s = s.split(':')[0];
+    s = s.replace(/^www\./i, '').replace(/\.$/, '');
+    return s;
+  }
+
+  function isOpenableSite(host) {
+    host = String(host || '').toLowerCase();
+    if (!host || host.indexOf('.') === -1) return false;
+    if (/\s/.test(host)) return false;
+    if (!/^[a-z0-9.-]+$/.test(host)) return false;
+    if (host.charAt(0) === '-' || host.slice(-1) === '-' || host.indexOf('..') !== -1) return false;
+    var parts = host.split('.').filter(Boolean);
+    if (parts.length < 2) return false;
+    for (var i = 0; i < parts.length; i++) {
+      var label = parts[i];
+      if (!label || label.length > 63) return false;
+      if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) return false;
+    }
+    return true;
+  }
+
+  function siteOpenUrl(host) {
+    return 'https://' + host;
+  }
+
+  function refreshOpenLink(row) {
+    if (!row) return;
+    var domainEl = row.querySelector('.swe-domain, [data-swe-domain]');
+    var link = row.querySelector('[data-swe-open-site]');
+    var cell = row.querySelector('.swe-site-cell');
+    if (!domainEl || !link) return;
+    var host = normalizeSiteHost(domainEl.value);
+    var ok = isOpenableSite(host);
+    if (cell) cell.classList.toggle('is-invalid-site', !ok);
+    if (ok) {
+      link.href = siteOpenUrl(host);
+      link.removeAttribute('aria-disabled');
+      link.classList.remove('is-disabled');
+      link.removeAttribute('tabindex');
+      link.title = 'Open ' + host + ' in a new tab';
+      link.setAttribute('aria-label', 'Open ' + host + ' in a new tab');
+    } else {
+      link.href = '#';
+      link.setAttribute('aria-disabled', 'true');
+      link.classList.add('is-disabled');
+      link.setAttribute('tabindex', '-1');
+      link.title = 'Fix the site name (needs a valid domain) before opening';
+      link.setAttribute('aria-label', 'Site name invalid — cannot open');
+    }
+  }
+
+  function listEligibleOpenRows() {
+    var out = [];
+    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+      if (row.hidden) return;
+      var domainEl = row.querySelector('.swe-domain, [data-swe-domain]');
+      if (!domainEl) return;
+      var host = normalizeSiteHost(domainEl.value);
+      if (!isOpenableSite(host)) return;
+      out.push({ row: row, host: host, url: siteOpenUrl(host) });
+    });
+    return out;
+  }
+
+  /** Open large goals in batches of 10 to reduce popup-blocker friction. */
+  var OPEN_BATCH_SIZE = 10;
+  var openBatchState = null; // { goal: number, offset: number, urls: string[] }
+  var OPEN_COUNT_STORAGE_KEY = 'swe-open-count';
+
+  function clearOpenBatchState() {
+    openBatchState = null;
+    syncOpenContinueButton();
+  }
+
+  function syncOpenContinueButton() {
+    var cont = document.querySelector('[data-swe-open-continue]');
+    if (!cont) return;
+    if (!openBatchState || openBatchState.offset >= openBatchState.goal) {
+      cont.hidden = true;
+      cont.disabled = true;
+      return;
+    }
+    var left = openBatchState.goal - openBatchState.offset;
+    var next = Math.min(OPEN_BATCH_SIZE, left);
+    cont.hidden = false;
+    cont.disabled = false;
+    cont.textContent = 'Open next ' + next;
+    cont.title = 'Open the next ' + next + ' of '
+      + openBatchState.goal + ' sites (' + openBatchState.offset + ' already opened)';
+  }
+
+  function syncOpenBulkButton() {
+    var select = document.querySelector('[data-swe-open-count]');
+    var btn = document.querySelector('[data-swe-open-bulk]');
+    if (!btn) return;
+    var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+    var eligible = listEligibleOpenRows();
+    var take = Math.min(choice, eligible.length);
+    if (eligible.length === 0) {
+      btn.disabled = true;
+      btn.textContent = 'No sites to open';
+      btn.title = 'No openable sites on this page';
+      clearOpenBatchState();
+      return;
+    }
+    btn.disabled = false;
+    if (take < choice) {
+      btn.textContent = 'Open all ' + take;
+      btn.title = 'Open all ' + take + ' openable site' + (take === 1 ? '' : 's')
+        + ' on this page'
+        + (take > OPEN_BATCH_SIZE ? ' (in batches of ' + OPEN_BATCH_SIZE + ')' : '');
+    } else {
+      btn.textContent = 'Open first ' + choice;
+      btn.title = 'Open the first ' + choice + ' sites on this page in new tabs'
+        + (choice > OPEN_BATCH_SIZE ? ' (batches of ' + OPEN_BATCH_SIZE + ')' : '');
+    }
+    // Keep an in-progress batch aligned with the current visible eligible list.
+    if (openBatchState) {
+      openBatchState.goal = Math.min(openBatchState.goal, eligible.length);
+      openBatchState.urls = eligible.slice(0, openBatchState.goal).map(function (e) {
+        return e.url;
+      });
+      if (openBatchState.offset > openBatchState.goal) {
+        openBatchState.offset = openBatchState.goal;
+      }
+      if (openBatchState.offset >= openBatchState.goal || openBatchState.goal < 1) {
+        clearOpenBatchState();
+      } else {
+        syncOpenContinueButton();
+      }
+    }
+  }
+
+  function openUrlBatch(urls) {
+    var opened = 0;
+    for (var i = 0; i < urls.length; i++) {
+      var w = window.open(urls[i], '_blank');
+      if (w) {
+        try { w.opener = null; } catch (err) {}
+        opened++;
+      }
+    }
+    return opened;
+  }
+
+  function reportOpenBatch(opened, attempted, goal, offsetAfter, isContinue) {
+    var remaining = Math.max(0, goal - offsetAfter);
+    if (opened === 0) {
+      setStatus(
+        'Could not open tabs — allow popups for this site, then try again.',
+        true
+      );
+      return;
+    }
+    if (opened < attempted) {
+      setStatus(
+        'Opened ' + opened + ' of ' + attempted
+          + ' in this batch — allow popups, then use Open next.',
+        true
+      );
+      return;
+    }
+    if (remaining > 0) {
+      setStatus(
+        'Opened ' + offsetAfter + ' of ' + goal
+          + ' · click Open next ' + Math.min(OPEN_BATCH_SIZE, remaining) + ' to continue.'
+      );
+    } else if (goal <= OPEN_BATCH_SIZE && !isContinue) {
+      setStatus(
+        goal === attempted
+          ? (attempted === 1 ? 'Opened 1 site in a new tab.' : ('Opened ' + attempted + ' sites in new tabs.'))
+          : ('Opened ' + offsetAfter + ' sites in new tabs.')
+      );
+    } else {
+      setStatus('Opened all ' + goal + ' sites in new tabs.');
+    }
+  }
+
+  function startOrContinueOpen(fromContinue) {
+    var select = document.querySelector('[data-swe-open-count]');
+    var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+    var eligible = listEligibleOpenRows();
+
+    if (!fromContinue) {
+      var take = Math.min(choice, eligible.length);
+      if (take < 1) {
+        setStatus('No sites to open on this page.', true);
+        clearOpenBatchState();
+        syncOpenBulkButton();
+        return;
+      }
+      openBatchState = {
+        goal: take,
+        offset: 0,
+        urls: eligible.slice(0, take).map(function (e) { return e.url; })
+      };
+    }
+
+    if (!openBatchState || openBatchState.offset >= openBatchState.goal) {
+      clearOpenBatchState();
+      syncOpenBulkButton();
+      return;
+    }
+
+    var start = openBatchState.offset;
+    var end = Math.min(start + OPEN_BATCH_SIZE, openBatchState.goal);
+    var slice = openBatchState.urls.slice(start, end);
+    var opened = openUrlBatch(slice);
+    // Advance by attempted length so "Open next" still moves forward if some popups blocked;
+    // user can re-run first N if needed. Partial opens still report accurately.
+    openBatchState.offset = end;
+    reportOpenBatch(opened, slice.length, openBatchState.goal, openBatchState.offset, !!fromContinue);
+    if (openBatchState.offset >= openBatchState.goal) {
+      clearOpenBatchState();
+    } else {
+      syncOpenContinueButton();
+    }
+    syncOpenBulkButton();
+  }
+
+  document.addEventListener('click', function (e) {
+    var link = e.target && e.target.closest ? e.target.closest('[data-swe-open-site]') : null;
+    if (!link) return;
+    if (link.getAttribute('aria-disabled') === 'true' || link.classList.contains('is-disabled')) {
+      e.preventDefault();
+    }
+  });
+
+  var openCountSelect = document.querySelector('[data-swe-open-count]');
+  var openBulkBtn = document.querySelector('[data-swe-open-bulk]');
+  var openContinueBtn = document.querySelector('[data-swe-open-continue]');
+  if (openCountSelect) {
+    try {
+      var saved = window.sessionStorage && sessionStorage.getItem(OPEN_COUNT_STORAGE_KEY);
+      if (saved && openCountSelect.querySelector('option[value="' + saved + '"]')) {
+        openCountSelect.value = saved;
+      }
+    } catch (err) {}
+    openCountSelect.addEventListener('change', function () {
+      clearOpenBatchState();
+      try {
+        if (window.sessionStorage) {
+          sessionStorage.setItem(OPEN_COUNT_STORAGE_KEY, String(openCountSelect.value || '10'));
+        }
+      } catch (err2) {}
+      syncOpenBulkButton();
+    });
+  }
+  if (openBulkBtn) {
+    openBulkBtn.addEventListener('click', function () {
+      startOrContinueOpen(false);
+    });
+  }
+  if (openContinueBtn) {
+    openContinueBtn.addEventListener('click', function () {
+      startOrContinueOpen(true);
+    });
+  }
+
+  document.querySelectorAll('[data-swe-row]').forEach(refreshOpenLink);
+  syncOpenBulkButton();
+  syncOpenContinueButton();
 })();
