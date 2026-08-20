@@ -21,7 +21,7 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_departments' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
-        'admin_semrush_research' => [],
+        'admin_semrush_research' => ['admin_semrush_sheet'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_semrush_research' => ['team_semrush_sheet'],

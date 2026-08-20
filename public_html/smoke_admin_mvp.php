@@ -183,5 +183,24 @@ if (!str_contains($teamProspects, 'Admin-only')) {
     ok('team prospects privatized');
 }
 
+$index = file_get_contents($root . '/index.php') ?: '';
+if (!str_contains($index, "'admin_semrush_sheet'")) {
+    fail('index.php missing admin_semrush_sheet route');
+} else {
+    ok('admin_semrush_sheet route');
+}
+if (!is_file($root . '/pages/admin/semrush_sheet.php')) {
+    fail('missing pages/admin/semrush_sheet.php');
+} else {
+    ok('file pages/admin/semrush_sheet.php');
+}
+$adminSemrush = file_get_contents($root . '/pages/admin/semrush_research.php') ?: '';
+if (!str_contains($adminSemrush, 'semrush_sheet_url($dest, true)')
+    && !str_contains($adminSemrush, 'semrush_sheet_url($c, true)')) {
+    fail('admin semrush hub still opens Team sheet URLs');
+} else {
+    ok('admin semrush uses Admin sheet URLs');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

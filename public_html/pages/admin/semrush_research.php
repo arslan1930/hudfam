@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         flash('ok', $msg . '.');
         $dest = (string) ($result['country'] ?? $country);
-        redirect($dest !== '' ? semrush_sheet_url($dest, false) : $hub);
+        redirect($dest !== '' ? semrush_sheet_url($dest, true) : $hub);
     }
     if ($action === 'clear_country') {
         $result = clear_semrush_country((string) post('country'));
@@ -122,7 +122,7 @@ render_breadcrumbs([
       <tbody>
       <?php foreach ($folders as $f):
           $c = (string) $f['country'];
-          $sheetHref = semrush_sheet_url($c, false);
+          $sheetHref = semrush_sheet_url($c, true);
           ?>
         <tr>
           <td><strong><?= h($c) ?></strong></td>

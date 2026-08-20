@@ -73,6 +73,7 @@ $routes = [
     'admin_invoice_view' => 'pages/admin/invoice_view.php',
     'admin_users' => 'pages/admin/users.php',
     'admin_semrush_research' => 'pages/admin/semrush_research.php',
+    'admin_semrush_sheet' => 'pages/admin/semrush_sheet.php',
 
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_departments' => 'pages/team/departments.php',
