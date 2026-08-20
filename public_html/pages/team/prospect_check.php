@@ -210,6 +210,7 @@ render_header('Filter & add', 'team');
 </ul>
 
 <form method="post" id="filter_form">
+  <?= csrf_field() ?>
   <input type="hidden" name="action" value="filter">
 
   <div class="card" style="margin-bottom:1rem">
@@ -335,6 +336,7 @@ render_header('Filter & add', 'team');
     <h2>New unique sites only</h2>
     <?php if ($result['new']): ?>
       <form method="post" id="add_unique_form">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="add_new">
         <input type="hidden" name="country" value="<?= h($country) ?>">
         <input type="hidden" name="language" value="<?= h($language) ?>">

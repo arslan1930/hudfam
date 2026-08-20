@@ -233,6 +233,7 @@ render_header('Extracting · ' . $country, 'team');
       Sites go to Extracted Sites + Sites with emails - Team in each destination country.
     </p>
     <form method="post">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="push_results">
       <textarea class="inventory-box" name="results_text" rows="16" placeholder="Paste sites…&#10;example.com&#10;shop.de&#10;blog.fr"><?= h($resultsText) ?></textarea>
       <div class="actions-sticky" style="margin-top:0.75rem">

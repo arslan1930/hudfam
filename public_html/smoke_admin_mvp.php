@@ -216,10 +216,10 @@ if (!str_contains($indexFull, 'require_csrf()') || !str_contains($indexFull, "st
 } else {
     ok('index.php Admin CSRF gate');
 }
-if (!str_contains($indexFull, "\$page === 'team_departments'")) {
-    fail('index.php missing Team Departments CSRF gate');
+if (!str_contains($indexFull, "str_starts_with(\$page, 'team_')")) {
+    fail('index.php missing Team CSRF gate');
 } else {
-    ok('index.php Team Departments CSRF gate');
+    ok('index.php Team CSRF gate');
 }
 if (!is_file($root . '/assets/js/csrf.js')) {
     fail('missing assets/js/csrf.js');
@@ -237,6 +237,18 @@ if (!str_contains($layoutFull, 'csrf-token') || !str_contains($layoutFull, 'csrf
     fail('layout missing csrf meta or script');
 } else {
     ok('layout csrf meta + script');
+}
+if (!str_contains($layoutFull, "\$panel === 'admin' || \$panel === 'team'")) {
+    fail('layout csrf.js not loaded for Team panel');
+} else {
+    ok('layout csrf.js for Admin + Team');
+}
+$prospectCheck = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
+$extractBatch = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+if (!str_contains($prospectCheck, 'csrf_field()') || !str_contains($extractBatch, 'csrf_field()')) {
+    fail('Team Filter/Push forms missing csrf_field');
+} else {
+    ok('Team Filter & Push csrf_field');
 }
 
 $extracted = file_get_contents($root . '/pages/admin/extracted.php') ?: '';

@@ -271,7 +271,7 @@ function render_footer(string $panel = ''): void
             ], JSON_UNESCAPED_UNICODE) . ';';
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
-            if ($panel === 'admin') {
+            if ($panel === 'admin' || $panel === 'team') {
                 echo '<script src="' . h(script_asset_url('js/csrf.js')) . '"></script>';
             }
             echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';

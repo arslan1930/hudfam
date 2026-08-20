@@ -89,6 +89,7 @@ render_breadcrumbs([
             <a class="btn small" href="<?= h($href) ?>">Open sheet</a>
             <form method="post" action="<?= h($hub) ?>" style="display:inline"
                   onsubmit="return confirm('Clear ALL Semrush sites and comments for <?= h($c) ?>? Extracted Sites stay unchanged.');">
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_country">
               <input type="hidden" name="country" value="<?= h($c) ?>">
               <button class="btn danger small" type="submit">Clear country</button>
