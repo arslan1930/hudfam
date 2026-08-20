@@ -96,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $items = list_order_items($clientId);
 $display = order_sheet_display_rows($items);
+$unpaidLiveCount = count_order_client_unpaid_live($clientId);
 
 $totalOwner = 0.0;
 $totalDecided = 0.0;
@@ -151,7 +152,13 @@ render_header('Order · ' . $client['name'], 'admin');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders">All clients</a>
-    <a class="btn" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $clientId ?>">Generate invoice</a>
+    <?php if ($unpaidLiveCount > 0): ?>
+      <a class="btn" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $clientId ?>">
+        Generate invoice (<?= (int) $unpaidLiveCount ?> unpaid)
+      </a>
+    <?php else: ?>
+      <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $clientId ?>">Generate invoice</a>
+    <?php endif; ?>
   </div>
 </div>
 

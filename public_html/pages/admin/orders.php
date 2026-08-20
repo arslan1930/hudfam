@@ -7,7 +7,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if ($action === 'create') {
             $id = create_order_client((string) post('name'), (string) post('notes'), (int) ($user['id'] ?? 0));
-            // Start with one empty row so the sheet is ready to fill
             add_order_item($id);
             flash('ok', 'Client sheet created.');
             redirect('index.php?page=admin_order_sheet&id=' . $id);
@@ -34,7 +33,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$clients = list_order_clients();
+$filter = (string) get('filter');
+if (!in_array($filter, ['all', 'unpaid', 'completed'], true)) {
+    $filter = 'all';
+}
+$sort = (string) get('sort');
+if (!in_array($sort, ['name', 'updated', 'unpaid'], true)) {
+    $sort = 'name';
+}
+$q = trim((string) get('q'));
+
+$clients = list_order_clients([
+    'filter' => $filter,
+    'sort' => $sort,
+    'q' => $q,
+]);
+
+$listBase = 'index.php?page=admin_orders';
+$qs = static function (array $overrides) use ($filter, $sort, $q, $listBase): string {
+    $params = array_merge([
+        'filter' => $filter,
+        'sort' => $sort,
+        'q' => $q,
+    ], $overrides);
+    $bits = [];
+    foreach ($params as $k => $v) {
+        $v = (string) $v;
+        if ($v === '' || ($k === 'filter' && $v === 'all') || ($k === 'sort' && $v === 'name')) {
+            continue;
+        }
+        $bits[] = rawurlencode($k) . '=' . rawurlencode($v);
+    }
+    return $bits ? ($listBase . '&' . implode('&', $bits)) : $listBase;
+};
 
 render_header('Order management', 'admin');
 ?>
@@ -46,7 +77,7 @@ render_header('Order management', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Order management', 'One editable sheet per client: sites, prices, LIVE URLs, Banner/Textlink placements, and profit.') ?></h1>
-    <p class="muted">One sheet per client — country, month, sites, prices, profit, live URL. Completed = LIVE URL filled.</p>
+    <p class="muted">One sheet per client — country, month, sites, prices, profit, live URL. Completed = LIVE URL filled. Unpaid LIVE rows are ready to invoice.</p>
   </div>
 </div>
 
@@ -54,22 +85,38 @@ render_header('Order management', 'admin');
   <section class="card">
     <div class="invoice-list-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
       <h2 style="margin:0"><?= label_with_info('Client sheets', 'Open a sheet to edit rows. Completed count = rows with LIVE URL filled.') ?></h2>
-      <?php if ($clients): ?>
-      <label class="sheet-search" for="order-client-search" style="margin-left:auto">
-        <span class="visually-hidden">Search clients</span>
-        <input id="order-client-search" type="search" placeholder="Search client…"
-               autocomplete="off" spellcheck="false" data-no-draft>
-      </label>
-      <?php endif; ?>
+      <form method="get" action="index.php" class="actions" style="margin-left:auto;flex-wrap:wrap;gap:0.45rem;align-items:center">
+        <input type="hidden" name="page" value="admin_orders">
+        <label class="sheet-search" for="order-client-search" style="margin:0">
+          <span class="visually-hidden">Search clients</span>
+          <input id="order-client-search" type="search" name="q" value="<?= h($q) ?>"
+                 placeholder="Search client…" autocomplete="off" spellcheck="false" data-no-draft>
+        </label>
+        <select name="filter" aria-label="Filter clients" onchange="this.form.submit()">
+          <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>All</option>
+          <option value="unpaid" <?= $filter === 'unpaid' ? 'selected' : '' ?>>Has unpaid LIVE</option>
+          <option value="completed" <?= $filter === 'completed' ? 'selected' : '' ?>>Has completed</option>
+        </select>
+        <select name="sort" aria-label="Sort clients" onchange="this.form.submit()">
+          <option value="name" <?= $sort === 'name' ? 'selected' : '' ?>>Sort: name</option>
+          <option value="updated" <?= $sort === 'updated' ? 'selected' : '' ?>>Sort: updated</option>
+          <option value="unpaid" <?= $sort === 'unpaid' ? 'selected' : '' ?>>Sort: unpaid amount</option>
+        </select>
+        <button class="btn secondary small" type="submit">Apply</button>
+      </form>
     </div>
     <?php if (!$clients): ?>
       <div class="empty-state">
-        <p>No client sheets yet. Create one on the right to start.</p>
+        <p><?= ($q !== '' || $filter !== 'all') ? 'No clients match this filter.' : 'No client sheets yet. Create one on the right to start.' ?></p>
+        <?php if ($q !== '' || $filter !== 'all'): ?>
+          <p><a class="btn secondary" href="<?= h($listBase) ?>">Clear filters</a></p>
+        <?php endif; ?>
       </div>
     <?php else: ?>
       <ul class="order-client-list" id="order-client-list">
         <?php foreach ($clients as $c):
-            $searchHay = mb_strtolower(trim((string) ($c['name'] ?? '') . ' ' . (string) ($c['notes'] ?? '')));
+            $unpaidLive = (int) ($c['unpaid_live_count'] ?? 0);
+            $unpaidDecided = (float) ($c['unpaid_decided'] ?? 0);
             $invCount = count_invoices_for_order_client((int) $c['id']);
             $deleteMsg = 'Delete sheet for ' . $c['name'] . '?';
             if ($invCount > 0) {
@@ -78,7 +125,7 @@ render_header('Order management', 'admin');
                 $deleteMsg .= "\n\nInvoices for this client (if any) are kept; their client link is cleared.";
             }
             ?>
-          <li class="order-client-row" data-order-client-row data-search="<?= h($searchHay) ?>">
+          <li class="order-client-row">
             <div class="order-client-main">
               <a class="order-client-name" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">
                 <?= h($c['name']) ?>
@@ -87,6 +134,9 @@ render_header('Order management', 'admin');
                 <span><?= (int) $c['item_count'] ?> site<?= (int) $c['item_count'] === 1 ? '' : 's' ?></span>
                 <span class="order-meta-done"><?= (int) $c['completed_count'] ?> completed</span>
                 <span class="order-meta-done">Completed profit <?= h(format_money($c['completed_profit'])) ?></span>
+                <?php if ($unpaidLive > 0): ?>
+                  <span><strong><?= $unpaidLive ?></strong> unpaid LIVE · <?= h(format_money($unpaidDecided)) ?></span>
+                <?php endif; ?>
                 <?php if ($invCount > 0): ?>
                   <span><?= (int) $invCount ?> invoice<?= (int) $invCount === 1 ? '' : 's' ?></span>
                 <?php endif; ?>
@@ -94,6 +144,9 @@ render_header('Order management', 'admin');
             </div>
             <div class="order-client-actions">
               <a class="btn small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">Open sheet</a>
+              <?php if ($unpaidLive > 0): ?>
+                <a class="btn small" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $c['id'] ?>">Invoice</a>
+              <?php endif; ?>
               <?php if ($invCount > 0): ?>
                 <a class="btn secondary small" href="index.php?page=admin_invoices">Invoices</a>
               <?php endif; ?>
@@ -107,29 +160,7 @@ render_header('Order management', 'admin');
             </div>
           </li>
         <?php endforeach; ?>
-        <li class="muted" data-order-client-empty hidden style="list-style:none;padding:0.75rem 0">No clients match your search.</li>
       </ul>
-      <script>
-      (function () {
-        var input = document.getElementById('order-client-search');
-        var rows = document.querySelectorAll('[data-order-client-row]');
-        var empty = document.querySelector('[data-order-client-empty]');
-        if (!input || !rows.length) return;
-        function run() {
-          var q = String(input.value || '').trim().toLowerCase();
-          var shown = 0;
-          rows.forEach(function (row) {
-            var hay = String(row.getAttribute('data-search') || '');
-            var hit = !q || hay.indexOf(q) !== -1;
-            row.hidden = !hit;
-            if (hit) shown++;
-          });
-          if (empty) empty.hidden = !(q && shown === 0);
-        }
-        input.addEventListener('input', run);
-        input.addEventListener('search', run);
-      })();
-      </script>
     <?php endif; ?>
   </section>
 

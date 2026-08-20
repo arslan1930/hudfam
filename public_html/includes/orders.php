@@ -276,13 +276,17 @@ function count_invoices_for_order_client(int $clientId): int
 }
 
 /**
+ * @param array{filter?:string,sort?:string,q?:string} $opts
  * @return list<array<string,mixed>>
  */
-function list_order_clients(): array
+function list_order_clients(array $opts = []): array
 {
     ensure_order_schema();
-    return db()->query(
-        "SELECT c.*,
+    $filter = (string) ($opts['filter'] ?? 'all');
+    $sort = (string) ($opts['sort'] ?? 'name');
+    $q = trim((string) ($opts['q'] ?? ''));
+
+    $sql = "SELECT c.*,
                 (SELECT COUNT(*) FROM order_items i
                   WHERE i.client_id = c.id AND i.row_type = 'site') AS item_count,
                 (SELECT COUNT(*) FROM order_items i
@@ -294,10 +298,63 @@ function list_order_clients(): array
                     AND TRIM(i.live_url) <> '') AS completed_profit,
                 (SELECT COALESCE(SUM(i.decided_price - i.owner_price), 0)
                    FROM order_items i
-                  WHERE i.client_id = c.id AND i.row_type = 'site') AS total_profit
-         FROM order_clients c
-         ORDER BY c.name ASC"
-    )->fetchAll();
+                  WHERE i.client_id = c.id AND i.row_type = 'site') AS total_profit,
+                (SELECT COUNT(*) FROM order_items i
+                  WHERE i.client_id = c.id AND i.row_type = 'site'
+                    AND TRIM(i.live_url) <> ''
+                    AND COALESCE(i.is_paid, 0) = 0) AS unpaid_live_count,
+                (SELECT COALESCE(SUM(i.decided_price), 0) FROM order_items i
+                  WHERE i.client_id = c.id AND i.row_type = 'site'
+                    AND TRIM(i.live_url) <> ''
+                    AND COALESCE(i.is_paid, 0) = 0) AS unpaid_decided
+         FROM order_clients c";
+    $where = [];
+    $params = [];
+    if ($q !== '') {
+        $where[] = '(c.name LIKE ? OR c.notes LIKE ?)';
+        $like = '%' . $q . '%';
+        $params[] = $like;
+        $params[] = $like;
+    }
+    if ($filter === 'unpaid') {
+        $where[] = "EXISTS (
+            SELECT 1 FROM order_items i
+            WHERE i.client_id = c.id AND i.row_type = 'site'
+              AND TRIM(i.live_url) <> '' AND COALESCE(i.is_paid, 0) = 0
+        )";
+    } elseif ($filter === 'completed') {
+        $where[] = "EXISTS (
+            SELECT 1 FROM order_items i
+            WHERE i.client_id = c.id AND i.row_type = 'site'
+              AND TRIM(i.live_url) <> ''
+        )";
+    }
+    if ($where) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    if ($sort === 'updated') {
+        $sql .= ' ORDER BY c.updated_at DESC, c.name ASC';
+    } elseif ($sort === 'unpaid') {
+        $sql .= ' ORDER BY unpaid_decided DESC, c.name ASC';
+    } else {
+        $sql .= ' ORDER BY c.name ASC';
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+/** Count unpaid LIVE rows for one client (invoice-ready). */
+function count_order_client_unpaid_live(int $clientId): int
+{
+    ensure_order_schema();
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM order_items
+         WHERE client_id=? AND row_type='site'
+           AND TRIM(live_url) <> '' AND COALESCE(is_paid, 0) = 0"
+    );
+    $stmt->execute([$clientId]);
+    return (int) $stmt->fetchColumn();
 }
 
 function get_order_client(int $id): ?array

@@ -1870,6 +1870,27 @@ try {
     }
     set_order_item_paid((int) $itemId, (int) $clientId, false);
 
+    // OM-2: unpaid LIVE metrics
+    $unpaidN = count_order_client_unpaid_live((int) $clientId);
+    if ($unpaidN === 1) {
+        pass('unpaid LIVE count after unmark');
+    } else {
+        fail("unpaid LIVE count=$unpaidN expected 1");
+    }
+    $listed = list_order_clients(['filter' => 'unpaid']);
+    $foundUnpaid = false;
+    foreach ($listed as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) $clientId) {
+            $foundUnpaid = true;
+            break;
+        }
+    }
+    if ($foundUnpaid) {
+        pass('list filter unpaid includes client');
+    } else {
+        fail('list filter unpaid missing client');
+    }
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
 
