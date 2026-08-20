@@ -191,7 +191,7 @@ function email_field_clear_script_tag(): string
 }
 
 /**
- * Domains textarea + Clean errors control (root domains only).
+ * Domains textarea + Clean to root domains (Ready vs Needs attention).
  */
 function render_domains_paste_field(
     string $name,
@@ -204,11 +204,13 @@ function render_domains_paste_field(
     $required = !empty($opts['required']);
     $class = (string) ($opts['class'] ?? '');
     $placeholder = (string) ($opts['placeholder'] ?? "example.com\nmy-site.co.uk");
+    $attentionId = $id . '_attention';
 
     $html = '<div class="domains-paste" data-domains-paste>';
     $html .= '<div class="domains-paste-head">';
     $html .= '<label for="' . h($id) . '">' . h($label) . '</label>';
-    $html .= '<button type="button" class="btn secondary small" data-clean-domains>Clean errors</button>';
+    $html .= '<button type="button" class="btn secondary small" data-clean-domains title="Convert https/paths/subdomains to root domains; move unfixable lines aside">'
+        . 'Clean to root domains</button>';
     $html .= '</div>';
     $html .= '<textarea id="' . h($id) . '" name="' . h($name) . '" rows="' . $rows . '"'
         . ($required ? ' required' : '')
@@ -217,11 +219,17 @@ function render_domains_paste_field(
         . h($value) . '</textarea>';
     $html .= '<p class="help" style="margin-top:0.5rem">'
         . 'Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>. '
-        . 'Hyphens and multi-part TLDs are OK. '
-        . 'One per line (or commas). Use <strong>Clean errors</strong> to correct '
-        . '<code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).'
+        . 'Hyphens and multi-part TLDs are OK. One per line (or commas). '
+        . '<strong>Clean to root domains</strong> fixes <code>https</code>/paths/subdomains into the Ready list; '
+        . 'lines it cannot fix move to <strong>Needs attention</strong> (Push uses Ready only).'
         . '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
+    $html .= '<div class="domains-paste-attention" data-domains-attention-wrap hidden>';
+    $html .= '<label for="' . h($attentionId) . '">Needs attention</label>';
+    $html .= '<textarea id="' . h($attentionId) . '" rows="4" class="domains-attention-box" '
+        . 'data-domains-attention spellcheck="false" placeholder="Unfixable lines appear here after Clean"></textarea>';
+    $html .= '<p class="help" style="margin:0.35rem 0 0">Edit or delete these, then Clean again — or leave them; Push / Separate only use the Ready list above.</p>';
+    $html .= '</div>';
     $html .= '</div>';
     return $html;
 }

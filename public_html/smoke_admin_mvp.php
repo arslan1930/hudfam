@@ -771,5 +771,20 @@ if (!str_contains($testsSf, 'group_domains_by_tld splits')) {
     ok('tests_run TLD separate coverage');
 }
 
+$sitesFormJs = file_get_contents($root . '/assets/js/sites-form.js') ?: '';
+$sitesFormPhp = file_get_contents($root . '/includes/sites_form.php') ?: '';
+if (!str_contains($sitesFormPhp, 'data-domains-attention')
+    || !str_contains($sitesFormPhp, 'Clean to root domains')) {
+    fail('sites_form missing Ready/Needs attention Clean UI');
+} else {
+    ok('Clean Ready / Needs attention markup');
+}
+if (!str_contains($sitesFormJs, 'readyText')
+    || !str_contains($sitesFormJs, 'attentionText')) {
+    fail('sites-form.js missing Ready/attention split');
+} else {
+    ok('sites-form.js Ready/attention clean split');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
