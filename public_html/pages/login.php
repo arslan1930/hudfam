@@ -42,8 +42,11 @@ render_header('Login');
     <?php if ($error): render_alert_box('error', $error); endif; ?>
     <form method="post">
       <label for="login_username">Username</label>
-      <input id="login_username" type="text" name="username" required autofocus autocomplete="username"
+      <input id="login_username" type="text" name="username" required autofocus
+             autocomplete="username"
+             placeholder="username"
              <?= $error ? 'aria-invalid="true" aria-describedby="login_error"' : '' ?>>
+      <p class="help" style="margin:0.25rem 0 0">Admin can also sign in with their account email.</p>
       <label for="login_password">Password</label>
       <input id="login_password" type="password" name="password" required autocomplete="current-password"
              <?= $error ? 'aria-invalid="true" aria-describedby="login_error"' : '' ?>>

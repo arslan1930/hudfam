@@ -129,6 +129,23 @@ function ensure_sites_with_emails_schema(): void
     } catch (Throwable $e) {
         // ignore
     }
+
+    // Country + id for paginated country sheets (up to ~100K rows per country).
+    foreach (['sites_with_emails_team', 'sites_with_emails_admin', 'sites_with_emails_admin_all'] as $tbl) {
+        try {
+            $idxName = 'idx_' . $tbl . '_country_id';
+            $idx = $pdo->query('SHOW INDEX FROM ' . $tbl)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $haveIdx = [];
+            foreach ($idx as $row) {
+                $haveIdx[(string) ($row['Key_name'] ?? '')] = true;
+            }
+            if (empty($haveIdx[$idxName])) {
+                $pdo->exec("ALTER TABLE {$tbl} ADD INDEX {$idxName} (country, id)");
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
 }
 
 /**
@@ -736,14 +753,14 @@ function count_sites_with_emails_ready_to_push(string $country): int
 function sites_with_emails_inventory_query(
     array $filters,
     int $page = 1,
-    int $perPage = 100,
+    int $perPage = 1000,
     string $scope = 'team'
 ): array {
     ensure_sites_with_emails_schema();
     $scope = swe_normalize_scope($scope);
     $table = swe_table($scope);
     $page = max(1, $page);
-    $perPage = max(1, min(500, $perPage));
+    $perPage = max(1, min(1000, $perPage));
     $country = trim((string) ($filters['country'] ?? ''));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1' — Admin only

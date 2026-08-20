@@ -8,6 +8,8 @@
  */
 (function () {
   'use strict';
+  if (window.__HF_APP_PROCESSING__) return;
+  window.__HF_APP_PROCESSING__ = true;
 
   var overlay = null;
   var msgEl = null;

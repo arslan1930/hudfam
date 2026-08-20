@@ -244,13 +244,29 @@ function extract_host_candidate(string $raw): string
     }
     $s = preg_replace('/^[\s\'"\[<\(]+/', '', $s) ?? $s;
     $s = preg_replace('/[\s\'"\]>\)]+$/', '', $s) ?? $s;
-    $s = preg_replace('#^[a-z][a-z0-9+.-]*://#i', '', $s) ?? $s;
-    if (str_starts_with($s, '//')) {
-        $s = substr($s, 2);
+
+    // Prefer parse_url for full https://…/path?#… pastes (Filter & add Clean errors).
+    $probe = $s;
+    if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $probe) && str_contains($probe, '.')) {
+        if (preg_match('#^[a-z0-9.-]+(/|\?|#|$)#i', $probe)) {
+            $probe = 'https://' . $probe;
+        }
     }
-    $s = explode('/', $s, 2)[0];
-    $s = explode('?', $s, 2)[0];
-    $s = explode('#', $s, 2)[0];
+    // Typo schemes: ttps://, htps://, ttp://
+    $probe = preg_replace('#^(?:h?ttps?|tps?)://#i', 'https://', $probe) ?? $probe;
+    $host = parse_url($probe, PHP_URL_HOST);
+    if (is_string($host) && $host !== '') {
+        $s = $host;
+    } else {
+        $s = preg_replace('#^[a-z][a-z0-9+.-]*://#i', '', $s) ?? $s;
+        if (str_starts_with($s, '//')) {
+            $s = substr($s, 2);
+        }
+        $s = explode('/', $s, 2)[0];
+        $s = explode('?', $s, 2)[0];
+        $s = explode('#', $s, 2)[0];
+    }
+
     if (str_contains($s, '@')) {
         $parts = explode('@', $s);
         $s = (string) end($parts);
@@ -844,6 +860,9 @@ function add_prospect_domains(
     if ($language === '') {
         $language = $canon['language'];
     }
+    if (function_exists('normalize_site_language')) {
+        $language = normalize_site_language($language, $country);
+    }
 
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
     // Team/admin shared insert path: never insert domains already in this country folder.
@@ -959,6 +978,9 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     $region = $canon['region'];
     if ($language === '') {
         $language = $canon['language'];
+    }
+    if (function_exists('normalize_site_language')) {
+        $language = normalize_site_language($language, $country);
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
@@ -1300,7 +1322,7 @@ function get_prospect_batch_items(int $batchId, int $limit = 50000): array
     return $stmt->fetchAll();
 }
 
-function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 50): array
+function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 1000): array
 {
     ensure_prospect_schema();
     $where = ['1=1'];
@@ -1336,6 +1358,7 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     $pageNum = max(1, $pageNum);
+    $per = max(1, min(1000, $per));
     $offset = ($pageNum - 1) * $per;
     $stmt = db()->prepare(
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full

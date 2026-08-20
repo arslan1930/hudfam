@@ -57,19 +57,54 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not save task.'));
         } else {
-            flash('ok', $taskId > 0 ? 'Task updated.' : 'Task assigned to ' . $dept['name'] . '.');
+            $who = 'whole department';
+            if ($assigned > 0) {
+                $uSt = db()->prepare('SELECT full_name, username FROM users WHERE id=? LIMIT 1');
+                $uSt->execute([$assigned]);
+                $uRow = $uSt->fetch(PDO::FETCH_ASSOC) ?: [];
+                $label = trim((string) ($uRow['full_name'] ?? ''));
+                if ($label === '') {
+                    $label = trim((string) ($uRow['username'] ?? 'teammate'));
+                }
+                $who = $label;
+            }
+            flash(
+                'ok',
+                $taskId > 0
+                    ? ('Task updated · assigned to ' . $who . '.')
+                    : ('Task assigned to ' . $who . ' in ' . $dept['name'] . '.')
+            );
         }
         redirect($back);
     }
 
     if ($action === 'set_status') {
         $taskId = (int) post('task_id');
+        $status = (string) post('status');
+        $wantsJson = (string) post('ajax') === '1'
+            || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
         $task = get_department_task($taskId);
         if (!$task || (int) $task['department_id'] !== (int) $dept['id']) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'error' => 'Task not found.']);
+                exit;
+            }
             flash('error', 'Task not found.');
             redirect($back);
         }
-        update_department_task_status($taskId, (string) post('status'));
+        update_department_task_status($taskId, $status);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => true,
+                'task_id' => $taskId,
+                'status' => $status,
+                'message' => 'Status updated.',
+            ]);
+            exit;
+        }
         flash('ok', 'Status updated.');
         redirect($back);
     }
@@ -140,6 +175,13 @@ $available = array_values(array_filter(
     $allTeam,
     static fn ($u) => !in_array((int) $u['id'], $memberIds, true)
 ));
+// Assignee list = current members first, then other team users (auto-added on assign).
+$assigneeChoices = $members;
+foreach ($allTeam as $u) {
+    if (!in_array((int) $u['id'], $memberIds, true)) {
+        $assigneeChoices[] = $u;
+    }
+}
 $statusFilter = (string) get('status');
 $tasks = list_department_tasks($deptId, $statusFilter);
 $editTaskId = (int) get('edit_task');
@@ -252,16 +294,26 @@ render_breadcrumbs([
         <textarea id="dept_task_notes" name="notes" rows="3" placeholder="Details, links, country, counts…"><?= h((string) ($editTask['notes'] ?? '')) ?></textarea>
       </div>
       <div>
-        <label for="dept_task_assignee">Assign to member</label>
+        <label for="dept_task_assignee">Assign to user</label>
         <select id="dept_task_assignee" name="assigned_to">
           <option value="0">Whole department</option>
-          <?php foreach ($members as $m): ?>
+          <?php foreach ($assigneeChoices as $m):
+              $isMember = in_array((int) $m['id'], $memberIds, true);
+              $name = trim(((string) ($m['full_name'] ?? '')) !== ''
+                  ? (string) $m['full_name']
+                  : (string) $m['username']);
+              ?>
             <option value="<?= (int) $m['id'] ?>"
               <?= $editTask && (int) ($editTask['assigned_to'] ?? 0) === (int) $m['id'] ? 'selected' : '' ?>>
-              <?= h(trim(((string) $m['full_name']) !== '' ? (string) $m['full_name'] : (string) $m['username'])) ?>
+              <?= h($name) ?><?= $isMember ? '' : ' (add to department)' ?>
             </option>
           <?php endforeach; ?>
         </select>
+        <?php if (!$allTeam): ?>
+          <p class="help">Create Team users under Users first, then assign tasks here.</p>
+        <?php else: ?>
+          <p class="help">Pick a teammate — they are added to this department automatically if needed.</p>
+        <?php endif; ?>
       </div>
       <div>
         <label for="dept_task_status">Status</label>
@@ -322,10 +374,11 @@ render_breadcrumbs([
           </td>
           <td><?= h($assignee !== '' ? $assignee : 'Whole department') ?></td>
           <td>
-            <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>" class="inline-form">
+            <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
+                  class="inline-form" data-stay-ajax>
               <input type="hidden" name="action" value="set_status">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
-              <select name="status" onchange="this.form.submit()">
+              <select name="status" data-stay-ajax-change aria-label="Task status">
                 <?php foreach (['open' => 'Open', 'in_progress' => 'In progress', 'done' => 'Done'] as $val => $lab): ?>
                   <option value="<?= h($val) ?>" <?= (string) $t['status'] === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
                 <?php endforeach; ?>

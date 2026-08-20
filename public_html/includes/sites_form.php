@@ -35,15 +35,9 @@ function render_typeahead_field(
     $reqMark = $required ? ' <span class="help">(required)</span>' : ($optional ? ' <span class="help">(optional)</span>' : '');
     $reqAttr = $required ? ' data-required="1"' : '';
 
+    // Always show the canonical value in the input (e.g. "Germany").
+    // Suggestion labels may include counts ("6 · Germany") for the dropdown only.
     $displayValue = $value;
-    if ($value !== '') {
-        foreach ($jsonItems as $it) {
-            if (strcasecmp((string) $it['value'], $value) === 0) {
-                $displayValue = (string) $it['label'];
-                break;
-            }
-        }
-    }
 
     $html = '<div class="typeahead' . ($extraClass !== '' ? ' ' . h($extraClass) : '') . '" data-typeahead'
         . $reqAttr . ' data-name="' . h($name) . '" ' . $attrs . '>';
@@ -165,6 +159,7 @@ function render_clearable_email_input(string $name, string $value = '', array $o
     $placeholder = (string) ($opts['placeholder'] ?? '');
     $extraClass = trim((string) ($opts['class'] ?? ''));
     $attrs = trim((string) ($opts['attrs'] ?? ''));
+    $formId = trim((string) ($opts['form'] ?? ''));
     $aria = (string) ($opts['aria_label'] ?? ('Clear email'));
     $swe = !empty($opts['swe']);
     $has = trim($value) !== '';
@@ -172,6 +167,7 @@ function render_clearable_email_input(string $name, string $value = '', array $o
     $html = '<div class="email-field swe-email-field' . ($has ? ' has-value' : '') . '">';
     $html .= '<input type="text" inputmode="email" name="' . h($name) . '"'
         . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ($formId !== '' ? ' form="' . h($formId) . '"' : '')
         . ' class="' . h(trim('email-field-input ' . $extraClass)) . '"'
         . ' value="' . h($value) . '"'
         . ($placeholder !== '' ? ' placeholder="' . h($placeholder) . '"' : '')
