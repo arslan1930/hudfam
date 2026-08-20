@@ -2465,6 +2465,27 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .domains-paste-head label { margin: 0; }
 .domains-paste-warn { color: #8a1f1f !important; font-weight: 600; }
+.domains-paste-attention {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #f0c2c2;
+  border-radius: var(--radius, 10px);
+  background: #fff8f8;
+}
+.domains-paste-attention label {
+  display: block;
+  font-weight: 700;
+  color: #8a1f1f;
+  margin: 0 0 0.35rem;
+}
+.domains-attention-box {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  white-space: pre;
+}
 .btn-link {
   background: none;
   border: 0;

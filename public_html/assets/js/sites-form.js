@@ -287,53 +287,62 @@
   }
 
   /**
-   * Clean = correct fixable lines to root domains; keep unfixable lines so data is not lost.
+   * Clean = Ready roots + Needs attention (unfixable). Never mixes bad lines into Ready.
    */
   function cleanDomains(raw) {
     var text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     var lines = text.split(/\n+/);
     var validMap = {};
-    var out = [];
+    var ready = [];
+    var attention = [];
     var fixed = 0;
-    var keptBad = 0;
     lines.forEach(function (line) {
       line = line.trim();
       if (!line) return;
       var chunks = splitChunks(line);
-      var lineHadFixable = false;
       chunks.forEach(function (chunk) {
         var a = repairLine(chunk);
         if (a.ok) {
-          lineHadFixable = true;
           if (a.fixed) fixed++;
           if (!validMap[a.domain]) {
             validMap[a.domain] = true;
-            out.push(a.domain);
+            ready.push(a.domain);
           }
         } else if (a.reason !== 'empty') {
-          // Preserve unfixable original so Clean never silently deletes user data
-          out.push(a.raw);
-          keptBad++;
+          attention.push(a.raw + (a.reason ? ('  # ' + a.reason) : ''));
         }
       });
-      if (!lineHadFixable && chunks.length === 0) {
-        // no-op
-      }
     });
     return {
-      text: out.join('\n'),
+      text: ready.join('\n'),
+      readyText: ready.join('\n'),
+      attentionText: attention.join('\n'),
       fixed: fixed,
-      keptBad: keptBad,
-      valid: Object.keys(validMap)
+      keptBad: attention.length,
+      valid: ready.slice(),
+      attention: attention
     };
   }
 
-  function applyCleanToTextarea(ta, status) {
+  function applyCleanToTextarea(ta, status, root) {
     if (!ta) return null;
+    var wrap = root || (ta.closest && ta.closest('[data-domains-paste]')) || null;
+    var attentionTa = wrap ? wrap.querySelector('[data-domains-attention]') : null;
+    var attentionWrap = wrap ? wrap.querySelector('[data-domains-attention-wrap]') : null;
     var before = ta.value;
-    var cleaned = cleanDomains(before);
-    ta.value = cleaned.text;
-    // Notify draft autosave / other listeners (programmatic .value does not fire input).
+    // If attention box already has lines, include them in the clean pass so edits re-process.
+    var combined = before;
+    if (attentionTa && String(attentionTa.value || '').trim()) {
+      combined = before + (before && !/\n$/.test(before) ? '\n' : '') + attentionTa.value;
+    }
+    var cleaned = cleanDomains(combined);
+    ta.value = cleaned.readyText;
+    if (attentionTa) {
+      attentionTa.value = cleaned.attentionText;
+    }
+    if (attentionWrap) {
+      attentionWrap.hidden = cleaned.keptBad < 1;
+    }
     try {
       ta.dispatchEvent(new Event('input', { bubbles: true }));
       ta.dispatchEvent(new Event('change', { bubbles: true }));
@@ -342,17 +351,21 @@
       if (cleaned.keptBad > 0) {
         status.hidden = false;
         status.classList.add('domains-paste-warn');
-        status.textContent = 'Corrected ' + cleaned.fixed +
-          ' · kept ' + cleaned.keptBad +
-          ' unfixable line' + (cleaned.keptBad === 1 ? '' : 's') +
-          ' — edit those manually.';
-      } else if (cleaned.fixed > 0 || cleaned.text !== before) {
+        status.textContent = 'Ready: ' + cleaned.valid.length
+          + ' · corrected ' + cleaned.fixed
+          + ' · ' + cleaned.keptBad + ' need attention (listed below). Push uses Ready only.';
+      } else if (cleaned.fixed > 0 || cleaned.readyText !== before) {
         status.hidden = false;
         status.classList.remove('domains-paste-warn');
         status.textContent = cleaned.fixed > 0
-          ? ('Corrected ' + cleaned.fixed + ' line' + (cleaned.fixed === 1 ? '' : 's') +
-            ' to root domains (e.g. guruhitech.com).')
-          : 'List is already clean.';
+          ? ('Ready: ' + cleaned.valid.length + ' root domain'
+            + (cleaned.valid.length === 1 ? '' : 's')
+            + ' (corrected ' + cleaned.fixed + ').')
+          : 'Already root domains — nothing to clean.';
+      } else if (cleaned.valid.length > 0) {
+        status.hidden = false;
+        status.classList.remove('domains-paste-warn');
+        status.textContent = 'Already root domains — nothing to clean.';
       } else {
         status.hidden = true;
         status.textContent = '';
@@ -365,6 +378,8 @@
   function initDomainsPaste(root) {
     var ta = root.querySelector('[data-domains-input]');
     var status = root.querySelector('[data-domains-status]');
+    var attentionTa = root.querySelector('[data-domains-attention]');
+    var attentionWrap = root.querySelector('[data-domains-attention-wrap]');
     if (!ta) return;
 
     function updateStatus() {
@@ -373,18 +388,17 @@
       if (parsed.invalid.length > 0) {
         status.hidden = false;
         status.classList.add('domains-paste-warn');
-        status.textContent = parsed.invalid.length + ' line' +
-          (parsed.invalid.length === 1 ? '' : 's') +
-          ' need fixing — click Clean errors to correct https/paths/subdomains (keeps what it cannot fix).';
+        status.textContent = parsed.invalid.length + ' line'
+          + (parsed.invalid.length === 1 ? '' : 's')
+          + ' need fixing — click Clean to root domains (Ready list vs Needs attention).';
         return;
       }
-      // https://… / paths / subdomains parse as fixable roots but still look “dirty” in the box.
       if (parsed.dirty > 0) {
         status.hidden = false;
         status.classList.add('domains-paste-warn');
-        status.textContent = parsed.dirty + ' line' +
-          (parsed.dirty === 1 ? '' : 's') +
-          ' still have https/paths/subdomains — click Clean errors to convert to root domains.';
+        status.textContent = parsed.dirty + ' line'
+          + (parsed.dirty === 1 ? '' : 's')
+          + ' still have https/paths/subdomains — click Clean to root domains.';
         return;
       }
       status.hidden = true;
@@ -392,9 +406,7 @@
       status.classList.remove('domains-paste-warn');
     }
 
-    // Clean errors click is handled by document delegation (below) so it always works.
     ta.addEventListener('input', updateStatus);
-    // After paste of full URLs, nudge status immediately (Clean still required for rewrite).
     ta.addEventListener('paste', function () {
       setTimeout(updateStatus, 0);
     });
@@ -407,34 +419,48 @@
         var blocks = form.querySelectorAll('[data-domains-paste] [data-domains-input]');
         for (var i = 0; i < blocks.length; i++) {
           var field = blocks[i];
-          // Auto-correct on submit first, then block only if still invalid
-          var cleaned = cleanDomains(field.value);
-          field.value = cleaned.text;
+          var wrap = field.closest('[data-domains-paste]');
+          var st = wrap && wrap.querySelector('[data-domains-status]');
+          var att = wrap && wrap.querySelector('[data-domains-attention]');
+          var attWrap = wrap && wrap.querySelector('[data-domains-attention-wrap]');
+          var cleaned = cleanDomains(
+            field.value + ((att && String(att.value || '').trim())
+              ? ('\n' + att.value)
+              : '')
+          );
+          field.value = cleaned.readyText;
+          if (att) att.value = cleaned.attentionText;
+          if (attWrap) attWrap.hidden = cleaned.keptBad < 1;
           try {
             field.dispatchEvent(new Event('input', { bubbles: true }));
           } catch (err) { /* ignore */ }
-          var parsed = parseDomains(field.value);
-          if (parsed.invalid.length > 0) {
+          if (!cleaned.valid.length) {
             e.preventDefault();
             field.focus();
-            var wrap = field.closest('[data-domains-paste]');
-            var st = wrap && wrap.querySelector('[data-domains-status]');
             if (st) {
               st.hidden = false;
               st.classList.add('domains-paste-warn');
-              st.textContent = 'Still ' + parsed.invalid.length +
-                ' unfixable line' + (parsed.invalid.length === 1 ? '' : 's') +
-                ' — edit or remove those, then try again.';
+              st.textContent = cleaned.keptBad > 0
+                ? 'No Ready domains — fix Needs attention below, then Clean again.'
+                : 'Paste at least one root domain.';
             }
             return;
           }
-          field.value = parsed.validText;
+          // Push uses Ready only; attention may remain as a warning.
+          if (cleaned.keptBad > 0 && st) {
+            st.hidden = false;
+            st.classList.add('domains-paste-warn');
+            st.textContent = 'Submitting ' + cleaned.valid.length
+              + ' Ready domain' + (cleaned.valid.length === 1 ? '' : 's')
+              + ' · ' + cleaned.keptBad + ' left in Needs attention.';
+          }
+          field.value = cleaned.readyText;
         }
       });
     }
   }
 
-  // Global delegation: Clean errors still works if a paste block was added later.
+  // Global delegation: Clean still works if a paste block was added later.
   if (typeof window !== 'undefined' && typeof document !== 'undefined'
       && !window.__TXF_DOMAINS_CLEAN_DELEGATE__) {
     window.__TXF_DOMAINS_CLEAN_DELEGATE__ = true;
@@ -447,7 +473,7 @@
       var status = root.querySelector('[data-domains-status]');
       if (!ta) return;
       e.preventDefault();
-      applyCleanToTextarea(ta, status);
+      applyCleanToTextarea(ta, status, root);
       ta.focus();
     });
   }
