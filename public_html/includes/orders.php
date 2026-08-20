@@ -378,6 +378,27 @@ function count_order_client_unpaid_live(int $clientId): int
     return (int) $stmt->fetchColumn();
 }
 
+/** Dashboard/order list aggregates for active (non-archived) clients. */
+function order_management_dashboard_stats(): array
+{
+    ensure_order_schema();
+    $clients = (int) db()->query(
+        'SELECT COUNT(*) FROM order_clients WHERE COALESCE(is_archived, 0) = 0'
+    )->fetchColumn();
+    $unpaidLive = (int) db()->query(
+        "SELECT COUNT(*) FROM order_items i
+         INNER JOIN order_clients c ON c.id = i.client_id
+         WHERE COALESCE(c.is_archived, 0) = 0
+           AND i.row_type = 'site'
+           AND TRIM(i.live_url) <> ''
+           AND COALESCE(i.is_paid, 0) = 0"
+    )->fetchColumn();
+    return [
+        'clients' => $clients,
+        'unpaid_live' => $unpaidLive,
+    ];
+}
+
 function get_order_client(int $id): ?array
 {
     ensure_order_schema();

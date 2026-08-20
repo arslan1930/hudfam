@@ -1921,6 +1921,13 @@ try {
     }
     set_order_client_archived((int) $clientId, false);
 
+    $dash = order_management_dashboard_stats();
+    if (isset($dash['clients'], $dash['unpaid_live'])) {
+        pass('order dashboard stats ok');
+    } else {
+        fail('order dashboard stats missing keys');
+    }
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
 
