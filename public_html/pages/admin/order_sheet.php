@@ -147,11 +147,19 @@ render_header('Order · ' . $client['name'], 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= h($client['name']) ?></h1>
+    <h1><?= h($client['name']) ?><?php if (order_client_is_archived($client)): ?> <span class="badge">Archived</span><?php endif; ?></h1>
     <p class="muted">Client sheet — country, month, prices, profit. Completed = LIVE URL filled.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders">All clients</a>
+    <?php if (order_client_is_archived($client)): ?>
+      <form method="post" action="index.php?page=admin_orders" style="display:inline">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="restore">
+        <input type="hidden" name="id" value="<?= (int) $clientId ?>">
+        <button class="btn" type="submit">Restore client</button>
+      </form>
+    <?php endif; ?>
     <?php if ($unpaidLiveCount > 0): ?>
       <a class="btn" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $clientId ?>">
         Generate invoice (<?= (int) $unpaidLiveCount ?> unpaid)
@@ -161,6 +169,11 @@ render_header('Order · ' . $client['name'], 'admin');
     <?php endif; ?>
   </div>
 </div>
+<?php if (order_client_is_archived($client)): ?>
+<div class="card" style="margin-bottom:1rem">
+  <p style="margin:0">This client is <strong>archived</strong> and hidden from the default Order management list. You can still view and edit the sheet, or restore it.</p>
+</div>
+<?php endif; ?>
 
 <div class="orders-summary orders-summary-6">
   <div class="orders-summary-item">

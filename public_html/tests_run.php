@@ -1891,6 +1891,36 @@ try {
         fail('list filter unpaid missing client');
     }
 
+    // OM-3: archive hides from default list
+    set_order_client_archived((int) $clientId, true);
+    $activeList = list_order_clients(['filter' => 'all']);
+    $stillVisible = false;
+    foreach ($activeList as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) $clientId) {
+            $stillVisible = true;
+            break;
+        }
+    }
+    if (!$stillVisible) {
+        pass('archived client hidden from default list');
+    } else {
+        fail('archived client still in default list');
+    }
+    $archList = list_order_clients(['filter' => 'archived']);
+    $inArch = false;
+    foreach ($archList as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) $clientId) {
+            $inArch = true;
+            break;
+        }
+    }
+    if ($inArch) {
+        pass('archived filter lists client');
+    } else {
+        fail('archived filter missing client');
+    }
+    set_order_client_archived((int) $clientId, false);
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
 

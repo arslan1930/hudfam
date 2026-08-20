@@ -17,11 +17,13 @@ function ensure_order_schema(): void
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(200) NOT NULL,
           notes TEXT NULL,
+          is_archived TINYINT(1) NOT NULL DEFAULT 0,
           created_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_order_client_name (name),
           INDEX (created_by),
+          INDEX idx_order_clients_archived (is_archived),
           CONSTRAINT fk_oc_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
@@ -93,6 +95,19 @@ function ensure_order_schema(): void
         );
     } catch (Throwable $e) {
         // ignore on fresh installs
+    }
+
+    try {
+        $cCols = $pdo->query('SHOW COLUMNS FROM order_clients')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('is_archived', $cCols, true)) {
+            $pdo->exec(
+                'ALTER TABLE order_clients
+                 ADD COLUMN is_archived TINYINT(1) NOT NULL DEFAULT 0 AFTER notes,
+                 ADD INDEX idx_order_clients_archived (is_archived)'
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore
     }
 }
 
@@ -285,6 +300,7 @@ function list_order_clients(array $opts = []): array
     $filter = (string) ($opts['filter'] ?? 'all');
     $sort = (string) ($opts['sort'] ?? 'name');
     $q = trim((string) ($opts['q'] ?? ''));
+    $includeArchived = !empty($opts['include_archived']) || $filter === 'archived';
 
     $sql = "SELECT c.*,
                 (SELECT COUNT(*) FROM order_items i
@@ -310,6 +326,11 @@ function list_order_clients(array $opts = []): array
          FROM order_clients c";
     $where = [];
     $params = [];
+    if ($filter === 'archived') {
+        $where[] = 'COALESCE(c.is_archived, 0) = 1';
+    } elseif (!$includeArchived) {
+        $where[] = 'COALESCE(c.is_archived, 0) = 0';
+    }
     if ($q !== '') {
         $where[] = '(c.name LIKE ? OR c.notes LIKE ?)';
         $like = '%' . $q . '%';
@@ -405,6 +426,19 @@ function delete_order_client(int $id): void
 {
     ensure_order_schema();
     db()->prepare('DELETE FROM order_clients WHERE id=?')->execute([$id]);
+}
+
+function set_order_client_archived(int $id, bool $archived): void
+{
+    ensure_order_schema();
+    db()->prepare(
+        'UPDATE order_clients SET is_archived=?, updated_at=NOW() WHERE id=?'
+    )->execute([$archived ? 1 : 0, $id]);
+}
+
+function order_client_is_archived(array $client): bool
+{
+    return (int) ($client['is_archived'] ?? 0) === 1;
 }
 
 function next_order_sort(int $clientId): int
