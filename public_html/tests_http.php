@@ -120,7 +120,12 @@ if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id=
 }
 
 // Assets
-foreach (['/asset.php?f=css/app.css', '/asset.php?f=js/nav-shell.js', '/asset.php?f=js/sites-with-emails.js'] as $path) {
+foreach ([
+    '/asset.php?f=css/app.css',
+    '/asset.php?f=js/nav-shell.js',
+    '/asset.php?f=js/sites-with-emails.js',
+    '/asset.php?f=js/csrf.js',
+] as $path) {
     $r = req('GET', $base . $path);
     if ($r['status'] === 200 && strlen($r['body']) > 50) {
         pass('asset ' . $path);
@@ -160,10 +165,10 @@ if ($r['status'] >= 300 && $r['status'] < 400 && (str_contains($loc, 'team_dashb
 foreach (
     [
         'team_dashboard' => ['Filter', 'Extracting'],
-        'team_prospect_check' => ['Filter'],
+        'team_prospect_check' => ['Filter', 'csrf-token'],
         'team_extracting' => ['Extracting'],
         'team_sites_emails' => ['Sites with emails'],
-        'team_admin_emails_delete' => ['Admin emails search'],
+        'team_admin_emails_delete' => ['Admin emails search', 'Delete both'],
         'team_email_campaigns' => ['Campaign search'],
         'team_email_campaigns_drafts' => ['Campaign drafts'],
     ] as $page => $needles
@@ -182,6 +187,14 @@ foreach (
     }
 }
 
+// Unscoped teammate pages load csrf.js
+$r = req('GET', $base . '/index.php?page=team_prospect_check');
+if (str_contains($r['body'], 'csrf.js') || str_contains($r['body'], 'js/csrf.js')) {
+    pass('team page loads csrf.js');
+} else {
+    fail('team page missing csrf.js');
+}
+
 // Dept-scoped finder cannot open extracting
 req('GET', $base . '/index.php?page=logout');
 $r = req('POST', $base . '/index.php?page=login', [
@@ -192,6 +205,17 @@ if ($r['status'] === 200 && (str_contains($r['body'], 'Filter') || str_contains(
     pass('finder can open Filter & add');
 } else {
     fail('finder blocked from Filter & add status=' . $r['status']);
+}
+if (!str_contains($r['body'], 'team_extracting') && !str_contains($r['body'], 'Extracting sites')) {
+    pass('finder Filter page hides Extracting CTA');
+} else {
+    // CTA may still mention Extracting in help copy — require unlocked link absence
+    if (!preg_match('/href="[^"]*team_extracting[^"]*"/', $r['body'])
+        && !preg_match('/href="[^"]*team_extract_batch[^"]*"/', $r['body'])) {
+        pass('finder Filter page hides Extracting CTA');
+    } else {
+        fail('finder Filter still links into Extracting');
+    }
 }
 $r = req('GET', $base . '/index.php?page=team_extracting');
 $loc = location($r);
@@ -204,6 +228,33 @@ if (($r['status'] >= 300 && str_contains($loc, 'team_departments')) || str_conta
     } else {
         fail('finder unexpectedly opened Extracting status=' . $r['status'] . ' loc=' . $loc);
     }
+}
+
+// Email Extracting folder shows tool shortcuts
+req('GET', $base . '/index.php?page=logout');
+$r = req('POST', $base . '/index.php?page=login', [
+    'body' => http_build_query(['username' => 'emailer', 'password' => 'DeptTest9x']),
+]);
+$r = req('GET', $base . '/index.php?page=team_departments&folder=email_extracting');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Email Extracting tools')
+    && str_contains($r['body'], 'team_sites_emails')) {
+    pass('emailer sees Email Extracting tool shortcuts');
+} else {
+    fail('emailer Email Extracting shortcuts missing status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_sites_emails');
+if ($r['status'] === 200 && str_contains($r['body'], 'Sites with emails')) {
+    pass('emailer can open Sites with emails');
+} else {
+    fail('emailer blocked from Sites with emails status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_extracting');
+$loc = location($r);
+if ($r['status'] >= 300 || str_contains($r['body'], 'only shows') || str_contains($loc, 'team_departments')) {
+    pass('emailer blocked from Extracting');
+} else {
+    fail('emailer unexpectedly opened Extracting status=' . $r['status']);
 }
 
 echo "\n==== HTTP SUMMARY ====\n";
