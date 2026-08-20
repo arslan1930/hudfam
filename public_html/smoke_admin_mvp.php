@@ -476,5 +476,144 @@ if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
     ok('layout nav uses aliases for child routes');
 }
 
+// --- Team panels T-1–T-5 ---
+if (!str_contains($deptLib, 'function team_page_unlocked')) {
+    fail('departments.php missing team_page_unlocked');
+} else {
+    ok('team_page_unlocked helper');
+}
+
+$prospectCheckT = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
+if (!str_contains($prospectCheckT, 'team_page_unlocked($user, \'team_extract_batch\')')
+    && !str_contains($prospectCheckT, 'team_page_unlocked($user, "team_extract_batch")')) {
+    fail('Finding redirect to Extracting is not gated by unlock');
+} else {
+    ok('Finding Extracting redirect gated');
+}
+if (!str_contains($prospectCheckT, 'team_page_unlocked($user, \'team_extracting\')')
+    && !str_contains($prospectCheckT, 'team_page_unlocked($user, "team_extracting")')) {
+    fail('Finding Extracting CTA not gated');
+} else {
+    ok('Finding Extracting CTA gated');
+}
+
+$prospectsLib = file_get_contents($root . '/includes/prospects.php') ?: '';
+if (!str_contains($prospectsLib, 'uniq_user_batch_date_country')) {
+    fail('prospect batches missing per-country unique key');
+} else {
+    ok('prospect batches unique per user/day/country');
+}
+if (!str_contains($prospectCheckT, 'json_encode') || !str_contains($prospectCheckT, 'confirm_tld_mismatch')) {
+    fail('Finding TLD confirm not json_encode-safe');
+} else {
+    ok('Finding TLD confirm json_encode-safe');
+}
+
+$extractBatchT = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+if (str_contains($extractBatchT, 'Clean errors') || str_contains($extractBatchT, 'Clean Errors')) {
+    fail('Extracting still documents fake Clean errors control');
+} else {
+    ok('Extracting help omits fake Clean errors');
+}
+if (!str_contains($extractBatchT, 'remove_extract_batch_domains')
+    || !str_contains($extractBatchT, "(int) \$pushed['inserted'] > 0")) {
+    fail('Extracting Push missing Sites-list clear / insert-only Results clear');
+} else {
+    ok('Extracting Push clears Results only after insert');
+}
+$extractSitesJs = file_get_contents($root . '/assets/js/extract-sites-list.js') ?: '';
+if (!str_contains($extractSitesJs, 'data.domains')) {
+    fail('extract-sites-list.js autosave does not rewrite from server domains');
+} else {
+    ok('extract Sites-list autosave syncs textarea');
+}
+
+$sweLib = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
+foreach ([
+    'list_sites_with_emails_push_conflict_domains',
+    'count_sites_with_emails_push_conflicts',
+] as $fn) {
+    if (!str_contains($sweLib, "function {$fn}")) {
+        fail("sites_with_emails.php missing {$fn}");
+    }
+}
+ok('SWE push conflict helpers');
+if (!str_contains($sweLib, 'confirmOverwrite') && !str_contains($sweLib, '$confirmOverwrite')) {
+    fail('push helpers missing confirmOverwrite gate');
+} else {
+    ok('push helpers require confirmOverwrite on conflict');
+}
+if (!str_contains($sweLib, "LEFT(domain, 8) <> '__blank_'")) {
+    fail('Admin emails suggest still includes blank placeholder domains');
+} else {
+    ok('Admin emails suggest skips blank placeholders');
+}
+
+$sweApp = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'OVERWRITE')) {
+    fail('SWE UI missing overwrite confirm');
+} else {
+    ok('SWE UI overwrite confirm');
+}
+
+$sitesEmailsPage = file_get_contents($root . '/pages/team/sites_emails.php') ?: '';
+if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {
+    fail('team_sites_emails missing page-level unlock check');
+} else {
+    ok('team_sites_emails page-level unlock');
+}
+$adminEmailsDelete = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
+if (!str_contains($adminEmailsDelete, 'team_page_unlocked($user, \'team_admin_emails_delete\')')
+    && !str_contains($adminEmailsDelete, 'team_page_unlocked($user, "team_admin_emails_delete")')) {
+    fail('admin_emails_delete missing team_page_unlocked ACL');
+} else {
+    ok('admin_emails_delete uses team_page_unlocked');
+}
+if (str_contains($adminEmailsDelete, 'catch (Throwable') && str_contains($adminEmailsDelete, '$ok = false')) {
+    fail('admin_emails_delete still uses brittle try/catch deny');
+} else {
+    ok('admin_emails_delete ACL without brittle catch-deny');
+}
+
+$teamDeptsT = file_get_contents($root . '/pages/team/departments.php') ?: '';
+if (!str_contains($teamDeptsT, 'Email Extracting tools')) {
+    fail('departments missing Email Extracting tool shortcuts');
+} else {
+    ok('Email Extracting folder tool shortcuts');
+}
+if (!str_contains($teamDeptsT, 'canSitesEmails') || !str_contains($teamDeptsT, 'canCampaigns')) {
+    fail('departments dual-dept shortcuts not unlock-gated');
+} else {
+    ok('departments dual-dept shortcuts unlock-gated');
+}
+
+$testsTeam = file_get_contents($root . '/tests_run.php') ?: '';
+foreach ([
+    'Team re-push without confirm is blocked',
+    'push_site rejects country mismatch',
+    'team_page_unlocked',
+    'prospect batch per country',
+] as $needle) {
+    if (!str_contains($testsTeam, $needle)) {
+        fail("tests_run.php missing Team coverage: {$needle}");
+    }
+}
+ok('tests_run Team T-1–T-5 coverage needles');
+
+$httpSmoke = file_get_contents($root . '/tests_http.php') ?: '';
+if (str_contains($httpSmoke, 'curl_init')) {
+    fail('tests_http.php still requires ext-curl (curl_init)');
+} elseif (!str_contains($httpSmoke, 'file_get_contents') || !str_contains($httpSmoke, 'stream_context_create')) {
+    fail('tests_http.php missing stream-based HTTP client');
+} else {
+    ok('tests_http.php uses streams (no ext-curl)');
+}
+if (!str_contains($httpSmoke, 'Waiting for assignment')
+    || !str_contains($httpSmoke, 'admin_extracted&folder=extracted_sites')) {
+    fail('tests_http.php missing waiting-dashboard / extracted-folder asserts');
+} else {
+    ok('tests_http.php ACL + extracted hub asserts');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

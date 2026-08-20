@@ -544,12 +544,6 @@ try {
     } else {
         pass('four-slot push ok');
     }
-    $wrongCountry = push_one_site_with_emails_team_to_admin(
-        (int) db()->query("SELECT id FROM sites_with_emails_team WHERE domain='txfpush-noemail.com' LIMIT 1")->fetchColumn() ?: 0,
-        $teamUser,
-        'France'
-    );
-    // noemail row may lack emails; use a fresh row for country bind check
     db()->prepare(
         "INSERT INTO sites_with_emails_team
            (domain, country, language, region, email1, email2, email3, email4)
@@ -2549,6 +2543,64 @@ try {
     db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-%'");
 } catch (Throwable $e) {
     fail('semrush: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Team panels T-2 / T-3 helpers ---
+try {
+    $finderUid = (int) db()->query("SELECT id FROM users WHERE username='finder'")->fetchColumn();
+    $extractorUid = (int) db()->query("SELECT id FROM users WHERE username='extractor'")->fetchColumn();
+    $finder = ['id' => $finderUid, 'username' => 'finder', 'role' => 'team'];
+    $extractor = ['id' => $extractorUid, 'username' => 'extractor', 'role' => 'team'];
+    if ($finderUid > 0 && team_page_unlocked($finder, 'team_prospect_check')
+        && !team_page_unlocked($finder, 'team_extract_batch')
+        && !team_page_unlocked($finder, 'team_sites_emails')) {
+        pass('team_page_unlocked finder tools');
+    } else {
+        fail('team_page_unlocked finder unexpected');
+    }
+    if ($extractorUid > 0 && team_page_unlocked($extractor, 'team_extract_batch')
+        && !team_page_unlocked($extractor, 'team_prospect_check')) {
+        pass('team_page_unlocked extractor tools');
+    } else {
+        fail('team_page_unlocked extractor unexpected');
+    }
+
+    $day = '2099-01-15';
+    $batchDe = get_or_create_prospect_batch(
+        (int) $teamUser['id'],
+        'Germany',
+        'German',
+        'europe',
+        'txf-t3',
+        'per-country',
+        $day
+    );
+    $batchFr = get_or_create_prospect_batch(
+        (int) $teamUser['id'],
+        'France',
+        'French',
+        'europe',
+        'txf-t3',
+        'per-country',
+        $day
+    );
+    $batchDe2 = get_or_create_prospect_batch(
+        (int) $teamUser['id'],
+        'Germany',
+        'German',
+        'europe',
+        'txf-t3',
+        'per-country',
+        $day
+    );
+    if ($batchDe > 0 && $batchFr > 0 && $batchDe !== $batchFr && $batchDe === $batchDe2) {
+        pass('prospect batch per country');
+    } else {
+        fail("prospect batches de=$batchDe fr=$batchFr de2=$batchDe2");
+    }
+    db()->prepare('DELETE FROM prospect_batches WHERE id IN (?,?)')->execute([$batchDe, $batchFr]);
+} catch (Throwable $e) {
+    fail('team panels helpers: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";
