@@ -1,6 +1,6 @@
 <?php
 /**
- * Communication Team · one search bar per Admin project sheet (site + emails delete).
+ * Communication Team · one search bar per Admin project (all countries in it).
  */
 $user = require_team();
 ensure_email_campaign_schema();
@@ -12,13 +12,21 @@ if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
 
 $base = 'index.php?page=team_email_campaigns';
 
-// JSON suggest — one project sheet (or all visible if sheet_id omitted)
+// JSON suggest — one project (all its countries), or all visible projects
 if ((string) get('ajax') === 'suggest') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $q = (string) get('q');
-    $sheetId = (int) get('sheet_id');
-    if ($sheetId > 0) {
+    $projectId = (int) get('project_id');
+    $sheetId = (int) get('sheet_id'); // legacy
+    if ($projectId > 0) {
+        $project = get_email_campaign_project($projectId);
+        if (!$project || !email_campaign_project_team_visible($project)) {
+            echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
+            exit;
+        }
+        $suggestions = search_email_campaign_suggestions_for_project($projectId, $q, 25);
+    } elseif ($sheetId > 0) {
         $sheet = get_email_campaign_sheet($sheetId);
         if (!$sheet || !email_campaign_sheet_team_visible($sheet)) {
             echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
@@ -120,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
-$visibleCount = count(list_email_campaign_sheets(true));
+$visibleCount = count(list_email_campaign_projects(true));
 
 render_header('Campaign search', 'team');
 render_breadcrumbs([
@@ -130,13 +138,16 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Campaign search', 'One search bar per Admin project sheet that is shown to Communication Team. Search site + email, then delete both or remove only email.') ?></h1>
+    <h1><?= label_with_info('Campaign search', 'One search bar per Admin project shown to Communication Team. Each project can include many countries. Search the whole project, then delete — updates the matching country sheet.') ?></h1>
     <p class="muted">
       <?= (int) $visibleCount ?> project search bar<?= (int) $visibleCount === 1 ? '' : 's' ?>
       from Admin → Emails data → Email campaign data.
-      Each bar is named with the <strong>project name</strong> Admin assigned.
+      Each bar covers <strong>all countries</strong> Admin added to that project.
       Delete both or remove only email — removing the <strong>last</strong> email also deletes the site row.
     </p>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
   </div>
 </div>
 <?php
