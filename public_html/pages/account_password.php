@@ -53,7 +53,9 @@ render_header('Change password', $panel);
     <p style="margin-top:1.1rem">
       <button class="btn" type="submit">Save new password</button>
       <?php if (!$forced): ?>
-        <a class="btn secondary" href="index.php?page=<?= is_admin() ? 'admin_dashboard' : 'team_dashboard' ?>">Cancel</a>
+        <a class="btn secondary" href="index.php?page=<?= is_admin()
+            ? 'admin_dashboard'
+            : (user_is_department_scoped($user) ? 'team_departments' : 'team_dashboard') ?>">Cancel</a>
       <?php endif; ?>
     </p>
   </form>
