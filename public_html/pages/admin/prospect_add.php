@@ -79,7 +79,7 @@ render_header('Add URLs', 'admin');
     ]
 ) ?>
 
-<form class="card" method="post">
+<form class="card" method="post" action="index.php?page=admin_prospect_add">
   <div class="form-grid">
     <div>
       <label for="country">Country <span class="help">(required)</span></label>

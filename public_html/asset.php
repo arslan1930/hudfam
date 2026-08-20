@@ -8,7 +8,11 @@
  */
 $allowed = [
     'css/app.css' => 'text/css; charset=utf-8',
+    'js/draft-autosave.js' => 'application/javascript; charset=utf-8',
+    'js/info-tips.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',
+    'img/topurlz-logo.svg' => 'image/svg+xml',
+    'img/topurlz-logo.png' => 'image/png',
 ];
 
 $f = (string) ($_GET['f'] ?? '');

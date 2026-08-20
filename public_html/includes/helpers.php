@@ -81,6 +81,20 @@ function get_flashes(): array
     return $flashes;
 }
 
+/** Pretty alert / flash message box used across the app. */
+function render_alert_box(string $type, string $message): void
+{
+    $isError = $type === 'error';
+    $cls = $isError ? 'alert-error' : 'alert-ok';
+    $alertTitle = $isError ? 'Error' : 'Success';
+    echo '<div class="alert-box ' . h($cls) . '" role="alert">';
+    echo '<div class="alert-icon" aria-hidden="true">' . ($isError ? '!' : '✓') . '</div>';
+    echo '<div class="alert-body">';
+    echo '<strong class="alert-title">' . h($alertTitle) . '</strong>';
+    echo '<p class="alert-text">' . h($message) . '</p>';
+    echo '</div></div>';
+}
+
 function post(string $key, $default = '')
 {
     return $_POST[$key] ?? $default;
@@ -124,6 +138,30 @@ function badge(string $status): string
 function money_or_dash($value): string
 {
     return $value === null || $value === '' ? '—' : h((string) $value);
+}
+
+/**
+ * Small “i” info icon with tooltip (hover / focus / tap).
+ */
+function info_icon(string $tip, string $aria = 'More info'): string
+{
+    $tip = trim($tip);
+    if ($tip === '') {
+        return '';
+    }
+    return '<button type="button" class="info-tip" aria-label="' . h($aria) . '">'
+        . '<span class="info-tip-mark" aria-hidden="true">i</span>'
+        . '<span class="info-tip-bubble" role="tooltip">' . h($tip) . '</span>'
+        . '</button>';
+}
+
+/**
+ * Label text + info icon (escaped label).
+ */
+function label_with_info(string $label, string $tip): string
+{
+    return '<span class="with-info"><span class="with-info-label">' . h($label) . '</span>'
+        . info_icon($tip, 'About ' . $label) . '</span>';
 }
 
 /**
