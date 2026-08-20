@@ -234,5 +234,48 @@ if (!str_contains($layoutFull, 'csrf-token') || !str_contains($layoutFull, 'csrf
     ok('layout csrf meta + script');
 }
 
+$extracted = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
+if (!str_contains($extracted, "redirect(\$sitesListUrl)") && !str_contains($extracted, 'redirect($sitesListUrl)')) {
+    fail('extracted hub should redirect to country list');
+} else {
+    ok('extracted hub skips one-card hop');
+}
+if (!str_contains($extracted, 'extracted_search_all_pages')) {
+    fail('extracted missing Search all pages control');
+} else {
+    ok('extracted Search all pages control');
+}
+
+$emailsHub = file_get_contents($root . '/pages/admin/emails_data.php') ?: '';
+if (str_contains($emailsHub, 'sync_sites_with_emails_admin_to_all()')
+    && !str_contains($emailsHub, 'repair_final_archive')) {
+    fail('emails hub still auto-syncs without repair action');
+}
+if (!str_contains($emailsHub, 'repair_final_archive')) {
+    fail('emails hub missing repair_final_archive');
+} else {
+    ok('emails hub repair Final archive');
+}
+
+$ordersPage = file_get_contents($root . '/pages/admin/orders.php') ?: '';
+if (!str_contains($ordersPage, 'order-client-search')) {
+    fail('orders missing client search');
+} else {
+    ok('orders client search');
+}
+$orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
+if (!str_contains($orderSheet, 'yearNow') && !str_contains($orderSheet, 'date(\'Y\')')) {
+    fail('order sheet year range not dynamic');
+} else {
+    ok('order sheet dynamic year range');
+}
+
+$layoutNav = file_get_contents($root . '/includes/layout.php') ?: '';
+if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
+    fail('layout nav does not use aliases for child routes');
+} else {
+    ok('layout nav uses aliases for child routes');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
