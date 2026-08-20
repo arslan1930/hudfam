@@ -333,7 +333,7 @@ if (!$inCountry && !$emptyCountry) {
                   <td><?= h($hit['added_by_full'] ?: $hit['added_by_name'] ?: '—') ?></td>
                   <td class="actions">
                     <form method="post" action="index.php?page=admin_prospects#super-search" style="display:inline"
-                          onsubmit="return confirm('Remove <?= h($hit['domain']) ?> from <?= h($cLabel) ?>?');">
+                          onsubmit="return confirm(<?= js_string('Remove ' . (string) $hit['domain'] . ' from ' . $cLabel . '?') ?>);">
                       <input type="hidden" name="action" value="remove_site">
                       <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
                       <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
@@ -357,6 +357,8 @@ if (!$inCountry && !$emptyCountry) {
       <?php endif; ?>
       <?php if ($sortByCount): ?>
         <input type="hidden" name="sort" value="count">
+      <?php else: ?>
+        <input type="hidden" name="sort" value="name">
       <?php endif; ?>
       <div class="country-finder-grid">
         <div>
@@ -375,7 +377,19 @@ if (!$inCountry && !$emptyCountry) {
                  onchange="this.form.submit()">
           Non-empty only
         </label>
-        <a class="btn secondary small" href="index.php?page=admin_prospects&amp;sort=<?= $sortByCount ? 'name' : 'count' ?><?= $nonEmptyOnly ? '&amp;nonempty=1' : '' ?><?= $langFilter !== '' ? '&amp;language=' . urlencode($langFilter) : '' ?>">
+        <?php
+          $sortSwitch = 'index.php?page=admin_prospects&sort=' . ($sortByCount ? 'name' : 'count');
+          if ($nonEmptyOnly) {
+              $sortSwitch .= '&nonempty=1';
+          }
+          if ($langFilter !== '') {
+              $sortSwitch .= '&language=' . rawurlencode($langFilter);
+          }
+          if ($filterUser > 0) {
+              $sortSwitch .= '&created_by=' . $filterUser;
+          }
+        ?>
+        <a class="btn secondary small" href="<?= h($sortSwitch) ?>">
           Sort: <?= $sortByCount ? 'by count' : 'by name' ?> (switch)
         </a>
       </div>
@@ -472,9 +486,9 @@ $qsParts = array_filter([
     'per' => (string) $perPage,
 ], static fn ($v) => $v !== '' && $v !== null);
 $qs = http_build_query($qsParts);
-
-$exportPack = list_prospect_domains_for_export($filters, 20000);
-$exportText = implode("\n", $exportPack['domains']);
+$exportUrl = 'index.php?' . $qs . '&export=txt';
+$exportCap = 20000;
+$exportCapped = $total > $exportCap;
 
 $editRow = null;
 if ($editId > 0) {
@@ -559,7 +573,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     </div>
     <p class="actions" style="margin-top:0.85rem">
       <button class="btn" type="submit">Save</button>
-      <a class="btn secondary" href="?<?= h($qs) ?>">Cancel</a>
+      <a class="btn secondary" href="index.php?<?= h($qs) ?>">Cancel</a>
     </p>
   </form>
 </div>
@@ -600,35 +614,51 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <h2 style="margin:0 0 0.45rem">Copy / export</h2>
   <p class="help" style="margin-top:0">
     Domains matching the current filters
-    (<?= (int) $exportPack['total'] ?> total<?= $exportPack['capped'] ? ', showing first ' . (int) $exportPack['cap'] : '' ?>).
+    (<?= (int) $total ?> total<?= $exportCapped ? ', download/copy capped at ' . (int) $exportCap : '' ?>).
   </p>
-  <textarea id="export_domains" class="inventory-box" rows="8" readonly><?= h($exportText) ?></textarea>
   <div class="actions" style="margin-top:0.75rem">
-    <button type="button" class="btn secondary" id="copy_domains_btn">Copy all</button>
-    <a class="btn secondary" href="?<?= h($qs) ?>&amp;export=txt">Download .txt</a>
+    <button type="button" class="btn secondary" id="copy_domains_btn"
+            data-export-url="<?= h($exportUrl) ?>">Copy all</button>
+    <a class="btn secondary" href="<?= h($exportUrl) ?>">Download .txt</a>
   </div>
   <p class="help" id="copy_domains_status" hidden></p>
 </div>
 <script>
 (function () {
   var btn = document.getElementById('copy_domains_btn');
-  var ta = document.getElementById('export_domains');
   var status = document.getElementById('copy_domains_status');
-  if (!btn || !ta) return;
+  if (!btn) return;
   btn.addEventListener('click', function () {
-    var text = ta.value || '';
-    function done(ok) {
+    var url = btn.getAttribute('data-export-url') || '';
+    function done(ok, msg) {
       if (!status) return;
       status.hidden = false;
-      status.textContent = ok ? 'Copied ' + (text ? text.split(/\n/).filter(Boolean).length : 0) + ' domain(s).' : 'Copy failed — select the box and copy manually.';
+      status.textContent = msg || (ok ? 'Copied.' : 'Copy failed.');
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { done(true); }).catch(function () {
-        try { ta.focus(); ta.select(); done(document.execCommand('copy')); } catch (e) { done(false); }
-      });
-    } else {
-      try { ta.focus(); ta.select(); done(document.execCommand('copy')); } catch (e) { done(false); }
+    if (!url) {
+      done(false, 'Export URL missing.');
+      return;
     }
+    btn.disabled = true;
+    done(true, 'Loading…');
+    fetch(url, { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (text) {
+      var n = text ? text.replace(/\r/g, '').split('\n').filter(Boolean).length : 0;
+      function finish(ok) {
+        btn.disabled = false;
+        done(ok, ok ? ('Copied ' + n + ' domain(s).') : 'Copy failed — use Download .txt instead.');
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { finish(true); }).catch(function () { finish(false); });
+      } else {
+        finish(false);
+      }
+    }).catch(function () {
+      btn.disabled = false;
+      done(false, 'Could not load domains — use Download .txt instead.');
+    });
   });
 })();
 </script>
@@ -648,9 +678,9 @@ render_header('Our database · ' . $sheetLabel, 'admin');
         <td><?= h($s['added_by_full'] ?: $s['added_by_name'] ?: '—') ?></td>
         <td><?= h(substr((string) $s['created_at'], 0, 10)) ?></td>
         <td class="actions">
-          <a class="btn secondary small" href="?<?= h($qs) ?>&amp;edit=<?= (int) $s['id'] ?>#edit-site">Edit</a>
+          <a class="btn secondary small" href="index.php?<?= h($qs) ?>&amp;edit=<?= (int) $s['id'] ?>#edit-site">Edit</a>
           <form method="post" style="display:inline"
-                onsubmit="return confirm('Remove <?= h($s['domain']) ?> from <?= h($sheetLabel) ?>? History stays unchanged.');">
+                onsubmit="return confirm(<?= js_string('Remove ' . (string) $s['domain'] . ' from ' . $sheetLabel . '? History stays unchanged.') ?>);">
             <input type="hidden" name="action" value="remove_site">
             <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
             <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
@@ -675,9 +705,9 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     </div>
   <?php else: ?>
     <div class="actions" style="margin-top:0.8rem">
-      <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
+      <?php if ($pageNum > 1): ?><a href="index.php?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <span>Page <?= $pageNum ?> / <?= $pages ?></span>
-      <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <?php if ($pageNum < $pages): ?><a href="index.php?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
     </div>
   <?php endif; ?>
 </div>
@@ -692,7 +722,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <form
     method="post"
     action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#remove-by-list"
-    onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?> (Our database)?');"
+    onsubmit="return confirm(<?= js_string('Remove all matching sites from this list in ' . $countryName . ' (Our database)?') ?>);"
   >
     <input type="hidden" name="action" value="remove_list">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">

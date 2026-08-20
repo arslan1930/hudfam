@@ -644,7 +644,7 @@ function remove_prospect_sites_by_list(string $country, string $raw): array
         $placeholders = implode(',', array_fill(0, count($chunk), '?'));
         $params = array_merge([$country], $chunk);
         $sel = db()->prepare(
-            "SELECT domain FROM prospect_sites WHERE country=? AND domain IN ({$placeholders})"
+            "SELECT domain FROM prospect_sites WHERE TRIM(country)=? AND domain IN ({$placeholders})"
         );
         $sel->execute($params);
         $found = $sel->fetchAll(PDO::FETCH_COLUMN) ?: [];
@@ -660,7 +660,7 @@ function remove_prospect_sites_by_list(string $country, string $raw): array
         $ph2 = implode(',', array_fill(0, count($found), '?'));
         $delParams = array_merge([$country], $found);
         $del = db()->prepare(
-            "DELETE FROM prospect_sites WHERE country=? AND domain IN ({$ph2})"
+            "DELETE FROM prospect_sites WHERE TRIM(country)=? AND domain IN ({$ph2})"
         );
         $del->execute($delParams);
         $removed += $del->rowCount();
@@ -732,17 +732,25 @@ function list_prospect_domains_for_export(array $filters, int $cap = 20000): arr
     $params = [];
     $q = trim((string) ($filters['q'] ?? ''));
     if ($q !== '') {
-        $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
-        array_push($params, $like, $like, $like, $like);
+        $host = normalize_domain($q);
+        if ($host !== '' && $host !== strtolower($q)) {
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ? OR p.domain = ? OR p.domain LIKE ?)';
+            $like = '%' . $q . '%';
+            $hostLike = '%' . $host . '%';
+            array_push($params, $like, $like, $like, $like, $host, $hostLike);
+        } else {
+            $like = '%' . $q . '%';
+            $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
+            array_push($params, $like, $like, $like, $like);
+        }
     }
     if (array_key_exists('country', $filters)) {
         $country = (string) $filters['country'];
         if ($country === '') {
             $where[] = "TRIM(p.country)=''";
         } else {
-            $where[] = 'p.country = ?';
-            $params[] = $country;
+            $where[] = 'TRIM(p.country) = ?';
+            $params[] = trim($country);
         }
     }
     if (!empty($filters['language'])) {
@@ -1161,8 +1169,8 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 5
         if ($country === '') {
             $where[] = "TRIM(p.country)=''";
         } else {
-            $where[] = 'p.country = ?';
-            $params[] = $country;
+            $where[] = 'TRIM(p.country) = ?';
+            $params[] = trim($country);
         }
     }
     if (!empty($filters['language'])) {

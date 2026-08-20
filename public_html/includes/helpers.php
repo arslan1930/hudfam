@@ -129,8 +129,17 @@ function status_label(string $status): string
 function badge(string $status): string
 {
     $label = status_label($status);
-    $cls = preg_replace('/[^a-z0-9_-]/i', '', $status) ?: 'unknown';
+    $cls = preg_replace('/[^a-zA-Z0-9_-]/', '', $status) ?: 'unknown';
     return '<span class="badge ' . h($cls) . '">' . h($label) . '</span>';
+}
+
+/** JSON-encode a string for safe use inside a JS expression (e.g. confirm(...)). */
+function js_string(string $value): string
+{
+    return (string) json_encode(
+        $value,
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE
+    );
 }
 
 function money_or_dash($value): string

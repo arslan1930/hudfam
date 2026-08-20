@@ -49,18 +49,26 @@ foreach ([
     'guide_inventory',
     'export=txt',
     'copy_domains_btn',
+    'data-export-url',
     'remove_site',
     'remove_list',
     'super_q',
     'save_site_meta',
     'Non-empty only',
     'Add sites',
+    'js_string',
 ] as $needle) {
     if (!str_contains($page, $needle)) {
         fail("admin prospects missing {$needle}");
     } else {
         ok("prospects page has {$needle}");
     }
+}
+
+if (str_contains($page, "confirm('Remove")) {
+    fail('unsafe confirm() string interpolation still present');
+} else {
+    ok('confirm uses js_string');
 }
 
 if (str_contains($page, '>Add URLs<')) {
