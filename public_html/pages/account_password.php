@@ -43,6 +43,7 @@ render_header('Change password', $panel);
 <div class="card" style="max-width:28rem">
   <?php if ($error): render_alert_box('error', $error); endif; ?>
   <form method="post" action="index.php?page=account_password" autocomplete="off">
+    <?= csrf_field() ?>
     <label>Current password</label>
     <input type="password" name="current_password" required autofocus>
     <label>New password (min 8 characters)</label>
