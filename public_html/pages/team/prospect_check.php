@@ -298,26 +298,6 @@ render_header('Filter & add', 'team');
           'rows' => 14,
           'class' => 'inventory-box',
       ]) ?>
-      <div class="tld-separate-toolbar"
-           data-tld-separate
-           data-source="#domains"
-           data-group-url="index.php?page=team_prospect_check"
-           data-csrf="<?= h(csrf_token()) ?>"
-           data-country="<?= h($country) ?>"
-           data-language="<?= h($language) ?>"
-           data-region="<?= h($region) ?>"
-           data-niche="<?= h($niche) ?>"
-           data-notes="<?= h($notes) ?>"
-           data-can-send="0"
-           data-send-label="<?= h($sendBtnLabel) ?>">
-        <button type="button" class="btn secondary" data-tld-separate-btn
-                title="Split the paste box into columns by domain ending (.es, .com, .pe, …)">
-          Separate all
-        </button>
-        <span class="muted" style="font-size:0.88rem">Split by ending — Copy or Delete a column (Send after Push to extract)</span>
-        <p class="help tld-separate-status" data-tld-status hidden></p>
-        <div class="tld-separate-grid" data-tld-grid hidden></div>
-      </div>
     </div>
   </div>
 
@@ -325,6 +305,39 @@ render_header('Filter & add', 'team');
     <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?> id="filter_submit">Push to extract</button>
   </div>
 </form>
+
+<?php
+  // TLD workspace lives OUTSIDE #filter_form so Send can use its own POST form (no nested forms).
+  $pasteCanSend = ($country !== '');
+?>
+<div class="card tld-separate-card"
+     data-tld-separate
+     data-source="#domains"
+     data-group-url="index.php?page=team_prospect_check"
+     data-csrf="<?= h(csrf_token()) ?>"
+     data-country="<?= h($country) ?>"
+     data-language="<?= h($language) ?>"
+     data-region="<?= h($region) ?>"
+     data-niche="<?= h($niche) ?>"
+     data-notes="<?= h($notes) ?>"
+     data-can-send="<?= $pasteCanSend ? '1' : '0' ?>"
+     data-send-label="<?= h($sendBtnLabel) ?>">
+  <div class="tld-separate-toolbar">
+    <button type="button" class="btn secondary" data-tld-separate-btn
+            title="Split the paste box by domain ending (.es, .com, .pe, …)">
+      Separate all
+    </button>
+    <span class="muted" style="font-size:0.88rem">
+      One ending at a time — Copy, Delete, or <?= h($sendBtnLabel) ?> that list only
+      <?= $pasteCanSend ? '' : ' (select a country first to send)' ?>
+    </span>
+    <p class="help tld-separate-status" data-tld-status hidden></p>
+  </div>
+  <div class="tld-separate-workspace" data-tld-workspace hidden>
+    <div class="tld-separate-rail" data-tld-rail hidden></div>
+    <div class="tld-separate-panel" data-tld-panel hidden></div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -426,7 +439,7 @@ render_header('Filter & add', 'team');
         </div>
       </form>
 
-      <div class="tld-separate-toolbar"
+      <div class="tld-separate-card"
            data-tld-separate
            data-source="#unique_domains_preview"
            data-group-url="index.php?page=team_prospect_check"
@@ -439,15 +452,20 @@ render_header('Filter & add', 'team');
            data-can-send="1"
            data-send-label="<?= h($sendBtnLabel) ?>"
            data-groups-json="<?= h(json_encode($tldGroups, JSON_UNESCAPED_UNICODE)) ?>">
-        <button type="button" class="btn" data-tld-separate-btn
-                title="Split unique sites into columns by domain ending">
-          Separate all
-        </button>
-        <span class="muted" style="font-size:0.88rem">
-          One column per ending — Copy, Delete column, or <?= h($sendBtnLabel) ?> (filters known sites first)
-        </span>
-        <p class="help tld-separate-status" data-tld-status hidden></p>
-        <div class="tld-separate-grid" data-tld-grid hidden></div>
+        <div class="tld-separate-toolbar">
+          <button type="button" class="btn" data-tld-separate-btn
+                  title="Split unique sites by domain ending">
+            Separate all
+          </button>
+          <span class="muted" style="font-size:0.88rem">
+            One ending at a time — Copy, Delete, or <?= h($sendBtnLabel) ?> (filters known sites first)
+          </span>
+          <p class="help tld-separate-status" data-tld-status hidden></p>
+        </div>
+        <div class="tld-separate-workspace" data-tld-workspace hidden>
+          <div class="tld-separate-rail" data-tld-rail hidden></div>
+          <div class="tld-separate-panel" data-tld-panel hidden></div>
+        </div>
       </div>
 
       <?php if (!empty($tldCheck['warn'])): ?>
