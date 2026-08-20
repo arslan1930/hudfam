@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(150) NOT NULL DEFAULT '',
   email VARCHAR(190) NOT NULL DEFAULT '',
+  email_verified_at DATETIME NULL DEFAULT NULL,
   phone VARCHAR(80) NOT NULL DEFAULT '',
   contact_details TEXT,
   role ENUM('admin','team') NOT NULL DEFAULT 'team',

@@ -170,6 +170,30 @@ if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
 } else {
     ok('guide_admin_users updated');
 }
+$deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
+if (!str_contains($deptLib, 'function user_deactivation_residue')) {
+    fail('departments missing user_deactivation_residue');
+} else {
+    ok('user_deactivation_residue helper');
+}
+if (!str_contains($usersPage, 'user_deactivation_residue') || !str_contains($usersPage, 'review under Departments')) {
+    fail('users.php missing deactivate residue messaging');
+} else {
+    ok('users.php deactivate residue messaging');
+}
+$indexRoutes = file_get_contents($root . '/index.php') ?: '';
+foreach (['admin_account', 'forgot_password', 'reset_password', 'verify_email'] as $route) {
+    if (!str_contains($indexRoutes, "'{$route}'")) {
+        fail("index.php missing route {$route}");
+    } else {
+        ok("route {$route}");
+    }
+}
+if (!str_contains(file_get_contents($root . '/sql/schema.sql') ?: '', 'email_verified_at')) {
+    fail('schema.sql missing email_verified_at');
+} else {
+    ok('schema.sql email_verified_at');
+}
 
 $invoiceManual = file_get_contents($root . '/pages/admin/invoice_manual.php') ?: '';
 if (!str_contains($invoiceManual, "post('action') === 'create_blank'")) {
@@ -660,11 +684,23 @@ if (str_contains($httpSmoke, 'curl_init')) {
 } else {
     ok('tests_http.php uses streams (no ext-curl)');
 }
+if (!str_contains($httpSmoke, 'function http_start_builtin_server')
+    || !str_contains($httpSmoke, 'http_base_reachable')) {
+    fail('tests_http.php missing auto-start php -S helper');
+} else {
+    ok('tests_http.php auto-starts php -S when needed');
+}
 if (!str_contains($httpSmoke, 'Waiting for assignment')
     || !str_contains($httpSmoke, 'admin_extracted&folder=extracted_sites')) {
     fail('tests_http.php missing waiting-dashboard / extracted-folder asserts');
 } else {
     ok('tests_http.php ACL + extracted hub asserts');
+}
+if (!str_contains($httpSmoke, 'forgot_password page')
+    || !str_contains($httpSmoke, 'admin_account redirects when logged out')) {
+    fail('tests_http.php missing Account/forgot route asserts');
+} else {
+    ok('tests_http.php Account/forgot route asserts');
 }
 
 $prospectCheckSf = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';

@@ -2705,6 +2705,22 @@ try {
     fail('users U-2: ' . $e->getMessage());
 }
 
+// --- Admin Users U-4: deactivation residue ---
+try {
+    if (function_exists('user_deactivation_residue')) {
+        $empty = user_deactivation_residue(0);
+        if (($empty['memberships'] ?? -1) === 0 && ($empty['open_tasks'] ?? -1) === 0) {
+            pass('user_deactivation_residue empty user');
+        } else {
+            fail('user_deactivation_residue empty failed');
+        }
+    } else {
+        fail('user_deactivation_residue missing');
+    }
+} catch (Throwable $e) {
+    fail('users U-4: ' . $e->getMessage());
+}
+
 echo "\n==== SUMMARY ====\n";
 echo 'passed: ' . count($ok) . "\n";
 echo 'failed: ' . count($errors) . "\n";

@@ -383,6 +383,31 @@ function count_open_department_tasks_for_assignee(int $departmentId, int $userId
 }
 
 /**
+ * Residue left when deactivating a Team user (memberships + open assignees).
+ * Does not auto-remove — Admin reviews under Departments.
+ *
+ * @return array{memberships:int,open_tasks:int}
+ */
+function user_deactivation_residue(int $userId): array
+{
+    ensure_departments_schema();
+    if ($userId < 1) {
+        return ['memberships' => 0, 'open_tasks' => 0];
+    }
+    $m = db()->prepare('SELECT COUNT(*) FROM department_members WHERE user_id=?');
+    $m->execute([$userId]);
+    $t = db()->prepare(
+        "SELECT COUNT(*) FROM department_tasks
+         WHERE assigned_to=? AND status IN ('open','in_progress')"
+    );
+    $t->execute([$userId]);
+    return [
+        'memberships' => (int) $m->fetchColumn(),
+        'open_tasks' => (int) $t->fetchColumn(),
+    ];
+}
+
+/**
  * @return array{member_count:int,open_tasks:int,total_tasks:int}
  */
 function department_stats(int $departmentId): array

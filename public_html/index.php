@@ -57,6 +57,9 @@ $routes = [
     'login' => 'pages/login.php',
     'logout' => 'pages/logout.php',
     'account_password' => 'pages/account_password.php',
+    'forgot_password' => 'pages/forgot_password.php',
+    'reset_password' => 'pages/reset_password.php',
+    'verify_email' => 'pages/verify_email.php',
 
     'admin_dashboard' => 'pages/admin/dashboard.php',
     'admin_departments' => 'pages/admin/departments.php',
@@ -73,6 +76,7 @@ $routes = [
     'admin_invoice_manual' => 'pages/admin/invoice_manual.php',
     'admin_invoice_view' => 'pages/admin/invoice_view.php',
     'admin_users' => 'pages/admin/users.php',
+    'admin_account' => 'pages/admin/account.php',
     'admin_tasks' => 'pages/admin/tasks.php',
     'admin_semrush_research' => 'pages/admin/semrush_research.php',
     'admin_semrush_sheet' => 'pages/admin/semrush_sheet.php',

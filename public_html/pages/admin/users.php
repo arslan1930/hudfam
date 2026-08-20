@@ -174,6 +174,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $emailChanged = $id > 0 && strcasecmp($oldEmail, $email) !== 0;
     // Changing an admin's email must re-verify (same as Admin → Account).
     $clearEmailVerify = $role === 'admin' && $emailChanged;
+    $wasActive = $existing && (int) ($existing['is_active'] ?? 0) === 1;
+    $justDeactivated = $id > 0 && $wasActive && $active === 0;
+
+    $appendDeactivateNote = static function (string $msg) use ($id, $justDeactivated): string {
+        if (!$justDeactivated || !function_exists('user_deactivation_residue')) {
+            return $msg;
+        }
+        $res = user_deactivation_residue($id);
+        $m = (int) ($res['memberships'] ?? 0);
+        $t = (int) ($res['open_tasks'] ?? 0);
+        if ($m < 1 && $t < 1) {
+            return $msg;
+        }
+        $extra = ' Still in ' . $m . ' department(s)';
+        if ($t > 0) {
+            $extra .= ', assigned on ' . $t . ' open task(s)';
+        }
+        return $msg . $extra . ' — review under Departments (memberships were not auto-removed).';
+    };
 
     try {
         if ($id) {
@@ -191,9 +210,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                 }
                 if ($id === $myId) {
                     clear_must_change_password_flag($id);
-                    flash('ok', 'User updated. Your new password is active now.');
+                    flash('ok', $appendDeactivateNote('User updated. Your new password is active now.'));
                 } else {
-                    flash('ok', 'User updated. They must change the password on next login.');
+                    flash('ok', $appendDeactivateNote('User updated. They must change the password on next login.'));
                 }
             } else {
                 if ($clearEmailVerify) {
@@ -205,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                         'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
                     )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
                 }
-                flash('ok', 'User updated.');
+                flash('ok', $appendDeactivateNote('User updated.'));
             }
             unset($_SESSION['users_form_draft']);
             redirect('index.php?page=admin_users');
