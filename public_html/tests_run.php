@@ -2284,6 +2284,43 @@ try {
     } else {
         fail('departments dashboard stats missing keys');
     }
+
+    // Residual: edit can keep historical assignee after member removed.
+    $histUid = (int) ($teamUser['id'] ?? 0);
+    if ($histUid > 0 && $dept) {
+        remove_department_member((int) $dept['id'], $histUid);
+        $histSave = save_department_task(
+            (int) $dept['id'],
+            'D residual hist assignee',
+            '',
+            'done',
+            $histUid,
+            null,
+            $adminUser,
+            null
+        );
+        remove_department_member((int) $dept['id'], $histUid);
+        $kept = save_department_task(
+            (int) $dept['id'],
+            'D residual hist assignee edited',
+            'note',
+            'done',
+            $histUid,
+            null,
+            $adminUser,
+            (int) ($histSave['id'] ?? 0)
+        );
+        $row = !empty($histSave['id']) ? get_department_task((int) $histSave['id']) : null;
+        if (!empty($kept['ok']) && $row && (int) ($row['assigned_to'] ?? 0) === $histUid) {
+            pass('edit keeps historical assignee after remove');
+        } else {
+            fail('historical assignee edit failed: ' . json_encode($kept));
+        }
+        if (!empty($histSave['id'])) {
+            delete_department_task((int) $histSave['id']);
+        }
+        remove_department_member((int) $dept['id'], $histUid);
+    }
 } catch (Throwable $e) {
     fail('department assign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

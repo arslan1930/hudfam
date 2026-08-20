@@ -526,20 +526,32 @@ function save_department_task(
         }
     }
     $addedMember = false;
+    $existing = null;
+    if ($taskId !== null && $taskId > 0) {
+        $existing = get_department_task($taskId);
+        if (!$existing || (int) $existing['department_id'] !== $departmentId) {
+            return ['ok' => false, 'error' => 'Task not found.'];
+        }
+    }
     if ($assignedTo !== null && $assignedTo > 0) {
         $assignee = db()->prepare(
             "SELECT id, role, is_active FROM users WHERE id=? LIMIT 1"
         );
         $assignee->execute([$assignedTo]);
         $assigneeRow = $assignee->fetch(PDO::FETCH_ASSOC);
-        if (!$assigneeRow || (int) ($assigneeRow['is_active'] ?? 0) !== 1) {
-            return ['ok' => false, 'error' => 'Assignee user not found or inactive.'];
-        }
-        if (($assigneeRow['role'] ?? '') !== 'team') {
+        if (!$assigneeRow || ($assigneeRow['role'] ?? '') !== 'team') {
             return ['ok' => false, 'error' => 'Tasks can only be assigned to Team users.'];
         }
+        $keepingSameAssignee = $existing
+            && (int) ($existing['assigned_to'] ?? 0) === (int) $assignedTo;
+        // Allow keeping a historical (inactive / removed) assignee on edit;
+        // new assignments still require an active Team user.
+        if ((int) ($assigneeRow['is_active'] ?? 0) !== 1 && !$keepingSameAssignee) {
+            return ['ok' => false, 'error' => 'Assignee user not found or inactive.'];
+        }
         // Auto-add assignee to the department so tools unlock for them.
-        if (!user_in_department($assignedTo, $departmentId)) {
+        if ((int) ($assigneeRow['is_active'] ?? 0) === 1
+            && !user_in_department($assignedTo, $departmentId)) {
             if (!add_department_member($departmentId, $assignedTo, $actor)) {
                 return ['ok' => false, 'error' => 'Could not add assignee to this department.'];
             }
@@ -552,11 +564,7 @@ function save_department_task(
     $actorId = (int) ($actor['id'] ?? 0) ?: null;
 
     try {
-        if ($taskId !== null && $taskId > 0) {
-            $existing = get_department_task($taskId);
-            if (!$existing || (int) $existing['department_id'] !== $departmentId) {
-                return ['ok' => false, 'error' => 'Task not found.'];
-            }
+        if ($existing) {
             db()->prepare(
                 'UPDATE department_tasks
                  SET title=?, notes=?, status=?, assigned_to=?, due_date=?, updated_at=NOW()

@@ -449,6 +449,7 @@ foreach ([
     'department assignee filters mine/unassigned',
     'department overdue helper',
     'departments dashboard stats',
+    'edit keeps historical assignee after remove',
 ] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing Departments coverage: {$needle}");
