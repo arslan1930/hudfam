@@ -6,9 +6,7 @@ require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
-require __DIR__ . '/includes/extract.php';
-require __DIR__ . '/includes/mail.php';
-require __DIR__ . '/includes/account.php';
+require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/guides.php';
 require __DIR__ . '/includes/layout.php';
 

@@ -57,8 +57,8 @@ if (!$inCountry && !$emptyCountry) {
     ]); ?>
     <div class="topbar">
       <div>
-        <h1>Countries</h1>
-        <p class="muted">Browse, download, add, or delete sites. Mistaken deletes can be undone. <?= (int) $grandTotal ?> sites total<?= $personLabel !== '' ? ' · added by ' . h($personLabel) : '' ?>.</p>
+        <h1>Country databases</h1>
+        <p class="muted">Each country is its own site database. Open a folder to view or add sites. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
         <a class="btn" href="index.php?page=admin_prospect_add">Sites add by admin</a>
@@ -96,6 +96,16 @@ if (!$inCountry && !$emptyCountry) {
       <label for="folder_search_admin">Find a country <span class="help">(type to filter folders)</span></label>
       <input type="search" id="folder_search_admin" data-folder-search placeholder="e.g. Germany, Austria…" autocomplete="off">
     </div>
+    <?= render_page_purpose(
+        'Our database — one folder per country',
+        'Sites are stored separately for each country.',
+        'Click a country folder to open that country’s database. Use Add sites inside the folder to paste domains into that country only.',
+        [
+            'Open a country folder.',
+            'Add sites into that country’s database.',
+            'Team Filter & add can check against the same country list.',
+        ]
+    ) ?>
     <?php foreach ($byRegion as $regionLabel => $list): ?>
       <div class="card" data-folder-group>
         <h2><?= h($regionLabel) ?></h2>
@@ -396,7 +406,7 @@ render_header('Countries · ' . $sheetLabel, 'admin');
     <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
     <a class="btn secondary" href="<?= h($namesUrl) ?>">View all names</a>
     <?php if (!$emptyCountry): ?>
-      <a class="btn secondary" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Sites add by admin</a>
+      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects<?= $createdByFilter > 0 ? '&created_by=' . $createdByFilter : '' ?>">All countries</a>
   </div>
@@ -527,7 +537,10 @@ render_header('Countries · ' . $sheetLabel, 'admin');
   </table>
   <?php if (!$rows): ?>
     <div class="empty-state">
-      <p>No sites<?= $q !== '' ? ' match this search' : ' in this country yet' ?>.</p>
+      <p>No sites in this country yet.</p>
+      <?php if (!$emptyCountry): ?>
+        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+      <?php endif; ?>
     </div>
   <?php else: ?>
     <div class="actions" style="margin-top:0.8rem;flex-wrap:wrap;gap:0.75rem">

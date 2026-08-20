@@ -95,12 +95,12 @@ function guide_inventory(): string
 {
     return render_page_purpose(
         'Our database — country folders',
-        'Browse sites by country. Each domain exists only once in the whole database.',
-        'Pick a country folder. Download/view large lists; Admin can select & delete sites.',
+        'Each country has its own site database. Admin opens a country folder to view or add sites.',
+        'Pick a country folder, then browse or add sites for that country only.',
         [
             'Open a country folder.',
-            'Download all / View all names for 10k–100k site lists.',
-            'Admin: select checkboxes to delete, or remove by filter / .txt list.',
+            'Add sites into that country’s database.',
+            'Team can filter against the same country list.',
         ]
     );
 }
@@ -108,13 +108,13 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — global uniqueness',
-        'Compare a pasted list to the entire database. Country only decides where new unique sites are saved.',
-        'Select country (save into) → Paste → Clean list → Filter (all countries) → Add unique.',
+        'Filter & add — per country database',
+        'Compare a pasted list to one country’s site database and save only root domains that country does not already have.',
+        'Select country (type + Enter) → Paste root domains → Clean errors if needed → Filter → Add unique.',
         [
-            'Select the country to save new sites into.',
-            'Paste sites; click Clean list if there are https://, www., paths, or duplicates.',
-            'Filter against all countries, then add the remaining unique sites into that country.',
+            'Select the country database (type to search, Enter to select).',
+            'Paste root domains only (example.com, my-site.co.uk) and Clean errors if needed.',
+            'Filter, then add the remaining unique sites to that country.',
         ]
     );
 }
@@ -132,13 +132,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add sites — seed a country folder',
-        'Paste root domains into a country folder (example.com / example.co.uk). Each domain can exist only once globally.',
-        'Choose country, paste sites, Clean list if needed, then Save. Domains already anywhere in the database are skipped.',
+        'Add sites — seed a country database',
+        'Paste root domains into one country’s folder (no prices). Optional language via search + Enter.',
+        'Choose country (type + Enter), paste root domains, Clean errors if needed, save.',
         [
-            'Select the country folder to save into.',
-            'Paste sites; use Clean list to fix errors and remove duplicates.',
-            'Save — then browse them under that country’s folder.',
+            'Select the country folder (type to search, Enter to select).',
+            'Paste root domains only — no https, paths, or subdomains.',
+            'Use Clean errors, then Save. Browse them under that country’s folder.',
         ]
     );
 }
@@ -158,12 +158,8 @@ function guide_admin_users(): string
 {
     return render_page_purpose(
         'Users — who can log in',
-        'Admin adds, edits, or removes teammates and sets their passwords. Team cannot change passwords.',
-        'Create a team login, set a password, share it securely. Remove deletes the login; sites stay in Our database.',
-        [
-            'Create teammate with username + password.',
-            'Edit to change details or reset password (blank = keep).',
-            'Remove deletes the login; uncheck Active to disable without deleting.',
-        ]
+        'Create Admin and Team accounts.',
+        'Team users can open Filter & add and grow Our database. Admins can add sites and view all history.',
+        []
     );
 }

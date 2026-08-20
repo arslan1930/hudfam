@@ -78,6 +78,7 @@ $topCountry = $frequent[0]['name'] ?? '';
     <time id="live-datetime" class="live-datetime" datetime="<?= h(date('c')) ?>"><?= h(date('l · d M Y · H:i:s')) ?></time>
     <a class="btn" href="index.php?page=admin_prospects">Countries</a>
   </div>
+  <a class="btn" href="index.php?page=admin_prospect_add">Add sites</a>
 </div>
 
 <?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospects&country=') ?>
@@ -94,6 +95,10 @@ $topCountry = $frequent[0]['name'] ?? '';
   <p class="muted" style="margin:0">Country folders, admin adds, and daily added-sites history.</p>
 </section>
 <div class="launch-cards">
+  <a class="launch-card" href="index.php?page=admin_prospect_add">
+    <h2>Add sites</h2>
+    <p>Paste root domains into a country folder.</p>
+  </a>
   <a class="launch-card" href="index.php?page=admin_prospects">
     <h2>Countries</h2>
     <p>Browse and manage sites by country folder.</p>
@@ -170,7 +175,7 @@ try {
   <?php else: ?>
     <div class="empty-state">
       <p>No sites added yet.</p>
-      <a class="btn" href="index.php?page=admin_prospect_add">Sites add by admin</a>
+      <a class="btn" href="index.php?page=admin_prospect_add">Add the first sites</a>
     </div>
   <?php endif; ?>
 </div>

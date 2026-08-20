@@ -83,19 +83,12 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
-            ],
-            'Sites Data' => [
-                'admin_prospects' => ['Countries', 'Browse country folders'],
-                'admin_prospect_add' => ['Sites add by admin', 'Paste into a country'],
-                'admin_prospect_batches' => ['Added sites', 'Who added what, by day'],
-            ],
-            'Extracting Sites with Emails' => [
-                'admin_extract_sites' => ['Extracted sites', 'Block 1 queue + Block 2 final'],
-                'admin_extract_emails' => ['Extracted sites with Emails', 'Emails under each site'],
-            ],
-            'People' => [
-                'admin_users' => ['Users', 'Accounts & assign tasks'],
-                'admin_account' => ['Account', 'Email & password'],
+                'admin_prospects' => ['Our database', 'Country folders → URLs'],
+                'admin_prospect_add' => ['Add sites', 'Paste into a country database'],
+                'admin_prospect_batches' => ['Add history', 'Who added what, by day'],
+                'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
+                'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
+                'admin_users' => ['Users', 'Admin and Team logins'],
             ],
         ];
     } else {

@@ -8,15 +8,6 @@ $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));
 $raw = '';
 $errorDetail = '';
-$needsClean = false;
-
-// Prefill from often-used country when opening blank Add sites
-if ($country === '' && $frequent !== [] && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $country = (string) $frequent[0]['name'];
-}
-if ($country !== '') {
-    $country = canonicalize_country_name($country);
-}
 
 // Prefill language from country default
 if ($country !== '' && $language === '') {
@@ -36,35 +27,27 @@ try {
         $language = trim((string) post('language'));
 
         if ($country === '') {
-            flash('error', 'Select a country folder first.');
+            flash('error', 'Select a country folder first (type to search, then Enter).');
         } elseif (trim($raw) === '') {
-            flash('error', 'Paste at least one site (example.com).');
-        } elseif ($action === 'clean') {
-            $clean = clean_site_list($raw, $country, true);
-            $raw = $clean['text'];
-            if ($clean['kept'] <= 0) {
-                flash('error', clean_site_list_summary($clean) . ' Nothing left to save.');
-            } else {
-                flash('ok', clean_site_list_summary($clean) . ' Review the list, then Save sites.');
-            }
+            flash('error', 'Paste at least one root domain.');
         } else {
-            // Save: auto-clean + add only unique sites (duplicates removed for you)
-            $result = admin_add_sites_to_database($raw, $user, $country, $language);
-            $raw = (string) ($result['text'] ?? $raw);
-            $c = $result['clean'] ?? [];
-            if ($result['inserted'] <= 0) {
-                $needsClean = ((int) ($c['dropped'] ?? 0) > 0);
-                flash('error', clean_site_list_summary($c) . ' No new sites to add (all duplicates or unusable).');
+            $parsed = parse_domain_list_strict($raw);
+            if ($parsed['invalid_count'] > 0) {
+                flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+                $raw = $parsed['valid_text'] !== '' ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw')) : $raw;
             } else {
-                $msg = 'Added ' . (int) $result['inserted'] . ' new site(s) to ' . $result['country'] . '.';
-                if ((int) $result['skipped_existing'] > 0) {
-                    $msg .= ' Removed ' . (int) $result['skipped_existing'] . ' already in database.';
+                $result = admin_add_urls_to_database($raw, $user, $country, $language);
+                if ($result['total'] <= 0) {
+                    flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
+                } else {
+                    $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
+                    $msg .= ' New: ' . (int) $result['inserted'] . '.';
+                    if ((int) $result['updated'] > 0) {
+                        $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+                    }
+                    flash('ok', $msg);
+                    redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
                 }
-                if ((int) ($c['fixed'] ?? 0) > 0 || (int) ($c['dropped'] ?? 0) > 0 || (int) ($c['dup_paste'] ?? 0) > 0) {
-                    $msg .= ' ' . clean_site_list_summary($c);
-                }
-                flash('ok', $msg);
-                redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
             }
         }
     }
@@ -73,19 +56,17 @@ try {
     flash('error', 'Could not save sites. ' . $errorDetail);
 }
 
-render_header('Sites add by admin', 'admin');
+render_header('Add sites', 'admin');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => 'Countries', 'href' => 'index.php?page=admin_prospects'],
-    ['label' => $country !== '' ? $country : 'Sites add by admin', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
-    ['label' => 'Sites add by admin'],
+    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+    ['label' => $country !== '' ? $country : 'Add sites', 'href' => $country !== '' ? 'index.php?page=admin_prospects&country=' . urlencode($country) : null],
+    ['label' => 'Add sites'],
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Sites add by admin<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste root domains: <strong>example.com</strong> / <strong>example.co.uk</strong>. Type to search country/language. Use <strong>Clean list</strong> to fix mistakes and remove duplicates.</p>
+    <h1>Add sites<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
+    <p class="muted">Paste root domains into one country’s database. No uniqueness preview — they are saved for that country folder.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -95,28 +76,22 @@ render_header('Sites add by admin', 'admin');
   </div>
 </div>
 
-<?= render_frequent_country_chips($frequent, 'index.php?page=admin_prospect_add&country=') ?>
+<?= guide_admin_add() ?>
 
 <form class="card" method="post" id="add_sites_form">
   <input type="hidden" name="action" id="form_action" value="save">
   <div class="form-grid">
-    <div>
-      <label for="country">Country <span class="help">(required · type to search)</span></label>
-      <?= render_country_select('country', $country, 'country', true, $frequent) ?>
-    </div>
-    <div>
-      <label for="language">Language <span class="help">(optional · type to search)</span></label>
-      <?= render_language_select('language', $language, 'language') ?>
-      <p class="help" style="margin-top:0.35rem">Prefills from the country; leave blank if you don’t need it.</p>
-    </div>
+    <?= render_country_typeahead($country) ?>
+    <?= render_language_typeahead($language) ?>
   </div>
-  <label for="sites" style="margin-top:0.9rem">Sites <span class="help">(root domain only)</span></label>
-  <textarea id="sites" name="sites" rows="14" required
-    placeholder="site1.com&#10;my-site.de&#10;shop.co.uk"><?= h($raw) ?></textarea>
-  <p class="help" style="margin-top:0.5rem">
-    Allowed: <code>example.com</code>, <code>my-site.com</code>, <code>example.co.uk</code>.
-    Clean list will strip <code>https://</code>/<code>www.</code>/paths when possible, drop unusable lines, and remove duplicates already in Countries (any country).
-  </p>
+  <div style="margin-top:0.9rem">
+    <?= render_domains_paste_field('urls', $raw, [
+        'id' => 'urls',
+        'label' => 'Sites (root domains)',
+        'required' => true,
+        'rows' => 14,
+    ]) ?>
+  </div>
   <p class="actions" style="margin-top:1rem">
     <button class="btn secondary" type="submit" onclick="document.getElementById('form_action').value='clean'">Clean list</button>
     <button class="btn" type="submit" onclick="document.getElementById('form_action').value='save'">Save sites</button>
@@ -144,4 +119,5 @@ render_header('Sites add by admin', 'admin');
 <?php if ($errorDetail !== ''): ?>
   <div class="card"><p class="help">Technical detail: <?= h($errorDetail) ?></p></div>
 <?php endif; ?>
+<?= sites_form_script_tag() ?>
 <?php render_footer('admin'); ?>
