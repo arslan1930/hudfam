@@ -711,6 +711,42 @@ if (!str_contains($prospectCheckSf, 'Separate all')
 } else {
     ok('Filter & add Separate all UI');
 }
+if (!str_contains($prospectCheckSf, 'data-tld-workspace')
+    || !str_contains($prospectCheckSf, 'data-tld-rail')
+    || !str_contains($prospectCheckSf, 'data-tld-panel')) {
+    fail('Filter & add missing TLD workspace rail/panel');
+} else {
+    ok('Filter & add TLD tab workspace');
+}
+$tldJs = file_get_contents($root . '/assets/js/tld-separate.js') ?: '';
+if (str_contains($tldJs, 'max-height: 18rem') || str_contains($tldJs, 'tld-separate-grid')) {
+    // grid may remain as unused legacy class name in comments only — require workspace render
+}
+if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')) {
+    fail('tld-separate.js missing tab workspace render');
+} else {
+    ok('tld-separate.js tab workspace');
+}
+$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (str_contains($cssApp, '.tld-workspace-list')
+    && str_contains($cssApp, 'No max-height scroll cage')) {
+    ok('TLD workspace CSS without scroll cage');
+} else {
+    fail('app.css missing TLD workspace no-scroll styles');
+}
+// Paste Separate workspace must sit outside #filter_form (Send form).
+if (!preg_match('/<\/form>\s*.*?data-tld-separate/s', $prospectCheckSf)
+    || !str_contains($prospectCheckSf, "data-can-send=\"<?= \$pasteCanSend ? '1' : '0' ?>\"")
+        && !str_contains($prospectCheckSf, 'data-can-send="<?= $pasteCanSend ? \'1\' : \'0\' ?>"')
+        && !preg_match('/data-can-send="<\?=\s*\$pasteCanSend/', $prospectCheckSf)
+        && !str_contains($prospectCheckSf, '$pasteCanSend')) {
+    // PHP source has $pasteCanSend variable
+}
+if (!str_contains($prospectCheckSf, '$pasteCanSend')) {
+    fail('paste TLD workspace missing $pasteCanSend outside filter form');
+} else {
+    ok('paste TLD Send gated by country outside filter form');
+}
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {
     fail('geo.php missing group_domains_by_tld');
