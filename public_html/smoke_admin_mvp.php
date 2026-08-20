@@ -263,11 +263,83 @@ if (!str_contains($ordersPage, 'order-client-search')) {
 } else {
     ok('orders client search');
 }
+if (!str_contains($ordersPage, 'Has unpaid LIVE') || !str_contains($ordersPage, "value=\"archived\"")) {
+    fail('orders missing unpaid/archived filters');
+} else {
+    ok('orders unpaid + archived filters');
+}
+if (!str_contains($ordersPage, 'Archive') || !str_contains($ordersPage, 'restore')) {
+    fail('orders missing archive/restore actions');
+} else {
+    ok('orders archive/restore actions');
+}
+if (!str_contains($ordersPage, "['p' => \$pageNum") && !str_contains($ordersPage, 'Page <?= (int) $pageNum ?>')) {
+    fail('orders missing list pagination');
+} else {
+    ok('orders list pagination');
+}
+
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($orderSheet, 'yearNow') && !str_contains($orderSheet, 'date(\'Y\')')) {
     fail('order sheet year range not dynamic');
 } else {
     ok('order sheet dynamic year range');
+}
+if (!str_contains($orderSheet, 'csrf_field()')) {
+    fail('order sheet missing csrf_field');
+} else {
+    ok('order sheet csrf_field');
+}
+if (!str_contains($orderSheet, 'data-no-draft') || !str_contains($orderSheet, 'isDraftIgnored')) {
+    fail('order sheet dirty ignore for search missing');
+} else {
+    ok('order sheet search does not mark dirty');
+}
+if (!str_contains($orderSheet, 'order-country-list') || !str_contains($orderSheet, '<datalist')) {
+    fail('order sheet missing country datalist');
+} else {
+    ok('order sheet country datalist');
+}
+if (!str_contains($orderSheet, 'beforeunload')) {
+    fail('order sheet missing unsaved beforeunload warning');
+} else {
+    ok('order sheet unsaved beforeunload');
+}
+if (!str_contains($orderSheet, 'unpaid LIVE') && !str_contains($orderSheet, 'unpaidLiveCount')) {
+    fail('order sheet missing unpaid Generate CTA');
+} else {
+    ok('order sheet unpaid Generate CTA');
+}
+
+$dashboardPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
+    || !str_contains($dashboardPage, 'unpaid LIVE')) {
+    fail('dashboard missing order unpaid LIVE stats');
+} else {
+    ok('dashboard order unpaid LIVE stats');
+}
+
+$ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats'] as $omFn) {
+    if (!str_contains($ordersLib, "function {$omFn}")) {
+        fail("orders.php missing {$omFn}");
+    }
+}
+ok('orders helpers for OM-1–4');
+
+$testsFull = file_get_contents($root . '/tests_run.php') ?: '';
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid'] as $needle) {
+    if (!str_contains($testsFull, $needle)) {
+        fail("tests_run.php missing OM coverage: {$needle}");
+    }
+}
+ok('tests_run OM coverage needles');
+
+$invoiceGenerate = file_get_contents($root . '/pages/admin/invoice_generate.php') ?: '';
+if (!str_contains($invoiceGenerate, 'csrf_field()')) {
+    fail('invoice_generate missing csrf_field');
+} else {
+    ok('invoice_generate csrf_field');
 }
 
 $layoutNav = file_get_contents($root . '/includes/layout.php') ?: '';
