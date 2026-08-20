@@ -129,6 +129,23 @@ function ensure_sites_with_emails_schema(): void
     } catch (Throwable $e) {
         // ignore
     }
+
+    // Country + id for paginated country sheets (up to ~100K rows per country).
+    foreach (['sites_with_emails_team', 'sites_with_emails_admin', 'sites_with_emails_admin_all'] as $tbl) {
+        try {
+            $idxName = 'idx_' . $tbl . '_country_id';
+            $idx = $pdo->query('SHOW INDEX FROM ' . $tbl)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            $haveIdx = [];
+            foreach ($idx as $row) {
+                $haveIdx[(string) ($row['Key_name'] ?? '')] = true;
+            }
+            if (empty($haveIdx[$idxName])) {
+                $pdo->exec("ALTER TABLE {$tbl} ADD INDEX {$idxName} (country, id)");
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
 }
 
 /**
@@ -736,14 +753,14 @@ function count_sites_with_emails_ready_to_push(string $country): int
 function sites_with_emails_inventory_query(
     array $filters,
     int $page = 1,
-    int $perPage = 100,
+    int $perPage = 1000,
     string $scope = 'team'
 ): array {
     ensure_sites_with_emails_schema();
     $scope = swe_normalize_scope($scope);
     $table = swe_table($scope);
     $page = max(1, $page);
-    $perPage = max(1, min(500, $perPage));
+    $perPage = max(1, min(1000, $perPage));
     $country = trim((string) ($filters['country'] ?? ''));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1' — Admin only
@@ -866,6 +883,61 @@ function mark_sites_with_emails_admin_emailed_up_to(int $siteId): array
         'marked' => $st->rowCount(),
         'domain' => (string) $row['domain'],
         'country' => $country,
+    ];
+}
+
+/**
+ * Undo checkpoint: clear emailed marks on every Admin row in this country with id <= $siteId.
+ * Lets Admin redo a campaign stretch. Final stays unchanged.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,domain?:string,country?:string}
+ */
+function clear_sites_with_emails_admin_emailed_up_to(int $siteId): array
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
+    }
+    $country = (string) $row['country'];
+    $st = db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=0, email_sent_at=NULL
+         WHERE country=? AND id<=? AND email_sent=1'
+    );
+    $st->execute([$country, $siteId]);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'domain' => (string) $row['domain'],
+        'country' => $country,
+    ];
+}
+
+/**
+ * Clear every emailed mark for one Admin country sheet so Admin can resend and re-track.
+ * Final stays neutral.
+ *
+ * @return array{ok:bool,error?:string,cleared?:int,country?:string}
+ */
+function clear_all_sites_with_emails_admin_emailed(string $country): array
+{
+    ensure_sites_with_emails_schema();
+    $canon = resolve_canonical_country(trim($country));
+    $countryName = $canon ? $canon['name'] : trim($country);
+    if ($countryName === '') {
+        return ['ok' => false, 'error' => 'Country is required.'];
+    }
+    $st = db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=0, email_sent_at=NULL
+         WHERE country=? AND email_sent=1'
+    );
+    $st->execute([$countryName]);
+    return [
+        'ok' => true,
+        'cleared' => $st->rowCount(),
+        'country' => $countryName,
     ];
 }
 
@@ -1190,26 +1262,49 @@ function remove_sites_with_emails_by_list(string $country, string $raw, string $
 }
 
 /**
+ * Collect unique emails for a country sheet.
+ * Admin only: $sentFilter '0' = not emailed yet, '1' = already emailed, null/'' = all.
+ *
  * @return list<string>
  */
-function collect_sites_with_emails_all_emails(string $country, string $scope = 'team'): array
-{
+function collect_sites_with_emails_all_emails(
+    string $country,
+    string $scope = 'team',
+    ?string $sentFilter = null
+): array {
     ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
     $table = swe_table($scope);
+    $canon = resolve_canonical_country(trim($country));
+    $country = $canon ? $canon['name'] : trim($country);
+
+    $where = ['country = ?'];
+    $params = [$country];
+    if ($scope === 'admin' && ($sentFilter === '0' || $sentFilter === '1')) {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $order = $scope === 'admin' ? 'id ASC' : 'id DESC';
     $stmt = db()->prepare(
         "SELECT email1, email2, email3, email4
-         FROM {$table} WHERE country=? ORDER BY id DESC"
+         FROM {$table}
+         WHERE " . implode(' AND ', $where) . "
+         ORDER BY {$order}"
     );
-    $stmt->execute([$country]);
+    $stmt->execute($params);
     $out = [];
     $seen = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
             $e = trim((string) ($row[$k] ?? ''));
-            if ($e === '' || isset($seen[$e])) {
+            if ($e === '') {
                 continue;
             }
-            $seen[$e] = true;
+            $key = mb_strtolower($e);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
             $out[] = $e;
         }
     }
@@ -1261,12 +1356,19 @@ function stream_sites_with_emails_csv(string $country, string $scope = 'team'): 
     exit;
 }
 
-function stream_sites_with_emails_emails_plain(string $country, string $scope = 'team'): void
-{
+function stream_sites_with_emails_emails_plain(
+    string $country,
+    string $scope = 'team',
+    ?string $sentFilter = null
+): void {
     ensure_sites_with_emails_schema();
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');
-    foreach (collect_sites_with_emails_all_emails($country, $scope) as $email) {
+    $scope = swe_normalize_scope($scope);
+    if ($scope !== 'admin' || ($sentFilter !== '0' && $sentFilter !== '1')) {
+        $sentFilter = null;
+    }
+    foreach (collect_sites_with_emails_all_emails($country, $scope, $sentFilter) as $email) {
         echo $email, "\n";
     }
     exit;

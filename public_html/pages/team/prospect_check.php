@@ -27,6 +27,9 @@ if ($country !== '') {
     if ($language === '') {
         $language = $canonCountry['language'];
     }
+    $language = function_exists('normalize_site_language')
+        ? normalize_site_language($language, $country)
+        : $language;
 }
 
 try {
@@ -58,6 +61,9 @@ try {
             if ($language === '') {
                 $language = $canonCountry['language'];
             }
+            $language = function_exists('normalize_site_language')
+                ? normalize_site_language($language, $country)
+                : $language;
         }
 
         if ($country === '' || $canonCountry === null) {
@@ -187,6 +193,10 @@ render_header('Filter & add', 'team');
     <p class="muted">Paste sites → <strong>Push to extract</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder.</p>
   </div>
   <div class="actions">
+    <?php if ($country !== ''): ?>
+      <?php render_task_presence('prospect:' . $country, 'Others adding sites for ' . $country); ?>
+    <?php endif; ?>
+    <a class="btn" href="index.php?page=team_semrush_research">Semrush Research</a>
     <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
     <a class="btn secondary" href="index.php?page=team_prospect_batches">Site adding history</a>
   </div>
@@ -207,9 +217,9 @@ render_header('Filter & add', 'team');
       <?= render_country_typeahead($country, [
           'id' => 'country',
           'label' => 'Country database',
-          'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]" data-reload-on-select="1"',
+          'attrs' => 'data-fill-language="#language" data-fill-region="select[name=region]" data-reload-on-select="1"',
       ]) ?>
-      <?= render_language_typeahead($language) ?>
+      <input type="hidden" name="language" id="language" value="<?= h($language) ?>">
       <div><label>Region</label>
         <select name="region">
           <option value="">—</option>

@@ -16,6 +16,8 @@ require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/guides.php';
+require __DIR__ . '/includes/presence.php';
+require __DIR__ . '/includes/semrush_research.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -70,10 +72,13 @@ $routes = [
     'admin_invoice_manual' => 'pages/admin/invoice_manual.php',
     'admin_invoice_view' => 'pages/admin/invoice_view.php',
     'admin_users' => 'pages/admin/users.php',
+    'admin_semrush_research' => 'pages/admin/semrush_research.php',
 
     'team_dashboard' => 'pages/team/dashboard.php',
     'team_departments' => 'pages/team/departments.php',
     'team_prospect_check' => 'pages/team/prospect_check.php',
+    'team_semrush_research' => 'pages/team/semrush_research.php',
+    'team_semrush_sheet' => 'pages/team/semrush_sheet.php',
     'team_prospects' => 'pages/team/prospects.php',
     'team_prospect_form' => 'pages/team/prospect_form.php',
     'team_prospect_batches' => 'pages/team/prospect_batches.php',
@@ -83,6 +88,8 @@ $routes = [
     'team_sites_emails' => 'pages/team/sites_emails.php',
     'team_admin_emails_delete' => 'pages/team/admin_emails_delete.php',
     'team_email_campaigns' => 'pages/team/email_campaigns.php',
+    'team_email_campaigns_drafts' => 'pages/team/email_campaign_drafts.php',
+    'presence_ping' => 'pages/presence_ping.php',
 ];
 
 if (!isset($routes[$page])) {
@@ -108,6 +115,7 @@ $teamWaitingAllowed = [
     'account_password',
     'team_dashboard',
     'team_departments',
+    'presence_ping',
 ];
 if (
     $cu
@@ -126,6 +134,7 @@ $deptOnlyAllowed = [
     'account_password',
     'team_dashboard',
     'team_departments',
+    'presence_ping',
 ];
 if (
     $cu

@@ -21,8 +21,10 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_departments' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
+        'admin_semrush_research' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'team_semrush_research' => ['team_semrush_sheet'],
         'team_extracting' => ['team_extract_batch'],
         'team_departments' => [],
         'team_admin_emails_delete' => [],
@@ -43,7 +45,6 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
     $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
@@ -52,8 +53,15 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
+    // One stylesheet URL (asset.php) — avoid loading CSS twice (parse cost / jank).
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
-    echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
+    // Early scroll restore after same-page POST actions (before paint when possible).
+    echo '<script>';
+    echo '(function(){try{var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
+    echo 'if(p&&y&&p===location.pathname+location.search){var t=parseInt(y,10)||0;if(t>0){';
+    echo 'if("scrollRestoration" in history)history.scrollRestoration="manual";';
+    echo 'window.scrollTo(0,t);}}}catch(e){}})();';
+    echo '</script>';
     echo '</head><body>';
 
     if (!$user || $panel === '') {
@@ -94,6 +102,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
+                'admin_semrush_research' => ['Semrush Research', 'Site Finding copy · Extracting Push + optional seed'],
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
                 'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
@@ -138,6 +147,12 @@ function render_header(string $title, string $panel = ''): void
                         'Your daily adds',
                     ];
                 }
+                if (!empty($toolSet['team_semrush_research'])) {
+                    $groups['Main']['team_semrush_research'] = [
+                        'Semrush Research',
+                        'From Extracting Push · edit, comment, clear country',
+                    ];
+                }
                 if (!empty($toolSet['team_extracting'])) {
                     $groups['Main']['team_extracting'] = [
                         'Extracting sites',
@@ -162,6 +177,12 @@ function render_header(string $title, string $panel = ''): void
                         'Email campaign sheets · all countries',
                     ];
                 }
+                if (!empty($toolSet['team_email_campaigns_drafts'])) {
+                    $groups['Main']['team_email_campaigns_drafts'] = [
+                        'Campaign drafts',
+                        'Formatted outreach per project · copy for email',
+                    ];
+                }
             }
         } elseif (function_exists('team_user_awaits_department') && team_user_awaits_department($user)) {
             // Team login with no department yet — no tools until Admin assigns one.
@@ -177,10 +198,12 @@ function render_header(string $title, string $panel = ''): void
                 'Main' => [
                     'team_dashboard' => ['Dashboard', 'Overview'],
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
+                    'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
                     'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
+                    'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Site adding history', 'Your daily adds'],
                 ],
@@ -193,7 +216,6 @@ function render_header(string $title, string $panel = ''): void
         echo '<div class="nav-group-label">' . h($groupLabel) . '</div>';
         foreach ($links as $page => $meta) {
             $label = is_array($meta) ? (string) $meta[0] : (string) $meta;
-            $hint = is_array($meta) ? (string) ($meta[1] ?? '') : '';
             // Support "page&folder=slug" keys for department shortcuts
             $hrefPage = $page;
             $activePage = $page;
@@ -211,13 +233,9 @@ function render_header(string $title, string $panel = ''): void
                     $active = nav_is_active($activePage, $current) ? ' active' : '';
                 }
             }
-            $titleAttr = $hint !== '' ? ' title="' . h($hint) . '"' : '';
             $ariaCurrent = trim($active) !== '' ? ' aria-current="page"' : '';
-            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $titleAttr . $ariaCurrent . '>';
+            echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $ariaCurrent . '>';
             echo '<span class="nav-label">' . h($label) . '</span>';
-            if ($hint !== '') {
-                echo '<span class="nav-hint">' . h($hint) . '</span>';
-            }
             echo '</a>';
         }
         echo '</div>';
@@ -239,15 +257,7 @@ function render_footer(string $panel = ''): void
         render_project_credit();
         if ($panel === 'admin' || $panel === 'team') {
             $user = current_user();
-            $jsVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/draft-autosave.js') ?: time());
-            $jsPhp = app_url('asset.php?f=js/draft-autosave.js&v=' . rawurlencode($jsVersion));
-            $jsFile = asset_url('assets/js/draft-autosave.js');
-            $tipVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/info-tips.js') ?: time());
-            $tipPhp = app_url('asset.php?f=js/info-tips.js&v=' . rawurlencode($tipVersion));
-            $tipFile = asset_url('assets/js/info-tips.js');
-            $navVersion = (string) (@filemtime(dirname(__DIR__) . '/assets/js/nav-shell.js') ?: time());
-            $navPhp = app_url('asset.php?f=js/nav-shell.js&v=' . rawurlencode($navVersion));
-            $navFile = asset_url('assets/js/nav-shell.js');
+            // Load each global script once (dual asset.php + /assets/ URLs ran listeners twice and lagged scroll).
             echo '<script>';
             echo 'window.TXF_DRAFT=' . json_encode([
                 'panel' => $panel,
@@ -256,14 +266,20 @@ function render_footer(string $panel = ''): void
             ], JSON_UNESCAPED_UNICODE) . ';';
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
-            echo '<script src="' . h($jsPhp) . '" defer></script>';
-            echo '<script src="' . h($jsFile) . '" defer></script>';
-            echo '<script src="' . h($tipPhp) . '" defer></script>';
-            echo '<script src="' . h($tipFile) . '" defer></script>';
-            echo '<script src="' . h($navPhp) . '" defer></script>';
-            echo '<script src="' . h($navFile) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/stay-scroll.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/info-tips.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/nav-shell.js')) . '" defer></script>';
         }
         echo '</main></div>';
+        // Global Processing / Loading overlay (Admin + Team shell).
+        echo '<div id="app-processing" class="app-processing" hidden aria-busy="false" aria-live="assertive" role="alert">';
+        echo '<div class="app-processing-card">';
+        echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
+        echo '<p class="app-processing-msg" data-processing-msg>Processing…</p>';
+        echo '<p class="app-processing-sub muted">Please wait — do not close this page.</p>';
+        echo '</div></div>';
     }
     echo '</body></html>';
 }

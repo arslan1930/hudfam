@@ -78,6 +78,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ensure_extract_schema();
         $notes[] = 'extract_batches / extract_batch_sites (Extracting sites) OK';
 
+        require_once __DIR__ . '/includes/semrush_research.php';
+        ensure_semrush_research_schema();
+        $notes[] = 'semrush_sites / semrush_sheet_comments (Semrush Research) OK';
+
         ensure_extracted_schema();
         $notes[] = 'extracted_sites (Extracted URLs) OK';
 

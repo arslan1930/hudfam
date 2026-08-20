@@ -549,7 +549,57 @@ function distinct_site_languages(): array
 }
 
 /**
+ * True when a language value is actually a country name (e.g. "Germany").
+ * Demonyms like "German" are valid languages and return false.
+ */
+function is_country_name_used_as_language(string $language): bool
+{
+    $language = trim($language);
+    if ($language === '') {
+        return false;
+    }
+    foreach (list_countries(null, false) as $c) {
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $language) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Resolve a stored/posted language for a country.
+ * Never keeps a country name (Germany) as the language — maps to default (German).
+ */
+function normalize_site_language(string $language, string $country = ''): string
+{
+    $language = trim($language);
+    $country = trim($country);
+    if ($language !== '' && !is_country_name_used_as_language($language)) {
+        return $language;
+    }
+    if ($country !== '') {
+        $canon = resolve_canonical_country($country);
+        if ($canon) {
+            $fallback = trim((string) ($canon['language'] ?? ''));
+            if ($fallback !== '' && !is_country_name_used_as_language($fallback)) {
+                return $fallback;
+            }
+        }
+    }
+    if ($language !== '' && is_country_name_used_as_language($language)) {
+        $canon = resolve_canonical_country($language);
+        if ($canon) {
+            return trim((string) ($canon['language'] ?? ''));
+        }
+        return '';
+    }
+    return $language;
+}
+
+/**
  * Language labels for optional typeahead (country defaults + any already used on prospects).
+ * Never includes country names (fixes Language list showing "German" and "Germany").
  *
  * @return list<string>
  */
@@ -557,7 +607,7 @@ function list_language_options(): array
 {
     $set = [];
     foreach (list_countries(null, true) as $c) {
-        $lang = trim((string) ($c['default_language'] ?? ''));
+        $lang = normalize_site_language((string) ($c['default_language'] ?? ''), (string) ($c['name'] ?? ''));
         if ($lang !== '') {
             $set[$lang] = true;
         }
@@ -567,7 +617,7 @@ function list_language_options(): array
             "SELECT DISTINCT language FROM prospect_sites WHERE TRIM(language) <> '' ORDER BY language"
         )->fetchAll(PDO::FETCH_COLUMN);
         foreach ($rows as $lang) {
-            $lang = trim((string) $lang);
+            $lang = normalize_site_language((string) $lang);
             if ($lang !== '') {
                 $set[$lang] = true;
             }
@@ -795,6 +845,229 @@ function country_expected_tlds(string $countryName): array
         }
     }
     return [];
+}
+
+/**
+ * Primary country-code TLD → catalog country name (one owner each).
+ * Used by Extracting Results Push to auto-route .de→Germany, .at→Austria, etc.
+ * Not the soft “neighbors” list — each TLD has a single destination.
+ *
+ * @return array<string, string> tld suffix (lowercase) => country name
+ */
+function primary_tld_country_map(): array
+{
+    return [
+        // DACH (primary owners — not neighbors)
+        'de' => 'Germany',
+        'at' => 'Austria',
+        'co.at' => 'Austria',
+        'ch' => 'Switzerland',
+        'li' => 'Liechtenstein',
+        // Romance / Iberia
+        'fr' => 'France',
+        're' => 'France',
+        'es' => 'Spain',
+        'cat' => 'Spain',
+        'com.es' => 'Spain',
+        'pt' => 'Portugal',
+        'com.pt' => 'Portugal',
+        'it' => 'Italy',
+        'be' => 'Belgium',
+        'lu' => 'Luxembourg',
+        'mc' => 'Monaco',
+        'ad' => 'Andorra',
+        'sm' => 'San Marino',
+        // British Isles (catalog code is GB)
+        'uk' => 'United Kingdom',
+        'co.uk' => 'United Kingdom',
+        'org.uk' => 'United Kingdom',
+        'ac.uk' => 'United Kingdom',
+        'gov.uk' => 'United Kingdom',
+        'me.uk' => 'United Kingdom',
+        'net.uk' => 'United Kingdom',
+        'scot' => 'United Kingdom',
+        'wales' => 'United Kingdom',
+        'cymru' => 'United Kingdom',
+        'ie' => 'Ireland',
+        'mt' => 'Malta',
+        'com.mt' => 'Malta',
+        // Nordics / Baltics
+        'se' => 'Sweden',
+        'no' => 'Norway',
+        'dk' => 'Denmark',
+        'fi' => 'Finland',
+        'ax' => 'Finland',
+        'is' => 'Iceland',
+        'ee' => 'Estonia',
+        'lv' => 'Latvia',
+        'lt' => 'Lithuania',
+        // Central / East Europe
+        'nl' => 'Netherlands',
+        'pl' => 'Poland',
+        'com.pl' => 'Poland',
+        'cz' => 'Czech Republic',
+        'sk' => 'Slovakia',
+        'hu' => 'Hungary',
+        'ro' => 'Romania',
+        'com.ro' => 'Romania',
+        'bg' => 'Bulgaria',
+        'gr' => 'Greece',
+        'com.gr' => 'Greece',
+        'cy' => 'Cyprus',
+        'com.cy' => 'Cyprus',
+        'hr' => 'Croatia',
+        'com.hr' => 'Croatia',
+        'si' => 'Slovenia',
+        'rs' => 'Serbia',
+        'ba' => 'Bosnia and Herzegovina',
+        'com.ba' => 'Bosnia and Herzegovina',
+        'al' => 'Albania',
+        'mk' => 'North Macedonia',
+        'md' => 'Moldova',
+        'ua' => 'Ukraine',
+        'com.ua' => 'Ukraine',
+        'by' => 'Belarus',
+        'ru' => 'Russia',
+        // North America
+        'us' => 'United States',
+        'ca' => 'Canada',
+        'mx' => 'Mexico',
+        'com.mx' => 'Mexico',
+        // English / other markets
+        'au' => 'Australia',
+        'com.au' => 'Australia',
+        'net.au' => 'Australia',
+        'org.au' => 'Australia',
+        'nz' => 'New Zealand',
+        'co.nz' => 'New Zealand',
+        'za' => 'South Africa',
+        'co.za' => 'South Africa',
+        'in' => 'India',
+        'co.in' => 'India',
+        'pk' => 'Pakistan',
+        'com.pk' => 'Pakistan',
+        'sg' => 'Singapore',
+        'com.sg' => 'Singapore',
+        'my' => 'Malaysia',
+        'com.my' => 'Malaysia',
+        'ph' => 'Philippines',
+        'com.ph' => 'Philippines',
+        'hk' => 'Hong Kong',
+        'com.hk' => 'Hong Kong',
+        'ng' => 'Nigeria',
+        'com.ng' => 'Nigeria',
+        'ke' => 'Kenya',
+        'co.ke' => 'Kenya',
+        'br' => 'Brazil',
+        'com.br' => 'Brazil',
+        'jp' => 'Japan',
+        'co.jp' => 'Japan',
+        'kr' => 'South Korea',
+        'co.kr' => 'South Korea',
+        'ae' => 'United Arab Emirates',
+    ];
+}
+
+/**
+ * Resolve which country folder a domain should land in on Extracting Results Push.
+ * Generic TLDs (.com, .net, .eu, …) and unknown TLDs stay in $selectedCountry.
+ */
+function country_for_push_domain(string $domain, string $selectedCountry): string
+{
+    $fallback = resolve_canonical_country($selectedCountry);
+    $fallbackName = $fallback['name'] ?? trim($selectedCountry);
+    if ($fallbackName === '') {
+        return '';
+    }
+
+    $root = function_exists('to_root_domain') ? to_root_domain($domain) : normalize_domain($domain);
+    if ($root === '' && function_exists('normalize_domain')) {
+        $root = normalize_domain($domain);
+    }
+    if ($root === '') {
+        return $fallbackName;
+    }
+
+    $tld = domain_tld_suffix($root);
+    if ($tld === '') {
+        return $fallbackName;
+    }
+
+    $generic = array_fill_keys(generic_tlds(), true);
+    if (isset($generic[$tld])) {
+        return $fallbackName;
+    }
+
+    $primary = primary_tld_country_map();
+    if (isset($primary[$tld])) {
+        $canon = resolve_canonical_country($primary[$tld]);
+        if ($canon) {
+            return $canon['name'];
+        }
+    }
+
+    // ISO / catalog code fallback (e.g. .se → Sweden when code=SE).
+    $cc = $tld;
+    if (str_contains($tld, '.')) {
+        $parts = explode('.', $tld);
+        $cc = (string) end($parts);
+    }
+    if ($cc !== '' && !isset($generic[$cc])) {
+        foreach (list_countries(null, true) as $c) {
+            $code = strtolower(trim((string) ($c['code'] ?? '')));
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($code !== '' && $name !== '' && $code === $cc) {
+                return $name;
+            }
+        }
+        // United Kingdom is stored as GB but uses .uk
+        if ($cc === 'uk' || $cc === 'gb') {
+            $uk = resolve_canonical_country('United Kingdom');
+            if ($uk) {
+                return $uk['name'];
+            }
+        }
+    }
+
+    return $fallbackName;
+}
+
+/**
+ * Group domains by destination country for Extracting Results Push.
+ *
+ * @param list<string> $domains
+ * @return array<string, list<string>> country name => domains
+ */
+function route_domains_by_country_tld(array $domains, string $selectedCountry): array
+{
+    $groups = [];
+    foreach ($domains as $d) {
+        $raw = trim((string) $d);
+        if ($raw === '') {
+            continue;
+        }
+        $root = function_exists('to_root_domain') ? to_root_domain($raw) : '';
+        if ($root === '' && function_exists('normalize_domain')) {
+            $root = normalize_domain($raw);
+        }
+        if ($root === '') {
+            continue;
+        }
+        $dest = country_for_push_domain($root, $selectedCountry);
+        if ($dest === '') {
+            continue;
+        }
+        if (!isset($groups[$dest])) {
+            $groups[$dest] = [];
+        }
+        $groups[$dest][$root] = $root;
+    }
+    $out = [];
+    foreach ($groups as $country => $map) {
+        $out[$country] = array_values($map);
+    }
+    ksort($out);
+    return $out;
 }
 
 /**

@@ -77,7 +77,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // Clear the box after a successful push into admin Extracted Sites.
         save_extract_batch_results($id, '');
-        $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted Sites and Sites with emails - Team · ' . $pushed['country'];
+        $byCountry = is_array($pushed['by_country'] ?? null) ? $pushed['by_country'] : [];
+        $countryBits = [];
+        foreach ($byCountry as $cName => $stats) {
+            $n = (int) ($stats['inserted'] ?? 0) + (int) ($stats['skipped'] ?? 0);
+            if ($n > 0) {
+                $countryBits[] = $cName . ': ' . $n;
+            }
+        }
+        if (count($countryBits) > 1) {
+            $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) across '
+                . count($countryBits) . ' countries (' . implode(', ', $countryBits) . ')';
+            $msg .= '. Country TLDs were routed to their folders; .com/.net/.eu/etc. stayed in '
+                . (string) $pushed['country'];
+        } else {
+            $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted Sites and Sites with emails - Team · '
+                . (string) $pushed['country'];
+        }
+        $msg .= ' · also copied to Semrush Research for Site Finding';
         if ((int) $pushed['skipped'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
         }
@@ -151,6 +168,7 @@ render_header('Extracting · ' . $country, 'team');
     </p>
   </div>
   <div class="actions">
+    <?php render_task_presence('extract:' . $country, 'Others extracting ' . $country); ?>
     <a class="btn secondary" href="index.php?page=team_extracting">All countries</a>
     <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Add more sites</a>
   </div>
@@ -209,12 +227,14 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>② Extracting Results</h2>
     <p class="help">
-      Paste extracted sites for <strong><?= h($country) ?></strong>, then <strong>Push</strong>
-      to send them into Admin → Extracted Sites → Extracted Sites → <?= h($country) ?>.
+      Paste extracted sites, then <strong>Push</strong>.
+      Country TLDs auto-route (<strong>.de</strong>→Germany, <strong>.at</strong>→Austria, <strong>.ch</strong>→Switzerland, …).
+      Generic TLDs (<strong>.com</strong>, <strong>.net</strong>, <strong>.eu</strong>, …) stay in <strong><?= h($country) ?></strong>.
+      Sites go to Extracted Sites + Sites with emails - Team in each destination country.
     </p>
     <form method="post">
       <input type="hidden" name="action" value="push_results">
-      <textarea class="inventory-box" name="results_text" rows="16" placeholder="Paste sites for <?= h($country) ?>…&#10;example.com&#10;another-site.de"><?= h($resultsText) ?></textarea>
+      <textarea class="inventory-box" name="results_text" rows="16" placeholder="Paste sites…&#10;example.com&#10;shop.de&#10;blog.fr"><?= h($resultsText) ?></textarea>
       <div class="actions-sticky" style="margin-top:0.75rem">
         <button class="btn large" type="submit">Push</button>
       </div>
