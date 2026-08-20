@@ -4,11 +4,12 @@
  * php tests_http.php
  *
  * Uses PHP streams (allow_url_fopen) — no ext-curl required.
+ * If the local server is not running, starts `php -S` for this process and stops it on exit.
  *
  * Expects seeded users from tests_run.php (admin/teammate + finder/extractor/emailer).
  * Unassigned teammate sees the waiting dashboard; dept users unlock their tools.
  */
-$base = getenv('TXF_BASE') ?: 'http://127.0.0.1:8080';
+$base = rtrim(getenv('TXF_BASE') ?: 'http://127.0.0.1:8080', '/');
 $cookie = sys_get_temp_dir() . '/txf_http_cookie.txt';
 @unlink($cookie);
 
@@ -16,6 +17,127 @@ $errors = [];
 $ok = [];
 function pass(string $m): void { global $ok; $ok[] = $m; echo "OK  $m\n"; }
 function fail(string $m): void { global $errors; $errors[] = $m; echo "FAIL $m\n"; }
+
+/**
+ * True when $base answers over HTTP (any status counts as “server up”).
+ */
+function http_base_reachable(string $base): bool
+{
+    $url = $base . '/index.php?page=login';
+    $ctx = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => 2,
+            'ignore_errors' => true,
+            'follow_location' => 0,
+        ],
+    ]);
+    $http_response_header = [];
+    $body = @file_get_contents($url, false, $ctx);
+    return $body !== false || $http_response_header !== [];
+}
+
+/**
+ * Start php -S for local TXF_BASE only. Returns proc resource or null if not started.
+ *
+ * @return resource|null
+ */
+function http_start_builtin_server(string $base)
+{
+    $parts = parse_url($base);
+    $host = (string) ($parts['host'] ?? '');
+    $port = (int) ($parts['port'] ?? 0);
+    $scheme = (string) ($parts['scheme'] ?? 'http');
+    if ($scheme !== 'http' || !in_array($host, ['127.0.0.1', 'localhost'], true)) {
+        return null;
+    }
+    if ($port < 1) {
+        $port = 8080;
+    }
+    $docroot = __DIR__;
+    $log = sys_get_temp_dir() . '/txf_http_server_' . $port . '.log';
+    $cmd = [
+        PHP_BINARY,
+        '-S',
+        $host . ':' . $port,
+        '-t',
+        $docroot,
+    ];
+    $descriptors = [
+        0 => ['file', '/dev/null', 'r'],
+        1 => ['file', $log, 'w'],
+        2 => ['file', $log, 'a'],
+    ];
+    $proc = @proc_open($cmd, $descriptors, $pipes, $docroot);
+    if (!is_resource($proc)) {
+        return null;
+    }
+    // Wait until the listener accepts connections (max ~5s).
+    for ($i = 0; $i < 25; $i++) {
+        usleep(200000);
+        if (http_base_reachable($base)) {
+            return $proc;
+        }
+        $st = proc_get_status($proc);
+        if (empty($st['running'])) {
+            break;
+        }
+    }
+    @proc_terminate($proc);
+    @proc_close($proc);
+    return null;
+}
+
+function http_stop_builtin_server($proc): void
+{
+    if (!is_resource($proc)) {
+        return;
+    }
+    $st = @proc_get_status($proc);
+    $pid = (int) ($st['pid'] ?? 0);
+    @proc_terminate($proc, 15);
+    $deadline = microtime(true) + 2;
+    while (microtime(true) < $deadline) {
+        $st = @proc_get_status($proc);
+        if (empty($st['running'])) {
+            break;
+        }
+        usleep(50000);
+    }
+    if ($pid > 0 && function_exists('posix_kill')) {
+        @posix_kill($pid, 9);
+    }
+    @proc_close($proc);
+}
+
+$httpServerProc = null;
+$httpServerOwned = false;
+if (!http_base_reachable($base)) {
+    echo "HTTP server not reachable at {$base} — starting php -S…\n";
+    $httpServerProc = http_start_builtin_server($base);
+    if ($httpServerProc) {
+        $httpServerOwned = true;
+        pass('auto-started php -S for HTTP smoke');
+    } else {
+        fail('could not start php -S for ' . $base . ' (set TXF_BASE or start the server manually)');
+        echo "\n==== HTTP SUMMARY ====\n";
+        echo 'passed: ' . count($ok) . "\n";
+        echo 'failed: ' . count($errors) . "\n";
+        foreach ($errors as $e) {
+            echo " - $e\n";
+        }
+        exit(1);
+    }
+} else {
+    pass('HTTP server already reachable');
+}
+
+if ($httpServerOwned && is_resource($httpServerProc)) {
+    register_shutdown_function(static function () use (&$httpServerProc): void {
+        http_stop_builtin_server($httpServerProc);
+        $httpServerProc = null;
+    });
+}
 
 /**
  * Load cookies for $url from a simple jar file (one Set-Cookie line per entry).
@@ -248,6 +370,33 @@ if ($r['status'] === 200 && str_contains($r['body'], 'name="username"')) {
     pass('login page');
 } else {
     fail('login page status=' . $r['status'] . ' err=' . $r['error']);
+}
+
+// Public auth routes (Account stack — must not 404)
+$r = req('GET', $base . '/index.php?page=forgot_password');
+if ($r['status'] === 200 && str_contains($r['body'], 'Forgot password')) {
+    pass('forgot_password page');
+} else {
+    fail('forgot_password status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=reset_password');
+if ($r['status'] === 200 && (str_contains($r['body'], 'Reset') || str_contains($r['body'], 'password'))) {
+    pass('reset_password page');
+} else {
+    fail('reset_password status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=verify_email');
+if ($r['status'] === 200 && str_contains($r['body'], 'Verify')) {
+    pass('verify_email page');
+} else {
+    fail('verify_email status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_account');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400 && (str_contains($loc, 'login') || str_contains($loc, 'page=login'))) {
+    pass('admin_account redirects when logged out');
+} else {
+    fail('admin_account unexpected status=' . $r['status'] . ' loc=' . $loc);
 }
 
 // Bad login

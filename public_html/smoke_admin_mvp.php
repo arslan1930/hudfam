@@ -684,11 +684,23 @@ if (str_contains($httpSmoke, 'curl_init')) {
 } else {
     ok('tests_http.php uses streams (no ext-curl)');
 }
+if (!str_contains($httpSmoke, 'function http_start_builtin_server')
+    || !str_contains($httpSmoke, 'http_base_reachable')) {
+    fail('tests_http.php missing auto-start php -S helper');
+} else {
+    ok('tests_http.php auto-starts php -S when needed');
+}
 if (!str_contains($httpSmoke, 'Waiting for assignment')
     || !str_contains($httpSmoke, 'admin_extracted&folder=extracted_sites')) {
     fail('tests_http.php missing waiting-dashboard / extracted-folder asserts');
 } else {
     ok('tests_http.php ACL + extracted hub asserts');
+}
+if (!str_contains($httpSmoke, 'forgot_password page')
+    || !str_contains($httpSmoke, 'admin_account redirects when logged out')) {
+    fail('tests_http.php missing Account/forgot route asserts');
+} else {
+    ok('tests_http.php Account/forgot route asserts');
 }
 
 $prospectCheckSf = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
