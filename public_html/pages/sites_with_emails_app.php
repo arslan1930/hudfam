@@ -676,6 +676,20 @@ render_breadcrumbs($crumbs);
             data-copy-label="all"
             <?= $countryTotal > 0 ? '' : 'disabled' ?>>Copy all emails</button>
     <?php endif; ?>
+    <div class="swe-open-group" data-swe-open-group role="group" aria-label="Open sites in new tabs">
+      <label class="visually-hidden" for="swe-open-count">How many sites to open</label>
+      <select id="swe-open-count" class="swe-open-count" data-swe-open-count title="Open sites on this page (after search)">
+        <option value="10" selected>First 10</option>
+        <option value="20">First 20</option>
+        <option value="30">First 30</option>
+        <option value="40">First 40</option>
+        <option value="50">First 50</option>
+      </select>
+      <button type="button" class="btn secondary" data-swe-open-bulk
+              title="Open sites from the top of this page in new tabs">
+        Open first 10
+      </button>
+    </div>
     <a class="btn secondary" href="<?= h($csvUrl) ?>">Download CSV / Excel</a>
     <a class="btn secondary" href="<?= h($sweBase) ?>">All countries</a>
   </div>
@@ -684,6 +698,7 @@ render_breadcrumbs($crumbs);
 <?php if ($isTeam): ?>
 <p class="help">
   Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
+  Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page.
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
   <?php if ($pushConflictCount > 0): ?>
     <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before overwriting those emails.
@@ -693,11 +708,13 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Neutral duplicate archive (mirror of Admin). No campaign “emailed” marks here.
   Search finds a <strong>site + its emails</strong> together.
+  Use <strong>Open</strong> on a row or <strong>Open first 10–50</strong> to visit sites on this page in new tabs.
 </p>
 <?php else: ?>
 <p class="help">
   Working archive from Team Push. Campaign progress is tracked on this Admin sheet only —
   <strong>Final stays neutral</strong> (no emailed marks).
+  Use <strong>Open</strong> on a row or <strong>Open first 10–50</strong> to visit sites on this page in new tabs.
 </p>
 <?php endif; ?>
 
@@ -813,6 +830,13 @@ render_breadcrumbs($crumbs);
           $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
           $willOverwrite = $isTeam && isset($pushConflictSet[$domain]);
           $isEmailed = $sweScope === 'admin' && (int) ($s['email_sent'] ?? 0) === 1;
+          $openHost = function_exists('extract_host_candidate')
+              ? extract_host_candidate($domain)
+              : strtolower(trim($domain));
+          $openRoot = function_exists('to_root_domain') ? to_root_domain($openHost) : $openHost;
+          $siteOpenable = $openRoot !== ''
+              && (!function_exists('is_root_domain') || is_root_domain($openRoot));
+          $siteOpenUrl = $siteOpenable ? ('https://' . $openRoot) : '';
           $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
           if ($sweScope === 'admin') {
               $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
@@ -839,9 +863,22 @@ render_breadcrumbs($crumbs);
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
             </form>
-            <label class="visually-hidden" for="swe-domain-<?= $sid ?>">Site</label>
-            <input id="swe-domain-<?= $sid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
-                   value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site">
+            <div class="swe-site-cell<?= $siteOpenable ? '' : ' is-invalid-site' ?>">
+              <label class="visually-hidden" for="swe-domain-<?= $sid ?>">Site</label>
+              <input id="swe-domain-<?= $sid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
+                     value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site"
+                     data-swe-domain>
+              <?php if ($siteOpenable): ?>
+              <a class="swe-open-site" data-swe-open-site
+                 href="<?= h($siteOpenUrl) ?>" target="_blank" rel="noopener noreferrer"
+                 title="Open <?= h($openRoot) ?> in a new tab"
+                 aria-label="Open <?= h($openRoot) ?> in a new tab">Open</a>
+              <?php else: ?>
+              <a class="swe-open-site is-disabled" data-swe-open-site href="#" tabindex="-1" aria-disabled="true"
+                 title="Fix the site name (needs a valid domain) before opening"
+                 aria-label="Site name invalid — cannot open">Open</a>
+              <?php endif; ?>
+            </div>
           </td>
           <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
           <td class="swe-td-email">

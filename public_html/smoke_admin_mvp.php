@@ -631,6 +631,27 @@ if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'OVERW
 } else {
     ok('SWE UI overwrite confirm');
 }
+if (!str_contains($sweApp, 'data-swe-open-site')
+    || !str_contains($sweApp, 'data-swe-open-bulk')
+    || !str_contains($sweApp, 'data-swe-open-count')) {
+    fail('SWE UI missing Open site / Open first N controls');
+} else {
+    ok('SWE UI Open site + Open first N');
+}
+$sweJs = file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '';
+if (!str_contains($sweJs, 'listEligibleOpenRows')
+    || !str_contains($sweJs, 'Open all ')
+    || !str_contains($sweJs, 'syncOpenBulkButton')) {
+    fail('sites-with-emails.js missing Open first N logic');
+} else {
+    ok('sites-with-emails.js Open first N');
+}
+$sweCss = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($sweCss, 'swe-open-site') || !str_contains($sweCss, 'swe-open-group')) {
+    fail('app.css missing SWE Open site styles');
+} else {
+    ok('SWE Open site CSS');
+}
 
 $sitesEmailsPage = file_get_contents($root . '/pages/team/sites_emails.php') ?: '';
 if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {

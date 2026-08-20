@@ -288,6 +288,7 @@
     document.querySelectorAll('[data-swe-q]').forEach(function (el) {
       el.value = String(searchInput.value || '');
     });
+    if (typeof syncOpenBulkButton === 'function') syncOpenBulkButton();
   }
 
   function jump(dir) {
@@ -451,6 +452,9 @@
     var form = saveFormOf(input);
     if (!form) return;
     refreshRowSearchIndex(input.closest('[data-swe-row]'));
+    if (input.matches('.swe-domain')) {
+      refreshOpenLink(input.closest('[data-swe-row]'));
+    }
     filterRows();
     scheduleAutosave(form);
     if (input.matches('[data-swe-email]') && String(input.value || '').trim() === '') {
@@ -765,4 +769,168 @@
       }
     });
   });
+
+  // --- Open site(s) in new tabs (row Open + Open first 10–50) ---
+  function normalizeSiteHost(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    s = s.replace(/^[\s'"\[<\(]+/, '').replace(/[\s'"\]>\)]+$/, '');
+    try {
+      var probe = s;
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(probe) && probe.indexOf('.') !== -1) {
+        if (/^[a-z0-9.-]+(\/|\?|#|$)/i.test(probe)) probe = 'https://' + probe;
+      }
+      probe = probe.replace(/^(?:h?ttps?|tps?):\/\//i, 'https://');
+      var u = new URL(probe);
+      if (u.hostname) s = u.hostname;
+    } catch (err) {
+      s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+      if (s.indexOf('//') === 0) s = s.slice(2);
+      s = s.split('/')[0].split('?')[0].split('#')[0];
+    }
+    if (s.indexOf('@') !== -1) s = s.split('@').pop() || '';
+    s = String(s).toLowerCase();
+    if (s.indexOf(':') !== -1 && s.indexOf(']') === -1) s = s.split(':')[0];
+    s = s.replace(/^www\./i, '').replace(/\.$/, '');
+    return s;
+  }
+
+  function isOpenableSite(host) {
+    host = String(host || '').toLowerCase();
+    if (!host || host.indexOf('.') === -1) return false;
+    if (/\s/.test(host)) return false;
+    if (!/^[a-z0-9.-]+$/.test(host)) return false;
+    if (host.charAt(0) === '-' || host.slice(-1) === '-' || host.indexOf('..') !== -1) return false;
+    var parts = host.split('.').filter(Boolean);
+    if (parts.length < 2) return false;
+    for (var i = 0; i < parts.length; i++) {
+      var label = parts[i];
+      if (!label || label.length > 63) return false;
+      if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) return false;
+    }
+    return true;
+  }
+
+  function siteOpenUrl(host) {
+    return 'https://' + host;
+  }
+
+  function refreshOpenLink(row) {
+    if (!row) return;
+    var domainEl = row.querySelector('.swe-domain, [data-swe-domain]');
+    var link = row.querySelector('[data-swe-open-site]');
+    var cell = row.querySelector('.swe-site-cell');
+    if (!domainEl || !link) return;
+    var host = normalizeSiteHost(domainEl.value);
+    var ok = isOpenableSite(host);
+    if (cell) cell.classList.toggle('is-invalid-site', !ok);
+    if (ok) {
+      link.href = siteOpenUrl(host);
+      link.removeAttribute('aria-disabled');
+      link.classList.remove('is-disabled');
+      link.removeAttribute('tabindex');
+      link.title = 'Open ' + host + ' in a new tab';
+      link.setAttribute('aria-label', 'Open ' + host + ' in a new tab');
+    } else {
+      link.href = '#';
+      link.setAttribute('aria-disabled', 'true');
+      link.classList.add('is-disabled');
+      link.setAttribute('tabindex', '-1');
+      link.title = 'Fix the site name (needs a valid domain) before opening';
+      link.setAttribute('aria-label', 'Site name invalid — cannot open');
+    }
+  }
+
+  function listEligibleOpenRows() {
+    var out = [];
+    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+      if (row.hidden) return;
+      var domainEl = row.querySelector('.swe-domain, [data-swe-domain]');
+      if (!domainEl) return;
+      var host = normalizeSiteHost(domainEl.value);
+      if (!isOpenableSite(host)) return;
+      out.push({ row: row, host: host, url: siteOpenUrl(host) });
+    });
+    return out;
+  }
+
+  function syncOpenBulkButton() {
+    var select = document.querySelector('[data-swe-open-count]');
+    var btn = document.querySelector('[data-swe-open-bulk]');
+    if (!btn) return;
+    var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+    var eligible = listEligibleOpenRows();
+    var take = Math.min(choice, eligible.length);
+    if (eligible.length === 0) {
+      btn.disabled = true;
+      btn.textContent = 'No sites to open';
+      btn.title = 'No openable sites on this page';
+      return;
+    }
+    btn.disabled = false;
+    if (take < choice) {
+      btn.textContent = 'Open all ' + take;
+      btn.title = 'Open all ' + take + ' openable site' + (take === 1 ? '' : 's') + ' on this page';
+    } else {
+      btn.textContent = 'Open first ' + choice;
+      btn.title = 'Open the first ' + choice + ' sites on this page in new tabs';
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    var link = e.target && e.target.closest ? e.target.closest('[data-swe-open-site]') : null;
+    if (!link) return;
+    if (link.getAttribute('aria-disabled') === 'true' || link.classList.contains('is-disabled')) {
+      e.preventDefault();
+    }
+  });
+
+  var openCountSelect = document.querySelector('[data-swe-open-count]');
+  var openBulkBtn = document.querySelector('[data-swe-open-bulk]');
+  if (openCountSelect) {
+    openCountSelect.addEventListener('change', syncOpenBulkButton);
+  }
+  if (openBulkBtn) {
+    openBulkBtn.addEventListener('click', function () {
+      var select = document.querySelector('[data-swe-open-count]');
+      var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+      var eligible = listEligibleOpenRows();
+      var take = Math.min(choice, eligible.length);
+      if (take < 1) {
+        setStatus('No sites to open on this page.', true);
+        syncOpenBulkButton();
+        return;
+      }
+      var opened = 0;
+      for (var i = 0; i < take; i++) {
+        var w = window.open(eligible[i].url, '_blank');
+        if (w) {
+          try { w.opener = null; } catch (err) {}
+          opened++;
+        }
+      }
+      if (opened === take) {
+        setStatus(
+          take < choice
+            ? ('Opened all ' + opened + ' site' + (opened === 1 ? '' : 's') + ' in new tabs.')
+            : ('Opened first ' + opened + ' sites in new tabs.')
+        );
+      } else if (opened > 0) {
+        setStatus(
+          'Opened ' + opened + ' of ' + take
+            + ' — allow popups for this site, then try again.',
+          true
+        );
+      } else {
+        setStatus(
+          'Could not open tabs — allow popups for this site, then try again.',
+          true
+        );
+      }
+      syncOpenBulkButton();
+    });
+  }
+
+  document.querySelectorAll('[data-swe-row]').forEach(refreshOpenLink);
+  syncOpenBulkButton();
 })();
