@@ -147,8 +147,8 @@ function guide_extracting(): string
         'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
         [
             'Teammate uses Filter & add and saves new unique sites.',
-            'Those sites appear here under Sites list for that country.',
-            'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
+            'Those sites appear here under Sites list for that country (editable textarea; edits autosave).',
+            'Sites list tools: Copy, Undo, and Redo while you stay on this page.',
             'Paste sites into Extracting Results and Push — country TLDs (.de, .at, .ch, …) go to their own folders; .com/.net/.eu stay in the selected country.',
             'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
         ]
