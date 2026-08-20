@@ -170,6 +170,17 @@ if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
 } else {
     ok('guide_admin_users updated');
 }
+$deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
+if (!str_contains($deptLib, 'function user_deactivation_residue')) {
+    fail('departments missing user_deactivation_residue');
+} else {
+    ok('user_deactivation_residue helper');
+}
+if (!str_contains($usersPage, 'user_deactivation_residue') || !str_contains($usersPage, 'review under Departments')) {
+    fail('users.php missing deactivate residue messaging');
+} else {
+    ok('users.php deactivate residue messaging');
+}
 
 $invoiceManual = file_get_contents($root . '/pages/admin/invoice_manual.php') ?: '';
 if (!str_contains($invoiceManual, "post('action') === 'create_blank'")) {
