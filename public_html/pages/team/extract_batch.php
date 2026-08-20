@@ -70,20 +70,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash(
                 'error',
                 $pushed['invalid'] > 0
-                    ? 'Could not push — fix invalid lines first (root domains only, or use Clean-style https URLs).'
+                    ? 'Could not push — fix invalid lines first (root domains only).'
                     : 'Paste at least one site into Extracting Results before Push.'
             );
             redirect('index.php?page=team_extract_batch&id=' . $id);
         }
-        // Clear the box after a successful push into admin Extracted Sites.
-        save_extract_batch_results($id, '');
+        // Only clear Results when something new was inserted; keep paste if only duplicates.
+        if ((int) $pushed['inserted'] > 0) {
+            save_extract_batch_results($id, '');
+            // Remove successfully pushed domains from this country's Sites list.
+            $pushedDomains = [];
+            $rawLines = preg_split('/\R+/', $resultsText) ?: [];
+            foreach ($rawLines as $line) {
+                $d = normalize_domain(trim((string) $line));
+                if ($d !== '') {
+                    $pushedDomains[] = $d;
+                }
+            }
+            if ($pushedDomains !== []) {
+                remove_extract_batch_domains($id, $pushedDomains);
+                refresh_extract_batch_site_count($id);
+            }
+        }
         $byCountry = is_array($pushed['by_country'] ?? null) ? $pushed['by_country'] : [];
         $countryBits = [];
+        $semrushInserted = 0;
         foreach ($byCountry as $cName => $stats) {
             $n = (int) ($stats['inserted'] ?? 0) + (int) ($stats['skipped'] ?? 0);
             if ($n > 0) {
                 $countryBits[] = $cName . ': ' . $n;
             }
+            $semrushInserted += (int) ($stats['semrush_inserted'] ?? 0);
         }
         if (count($countryBits) > 1) {
             $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) across '
@@ -94,55 +111,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Pushed ' . (int) $pushed['inserted'] . ' site(s) to Extracted Sites and Sites with emails - Team · '
                 . (string) $pushed['country'];
         }
-        $msg .= ' · also copied to Semrush Research for Site Finding';
+        if ($semrushInserted > 0) {
+            $msg .= ' · ' . $semrushInserted . ' also copied to Semrush Research';
+        }
         if ((int) $pushed['skipped'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
         }
         if ((int) $pushed['invalid'] > 0) {
             $msg .= ' · ' . (int) $pushed['invalid'] . ' invalid line(s) skipped';
         }
+        if ((int) $pushed['inserted'] < 1 && (int) $pushed['skipped'] > 0) {
+            $msg .= ' · Results kept so you can edit and retry';
+        }
         flash('ok', $msg . '.');
-        redirect('index.php?page=team_extract_batch&id=' . $id);
-    }
-
-    if ($action === 'remove_sites') {
-        $selected = post('domains');
-        if (!is_array($selected)) {
-            $raw = (string) post('domains_json');
-            $decoded = $raw !== '' ? json_decode($raw, true) : null;
-            $selected = is_array($decoded) ? $decoded : [];
-        }
-        $removed = remove_extract_batch_domains($id, $selected);
-        $siteCount = refresh_extract_batch_site_count($id);
-        if ($wantsJson) {
-            extract_json_response([
-                'ok' => true,
-                'removed' => $removed,
-                'site_count' => $siteCount,
-            ]);
-        }
-        flash('ok', 'Removed ' . count($removed) . ' site(s) from the Sites list.');
-        redirect('index.php?page=team_extract_batch&id=' . $id);
-    }
-
-    if ($action === 'restore_sites') {
-        $raw = (string) post('rows_json');
-        $rows = $raw !== '' ? json_decode($raw, true) : null;
-        if (!is_array($rows)) {
-            $rows = [];
-        }
-        $restored = restore_extract_batch_domains($id, $rows);
-        $siteCount = refresh_extract_batch_site_count($id);
-        $domains = get_extract_batch_domains($id);
-        if ($wantsJson) {
-            extract_json_response([
-                'ok' => true,
-                'restored' => $restored,
-                'site_count' => $siteCount,
-                'domains' => $domains,
-            ]);
-        }
-        flash('ok', 'Restored ' . $restored . ' site(s) to the Sites list.');
         redirect('index.php?page=team_extract_batch&id=' . $id);
     }
 }
@@ -181,7 +162,7 @@ render_header('Extracting · ' . $country, 'team');
     <h2>① Sites list</h2>
     <p class="help">
       Sites waiting to extract for <strong><?= h($country) ?></strong>.
-      <kbd>Backspace</kbd> removes sites — changes <strong>autosave</strong> in real time.
+      Changes <strong>autosave</strong> in real time.
       <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page.
       If emptied, this page stays open; the country hides when you return to Extracting sites,
       and the row is removed after <strong>1 hour</strong> unless new sites are added (new sites appear at the top).
@@ -215,8 +196,8 @@ render_header('Extracting · ' . $country, 'team');
       <p class="help" style="margin-top:0.5rem">
         Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>.
         Hyphens and multi-part TLDs are OK.
-        One per line (or commas). Use <strong>Clean errors</strong> to correct
-        <code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).
+        One per line (or commas). Autosave normalizes <code>https</code>/paths to root domains;
+        invalid lines are removed so this box matches the saved list.
       </p>
       <p class="muted" style="margin:0.35rem 0 0">
         <span id="sites_footer_count"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
