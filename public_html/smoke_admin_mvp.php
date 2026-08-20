@@ -149,24 +149,31 @@ if (str_contains($batches, "clear_admin_new_data('our_database'")) {
     ok('history list leaves Our database New badge');
 }
 
+// Phase B (editable sheet)
+$prospects = file_get_contents($root . '/includes/prospects.php') ?: '';
+foreach (['set_prospect_batch_domains_from_text', 'delete_prospect_batch', 'update_prospect_batch_meta'] as $fn) {
+    if (!str_contains($prospects, "function {$fn}")) {
+        fail("prospects missing {$fn}");
+    } else {
+        ok("prospects {$fn}");
+    }
+}
+
 $batch = file_get_contents($root . '/pages/admin/prospect_batch.php') ?: '';
 if (str_contains($batch, "clear_admin_new_data('our_database'")) {
     fail('history detail should not clear Our database New badge');
 } else {
     ok('history detail leaves Our database New badge');
 }
-
-// Phase B (editable sheet) — expected after PR2; report as soft until helpers land.
-$prospects = file_get_contents($root . '/includes/prospects.php') ?: '';
-$phaseBReady = str_contains($prospects, 'function set_prospect_batch_domains_from_text')
-    && str_contains($prospects, 'function delete_prospect_batch')
-    && str_contains($prospects, 'function update_prospect_batch_meta')
-    && str_contains($batch, 'prospect-batch-sheet.js')
-    && str_contains($batch, 'autosave_sites');
-if ($phaseBReady) {
-    ok('phase B editable history sheet wired');
+if (!str_contains($batch, 'prospect-batch-sheet.js')) {
+    fail('admin batch missing sheet JS');
 } else {
-    echo "SKIP: phase B editable history sheet (PR2)\n";
+    ok('admin batch sheet JS');
+}
+if (!str_contains($batch, 'autosave_sites')) {
+    fail('admin batch missing autosave action');
+} else {
+    ok('admin batch autosave');
 }
 
 $teamProspects = file_get_contents($root . '/pages/team/prospects.php') ?: '';

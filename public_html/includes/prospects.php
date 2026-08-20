@@ -1442,6 +1442,232 @@ function search_prospect_sites_global(string $q, int $limit = 200): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
+/**
+ * Update metadata on a site-adding history day (does not change domains).
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function update_prospect_batch_meta(
+    int $batchId,
+    string $country = '',
+    string $language = '',
+    string $region = '',
+    string $niche = '',
+    string $notes = ''
+): array {
+    ensure_prospect_schema();
+    $batch = get_prospect_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Site adding history day not found.'];
+    }
+    $country = trim($country);
+    $language = trim($language);
+    $region = trim($region);
+    $niche = trim($niche);
+    $notes = trim($notes);
+    if ($country !== '') {
+        try {
+            $canon = require_canonical_country($country);
+            $country = $canon['name'];
+            if ($region === '') {
+                $region = $canon['region'];
+            }
+            if ($language === '') {
+                $language = $canon['language'];
+            }
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $e->getMessage()];
+        }
+    } else {
+        $country = (string) ($batch['country'] ?? '');
+    }
+    if (function_exists('normalize_site_language') && $language !== '') {
+        $language = normalize_site_language($language, $country);
+    }
+    db()->prepare(
+        'UPDATE prospect_batches
+         SET country=?, language=?, region=?, niche=?, notes=?, updated_at=NOW()
+         WHERE id=?'
+    )->execute([$country, $language, $region, $niche, $notes, $batchId]);
+    return ['ok' => true];
+}
+
+/**
+ * Replace the domain list for a history day. Optionally remove dropped domains from Our database.
+ * New domains are linked to existing Our-database rows when present, otherwise inserted there.
+ *
+ * @return array{ok:bool,error?:string,total?:int,removed?:int,inserted?:int,db_removed?:int}
+ */
+function set_prospect_batch_domains_from_text(
+    int $batchId,
+    string $text,
+    bool $alsoRemoveFromDb = false
+): array {
+    ensure_prospect_schema();
+    $batch = get_prospect_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Site adding history day not found.'];
+    }
+
+    $rawLines = preg_split('/\R/u', $text) ?: [];
+    $wanted = [];
+    foreach ($rawLines as $line) {
+        $d = normalize_domain((string) $line);
+        if ($d !== '' && !isset($wanted[$d])) {
+            $wanted[$d] = true;
+        }
+    }
+    $wantedList = array_keys($wanted);
+
+    $items = get_prospect_batch_items($batchId);
+    /** @var array<string,array{domain:string,created_at:string,prospect_site_id:?int}> $current */
+    $current = [];
+    foreach ($items as $item) {
+        $d = normalize_domain((string) ($item['domain'] ?? ''));
+        if ($d !== '') {
+            $current[$d] = $item;
+        }
+    }
+
+    $toRemove = array_values(array_diff(array_keys($current), $wantedList));
+    $toAdd = array_values(array_diff($wantedList, array_keys($current)));
+
+    $removed = 0;
+    $inserted = 0;
+    $dbRemoved = 0;
+    $country = (string) ($batch['country'] ?? '');
+    $language = (string) ($batch['language'] ?? '');
+    $region = (string) ($batch['region'] ?? '');
+    $niche = (string) ($batch['niche'] ?? '');
+    $notes = (string) ($batch['notes'] ?? '');
+    $ownerId = (int) ($batch['user_id'] ?? 0);
+
+    $delItem = db()->prepare('DELETE FROM prospect_batch_items WHERE batch_id=? AND domain=?');
+    $insItem = db()->prepare(
+        'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
+    );
+    $findSite = db()->prepare(
+        'SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1'
+    );
+    $insSite = db()->prepare(
+        'INSERT INTO prospect_sites (domain, country, language, region, niche, notes, status, created_by)
+         VALUES (?,?,?,?,?,?,\'new\',?)'
+    );
+
+    db()->beginTransaction();
+    try {
+        foreach ($toRemove as $d) {
+            $delItem->execute([$batchId, $d]);
+            $removed++;
+            if ($alsoRemoveFromDb) {
+                $siteId = (int) ($current[$d]['prospect_site_id'] ?? 0);
+                if ($siteId <= 0) {
+                    $findSite->execute([$country, $d]);
+                    $siteId = (int) ($findSite->fetchColumn() ?: 0);
+                }
+                if ($siteId > 0 && delete_prospect_site_by_id($siteId)) {
+                    $dbRemoved++;
+                }
+            }
+        }
+
+        foreach ($toAdd as $d) {
+            $siteId = null;
+            if ($country !== '') {
+                $findSite->execute([$country, $d]);
+                $existingId = (int) ($findSite->fetchColumn() ?: 0);
+                if ($existingId > 0) {
+                    $siteId = $existingId;
+                } else {
+                    try {
+                        $insSite->execute([
+                            $d,
+                            $country,
+                            $language,
+                            $region,
+                            $niche,
+                            $notes,
+                            $ownerId > 0 ? $ownerId : null,
+                        ]);
+                        $siteId = (int) db()->lastInsertId() ?: null;
+                    } catch (PDOException $e) {
+                        $findSite->execute([$country, $d]);
+                        $siteId = (int) ($findSite->fetchColumn() ?: 0) ?: null;
+                    }
+                }
+            }
+            $insItem->execute([$batchId, $d, $siteId]);
+            $inserted++;
+        }
+
+        $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+        $cnt->execute([$batchId]);
+        $total = (int) $cnt->fetchColumn();
+        db()->prepare(
+            'UPDATE prospect_batches SET site_count=?, updated_at=NOW() WHERE id=?'
+        )->execute([$total, $batchId]);
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        return ['ok' => false, 'error' => $e->getMessage()];
+    }
+
+    if (($inserted > 0 || $dbRemoved > 0) && function_exists('mark_admin_new_data')) {
+        try {
+            mark_admin_new_data('our_database');
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
+    return [
+        'ok' => true,
+        'total' => $total,
+        'removed' => $removed,
+        'inserted' => $inserted,
+        'db_removed' => $dbRemoved,
+    ];
+}
+
+/**
+ * Delete a history day. By default leaves Our database rows intact (policy A).
+ * When $alsoRemoveFromDb is true, deletes linked prospect_sites for that day's domains.
+ *
+ * @return array{ok:bool,error?:string,db_removed?:int}
+ */
+function delete_prospect_batch(int $batchId, bool $alsoRemoveFromDb = false): array
+{
+    ensure_prospect_schema();
+    $batch = get_prospect_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Site adding history day not found.'];
+    }
+    $dbRemoved = 0;
+    if ($alsoRemoveFromDb) {
+        $items = get_prospect_batch_items($batchId);
+        $country = (string) ($batch['country'] ?? '');
+        $findSite = db()->prepare(
+            'SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1'
+        );
+        foreach ($items as $item) {
+            $siteId = (int) ($item['prospect_site_id'] ?? 0);
+            $domain = normalize_domain((string) ($item['domain'] ?? ''));
+            if ($siteId <= 0 && $country !== '' && $domain !== '') {
+                $findSite->execute([$country, $domain]);
+                $siteId = (int) ($findSite->fetchColumn() ?: 0);
+            }
+            if ($siteId > 0 && delete_prospect_site_by_id($siteId)) {
+                $dbRemoved++;
+            }
+        }
+    }
+    db()->prepare('DELETE FROM prospect_batches WHERE id=?')->execute([$batchId]);
+    return ['ok' => true, 'db_removed' => $dbRemoved];
+}
+
 function delete_prospect_site_by_id(int $id): ?array
 {
     ensure_prospect_schema();
