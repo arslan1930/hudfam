@@ -12,6 +12,25 @@ $niche = '';
 $notes = '';
 $result = null;
 $old = ['domains' => [], 'total' => 0, 'truncated' => false];
+$canSendExtracting = team_page_unlocked($user, 'team_extract_batch');
+
+// AJAX: group domains by public suffix (Separate all).
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && (string) post('action') === 'group_tlds'
+) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $parsed = parse_domain_list_strict((string) post('domains'));
+    $groups = group_domains_by_tld($parsed['valid']);
+    echo json_encode([
+        'ok' => true,
+        'groups' => $groups,
+        'total' => count($parsed['valid']),
+        'invalid' => (int) ($parsed['invalid_count'] ?? 0),
+    ]);
+    exit;
+}
 
 // Always use the existing country folder name (Germany, Spain, …) — never a free-text variant.
 if ($country !== '') {
@@ -68,16 +87,15 @@ try {
 
         if ($country === '' || $canonCountry === null) {
             // error already flashed
-        } elseif ($parsed['invalid_count'] > 0 && $action !== 'add_new') {
+        } elseif ($parsed['invalid_count'] > 0 && $action !== 'add_new' && $action !== 'send_tld_column') {
             flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
             $raw = $parsed['valid_text'] !== ''
                 ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
                 : $raw;
-        } elseif ($action === 'add_new') {
-            // Always re-filter against the country database — only brand-new sites may be saved.
+        } elseif ($action === 'add_new' || $action === 'send_tld_column') {
+            // Option A: re-filter against the country database — only brand-new sites may be saved.
             if (!$domains) {
-                // Hidden <input> newlines often become spaces in browsers — use textarea POST.
-                flash('error', 'Could not read the unique list. Click Push to extract again, then Add.');
+                flash('error', 'Could not read the domain list. Separate again or Push to extract, then retry.');
                 redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
             $filter = filter_domains_against_prospects($domains, $country);
@@ -118,6 +136,9 @@ try {
                         }
                         if ($tldGate['warn']) {
                             $msg .= ' · saved despite TLD mismatch warning';
+                        }
+                        if ($action === 'send_tld_column') {
+                            $msg .= ' · sent from TLD column';
                         }
                         flash('ok', $msg . '.');
                         // Only jump to Extracting when that tool is unlocked for this user.
@@ -182,6 +203,11 @@ if ($result && !empty($result['new'])) {
     $tldCheck = analyze_country_tld_match($result['new'], $country);
 }
 
+$tldGroups = ($result && !empty($result['new']))
+    ? group_domains_by_tld($result['new'])
+    : [];
+$sendBtnLabel = $canSendExtracting ? 'Send to Extracting' : 'Add to country';
+
 $stepPaste = !$result ? 'active' : 'done';
 $stepFilter = $result ? 'active' : '';
 $stepAdd = ($result && $result['new']) ? 'active' : '';
@@ -195,7 +221,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Push to extract</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder.</p>
+    <p class="muted">Paste sites → <strong>Push to extract</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder. Use <strong>Separate all</strong> to split by domain ending (.es, .com, …).</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -272,6 +298,26 @@ render_header('Filter & add', 'team');
           'rows' => 14,
           'class' => 'inventory-box',
       ]) ?>
+      <div class="tld-separate-toolbar"
+           data-tld-separate
+           data-source="#domains"
+           data-group-url="index.php?page=team_prospect_check"
+           data-csrf="<?= h(csrf_token()) ?>"
+           data-country="<?= h($country) ?>"
+           data-language="<?= h($language) ?>"
+           data-region="<?= h($region) ?>"
+           data-niche="<?= h($niche) ?>"
+           data-notes="<?= h($notes) ?>"
+           data-can-send="0"
+           data-send-label="<?= h($sendBtnLabel) ?>">
+        <button type="button" class="btn secondary" data-tld-separate-btn
+                title="Split the paste box into columns by domain ending (.es, .com, .pe, …)">
+          Separate all
+        </button>
+        <span class="muted" style="font-size:0.88rem">Split by ending — Copy or Delete a column (Send after Push to extract)</span>
+        <p class="help tld-separate-status" data-tld-status hidden></p>
+        <div class="tld-separate-grid" data-tld-grid hidden></div>
+      </div>
     </div>
   </div>
 
@@ -362,10 +408,10 @@ render_header('Filter & add', 'team');
           }
         ?>
         <?= render_hidden_multiline('domains', $uniqueText) ?>
-        <textarea class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
+        <textarea id="unique_domains_preview" class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in <?= h($country) ?> yet. Clicking add merges only these new sites into the existing <?= h($country) ?> database.
-          Already-known sites stay skipped.
+          Already-known sites stay skipped. Or <strong>Separate all</strong> below to work by domain ending.
         </p>
         <?php if (!empty($tldCheck['warn'])): ?>
           <label class="tld-confirm">
@@ -379,6 +425,31 @@ render_header('Filter & add', 'team');
           </button>
         </div>
       </form>
+
+      <div class="tld-separate-toolbar"
+           data-tld-separate
+           data-source="#unique_domains_preview"
+           data-group-url="index.php?page=team_prospect_check"
+           data-csrf="<?= h(csrf_token()) ?>"
+           data-country="<?= h($country) ?>"
+           data-language="<?= h($language) ?>"
+           data-region="<?= h($region) ?>"
+           data-niche="<?= h($niche) ?>"
+           data-notes="<?= h($notes) ?>"
+           data-can-send="1"
+           data-send-label="<?= h($sendBtnLabel) ?>"
+           data-groups-json="<?= h(json_encode($tldGroups, JSON_UNESCAPED_UNICODE)) ?>">
+        <button type="button" class="btn" data-tld-separate-btn
+                title="Split unique sites into columns by domain ending">
+          Separate all
+        </button>
+        <span class="muted" style="font-size:0.88rem">
+          One column per ending — Copy, Delete column, or <?= h($sendBtnLabel) ?> (filters known sites first)
+        </span>
+        <p class="help tld-separate-status" data-tld-status hidden></p>
+        <div class="tld-separate-grid" data-tld-grid hidden></div>
+      </div>
+
       <?php if (!empty($tldCheck['warn'])): ?>
       <script>
       (function(){
@@ -407,4 +478,5 @@ render_header('Filter & add', 'team');
   </div>
 </div>
 <?php endif; ?>
+<script src="<?= h(script_asset_url('js/tld-separate.js')) ?>" defer></script>
 <?php render_footer('team'); ?>
