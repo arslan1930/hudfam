@@ -154,6 +154,69 @@ function get(string $key, $default = '')
     return $_GET[$key] ?? $default;
 }
 
+/** Session CSRF token (creates one if missing). */
+function csrf_token(): string
+{
+    if (empty($_SESSION['_csrf']) || !is_string($_SESSION['_csrf'])) {
+        $_SESSION['_csrf'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['_csrf'];
+}
+
+/** Hidden input for HTML forms. */
+function csrf_field(): string
+{
+    return '<input type="hidden" name="_csrf" value="' . h(csrf_token()) . '">';
+}
+
+/** Read token from POST body or X-CSRF-Token header. */
+function csrf_request_token(): string
+{
+    $fromPost = (string) ($_POST['_csrf'] ?? '');
+    if ($fromPost !== '') {
+        return $fromPost;
+    }
+    $header = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if ($header !== '') {
+        return $header;
+    }
+    // Some stacks expose custom headers as HTTP_X_CSRF_TOKEN only; also check REDIRECT_ variants.
+    $alt = (string) ($_SERVER['REDIRECT_HTTP_X_CSRF_TOKEN'] ?? '');
+    return $alt;
+}
+
+function csrf_token_valid(?string $token = null): bool
+{
+    $expected = csrf_token();
+    $got = $token ?? csrf_request_token();
+    return $got !== '' && hash_equals($expected, $got);
+}
+
+/**
+ * Reject the request when CSRF is missing/invalid.
+ * JSON POSTs (ajax=1 or Accept: application/json) get a JSON 403.
+ */
+function require_csrf(): void
+{
+    if (csrf_token_valid()) {
+        return;
+    }
+    $wantsJson = (string) ($_POST['ajax'] ?? '') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    if ($wantsJson) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'error' => 'Invalid or missing CSRF token. Refresh the page and try again.']);
+        exit;
+    }
+    flash('error', 'Invalid or missing security token. Refresh the page and try again.');
+    $ref = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+    if ($ref !== '' && str_contains($ref, 'index.php')) {
+        redirect($ref);
+    }
+    redirect('index.php?page=admin_dashboard');
+}
+
 function prospect_statuses(): array
 {
     return [
