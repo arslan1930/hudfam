@@ -146,6 +146,9 @@ render_breadcrumbs([
       Delete both or remove only email — removing the <strong>last</strong> email also deletes the site row.
     </p>
   </div>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+  </div>
 </div>
 <?php
 render_email_campaign_super_search($base);
