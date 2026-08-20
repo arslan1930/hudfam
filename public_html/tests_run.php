@@ -2682,6 +2682,29 @@ try {
     fail('users U-1: ' . $e->getMessage());
 }
 
+// --- Admin Users U-2: temp password generator ---
+try {
+    $pwd = generate_temp_password();
+    if (strlen($pwd) < 12) {
+        fail('generate_temp_password too short: ' . strlen($pwd));
+    } elseif (in_array($pwd, known_weak_passwords(), true)) {
+        fail('generate_temp_password returned weak password');
+    } elseif (!preg_match('/^[A-Za-z0-9!@#$%]+$/', $pwd)) {
+        fail('generate_temp_password unexpected chars');
+    } else {
+        pass('generate_temp_password length and charset');
+    }
+    $a = generate_temp_password();
+    $b = generate_temp_password();
+    if ($a !== $b) {
+        pass('generate_temp_password not constant');
+    } else {
+        fail('generate_temp_password returned identical twice');
+    }
+} catch (Throwable $e) {
+    fail('users U-2: ' . $e->getMessage());
+}
+
 echo "\n==== SUMMARY ====\n";
 echo 'passed: ' . count($ok) . "\n";
 echo 'failed: ' . count($errors) . "\n";

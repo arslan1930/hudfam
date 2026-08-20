@@ -39,6 +39,38 @@ if (!empty($_SESSION['revealed_temp_password']) && is_array($_SESSION['revealed_
     unset($_SESSION['revealed_temp_password']);
 }
 
+// Generate a one-time temp password for another user (edit only; not self).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'generate_temp') {
+    $id = (int) post('id');
+    $myId = (int) ($me['id'] ?? 0);
+    if ($id < 1) {
+        flash('error', 'Select a user to edit first.');
+        redirect('index.php?page=admin_users');
+    }
+    if ($id === $myId) {
+        flash('error', 'Use the password field to change your own password.');
+        redirect('index.php?page=admin_users&edit=' . $id);
+    }
+    $s = db()->prepare('SELECT id, username FROM users WHERE id=? LIMIT 1');
+    $s->execute([$id]);
+    $target = $s->fetch() ?: null;
+    if (!$target) {
+        flash('error', 'User not found.');
+        redirect('index.php?page=admin_users');
+    }
+    $password = generate_temp_password();
+    db()->prepare(
+        'UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?'
+    )->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+    $_SESSION['revealed_temp_password'] = [
+        'user_id' => $id,
+        'username' => (string) $target['username'],
+        'password' => $password,
+    ];
+    flash('ok', 'Temporary password generated. Copy it below (shown once). They must change it on next login.');
+    redirect('index.php?page=admin_users&edit=' . $id);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $id = (int) post('id');
     $username = trim((string) post('username'));
@@ -127,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
 
     $settingPassword = $password !== '' || $id === 0;
     if ($id === 0 && $password === '') {
-        $password = bin2hex(random_bytes(5));
+        $password = generate_temp_password();
     }
     if ($settingPassword && $password !== '') {
         if (strlen($password) < 8) {
@@ -347,11 +379,38 @@ render_header('Admins & users', 'admin');
       <option value="admin" <?= ($form['role'] ?? '')==='admin'?'selected':'' ?>>admin</option>
     </select>
     <label>Password <?= $edit ? '(blank = keep)' : '(min 8 chars; blank = generate)' ?></label>
-    <input type="password" name="password" autocomplete="new-password" minlength="8">
+    <input type="password" name="password" id="users_password" autocomplete="new-password" minlength="8"
+           data-editing-other="<?= ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0)) ? '1' : '0' ?>">
     <p class="help">Passwords must be at least 8 characters (not demo defaults). Admin emails must be unique.</p>
     <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !empty($form['is_active']) ? 'checked' : '' ?>> Active</label>
     <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
   </form>
+  <?php if ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0)): ?>
+  <form method="post" action="index.php?page=admin_users" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border, #ddd)"
+        onsubmit="return confirm(<?= json_encode('Generate a temporary password for ' . (string) ($edit['username'] ?? 'this user') . '? They must change it on next login.', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>);">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="generate_temp">
+    <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
+    <p class="help" style="margin-top:0">Reset without typing a password — shows once on the next page.</p>
+    <button class="btn secondary" type="submit">Generate temporary password</button>
+  </form>
+  <?php endif; ?>
 </div>
 </div>
+<script>
+(function () {
+  var form = document.querySelector('form[action="index.php?page=admin_users"] input[name="action"][value="save"]');
+  if (!form) return;
+  form = form.closest('form');
+  var pwd = document.getElementById('users_password');
+  if (!form || !pwd) return;
+  form.addEventListener('submit', function (e) {
+    if (pwd.getAttribute('data-editing-other') !== '1') return;
+    if (!String(pwd.value || '').trim()) return;
+    if (!window.confirm('Set a new password for this user? They must change it on next login.')) {
+      e.preventDefault();
+    }
+  });
+})();
+</script>
 <?php render_footer('admin'); ?>

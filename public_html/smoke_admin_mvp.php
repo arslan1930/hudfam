@@ -139,6 +139,21 @@ if (!str_contains($accountLib, 'function admin_email_taken_by_other')) {
 } else {
     ok('admin_email_taken_by_other helper');
 }
+$authLib = file_get_contents($root . '/includes/auth.php') ?: '';
+if (!str_contains($authLib, 'function generate_temp_password')) {
+    fail('auth.php missing generate_temp_password');
+} else {
+    ok('generate_temp_password helper');
+}
+if (!str_contains($usersPage, "post('action') === 'generate_temp'")
+    && !str_contains($usersPage, 'action\') === \'generate_temp\'')) {
+    // PHP source uses post('action') === 'generate_temp'
+}
+if (!str_contains($usersPage, 'generate_temp')) {
+    fail('users.php missing generate_temp action');
+} else {
+    ok('users.php generate temporary password on edit');
+}
 
 $invoiceManual = file_get_contents($root . '/pages/admin/invoice_manual.php') ?: '';
 if (!str_contains($invoiceManual, "post('action') === 'create_blank'")) {
