@@ -177,7 +177,18 @@
       })
       .then(function (data) {
         lastSavedText = text;
-        var n = typeof data.total === 'number' ? data.total : linesOf(text).length;
+        if (data.domains != null) {
+          var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
+          var saved = normalizeText(savedRaw);
+          if (saved !== normalizeText(ta.value)) {
+            applyingHistory = true;
+            ta.value = savedRaw;
+            lastSnapshot = saved;
+            applyingHistory = false;
+            setStatus('Autosaved — invalid lines were removed so the box matches the sheet.');
+          }
+        }
+        var n = typeof data.total === 'number' ? data.total : linesOf(ta.value).length;
         updateCounts(n);
         setAutosaveLabel('Saved');
         if (data.empty) {
