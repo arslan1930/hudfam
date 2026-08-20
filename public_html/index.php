@@ -153,11 +153,10 @@ if (
     }
 }
 
-// CSRF: every Admin POST (forms + AJAX) must carry a valid token.
-// Team Departments status updates are also CSRF-protected.
+// CSRF: every Admin and Team POST (forms + AJAX) must carry a valid token.
 if (
     ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
-    && (str_starts_with($page, 'admin_') || $page === 'team_departments')
+    && (str_starts_with($page, 'admin_') || str_starts_with($page, 'team_'))
 ) {
     require_csrf();
 }

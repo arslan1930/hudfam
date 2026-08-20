@@ -158,6 +158,7 @@ render_breadcrumbs([
   </div>
   <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem"
         onsubmit="return confirm('Clear ALL site names and comments for <?= h($country) ?>? Extracted Sites stay unchanged.');">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="clear_all">
     <button class="btn danger small" type="submit">Clear country</button>
   </form>
@@ -167,6 +168,7 @@ render_breadcrumbs([
   <h2 style="margin:0 0 0.45rem">Comments</h2>
   <p class="help" style="margin-top:0">Notes for this country sheet (visible to Site Finding + Admin).</p>
   <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-form" autocomplete="off">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_comment">
     <label for="semrush_comment_body">Add comment</label>
     <textarea id="semrush_comment_body" name="body" rows="3" required maxlength="4000"
@@ -194,6 +196,7 @@ render_breadcrumbs([
         <?php if ($canDel): ?>
         <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-delete"
               onsubmit="return confirm('Delete this comment?');">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="delete_comment">
           <input type="hidden" name="comment_id" value="<?= $cid ?>">
           <button class="btn secondary small" type="submit">Delete</button>

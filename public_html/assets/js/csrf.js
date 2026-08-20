@@ -1,5 +1,5 @@
 /**
- * Admin CSRF helper — inject token into forms and same-origin POST fetch/XHR.
+ * CSRF helper — inject token into forms and same-origin POST fetch/XHR (Admin + Team).
  * Requires <meta name="csrf-token" content="..."> in the document head.
  */
 (function () {

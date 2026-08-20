@@ -230,6 +230,7 @@ endif;
               <form method="post" action="<?= h($formAction) ?>" class="camp-draft-delete-form"
                     data-camp-draft-delete
                     onsubmit="return confirm(<?= h(json_encode('Delete draft “' . $title . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="delete_draft">
                 <input type="hidden" name="project_id" value="<?= $projectId ?>">
                 <input type="hidden" name="draft_id" value="<?= $did ?>">
@@ -256,6 +257,7 @@ endif;
       </p>
       <form method="post" action="<?= h($formAction) ?>" class="camp-draft-form" autocomplete="off"
             data-show-processing="<?= $editDraft ? 'Updating draft…' : 'Saving draft…' ?>">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="save_draft">
         <input type="hidden" name="project_id" value="<?= $projectId ?>">
         <input type="hidden" name="draft_id" value="<?= $editDraft ? (int) $editDraft['id'] : 0 ?>">

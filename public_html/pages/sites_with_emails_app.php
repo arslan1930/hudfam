@@ -604,6 +604,7 @@ render_breadcrumbs($crumbs);
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
           data-show-processing="Pushing sites to Admin…"
           data-confirm-push-all="Push ALL <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?&#10;&#10;Those rows will leave this Team working copy.">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="push_to_admin">
       <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
               title="<?= $readyToPush > 0 ? 'Push every site on this country that has at least one email' : 'Add at least one email on a site first' ?>">
@@ -719,6 +720,7 @@ render_breadcrumbs($crumbs);
         <form method="post" action="<?= h($listBase) ?>" class="swe-clear-all-emailed"
               data-swe-clear-all-emailed
               onsubmit="return confirm('Clear ALL emailed marks on <?= h($countryName) ?>?\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.');">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="clear_all_emailed">
           <input type="hidden" name="q" value="<?= h($q) ?>">
           <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
@@ -953,6 +955,7 @@ render_breadcrumbs($crumbs);
     <form method="post" action="<?= h($listBase) ?>"
           data-show-processing="Removing all sites…"
           onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> sites from <?= h($countryName) ?>?');">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
       <button class="btn secondary small danger" type="submit">Remove all</button>
@@ -967,6 +970,7 @@ render_breadcrumbs($crumbs);
   <p class="help">Optional manual add. Most sites arrive from Extracting Results → Push.</p>
   <form method="post" action="<?= h($listBase) ?>" class="swe-add-form"
         data-show-processing="Adding site…">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="save_row">
     <input type="hidden" name="site_id" value="0">
     <div class="form-grid" style="gap:0.65rem">
@@ -998,6 +1002,7 @@ render_breadcrumbs($crumbs);
   <form method="post" action="<?= h($listBase) ?>#remove-by-list" enctype="multipart/form-data"
         data-show-processing="Removing listed sites…"
         onsubmit="return confirm('Remove matching sites from <?= h($countryName) ?>?');">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">
     <textarea name="remove_text" class="inventory-box" rows="6" placeholder="site-to-remove.com"></textarea>
     <label style="display:block;margin-top:0.55rem">CSV (1 column)</label>
