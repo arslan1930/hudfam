@@ -95,7 +95,7 @@ try {
         } elseif ($action === 'add_new' || $action === 'send_tld_column') {
             // Option A: re-filter against the country database — only brand-new sites may be saved.
             if (!$domains) {
-                flash('error', 'Could not read the domain list. Separate again or Push to extract, then retry.');
+                flash('error', 'Could not read the domain list. Separate again or Filter, then retry.');
                 redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
             }
             $filter = filter_domains_against_prospects($domains, $country);
@@ -221,7 +221,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Push to extract</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder. Use <strong>Separate all</strong> to split by domain ending (.es, .com, …).</p>
+    <p class="muted">Paste sites → <strong>Filter</strong> removes sites already in that country → you see <strong>only unique</strong> sites → Add merges them into that folder. Use <strong>Separate all</strong> to split by domain ending (.es, .com, …).</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -302,7 +302,14 @@ render_header('Filter & add', 'team');
   </div>
 
   <div class="actions-sticky">
-    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?> id="filter_submit">Push to extract</button>
+    <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block"
+            id="filter_submit"
+            <?= $country === '' ? 'disabled' : '' ?>
+            title="<?= $country === ''
+                ? 'Select a country first'
+                : 'Remove sites already in this country and show unique only' ?>">
+      Filter unique sites
+    </button>
   </div>
 </form>
 

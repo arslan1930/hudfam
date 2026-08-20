@@ -736,6 +736,12 @@ if (!str_contains($prospectCheckSf, 'Separate all')
 } else {
     ok('Filter & add Separate all UI');
 }
+if (!str_contains($prospectCheckSf, 'Filter unique sites')
+    || str_contains($prospectCheckSf, '>Push to extract<')) {
+    fail('Filter & add CTA still mislabeled Push to extract');
+} else {
+    ok('Filter & add CTA says Filter unique sites');
+}
 if (!str_contains($prospectCheckSf, 'data-tld-workspace')
     || !str_contains($prospectCheckSf, 'data-tld-rail')
     || !str_contains($prospectCheckSf, 'data-tld-panel')) {
