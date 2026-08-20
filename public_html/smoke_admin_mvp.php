@@ -297,6 +297,24 @@ if (!str_contains($indexFull, "str_starts_with(\$page, 'team_')")) {
 } else {
     ok('index.php Team CSRF gate');
 }
+if (!str_contains($indexFull, "\$page === 'account_password'")) {
+    fail('index.php CSRF gate missing account_password');
+} else {
+    ok('index.php account_password CSRF gate');
+}
+$accountPw = file_get_contents($root . '/pages/account_password.php') ?: '';
+if (!str_contains($accountPw, 'csrf_field()')) {
+    fail('account_password form missing csrf_field');
+} else {
+    ok('account_password csrf_field');
+}
+if (!str_contains($indexFull, 'Page not found')
+    || !str_contains($indexFull, 'Go to dashboard')
+    || !str_contains($indexFull, 'legacyPageRedirects')) {
+    fail('index.php missing branded 404 / legacy redirects');
+} else {
+    ok('index.php branded 404 + legacy redirects');
+}
 if (!is_file($root . '/assets/js/csrf.js')) {
     fail('missing assets/js/csrf.js');
 } else {
