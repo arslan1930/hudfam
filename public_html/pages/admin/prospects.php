@@ -288,7 +288,10 @@ if (!$inCountry && !$emptyCountry) {
                   <td class="actions">
                     <a class="btn small" href="<?= h($openUrl) ?>">Go to site</a>
                     <form method="post" action="index.php?page=admin_prospects#super-search" class="inline-form"
-                          onsubmit="return confirm('Remove <?= h((string) $hit['domain']) ?> from <?= h($hitCountry !== '' ? $hitCountry : 'No country') ?>?');">
+                          onsubmit="return confirm(<?= h(json_encode(
+                              'Remove ' . (string) $hit['domain'] . ' from ' . ($hitCountry !== '' ? $hitCountry : 'No country') . '?',
+                              JSON_UNESCAPED_UNICODE
+                          )) ?>);">
                       <input type="hidden" name="action" value="remove_site">
                       <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
                       <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
@@ -681,9 +684,9 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     </div>
   <?php else: ?>
     <div class="actions" style="margin-top:0.8rem">
-      <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
+      <?php if ($pageNum > 1): ?><a href="index.php?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <span>Page <?= $pageNum ?> / <?= $pages ?></span>
-      <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <?php if ($pageNum < $pages): ?><a href="index.php?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
     </div>
   <?php endif; ?>
 </div>
@@ -699,7 +702,10 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     method="post"
     action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#remove-by-list"
     enctype="multipart/form-data"
-    onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?> (Our database)?');"
+    onsubmit="return confirm(<?= h(json_encode(
+        'Remove all matching sites from this list in ' . $countryName . ' (Our database)?',
+        JSON_UNESCAPED_UNICODE
+    )) ?>);"
   >
     <input type="hidden" name="action" value="remove_list">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">

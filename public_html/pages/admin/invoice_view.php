@@ -79,7 +79,6 @@ $editable = $isManual && !$isPaid && !$print;
 if ($print) {
     $editable = false;
     $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
     header('Content-Type: text/html; charset=utf-8');
     ?>
 <!DOCTYPE html>
@@ -89,7 +88,6 @@ if ($print) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Invoice <?= h($invoice['invoice_number']) ?></title>
   <link rel="stylesheet" href="<?= h($cssPhp) ?>">
-  <link rel="stylesheet" href="<?= h($cssFile) ?>">
   <style>
     @page { size: A4; margin: 12mm; }
     html, body.invoice-print-body {
