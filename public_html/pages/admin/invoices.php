@@ -61,7 +61,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$invoices = list_invoices();
+$invoicesAll = list_invoices();
+$invoiceQ = trim((string) get('q'));
+if ($invoiceQ !== '') {
+    $needle = mb_strtolower($invoiceQ);
+    $invoicesAll = array_values(array_filter(
+        $invoicesAll,
+        static function (array $inv) use ($needle): bool {
+            $hay = mb_strtolower(implode(' ', [
+                (string) ($inv['invoice_number'] ?? ''),
+                (string) ($inv['client_name'] ?? ''),
+                (string) ($inv['admin_note'] ?? ''),
+                (string) ($inv['status'] ?? ''),
+            ]));
+            return str_contains($hay, $needle);
+        }
+    ));
+}
+$perPage = 50;
+$pageNum = max(1, (int) get('p', 1));
+$totalInvoices = count($invoicesAll);
+$totalPages = max(1, (int) ceil($totalInvoices / $perPage));
+if ($pageNum > $totalPages) {
+    $pageNum = $totalPages;
+}
+$invoices = array_slice($invoicesAll, ($pageNum - 1) * $perPage, $perPage);
+
+$invoiceListQs = static function (array $overrides) use ($invoiceQ): string {
+    $params = array_merge([
+        'page' => 'admin_invoices',
+        'q' => $invoiceQ,
+        'p' => '1',
+    ], $overrides);
+    $bits = [];
+    foreach ($params as $k => $v) {
+        $v = (string) $v;
+        if ($v === '' || ($k === 'p' && $v === '1')) {
+            continue;
+        }
+        $bits[] = rawurlencode((string) $k) . '=' . rawurlencode($v);
+    }
+    return 'index.php?' . implode('&', $bits);
+};
 
 render_header('Invoices', 'admin');
 ?>
@@ -84,23 +125,34 @@ render_header('Invoices', 'admin');
 <section class="card">
   <div class="invoice-list-toolbar">
     <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
-    <?php if ($invoices): ?>
-      <label class="sheet-search invoice-list-search" for="invoice-search">
-        <span class="visually-hidden">Search invoices</span>
-        <input id="invoice-search" type="search" placeholder="Search…"
-               autocomplete="off" spellcheck="false" data-no-draft
-               title="Type to filter · Enter = next match · Shift+Enter = previous">
-        <span class="sheet-search-meta muted" data-invoice-search-meta hidden></span>
-      </label>
-    <?php endif; ?>
+    <form method="get" action="index.php" class="sheet-search invoice-list-search" style="display:flex;gap:0.4rem;align-items:center;margin:0">
+      <input type="hidden" name="page" value="admin_invoices">
+      <label class="visually-hidden" for="invoice-search">Search invoices</label>
+      <input id="invoice-search" type="search" name="q" value="<?= h($invoiceQ) ?>"
+             placeholder="Search…" autocomplete="off" spellcheck="false" data-no-draft
+             title="Search invoice number, client, or note">
+      <button class="btn secondary small" type="submit">Search</button>
+      <?php if ($invoiceQ !== ''): ?>
+        <a class="btn secondary small" href="index.php?page=admin_invoices">Clear</a>
+      <?php endif; ?>
+    </form>
   </div>
-  <?php if (!$invoices): ?>
+  <?php if (!$invoices && $totalInvoices < 1): ?>
     <div class="empty-state">
-      <p>No invoices yet. Generate one from unpaid completed articles on a client sheet.</p>
+      <p><?= $invoiceQ !== '' ? 'No invoices match this search.' : 'No invoices yet. Generate one from unpaid completed articles on a client sheet.' ?></p>
+      <?php if ($invoiceQ === ''): ?>
       <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
+      <?php endif; ?>
     </div>
   <?php else: ?>
+    <p class="muted" style="margin:0 0 0.65rem">
+      <?= (int) $totalInvoices ?> invoice<?= $totalInvoices === 1 ? '' : 's' ?>
+      <?php if ($totalPages > 1): ?>
+        · page <?= (int) $pageNum ?> / <?= (int) $totalPages ?>
+        · showing <?= count($invoices) ?>
+      <?php endif; ?>
+    </p>
     <div class="table-wrap">
       <table class="invoice-list-table" id="invoice-list-table">
         <thead>
@@ -216,108 +268,20 @@ render_header('Invoices', 'admin');
             </td>
           </tr>
         <?php endforeach; ?>
-          <tr class="sheet-search-empty" data-invoice-search-empty hidden>
-            <td colspan="7" class="muted">No invoices match your search.</td>
-          </tr>
         </tbody>
       </table>
     </div>
-    <script>
-    (function () {
-      var input = document.getElementById('invoice-search');
-      if (!input) return;
-      var matchRows = [];
-      var matchIndex = -1;
-      var meta = document.querySelector('[data-invoice-search-meta]');
-      var empty = document.querySelector('[data-invoice-search-empty]');
-
-      function clearHits() {
-        document.querySelectorAll('.sheet-search-hit').forEach(function (el) {
-          el.classList.remove('sheet-search-hit');
-        });
-      }
-
-      function filterInvoices() {
-        var q = String(input.value || '').trim().toLowerCase();
-        var rows = document.querySelectorAll('[data-invoice-row]');
-        var shown = 0;
-        matchRows = [];
-        clearHits();
-        rows.forEach(function (row) {
-          var hay = String(row.getAttribute('data-search') || '');
-          var hit = !q || hay.indexOf(q) !== -1;
-          row.hidden = !hit;
-          if (hit) {
-            shown++;
-            if (q) matchRows.push(row);
-          }
-        });
-        if (empty) empty.hidden = !(q && shown === 0);
-        if (matchIndex >= matchRows.length) matchIndex = matchRows.length ? 0 : -1;
-        if (meta) {
-          if (q) {
-            meta.hidden = false;
-            if (!matchRows.length) {
-              meta.textContent = '0 · Enter = next';
-            } else if (matchIndex >= 0) {
-              meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
-            } else {
-              meta.textContent = matchRows.length + (matchRows.length === 1 ? ' match' : ' matches')
-                + ' · Enter = next';
-            }
-          } else {
-            meta.hidden = true;
-            meta.textContent = '';
-            matchIndex = -1;
-          }
-        }
-      }
-
-      function jumpToMatch(dir) {
-        var q = String(input.value || '').trim();
-        if (!q) return;
-        filterInvoices();
-        if (!matchRows.length) return;
-        if (matchIndex < 0) {
-          matchIndex = dir > 0 ? 0 : matchRows.length - 1;
-        } else {
-          matchIndex = (matchIndex + dir + matchRows.length) % matchRows.length;
-        }
-        var row = matchRows[matchIndex];
-        if (!row) return;
-        clearHits();
-        row.hidden = false;
-        row.classList.add('sheet-search-hit');
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        if (meta) {
-          meta.hidden = false;
-          meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
-        }
-        window.setTimeout(function () {
-          try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
-          try {
-            var len = String(input.value || '').length;
-            input.setSelectionRange(len, len);
-          } catch (err2) {}
-        }, 0);
-      }
-
-      input.addEventListener('input', function () {
-        matchIndex = -1;
-        filterInvoices();
-      });
-      input.addEventListener('search', function () {
-        matchIndex = -1;
-        filterInvoices();
-      });
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          jumpToMatch(e.shiftKey ? -1 : 1);
-        }
-      });
-    })();
-    </script>
+    <?php if ($totalPages > 1): ?>
+    <p class="muted" style="margin-top:0.85rem">
+      Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>
+      <?php if ($pageNum > 1): ?>
+        · <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum - 1)])) ?>">Previous</a>
+      <?php endif; ?>
+      <?php if ($pageNum < $totalPages): ?>
+        · <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum + 1)])) ?>">Next</a>
+      <?php endif; ?>
+    </p>
+    <?php endif; ?>
     <script>
     (function () {
       function fitTextarea(ta) {

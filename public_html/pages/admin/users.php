@@ -318,6 +318,34 @@ if ($params) {
 }
 $admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
 
+$perPage = 50;
+$pageNum = max(1, (int) get('p', 1));
+$totalUsers = count($users);
+$totalPages = max(1, (int) ceil($totalUsers / $perPage));
+if ($pageNum > $totalPages) {
+    $pageNum = $totalPages;
+}
+$usersPage = array_slice($users, ($pageNum - 1) * $perPage, $perPage);
+
+$usersListQs = static function (array $overrides) use ($q, $roleFilter, $activeFilter, $editId): string {
+    $params = array_merge([
+        'page' => 'admin_users',
+        'q' => $q,
+        'role' => $roleFilter,
+        'active' => $activeFilter,
+        'edit' => $editId > 0 ? (string) $editId : '',
+        'p' => '1',
+    ], $overrides);
+    $bits = [];
+    foreach ($params as $k => $v) {
+        $v = (string) $v;
+        if ($v === '' || ($k === 'p' && $v === '1')) {
+            continue;
+        }
+        $bits[] = rawurlencode((string) $k) . '=' . rawurlencode($v);
+    }
+    return 'index.php?' . implode('&', $bits);
+};
 $deptByUser = [];
 if (function_exists('ensure_departments_schema')) {
     try {
@@ -440,7 +468,13 @@ render_header('Admins & users', 'admin');
       <a class="btn secondary" href="index.php?page=admin_users<?= $editId ? '&edit=' . (int) $editId : '' ?>">Clear</a>
     <?php endif; ?>
   </form>
-  <p class="muted" style="margin:0 0 0.75rem"><?= count($users) ?> user<?= count($users) === 1 ? '' : 's' ?></p>
+  <p class="muted" style="margin:0 0 0.75rem">
+    <?= (int) $totalUsers ?> user<?= $totalUsers === 1 ? '' : 's' ?>
+    <?php if ($totalPages > 1): ?>
+      · page <?= (int) $pageNum ?> / <?= (int) $totalPages ?>
+      · showing <?= count($usersPage) ?>
+    <?php endif; ?>
+  </p>
   <table>
     <thead>
       <tr>
@@ -455,7 +489,7 @@ render_header('Admins & users', 'admin');
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($users as $u): ?>
+    <?php foreach ($usersPage as $u): ?>
       <?php
         $uid = (int) $u['id'];
         $depts = $deptByUser[$uid] ?? [];
@@ -470,7 +504,7 @@ render_header('Admins & users', 'admin');
         <td><?= !empty($u['must_change_password']) ? 'Yes' : 'No' ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
         <td class="actions">
-          <a href="index.php?page=admin_users&edit=<?= $uid ?>">Edit</a>
+          <a href="<?= h($usersListQs(['edit' => (string) $uid, 'p' => (string) $pageNum])) ?>">Edit</a>
           <?php if ($u['role'] === 'team'): ?>
             <a href="index.php?page=admin_departments">Departments</a>
             <a href="index.php?page=admin_prospect_batches&amp;user=<?= $uid ?>">Site adding history</a>
@@ -478,11 +512,22 @@ render_header('Admins & users', 'admin');
         </td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$users): ?>
+    <?php if (!$usersPage): ?>
       <tr><td colspan="8" class="muted">No users match these filters.</td></tr>
     <?php endif; ?>
     </tbody>
   </table>
+  <?php if ($totalPages > 1): ?>
+  <p class="muted" style="margin-top:0.85rem">
+    Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>
+    <?php if ($pageNum > 1): ?>
+      · <a href="<?= h($usersListQs(['p' => (string) ($pageNum - 1)])) ?>">Previous</a>
+    <?php endif; ?>
+    <?php if ($pageNum < $totalPages): ?>
+      · <a href="<?= h($usersListQs(['p' => (string) ($pageNum + 1)])) ?>">Next</a>
+    <?php endif; ?>
+  </p>
+  <?php endif; ?>
 </div>
 <div class="card">
   <h2><?= $edit ? 'Edit user' : 'New admin / team user' ?></h2>
