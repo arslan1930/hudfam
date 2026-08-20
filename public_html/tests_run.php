@@ -1785,6 +1785,8 @@ try {
                 'team_prospect_check',
                 'team_prospect_batches',
                 'team_prospect_batch',
+                'team_prospects',
+                'team_prospect_form',
                 'team_semrush_research',
                 'team_semrush_sheet',
             ],

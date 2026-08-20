@@ -203,6 +203,8 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_prospect_check';
                 $pages[] = 'team_prospect_batches';
                 $pages[] = 'team_prospect_batch';
+                $pages[] = 'team_prospects';
+                $pages[] = 'team_prospect_form';
                 $pages[] = 'team_semrush_research';
                 $pages[] = 'team_semrush_sheet';
             } elseif ($slug === 'site_extracting') {
@@ -221,6 +223,34 @@ function department_tool_pages_for_user(array $user): array
         return [];
     }
     return array_values(array_unique($pages));
+}
+
+/**
+ * True when this Team user may open a page (department tool ACL).
+ * Admins always true. Waiting (no dept) users only core waiting pages.
+ */
+function team_page_unlocked(array $user, string $page): bool
+{
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    if (($user['role'] ?? '') !== 'team') {
+        return false;
+    }
+    $core = ['team_dashboard', 'team_departments', 'account_password', 'presence_ping', 'login', 'logout'];
+    if (team_user_awaits_department($user)) {
+        return in_array($page, $core, true);
+    }
+    if (!user_is_department_scoped($user)) {
+        return true;
+    }
+    $allowed = array_merge($core, department_tool_pages_for_user($user));
+    // Legacy stubs redirect into Filter & add when that tool is unlocked.
+    if (in_array($page, ['team_prospects', 'team_prospect_form'], true)
+        && in_array('team_prospect_check', $allowed, true)) {
+        return true;
+    }
+    return in_array($page, $allowed, true);
 }
 
 /** Short help for Admin department member assignment. */

@@ -387,8 +387,12 @@ if (!$inCountry) {
         <?php if ($isAdmin): ?>
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
-          <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
-          <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
+          <?php if (team_page_unlocked($user, 'team_admin_emails_delete')): ?>
+            <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+          <?php endif; ?>
+          <?php if (team_page_unlocked($user, 'team_extracting')): ?>
+            <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
+          <?php endif; ?>
         <?php endif; ?>
       </div>
     </div>
