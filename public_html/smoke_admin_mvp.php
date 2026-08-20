@@ -660,10 +660,20 @@ if (!str_contains($sweLib, "LEFT(domain, 8) <> '__blank_'")) {
 }
 
 $sweApp = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
-if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'OVERWRITE')) {
-    fail('SWE UI missing overwrite confirm');
+if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'MERGE Team emails')) {
+    fail('SWE UI missing merge-on-conflict confirm');
 } else {
-    ok('SWE UI overwrite confirm');
+    ok('SWE UI merge-on-conflict confirm');
+}
+if (str_contains($sweApp, 'merge is not available yet') || str_contains($sweLib, 'merge is not available yet')) {
+    fail('SWE still says merge is not available');
+} else {
+    ok('SWE merge blanks available');
+}
+if (!str_contains($sweLib, 'merge_swe_email_slots_prefer_admin')) {
+    fail('sites_with_emails.php missing merge_swe_email_slots_prefer_admin');
+} else {
+    ok('SWE merge_swe_email_slots_prefer_admin helper');
 }
 if (!str_contains($sweApp, 'data-swe-open-site')
     || !str_contains($sweApp, 'data-swe-open-bulk')
