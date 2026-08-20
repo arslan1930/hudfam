@@ -470,12 +470,50 @@ function add_sites_with_emails_domains_to_scope(
 }
 
 /**
- * Team → Admin: push one site row (must have at least one email), then remove it from Team.
+ * Domains already in Admin that a Team push for this country would overwrite.
  *
- * @return array{ok:bool,error?:string,pushed?:int,updated?:int,cleared?:int,domain?:string,country?:string,site_count?:int}
+ * @return list<string>
  */
-function push_one_site_with_emails_team_to_admin(int $siteId, array $user): array
+function list_sites_with_emails_push_conflict_domains(string $country): array
 {
+    ensure_sites_with_emails_schema();
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    $team = swe_table('team');
+    $admin = swe_table('admin');
+    $stmt = db()->prepare(
+        "SELECT t.domain
+         FROM {$team} t
+         INNER JOIN {$admin} a ON a.country = t.country AND a.domain = t.domain
+         WHERE t.country=?
+           AND (t.email1<>'' OR t.email2<>'' OR t.email3<>'' OR t.email4<>'')
+         ORDER BY t.domain ASC"
+    );
+    $stmt->execute([$country]);
+    $out = [];
+    while ($domain = $stmt->fetchColumn()) {
+        $out[] = (string) $domain;
+    }
+    return $out;
+}
+
+function count_sites_with_emails_push_conflicts(string $country): int
+{
+    return count(list_sites_with_emails_push_conflict_domains($country));
+}
+
+/**
+ * Team → Admin: push one site row (must have at least one email), then remove it from Team.
+ * When Admin already has the domain, require $confirmOverwrite (UI confirm) before replacing emails.
+ *
+ * @return array{ok:bool,error?:string,needs_confirm?:bool,pushed?:int,updated?:int,cleared?:int,domain?:string,country?:string,site_count?:int}
+ */
+function push_one_site_with_emails_team_to_admin(
+    int $siteId,
+    array $user,
+    ?string $expectCountry = null,
+    bool $confirmOverwrite = false
+): array {
     ensure_sites_with_emails_schema();
     $team = swe_table('team');
     $admin = swe_table('admin');
@@ -498,6 +536,14 @@ function push_one_site_with_emails_team_to_admin(int $siteId, array $user): arra
         return ['ok' => false, 'error' => 'Site row is incomplete.'];
     }
 
+    if ($expectCountry !== null && $expectCountry !== '') {
+        $expectCanon = resolve_canonical_country($expectCountry);
+        $expectName = $expectCanon ? $expectCanon['name'] : trim($expectCountry);
+        if ($expectName !== $country) {
+            return ['ok' => false, 'error' => 'That site is not on this country sheet.'];
+        }
+    }
+
     $slots = email_slots_from_row($row);
     $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     if (!$hasEmail) {
@@ -507,6 +553,16 @@ function push_one_site_with_emails_team_to_admin(int $siteId, array $user): arra
     $exists = db()->prepare("SELECT id FROM {$admin} WHERE country=? AND domain=? LIMIT 1");
     $exists->execute([$country, $domain]);
     $already = (int) $exists->fetchColumn() > 0;
+    if ($already && !$confirmOverwrite) {
+        return [
+            'ok' => false,
+            'needs_confirm' => true,
+            'error' => $domain . ' already exists in Sites with emails - Admin. Confirm to overwrite those Admin emails (merge is not available yet).',
+            'domain' => $domain,
+            'country' => $country,
+            'site_count' => count_sites_with_emails_for_country($country, 'team'),
+        ];
+    }
 
     $ins = db()->prepare(
         "INSERT INTO {$admin}
@@ -570,11 +626,15 @@ function push_one_site_with_emails_team_to_admin(int $siteId, array $user): arra
 /**
  * Team → Admin: copy rows that have at least one email into the admin archive,
  * then remove those rows from the Team working copy (sites without emails stay).
+ * When any domain already exists in Admin, require $confirmOverwrite before replacing emails.
  *
- * @return array{pushed:int,updated:int,cleared:int,skipped_empty:int,country:string}
+ * @return array{ok:bool,error?:string,needs_confirm?:bool,conflicts?:int,pushed:int,updated:int,cleared:int,skipped_empty:int,country:string}
  */
-function push_sites_with_emails_team_to_admin(string $country, array $user): array
-{
+function push_sites_with_emails_team_to_admin(
+    string $country,
+    array $user,
+    bool $confirmOverwrite = false
+): array {
     ensure_sites_with_emails_schema();
     @set_time_limit(0);
     $canon = require_canonical_country($country);
@@ -582,6 +642,21 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
     $team = swe_table('team');
     $admin = swe_table('admin');
     $uid = (int) ($user['id'] ?? 0) ?: null;
+
+    $conflicts = count_sites_with_emails_push_conflicts($country);
+    if ($conflicts > 0 && !$confirmOverwrite) {
+        return [
+            'ok' => false,
+            'needs_confirm' => true,
+            'conflicts' => $conflicts,
+            'error' => $conflicts . ' site(s) already exist in Sites with emails - Admin. Confirm to overwrite those Admin emails (merge is not available yet).',
+            'pushed' => 0,
+            'updated' => 0,
+            'cleared' => 0,
+            'skipped_empty' => 0,
+            'country' => $country,
+        ];
+    }
 
     $sel = db()->prepare(
         "SELECT domain, country, language, region, email1, email2, email3, email4, extract_batch_id
@@ -675,6 +750,8 @@ function push_sites_with_emails_team_to_admin(string $country, array $user): arr
     }
 
     return [
+        'ok' => true,
+        'conflicts' => $conflicts,
         'pushed' => $pushed,
         'updated' => $updated,
         'cleared' => $cleared,
@@ -1394,21 +1471,23 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
     $stmt = db()->prepare(
         "SELECT id, domain, country, email1, email2, email3, email4
          FROM sites_with_emails_admin
-         WHERE domain LIKE ?
-            OR country LIKE ?
-            OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
+         WHERE LEFT(domain, 8) <> '__blank_'
+           AND (
+             domain LIKE ?
+             OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
+           )
          ORDER BY
            CASE
-             WHEN domain = ? THEN 0
+             WHEN LOWER(domain) = ? THEN 0
              WHEN domain LIKE ? THEN 1
-             WHEN email1 = ? OR email2 = ? OR email3 = ? OR email4 = ? THEN 2
+             WHEN LOWER(email1) = ? OR LOWER(email2) = ? OR LOWER(email3) = ? OR LOWER(email4) = ? THEN 2
              ELSE 3
            END,
            country ASC, domain ASC
          LIMIT {$limit}"
     );
     $stmt->execute([
-        $like, $like, $like, $like, $like, $like,
+        $like, $like, $like, $like, $like,
         $q,
         $q . '%',
         $q, $q, $q, $q,
@@ -1435,10 +1514,6 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
                     $matched = $e;
                     break;
                 }
-            }
-            if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
-                $matchType = 'country';
-                $matched = $country;
             }
         }
         $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';

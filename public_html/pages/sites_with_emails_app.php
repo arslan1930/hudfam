@@ -280,16 +280,23 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'push_site' && $isTeam) {
         $siteId = (int) post('site_id');
-        $result = push_one_site_with_emails_team_to_admin($siteId, $sweUser);
+        $confirmOverwrite = post('confirm_overwrite') === '1';
+        $result = push_one_site_with_emails_team_to_admin(
+            $siteId,
+            $sweUser,
+            $countryName,
+            $confirmOverwrite
+        );
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
             if (!$result['ok']) {
-                http_response_code(400);
+                http_response_code(!empty($result['needs_confirm']) ? 409 : 400);
             }
             $left = (int) ($result['site_count'] ?? count_sites_with_emails_for_country($countryName, 'team'));
             echo json_encode($result + [
                 'ready_count' => count_sites_with_emails_ready_to_push($countryName),
-                'redirect' => $left < 1 ? $sweBase : null,
+                'conflict_count' => count_sites_with_emails_push_conflicts($countryName),
+                'redirect' => ($result['ok'] ?? false) && $left < 1 ? $sweBase : null,
             ]);
             exit;
         }
@@ -299,8 +306,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         flash(
             'ok',
-            'Pushed ' . (string) ($result['domain'] ?? 'site')
-            . ' to Sites with emails - Admin · cleared from Team.'
+            ((!empty($result['updated'])) ? 'Overwrote Admin emails for ' : 'Pushed ')
+            . (string) ($result['domain'] ?? 'site')
+            . ' · cleared from Team.'
         );
         $left = (int) ($result['site_count'] ?? 0);
         redirect($left > 0 ? $back : $sweBase);
@@ -313,13 +321,18 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'All email boxes are empty. Fill at least one email on a site, then Push.');
             redirect($back);
         }
-        $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser);
+        $confirmOverwrite = post('confirm_overwrite') === '1';
+        $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser, $confirmOverwrite);
+        if (empty($pushed['ok'])) {
+            flash('error', (string) ($pushed['error'] ?? 'Could not push to Admin.'));
+            redirect($back);
+        }
         $msg = 'Pushed all ' . ((int) $pushed['pushed'] + (int) $pushed['updated'])
             . ' site(s) with emails to Sites with emails - Admin · ' . $pushed['country'];
         if ((int) $pushed['pushed'] > 0 || (int) $pushed['updated'] > 0) {
             $msg .= ' (' . (int) $pushed['pushed'] . ' new';
             if ((int) $pushed['updated'] > 0) {
-                $msg .= ', ' . (int) $pushed['updated'] . ' updated';
+                $msg .= ', ' . (int) $pushed['updated'] . ' overwritten';
             }
             $msg .= ')';
         }
@@ -397,7 +410,7 @@ if (!$inCountry) {
       </div>
     </div>
 
-    <?php if ($isTeam): ?>
+    <?php if ($isTeam && team_page_unlocked($sweUser, 'team_admin_emails_delete')): ?>
     <div class="card" style="margin-bottom:1rem">
       <h2><?= label_with_info('Admin emails search', 'Live search across Sites with emails - Admin. Delete the whole site row, or remove one email only and keep the site name.') ?></h2>
       <p class="help">
@@ -543,6 +556,9 @@ $pages = $inv['pages'];
 $countryTotal = count_sites_with_emails_for_country($countryName, $sweScope);
 $sentStats = ($sweScope === 'admin') ? count_sites_with_emails_sent_stats($countryName) : null;
 $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0;
+$pushConflicts = $isTeam ? list_sites_with_emails_push_conflict_domains($countryName) : [];
+$pushConflictSet = $pushConflicts !== [] ? array_fill_keys($pushConflicts, true) : [];
+$pushConflictCount = count($pushConflicts);
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $listBase = append_sheet_per_page_query($listBase, $perPage);
 $csvUrl = $listBase . '&export=csv';
@@ -607,11 +623,25 @@ render_breadcrumbs($crumbs);
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
           data-show-processing="Pushing sites to Admin…"
-          data-confirm-push-all="Push ALL <?= (int) $readyToPush ?> site(s) with emails to Sites with emails - Admin?&#10;&#10;Those rows will leave this Team working copy.">
+          data-conflict-count="<?= (int) $pushConflictCount ?>"
+          data-confirm-push-all="<?php
+            $pushAllMsg = 'Push ALL ' . (int) $readyToPush . ' site(s) with emails to Sites with emails - Admin?'
+                . "\n\nThose rows will leave this Team working copy.";
+            if ($pushConflictCount > 0) {
+                $pushAllMsg .= "\n\n" . (int) $pushConflictCount
+                    . ' already exist in Admin — Push will OVERWRITE those Admin emails (merge is not available yet).';
+            }
+            echo h($pushAllMsg);
+          ?>">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="push_to_admin">
+      <input type="hidden" name="confirm_overwrite" value="0" id="swe-push-confirm-overwrite">
       <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
-              title="<?= $readyToPush > 0 ? 'Push every site on this country that has at least one email' : 'Add at least one email on a site first' ?>">
+              title="<?= $readyToPush > 0
+                  ? ($pushConflictCount > 0
+                      ? 'Push every ready site · ' . (int) $pushConflictCount . ' will overwrite Admin'
+                      : 'Push every site on this country that has at least one email')
+                  : 'Add at least one email on a site first' ?>">
         Push all to Admin
       </button>
     </form>
@@ -655,6 +685,9 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
+  <?php if ($pushConflictCount > 0): ?>
+    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before overwriting those emails.
+  <?php endif; ?>
 </p>
 <?php elseif ($isAdminAll): ?>
 <p class="help">
@@ -778,6 +811,7 @@ render_breadcrumbs($crumbs);
           $e3 = (string) $s['email3'];
           $e4 = (string) $s['email4'];
           $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
+          $willOverwrite = $isTeam && isset($pushConflictSet[$domain]);
           $isEmailed = $sweScope === 'admin' && (int) ($s['email_sent'] ?? 0) === 1;
           $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
           if ($sweScope === 'admin') {
@@ -844,19 +878,31 @@ render_breadcrumbs($crumbs);
                 Clear up to
               </button>
               <?php endif; ?>
-              <?php if ($isTeam): ?>
+              <?php if ($isTeam):
+                  $pushConfirm = $willOverwrite
+                      ? 'Push ' . $domain . ' to Sites with emails - Admin?\n\n'
+                        . 'This site ALREADY EXISTS in Admin. Push will OVERWRITE those Admin emails '
+                        . '(merge is not available yet).\n\nThis row will leave the Team working copy.'
+                      : 'Push ' . $domain . ' to Sites with emails - Admin?\n\nThis row will leave the Team working copy.';
+                  ?>
               <button class="btn small" type="submit" form="swe-push-<?= $sid ?>"
                       data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
-                      title="<?= $hasEmail ? 'Push this site to Admin' : 'Add at least one email first' ?>"
-                      onclick="return confirm('Push <?= h($domain) ?> to Sites with emails - Admin?\n\nThis row will leave the Team working copy.');">Push</button>
+                      data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>"
+                      title="<?= $hasEmail
+                          ? ($willOverwrite ? 'Overwrite existing Admin emails for this site' : 'Push this site to Admin')
+                          : 'Add at least one email first' ?>"
+                      onclick="return confirm(<?= h(json_encode($pushConfirm, JSON_UNESCAPED_UNICODE)) ?>);">Push</button>
               <?php endif; ?>
               <button class="btn secondary small" type="submit" form="swe-remove-<?= $sid ?>"
                       onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
             </div>
             <?php if ($isTeam): ?>
-            <form id="swe-push-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-push hidden>
+            <form id="swe-push-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-push
+                  data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>" hidden>
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="push_site">
               <input type="hidden" name="site_id" value="<?= $sid ?>">
+              <input type="hidden" name="confirm_overwrite" value="0" data-swe-confirm-overwrite>
               <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
             </form>

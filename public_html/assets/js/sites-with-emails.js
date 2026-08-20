@@ -565,6 +565,11 @@
         msg = msg.replace(/ALL \d+ site\(s\)/, 'ALL ' + String(readyLabel.textContent || '').trim() + ' site(s)');
       }
       if (!window.confirm(msg)) return;
+      var overwriteField = document.getElementById('swe-push-confirm-overwrite');
+      if (overwriteField) {
+        var conflicts = parseInt(pushAllForm.getAttribute('data-conflict-count') || '0', 10) || 0;
+        overwriteField.value = conflicts > 0 ? '1' : '0';
+      }
       var btn = document.getElementById('swe-push-btn');
       if (btn) btn.disabled = true;
       setStatus('Saving emails before push…', false, true);
@@ -600,6 +605,11 @@
 
     if (form.matches('[data-swe-push]')) {
       e.preventDefault();
+      // User already confirmed via the Push button onclick (includes overwrite warning when needed).
+      var overwriteInput = form.querySelector('[data-swe-confirm-overwrite], [name="confirm_overwrite"]');
+      if (overwriteInput && form.getAttribute('data-admin-conflict') === '1') {
+        overwriteInput.value = '1';
+      }
       // Flush pending autosave so emails are on the server before push
       var row = document.querySelector('[data-swe-row][data-site-id="' + form.querySelector('[name="site_id"]').value + '"]');
       var saveForm = row && row.querySelector('[data-swe-save]');

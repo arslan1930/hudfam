@@ -9,24 +9,9 @@ ensure_sites_with_emails_schema();
 $base = 'index.php?page=team_admin_emails_delete';
 
 // Allow Communication Team + Email Extracting (and unscoped team / admin).
-if (user_is_department_scoped($user)) {
-    $ok = false;
-    try {
-        $ed = get_department_by_slug('email_extracting');
-        $cd = get_department_by_slug('communication');
-        if ($ed && user_in_department((int) $user['id'], (int) $ed['id'])) {
-            $ok = true;
-        }
-        if ($cd && user_in_department((int) $user['id'], (int) $cd['id'])) {
-            $ok = true;
-        }
-    } catch (Throwable $e) {
-        $ok = false;
-    }
-    if (!$ok) {
-        flash('error', 'This tool is for Communication Team or Email Extracting.');
-        redirect('index.php?page=team_departments');
-    }
+if (!team_page_unlocked($user, 'team_admin_emails_delete')) {
+    flash('error', 'This tool is for Communication Team or Email Extracting.');
+    redirect('index.php?page=team_departments');
 }
 
 // JSON suggest — all countries
@@ -113,7 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
-$inCommunication = function_exists('user_in_communication_team') && user_in_communication_team($user);
+$canSitesEmails = team_page_unlocked($user, 'team_sites_emails');
+$canCampaigns = team_page_unlocked($user, 'team_email_campaigns');
 
 render_header('Admin emails search', 'team');
 render_breadcrumbs([
@@ -128,14 +114,15 @@ render_breadcrumbs([
       Search <strong>Sites with emails - Admin</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.
       Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
-      Removing the <strong>last</strong> email also deletes the site row.
+      Removing the <strong>last</strong> email also deletes the site row from Admin + Final.
     </p>
   </div>
   <div class="actions">
-    <?php if ($inCommunication): ?>
-      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
-    <?php else: ?>
+    <?php if ($canSitesEmails): ?>
       <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+    <?php endif; ?>
+    <?php if ($canCampaigns): ?>
+      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
     <?php endif; ?>
   </div>
 </div>

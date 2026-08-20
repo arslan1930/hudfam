@@ -536,12 +536,40 @@ try {
     )->execute();
     $fourPush = push_one_site_with_emails_team_to_admin(
         (int) db()->query("SELECT id FROM sites_with_emails_team WHERE domain='txfpush-four.com' LIMIT 1")->fetchColumn(),
-        $teamUser
+        $teamUser,
+        'Germany'
     );
     if (empty($fourPush['ok'])) {
         fail('four-slot push failed: ' . ($fourPush['error'] ?? '?'));
     } else {
         pass('four-slot push ok');
+    }
+    $wrongCountry = push_one_site_with_emails_team_to_admin(
+        (int) db()->query("SELECT id FROM sites_with_emails_team WHERE domain='txfpush-noemail.com' LIMIT 1")->fetchColumn() ?: 0,
+        $teamUser,
+        'France'
+    );
+    // noemail row may lack emails; use a fresh row for country bind check
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfpush-bind.com','Germany','German','europe','b@bind.test','','','')
+         ON DUPLICATE KEY UPDATE email1='b@bind.test'"
+    )->execute();
+    $bindId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_team WHERE domain='txfpush-bind.com' LIMIT 1"
+    )->fetchColumn();
+    $wrongCountry = push_one_site_with_emails_team_to_admin($bindId, $teamUser, 'France');
+    if (empty($wrongCountry['ok']) && str_contains((string) ($wrongCountry['error'] ?? ''), 'not on this country')) {
+        pass('push_site rejects country mismatch');
+    } else {
+        fail('country bind: ' . json_encode($wrongCountry));
+    }
+    $boundPush = push_one_site_with_emails_team_to_admin($bindId, $teamUser, 'Germany');
+    if (!empty($boundPush['ok'])) {
+        pass('push_site accepts matching country');
+    } else {
+        fail('country match push: ' . json_encode($boundPush));
     }
     $fourAdmin = db()->query(
         "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin WHERE domain='txfpush-four.com' LIMIT 1"
@@ -1486,11 +1514,17 @@ try {
                (domain, country, language, region, email1, email2, email3, email4)
              VALUES ('txfsent-a.com','Germany','German','europe','a2@txfsent-a.com','','','')"
         )->execute();
-        $repush = push_sites_with_emails_team_to_admin('Germany', $teamUser);
+        $blocked = push_sites_with_emails_team_to_admin('Germany', $teamUser, false);
+        if (empty($blocked['ok']) && !empty($blocked['needs_confirm'])) {
+            pass('Team re-push without confirm is blocked');
+        } else {
+            fail('expected needs_confirm: ' . json_encode($blocked));
+        }
+        $repush = push_sites_with_emails_team_to_admin('Germany', $teamUser, true);
         $afterRepush = (int) db()->query(
             "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
         )->fetchColumn();
-        if (!empty($repush['updated']) && $afterRepush === 1) {
+        if (!empty($repush['ok']) && !empty($repush['updated']) && $afterRepush === 1) {
             pass('Team re-push keeps Admin emailed mark');
         } else {
             fail('re-push sent flag: ' . json_encode($repush) . " sent=$afterRepush");
