@@ -1,8 +1,45 @@
 <?php
 
+// Soft polyfills when php-mbstring is missing (Hostinger usually has it).
+if (!function_exists('mb_strtolower')) {
+    function mb_strtolower(string $string, ?string $encoding = null): string
+    {
+        return strtolower($string);
+    }
+}
+if (!function_exists('mb_strlen')) {
+    function mb_strlen(string $string, ?string $encoding = null): int
+    {
+        return strlen($string);
+    }
+}
+if (!function_exists('mb_substr')) {
+    function mb_substr(string $string, int $start, ?int $length = null, ?string $encoding = null): string
+    {
+        return $length === null ? substr($string, $start) : substr($string, $start, $length);
+    }
+}
+
 function h(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Hidden multi-line POST field (domain lists, notes, etc.).
+ * Never put multi-line values in <input type="hidden"> — browsers turn
+ * newlines in attribute values into spaces, which breaks domain parsing.
+ */
+function render_hidden_multiline(string $name, string $value, array $opts = []): string
+{
+    $id = trim((string) ($opts['id'] ?? ''));
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $class = trim('visually-hidden ' . $extraClass);
+    return '<textarea name="' . h($name) . '"'
+        . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ' class="' . h($class) . '" aria-hidden="true" tabindex="-1">'
+        . h($value)
+        . '</textarea>';
 }
 
 /**
@@ -204,21 +241,43 @@ function render_breadcrumbs(array $crumbs): void
 /**
  * Short glossary for the simple inventory panel.
  * $panel: 'admin' | 'team'
+ * $showTitle: false when nested inside a collapsible help block.
  */
-function render_glossary(string $panel): void
+function render_glossary(string $panel, bool $showTitle = true): void
 {
     echo '<div class="glossary card" role="note">';
-    echo '<h2 class="glossary-title">How this works</h2>';
+    if ($showTitle) {
+        echo '<h2 class="glossary-title">How this works</h2>';
+    }
     echo '<dl class="glossary-list">';
-    echo '<div><dt>Countries</dt><dd>One shared list of unique website domains, browsed by country folder.</dd></div>';
-    echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → remove domains already in the database → save only new ones.</dd></div>';
-    echo '<div><dt>Added sites</dt><dd>Who added which sites, saved by person and day.</dd></div>';
     if ($panel === 'admin') {
-        echo '<div><dt>Your job</dt><dd>Add sites to the database and manage Team users.</dd></div>';
+        echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
+        echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
+        echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
+        echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';
     } else {
-        echo '<div><dt>Your job</dt><dd>Filter new sites against the database and add the unique ones.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
+        echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';
+        echo '<div><dt>Sites with emails - Team</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
+        echo '<div><dt>Admin emails search</dt><dd>Super search Sites with emails - Admin across all countries.</dd></div>';
+        echo '<div><dt>Campaign search</dt><dd>Super search Email campaign sheets across all countries.</dd></div>';
+        echo '<div><dt>Site adding history</dt><dd>Sites you added, saved by day.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
     }
     echo '</dl></div>';
+}
+
+/** Dashboard help collapsed by default so work cards stay above the fold. */
+function render_dashboard_help(string $panel): void
+{
+    echo '<details class="help-details">';
+    echo '<summary>How this works</summary>';
+    echo '<div class="help-details-body">';
+    render_glossary($panel, false);
+    echo $panel === 'admin' ? render_admin_panel_guide() : render_team_panel_guide();
+    echo '</div></details>';
 }
 
 /**
@@ -250,4 +309,83 @@ function render_workflow(array $steps): void
         echo '</span></li>';
     }
     echo '</ol>';
+}
+
+/**
+ * Allowed rows-per-page choices for country / campaign sheets (sitewide).
+ *
+ * @return list<int>
+ */
+function sheet_per_page_options(): array
+{
+    return [100, 250, 500, 1000];
+}
+
+function sheet_per_page_default(): int
+{
+    return 1000;
+}
+
+function normalize_sheet_per_page(int $n): int
+{
+    return in_array($n, sheet_per_page_options(), true) ? $n : sheet_per_page_default();
+}
+
+/**
+ * Resolve rows-per-page from GET/POST, remembering the choice in session.
+ */
+function resolve_sheet_per_page(): int
+{
+    $raw = get('per_page', '');
+    if ($raw === '' || $raw === null) {
+        $raw = post('per_page', '');
+    }
+    if ($raw !== '' && $raw !== null) {
+        $n = normalize_sheet_per_page((int) $raw);
+        $_SESSION['sheet_per_page'] = $n;
+        return $n;
+    }
+    if (isset($_SESSION['sheet_per_page'])) {
+        return normalize_sheet_per_page((int) $_SESSION['sheet_per_page']);
+    }
+    return sheet_per_page_default();
+}
+
+/** Append &per_page=N to a relative app URL (idempotent). */
+function append_sheet_per_page_query(string $url, int $perPage): string
+{
+    $perPage = normalize_sheet_per_page($perPage);
+    if (preg_match('/([?&])per_page=\d+/', $url)) {
+        return preg_replace('/([?&])per_page=\d+/', '${1}per_page=' . $perPage, $url) ?? $url;
+    }
+    return $url . (str_contains($url, '?') ? '&' : '?') . 'per_page=' . $perPage;
+}
+
+/**
+ * GET filter: “Per page” select. Resets to page 1 when changed.
+ *
+ * @param array<string, scalar|null> $baseQuery query params without p / per_page
+ */
+function render_sheet_per_page_filter(array $baseQuery, int $current): void
+{
+    $current = normalize_sheet_per_page($current);
+    echo '<form class="sheet-per-page-filter" method="get" action="index.php">';
+    foreach ($baseQuery as $key => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $k = (string) $key;
+        if ($k === 'p' || $k === 'per_page') {
+            continue;
+        }
+        echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
+    }
+    echo '<label for="sheet_per_page_select">Per page</label>';
+    echo '<select id="sheet_per_page_select" name="per_page" onchange="this.form.submit()" title="How many rows to show on each page">';
+    foreach (sheet_per_page_options() as $n) {
+        echo '<option value="' . (int) $n . '"' . ($n === $current ? ' selected' : '') . '>'
+            . (int) $n
+            . '</option>';
+    }
+    echo '</select></form>';
 }

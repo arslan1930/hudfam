@@ -29,20 +29,30 @@ function render_admin_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Admin works</h2>'
-        . '<p class="muted">Country folders are for browsing and saving. Each domain exists only once in the whole database. Team filters against all countries, then saves unique sites into the selected country.</p>'
+        . '<p class="muted">Each country has its own URL database. You seed country folders; Team filters new lists against that country and adds only unique sites. Every add is saved in history.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Our database</h3>'
-        . '<p><strong>What:</strong> Country folders for browsing sites.</p>'
-        . '<p><strong>How:</strong> Open a country and add sites into that folder (global uniqueness still applies).</p>'
+        . '<p><strong>What:</strong> Country folders — one URL list per country.</p>'
+        . '<p><strong>How:</strong> Open Our database → Add sites (or open a country and paste there).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Site adding history</h3>'
+        . '<h3>2. Extracted Sites</h3>'
+        . '<p><strong>What:</strong> Sites pushed from Team Extracting Results.</p>'
+        . '<p><strong>How:</strong> Open Extracted Sites → country → copy or remove.</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>3. Emails data</h3>'
+        . '<p><strong>What:</strong> Sites with emails - Admin, All sites with emails - Final, and Email campaign data (one sheet per country).</p>'
+        . '<p><strong>How:</strong> Archives fill from Team Push. Create a country Email Sheet with site names + emails → Communication Team uses Admin emails search / Campaign search.</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>4. Site adding history</h3>'
         . '<p><strong>What:</strong> Who added which sites, by day.</p>'
-        . '<p><strong>How:</strong> Open a day to edit, copy/cut, or delete that history.</p>'
+        . '<p><strong>How:</strong> Open a day to see the domains that person added.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>3. Users</h3>'
+        . '<h3>5. Users</h3>'
         . '<p><strong>What:</strong> Admin and Team logins.</p>'
         . '<p><strong>How:</strong> Create Team accounts so they can filter and add sites.</p>'
         . '</article>'
@@ -51,8 +61,11 @@ function render_admin_panel_guide(): string
         . '<h3>Flow</h3>'
         . '<ol>'
         . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
-        . '<li>Team picks a country to save into → pastes a list → Filter removes domains already anywhere in the database.</li>'
-        . '<li>Team adds the unique ones → they join that country folder and <strong>Add history</strong>.</li>'
+        . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
+        . '<li>Team adds the unique ones → they join that country’s database and <strong>Site adding history</strong>.</li>'
+        . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
+        . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails data → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Final</strong>). Pushed rows leave the Team working copy.</li>'
+        . '<li>Admin creates a <strong>country Email Sheet</strong> under Email campaign data; Communication Team uses <strong>Admin emails search</strong> / <strong>Campaign search</strong> and updates the matching country row.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -62,30 +75,37 @@ function render_team_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Team works</h2>'
-        . '<p class="muted">Pick a country to save into, paste new sites, Filter against the whole database, then add only globally unique sites into that country.</p>'
+        . '<p class="muted">Paste new sites for a country. Duplicates are removed privately (existing country lists stay hidden). Add only the new unique sites — they go into the country database and Extracting sites.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Filter &amp; add</h3>'
-        . '<p><strong>What:</strong> Compare your paste to the entire database.</p>'
-        . '<p><strong>How:</strong> Select country (save into) → Paste → Filter (all countries) → Add unique.</p>'
+        . '<p><strong>What:</strong> Compare your paste to one country’s database without seeing that list.</p>'
+        . '<p><strong>How:</strong> Select country → Paste → Filter → Add unique into that country.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Site adding history</h3>'
-        . '<p><strong>What:</strong> Your daily batches of new sites (read-only).</p>'
+        . '<h3>2. Extracting sites</h3>'
+        . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
+        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> → country TLDs route to their folders; generic TLDs stay in the selected country (Extracted Sites + Sites with emails - Team).</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>3. Sites with emails - Team</h3>'
+        . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each.</p>'
+        . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong> — they move to the Admin archive and clear from Team.</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>4. Site adding history</h3>'
+        . '<p><strong>What:</strong> Your daily batches of new sites.</p>'
         . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
-        . '</article>'
-        . '<article class="panel-guide-card">'
-        . '<h3>3. Change password</h3>'
-        . '<p><strong>What:</strong> Keep your login secure.</p>'
-        . '<p><strong>How:</strong> Use Change password in the sidebar (required after demo passwords).</p>'
         . '</article>'
         . '</div>'
         . '<div class="panel-guide-flow">'
         . '<h3>Flow</h3>'
         . '<ol>'
-        . '<li>Open <strong>Filter &amp; add</strong> and select the country to save into.</li>'
-        . '<li>Paste domains and Filter (duplicates already anywhere in the database are removed).</li>'
-        . '<li>Add the unique sites — they join that country folder and today’s history.</li>'
+        . '<li>Open <strong>Filter &amp; add</strong> and select a country.</li>'
+        . '<li>Paste domains and Filter (duplicates already in that country are removed privately).</li>'
+        . '<li>Add the unique sites — they join that country’s database and <strong>Extracting sites → Sites list</strong>.</li>'
+        . '<li>Paste into <strong>Extracting Results</strong> and <strong>Push</strong> → Extracted Sites + Sites with emails - Team.</li>'
+        . '<li>Add emails in <strong>Sites with emails - Team</strong>, then <strong>Push to Admin</strong>.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -108,13 +128,29 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — per country database',
-        'Compare a pasted list to one country’s site database and save only root domains that country does not already have.',
-        'Select country (type + Enter) → Paste root domains → Clean errors if needed → Filter → Add unique.',
+        'Filter & add — new unique sites only',
+        'Paste a list and compare it privately against the existing country database. Existing URLs stay hidden; only new unique sites are shown so you can add them.',
+        'Select country → Paste → Filter → Add. New sites go into the country database and Extracting sites → Sites list.',
         [
-            'Select the country database (type to search, Enter to select).',
-            'Paste root domains only (example.com, my-site.co.uk) and Clean errors if needed.',
-            'Filter, then add the remaining unique sites to that country.',
+            'Select an existing country database (Germany, Spain, …).',
+            'Paste root domains and Filter — duplicates are removed without showing the private country list.',
+            'Add only the remaining new unique sites — they join the country database and that country’s Extracting Sites list.',
+        ]
+    );
+}
+
+function guide_extracting(): string
+{
+    return render_page_purpose(
+        'Extracting sites — Sites list + Results',
+        'Each country has its own batch with two boxes: Sites list and Extracting Results.',
+        'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
+        [
+            'Teammate uses Filter & add and saves new unique sites.',
+            'Those sites appear here under Sites list for that country.',
+            'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
+            'Paste sites into Extracting Results and Push — country TLDs (.de, .at, .ch, …) go to their own folders; .com/.net/.eu stay in the selected country.',
+            'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
         ]
     );
 }
@@ -123,7 +159,7 @@ function guide_add_history(): string
 {
     return render_page_purpose(
         'Site adding history — who added what',
-        'Daily record of domains added by each person. Admins can edit or delete a day; Team views their own days read-only.',
+        'Daily record of domains added by each person.',
         'Open a date/person to see the exact domains saved that day.',
         []
     );
@@ -132,13 +168,13 @@ function guide_add_history(): string
 function guide_admin_add(): string
 {
     return render_page_purpose(
-        'Add sites — seed a country database',
-        'Paste root domains into one country’s folder (no prices). Optional language via search + Enter.',
-        'Choose country (type + Enter), paste root domains, Clean errors if needed, save.',
+        'Add sites — inside Our database',
+        'Paste root domains into one country’s folder in Our database. Extracted Sites are filled only when Team clicks Push.',
+        'In Our database: choose country, paste root domains, Clean errors if needed, save.',
         [
-            'Select the country folder (type to search, Enter to select).',
-            'Paste root domains only — no https, paths, or subdomains.',
-            'Use Clean errors, then Save. Browse them under that country’s folder.',
+            'Open Our database (sidebar).',
+            'Use Add sites — select country, paste domains, Clean errors, save.',
+            'Or open a country folder and add sites there.',
         ]
     );
 }

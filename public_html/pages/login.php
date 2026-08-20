@@ -1,11 +1,31 @@
 <?php
 if (current_user()) {
-    redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
+    if (is_admin()) {
+        redirect('index.php?page=admin_dashboard');
+    }
+    $u = current_user();
+    redirect(
+        user_is_department_scoped($u)
+            ? 'index.php?page=team_departments'
+            : 'index.php?page=team_dashboard'
+    );
 }
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (attempt_login(trim(post('username')), (string) post('password'))) {
-        redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
+        if (user_must_change_password()) {
+            flash('error', 'Change your password before continuing.');
+            redirect('index.php?page=account_password');
+        }
+        if (is_admin()) {
+            redirect('index.php?page=admin_dashboard');
+        }
+        $u = current_user();
+        redirect(
+            user_is_department_scoped($u)
+                ? 'index.php?page=team_departments'
+                : 'index.php?page=team_dashboard'
+        );
     }
     $error = 'Invalid username or password.';
 }
@@ -21,10 +41,16 @@ render_header('Login');
     <p class="muted">Shared site database — Admin manages Our database; Team filters and adds unique sites.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
     <form method="post">
-      <label>Username</label>
-      <input type="text" name="username" required autofocus>
-      <label>Password</label>
-      <input type="password" name="password" required>
+      <label for="login_username">Username</label>
+      <input id="login_username" type="text" name="username" required autofocus
+             autocomplete="username"
+             placeholder="username"
+             <?= $error ? 'aria-invalid="true" aria-describedby="login_error"' : '' ?>>
+      <p class="help" style="margin:0.25rem 0 0">Admin can also sign in with their account email.</p>
+      <label for="login_password">Password</label>
+      <input id="login_password" type="password" name="password" required autocomplete="current-password"
+             <?= $error ? 'aria-invalid="true" aria-describedby="login_error"' : '' ?>>
+      <?php if ($error): ?><p id="login_error" class="visually-hidden"><?= h($error) ?></p><?php endif; ?>
       <p style="margin-top:1.1rem"><button class="btn" type="submit">Sign in</button></p>
     </form>
     <p class="help" style="margin-top:1rem">

@@ -88,6 +88,10 @@ function user_must_change_password(?array $user = null): bool
     }
 }
 
+/**
+ * Sign in with username (any role), or with email for Admin accounts only.
+ * Email match is case-insensitive; ignored if more than one admin shares it.
+ */
 function attempt_login(string $username, string $password): bool
 {
     ensure_users_auth_schema();
@@ -99,6 +103,23 @@ function attempt_login(string $username, string $password): bool
     $stmt = db()->prepare('SELECT * FROM users WHERE username = ? AND is_active = 1 LIMIT 1');
     $stmt->execute([$login]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    // Admin-only: allow signing in with the email on the Admin user profile.
+    if (!$user && str_contains($login, '@')) {
+        $byEmail = db()->prepare(
+            "SELECT * FROM users
+             WHERE role = 'admin'
+               AND email <> ''
+               AND LOWER(email) = LOWER(?)
+               AND is_active = 1
+             LIMIT 2"
+        );
+        $byEmail->execute([$login]);
+        $matches = $byEmail->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if (count($matches) === 1) {
+            $user = $matches[0];
+        }
+    }
 
     if (!$user || !password_verify($password, (string) ($user['password_hash'] ?? ''))) {
         return false;
@@ -162,6 +183,29 @@ function change_user_password(int $userId, string $currentPassword, string $newP
         ->execute([password_hash($newPassword, PASSWORD_DEFAULT), $userId]);
     clear_must_change_password_flag($userId);
     return '';
+}
+
+/**
+ * Mark accounts still using known demo passwords so they must change on next login.
+ * @return int number of users flagged
+ */
+function flag_users_with_weak_passwords(): int
+{
+    ensure_users_auth_schema();
+    $users = db()->query('SELECT id, password_hash FROM users')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $upd = db()->prepare('UPDATE users SET must_change_password=1 WHERE id=?');
+    $n = 0;
+    foreach ($users as $u) {
+        $hash = (string) ($u['password_hash'] ?? '');
+        foreach (known_weak_passwords() as $weak) {
+            if ($hash !== '' && password_verify($weak, $hash)) {
+                $upd->execute([(int) $u['id']]);
+                $n++;
+                break;
+            }
+        }
+    }
+    return $n;
 }
 
 function logout_user(): void

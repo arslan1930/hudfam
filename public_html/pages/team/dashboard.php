@@ -1,158 +1,232 @@
 <?php
 $user = require_team();
 $uid = (int) $user['id'];
+ensure_departments_schema();
+
+$deptScoped = user_is_department_scoped($user);
+$awaitsDept = team_user_awaits_department($user);
+$myDepartments = $deptScoped ? list_departments_for_user($uid) : [];
+$myTasks = $deptScoped ? list_open_tasks_for_user($uid, 40) : [];
+
+if ($awaitsDept) {
+    render_header('Dashboard', 'team');
+    ?>
+    <div class="topbar">
+      <div>
+        <h1>Waiting for assignment</h1>
+        <p class="muted">Your Team login works, but you are not in a department yet.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <p>No department assigned.</p>
+        <p class="muted">
+          Ask Admin to add you to a department (Site Finding, Site Extracting, Email Extracting, or Communication).
+          Your tools will appear here after that.
+        </p>
+      </div>
+      <p class="actions" style="margin-top:1rem;justify-content:center">
+        <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
+      </p>
+    </div>
+    <?php
+    render_footer('team');
+    return;
+}
+
+if ($deptScoped) {
+    render_header('Dashboard', 'team');
+    ?>
+    <div class="topbar">
+      <div>
+        <h1>Your work</h1>
+        <p class="muted">
+          You are assigned to
+          <?= count($myDepartments) ?> department<?= count($myDepartments) === 1 ? '' : 's' ?>.
+          Your tasks and department tools are shown below.
+        </p>
+      </div>
+      <a class="btn" href="index.php?page=team_departments">My departments</a>
+    </div>
+
+    <div class="card">
+      <h2>Open tasks</h2>
+      <?php if (!$myTasks): ?>
+        <div class="empty-state">
+          <p>No open tasks right now.</p>
+          <p class="muted">When Admin assigns work to your department, it appears here.</p>
+        </div>
+      <?php else: ?>
+        <div class="table-wrap">
+          <table class="dept-task-table">
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Task</th>
+                <th>Status</th>
+                <th>Due</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($myTasks as $t):
+                $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
+                ?>
+              <tr class="<?= $mine ? 'dept-task-mine' : '' ?>">
+                <td><?= h((string) $t['department_name']) ?></td>
+                <td>
+                  <strong><?= h((string) $t['title']) ?></strong>
+                  <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+                  <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
+                    <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
+                  <?php endif; ?>
+                </td>
+                <td><?= h(department_task_status_label((string) $t['status'])) ?></td>
+                <td class="muted"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+                <td>
+                  <a href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+    </div>
+
+    <?php
+    $toolPages = department_tool_pages_for_user($user);
+    $toolSet = array_fill_keys($toolPages, true);
+    $toolCards = [];
+    if (!empty($toolSet['team_prospect_check'])) {
+        $toolCards[] = ['team_prospect_check', 'Filter & add', 'Paste → filter → add unique sites'];
+        $toolCards[] = ['team_prospect_batches', 'Site adding history', 'Your daily adds'];
+    }
+    if (!empty($toolSet['team_semrush_research'])) {
+        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, clear country'];
+    }
+    if (!empty($toolSet['team_extracting'])) {
+        $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
+    }
+    if (!empty($toolSet['team_sites_emails'])) {
+        $toolCards[] = ['team_sites_emails', 'Sites with emails - Team', 'Add emails · Push to Admin'];
+    }
+    if (!empty($toolSet['team_admin_emails_delete'])) {
+        $toolCards[] = ['team_admin_emails_delete', 'Admin emails search', 'Sites with emails - Admin · all countries'];
+    }
+    if (!empty($toolSet['team_email_campaigns'])) {
+        $toolCards[] = ['team_email_campaigns', 'Campaign search', 'Email campaign sheets · all countries'];
+    }
+    if (!empty($toolSet['team_email_campaigns_drafts'])) {
+        $toolCards[] = ['team_email_campaigns_drafts', 'Campaign drafts', 'Formatted outreach per project · copy for email'];
+    }
+    ?>
+    <?php if ($toolCards): ?>
+    <div class="card" style="margin-top:1rem">
+      <h2>Your tools</h2>
+      <div class="folders">
+        <?php foreach ($toolCards as [$pageKey, $title, $hint]): ?>
+          <a class="folder" href="index.php?page=<?= h($pageKey) ?>">
+            <h3><?= h($title) ?></h3>
+            <p class="muted"><?= h($hint) ?></p>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($myDepartments): ?>
+    <div class="card" style="margin-top:1rem">
+      <h2>Your departments</h2>
+      <div class="folders">
+        <?php foreach ($myDepartments as $d):
+            $stats = department_stats((int) $d['id']);
+            ?>
+          <a class="folder" href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $d['slug']) ?>">
+            <h3><?= h((string) $d['name']) ?></h3>
+            <p class="muted"><?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?></p>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+    <?php
+    render_footer('team');
+    return;
+}
 
 $todayBatch = null;
+$extractCount = 0;
 try {
-    $todayBatch = get_today_prospect_batch($uid);
+    $tb = db()->prepare(
+        'SELECT * FROM prospect_batches WHERE user_id=? AND batch_date=CURDATE() LIMIT 1'
+    );
+    $tb->execute([$uid]);
+    $todayBatch = $tb->fetch() ?: null;
 } catch (Throwable $e) {
     $todayBatch = null;
 }
-
-$openTasks = [];
 try {
-    ensure_tasks_schema();
-    $all = list_team_tasks($uid, '');
-    $openTasks = array_values(array_filter(
-        $all,
-        static fn($t) => in_array($t['status'], ['open', 'in_progress'], true)
-    ));
+    $extractCount = count_extract_batches();
 } catch (Throwable $e) {
-    $openTasks = [];
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'task_status') {
-    $id = (int) post('id');
-    $status = (string) post('status');
-    $task = get_team_task($id);
-    if (!$task || (int) $task['assigned_to'] !== $uid) {
-        flash('error', 'Task not found.');
-        redirect('index.php?page=team_dashboard');
-    }
-    if (!in_array($status, ['open', 'in_progress', 'done'], true)) {
-        flash('error', 'Invalid status.');
-        redirect('index.php?page=team_dashboard');
-    }
-    try {
-        update_team_task($id, [
-            'title' => $task['title'],
-            'notes' => $task['notes'],
-            'country' => $task['country'],
-            'language' => $task['language'],
-            'niche' => $task['niche'],
-            'target_count' => $task['target_count'],
-            'assigned_to' => $task['assigned_to'],
-            'due_date' => $task['due_date'],
-            'status' => $status,
-        ]);
-        flash('ok', 'Task updated.');
-    } catch (Throwable $e) {
-        flash('error', $e->getMessage());
-    }
-    redirect('index.php?page=team_dashboard');
+    $extractCount = 0;
 }
 
 render_header('Dashboard', 'team');
-$frequent = user_frequent_countries($uid, 6);
-$topCountry = $frequent[0]['name'] ?? '';
-if ($topCountry === '' && $openTasks !== [] && trim((string) ($openTasks[0]['country'] ?? '')) !== '') {
-    $topCountry = (string) $openTasks[0]['country'];
-}
 ?>
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?>.</p>
+    <p class="muted">Filter new sites against a country database, then add only the unique ones. Existing country lists stay private.</p>
   </div>
-  <div class="actions" style="align-items:center;gap:0.75rem">
-    <time id="live-datetime" class="live-datetime" datetime="<?= h(date('c')) ?>"><?= h(date('l · d M Y · H:i:s')) ?></time>
-    <a class="btn" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">Filter &amp; add<?= $topCountry !== '' ? ' · ' . h($topCountry) : '' ?></a>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_semrush_research">Semrush Research</a>
+    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
   </div>
 </div>
 
-<section class="card" style="margin-bottom:1.25rem">
-  <h2 style="margin-top:0">Your tasks</h2>
-  <?php if (!$openTasks): ?>
-    <p class="muted" style="margin:0">No open tasks from Admin.</p>
-  <?php else: ?>
-    <?php foreach ($openTasks as $t): ?>
-      <div style="border-top:1px solid var(--line);padding:0.85rem 0;margin-top:0.5rem">
-        <div class="topbar" style="margin:0;padding:0;border:0">
-          <div>
-            <strong><?= h($t['title']) ?></strong>
-            <p class="muted" style="margin:0.3rem 0 0">
-              <span class="badge"><?= h(task_status_label((string) $t['status'])) ?></span>
-              <?php if ($t['country'] !== ''): ?> · <?= h($t['country']) ?><?php endif; ?>
-              <?php if (!empty($t['target_count'])): ?> · target <?= (int) $t['target_count'] ?><?php endif; ?>
-              <?php if (!empty($t['due_date'])): ?> · due <?= h($t['due_date']) ?><?php endif; ?>
-            </p>
-            <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
-              <p style="margin:0.45rem 0 0"><?= nl2br(h((string) $t['notes'])) ?></p>
-            <?php endif; ?>
-          </div>
-          <div class="actions">
-            <?php
-              $workType = (string) ($t['work_type'] ?? 'sites');
-              $taskCountry = trim((string) ($t['country'] ?? ''));
-              $workHref = function_exists('extract_team_page_for_work_type')
-                  ? extract_team_page_for_work_type($workType, $taskCountry)
-                  : ('index.php?page=team_prospect_check' . ($taskCountry !== '' ? '&country=' . urlencode($taskCountry) : ''));
-              $workLabel = match ($workType) {
-                  'extract_submit' => 'Submit for extraction',
-                  'extract_claim' => 'Claim & extract',
-                  'extract_final' => 'Paste extracted',
-                  'extract_emails' => 'Add emails',
-                  default => 'Filter & add',
-              };
-            ?>
-            <a class="btn" href="<?= h($workHref) ?>"><?= h($workLabel) ?></a>
-          </div>
-        </div>
-        <form method="post" class="actions" style="margin-top:0.65rem">
-          <input type="hidden" name="action" value="task_status">
-          <input type="hidden" name="id" value="<?= (int) $t['id'] ?>">
-          <select name="status" data-searchable="1" style="max-width:200px">
-            <option value="open" <?= $t['status'] === 'open' ? 'selected' : '' ?>>Open</option>
-            <option value="in_progress" <?= $t['status'] === 'in_progress' ? 'selected' : '' ?>>In progress</option>
-            <option value="done" <?= $t['status'] === 'done' ? 'selected' : '' ?>>Done</option>
-          </select>
-          <button class="btn secondary" type="submit">Save</button>
-        </form>
-      </div>
-    <?php endforeach; ?>
-  <?php endif; ?>
-</section>
-
-<?= render_frequent_country_chips($frequent, 'index.php?page=team_prospect_check&country=') ?>
+<?php render_dashboard_help('team'); ?>
 
 <div class="launch-cards">
-  <a class="launch-card" href="index.php?page=team_prospect_check<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
+  <a class="launch-card" href="index.php?page=team_prospect_check">
     <h2>Filter &amp; add</h2>
-    <p><?= $topCountry !== '' ? 'Continue with ' . h($topCountry) . '.' : 'Paste → filter → add unique.' ?></p>
+    <p>Filter against the country database, then add only new unique sites.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_semrush_research">
+    <h2>Semrush Research</h2>
+    <p>From Extracting Results Push · edit, comment, clear country.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_extracting">
+    <h2>Extracting sites</h2>
+    <p><?= $extractCount > 0 ? $extractCount . ' country batch' . ($extractCount === 1 ? '' : 'es') . ' ready' : 'Waiting for sites from the team mate' ?></p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_sites_emails">
+    <h2>Sites with emails - Team</h2>
+    <p>Add emails after Extracting Results Push, then Push to Admin.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_admin_emails_delete">
+    <h2>Admin emails search</h2>
+    <p>Super search Sites with emails - Admin · update or remove.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_email_campaigns">
+    <h2>Campaign search</h2>
+    <p>Super search Email campaign sheets across all countries.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_email_campaigns_drafts">
+    <h2>Campaign drafts</h2>
+    <p>Formatted outreach / offers per project · copy keeps email formatting.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=team_departments">
+    <h2>My departments</h2>
+    <p>If Admin assigns you to a department, your tasks appear here.</p>
   </a>
   <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
-    <h2>Added sites</h2>
-    <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' today' : 'None today' ?></p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_extract_submit<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
-    <h2>Submit for extraction</h2>
-    <p>Block 1 · sites that need extraction.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_extract_queue<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
-    <h2>Claim &amp; extract</h2>
-    <p>Open a Block 1 batch in a new tab.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_extract_final<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
-    <h2>Paste extracted</h2>
-    <p>Block 2 · final list after extraction.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_extract_emails<?= $topCountry !== '' ? '&country=' . urlencode($topCountry) : '' ?>">
-    <h2>Add emails</h2>
-    <p>2–4 emails under each extracted site.</p>
+    <h2>Today’s history</h2>
+    <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' sites added today' : 'No adds yet today' ?></p>
   </a>
   <a class="launch-card" href="index.php?page=team_prospect_batches">
     <h2>Site adding history</h2>
-    <p>Your daily batches of new sites.</p>
+    <p>Sites you added, saved by day.</p>
   </a>
 </div>
 <?php render_footer('team'); ?>

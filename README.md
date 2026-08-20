@@ -29,13 +29,12 @@ Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
 1. Create a MySQL database in hPanel  
 2. Upload everything inside [`public_html/`](public_html/) to your domain’s web root  
 3. Open `https://YOUR-DOMAIN/install.php` → enter DB details → Install  
-4. Delete `install.php` (and `upgrade.php` if you used it)  
-5. Login:
-   - Admin: `admin` / `admin123`
-   - Team: `teammate` / `team123`
+4. Copy the one-time passwords shown on the install screen, then **delete `install.php`**  
+5. Login with those passwords — you will be asked to set a new password immediately  
 
 ### Already installed an older copy?
-Upload the new files, then open `/upgrade.php` once (country catalog + prior upgrades), then delete it.
+Upload the new files, sign in as Admin, open `/upgrade.php` once (Admin-only), then delete it.  
+If anyone still uses old demo passwords (`admin123` / `team123`), upgrade flags them to change on next login.
 
 ## Local preview (optional)
 

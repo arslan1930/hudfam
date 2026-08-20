@@ -9,7 +9,7 @@ Plain **PHP + MySQL + HTML/CSS**. No Catalog, Emails, Orders, or Published.
 | Dashboard | Dashboard |
 | Our database | Filter & add |
 | Add sites | Our database |
-| Add history | Add history |
+| Site adding history | Site adding history |
 | Users | |
 
 ## Deploy (important — wipe old files)
@@ -26,16 +26,19 @@ Do a **clean replace**:
    - `pages/team/email_*.php`, `countries.php`, `country_detail.php`
    - `includes/inventory.php`, `email_campaigns.php`, `country_catalog.php`, `orders.php`
 3. Upload **everything** from the repo’s `public_html/` folder.
-4. Open `https://YOUR-DOMAIN/upgrade.php` once → **Run upgrade** (drops old DB tables).
-5. Delete `upgrade.php` and `install.php` (if already installed).
-6. Hard-refresh the browser (Ctrl+F5). Sidebar should show only the simple menu.
+4. Sign in as **Admin**, then open `https://YOUR-DOMAIN/upgrade.php` once → **Run upgrade**.
+5. Delete `upgrade.php` and `install.php` (installer refuses to run again once `config.php` exists).
+6. Hard-refresh the browser (Ctrl+F5).
 
 ## Fresh install
 1. Create MySQL DB in hPanel  
 2. Upload `public_html/` contents  
 3. Open `install.php` → Install  
-4. Delete `install.php`  
-5. Login: `admin` / `admin123` or `teammate` / `team123`
+4. Copy the one-time passwords shown, then **delete `install.php`**  
+5. Login and set a new password when prompted (demo defaults like `admin123` are no longer created)
+
+## PHP extensions
+Enable **pdo_mysql** and **mbstring** in hPanel → PHP Configuration (Hostinger usually has both on).
 
 ## Correct layout
 ```text

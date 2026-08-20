@@ -12,7 +12,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = change_user_password((int) $user['id'], $current, $new);
         if ($error === '') {
             flash('ok', 'Password updated.');
-            redirect(is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard');
+            if (is_admin()) {
+                redirect('index.php?page=admin_dashboard');
+            }
+            $u = current_user() ?? $user;
+            redirect(
+                user_is_department_scoped($u)
+                    ? 'index.php?page=team_departments'
+                    : 'index.php?page=team_dashboard'
+            );
         }
     }
 }
@@ -33,7 +41,7 @@ render_header('Change password', $panel);
 </div>
 
 <div class="card" style="max-width:28rem">
-  <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
+  <?php if ($error): render_alert_box('error', $error); endif; ?>
   <form method="post" action="index.php?page=account_password" autocomplete="off">
     <label>Current password</label>
     <input type="password" name="current_password" required autofocus>

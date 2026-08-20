@@ -9,9 +9,23 @@
 $allowed = [
     'css/app.css' => 'text/css; charset=utf-8',
     'js/sites-form.js' => 'application/javascript; charset=utf-8',
+    'js/extract-sites-list.js' => 'application/javascript; charset=utf-8',
+    'js/extracted-admin.js' => 'application/javascript; charset=utf-8',
+    'js/sites-with-emails.js' => 'application/javascript; charset=utf-8',
+    'js/admin-emails-delete.js' => 'application/javascript; charset=utf-8',
+    'js/email-campaign-sheet.js' => 'application/javascript; charset=utf-8',
+    'js/email-campaign-search.js' => 'application/javascript; charset=utf-8',
+    'js/email-campaign-drafts.js' => 'application/javascript; charset=utf-8',
+    'js/semrush-sheet.js' => 'application/javascript; charset=utf-8',
+    'js/email-field-clear.js' => 'application/javascript; charset=utf-8',
+    'js/app-processing.js' => 'application/javascript; charset=utf-8',
+    'js/task-presence.js' => 'application/javascript; charset=utf-8',
+    'js/draft-autosave.js' => 'application/javascript; charset=utf-8',
+    'js/info-tips.js' => 'application/javascript; charset=utf-8',
+    'js/nav-shell.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',
-    'js/searchable-select.js' => 'application/javascript; charset=utf-8',
-    'js/live-clock.js' => 'application/javascript; charset=utf-8',
+    'img/topurlz-logo.svg' => 'image/svg+xml',
+    'img/topurlz-logo.png' => 'image/png',
 ];
 
 $f = (string) ($_GET['f'] ?? '');
@@ -39,13 +53,21 @@ if (!is_file($path)) {
 $mtime = filemtime($path) ?: time();
 $etag = '"' . md5($path . $mtime . filesize($path)) . '"';
 header('Content-Type: ' . $allowed[$f]);
-header('Cache-Control: public, max-age=86400');
+// Always revalidate — max-age=86400 kept teammates on broken JS after deploys.
+header('Cache-Control: no-cache, must-revalidate');
 header('ETag: ' . $etag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 
 if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim((string) $_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
     http_response_code(304);
     exit;
+}
+if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+    $since = strtotime((string) $_SERVER['HTTP_IF_MODIFIED_SINCE']);
+    if ($since !== false && $since >= $mtime) {
+        http_response_code(304);
+        exit;
+    }
 }
 
 readfile($path);

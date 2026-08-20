@@ -14,14 +14,108 @@
     'com.ar': 1, 'com.co': 1, 'com.pe': 1, 'com.ve': 1, 'com.ec': 1,
     'co.kr': 1, 'co.th': 1, 'co.il': 1, 'org.il': 1, 'ac.il': 1,
     'com.cn': 1, 'net.cn': 1, 'org.cn': 1,
-    'co.id': 1, 'or.id': 1, 'web.id': 1
+    'co.id': 1, 'or.id': 1, 'web.id': 1,
+    'com.pl': 1, 'net.pl': 1, 'org.pl': 1, 'info.pl': 1, 'biz.pl': 1, 'edu.pl': 1, 'gov.pl': 1,
+    'com.pk': 1, 'net.pk': 1, 'org.pk': 1, 'gov.pk': 1, 'edu.pk': 1,
+    'com.ua': 1, 'net.ua': 1, 'org.ua': 1, 'gov.ua': 1,
+    'com.pt': 1, 'net.pt': 1, 'org.pt': 1, 'gov.pt': 1, 'edu.pt': 1, 'publ.pt': 1,
+    'com.es': 1, 'nom.es': 1, 'org.es': 1, 'gob.es': 1, 'edu.es': 1,
+    'com.ng': 1, 'org.ng': 1, 'gov.ng': 1, 'edu.ng': 1, 'net.ng': 1,
+    'com.eg': 1, 'net.eg': 1, 'org.eg': 1, 'edu.eg': 1, 'gov.eg': 1,
+    'com.sa': 1, 'net.sa': 1, 'org.sa': 1, 'edu.sa': 1, 'gov.sa': 1,
+    'com.bd': 1, 'net.bd': 1, 'org.bd': 1, 'edu.bd': 1, 'gov.bd': 1, 'ac.bd': 1,
+    'com.np': 1, 'net.np': 1, 'org.np': 1, 'edu.np': 1, 'gov.np': 1,
+    'com.lk': 1, 'org.lk': 1, 'edu.lk': 1, 'gov.lk': 1, 'net.lk': 1,
+    'com.kh': 1, 'net.kh': 1, 'org.kh': 1, 'edu.kh': 1, 'gov.kh': 1,
+    'co.ke': 1, 'or.ke': 1, 'ne.ke': 1, 'go.ke': 1, 'ac.ke': 1,
+    'com.cy': 1, 'net.cy': 1, 'org.cy': 1, 'ac.cy': 1, 'gov.cy': 1,
+    'com.mt': 1, 'org.mt': 1, 'net.mt': 1, 'edu.mt': 1, 'gov.mt': 1,
+    'com.ro': 1, 'org.ro': 1,
+    'com.gr': 1, 'net.gr': 1, 'org.gr': 1, 'edu.gr': 1, 'gov.gr': 1,
+    'com.hr': 1, 'from.hr': 1, 'iz.hr': 1, 'name.hr': 1,
+    'com.ba': 1, 'net.ba': 1, 'org.ba': 1, 'edu.ba': 1, 'gov.ba': 1,
+    'co.ao': 1, 'it.ao': 1, 'og.ao': 1, 'pb.ao': 1, 'gv.ao': 1,
+    'co.bw': 1, 'org.bw': 1,
+    'co.ug': 1, 'or.ug': 1, 'ac.ug': 1, 'go.ug': 1, 'ne.ug': 1, 'sc.ug': 1,
+    'co.tz': 1, 'or.tz': 1, 'ac.tz': 1, 'go.tz': 1, 'ne.tz': 1, 'sc.tz': 1,
+    'co.zm': 1, 'org.zm': 1,
+    'co.zw': 1, 'org.zw': 1, 'ac.zw': 1, 'gov.zw': 1
   };
+
+  // Second-level labels commonly paired with a 2-letter country code.
+  var COUNTRY_SLD = {
+    com: 1, co: 1, org: 1, net: 1, gov: 1, edu: 1, ac: 1, gob: 1, go: 1, or: 1, ne: 1,
+    me: 1, ltd: 1, plc: 1, gen: 1, firm: 1, ind: 1, web: 1, asn: 1, id: 1, info: 1,
+    biz: 1, name: 1, nom: 1, publ: 1, from: 1, iz: 1, it: 1, og: 1, pb: 1, gv: 1,
+    sc: 1, govt: 1
+  };
+
+  // Valid TLDs (ccTLDs + common gTLDs). Rejects fakes like .comz
+  var VALID_TLDS = {};
+  (function buildValidTlds() {
+    var cc = 'ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi '
+      + 'bl bm bn bo bq br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr '
+      + 'cu cv cw cx cy cz de dj dk dm do dz ec ee eg eh er es et eu fi fj fk fm fo '
+      + 'fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht '
+      + 'hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky '
+      + 'kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg mh mk ml mm mn mo mp mq '
+      + 'mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf '
+      + 'pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si '
+      + 'sj sk sl sm sn so sr ss st su sv sx sy sz tc td tf tg th tj tk tl tm tn to '
+      + 'tr tt tv tw tz ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw';
+    var gtld = 'com net org info biz name pro edu gov mil int aero asia cat coop jobs '
+      + 'mobi museum post tel travel xxx app dev page site online store shop blog '
+      + 'cloud digital email agency studio media news world club live life today '
+      + 'space tech website company solutions services systems network global '
+      + 'international group ltd limited llc inc corp center centre design art '
+      + 'photography video game games software support help care health clinic '
+      + 'dental legal law accountant finance bank money insurance realestate '
+      + 'properties homes house hotel travel vacations tours cricket football '
+      + 'soccer tennis golf sports fitness gym yoga music band film movie tv '
+      + 'radio podcast books education school university college kids family '
+      + 'baby wedding dating singles church faith bible charity ngo foundation '
+      + 'community social link click download host hosting server domain domains '
+      + 'mail web webs websites xyz top win bid loan work works expert review '
+      + 'reviews report reports press spot zip mov new old cool fun wow one two '
+      + 'red blue green black white gold vip rich luxury boutique fashion watch '
+      + 'jewelry diamonds cafe bar pub beer wine vodka restaurant menu kitchen '
+      + 'food pizza sushi burger chicken vegan organic farm garden flowers plants '
+      + 'pet dog cat auto cars car motor motors bike boats yachts build builder '
+      + 'construction engineer engineering energy solar power green earth eco bio '
+      + 'science academy institute training coaching consulting management '
+      + 'marketing advertising seo brand brands sale sales deal deals discount '
+      + 'coupon market marketplace auction trade trading exchange crypto bitcoin '
+      + 'nft token wallet cash pay payment credit card ai io co tv me cc ws';
+    (cc + ' ' + gtld).split(/\s+/).forEach(function (t) {
+      if (t) VALID_TLDS[t] = 1;
+    });
+  })();
+
+  function isKnownTld(tld) {
+    return !!(tld && VALID_TLDS[String(tld).toLowerCase()]);
+  }
+
+  function isKnownPublicSuffix(suffix) {
+    suffix = String(suffix || '').toLowerCase();
+    if (!suffix) return false;
+    if (MULTI_TLDS[suffix]) return true;
+    if (suffix.indexOf('.') === -1) return isKnownTld(suffix);
+    var parts = suffix.split('.').filter(Boolean);
+    if (parts.length !== 2) return false;
+    return isKnownTld(parts[1]) && !!COUNTRY_SLD[parts[0]];
+  }
 
   function publicSuffix(host) {
     var parts = host.split('.').filter(Boolean);
     if (parts.length < 2) return '';
     var two = parts[parts.length - 2] + '.' + parts[parts.length - 1];
     if (MULTI_TLDS[two]) return two;
+    // Heuristic: keep multi-part country suffixes (com.pl, com.pk, co.uk, …)
+    var sld = parts[parts.length - 2];
+    var cc = parts[parts.length - 1];
+    if (cc.length === 2 && isKnownTld(cc) && COUNTRY_SLD[sld]) {
+      return two;
+    }
     return parts[parts.length - 1];
   }
 
@@ -37,41 +131,123 @@
       if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) return false;
     }
     var suffix = publicSuffix(host);
-    if (!suffix) return false;
+    if (!suffix || !isKnownPublicSuffix(suffix)) return false;
     var suffixParts = suffix.split('.').length;
     return (parts.length - suffixParts) === 1;
   }
 
-  function analyzeLine(line) {
+  /**
+   * Pull a hostname out of a messy paste (https, path, port, www, user@host).
+   */
+  function extractHostCandidate(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    s = s.replace(/^[\s'"\[<\(]+/, '').replace(/[\s'"\]>\)]+$/, '');
+    if (!s) return '';
+    // Prefer URL parser when the browser can read the token (handles https://…/path?#…).
+    try {
+      var probe = s;
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(probe) && probe.indexOf('.') !== -1) {
+        // Bare host or host/path without scheme
+        if (/^[a-z0-9.-]+(\/|\?|#|$)/i.test(probe)) {
+          probe = 'https://' + probe;
+        }
+      }
+      // Typo schemes: ttps://, htps://, ttp://
+      probe = probe.replace(/^(?:h?ttps?|tps?):\/\//i, 'https://');
+      var u = new URL(probe);
+      if (u.hostname) {
+        s = u.hostname;
+      }
+    } catch (e) {
+      s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+      if (s.indexOf('//') === 0) s = s.slice(2);
+      s = s.split('/')[0].split('?')[0].split('#')[0];
+    }
+    if (s.indexOf('@') !== -1) {
+      s = s.split('@').pop() || '';
+    }
+    s = String(s).toLowerCase();
+    if (s.indexOf(':') !== -1 && s.indexOf(']') === -1) {
+      s = s.split(':')[0];
+    }
+    s = s.replace(/^www\./i, '').replace(/\.$/, '');
+    return s;
+  }
+
+  /**
+   * Reduce host to apex/root domain (eTLD+1), e.g. blog.example.co.uk → example.co.uk
+   */
+  function toRootDomain(host) {
+    host = String(host || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+    if (!host || host.indexOf('.') === -1) return '';
+    if (!/^[a-z0-9.-]+$/.test(host)) return '';
+    if (host.charAt(0) === '-' || host.slice(-1) === '-' || host.indexOf('..') !== -1) return '';
+    var parts = host.split('.').filter(Boolean);
+    if (parts.length < 2) return '';
+    for (var i = 0; i < parts.length; i++) {
+      var label = parts[i];
+      if (!label || label.length > 63) return '';
+      if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) return '';
+    }
+    var suffix = publicSuffix(host);
+    if (!suffix) return '';
+    var suffixParts = suffix.split('.').length;
+    var need = suffixParts + 1;
+    if (parts.length < need) return '';
+    var root = parts.slice(parts.length - need).join('.');
+    return isRootDomain(root) ? root : '';
+  }
+
+  /**
+   * Try to correct one pasted token into a root domain (does not delete — returns '').
+   */
+  function repairLine(line) {
     var raw = String(line || '').trim();
-    if (!raw) return { ok: false, domain: '', reason: 'empty', raw: raw };
+    if (!raw) return { ok: false, domain: '', reason: 'empty', raw: raw, fixed: false };
+    var host = extractHostCandidate(raw);
+    var root = toRootDomain(host);
+    if (root) {
+      var alreadyClean = (raw.toLowerCase() === root);
+      return { ok: true, domain: root, reason: '', raw: raw, fixed: !alreadyClean };
+    }
     if (/https?:\/\//i.test(raw) || raw.indexOf('://') !== -1 || raw.indexOf('//') === 0) {
-      return { ok: false, domain: '', reason: 'has_scheme', raw: raw };
+      return { ok: false, domain: '', reason: 'has_scheme', raw: raw, fixed: false };
     }
     if (raw.indexOf('/') !== -1 || raw.indexOf('?') !== -1 || raw.indexOf('#') !== -1) {
-      return { ok: false, domain: '', reason: 'has_path', raw: raw };
+      return { ok: false, domain: '', reason: 'has_path', raw: raw, fixed: false };
     }
     if (/\s/.test(raw)) {
-      return { ok: false, domain: '', reason: 'has_spaces', raw: raw };
+      return { ok: false, domain: '', reason: 'has_spaces', raw: raw, fixed: false };
     }
-    var host = raw.toLowerCase().replace(/^www\./i, '');
-    if (host.indexOf(':') !== -1 && host.indexOf(']') === -1) {
-      host = host.split(':')[0];
-    }
-    host = host.replace(/\.$/, '');
-    if (!host || host.indexOf('.') === -1) {
-      return { ok: false, domain: '', reason: 'invalid', raw: raw };
-    }
-    if (!isRootDomain(host)) {
+    if (host && host.indexOf('.') !== -1) {
       var suffix = publicSuffix(host);
       var suffixParts = suffix ? suffix.split('.').length : 1;
       var parts = host.split('.').filter(Boolean);
       if (parts.length - suffixParts > 1) {
-        return { ok: false, domain: '', reason: 'subdomain', raw: raw };
+        return { ok: false, domain: '', reason: 'subdomain', raw: raw, fixed: false };
       }
-      return { ok: false, domain: '', reason: 'invalid', raw: raw };
     }
-    return { ok: true, domain: host, reason: '', raw: raw };
+    return { ok: false, domain: '', reason: 'invalid', raw: raw, fixed: false };
+  }
+
+  function analyzeLine(line) {
+    return repairLine(line);
+  }
+
+  /** Split a line into domain-like chunks (commas and/or whitespace). */
+  function splitChunks(line) {
+    var s = String(line || '').trim();
+    if (!s) return [];
+    if (s.indexOf(',') !== -1) {
+      return s.split(/\s*,\s*/).map(function (c) { return c.trim(); }).filter(Boolean);
+    }
+    // Multiple URL/domain tokens on one line
+    if (/\s/.test(s) && (/https?:\/\//i.test(s) || /\/\/|\//.test(s) || s.split(/\s+/).length > 1)) {
+      var parts = s.split(/\s+/).filter(Boolean);
+      if (parts.length > 1) return parts;
+    }
+    return [s];
   }
 
   function parseDomains(raw) {
@@ -80,57 +256,148 @@
     var validMap = {};
     var validOrder = [];
     var invalid = [];
+    var fixed = 0;
+    var dirty = 0;
     lines.forEach(function (line) {
       line = line.trim();
       if (!line) return;
-      line.split(/\s*,\s*/).forEach(function (chunk) {
-        chunk = chunk.trim();
-        if (!chunk) return;
+      splitChunks(line).forEach(function (chunk) {
         var a = analyzeLine(chunk);
         if (a.ok) {
+          if (a.fixed) {
+            fixed++;
+            dirty++;
+          }
           if (!validMap[a.domain]) {
             validMap[a.domain] = true;
             validOrder.push(a.domain);
           }
-        } else {
+        } else if (a.reason !== 'empty') {
           invalid.push(a);
         }
       });
     });
-    return { valid: validOrder, invalid: invalid, validText: validOrder.join('\n') };
+    return {
+      valid: validOrder,
+      invalid: invalid,
+      validText: validOrder.join('\n'),
+      fixed: fixed,
+      dirty: dirty
+    };
+  }
+
+  /**
+   * Clean = correct fixable lines to root domains; keep unfixable lines so data is not lost.
+   */
+  function cleanDomains(raw) {
+    var text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var lines = text.split(/\n+/);
+    var validMap = {};
+    var out = [];
+    var fixed = 0;
+    var keptBad = 0;
+    lines.forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var chunks = splitChunks(line);
+      var lineHadFixable = false;
+      chunks.forEach(function (chunk) {
+        var a = repairLine(chunk);
+        if (a.ok) {
+          lineHadFixable = true;
+          if (a.fixed) fixed++;
+          if (!validMap[a.domain]) {
+            validMap[a.domain] = true;
+            out.push(a.domain);
+          }
+        } else if (a.reason !== 'empty') {
+          // Preserve unfixable original so Clean never silently deletes user data
+          out.push(a.raw);
+          keptBad++;
+        }
+      });
+      if (!lineHadFixable && chunks.length === 0) {
+        // no-op
+      }
+    });
+    return {
+      text: out.join('\n'),
+      fixed: fixed,
+      keptBad: keptBad,
+      valid: Object.keys(validMap)
+    };
+  }
+
+  function applyCleanToTextarea(ta, status) {
+    if (!ta) return null;
+    var before = ta.value;
+    var cleaned = cleanDomains(before);
+    ta.value = cleaned.text;
+    // Notify draft autosave / other listeners (programmatic .value does not fire input).
+    try {
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      ta.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) { /* ignore */ }
+    if (status) {
+      if (cleaned.keptBad > 0) {
+        status.hidden = false;
+        status.classList.add('domains-paste-warn');
+        status.textContent = 'Corrected ' + cleaned.fixed +
+          ' · kept ' + cleaned.keptBad +
+          ' unfixable line' + (cleaned.keptBad === 1 ? '' : 's') +
+          ' — edit those manually.';
+      } else if (cleaned.fixed > 0 || cleaned.text !== before) {
+        status.hidden = false;
+        status.classList.remove('domains-paste-warn');
+        status.textContent = cleaned.fixed > 0
+          ? ('Corrected ' + cleaned.fixed + ' line' + (cleaned.fixed === 1 ? '' : 's') +
+            ' to root domains (e.g. guruhitech.com).')
+          : 'List is already clean.';
+      } else {
+        status.hidden = true;
+        status.textContent = '';
+        status.classList.remove('domains-paste-warn');
+      }
+    }
+    return cleaned;
   }
 
   function initDomainsPaste(root) {
     var ta = root.querySelector('[data-domains-input]');
-    var btn = root.querySelector('[data-clean-domains]');
     var status = root.querySelector('[data-domains-status]');
     if (!ta) return;
 
     function updateStatus() {
       var parsed = parseDomains(ta.value);
       if (!status) return;
-      if (parsed.invalid.length === 0) {
-        status.hidden = true;
-        status.textContent = '';
-        status.classList.remove('domains-paste-warn');
+      if (parsed.invalid.length > 0) {
+        status.hidden = false;
+        status.classList.add('domains-paste-warn');
+        status.textContent = parsed.invalid.length + ' line' +
+          (parsed.invalid.length === 1 ? '' : 's') +
+          ' need fixing — click Clean errors to correct https/paths/subdomains (keeps what it cannot fix).';
         return;
       }
-      status.hidden = false;
-      status.classList.add('domains-paste-warn');
-      status.textContent = parsed.invalid.length + ' invalid line' +
-        (parsed.invalid.length === 1 ? '' : 's') +
-        ' — click Clean errors to remove them.';
+      // https://… / paths / subdomains parse as fixable roots but still look “dirty” in the box.
+      if (parsed.dirty > 0) {
+        status.hidden = false;
+        status.classList.add('domains-paste-warn');
+        status.textContent = parsed.dirty + ' line' +
+          (parsed.dirty === 1 ? '' : 's') +
+          ' still have https/paths/subdomains — click Clean errors to convert to root domains.';
+        return;
+      }
+      status.hidden = true;
+      status.textContent = '';
+      status.classList.remove('domains-paste-warn');
     }
 
-    if (btn) {
-      btn.addEventListener('click', function () {
-        var parsed = parseDomains(ta.value);
-        ta.value = parsed.validText;
-        updateStatus();
-        ta.focus();
-      });
-    }
+    // Clean errors click is handled by document delegation (below) so it always works.
     ta.addEventListener('input', updateStatus);
+    // After paste of full URLs, nudge status immediately (Clean still required for rewrite).
+    ta.addEventListener('paste', function () {
+      setTimeout(updateStatus, 0);
+    });
     updateStatus();
 
     var form = ta.closest('form');
@@ -140,6 +407,12 @@
         var blocks = form.querySelectorAll('[data-domains-paste] [data-domains-input]');
         for (var i = 0; i < blocks.length; i++) {
           var field = blocks[i];
+          // Auto-correct on submit first, then block only if still invalid
+          var cleaned = cleanDomains(field.value);
+          field.value = cleaned.text;
+          try {
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+          } catch (err) { /* ignore */ }
           var parsed = parseDomains(field.value);
           if (parsed.invalid.length > 0) {
             e.preventDefault();
@@ -149,8 +422,9 @@
             if (st) {
               st.hidden = false;
               st.classList.add('domains-paste-warn');
-              st.textContent = 'Fix or Clean errors before continuing (' +
-                parsed.invalid.length + ' invalid).';
+              st.textContent = 'Still ' + parsed.invalid.length +
+                ' unfixable line' + (parsed.invalid.length === 1 ? '' : 's') +
+                ' — edit or remove those, then try again.';
             }
             return;
           }
@@ -158,6 +432,24 @@
         }
       });
     }
+  }
+
+  // Global delegation: Clean errors still works if a paste block was added later.
+  if (typeof window !== 'undefined' && typeof document !== 'undefined'
+      && !window.__TXF_DOMAINS_CLEAN_DELEGATE__) {
+    window.__TXF_DOMAINS_CLEAN_DELEGATE__ = true;
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-clean-domains]') : null;
+      if (!btn) return;
+      var root = btn.closest('[data-domains-paste]');
+      if (!root) return;
+      var ta = root.querySelector('[data-domains-input]');
+      var status = root.querySelector('[data-domains-status]');
+      if (!ta) return;
+      e.preventDefault();
+      applyCleanToTextarea(ta, status);
+      ta.focus();
+    });
   }
 
   function norm(s) {
@@ -171,8 +463,17 @@
     var contains = [];
     items.forEach(function (it) {
       var label = norm(it.label || it.value);
-      if (label.indexOf(q) === 0) starts.push(it);
-      else if (label.indexOf(q) !== -1) contains.push(it);
+      var value = norm(it.value || '');
+      var region = norm(it.region || '');
+      var lang = norm(it.lang || '');
+      // Match country name / region / default language quietly — do not show
+      // language in the selected field (avoids "German + Germany" confusion).
+      var hay = label + ' ' + value + ' ' + region + ' ' + lang;
+      if (value.indexOf(q) === 0 || label.indexOf(q) === 0 || lang.indexOf(q) === 0) {
+        starts.push(it);
+      } else if (hay.indexOf(q) !== -1) {
+        contains.push(it);
+      }
     });
     return starts.concat(contains).slice(0, 40);
   }
@@ -230,7 +531,9 @@
     function selectItem(it) {
       if (!it) return;
       hidden.value = it.value;
-      input.value = it.label || it.value;
+      // Keep the typed field as the country/language name only.
+      // Dropdown may still show richer labels like "6 · Germany".
+      input.value = it.value || it.label || '';
       closeList();
       if (fillLangSel) {
         var langRoot = document.querySelector(fillLangSel);
@@ -245,7 +548,8 @@
             var wrap = langRoot.closest('[data-typeahead]');
             if (wrap) langInput = wrap.querySelector('[data-typeahead-input]');
           }
-          if (langHidden && it.lang && !String(langHidden.value || '').trim()) {
+          // Always sync language from the selected country (hidden or typeahead).
+          if (langHidden && it.lang) {
             langHidden.value = it.lang;
             if (langInput) langInput.value = it.lang;
           }

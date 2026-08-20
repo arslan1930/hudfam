@@ -2,208 +2,80 @@
 
 function regions(): array
 {
+    // Display order for Our database markets
     return [
         'europe' => 'Europe',
-        'north_america' => 'North America',
         'english' => 'English markets',
+        'north_america' => 'North America',
         'other' => 'Other',
     ];
 }
 
 /**
- * Full country catalog: Europe + North America + English markets (+ a few Other).
- * Each row: [region, code, name, default_language]
- *
- * @return list<array{0:string,1:string,2:string,3:string}>
+ * Folder / search label for a country — always the country name (never TLD like .de).
  */
-function country_catalog(): array
+function prospect_folder_display_label(string $countryName, string $region = '', string $code = ''): string
 {
-    return [
-        // --- Europe (all) ---
-        ['europe', 'AL', 'Albania', 'Albanian'],
-        ['europe', 'AD', 'Andorra', 'Catalan'],
-        ['europe', 'AT', 'Austria', 'German'],
-        ['europe', 'BY', 'Belarus', 'Russian'],
-        ['europe', 'BE', 'Belgium', 'Dutch'],
-        ['europe', 'BA', 'Bosnia and Herzegovina', 'Bosnian'],
-        ['europe', 'BG', 'Bulgaria', 'Bulgarian'],
-        ['europe', 'HR', 'Croatia', 'Croatian'],
-        ['europe', 'CY', 'Cyprus', 'Greek'],
-        ['europe', 'CZ', 'Czech Republic', 'Czech'],
-        ['europe', 'DK', 'Denmark', 'Danish'],
-        ['europe', 'EE', 'Estonia', 'Estonian'],
-        ['europe', 'FI', 'Finland', 'Finnish'],
-        ['europe', 'FR', 'France', 'French'],
+    unset($region, $code); // kept in signature for callers; display is name-only
+    $countryName = trim($countryName);
+    return $countryName !== '' ? $countryName : 'No country';
+}
+
+function seed_countries_if_empty(PDO $pdo): void
+{
+    $count = (int) $pdo->query('SELECT COUNT(*) FROM countries')->fetchColumn();
+    if ($count > 0) {
+        return;
+    }
+    $rows = [
         ['europe', 'DE', 'Germany', 'German'],
-        ['europe', 'GR', 'Greece', 'Greek'],
-        ['europe', 'HU', 'Hungary', 'Hungarian'],
-        ['europe', 'IS', 'Iceland', 'Icelandic'],
-        ['europe', 'IE', 'Ireland', 'English'],
-        ['europe', 'IT', 'Italy', 'Italian'],
-        ['europe', 'XK', 'Kosovo', 'Albanian'],
-        ['europe', 'LV', 'Latvia', 'Latvian'],
-        ['europe', 'LI', 'Liechtenstein', 'German'],
-        ['europe', 'LT', 'Lithuania', 'Lithuanian'],
-        ['europe', 'LU', 'Luxembourg', 'French'],
-        ['europe', 'MT', 'Malta', 'English'],
-        ['europe', 'MD', 'Moldova', 'Romanian'],
-        ['europe', 'MC', 'Monaco', 'French'],
-        ['europe', 'ME', 'Montenegro', 'Montenegrin'],
-        ['europe', 'NL', 'Netherlands', 'Dutch'],
-        ['europe', 'MK', 'North Macedonia', 'Macedonian'],
-        ['europe', 'NO', 'Norway', 'Norwegian'],
-        ['europe', 'PL', 'Poland', 'Polish'],
-        ['europe', 'PT', 'Portugal', 'Portuguese'],
-        ['europe', 'RO', 'Romania', 'Romanian'],
-        ['europe', 'RU', 'Russia', 'Russian'],
-        ['europe', 'SM', 'San Marino', 'Italian'],
-        ['europe', 'RS', 'Serbia', 'Serbian'],
-        ['europe', 'SK', 'Slovakia', 'Slovak'],
-        ['europe', 'SI', 'Slovenia', 'Slovenian'],
-        ['europe', 'ES', 'Spain', 'Spanish'],
-        ['europe', 'SE', 'Sweden', 'Swedish'],
+        ['europe', 'AT', 'Austria', 'German'],
         ['europe', 'CH', 'Switzerland', 'German'],
-        ['europe', 'UA', 'Ukraine', 'Ukrainian'],
-        ['europe', 'GB', 'United Kingdom', 'English'],
-        ['europe', 'VA', 'Vatican City', 'Italian'],
-
-        // --- North America (Northern + Central + Caribbean) ---
-        ['north_america', 'AG', 'Antigua and Barbuda', 'English'],
-        ['north_america', 'BS', 'Bahamas', 'English'],
-        ['north_america', 'BB', 'Barbados', 'English'],
-        ['north_america', 'BZ', 'Belize', 'English'],
-        ['north_america', 'BM', 'Bermuda', 'English'],
-        ['north_america', 'CA', 'Canada', 'English'],
-        ['north_america', 'CR', 'Costa Rica', 'Spanish'],
-        ['north_america', 'CU', 'Cuba', 'Spanish'],
-        ['north_america', 'DM', 'Dominica', 'English'],
-        ['north_america', 'DO', 'Dominican Republic', 'Spanish'],
-        ['north_america', 'SV', 'El Salvador', 'Spanish'],
-        ['north_america', 'GL', 'Greenland', 'Danish'],
-        ['north_america', 'GD', 'Grenada', 'English'],
-        ['north_america', 'GT', 'Guatemala', 'Spanish'],
-        ['north_america', 'HT', 'Haiti', 'French'],
-        ['north_america', 'HN', 'Honduras', 'Spanish'],
-        ['north_america', 'JM', 'Jamaica', 'English'],
-        ['north_america', 'MX', 'Mexico', 'Spanish'],
-        ['north_america', 'NI', 'Nicaragua', 'Spanish'],
-        ['north_america', 'PA', 'Panama', 'Spanish'],
-        ['north_america', 'KN', 'Saint Kitts and Nevis', 'English'],
-        ['north_america', 'LC', 'Saint Lucia', 'English'],
-        ['north_america', 'VC', 'Saint Vincent and the Grenadines', 'English'],
-        ['north_america', 'TT', 'Trinidad and Tobago', 'English'],
+        ['europe', 'FR', 'France', 'French'],
+        ['europe', 'IT', 'Italy', 'Italian'],
+        ['europe', 'ES', 'Spain', 'Spanish'],
+        ['europe', 'NL', 'Netherlands', 'Dutch'],
+        ['europe', 'BE', 'Belgium', 'Dutch'],
+        ['europe', 'PL', 'Poland', 'Polish'],
+        ['europe', 'SE', 'Sweden', 'Swedish'],
+        ['europe', 'NO', 'Norway', 'Norwegian'],
+        ['europe', 'DK', 'Denmark', 'Danish'],
+        ['europe', 'FI', 'Finland', 'Finnish'],
+        ['europe', 'PT', 'Portugal', 'Portuguese'],
+        ['europe', 'IE', 'Ireland', 'English'],
         ['north_america', 'US', 'United States', 'English'],
-
-        // --- English markets (outside Europe / North America) ---
+        ['north_america', 'CA', 'Canada', 'English'],
+        ['north_america', 'MX', 'Mexico', 'Spanish'],
+        ['english', 'GB', 'United Kingdom', 'English'],
         ['english', 'AU', 'Australia', 'English'],
-        ['english', 'BD', 'Bangladesh', 'English'],
-        ['english', 'BW', 'Botswana', 'English'],
-        ['english', 'CM', 'Cameroon', 'English'],
-        ['english', 'GH', 'Ghana', 'English'],
-        ['english', 'GY', 'Guyana', 'English'],
-        ['english', 'HK', 'Hong Kong', 'English'],
-        ['english', 'IN', 'India', 'English'],
-        ['english', 'KE', 'Kenya', 'English'],
-        ['english', 'MW', 'Malawi', 'English'],
-        ['english', 'MY', 'Malaysia', 'English'],
-        ['english', 'MU', 'Mauritius', 'English'],
-        ['english', 'NA', 'Namibia', 'English'],
-        ['english', 'NG', 'Nigeria', 'English'],
         ['english', 'NZ', 'New Zealand', 'English'],
-        ['english', 'PK', 'Pakistan', 'English'],
-        ['english', 'PG', 'Papua New Guinea', 'English'],
-        ['english', 'PH', 'Philippines', 'English'],
-        ['english', 'RW', 'Rwanda', 'English'],
-        ['english', 'SG', 'Singapore', 'English'],
         ['english', 'ZA', 'South Africa', 'English'],
-        ['english', 'LK', 'Sri Lanka', 'English'],
-        ['english', 'TZ', 'Tanzania', 'English'],
-        ['english', 'UG', 'Uganda', 'English'],
-        ['english', 'ZM', 'Zambia', 'English'],
-        ['english', 'ZW', 'Zimbabwe', 'English'],
-
-        // --- Other (kept for existing installs) ---
+        ['english', 'SG', 'Singapore', 'English'],
+        ['english', 'IN', 'India', 'English'],
         ['other', 'BR', 'Brazil', 'Portuguese'],
         ['other', 'JP', 'Japan', 'Japanese'],
         ['other', 'KR', 'South Korea', 'Korean'],
         ['other', 'AE', 'United Arab Emirates', 'Arabic'],
     ];
-}
-
-/**
- * Unique default languages from the catalog (for optional language pickers).
- *
- * @return list<string>
- */
-function catalog_languages(): array
-{
-    $langs = [];
-    foreach (country_catalog() as $row) {
-        $lang = trim((string) $row[3]);
-        if ($lang !== '') {
-            $langs[$lang] = true;
-        }
-    }
-    $list = array_keys($langs);
-    natcasesort($list);
-    return array_values($list);
-}
-
-/**
- * Insert missing countries and refresh region / default language for known names.
- * Runs at most once per request; skips when the DB already has the full catalog.
- */
-function sync_countries(PDO $pdo, bool $force = false): void
-{
-    static $done = false;
-    if ($done && !$force) {
-        return;
-    }
-    $done = true;
-
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS countries (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          region VARCHAR(40) NOT NULL DEFAULT 'other',
-          code VARCHAR(10) NOT NULL DEFAULT '',
-          name VARCHAR(100) NOT NULL,
-          default_language VARCHAR(50) NOT NULL DEFAULT '',
-          is_active TINYINT(1) NOT NULL DEFAULT 1,
-          UNIQUE KEY uniq_country_name (name),
-          INDEX (region),
-          INDEX (code)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
-
-    $catalog = country_catalog();
-    $count = (int) $pdo->query('SELECT COUNT(*) FROM countries')->fetchColumn();
-    if (!$force && $count >= count($catalog)) {
-        return;
-    }
-
     $ins = $pdo->prepare(
-        'INSERT INTO countries (region, code, name, default_language, is_active)
-         VALUES (?,?,?,?,1)
-         ON DUPLICATE KEY UPDATE
-           region = VALUES(region),
-           code = VALUES(code),
-           default_language = VALUES(default_language),
-           is_active = 1'
+        'INSERT INTO countries (region, code, name, default_language, is_active) VALUES (?,?,?,?,1)'
     );
-    foreach ($catalog as $r) {
+    foreach ($rows as $r) {
         $ins->execute($r);
     }
 }
 
-/** @deprecated use sync_countries() — kept so older call sites still work */
-function seed_countries_if_empty(PDO $pdo): void
-{
-    sync_countries($pdo);
-}
-
 function list_countries(?string $region = null, bool $activeOnly = true): array
 {
-    sync_countries(db());
+    // One-time repair: merge German → Germany (and similar demonym folders), drop fake catalog rows.
+    if (function_exists('repair_country_alias_folders')) {
+        try {
+            repair_country_alias_folders();
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
     $sql = 'SELECT * FROM countries WHERE 1=1';
     $params = [];
     if ($activeOnly) {
@@ -213,24 +85,87 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         $sql .= ' AND region = ?';
         $params[] = $region;
     }
-    $sql .= ' ORDER BY region, name';
+    $sql .= ' ORDER BY name, id';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    // Never show duplicate country names (case/whitespace variants).
+    // Never show demonyms (German, Spanish, …) even if still in DB mid-repair.
+    $out = [];
+    $seen = [];
+    foreach ($rows as $row) {
+        $name = trim((string) ($row['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        if (function_exists('is_country_name_alias') && is_country_name_alias($name)) {
+            continue;
+        }
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $row['name'] = $name;
+        $out[] = $row;
+    }
+    return $out;
 }
 
 /**
- * Extra country labels people type (demonyms, native names, common mistakes).
- * Keys must be lowercase. Values are catalog country names.
+ * Remove duplicate rows from countries table (same name, case/space insensitive).
+ * Keeps the lowest id.
+ */
+function dedupe_countries_catalog(): int
+{
+    $pdo = db();
+    $rows = $pdo->query(
+        'SELECT id, name FROM countries ORDER BY id ASC'
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $keep = [];
+    $removed = 0;
+    $del = $pdo->prepare('DELETE FROM countries WHERE id=?');
+    $fixName = $pdo->prepare('UPDATE countries SET name=? WHERE id=?');
+    foreach ($rows as $row) {
+        $id = (int) $row['id'];
+        $name = trim((string) ($row['name'] ?? ''));
+        if ($name === '') {
+            $del->execute([$id]);
+            $removed++;
+            continue;
+        }
+        $key = mb_strtolower($name);
+        if (isset($keep[$key])) {
+            $del->execute([$id]);
+            $removed++;
+            continue;
+        }
+        $keep[$key] = $id;
+        if ($name !== (string) $row['name']) {
+            try {
+                $fixName->execute([$name, $id]);
+            } catch (Throwable $e) {
+                // unique collision after trim — drop this row
+                $del->execute([$id]);
+                $removed++;
+                unset($keep[$key]);
+            }
+        }
+    }
+    return $removed;
+}
+
+/**
+ * Language / demonym / mistaken labels that must never be country folders.
+ * Keys lowercase. Values = real catalog country names.
  *
  * @return array<string,string>
  */
 function country_name_aliases(): array
 {
     return [
-        // Germany
+        // Germany (fixes "German" showing next to Germany)
         'german' => 'Germany',
-        'germany' => 'Germany',
         'deutschland' => 'Germany',
         'deutchland' => 'Germany',
         'federal republic of germany' => 'Germany',
@@ -257,27 +192,24 @@ function country_name_aliases(): array
         'dutch' => 'Netherlands',
         'holland' => 'Netherlands',
         'the netherlands' => 'Netherlands',
-        // United Kingdom / English markets
+        // UK / US
         'uk' => 'United Kingdom',
         'u.k.' => 'United Kingdom',
         'great britain' => 'United Kingdom',
         'britain' => 'United Kingdom',
         'england' => 'United Kingdom',
         'british' => 'United Kingdom',
-        // United States
+        'english' => 'United Kingdom',
         'usa' => 'United States',
         'u.s.' => 'United States',
         'u.s.a.' => 'United States',
-        'us' => 'United States',
         'america' => 'United States',
         'american' => 'United States',
-        // Poland
+        // Others
         'polish' => 'Poland',
         'polska' => 'Poland',
-        // Czech
         'czech' => 'Czech Republic',
         'czechia' => 'Czech Republic',
-        // Others often mistyped
         'belgian' => 'Belgium',
         'swedish' => 'Sweden',
         'norwegian' => 'Norway',
@@ -294,89 +226,302 @@ function country_name_aliases(): array
         'irish' => 'Ireland',
         'canadian' => 'Canada',
         'australian' => 'Australia',
-        'new zealander' => 'New Zealand',
-        'nz' => 'New Zealand',
+        'japanese' => 'Japan',
+        'korean' => 'South Korea',
+        'brazilian' => 'Brazil',
+        'mexican' => 'Mexico',
+        'indian' => 'India',
     ];
 }
 
 /**
- * Map a free-text / code / wrong-case country to the catalog name.
- * Returns catalog name when known, otherwise the trimmed input (unchanged meaning).
+ * True when $name is a demonym/alias that maps to a different country.
  */
-function canonicalize_country_name(string $input): string
+function is_country_name_alias(string $name): bool
 {
-    $input = trim($input);
-    if ($input === '' || $input === '_none') {
-        return $input;
+    $key = mb_strtolower(trim($name));
+    if ($key === '') {
+        return false;
     }
-    static $byLower = null;
-    static $byCode = null;
-    static $aliases = null;
-    if ($byLower === null) {
-        $byLower = [];
-        $byCode = [];
-        foreach (list_countries(null, false) as $c) {
-            $name = trim((string) ($c['name'] ?? ''));
-            $code = strtoupper(trim((string) ($c['code'] ?? '')));
-            if ($name === '') {
-                continue;
-            }
-            $byLower[strtolower($name)] = $name;
-            if ($code !== '') {
-                $byCode[$code] = $name;
-            }
-        }
-        $aliases = country_name_aliases();
+    $aliases = country_name_aliases();
+    if (!isset($aliases[$key])) {
+        return false;
     }
-    $lower = strtolower($input);
-    if (isset($byLower[$lower])) {
-        return $byLower[$lower];
-    }
-    if (isset($aliases[$lower])) {
-        $mapped = $aliases[$lower];
-        // Prefer exact catalog casing
-        return $byLower[strtolower($mapped)] ?? $mapped;
-    }
-    $code = strtoupper($input);
-    if (isset($byCode[$code])) {
-        return $byCode[$code];
-    }
-    return $input;
+    return strcasecmp($aliases[$key], trim($name)) !== 0;
 }
 
 /**
- * All label variants that should match a country folder (catalog name + ISO code + input).
+ * Merge rows from one country label into another across a table that has country (+ optional domain).
  *
- * @return list<string>
+ * @return int rows changed (updated or deleted)
  */
-function country_name_match_values(string $countryKey): array
+function merge_country_label_rows(PDO $pdo, string $table, string $from, string $to): int
 {
-    $countryKey = trim($countryKey);
-    if ($countryKey === '' || $countryKey === '_none') {
-        return [''];
+    $from = trim($from);
+    $to = trim($to);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        return 0;
     }
-    $canon = canonicalize_country_name($countryKey);
-    $out = [$canon, $countryKey];
-    foreach (list_countries(null, false) as $c) {
-        if (strcasecmp((string) $c['name'], $canon) === 0) {
-            $code = trim((string) ($c['code'] ?? ''));
-            if ($code !== '') {
-                $out[] = $code;
+    try {
+        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
+        if (!$exists) {
+            return 0;
+        }
+        $cols = $pdo->query('SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('country', $cols, true)) {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $changed = 0;
+    $hasDomain = in_array('domain', $cols, true);
+
+    if ($hasDomain) {
+        $sel = $pdo->prepare("SELECT id, domain FROM `{$table}` WHERE TRIM(country)=?");
+        $find = $pdo->prepare("SELECT id FROM `{$table}` WHERE TRIM(country)=? AND domain=? LIMIT 1");
+        $upd = $pdo->prepare("UPDATE `{$table}` SET country=? WHERE id=?");
+        $del = $pdo->prepare("DELETE FROM `{$table}` WHERE id=?");
+        $sel->execute([$from]);
+        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $id = (int) $row['id'];
+            $domain = (string) ($row['domain'] ?? '');
+            $find->execute([$to, $domain]);
+            $existingId = (int) $find->fetchColumn();
+            if ($existingId > 0 && $existingId !== $id) {
+                $del->execute([$id]);
+            } else {
+                $upd->execute([$to, $id]);
             }
-            $out[] = (string) $c['name'];
-            break;
+            $changed++;
+        }
+        return $changed;
+    }
+
+    $updAll = $pdo->prepare("UPDATE `{$table}` SET country=? WHERE TRIM(country)=?");
+    $updAll->execute([$to, $from]);
+    return (int) $updAll->rowCount();
+}
+
+/**
+ * Merge extract_batches when both alias and target country batches exist.
+ */
+function merge_extract_batch_country_label(PDO $pdo, string $from, string $to): int
+{
+    $from = trim($from);
+    $to = trim($to);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        return 0;
+    }
+    try {
+        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('extract_batches'))->fetchColumn()) {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $get = $pdo->prepare('SELECT id FROM extract_batches WHERE TRIM(country)=? LIMIT 1');
+    $get->execute([$from]);
+    $fromId = (int) $get->fetchColumn();
+    if ($fromId < 1) {
+        return 0;
+    }
+    $get->execute([$to]);
+    $toId = (int) $get->fetchColumn();
+
+    $changed = 0;
+    if ($toId < 1) {
+        $pdo->prepare('UPDATE extract_batches SET country=? WHERE id=?')->execute([$to, $fromId]);
+        return 1;
+    }
+
+    // Move sites into target batch; drop duplicates
+    try {
+        $sites = $pdo->prepare('SELECT id, domain FROM extract_batch_sites WHERE batch_id=?');
+        $find = $pdo->prepare('SELECT id FROM extract_batch_sites WHERE batch_id=? AND domain=? LIMIT 1');
+        $move = $pdo->prepare('UPDATE extract_batch_sites SET batch_id=? WHERE id=?');
+        $delSite = $pdo->prepare('DELETE FROM extract_batch_sites WHERE id=?');
+        $sites->execute([$fromId]);
+        foreach ($sites->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $find->execute([$toId, $row['domain']]);
+            if ((int) $find->fetchColumn() > 0) {
+                $delSite->execute([(int) $row['id']]);
+            } else {
+                $move->execute([$toId, (int) $row['id']]);
+            }
+            $changed++;
+        }
+        $cStmt = $pdo->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
+        $cStmt->execute([$toId]);
+        $cnt = (int) $cStmt->fetchColumn();
+        $pdo->prepare('UPDATE extract_batches SET site_count=?, updated_at=NOW() WHERE id=?')
+            ->execute([$cnt, $toId]);
+        $pdo->prepare('DELETE FROM extract_batches WHERE id=?')->execute([$fromId]);
+        $changed++;
+    } catch (Throwable $e) {
+        // ignore
+    }
+    return $changed;
+}
+
+/**
+ * Merge email campaign sheet named like an alias into the real country sheet.
+ */
+function merge_email_sheet_country_label(PDO $pdo, string $from, string $to): int
+{
+    $from = trim($from);
+    $to = trim($to);
+    if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
+        return 0;
+    }
+    try {
+        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('email_campaign_sheets'))->fetchColumn()) {
+            return 0;
+        }
+    } catch (Throwable $e) {
+        return 0;
+    }
+
+    $get = $pdo->prepare('SELECT id FROM email_campaign_sheets WHERE TRIM(name)=? LIMIT 1');
+    $get->execute([$from]);
+    $fromId = (int) $get->fetchColumn();
+    if ($fromId < 1) {
+        return 0;
+    }
+    $get->execute([$to]);
+    $toId = (int) $get->fetchColumn();
+    $changed = 0;
+
+    if ($toId < 1) {
+        try {
+            $pdo->prepare('UPDATE email_campaign_sheets SET name=? WHERE id=?')->execute([$to, $fromId]);
+            $pdo->prepare('UPDATE email_campaign_rows SET country=? WHERE sheet_id=?')->execute([$to, $fromId]);
+            return 1;
+        } catch (Throwable $e) {
+            return 0;
         }
     }
-    foreach (country_name_aliases() as $alias => $target) {
-        if (strcasecmp($target, $canon) === 0) {
-            $out[] = $alias;
-            // Preserve common casing variants
-            $out[] = ucfirst($alias);
-            $out[] = strtoupper($alias);
+
+    try {
+        $rows = $pdo->prepare('SELECT id, domain FROM email_campaign_rows WHERE sheet_id=?');
+        $find = $pdo->prepare('SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1');
+        $move = $pdo->prepare('UPDATE email_campaign_rows SET sheet_id=?, country=? WHERE id=?');
+        $del = $pdo->prepare('DELETE FROM email_campaign_rows WHERE id=?');
+        $rows->execute([$fromId]);
+        foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $find->execute([$toId, $row['domain']]);
+            if ((int) $find->fetchColumn() > 0) {
+                $del->execute([(int) $row['id']]);
+            } else {
+                $move->execute([$toId, $to, (int) $row['id']]);
+            }
+            $changed++;
+        }
+        $pdo->prepare('DELETE FROM email_campaign_sheets WHERE id=?')->execute([$fromId]);
+        $changed++;
+    } catch (Throwable $e) {
+        // ignore
+    }
+    return $changed;
+}
+
+/**
+ * Merge demonym folders (German → Germany) in data + delete fake countries rows.
+ * Safe to call often (runs once per request unless $force).
+ *
+ * @return array{merged:int,removed_catalog:int}
+ */
+function repair_country_alias_folders(bool $force = false): array
+{
+    static $done = false;
+    if ($done && !$force) {
+        return ['merged' => 0, 'removed_catalog' => 0];
+    }
+    $done = true;
+
+    $pdo = db();
+    $aliases = country_name_aliases();
+    $merged = 0;
+    $removedCatalog = 0;
+
+    // Catalog lookup: lowercase real country name => canonical casing + region
+    $catalog = [];
+    try {
+        foreach ($pdo->query('SELECT id, name, region, default_language FROM countries')->fetchAll(PDO::FETCH_ASSOC) as $c) {
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $catalog[mb_strtolower($name)] = $c;
+        }
+    } catch (Throwable $e) {
+        return ['merged' => 0, 'removed_catalog' => 0];
+    }
+
+    $pairs = []; // fromLabel => toLabel
+    foreach ($aliases as $aliasKey => $targetName) {
+        $targetKey = mb_strtolower($targetName);
+        if (!isset($catalog[$targetKey])) {
+            continue; // target country not in catalog — skip
+        }
+        $to = trim((string) $catalog[$targetKey]['name']);
+
+        // Fake countries-table row named like the alias (e.g. name="German")
+        if (isset($catalog[$aliasKey])) {
+            $from = trim((string) $catalog[$aliasKey]['name']);
+            if (strcasecmp($from, $to) !== 0) {
+                $pairs[$from] = $to;
+            }
+        }
+        // Also merge common casings in data even if not in catalog
+        $pairs[ucfirst($aliasKey)] = $to;
+        $pairs[$aliasKey] = $to;
+    }
+
+    $dataTables = [
+        'prospect_sites',
+        'prospect_batches',
+        'extracted_sites',
+        'sites_with_emails_team',
+        'sites_with_emails_admin',
+        'sites_with_emails_admin_all',
+        'email_campaign_rows',
+        'order_items',
+        'order_clients',
+    ];
+
+    foreach ($pairs as $from => $to) {
+        if (strcasecmp($from, $to) === 0) {
+            continue;
+        }
+        foreach ($dataTables as $table) {
+            $merged += merge_country_label_rows($pdo, $table, $from, $to);
+        }
+        $merged += merge_extract_batch_country_label($pdo, $from, $to);
+        $merged += merge_email_sheet_country_label($pdo, $from, $to);
+    }
+
+    // Delete demonym rows from countries catalog (German, Spanish, …)
+    $del = $pdo->prepare('DELETE FROM countries WHERE id=?');
+    foreach ($catalog as $key => $row) {
+        if (!isset($aliases[$key])) {
+            continue;
+        }
+        $targetKey = mb_strtolower($aliases[$key]);
+        if ($targetKey === $key || !isset($catalog[$targetKey])) {
+            continue;
+        }
+        try {
+            $del->execute([(int) $row['id']]);
+            $removedCatalog++;
+        } catch (Throwable $e) {
+            // ignore
         }
     }
-    $out = array_values(array_unique(array_filter(array_map('trim', $out), static fn($v) => $v !== '')));
-    return $out !== [] ? $out : [$countryKey];
+
+    return ['merged' => $merged, 'removed_catalog' => $removedCatalog];
 }
 
 function countries_grouped(): array
@@ -395,280 +540,66 @@ function countries_grouped(): array
     return $grouped;
 }
 
-/**
- * Countries this user adds most often (from Add history batches).
- * Recent activity (last 30 days) is weighted higher.
- *
- * @return list<array{name:string,score:float,sites:int,days:int,last_date:?string}>
- */
-function user_frequent_countries(int $userId, int $limit = 8): array
-{
-    if ($userId <= 0) {
-        return [];
-    }
-    try {
-        if (function_exists('ensure_prospect_schema')) {
-            ensure_prospect_schema();
-        }
-        $liveByCanon = [];
-        try {
-            foreach (db()->query(
-                "SELECT TRIM(country) AS country, COUNT(*) AS total FROM prospect_sites GROUP BY TRIM(country)"
-            )->fetchAll() as $row) {
-                $raw = trim((string) ($row['country'] ?? ''));
-                if ($raw === '') {
-                    continue;
-                }
-                $canon = canonicalize_country_name($raw);
-                $liveByCanon[$canon] = ($liveByCanon[$canon] ?? 0) + (int) $row['total'];
-            }
-        } catch (Throwable $e) {
-            $liveByCanon = [];
-        }
-        $stmt = db()->prepare(
-            "SELECT TRIM(country) AS name,
-                    SUM(site_count) AS sites,
-                    COUNT(*) AS days,
-                    MAX(batch_date) AS last_date,
-                    SUM(
-                      CASE
-                        WHEN batch_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                          THEN site_count * 3
-                        ELSE site_count
-                      END
-                    ) AS score
-             FROM prospect_batches
-             WHERE user_id = ?
-               AND TRIM(country) <> ''
-             GROUP BY TRIM(country)
-             ORDER BY score DESC, sites DESC, last_date DESC
-             LIMIT " . (int) max($limit * 3, $limit)
-        );
-        $stmt->execute([$userId]);
-        $merged = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $raw = trim((string) ($row['name'] ?? ''));
-            if ($raw === '') {
-                continue;
-            }
-            $name = canonicalize_country_name($raw);
-            if (!isset($merged[$name])) {
-                $merged[$name] = [
-                    'name' => $name,
-                    'sites' => 0,
-                    'days' => 0,
-                    'last_date' => null,
-                    'score' => 0.0,
-                    'in_database' => (int) ($liveByCanon[$name] ?? 0),
-                ];
-            }
-            $merged[$name]['sites'] += (int) ($row['sites'] ?? 0);
-            $merged[$name]['days'] += (int) ($row['days'] ?? 0);
-            $merged[$name]['score'] += (float) ($row['score'] ?? 0);
-            $ld = $row['last_date'] ?? null;
-            if ($ld && ($merged[$name]['last_date'] === null || (string) $ld > (string) $merged[$name]['last_date'])) {
-                $merged[$name]['last_date'] = $ld;
-            }
-        }
-        uasort($merged, static function ($a, $b) {
-            if ($a['score'] !== $b['score']) {
-                return $b['score'] <=> $a['score'];
-            }
-            if ($a['sites'] !== $b['sites']) {
-                return $b['sites'] <=> $a['sites'];
-            }
-            return strcmp((string) ($b['last_date'] ?? ''), (string) ($a['last_date'] ?? ''));
-        });
-        $out = [];
-        foreach (array_slice(array_values($merged), 0, $limit) as $row) {
-            $out[] = [
-                'name' => (string) $row['name'],
-                'score' => (float) ($row['score'] ?? 0),
-                'sites' => (int) ($row['sites'] ?? 0),
-                'days' => (int) ($row['days'] ?? 0),
-                'last_date' => $row['last_date'] !== null ? (string) $row['last_date'] : null,
-                'in_database' => (int) ($row['in_database'] ?? 0),
-            ];
-        }
-        return $out;
-    } catch (Throwable $e) {
-        return [];
-    }
-}
-
-/** Top country name for a user, or '' if none. */
-function user_top_country(int $userId): string
-{
-    $list = user_frequent_countries($userId, 1);
-    return $list[0]['name'] ?? '';
-}
-
-/**
- * Country <select> with type-to-search, optional “Often used” group first.
- *
- * @param list<array{name:string,...}>|null $frequent from user_frequent_countries()
- */
-function render_country_select(
-    string $name,
-    string $selected = '',
-    string $id = '',
-    bool $required = false,
-    ?array $frequent = null,
-    string $placeholder = '— Select country —'
-): string {
-    $byName = [];
-    foreach (list_countries(null, true) as $c) {
-        $byName[(string) $c['name']] = $c;
-    }
-
-    $idAttr = $id !== '' ? ' id="' . h($id) . '"' : '';
-    $reqAttr = $required ? ' required' : '';
-    $html = '<select name="' . h($name) . '"' . $idAttr . $reqAttr . ' data-searchable="1">';
-    $html .= '<option value="">' . h($placeholder) . '</option>';
-
-    $optionHtml = static function (string $n, array $meta, string $selected, string $label = '') use (&$byName): string {
-        if ($label === '') {
-            $label = $n;
-        }
-        $region = (string) ($meta['region'] ?? ($byName[$n]['region'] ?? ''));
-        $lang = (string) ($meta['default_language'] ?? ($byName[$n]['default_language'] ?? ''));
-        $sel = strcasecmp($selected, $n) === 0 ? ' selected' : '';
-        return '<option value="' . h($n) . '" data-region="' . h($region) . '" data-lang="' . h($lang) . '"' . $sel . '>'
-            . h($label) . '</option>';
-    };
-
-    $frequentNames = [];
-    if ($frequent) {
-        foreach ($frequent as $f) {
-            $n = trim((string) ($f['name'] ?? ''));
-            if ($n !== '') {
-                $frequentNames[$n] = true;
-            }
-        }
-        if ($frequentNames !== []) {
-            $html .= '<optgroup label="Often used">';
-            foreach ($frequent as $f) {
-                $n = trim((string) ($f['name'] ?? ''));
-                if ($n === '') {
-                    continue;
-                }
-                $sites = (int) ($f['in_database'] ?? $f['sites'] ?? 0);
-                $label = $n . ($sites > 0 ? ' · ' . $sites . ' in DB' : '');
-                $html .= $optionHtml($n, $byName[$n] ?? [], $selected, $label);
-            }
-            $html .= '</optgroup>';
-        }
-    }
-
-    foreach (countries_grouped() as $block) {
-        if (empty($block['countries'])) {
-            continue;
-        }
-        $html .= '<optgroup label="' . h((string) $block['label']) . '">';
-        foreach ($block['countries'] as $c) {
-            $n = (string) $c['name'];
-            if (isset($frequentNames[$n])) {
-                continue;
-            }
-            $html .= $optionHtml($n, $c, $selected);
-        }
-        $html .= '</optgroup>';
-    }
-
-    if ($selected !== '' && !isset($byName[$selected]) && !isset($frequentNames[$selected])) {
-        $html .= $optionHtml($selected, [], $selected);
-    }
-
-    $html .= '</select>';
-    return $html;
-}
-
-/**
- * Optional language <select> with type-to-search.
- */
-function render_language_select(string $name, string $selected = '', string $id = ''): string
-{
-    $idAttr = $id !== '' ? ' id="' . h($id) . '"' : '';
-    $html = '<select name="' . h($name) . '"' . $idAttr . ' data-searchable="1">';
-    $html .= '<option value="">— Optional —</option>';
-    $seen = [];
-    foreach (catalog_languages() as $lang) {
-        $seen[$lang] = true;
-        $sel = strcasecmp($selected, $lang) === 0 ? ' selected' : '';
-        $html .= '<option value="' . h($lang) . '"' . $sel . '>' . h($lang) . '</option>';
-    }
-    if ($selected !== '' && !isset($seen[$selected])) {
-        $html .= '<option value="' . h($selected) . '" selected>' . h($selected) . '</option>';
-    }
-    $html .= '</select>';
-    return $html;
-}
-
-/**
- * Region <select> with type-to-search.
- */
-function render_region_select(string $name, string $selected = '', string $id = ''): string
-{
-    $idAttr = $id !== '' ? ' id="' . h($id) . '"' : '';
-    $html = '<select name="' . h($name) . '"' . $idAttr . ' data-searchable="1">';
-    $html .= '<option value="">—</option>';
-    foreach (regions() as $k => $v) {
-        $sel = $selected === $k ? ' selected' : '';
-        $html .= '<option value="' . h($k) . '"' . $sel . '>' . h($v) . '</option>';
-    }
-    $html .= '</select>';
-    return $html;
-}
-
-/**
- * Shortcut chips for often-used countries (links).
- * Number shown is sites currently in Our database for that country.
- *
- * @param list<array{name:string,sites?:int,in_database?:int}> $frequent
- */
-function render_frequent_country_chips(array $frequent, string $hrefPrefix): string
-{
-    if ($frequent === []) {
-        return '';
-    }
-    $html = '<div class="usage-chips" aria-label="Countries you use most">';
-    $html .= '<span class="usage-chips-label">Often used:</span>';
-    foreach ($frequent as $f) {
-        $n = trim((string) ($f['name'] ?? ''));
-        if ($n === '') {
-            continue;
-        }
-        $n = canonicalize_country_name($n);
-        $inDb = array_key_exists('in_database', $f)
-            ? (int) $f['in_database']
-            : (int) ($f['sites'] ?? 0);
-        $html .= '<a class="usage-chip" href="' . h($hrefPrefix . rawurlencode($n)) . '">'
-            . h($n)
-            . ' <span class="muted">(' . $inDb . ' in DB)</span>'
-            . '</a>';
-    }
-    $html .= '</div>';
-    return $html;
-}
-
 function distinct_site_languages(): array
 {
-    // Legacy helper (sites table may be gone); fall back to catalog.
-    try {
-        $rows = db()->query(
-            "SELECT DISTINCT language FROM sites WHERE language <> '' ORDER BY language"
-        )->fetchAll();
-        if ($rows) {
-            return array_column($rows, 'language');
-        }
-    } catch (Throwable $e) {
-        // ignore
+    $rows = db()->query(
+        "SELECT DISTINCT language FROM sites WHERE language <> '' ORDER BY language"
+    )->fetchAll();
+    return array_column($rows, 'language');
+}
+
+/**
+ * True when a language value is actually a country name (e.g. "Germany").
+ * Demonyms like "German" are valid languages and return false.
+ */
+function is_country_name_used_as_language(string $language): bool
+{
+    $language = trim($language);
+    if ($language === '') {
+        return false;
     }
-    return catalog_languages();
+    foreach (list_countries(null, false) as $c) {
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $language) === 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Resolve a stored/posted language for a country.
+ * Never keeps a country name (Germany) as the language — maps to default (German).
+ */
+function normalize_site_language(string $language, string $country = ''): string
+{
+    $language = trim($language);
+    $country = trim($country);
+    if ($language !== '' && !is_country_name_used_as_language($language)) {
+        return $language;
+    }
+    if ($country !== '') {
+        $canon = resolve_canonical_country($country);
+        if ($canon) {
+            $fallback = trim((string) ($canon['language'] ?? ''));
+            if ($fallback !== '' && !is_country_name_used_as_language($fallback)) {
+                return $fallback;
+            }
+        }
+    }
+    if ($language !== '' && is_country_name_used_as_language($language)) {
+        $canon = resolve_canonical_country($language);
+        if ($canon) {
+            return trim((string) ($canon['language'] ?? ''));
+        }
+        return '';
+    }
+    return $language;
 }
 
 /**
  * Language labels for optional typeahead (country defaults + any already used on prospects).
+ * Never includes country names (fixes Language list showing "German" and "Germany").
  *
  * @return list<string>
  */
@@ -676,7 +607,7 @@ function list_language_options(): array
 {
     $set = [];
     foreach (list_countries(null, true) as $c) {
-        $lang = trim((string) ($c['default_language'] ?? ''));
+        $lang = normalize_site_language((string) ($c['default_language'] ?? ''), (string) ($c['name'] ?? ''));
         if ($lang !== '') {
             $set[$lang] = true;
         }
@@ -686,7 +617,7 @@ function list_language_options(): array
             "SELECT DISTINCT language FROM prospect_sites WHERE TRIM(language) <> '' ORDER BY language"
         )->fetchAll(PDO::FETCH_COLUMN);
         foreach ($rows as $lang) {
-            $lang = trim((string) $lang);
+            $lang = normalize_site_language((string) $lang);
             if ($lang !== '') {
                 $set[$lang] = true;
             }
@@ -717,6 +648,70 @@ function list_country_typeahead_items(): array
     return $items;
 }
 
+/**
+ * Resolve typed/posted country text to an existing countries-table row.
+ * Never creates a new country — returns null when there is no match.
+ *
+ * @return array{name:string,region:string,language:string}|null
+ */
+function resolve_canonical_country(string $input): ?array
+{
+    $input = trim($input);
+    if ($input === '' || strcasecmp($input, '_none') === 0) {
+        return null;
+    }
+    if (function_exists('seed_countries_if_empty')) {
+        try {
+            seed_countries_if_empty(db());
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
+    // Demonyms / mistakes first: German → Germany (never treat "German" as its own folder).
+    $aliases = country_name_aliases();
+    $aliasKey = mb_strtolower($input);
+    if (isset($aliases[$aliasKey])) {
+        $mapped = $aliases[$aliasKey];
+        foreach (list_countries(null, true) as $c) {
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($name !== '' && strcasecmp($name, $mapped) === 0) {
+                return [
+                    'name' => $name,
+                    'region' => (string) ($c['region'] ?? ''),
+                    'language' => (string) ($c['default_language'] ?? ''),
+                ];
+            }
+        }
+    }
+
+    foreach (list_countries(null, true) as $c) {
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name !== '' && strcasecmp($name, $input) === 0) {
+            return [
+                'name' => $name,
+                'region' => (string) ($c['region'] ?? ''),
+                'language' => (string) ($c['default_language'] ?? ''),
+            ];
+        }
+    }
+    return null;
+}
+
+/**
+ * Require a catalog country name. Throws when the value is empty or unknown.
+ */
+function require_canonical_country(string $input): array
+{
+    $resolved = resolve_canonical_country($input);
+    if ($resolved === null) {
+        throw new InvalidArgumentException(
+            'Select an existing country database (e.g. Germany, Spain). New country folders are not created.'
+        );
+    }
+    return $resolved;
+}
+
 function apply_site_geo_filters(array &$where, array &$params, array $filters): void
 {
     if (!empty($filters['region'])) {
@@ -735,7 +730,7 @@ function apply_site_geo_filters(array &$where, array &$params, array $filters): 
 
 /**
  * Generic / global TLDs — ignored when scoring country mismatch
- * (a Spanish .com list should not look "wrong").
+ * (a German .com list should not look "wrong").
  *
  * @return list<string>
  */
@@ -750,7 +745,7 @@ function generic_tlds(): array
 
 /**
  * Expected country-code / regional TLDs for soft mismatch warnings.
- * Not exclusive — neighbors included where markets overlap (e.g. DACH).
+ * Neighbors included where markets overlap (e.g. DACH for Germany).
  *
  * @return array<string, list<string>> country name (lowercase) => tld suffixes
  */
@@ -764,7 +759,7 @@ function country_expected_tlds_map(): array
         'liechtenstein' => ['li', 'ch', 'de', 'at'],
         // Romance / Iberia
         'france' => ['fr', 're', 'pm', 'yt', 'tf', 'wf', 'nc', 'pf'],
-        'spain' => ['es', 'cat', 'gal', 'eus'],
+        'spain' => ['es', 'cat', 'gal', 'eus', 'com.es'],
         'portugal' => ['pt', 'com.pt'],
         'italy' => ['it'],
         'belgium' => ['be'],
@@ -776,7 +771,7 @@ function country_expected_tlds_map(): array
         // British Isles
         'united kingdom' => ['uk', 'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'scot', 'wales', 'cymru'],
         'ireland' => ['ie'],
-        'malta' => ['mt'],
+        'malta' => ['mt', 'com.mt'],
         // Nordics / Baltics
         'sweden' => ['se'],
         'norway' => ['no'],
@@ -794,12 +789,12 @@ function country_expected_tlds_map(): array
         'hungary' => ['hu'],
         'romania' => ['ro', 'com.ro'],
         'bulgaria' => ['bg'],
-        'greece' => ['gr'],
-        'cyprus' => ['cy'],
-        'croatia' => ['hr'],
+        'greece' => ['gr', 'com.gr'],
+        'cyprus' => ['cy', 'com.cy'],
+        'croatia' => ['hr', 'com.hr'],
         'slovenia' => ['si'],
         'serbia' => ['rs'],
-        'bosnia and herzegovina' => ['ba'],
+        'bosnia and herzegovina' => ['ba', 'com.ba'],
         'montenegro' => ['me'],
         'albania' => ['al'],
         'north macedonia' => ['mk'],
@@ -807,64 +802,27 @@ function country_expected_tlds_map(): array
         'moldova' => ['md'],
         'ukraine' => ['ua', 'com.ua'],
         'belarus' => ['by'],
-        'russia' => ['ru', 'su', 'рф'],
+        'russia' => ['ru', 'su'],
         // North America
         'united states' => ['us', 'edu', 'gov', 'mil'],
         'canada' => ['ca'],
         'mexico' => ['mx', 'com.mx'],
-        'guatemala' => ['gt', 'com.gt'],
-        'belize' => ['bz'],
-        'honduras' => ['hn', 'com.hn'],
-        'el salvador' => ['sv', 'com.sv'],
-        'nicaragua' => ['ni', 'com.ni'],
-        'costa rica' => ['cr', 'co.cr'],
-        'panama' => ['pa', 'com.pa'],
-        'cuba' => ['cu'],
-        'dominican republic' => ['do', 'com.do'],
-        'haiti' => ['ht'],
-        'jamaica' => ['jm', 'com.jm'],
-        'trinidad and tobago' => ['tt', 'com.tt'],
-        'bahamas' => ['bs', 'com.bs'],
-        'barbados' => ['bb', 'com.bb'],
-        'antigua and barbuda' => ['ag', 'com.ag'],
-        'dominica' => ['dm'],
-        'grenada' => ['gd'],
-        'saint kitts and nevis' => ['kn'],
-        'saint lucia' => ['lc'],
-        'saint vincent and the grenadines' => ['vc'],
-        'bermuda' => ['bm'],
-        'greenland' => ['gl'],
         // English markets
         'australia' => ['au', 'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au'],
         'new zealand' => ['nz', 'co.nz', 'net.nz', 'org.nz', 'govt.nz'],
-        'south africa' => ['za', 'co.za', 'org.za', 'net.za', 'web.za', 'gov.za'],
+        'south africa' => ['za', 'co.za', 'org.za', 'net.za', 'web.za'],
         'india' => ['in', 'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in'],
-        'pakistan' => ['pk'],
-        'bangladesh' => ['bd'],
-        'sri lanka' => ['lk'],
+        'pakistan' => ['pk', 'com.pk'],
         'singapore' => ['sg', 'com.sg'],
         'malaysia' => ['my', 'com.my'],
         'philippines' => ['ph', 'com.ph'],
         'hong kong' => ['hk', 'com.hk'],
         'nigeria' => ['ng', 'com.ng'],
-        'ghana' => ['gh', 'com.gh'],
         'kenya' => ['ke', 'co.ke'],
-        'uganda' => ['ug', 'co.ug'],
-        'tanzania' => ['tz', 'co.tz'],
-        'zimbabwe' => ['zw', 'co.zw'],
-        'botswana' => ['bw', 'co.bw'],
-        'namibia' => ['na', 'com.na'],
-        'zambia' => ['zm'],
-        'malawi' => ['mw', 'ac.mw'],
-        'rwanda' => ['rw'],
-        'cameroon' => ['cm'],
-        'mauritius' => ['mu'],
-        'guyana' => ['gy'],
-        'papua new guinea' => ['pg'],
         // Other
         'brazil' => ['br', 'com.br'],
         'japan' => ['jp', 'co.jp', 'or.jp', 'ne.jp'],
-        'south korea' => ['kr'],
+        'south korea' => ['kr', 'co.kr'],
         'united arab emirates' => ['ae'],
     ];
 }
@@ -879,14 +837,237 @@ function country_expected_tlds(string $countryName): array
     if (isset($map[$key])) {
         return $map[$key];
     }
-    // Fallback: ISO code from catalog → lowercase ccTLD
-    foreach (country_catalog() as $row) {
-        if (strcasecmp((string) $row[2], $countryName) === 0) {
-            $code = strtolower(trim((string) $row[1]));
+    // Fallback: ISO code from countries table → lowercase ccTLD
+    foreach (list_countries(null, false) as $row) {
+        if (strcasecmp(trim((string) ($row['name'] ?? '')), $countryName) === 0) {
+            $code = strtolower(trim((string) ($row['code'] ?? '')));
             return $code !== '' ? [$code] : [];
         }
     }
     return [];
+}
+
+/**
+ * Primary country-code TLD → catalog country name (one owner each).
+ * Used by Extracting Results Push to auto-route .de→Germany, .at→Austria, etc.
+ * Not the soft “neighbors” list — each TLD has a single destination.
+ *
+ * @return array<string, string> tld suffix (lowercase) => country name
+ */
+function primary_tld_country_map(): array
+{
+    return [
+        // DACH (primary owners — not neighbors)
+        'de' => 'Germany',
+        'at' => 'Austria',
+        'co.at' => 'Austria',
+        'ch' => 'Switzerland',
+        'li' => 'Liechtenstein',
+        // Romance / Iberia
+        'fr' => 'France',
+        're' => 'France',
+        'es' => 'Spain',
+        'cat' => 'Spain',
+        'com.es' => 'Spain',
+        'pt' => 'Portugal',
+        'com.pt' => 'Portugal',
+        'it' => 'Italy',
+        'be' => 'Belgium',
+        'lu' => 'Luxembourg',
+        'mc' => 'Monaco',
+        'ad' => 'Andorra',
+        'sm' => 'San Marino',
+        // British Isles (catalog code is GB)
+        'uk' => 'United Kingdom',
+        'co.uk' => 'United Kingdom',
+        'org.uk' => 'United Kingdom',
+        'ac.uk' => 'United Kingdom',
+        'gov.uk' => 'United Kingdom',
+        'me.uk' => 'United Kingdom',
+        'net.uk' => 'United Kingdom',
+        'scot' => 'United Kingdom',
+        'wales' => 'United Kingdom',
+        'cymru' => 'United Kingdom',
+        'ie' => 'Ireland',
+        'mt' => 'Malta',
+        'com.mt' => 'Malta',
+        // Nordics / Baltics
+        'se' => 'Sweden',
+        'no' => 'Norway',
+        'dk' => 'Denmark',
+        'fi' => 'Finland',
+        'ax' => 'Finland',
+        'is' => 'Iceland',
+        'ee' => 'Estonia',
+        'lv' => 'Latvia',
+        'lt' => 'Lithuania',
+        // Central / East Europe
+        'nl' => 'Netherlands',
+        'pl' => 'Poland',
+        'com.pl' => 'Poland',
+        'cz' => 'Czech Republic',
+        'sk' => 'Slovakia',
+        'hu' => 'Hungary',
+        'ro' => 'Romania',
+        'com.ro' => 'Romania',
+        'bg' => 'Bulgaria',
+        'gr' => 'Greece',
+        'com.gr' => 'Greece',
+        'cy' => 'Cyprus',
+        'com.cy' => 'Cyprus',
+        'hr' => 'Croatia',
+        'com.hr' => 'Croatia',
+        'si' => 'Slovenia',
+        'rs' => 'Serbia',
+        'ba' => 'Bosnia and Herzegovina',
+        'com.ba' => 'Bosnia and Herzegovina',
+        'al' => 'Albania',
+        'mk' => 'North Macedonia',
+        'md' => 'Moldova',
+        'ua' => 'Ukraine',
+        'com.ua' => 'Ukraine',
+        'by' => 'Belarus',
+        'ru' => 'Russia',
+        // North America
+        'us' => 'United States',
+        'ca' => 'Canada',
+        'mx' => 'Mexico',
+        'com.mx' => 'Mexico',
+        // English / other markets
+        'au' => 'Australia',
+        'com.au' => 'Australia',
+        'net.au' => 'Australia',
+        'org.au' => 'Australia',
+        'nz' => 'New Zealand',
+        'co.nz' => 'New Zealand',
+        'za' => 'South Africa',
+        'co.za' => 'South Africa',
+        'in' => 'India',
+        'co.in' => 'India',
+        'pk' => 'Pakistan',
+        'com.pk' => 'Pakistan',
+        'sg' => 'Singapore',
+        'com.sg' => 'Singapore',
+        'my' => 'Malaysia',
+        'com.my' => 'Malaysia',
+        'ph' => 'Philippines',
+        'com.ph' => 'Philippines',
+        'hk' => 'Hong Kong',
+        'com.hk' => 'Hong Kong',
+        'ng' => 'Nigeria',
+        'com.ng' => 'Nigeria',
+        'ke' => 'Kenya',
+        'co.ke' => 'Kenya',
+        'br' => 'Brazil',
+        'com.br' => 'Brazil',
+        'jp' => 'Japan',
+        'co.jp' => 'Japan',
+        'kr' => 'South Korea',
+        'co.kr' => 'South Korea',
+        'ae' => 'United Arab Emirates',
+    ];
+}
+
+/**
+ * Resolve which country folder a domain should land in on Extracting Results Push.
+ * Generic TLDs (.com, .net, .eu, …) and unknown TLDs stay in $selectedCountry.
+ */
+function country_for_push_domain(string $domain, string $selectedCountry): string
+{
+    $fallback = resolve_canonical_country($selectedCountry);
+    $fallbackName = $fallback['name'] ?? trim($selectedCountry);
+    if ($fallbackName === '') {
+        return '';
+    }
+
+    $root = function_exists('to_root_domain') ? to_root_domain($domain) : normalize_domain($domain);
+    if ($root === '' && function_exists('normalize_domain')) {
+        $root = normalize_domain($domain);
+    }
+    if ($root === '') {
+        return $fallbackName;
+    }
+
+    $tld = domain_tld_suffix($root);
+    if ($tld === '') {
+        return $fallbackName;
+    }
+
+    $generic = array_fill_keys(generic_tlds(), true);
+    if (isset($generic[$tld])) {
+        return $fallbackName;
+    }
+
+    $primary = primary_tld_country_map();
+    if (isset($primary[$tld])) {
+        $canon = resolve_canonical_country($primary[$tld]);
+        if ($canon) {
+            return $canon['name'];
+        }
+    }
+
+    // ISO / catalog code fallback (e.g. .se → Sweden when code=SE).
+    $cc = $tld;
+    if (str_contains($tld, '.')) {
+        $parts = explode('.', $tld);
+        $cc = (string) end($parts);
+    }
+    if ($cc !== '' && !isset($generic[$cc])) {
+        foreach (list_countries(null, true) as $c) {
+            $code = strtolower(trim((string) ($c['code'] ?? '')));
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($code !== '' && $name !== '' && $code === $cc) {
+                return $name;
+            }
+        }
+        // United Kingdom is stored as GB but uses .uk
+        if ($cc === 'uk' || $cc === 'gb') {
+            $uk = resolve_canonical_country('United Kingdom');
+            if ($uk) {
+                return $uk['name'];
+            }
+        }
+    }
+
+    return $fallbackName;
+}
+
+/**
+ * Group domains by destination country for Extracting Results Push.
+ *
+ * @param list<string> $domains
+ * @return array<string, list<string>> country name => domains
+ */
+function route_domains_by_country_tld(array $domains, string $selectedCountry): array
+{
+    $groups = [];
+    foreach ($domains as $d) {
+        $raw = trim((string) $d);
+        if ($raw === '') {
+            continue;
+        }
+        $root = function_exists('to_root_domain') ? to_root_domain($raw) : '';
+        if ($root === '' && function_exists('normalize_domain')) {
+            $root = normalize_domain($raw);
+        }
+        if ($root === '') {
+            continue;
+        }
+        $dest = country_for_push_domain($root, $selectedCountry);
+        if ($dest === '') {
+            continue;
+        }
+        if (!isset($groups[$dest])) {
+            $groups[$dest] = [];
+        }
+        $groups[$dest][$root] = $root;
+    }
+    $out = [];
+    foreach ($groups as $country => $map) {
+        $out[$country] = array_values($map);
+    }
+    ksort($out);
+    return $out;
 }
 
 /**
@@ -902,11 +1083,10 @@ function domain_tld_suffix(string $domain): string
     if ($domain === '' || !str_contains($domain, '.')) {
         return '';
     }
-    if (function_exists('multi_part_public_suffixes')) {
-        foreach (multi_part_public_suffixes() as $suffix) {
-            if ($domain === $suffix || str_ends_with($domain, '.' . $suffix)) {
-                return $suffix;
-            }
+    if (function_exists('domain_public_suffix')) {
+        $suffix = domain_public_suffix($domain);
+        if ($suffix !== '') {
+            return $suffix;
         }
     }
     $parts = explode('.', $domain);
@@ -916,6 +1096,7 @@ function domain_tld_suffix(string $domain): string
 /**
  * Soft check: do these domains look like they belong to $country?
  * Generic TLDs (.com etc.) are ignored. Never hard-blocks — UI warns + confirm.
+ * Warns when match on country-specific TLDs is under 70% (and enough signal).
  *
  * @param list<string> $domains
  * @return array{
@@ -978,8 +1159,8 @@ function analyze_country_tld_match(array $domains, string $country): array
         return $empty;
     }
 
-    // Soft threshold: under 40% of signal TLDs match the selected country
-    if ($matchPct >= 40) {
+    // Soft threshold: under 70% of signal TLDs match the selected country
+    if ($matchPct >= 70) {
         return $empty;
     }
 
@@ -994,12 +1175,14 @@ function analyze_country_tld_match(array $domains, string $country): array
             break;
         }
     }
-    $expectLabel = implode(', ', array_map(static fn($t) => '.' . $t, array_slice($expected, 0, 4)));
+    $expectLabel = implode(', ', array_map(static fn ($t) => '.' . $t, array_slice($expected, 0, 4)));
     $foundLabel = $topBits !== [] ? implode(', ', $topBits) : ('.' . $dominant);
 
     $message = 'This list may not match '
         . $country
-        . '. Expected TLDs like '
+        . '. For '
+        . $country
+        . ' we expect domains like '
         . $expectLabel
         . ', but most country-specific domains look like '
         . $foundLabel

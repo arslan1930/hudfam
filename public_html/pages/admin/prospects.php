@@ -1,6 +1,17 @@
 <?php
 $user = require_admin();
 ensure_prospect_schema();
+if (function_exists('clear_admin_new_data')) {
+    clear_admin_new_data('our_database', $user);
+}
+seed_countries_if_empty(db());
+if (function_exists('dedupe_countries_catalog')) {
+    try {
+        dedupe_countries_catalog();
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
 
 $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
@@ -8,135 +19,523 @@ if ($sheet === '' && (string) get('sheet') !== '') {
 }
 $emptyCountry = ($sheet === '_none');
 if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
-    $sheet = canonicalize_country_name(trim($sheet));
+    $canonSheet = resolve_canonical_country($sheet);
+    if ($canonSheet !== null && $canonSheet['name'] !== $sheet) {
+        redirect('index.php?page=admin_prospects&country=' . urlencode($canonSheet['name']));
+    }
+    if ($canonSheet === null) {
+        flash('error', 'That country folder is not in the country list. Sites only live in existing countries.');
+        redirect('index.php?page=admin_prospects');
+    }
+    $sheet = $canonSheet['name'];
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
-$createdByFilter = (int) (post('created_by') ?: get('created_by'));
-if ($createdByFilter < 0) {
-    $createdByFilter = 0;
-}
-$createdByUser = null;
-if ($createdByFilter > 0) {
-    try {
-        $stmt = db()->prepare('SELECT id, username, full_name, role FROM users WHERE id=? LIMIT 1');
-        $stmt->execute([$createdByFilter]);
-        $createdByUser = $stmt->fetch() ?: null;
-        if (!$createdByUser) {
-            $createdByFilter = 0;
+
+$addRaw = '';
+$addCountry = $inCountry && !$emptyCountry ? $sheet : trim((string) (post('country') ?: get('add_country')));
+$addLanguage = trim((string) (post('language') ?: get('language')));
+if ($addCountry !== '') {
+    $canonAdd = resolve_canonical_country($addCountry);
+    if ($canonAdd !== null) {
+        $addCountry = $canonAdd['name'];
+        if ($addLanguage === '') {
+            $addLanguage = $canonAdd['language'];
         }
-    } catch (Throwable $e) {
-        $createdByFilter = 0;
-        $createdByUser = null;
+        $addLanguage = function_exists('normalize_site_language')
+            ? normalize_site_language($addLanguage, $addCountry)
+            : $addLanguage;
     }
 }
-$personLabel = $createdByUser
-    ? trim((string) (($createdByUser['full_name'] ?: '') !== '' ? $createdByUser['full_name'] : $createdByUser['username']))
-    : '';
+
+// --- Remove one site (from super search or elsewhere) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove_site') {
+    $siteId = (int) post('site_id');
+    $returnSuper = trim((string) post('super_q'));
+    $returnCountry = trim((string) post('country'));
+    $removed = delete_prospect_site_by_id($siteId);
+    if (!$removed) {
+        flash('error', 'Site not found.');
+    } else {
+        flash('ok', 'Removed ' . (string) $removed['domain'] . ' from ' . ((string) ($removed['country'] ?: 'No country')) . '.');
+    }
+    if ($returnSuper !== '') {
+        redirect('index.php?page=admin_prospects&super_q=' . rawurlencode($returnSuper) . '#super-search');
+    }
+    if ($returnCountry !== '') {
+        redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
+    }
+    redirect('index.php?page=admin_prospects');
+}
+
+// --- Remove by list from Our database (country folder) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove_list') {
+    $removeCountry = trim((string) post('country'));
+    $raw = (string) post('remove_text');
+    try {
+        if (function_exists('read_extracted_sites_upload')) {
+            $fromFile = read_extracted_sites_upload($_FILES['remove_csv'] ?? null);
+            if ($fromFile !== '') {
+                $raw = trim($raw) !== '' ? ($raw . "\n" . $fromFile) : $fromFile;
+            }
+        }
+        if ($removeCountry === '' || resolve_canonical_country($removeCountry) === null) {
+            flash('error', 'Open a country folder first, then remove by list.');
+            redirect('index.php?page=admin_prospects');
+        }
+        $result = remove_prospect_sites_by_list($removeCountry, $raw);
+        if ($result['removed'] < 1) {
+            flash(
+                'error',
+                $result['invalid'] > 0
+                    ? 'No matching sites removed. Check the list (root domains) and try again.'
+                    : 'No sites from that list were found in ' . $result['country'] . '.'
+            );
+            redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']) . '#remove-by-list');
+        }
+        $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from Our database · ' . $result['country'];
+        if ((int) $result['not_found'] > 0) {
+            $msg .= ' · ' . (int) $result['not_found'] . ' not found';
+        }
+        if ((int) $result['invalid'] > 0) {
+            $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
+        }
+        flash('ok', $msg . '.');
+        redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+    } catch (Throwable $e) {
+        flash('error', $e->getMessage());
+        redirect(
+            $removeCountry !== ''
+                ? 'index.php?page=admin_prospects&country=' . urlencode($removeCountry) . '#remove-by-list'
+                : 'index.php?page=admin_prospects'
+        );
+    }
+}
+
+// --- Add sites into Our database (same panel) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_sites') {
+    $addRaw = (string) post('urls');
+    $addCountry = trim((string) post('country'));
+    $addLanguage = trim((string) post('language'));
+    try {
+        if ($addCountry === '' || resolve_canonical_country($addCountry) === null) {
+            flash('error', 'Select a country folder first (type to search, then Enter).');
+            redirect('index.php?page=admin_prospects');
+        }
+        $canon = require_canonical_country($addCountry);
+        $addCountry = $canon['name'];
+        if (trim($addRaw) === '') {
+            flash('error', 'Paste at least one root domain.');
+            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+        }
+        $parsed = parse_domain_list_strict($addRaw);
+        if ($parsed['invalid_count'] > 0) {
+            flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+            $_SESSION['admin_prospects_add_draft'] = [
+                'country' => $addCountry,
+                'language' => $addLanguage,
+                'urls' => $parsed['valid_text'] !== ''
+                    ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
+                    : $addRaw,
+            ];
+            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+        }
+        $result = admin_add_urls_to_database($addRaw, $user, $addCountry, $addLanguage);
+        if ($result['total'] <= 0) {
+            flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
+            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+        }
+        $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
+        $msg .= ' New: ' . (int) $result['inserted'] . '.';
+        if ((int) $result['updated'] > 0) {
+            $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+        }
+        flash('ok', $msg);
+        unset($_SESSION['admin_prospects_add_draft']);
+        redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+    } catch (Throwable $e) {
+        flash('error', 'Could not save sites. ' . $e->getMessage());
+        redirect(
+            $addCountry !== ''
+                ? 'index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'
+                : 'index.php?page=admin_prospects#add-sites'
+        );
+    }
+}
+
+// Restore draft after Clean-errors style validation failure
+$draft = $_SESSION['admin_prospects_add_draft'] ?? null;
+if (is_array($draft)) {
+    if ($addRaw === '' && !empty($draft['urls'])) {
+        $addRaw = (string) $draft['urls'];
+    }
+    if ($addCountry === '' && !empty($draft['country'])) {
+        $addCountry = (string) $draft['country'];
+    }
+    if ($addLanguage === '' && !empty($draft['language'])) {
+        $addLanguage = (string) $draft['language'];
+    }
+    unset($_SESSION['admin_prospects_add_draft']);
+}
 
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
-    $folders = prospect_country_folders($createdByFilter > 0 ? $createdByFilter : null);
+    $superQ = trim((string) get('super_q'));
+    $superResults = $superQ !== '' ? search_prospect_sites_global($superQ, 200) : [];
+    // Group matches by country for “present in multiple places”
+    $superByCountry = [];
+    foreach ($superResults as $hit) {
+        $cKey = trim((string) ($hit['country'] ?? ''));
+        if ($cKey === '') {
+            $cKey = '_none';
+        }
+        $superByCountry[$cKey][] = $hit;
+    }
+
+    $folders = prospect_country_folders();
     $byRegion = [];
+    // Preserve region order from regions()
+    foreach (regions() as $regionKey => $regionLabel) {
+        $byRegion[$regionLabel] = [];
+    }
     foreach ($folders as $f) {
-        $byRegion[$f['region_label']][] = $f;
+        $label = (string) ($f['region_label'] ?? 'Other');
+        if (!isset($byRegion[$label])) {
+            $byRegion[$label] = [];
+        }
+        $byRegion[$label][] = $f;
+    }
+    // Drop empty market groups
+    foreach ($byRegion as $k => $list) {
+        if ($list === []) {
+            unset($byRegion[$k]);
+        }
     }
     $grandTotal = 0;
     foreach ($folders as $f) {
         $grandTotal += (int) $f['total'];
     }
-    $teamUsers = list_team_users(false);
-    $adminUsers = list_admin_users(false);
-    $people = array_merge($teamUsers, $adminUsers);
 
-    render_header('Countries', 'admin');
+    render_header('Our database', 'admin');
     ?>
     <?php render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Sites Data', 'href' => 'index.php?page=admin_prospects'],
-        ['label' => 'Countries'],
+        ['label' => 'Our database'],
     ]); ?>
     <div class="topbar">
       <div>
-        <h1>Country databases</h1>
-        <p class="muted">Each country is its own site database. Open a folder to view or add sites. <?= (int) $grandTotal ?> sites total.</p>
+        <h1><?= label_with_info('Our database', 'Country folders of unique sites. Team Filter & add writes here.') ?></h1>
+        <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
-        <a class="btn" href="index.php?page=admin_prospect_add">Sites add by admin</a>
-        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Added sites</a>
+        <a class="btn" href="#super-search">Super search</a>
+        <a class="btn secondary" href="#add-sites">Add sites</a>
+        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Site adding history</a>
       </div>
     </div>
-    <?php if ($personLabel !== ''): ?>
-    <div class="card" style="border-color:var(--brand-2)">
-      <p style="margin:0">Showing only sites added by <strong><?= h($personLabel) ?></strong>.
-        <a href="index.php?page=admin_prospects">Show everyone</a>
+
+    <div class="card" id="super-search">
+      <h2>Super search</h2>
+      <p class="help">
+        Search any site across <strong>all country databases</strong>.
+        If it exists in more than one country, every place is listed.
       </p>
-    </div>
-    <?php endif; ?>
-    <form class="card filters" method="get" style="margin-bottom:1rem">
-      <input type="hidden" name="page" value="admin_prospects">
-      <div>
-        <label>Added by</label>
-        <select name="created_by" data-searchable="1">
-          <option value="">Everyone</option>
-          <?php foreach ($people as $p): ?>
-            <option value="<?= (int) $p['id'] ?>" <?= $createdByFilter === (int) $p['id'] ? 'selected' : '' ?>>
-              <?= h(($p['full_name'] ?: $p['username']) . ' · ' . $p['role']) ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <button class="btn" type="submit">Filter</button>
-    </form>
-    <?php
-      $freqAdmin = user_frequent_countries((int) $user['id'], 8);
-      echo render_frequent_country_chips($freqAdmin, 'index.php?page=admin_prospects&country=');
-    ?>
-    <div data-folder-scope>
-    <div class="card folder-search-bar">
-      <label for="folder_search_admin">Find a country <span class="help">(type to filter folders)</span></label>
-      <input type="search" id="folder_search_admin" data-folder-search placeholder="e.g. Germany, Austria…" autocomplete="off">
+      <form method="get" action="index.php" class="super-search-form">
+        <input type="hidden" name="page" value="admin_prospects">
+        <label class="visually-hidden" for="super_q">Site name</label>
+        <div class="super-search-row">
+          <input id="super_q" name="super_q" type="search" value="<?= h($superQ) ?>"
+                 placeholder="example.com" required autocomplete="off" spellcheck="false" data-no-draft>
+          <button class="btn" type="submit">Super search</button>
+          <?php if ($superQ !== ''): ?>
+            <a class="btn secondary" href="index.php?page=admin_prospects">Clear</a>
+          <?php endif; ?>
+        </div>
+      </form>
+
+      <?php if ($superQ !== ''): ?>
+        <?php if (!$superResults): ?>
+          <div class="empty-state" style="margin-top:0.85rem">
+            <p>No matches for “<?= h($superQ) ?>” in any country database.</p>
+          </div>
+        <?php else: ?>
+          <p class="help" style="margin-top:0.85rem">
+            Found <strong><?= count($superResults) ?></strong> match<?= count($superResults) === 1 ? '' : 'es' ?>
+            in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>.
+          </p>
+          <div class="table-wrap" style="margin-top:0.55rem">
+            <table class="super-search-table">
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>Country</th>
+                  <th>Language</th>
+                  <th>Added</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($superResults as $hit):
+                  $hitCountry = trim((string) ($hit['country'] ?? ''));
+                  $countryHref = $hitCountry !== '' ? $hitCountry : '_none';
+                  $countryLabel = $hitCountry !== '' ? $hitCountry : 'No country';
+                  $openUrl = 'index.php?page=admin_prospects&country=' . rawurlencode($countryHref)
+                      . '&q=' . rawurlencode((string) $hit['domain']);
+                  ?>
+                <tr>
+                  <td><strong><?= h((string) $hit['domain']) ?></strong></td>
+                  <td>
+                    <?= h($countryLabel) ?>
+                  </td>
+                  <td><?= h((string) ($hit['language'] ?: '—')) ?></td>
+                  <td class="muted"><?= h(substr((string) ($hit['created_at'] ?? ''), 0, 10)) ?></td>
+                  <td class="actions">
+                    <a class="btn small" href="<?= h($openUrl) ?>">Go to site</a>
+                    <form method="post" action="index.php?page=admin_prospects#super-search" class="inline-form"
+                          onsubmit="return confirm(<?= h(json_encode(
+                              'Remove ' . (string) $hit['domain'] . ' from ' . ($hitCountry !== '' ? $hitCountry : 'No country') . '?',
+                              JSON_UNESCAPED_UNICODE
+                          )) ?>);">
+                      <input type="hidden" name="action" value="remove_site">
+                      <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
+                      <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
+                      <button class="btn secondary small danger" type="submit">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      <?php endif; ?>
     </div>
     <?= render_page_purpose(
         'Our database — one folder per country',
         'Sites are stored separately for each country.',
-        'Click a country folder to open that country’s database. Use Add sites inside the folder to paste domains into that country only.',
+        'Open a country folder to browse, or use Add sites below to paste into a country database.',
         [
-            'Open a country folder.',
-            'Add sites into that country’s database.',
-            'Team Filter & add can check against the same country list.',
+            'Add sites with the form below (Our database only).',
+            'Or open a country folder to browse and add more there.',
+            'Team Filter & add checks against the same country lists.',
         ]
     ) ?>
-    <?php foreach ($byRegion as $regionLabel => $list): ?>
-      <div class="card" data-folder-group>
-        <h2><?= h($regionLabel) ?></h2>
-        <div class="folders" style="margin-top:0.7rem">
-          <?php foreach ($list as $f): ?>
-            <?php
-              $href = $f['country'] !== '' ? $f['country'] : '_none';
-              $label = $f['country'] !== '' ? $f['country'] : 'No country';
-              $folderUrl = 'index.php?page=admin_prospects&country=' . urlencode($href)
-                . ($createdByFilter > 0 ? '&created_by=' . $createdByFilter : '');
-            ?>
-            <a class="folder" href="<?= h($folderUrl) ?>">
-              <h3><?= h($label) ?></h3>
-              <p class="muted"><?= (int) $f['total'] ?> site<?= (int) $f['total'] === 1 ? '' : 's' ?><?= $f['language'] !== '' ? ' · ' . h($f['language']) : '' ?></p>
-            </a>
-          <?php endforeach; ?>
+
+    <div class="card" id="add-sites">
+      <h2>Add sites</h2>
+      <p class="help">Paste root domains into one country’s database. Use Clean errors for https/paths/subdomains.</p>
+      <form method="post" action="index.php?page=admin_prospects#add-sites">
+        <input type="hidden" name="action" value="add_sites">
+        <div class="form-grid">
+          <?= render_country_typeahead($addCountry, [
+              'id' => 'add_country',
+              'label' => 'Country',
+              'required' => true,
+              'attrs' => 'data-fill-language="#add_language" data-fill-region="select[name=region]"',
+          ]) ?>
+          <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
+        </div>
+        <div style="margin-top:0.9rem">
+          <?= render_domains_paste_field('urls', $addRaw, [
+              'id' => 'urls',
+              'label' => 'Sites (root domains)',
+              'required' => true,
+              'rows' => 12,
+          ]) ?>
+        </div>
+        <p class="actions" style="margin-top:1rem">
+          <button class="btn" type="submit">Save to country database</button>
+        </p>
+      </form>
+    </div>
+    <?= sites_form_script_tag() ?>
+
+    <?php if ($folders): ?>
+    <div class="card prospect-markets-toolbar">
+      <div class="invoice-list-toolbar" style="margin-bottom:0">
+        <h2 style="margin:0">Markets</h2>
+        <label class="sheet-search" for="prospect-country-search">
+          <span class="visually-hidden">Search countries</span>
+          <input id="prospect-country-search" type="search" placeholder="Search country name…"
+                 autocomplete="off" spellcheck="false" data-no-draft
+                 title="Type a country name · Enter = next match">
+          <span class="sheet-search-meta muted" data-prospect-country-search-meta hidden></span>
+        </label>
+      </div>
+      <p class="help" style="margin:0.45rem 0 0">
+        Europe first · English markets second. Click a market to expand/collapse.
+        Folders show country name and site count. Sorted by no. of sites.
+      </p>
+    </div>
+
+    <div id="prospect-markets">
+    <?php
+    $marketIndex = 0;
+    foreach ($byRegion as $regionLabel => $list):
+        $marketIndex++;
+        $marketId = 'market-' . preg_replace('/[^a-z0-9]+/i', '-', strtolower($regionLabel));
+        $openByDefault = $marketIndex <= 2; // Europe + English open
+        $marketTotal = 0;
+        foreach ($list as $f) {
+            $marketTotal += (int) $f['total'];
+        }
+        ?>
+      <div class="card prospect-market<?= $openByDefault ? ' is-open' : '' ?>"
+           data-prospect-market
+           data-market-label="<?= h(mb_strtolower($regionLabel)) ?>">
+        <button type="button" class="prospect-market-toggle" data-prospect-market-toggle
+                aria-expanded="<?= $openByDefault ? 'true' : 'false' ?>"
+                aria-controls="<?= h($marketId) ?>">
+          <span class="prospect-market-title"><?= h($regionLabel) ?></span>
+          <span class="prospect-market-meta muted">
+            <?= count($list) ?> countr<?= count($list) === 1 ? 'y' : 'ies' ?>
+            · <?= (int) $marketTotal ?> site<?= (int) $marketTotal === 1 ? '' : 's' ?>
+          </span>
+          <span class="prospect-market-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="prospect-market-body" id="<?= h($marketId) ?>" <?= $openByDefault ? '' : 'hidden' ?>>
+          <div class="folders" style="margin-top:0.7rem">
+            <?php foreach ($list as $f):
+                $href = $f['country'] !== '' ? $f['country'] : '_none';
+                $label = (string) ($f['country'] !== '' ? $f['country'] : 'No country');
+                $siteCount = (int) $f['total'];
+                $searchHay = mb_strtolower(trim(
+                    $label . ' '
+                    . (string) $regionLabel . ' '
+                    . $siteCount . ' sites'
+                ));
+                ?>
+              <a class="folder"
+                 href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>"
+                 data-prospect-country
+                 data-search="<?= h($searchHay) ?>"
+                 title="<?= h($label) ?>">
+                <h3>
+                  <span class="prospect-folder-label"><?= h($label) ?></span>
+                </h3>
+                <p class="muted">
+                  <span class="prospect-folder-count"><?= $siteCount ?></span>
+                  no. of sites
+                </p>
+              </a>
+            <?php endforeach; ?>
+          </div>
+          <p class="help sheet-search-empty" data-prospect-country-empty hidden>No countries in this market match.</p>
         </div>
       </div>
     <?php endforeach; ?>
     </div>
-    <?php if (!$folders): ?>
-      <div class="card empty-state">
-        <p>
-          <?= $langFilter !== ''
-              ? 'No countries use the language “' . h($langFilter) . '”.'
-              : 'No countries configured. Run upgrade.php once.' ?>
-        </p>
-        <?php if ($langFilter !== ''): ?>
-          <a class="btn secondary" href="index.php?page=admin_prospects">Show all countries</a>
-        <?php endif; ?>
-      </div>
+    <p class="help sheet-search-empty" data-prospect-country-search-empty hidden style="margin-top:0.75rem">
+      No countries match your search.
+    </p>
+    <script>
+    (function () {
+      var searchInput = document.getElementById('prospect-country-search');
+      var matchCards = [];
+      var matchIndex = -1;
+      var meta = document.querySelector('[data-prospect-country-search-meta]');
+      var emptyAll = document.querySelector('[data-prospect-country-search-empty]');
+
+      function clearHits() {
+        document.querySelectorAll('[data-prospect-country].sheet-search-hit').forEach(function (el) {
+          el.classList.remove('sheet-search-hit');
+        });
+      }
+
+      function setMarketOpen(market, open) {
+        if (!market) return;
+        market.classList.toggle('is-open', !!open);
+        var body = market.querySelector('.prospect-market-body');
+        var btn = market.querySelector('[data-prospect-market-toggle]');
+        if (body) body.hidden = !open;
+        if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      document.querySelectorAll('[data-prospect-market-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var market = btn.closest('[data-prospect-market]');
+          if (!market) return;
+          setMarketOpen(market, !market.classList.contains('is-open'));
+        });
+      });
+
+      function filterCountries() {
+        if (!searchInput) return;
+        var q = String(searchInput.value || '').trim().toLowerCase();
+        matchCards = [];
+        clearHits();
+        var anyShown = 0;
+
+        document.querySelectorAll('[data-prospect-market]').forEach(function (market) {
+          var shownInMarket = 0;
+          market.querySelectorAll('[data-prospect-country]').forEach(function (card) {
+            var hay = String(card.getAttribute('data-search') || '');
+            var hit = !q || hay.indexOf(q) !== -1;
+            card.hidden = !hit;
+            if (hit) {
+              shownInMarket++;
+              anyShown++;
+              if (q) matchCards.push(card);
+            }
+          });
+          var empty = market.querySelector('[data-prospect-country-empty]');
+          if (empty) empty.hidden = !(q && shownInMarket === 0);
+          if (q) {
+            if (shownInMarket > 0) setMarketOpen(market, true);
+            market.hidden = shownInMarket === 0;
+          } else {
+            market.hidden = false;
+          }
+        });
+
+        if (emptyAll) emptyAll.hidden = !(q && anyShown === 0);
+        if (meta) {
+          if (!q) {
+            meta.hidden = true;
+            meta.textContent = '';
+            matchIndex = -1;
+            return;
+          }
+          meta.hidden = false;
+          meta.textContent = !matchCards.length
+            ? '0 · Enter = next'
+            : (matchIndex >= 0
+              ? (matchIndex + 1) + ' of ' + matchCards.length + ' · Enter = next'
+              : matchCards.length + ' matches · Enter = next');
+        }
+      }
+
+      function jump(dir) {
+        if (!searchInput || !String(searchInput.value || '').trim()) return;
+        filterCountries();
+        if (!matchCards.length) return;
+        matchIndex = matchIndex < 0
+          ? (dir > 0 ? 0 : matchCards.length - 1)
+          : (matchIndex + dir + matchCards.length) % matchCards.length;
+        var card = matchCards[matchIndex];
+        clearHits();
+        card.classList.add('sheet-search-hit');
+        var market = card.closest('[data-prospect-market]');
+        setMarketOpen(market, true);
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        if (meta) meta.textContent = (matchIndex + 1) + ' of ' + matchCards.length + ' · Enter = next';
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          matchIndex = -1;
+          filterCountries();
+        });
+        searchInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            jump(e.shiftKey ? -1 : 1);
+          }
+        });
+      }
+    })();
+    </script>
+    <?php else: ?>
+      <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
     <?php endif; ?>
     <?php
     render_footer('admin');
@@ -145,388 +544,141 @@ if (!$inCountry && !$emptyCountry) {
 
 // --- One country database ---
 $countryName = $emptyCountry ? '' : $sheet;
-$countryKey = $emptyCountry ? '_none' : $countryName;
-$q = trim((string) (post('q') ?: get('q')));
-$status = (string) (post('status') ?: get('status'));
-$pageNum = max(1, (int) (post('p') ?: get('p', 1)));
-$per = normalize_prospect_per_page((int) (post('per') ?: get('per', 100)));
-$view = (string) get('view');
-$export = (string) get('export');
-$autoselect = (string) get('autoselect') === '1';
-$createdByOpt = $createdByFilter > 0 ? $createdByFilter : null;
-
-$sheetLabel = $emptyCountry ? 'No country' : $countryName;
-$baseQs = array_filter([
-    'page' => 'admin_prospects',
-    'country' => $countryKey,
+$q = trim((string) get('q'));
+$status = (string) get('status');
+$pageNum = max(1, (int) get('p', 1));
+$perPage = resolve_sheet_per_page();
+$inv = prospect_inventory_query([
     'q' => $q,
+    'country' => $countryName,
     'status' => $status,
-    'per' => $per,
-    'created_by' => $createdByFilter > 0 ? $createdByFilter : '',
-], static fn($v) => $v !== '' && $v !== null);
-$qs = http_build_query($baseQs);
-$exportUrl = 'index.php?' . http_build_query($baseQs + ['export' => 'txt']);
-$namesUrl = 'index.php?' . http_build_query($baseQs + ['view' => 'names']);
-$tableUrl = 'index.php?' . http_build_query($baseQs);
+] + ($emptyCountry ? [] : []), $pageNum, $perPage);
 
-$pendingUploadDelete = null;
-$preselectedIds = [];
-
-/** @param array{deleted:int,undo_token:string} $result */
-$rememberUndo = static function (array $result, string $countryKey, string $sheetLabel) use ($tableUrl): void {
-    $n = (int) ($result['deleted'] ?? 0);
-    $token = (string) ($result['undo_token'] ?? '');
-    if ($n > 0 && $token !== '') {
-        $_SESSION['prospect_last_undo'] = [
-            'token' => $token,
-            'country' => $countryKey,
-            'count' => $n,
-            'label' => $sheetLabel,
-            'at' => time(),
-        ];
-        flash('ok', 'Deleted ' . $n . ' site(s) from ' . $sheetLabel . '. Use Undo below if this was a mistake.');
-    } else {
-        flash('error', 'No sites were deleted.');
-    }
-    redirect($tableUrl);
-};
-
-try {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $action = (string) post('action');
-        $confirmed = (string) post('confirm') === '1';
-        $uid = (int) ($user['id'] ?? 0);
-
-        if ($action === 'undo_delete') {
-            $token = trim((string) post('undo_token'));
-            $result = undo_prospect_delete($token);
-            if (!empty($_SESSION['prospect_last_undo']['token']) && $_SESSION['prospect_last_undo']['token'] === $token) {
-                unset($_SESSION['prospect_last_undo']);
-            }
-            if ($result['restored'] > 0) {
-                $msg = 'Undo complete — restored ' . (int) $result['restored'] . ' site(s).';
-                if ($result['skipped'] > 0) {
-                    $msg .= ' Skipped ' . (int) $result['skipped'] . ' already present.';
-                }
-                flash('ok', $msg);
-            } else {
-                flash('error', 'Nothing to undo (already restored, or trash expired).');
-            }
-            redirect($tableUrl);
-        }
-
-        if ($action === 'delete_selected') {
-            $ids = post('ids');
-            if (!is_array($ids)) {
-                $ids = [];
-            }
-            if (!$confirmed) {
-                flash('error', 'Delete was not confirmed.');
-            } elseif (!$ids) {
-                flash('error', 'Select at least one site (checkbox) to delete.');
-            } else {
-                $rememberUndo(delete_prospect_sites_by_ids($ids, $countryKey, $uid), $countryKey, $sheetLabel);
-            }
-            redirect($tableUrl . ($pageNum > 1 ? '&p=' . $pageNum : ''));
-        }
-
-        if ($action === 'select_matching') {
-            $matchCount = count_prospect_sites_filtered($countryKey, $q, $status, $createdByOpt);
-            if ($matchCount <= 0) {
-                flash('error', 'No sites match your keyword search.');
-                redirect($tableUrl);
-            }
-            $redir = 'index.php?' . http_build_query(array_filter([
-                'page' => 'admin_prospects',
-                'country' => $countryKey,
-                'q' => $q,
-                'status' => $status,
-                'per' => 1000,
-                'p' => 1,
-                'autoselect' => 1,
-                'created_by' => $createdByFilter > 0 ? $createdByFilter : '',
-            ], static fn($v) => $v !== '' && $v !== null));
-            flash('ok', 'Showing up to 1000 matches for your search. Checkboxes are selected — review, then Delete selected.');
-            redirect($redir);
-        }
-
-        if ($action === 'delete_upload') {
-            $rawList = trim((string) post('domains_text'));
-            if ($rawList === '' && !empty($_FILES['domains_file']['tmp_name'])) {
-                $rawList = (string) file_get_contents($_FILES['domains_file']['tmp_name']);
-            }
-            if ($rawList === '') {
-                flash('error', 'Paste domains or upload a .txt file to remove.');
-                redirect($tableUrl);
-            }
-            $parsed = parse_plain_site_list($rawList);
-            $domains = $parsed['domains'];
-            foreach ($parsed['invalid'] as $bad) {
-                $root = extract_root_domain_candidate($bad);
-                if ($root !== '') {
-                    $domains[] = $root;
-                }
-            }
-            $domains = array_values(array_unique($domains));
-            if (!$domains) {
-                flash('error', 'No valid root domains found in the upload/paste.');
-                redirect($tableUrl);
-            }
-            if ($emptyCountry) {
-                $check = [];
-                foreach (array_chunk($domains, 500) as $chunk) {
-                    $ph = implode(',', array_fill(0, count($chunk), '?'));
-                    $st = db()->prepare("SELECT domain FROM prospect_sites WHERE TRIM(country)='' AND domain IN ($ph)");
-                    $st->execute($chunk);
-                    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $d) {
-                        $check[$d] = true;
-                    }
-                }
-                $toRemove = array_keys($check);
-            } else {
-                $toRemove = filter_domains_against_prospects($domains, $countryName)['existing'];
-            }
-
-            if (!$toRemove) {
-                flash('error', 'None of those domains are in ' . $sheetLabel . '.');
-                redirect($tableUrl);
-            }
-            if (!$confirmed) {
-                $pendingUploadDelete = [
-                    'domains' => $toRemove,
-                    'count' => count($toRemove),
-                    'text' => implode("\n", $toRemove),
-                ];
-            } else {
-                $rememberUndo(delete_prospect_sites_by_domains($toRemove, $countryKey, $uid), $countryKey, $sheetLabel);
-            }
-        }
-    }
-} catch (Throwable $e) {
-    flash('error', 'Delete failed: ' . $e->getMessage());
-    redirect($tableUrl);
-}
-
-if ($export === 'txt') {
-    stream_prospect_domains_export($countryKey, $q, $status, $createdByOpt);
-}
-
-// Preselect IDs when autoselect=1 (after keyword search → select all matches)
-if ($autoselect) {
-    $preselectedIds = array_fill_keys(list_prospect_ids_filtered($countryKey, $q, $status, 1000, $createdByOpt), true);
-}
-
-$lastUndo = null;
-if (!empty($_SESSION['prospect_last_undo']) && is_array($_SESSION['prospect_last_undo'])) {
-    $lu = $_SESSION['prospect_last_undo'];
-    if (($lu['country'] ?? '') === $countryKey && (time() - (int) ($lu['at'] ?? 0)) < 86400) {
-        $lastUndo = $lu;
-    }
-}
-$trashBatches = list_prospect_trash_batches($countryKey, 8);
-
-// --- View all names ---
-if ($view === 'names') {
-    $plain = list_prospect_domains_plain($countryKey, $q, $status, 150000, $createdByOpt);
-    $text = implode("\n", $plain['domains']);
-    render_header('Countries · ' . $sheetLabel . ' · all names', 'admin');
-    ?>
-    <?php render_breadcrumbs([
-        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-        ['label' => 'Countries', 'href' => 'index.php?page=admin_prospects'],
-        ['label' => $sheetLabel, 'href' => $tableUrl],
-        ['label' => 'All names'],
-    ]); ?>
-    <div class="topbar">
-      <div>
-        <h1><?= h($sheetLabel) ?> — all site names</h1>
-        <p class="muted"><?= (int) $plain['total'] ?> site<?= (int) $plain['total'] === 1 ? '' : 's' ?></p>
-      </div>
-      <div class="actions">
-        <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
-        <a class="btn secondary" href="<?= h($tableUrl) ?>">Table view</a>
-      </div>
-    </div>
-    <div class="card">
-      <textarea class="inventory-box" rows="28" readonly id="all_names"><?= h($text) ?></textarea>
-      <p class="actions" style="margin-top:0.8rem">
-        <button class="btn secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('all_names').value)">Copy all</button>
-        <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
-      </p>
-    </div>
-    <?php
-    render_footer('admin');
-    return;
-}
-
-// --- Table view ---
 if ($emptyCountry) {
-    [$whereSql, $params] = prospect_country_where($countryKey, $q, $status, $createdByOpt);
+    $where = ["TRIM(p.country)=''"];
+    $params = [];
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
+        $params[] = $like;
+        $params[] = $like;
+    }
+    if ($status !== '') {
+        $where[] = 'p.status = ?';
+        $params[] = $status;
+    }
+    $whereSql = implode(' AND ', $where);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
-    $pages = max(1, (int) ceil($total / $per));
-    $offset = ($pageNum - 1) * $per;
+    $pages = max(1, (int) ceil($total / $perPage));
+    $offset = ($pageNum - 1) * $perPage;
     $stmt = db()->prepare(
         "SELECT p.*, u.username added_by_name, u.full_name added_by_full
          FROM prospect_sites p
          LEFT JOIN users u ON u.id = p.created_by
-         WHERE $whereSql ORDER BY p.domain ASC LIMIT $per OFFSET $offset"
+         WHERE $whereSql ORDER BY p.created_at DESC LIMIT {$perPage} OFFSET $offset"
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
 } else {
-    $inv = prospect_inventory_query([
-        'q' => $q,
-        'country' => $countryName,
-        'status' => $status,
-        'created_by' => $createdByOpt,
-    ], $pageNum, $per);
     $rows = $inv['rows'];
     $total = $inv['total'];
     $pages = $inv['pages'];
 }
 
-$filterMatchCount = count_prospect_sites_filtered($countryKey, $q, $status, $createdByOpt);
-$peopleForFilter = array_merge(list_team_users(false), list_admin_users(false));
+$sheetLabel = $emptyCountry ? 'No country' : $countryName;
+$qs = http_build_query(array_filter([
+    'page' => 'admin_prospects',
+    'country' => $emptyCountry ? '_none' : $countryName,
+    'q' => $q,
+    'status' => $status,
+    'per_page' => $perPage,
+], static fn ($v) => $v !== '' && $v !== null));
 
-render_header('Countries · ' . $sheetLabel, 'admin');
+if (!$emptyCountry && $addCountry === '') {
+    $addCountry = $countryName;
+}
+if (!$emptyCountry && $addLanguage === '') {
+    $canonLang = resolve_canonical_country($countryName);
+    $addLanguage = $canonLang ? $canonLang['language'] : '';
+}
+
+render_header('Our database · ' . $sheetLabel, 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Countries', 'href' => 'index.php?page=admin_prospects' . ($createdByFilter > 0 ? '&created_by=' . $createdByFilter : '')],
+    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
     ['label' => $sheetLabel],
 ]); ?>
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?><?= $personLabel !== '' ? ' · added by ' . h($personLabel) : '' ?> · search keywords → select all → delete · Undo available</p>
+    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database · choose rows per page below</p>
   </div>
   <div class="actions">
-    <a class="btn" href="<?= h($exportUrl) ?>">Download all (.txt)</a>
-    <a class="btn secondary" href="<?= h($namesUrl) ?>">View all names</a>
     <?php if (!$emptyCountry): ?>
-      <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+      <a class="btn" href="#add-sites">Add sites</a>
     <?php endif; ?>
-    <a class="btn secondary" href="index.php?page=admin_prospects<?= $createdByFilter > 0 ? '&created_by=' . $createdByFilter : '' ?>">All countries</a>
+    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
 </div>
 
-<?php if ($personLabel !== ''): ?>
-<div class="card" style="border-color:var(--brand-2)">
-  <p style="margin:0">Showing only sites added by <strong><?= h($personLabel) ?></strong>.
-    <a href="index.php?page=admin_prospects&amp;country=<?= urlencode($countryKey) ?>">Show everyone in <?= h($sheetLabel) ?></a>
-  </p>
-</div>
-<?php endif; ?>
-
-<?php if ($lastUndo): ?>
-<div class="card" style="border-color:#2a7">
-  <h2>Undo last delete</h2>
-  <p>You deleted <strong><?= (int) $lastUndo['count'] ?></strong> site(s) from <strong><?= h((string) $lastUndo['label']) ?></strong>. Restore them?</p>
-  <form method="post" class="actions">
-    <input type="hidden" name="action" value="undo_delete">
-    <input type="hidden" name="undo_token" value="<?= h((string) $lastUndo['token']) ?>">
-    <button class="btn" type="submit">Undo delete</button>
+<?php if (!$emptyCountry): ?>
+<div class="card" id="add-sites">
+  <h2>Add sites to <?= h($countryName) ?></h2>
+  <p class="help">Paste root domains into this country’s Our database folder. Use Clean errors for https/paths/subdomains.</p>
+  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
+    <input type="hidden" name="action" value="add_sites">
+    <input type="hidden" name="country" value="<?= h($countryName) ?>">
+    <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
+    <div style="margin-top:0.9rem">
+      <?= render_domains_paste_field('urls', $addRaw, [
+          'id' => 'urls',
+          'label' => 'Sites (root domains)',
+          'required' => true,
+          'rows' => 10,
+      ]) ?>
+    </div>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save to <?= h($countryName) ?></button>
+    </p>
   </form>
 </div>
+<?= sites_form_script_tag() ?>
 <?php endif; ?>
 
-<?php if ($pendingUploadDelete): ?>
-<div class="card" style="border-color:#c44">
-  <h2>Confirm delete from list</h2>
-  <p>Delete <strong><?= (int) $pendingUploadDelete['count'] ?></strong> site(s) from <strong><?= h($sheetLabel) ?></strong>? You can Undo afterward.</p>
-  <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($pendingUploadDelete['domains'], 0, 500))) ?><?= count($pendingUploadDelete['domains']) > 500 ? "\n… +" . (count($pendingUploadDelete['domains']) - 500) . ' more' : '' ?></textarea>
-  <form method="post" class="actions" style="margin-top:0.8rem">
-    <input type="hidden" name="action" value="delete_upload">
-    <input type="hidden" name="confirm" value="1">
-    <input type="hidden" name="domains_text" value="<?= h($pendingUploadDelete['text']) ?>">
-    <input type="hidden" name="per" value="<?= (int) $per ?>">
-    <button class="btn" type="submit" style="background:#b33;border-color:#b33">Yes, delete <?= (int) $pendingUploadDelete['count'] ?> sites</button>
-    <a class="btn secondary" href="<?= h($tableUrl) ?>">Cancel</a>
-  </form>
-</div>
-<?php endif; ?>
-
-<form class="card filters" method="get" id="search_form">
+<form class="card filters" method="get">
   <input type="hidden" name="page" value="admin_prospects">
-  <input type="hidden" name="country" value="<?= h($countryKey) ?>">
-  <div><label>Search by keywords</label><input name="q" value="<?= h($q) ?>" placeholder="e.g. shop, blog, .de…"></div>
-  <div><label>Added by</label>
-    <select name="created_by" data-searchable="1">
-      <option value="">Everyone</option>
-      <?php foreach ($peopleForFilter as $p): ?>
-        <option value="<?= (int) $p['id'] ?>" <?= $createdByFilter === (int) $p['id'] ? 'selected' : '' ?>>
-          <?= h(($p['full_name'] ?: $p['username']) . ' · ' . $p['role']) ?>
-        </option>
-      <?php endforeach; ?>
-    </select>
-  </div>
+  <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
+  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain or url…"></div>
   <div><label>Status</label>
-    <select name="status" data-searchable="1">
+    <select name="status">
       <option value="">All</option>
       <?php foreach (prospect_statuses() as $code => $label): ?>
         <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
       <?php endforeach; ?>
     </select>
   </div>
-  <div><label>Per page</label>
-    <select name="per" data-searchable="1">
-      <?php foreach (prospect_per_page_choices() as $n): ?>
-        <option value="<?= (int) $n ?>" <?= $per === $n ? 'selected' : '' ?>><?= (int) $n ?></option>
+  <div>
+    <label for="prospects_per_page">Per page</label>
+    <select id="prospects_per_page" name="per_page">
+      <?php foreach (sheet_per_page_options() as $n): ?>
+        <option value="<?= (int) $n ?>" <?= (int) $perPage === (int) $n ? 'selected' : '' ?>><?= (int) $n ?></option>
       <?php endforeach; ?>
     </select>
   </div>
-  <button class="btn" type="submit">Search</button>
+  <button class="btn" type="submit">Filter</button>
 </form>
 
-<?php if ($q !== '' || $status !== ''): ?>
-<div class="card" style="padding:0.85rem 1rem">
-  <p style="margin:0" class="help">
-    Keyword search matches <strong><?= (int) $filterMatchCount ?></strong> site(s).
-    Next: select them, then delete.
-  </p>
-  <form method="post" class="actions" style="margin-top:0.6rem">
-    <input type="hidden" name="action" value="select_matching">
-    <input type="hidden" name="q" value="<?= h($q) ?>">
-    <input type="hidden" name="status" value="<?= h($status) ?>">
-    <input type="hidden" name="per" value="<?= (int) $per ?>">
-    <button class="btn secondary" type="submit" <?= $filterMatchCount <= 0 ? 'disabled' : '' ?>>
-      Select all matching (max 1000)
-    </button>
-  </form>
-</div>
-<?php endif; ?>
-
-<form class="card" method="post" id="bulk_delete_form">
-  <input type="hidden" name="action" value="delete_selected">
-  <input type="hidden" name="confirm" id="delete_confirm" value="0">
-  <input type="hidden" name="q" value="<?= h($q) ?>">
-  <input type="hidden" name="status" value="<?= h($status) ?>">
-  <input type="hidden" name="per" value="<?= (int) $per ?>">
-  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-
-  <div class="actions" style="margin-bottom:0.8rem;flex-wrap:wrap;gap:0.6rem;align-items:center">
-    <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
-      <input type="checkbox" id="select_all_page"> Select all on this page
-    </label>
-    <span class="help" id="selected_count">0 selected</span>
-    <button class="btn" type="submit" id="delete_selected_btn" style="background:#b33;border-color:#b33" disabled>Delete selected</button>
-  </div>
-
+<div class="card">
   <table>
-    <thead>
-      <tr>
-        <th style="width:2.2rem"></th>
-        <th>Site</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th>
-      </tr>
-    </thead>
+    <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
     <tbody>
     <?php foreach ($rows as $s): ?>
-      <?php $checked = isset($preselectedIds[(int) $s['id']]); ?>
       <tr>
-        <td><input type="checkbox" class="row-check" name="ids[]" value="<?= (int) $s['id'] ?>" <?= $checked ? 'checked' : '' ?>></td>
         <td><strong><?= h($s['domain']) ?></strong></td>
+        <td class="help"><?= h($s['url'] !== '' ? $s['url'] : '—') ?></td>
         <td><?= h($s['language'] ?: '—') ?></td>
         <td><?= badge($s['status']) ?></td>
         <td><?= h($s['added_by_full'] ?: $s['added_by_name'] ?: '—') ?></td>
@@ -539,104 +691,52 @@ render_header('Countries · ' . $sheetLabel, 'admin');
     <div class="empty-state">
       <p>No sites in this country yet.</p>
       <?php if (!$emptyCountry): ?>
-        <a class="btn" href="index.php?page=admin_prospect_add&amp;country=<?= urlencode($countryName) ?>">Add sites</a>
+        <a class="btn" href="#add-sites">Add sites above</a>
       <?php endif; ?>
     </div>
   <?php else: ?>
-    <div class="actions" style="margin-top:0.8rem;flex-wrap:wrap;gap:0.75rem">
+    <div class="actions" style="margin-top:0.8rem;align-items:center;gap:0.65rem;flex-wrap:wrap">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $per ?> per page</span>
+      <span>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      <?php
+      render_sheet_per_page_filter([
+          'page' => 'admin_prospects',
+          'country' => $emptyCountry ? '_none' : $countryName,
+          'q' => $q,
+          'status' => $status,
+      ], $perPage);
+      ?>
     </div>
   <?php endif; ?>
-</form>
+</div>
 
-<div class="card">
-  <h2>Remove from .txt / paste</h2>
-  <p class="muted">Upload or paste domains to remove from this country. Confirm first — then you can Undo.</p>
-  <form method="post" enctype="multipart/form-data">
-    <input type="hidden" name="action" value="delete_upload">
-    <input type="hidden" name="per" value="<?= (int) $per ?>">
-    <div class="form-grid">
-      <div>
-        <label>Upload .txt</label>
-        <input type="file" name="domains_file" accept=".txt,text/plain">
-      </div>
-      <div class="full">
-        <label>Or paste domains</label>
-        <textarea name="domains_text" rows="5" placeholder="site1.com&#10;site2.de"></textarea>
-      </div>
+<?php if (!$emptyCountry): ?>
+<div class="card" id="remove-by-list" style="margin-top:1rem">
+  <h2>Remove by list</h2>
+  <p class="help">
+    Paste site names (or upload a 1-column CSV) to remove those exact domains from
+    <strong><?= h($countryName) ?></strong> in Our database.
+  </p>
+  <form
+    method="post"
+    action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#remove-by-list"
+    enctype="multipart/form-data"
+    onsubmit="return confirm(<?= h(json_encode(
+        'Remove all matching sites from this list in ' . $countryName . ' (Our database)?',
+        JSON_UNESCAPED_UNICODE
+    )) ?>);"
+  >
+    <input type="hidden" name="action" value="remove_list">
+    <input type="hidden" name="country" value="<?= h($countryName) ?>">
+    <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
+    <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
+    <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
+    <p class="help">One site name per row. Only domains already in this country folder are removed.</p>
+    <div class="actions" style="margin-top:0.75rem">
+      <button class="btn danger" type="submit">Remove listed sites</button>
     </div>
-    <p class="actions" style="margin-top:0.6rem">
-      <button class="btn secondary" type="submit">Preview delete from list…</button>
-    </p>
   </form>
 </div>
-
-<?php if ($trashBatches): ?>
-<div class="card">
-  <h2>Recently deleted (Undo)</h2>
-  <table>
-    <thead><tr><th>When</th><th>Sites</th><th></th></tr></thead>
-    <tbody>
-    <?php foreach ($trashBatches as $b): ?>
-      <tr>
-        <td><?= h((string) $b['deleted_at']) ?></td>
-        <td><?= (int) $b['site_count'] ?></td>
-        <td>
-          <form method="post" style="display:inline">
-            <input type="hidden" name="action" value="undo_delete">
-            <input type="hidden" name="undo_token" value="<?= h((string) $b['undo_token']) ?>">
-            <button class="btn secondary" type="submit">Undo / restore</button>
-          </form>
-        </td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
-</div>
 <?php endif; ?>
-
-<script>
-(function(){
-  var form = document.getElementById('bulk_delete_form');
-  if (!form) return;
-  var selectAll = document.getElementById('select_all_page');
-  var checks = form.querySelectorAll('.row-check');
-  var countEl = document.getElementById('selected_count');
-  var btn = document.getElementById('delete_selected_btn');
-  var confirmField = document.getElementById('delete_confirm');
-
-  function sync(){
-    var n = 0;
-    checks.forEach(function(c){ if (c.checked) n++; });
-    if (countEl) countEl.textContent = n + ' selected';
-    if (btn) btn.disabled = n === 0;
-    if (selectAll) {
-      selectAll.checked = n > 0 && n === checks.length;
-      selectAll.indeterminate = n > 0 && n < checks.length;
-    }
-  }
-  if (selectAll) {
-    selectAll.addEventListener('change', function(){
-      checks.forEach(function(c){ c.checked = selectAll.checked; });
-      sync();
-    });
-  }
-  checks.forEach(function(c){ c.addEventListener('change', sync); });
-  form.addEventListener('submit', function(e){
-    var n = 0;
-    checks.forEach(function(c){ if (c.checked) n++; });
-    if (n === 0) { e.preventDefault(); return; }
-    var ok = window.confirm('Delete ' + n + ' selected site(s) from ' + <?= json_encode($sheetLabel, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?> + '?\n\nYou can Undo afterward.');
-    if (!ok) { e.preventDefault(); confirmField.value = '0'; return; }
-    confirmField.value = '1';
-  });
-  <?php if ($autoselect): ?>
-  if (selectAll) { selectAll.checked = true; }
-  checks.forEach(function(c){ c.checked = true; });
-  <?php endif; ?>
-  sync();
-})();
-</script>
 <?php render_footer('admin'); ?>

@@ -35,13 +35,18 @@ function render_typeahead_field(
     $reqMark = $required ? ' <span class="help">(required)</span>' : ($optional ? ' <span class="help">(optional)</span>' : '');
     $reqAttr = $required ? ' data-required="1"' : '';
 
+    // Always show the canonical value in the input (e.g. "Germany").
+    // Suggestion labels may include counts ("6 · Germany") for the dropdown only.
+    $displayValue = $value;
+
     $html = '<div class="typeahead' . ($extraClass !== '' ? ' ' . h($extraClass) : '') . '" data-typeahead'
         . $reqAttr . ' data-name="' . h($name) . '" ' . $attrs . '>';
     $html .= '<label for="' . h($id) . '_q">' . h($label) . $reqMark . '</label>';
+    // Single-line values only (country/language names). Multi-line lists must use render_hidden_multiline().
     $html .= '<input type="hidden" name="' . h($name) . '" id="' . h($id) . '" value="' . h($value) . '" data-typeahead-value'
         . ($required ? ' required' : '') . '>';
     $html .= '<div class="typeahead-control">';
-    $html .= '<input type="text" id="' . h($id) . '_q" class="typeahead-input" value="' . h($value) . '"'
+    $html .= '<input type="text" id="' . h($id) . '_q" class="typeahead-input" value="' . h($displayValue) . '"'
         . ' placeholder="' . h($placeholder) . '" autocomplete="off" spellcheck="false" data-typeahead-input>';
     $html .= '<ul class="typeahead-list" hidden data-typeahead-list></ul>';
     $html .= '</div>';
@@ -58,15 +63,51 @@ function render_typeahead_field(
 
 function render_country_typeahead(string $value = '', array $opts = []): string
 {
+    $counts = [];
+    if (function_exists('prospect_country_folders')) {
+        try {
+            foreach (prospect_country_folders() as $f) {
+                $counts[(string) ($f['country'] ?? '')] = (int) ($f['total'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            $counts = [];
+        }
+    }
     $items = [];
-    foreach (list_country_typeahead_items() as $c) {
+    $seen = [];
+    foreach (list_countries(null, true) as $c) {
+        $name = trim((string) ($c['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $region = (string) ($c['region'] ?? '');
+        $code = strtoupper(trim((string) ($c['code'] ?? '')));
+        $display = function_exists('prospect_folder_display_label')
+            ? prospect_folder_display_label($name, $region, $code)
+            : $name;
+        $n = (int) ($counts[$name] ?? 0);
         $items[] = [
-            'value' => $c['name'],
-            'label' => $c['name'],
-            'lang' => $c['language'],
-            'region' => $c['region'],
+            'value' => $name,
+            // Site count in front, then country name (never TLD)
+            'label' => $n . ' · ' . $display,
+            'lang' => (string) ($c['default_language'] ?? ''),
+            'region' => $region,
         ];
     }
+    // Sort suggestions: most sites first
+    usort($items, static function ($a, $b) {
+        $na = (int) explode(' · ', (string) $a['label'], 2)[0];
+        $nb = (int) explode(' · ', (string) $b['label'], 2)[0];
+        if ($na !== $nb) {
+            return $nb <=> $na;
+        }
+        return strcasecmp((string) $a['label'], (string) $b['label']);
+    });
     return render_typeahead_field(
         (string) ($opts['name'] ?? 'country'),
         (string) ($opts['label'] ?? 'Country'),
@@ -75,7 +116,8 @@ function render_country_typeahead(string $value = '', array $opts = []): string
         array_merge([
             'id' => 'country',
             'required' => true,
-            'help' => 'Type to search all countries, then press Enter to select.',
+            'placeholder' => (string) ($opts['placeholder'] ?? 'Search country name…'),
+            'help' => (string) ($opts['help'] ?? 'Type a country name. Suggestions show site count · country name.'),
             'attrs' => 'data-fill-language="[data-name=language]" data-fill-region="select[name=region]"',
         ], $opts)
     );
@@ -100,6 +142,52 @@ function render_language_typeahead(string $value = '', array $opts = []): string
             'placeholder' => 'Optional — type to search, Enter to select',
         ], $opts)
     );
+}
+
+/**
+ * Email text input with an in-box × clear control.
+ * Use anywhere a site has email1…email4 style fields.
+ *
+ * @param array{
+ *   id?:string,placeholder?:string,class?:string,attrs?:string,
+ *   aria_label?:string,swe?:bool
+ * } $opts
+ */
+function render_clearable_email_input(string $name, string $value = '', array $opts = []): string
+{
+    $id = trim((string) ($opts['id'] ?? ''));
+    $placeholder = (string) ($opts['placeholder'] ?? '');
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $attrs = trim((string) ($opts['attrs'] ?? ''));
+    $formId = trim((string) ($opts['form'] ?? ''));
+    $aria = (string) ($opts['aria_label'] ?? ('Clear email'));
+    $swe = !empty($opts['swe']);
+    $has = trim($value) !== '';
+
+    $html = '<div class="email-field swe-email-field' . ($has ? ' has-value' : '') . '">';
+    $html .= '<input type="text" inputmode="email" name="' . h($name) . '"'
+        . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ($formId !== '' ? ' form="' . h($formId) . '"' : '')
+        . ' class="' . h(trim('email-field-input ' . $extraClass)) . '"'
+        . ' value="' . h($value) . '"'
+        . ($placeholder !== '' ? ' placeholder="' . h($placeholder) . '"' : '')
+        . ' spellcheck="false" autocomplete="off"'
+        . ' data-email-input'
+        . ($swe ? ' data-swe-email' : '')
+        . ($attrs !== '' ? ' ' . $attrs : '')
+        . '>';
+    $html .= '<button type="button" class="email-field-clear swe-email-clear"'
+        . ' data-email-clear data-swe-email-clear'
+        . ' aria-label="' . h($aria) . '" title="Clear email"'
+        . ($has ? '' : ' hidden')
+        . '>&times;</button>';
+    $html .= '</div>';
+    return $html;
+}
+
+function email_field_clear_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/email-field-clear.js')) . '" defer></script>';
 }
 
 /**
@@ -128,9 +216,10 @@ function render_domains_paste_field(
         . ' placeholder="' . h($placeholder) . '" data-domains-input spellcheck="false">'
         . h($value) . '</textarea>';
     $html .= '<p class="help" style="margin-top:0.5rem">'
-        . 'Root domain only — no <code>https</code>, <code>//</code>, paths, or subdomains. '
-        . 'Hyphens and multi-part TLDs like <code>.co.uk</code> are OK. '
-        . 'One per line (or commas). Use <strong>Clean errors</strong> to remove invalid lines.'
+        . 'Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>. '
+        . 'Hyphens and multi-part TLDs are OK. '
+        . 'One per line (or commas). Use <strong>Clean errors</strong> to correct '
+        . '<code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).'
         . '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
     $html .= '</div>';
