@@ -591,6 +591,15 @@ if (str_contains($extractBatchT, 'Clean errors') || str_contains($extractBatchT,
 } else {
     ok('Extracting help omits fake Clean errors');
 }
+$guidesPhp = file_get_contents($root . '/includes/guides.php') ?: '';
+if (str_contains($guidesPhp, 'Backspace delete')
+    || str_contains($guidesPhp, 'Open links in new tabs')) {
+    fail('guide_extracting still documents missing Sites list Open/Backspace UI');
+} elseif (!str_contains($guidesPhp, 'Copy, Undo, and Redo')) {
+    fail('guide_extracting missing real Sites list tools');
+} else {
+    ok('Extracting guide matches Sites list tools');
+}
 if (!str_contains($extractBatchT, 'remove_extract_batch_domains')
     || !str_contains($extractBatchT, "(int) \$pushed['inserted'] > 0")) {
     fail('Extracting Push missing Sites-list clear / insert-only Results clear');
