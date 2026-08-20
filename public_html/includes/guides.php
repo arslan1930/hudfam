@@ -159,8 +159,8 @@ function guide_add_history(): string
 {
     return render_page_purpose(
         'Site adding history — who added what',
-        'Daily record of domains added by each person.',
-        'Open a date/person to see the exact domains saved that day.',
+        'Daily record of domains added by each person. Admin can open a day to edit, copy/cut, undo, or delete that history.',
+        'Open a date/person to review or change the exact domains saved that day.',
         []
     );
 }
