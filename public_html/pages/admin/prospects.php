@@ -41,7 +41,7 @@ if (!$inCountry && !$emptyCountry) {
         <p class="muted">Each country is its own URL database. Open a folder to view or add URLs. <?= (int) $grandTotal ?> URLs total.</p>
       </div>
       <div class="actions">
-        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Add history</a>
+        <a class="btn secondary" href="index.php?page=admin_prospect_batches">Site adding history</a>
       </div>
     </div>
 
