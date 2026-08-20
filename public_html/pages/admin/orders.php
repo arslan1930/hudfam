@@ -27,6 +27,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             redirect('index.php?page=admin_orders');
         }
+        if ($action === 'archive' || $action === 'restore') {
+            $id = (int) post('id');
+            $client = get_order_client($id);
+            if (!$client) {
+                flash('error', 'Client not found.');
+            } else {
+                $archiving = $action === 'archive';
+                set_order_client_archived($id, $archiving);
+                flash('ok', ($archiving ? 'Archived' : 'Restored') . ' “' . $client['name'] . '”.');
+            }
+            $redir = 'index.php?page=admin_orders';
+            if ($action === 'archive') {
+                // stay on active list
+            } else {
+                $redir .= '&filter=archived';
+            }
+            redirect($redir);
+        }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect('index.php?page=admin_orders');
@@ -34,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $filter = (string) get('filter');
-if (!in_array($filter, ['all', 'unpaid', 'completed'], true)) {
+if (!in_array($filter, ['all', 'unpaid', 'completed', 'archived'], true)) {
     $filter = 'all';
 }
 $sort = (string) get('sort');
@@ -93,9 +111,10 @@ render_header('Order management', 'admin');
                  placeholder="Search client…" autocomplete="off" spellcheck="false" data-no-draft>
         </label>
         <select name="filter" aria-label="Filter clients" onchange="this.form.submit()">
-          <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>All</option>
+          <option value="all" <?= $filter === 'all' ? 'selected' : '' ?>>All active</option>
           <option value="unpaid" <?= $filter === 'unpaid' ? 'selected' : '' ?>>Has unpaid LIVE</option>
           <option value="completed" <?= $filter === 'completed' ? 'selected' : '' ?>>Has completed</option>
+          <option value="archived" <?= $filter === 'archived' ? 'selected' : '' ?>>Archived</option>
         </select>
         <select name="sort" aria-label="Sort clients" onchange="this.form.submit()">
           <option value="name" <?= $sort === 'name' ? 'selected' : '' ?>>Sort: name</option>
@@ -144,11 +163,27 @@ render_header('Order management', 'admin');
             </div>
             <div class="order-client-actions">
               <a class="btn small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">Open sheet</a>
-              <?php if ($unpaidLive > 0): ?>
+              <?php if ($unpaidLive > 0 && !order_client_is_archived($c)): ?>
                 <a class="btn small" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $c['id'] ?>">Invoice</a>
               <?php endif; ?>
               <?php if ($invCount > 0): ?>
                 <a class="btn secondary small" href="index.php?page=admin_invoices">Invoices</a>
+              <?php endif; ?>
+              <?php if (order_client_is_archived($c)): ?>
+                <form method="post" action="index.php?page=admin_orders" style="display:inline">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="restore">
+                  <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                  <button class="btn secondary small" type="submit">Restore</button>
+                </form>
+              <?php else: ?>
+                <form method="post" action="index.php?page=admin_orders" style="display:inline"
+                      onsubmit="return confirm(<?= h(json_encode('Archive ' . $c['name'] . '? It will hide from the default list.', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="archive">
+                  <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                  <button class="btn secondary small" type="submit">Archive</button>
+                </form>
               <?php endif; ?>
               <form method="post" onsubmit="return confirm(<?= h(json_encode($deleteMsg, JSON_UNESCAPED_UNICODE)) ?>);"
                     action="index.php?page=admin_orders">
