@@ -470,7 +470,7 @@ function add_sites_with_emails_domains_to_scope(
 }
 
 /**
- * Domains already in Admin that a Team push for this country would overwrite.
+ * Domains already in Admin that a Team push for this country would merge into.
  *
  * @return list<string>
  */
@@ -503,8 +503,49 @@ function count_sites_with_emails_push_conflicts(string $country): int
 }
 
 /**
+ * Merge Team emails into Admin slots (option B):
+ * keep every existing Admin email in place; fill empty slots with Team emails
+ * that are not already present. Never wipe a filled Admin slot.
+ *
+ * @param array{0:string,1:string,2:string,3:string}|list<string> $adminSlots
+ * @param array{0:string,1:string,2:string,3:string}|list<string> $teamSlots
+ * @return array{0:string,1:string,2:string,3:string}
+ */
+function merge_swe_email_slots_prefer_admin(array $adminSlots, array $teamSlots): array
+{
+    $out = ['', '', '', ''];
+    $seen = [];
+    for ($i = 0; $i < 4; $i++) {
+        $e = trim((string) ($adminSlots[$i] ?? ''));
+        $out[$i] = $e;
+        if ($e !== '') {
+            $seen[strtolower($e)] = true;
+        }
+    }
+    foreach ($teamSlots as $raw) {
+        $e = trim((string) $raw);
+        if ($e === '') {
+            continue;
+        }
+        $key = strtolower($e);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        for ($i = 0; $i < 4; $i++) {
+            if ($out[$i] === '') {
+                $out[$i] = $e;
+                $seen[$key] = true;
+                break;
+            }
+        }
+    }
+    return $out;
+}
+
+/**
  * Team → Admin: push one site row (must have at least one email), then remove it from Team.
- * When Admin already has the domain, require $confirmOverwrite (UI confirm) before replacing emails.
+ * When Admin already has the domain, require $confirmOverwrite (UI confirm) then merge
+ * Team emails into empty Admin slots only (never wipe filled Admin emails).
  *
  * @return array{ok:bool,error?:string,needs_confirm?:bool,pushed?:int,updated?:int,cleared?:int,domain?:string,country?:string,site_count?:int}
  */
@@ -550,18 +591,25 @@ function push_one_site_with_emails_team_to_admin(
         return ['ok' => false, 'error' => 'Add at least one email before pushing this site.'];
     }
 
-    $exists = db()->prepare("SELECT id FROM {$admin} WHERE country=? AND domain=? LIMIT 1");
-    $exists->execute([$country, $domain]);
-    $already = (int) $exists->fetchColumn() > 0;
+    $adminSel = db()->prepare(
+        "SELECT id, email1, email2, email3, email4 FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
+    );
+    $adminSel->execute([$country, $domain]);
+    $adminRow = $adminSel->fetch(PDO::FETCH_ASSOC) ?: null;
+    $already = is_array($adminRow);
     if ($already && !$confirmOverwrite) {
         return [
             'ok' => false,
             'needs_confirm' => true,
-            'error' => $domain . ' already exists in Sites with emails - Admin. Confirm to overwrite those Admin emails (merge is not available yet).',
+            'error' => $domain . ' already exists in Sites with emails - Admin. Confirm to merge Team emails into empty Admin slots (existing Admin emails are kept).',
             'domain' => $domain,
             'country' => $country,
             'site_count' => count_sites_with_emails_for_country($country, 'team'),
         ];
+    }
+
+    if ($already) {
+        $slots = merge_swe_email_slots_prefer_admin(email_slots_from_row($adminRow), $slots);
     }
 
     $ins = db()->prepare(
@@ -626,7 +674,8 @@ function push_one_site_with_emails_team_to_admin(
 /**
  * Team → Admin: copy rows that have at least one email into the admin archive,
  * then remove those rows from the Team working copy (sites without emails stay).
- * When any domain already exists in Admin, require $confirmOverwrite before replacing emails.
+ * When any domain already exists in Admin, require $confirmOverwrite then merge
+ * Team emails into empty Admin slots only (existing Admin emails are kept).
  *
  * @return array{ok:bool,error?:string,needs_confirm?:bool,conflicts?:int,pushed:int,updated:int,cleared:int,skipped_empty:int,country:string}
  */
@@ -649,7 +698,7 @@ function push_sites_with_emails_team_to_admin(
             'ok' => false,
             'needs_confirm' => true,
             'conflicts' => $conflicts,
-            'error' => $conflicts . ' site(s) already exist in Sites with emails - Admin. Confirm to overwrite those Admin emails (merge is not available yet).',
+            'error' => $conflicts . ' site(s) already exist in Sites with emails - Admin. Confirm to merge Team emails into empty Admin slots (existing Admin emails are kept).',
             'pushed' => 0,
             'updated' => 0,
             'cleared' => 0,
@@ -681,8 +730,8 @@ function push_sites_with_emails_team_to_admin(
            pushed_by = VALUES(pushed_by),
            updated_at = NOW()"
     );
-    $exists = db()->prepare(
-        "SELECT id FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
+    $adminSel = db()->prepare(
+        "SELECT email1, email2, email3, email4 FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
     );
 
     $pushed = 0;
@@ -697,8 +746,12 @@ function push_sites_with_emails_team_to_admin(
             continue;
         }
         $domain = (string) $row['domain'];
-        $exists->execute([$country, $domain]);
-        $already = (int) $exists->fetchColumn() > 0;
+        $adminSel->execute([$country, $domain]);
+        $adminRow = $adminSel->fetch(PDO::FETCH_ASSOC) ?: null;
+        $already = is_array($adminRow);
+        if ($already) {
+            $slots = merge_swe_email_slots_prefer_admin(email_slots_from_row($adminRow), $slots);
+        }
         $ins->execute([
             $domain,
             $country,

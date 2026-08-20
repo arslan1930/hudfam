@@ -170,10 +170,10 @@ function guide_admin_add(): string
     return render_page_purpose(
         'Add sites — inside Our database',
         'Paste root domains into one country’s folder in Our database. Extracted Sites are filled only when Team clicks Push.',
-        'In Our database: choose country, paste root domains, Clean errors if needed, save.',
+        'In Our database: choose country, paste root domains, Clean to root domains if needed, save.',
         [
             'Open Our database (sidebar).',
-            'Use Add sites — select country, paste domains, Clean errors, save.',
+            'Use Add sites — select country, paste domains, Clean to root domains, save.',
             'Or open a country folder and add sites there.',
         ]
     );

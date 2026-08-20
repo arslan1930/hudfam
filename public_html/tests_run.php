@@ -148,7 +148,7 @@ try {
 
 $country = 'Germany';
 
-// --- Clean errors / https:// paste → root domains (Filter & add) ---
+// --- Clean to root domains / https:// paste → root domains (Filter & add) ---
 try {
     $messy = implode("\n", [
         'https://mail.google.com/mail/u/6/#inbox',
@@ -1569,6 +1569,31 @@ try {
             pass('Team re-push keeps Admin emailed mark');
         } else {
             fail('re-push sent flag: ' . json_encode($repush) . " sent=$afterRepush");
+        }
+        $mergedEmails = db()->query(
+            "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC) ?: [];
+        $mergedSlots = [
+            strtolower((string) ($mergedEmails['email1'] ?? '')),
+            strtolower((string) ($mergedEmails['email2'] ?? '')),
+            strtolower((string) ($mergedEmails['email3'] ?? '')),
+            strtolower((string) ($mergedEmails['email4'] ?? '')),
+        ];
+        if (in_array('a@txfsent-a.com', $mergedSlots, true)
+            && in_array('a2@txfsent-a.com', $mergedSlots, true)) {
+            pass('Team re-push merges new email without wiping Admin email');
+        } else {
+            fail('merge emails: ' . json_encode($mergedEmails));
+        }
+
+        $unitMerge = merge_swe_email_slots_prefer_admin(
+            ['keep@admin.test', '', '', ''],
+            ['new@team.test', 'keep@admin.test', 'extra@team.test', '']
+        );
+        if ($unitMerge === ['keep@admin.test', 'new@team.test', 'extra@team.test', '']) {
+            pass('merge_swe_email_slots_prefer_admin fills blanks only');
+        } else {
+            fail('merge unit: ' . json_encode($unitMerge));
         }
 
         // Brand-new Team push lands unmarked at bottom.

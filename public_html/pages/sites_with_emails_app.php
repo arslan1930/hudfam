@@ -306,7 +306,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         flash(
             'ok',
-            ((!empty($result['updated'])) ? 'Overwrote Admin emails for ' : 'Pushed ')
+            ((!empty($result['updated'])) ? 'Merged Team emails into Admin for ' : 'Pushed ')
             . (string) ($result['domain'] ?? 'site')
             . ' · cleared from Team.'
         );
@@ -332,7 +332,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ((int) $pushed['pushed'] > 0 || (int) $pushed['updated'] > 0) {
             $msg .= ' (' . (int) $pushed['pushed'] . ' new';
             if ((int) $pushed['updated'] > 0) {
-                $msg .= ', ' . (int) $pushed['updated'] . ' overwritten';
+                $msg .= ', ' . (int) $pushed['updated'] . ' merged';
             }
             $msg .= ')';
         }
@@ -629,7 +629,8 @@ render_breadcrumbs($crumbs);
                 . "\n\nThose rows will leave this Team working copy.";
             if ($pushConflictCount > 0) {
                 $pushAllMsg .= "\n\n" . (int) $pushConflictCount
-                    . ' already exist in Admin — Push will OVERWRITE those Admin emails (merge is not available yet).';
+                    . ' already exist in Admin — Push will MERGE Team emails into empty Admin slots '
+                    . '(existing Admin emails are kept; merge fills blanks only).';
             }
             echo h($pushAllMsg);
           ?>">
@@ -639,7 +640,7 @@ render_breadcrumbs($crumbs);
       <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
               title="<?= $readyToPush > 0
                   ? ($pushConflictCount > 0
-                      ? 'Push every ready site · ' . (int) $pushConflictCount . ' will overwrite Admin'
+                      ? 'Push every ready site · ' . (int) $pushConflictCount . ' will merge into Admin'
                       : 'Push every site on this country that has at least one email')
                   : 'Add at least one email on a site first' ?>">
         Push all to Admin
@@ -705,7 +706,7 @@ render_breadcrumbs($crumbs);
   Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
   <?php if ($pushConflictCount > 0): ?>
-    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before overwriting those emails.
+    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before merging Team emails into empty Admin slots (existing Admin emails stay).
   <?php endif; ?>
 </p>
 <?php elseif ($isAdminAll): ?>
@@ -922,15 +923,15 @@ render_breadcrumbs($crumbs);
               <?php if ($isTeam):
                   $pushConfirm = $willOverwrite
                       ? 'Push ' . $domain . ' to Sites with emails - Admin?\n\n'
-                        . 'This site ALREADY EXISTS in Admin. Push will OVERWRITE those Admin emails '
-                        . '(merge is not available yet).\n\nThis row will leave the Team working copy.'
+                        . 'This site ALREADY EXISTS in Admin. Push will MERGE Team emails into empty Admin slots '
+                        . '(existing Admin emails are kept).\n\nThis row will leave the Team working copy.'
                       : 'Push ' . $domain . ' to Sites with emails - Admin?\n\nThis row will leave the Team working copy.';
                   ?>
               <button class="btn small" type="submit" form="swe-push-<?= $sid ?>"
                       data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
                       data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>"
                       title="<?= $hasEmail
-                          ? ($willOverwrite ? 'Overwrite existing Admin emails for this site' : 'Push this site to Admin')
+                          ? ($willOverwrite ? 'Merge Team emails into empty Admin slots for this site' : 'Push this site to Admin')
                           : 'Add at least one email first' ?>"
                       onclick="return confirm(<?= h(json_encode($pushConfirm, JSON_UNESCAPED_UNICODE)) ?>);">Push</button>
               <?php endif; ?>

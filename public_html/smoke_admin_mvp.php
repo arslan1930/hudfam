@@ -128,6 +128,25 @@ if (!str_contains($usersPage, 'users_stash_form_draft') || !str_contains($usersP
 } else {
     ok('users.php form draft on validation failure');
 }
+if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPage = 50')) {
+    fail('users.php missing 50/page pagination');
+} else {
+    ok('users.php 50/page pagination');
+}
+$invoicesAdminPage = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+if (!str_contains($invoicesAdminPage, '$perPage = 50')
+    || !str_contains($invoicesAdminPage, '$invoiceListQs')
+    || !str_contains($invoicesAdminPage, 'Previous')) {
+    fail('invoices.php missing 50/page pagination');
+} else {
+    ok('invoices.php 50/page pagination');
+}
+$adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
+if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
+    fail('Admin Our database still says Clean errors');
+} else {
+    ok('Admin Our database uses Clean to root domains wording');
+}
 if (!str_contains($usersPage, 'User not found')) {
     fail('users.php missing invalid edit handling');
 } else {
@@ -660,10 +679,20 @@ if (!str_contains($sweLib, "LEFT(domain, 8) <> '__blank_'")) {
 }
 
 $sweApp = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
-if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'OVERWRITE')) {
-    fail('SWE UI missing overwrite confirm');
+if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'MERGE Team emails')) {
+    fail('SWE UI missing merge-on-conflict confirm');
 } else {
-    ok('SWE UI overwrite confirm');
+    ok('SWE UI merge-on-conflict confirm');
+}
+if (str_contains($sweApp, 'merge is not available yet') || str_contains($sweLib, 'merge is not available yet')) {
+    fail('SWE still says merge is not available');
+} else {
+    ok('SWE merge blanks available');
+}
+if (!str_contains($sweLib, 'merge_swe_email_slots_prefer_admin')) {
+    fail('sites_with_emails.php missing merge_swe_email_slots_prefer_admin');
+} else {
+    ok('SWE merge_swe_email_slots_prefer_admin helper');
 }
 if (!str_contains($sweApp, 'data-swe-open-site')
     || !str_contains($sweApp, 'data-swe-open-bulk')

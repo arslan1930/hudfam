@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
         }
         $parsed = parse_domain_list_strict($addRaw);
         if ($parsed['invalid_count'] > 0) {
-            flash('error', 'Remove invalid lines first (Clean errors). Root domains only — e.g. example.com or my-site.co.uk.');
+            flash('error', 'Remove invalid lines first (Clean to root domains). Root domains only — e.g. example.com or my-site.co.uk.');
             $_SESSION['admin_prospects_add_draft'] = [
                 'country' => $addCountry,
                 'language' => $addLanguage,
@@ -322,7 +322,7 @@ if (!$inCountry && !$emptyCountry) {
 
     <div class="card" id="add-sites">
       <h2>Add sites</h2>
-      <p class="help">Paste root domains into one country’s database. Use Clean errors for https/paths/subdomains.</p>
+      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
       <form method="post" action="index.php?page=admin_prospects#add-sites">
         <input type="hidden" name="action" value="add_sites">
         <div class="form-grid">
@@ -627,7 +627,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <?php if (!$emptyCountry): ?>
 <div class="card" id="add-sites">
   <h2>Add sites to <?= h($countryName) ?></h2>
-  <p class="help">Paste root domains into this country’s Our database folder. Use Clean errors for https/paths/subdomains.</p>
+  <p class="help">Paste root domains into this country’s Our database folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
   <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
     <input type="hidden" name="action" value="add_sites">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">
