@@ -44,9 +44,9 @@ public_html/
   asset.php
   .htaccess
   assets/css/app.css
-  includes/   (auth, db, geo, guides, helpers, layout, prospects only)
-  pages/admin/ (dashboard, prospects, prospect_add, prospect_batches, prospect_batch, users)
-  pages/team/  (dashboard, prospect_check, prospects, prospect_form, prospect_batches, prospect_batch)
+  includes/   (auth, db, geo, guides, helpers, layout, prospects, extract, account, mail)
+  pages/admin/ (dashboard, prospects*, users, tasks, account, extract_sites, extract_emails)
+  pages/team/  (dashboard, prospect*, tasks, extract_submit, extract_queue, extract_work, extract_final, extract_emails)
   sql/
 ```
 

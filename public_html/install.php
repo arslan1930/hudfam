@@ -106,6 +106,14 @@ if (!$done && $_SERVER['REQUEST_METHOD'] === 'POST') {
             . "    'db_user' => " . var_export($user, true) . ",\n"
             . "    'db_pass' => " . var_export($pass, true) . ",\n"
             . "    'app_name' => " . var_export($app, true) . ",\n"
+            . "    'app_url' => '',\n"
+            . "    'mail_from' => '',\n"
+            . "    'mail_from_name' => " . var_export($app, true) . ",\n"
+            . "    'smtp_host' => '',\n"
+            . "    'smtp_port' => 465,\n"
+            . "    'smtp_user' => '',\n"
+            . "    'smtp_pass' => '',\n"
+            . "    'smtp_secure' => 'ssl',\n"
             . "];\n";
         if (file_put_contents(__DIR__ . '/config.php', $configPhp) === false) {
             throw new RuntimeException('Could not write config.php. Create it manually from config.sample.php.');

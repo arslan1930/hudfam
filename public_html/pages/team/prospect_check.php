@@ -11,12 +11,32 @@ $region = (string) (post('region') ?: get('region'));
 $niche = '';
 $notes = '';
 $result = null;
+$needsClean = false;
 $old = ['domains' => [], 'total' => 0, 'truncated' => false];
-$oldText = '';
+$oldPreview = [];
+$oldMore = 0;
+
+// Default to the country this teammate uses most / first open task
+if ($country === '' && $frequent !== []) {
+    $country = (string) $frequent[0]['name'];
+}
+if ($country === '') {
+    try {
+        $tasks = list_team_tasks($uid, 'open', 1);
+        if ($tasks && trim((string) ($tasks[0]['country'] ?? '')) !== '') {
+            $country = (string) $tasks[0]['country'];
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
+if ($country !== '') {
+    $country = canonicalize_country_name($country);
+}
 
 // Prefill language/region from country default
 if ($country !== '' && ($language === '' || $region === '')) {
-    foreach ($countryOptions as $c) {
+    foreach (list_countries(null, true) as $c) {
         if (strcasecmp((string) $c['name'], $country) === 0) {
             $country = (string) $c['name'];
             if ($region === '') {
@@ -31,18 +51,37 @@ if ($country !== '' && ($language === '' || $region === '')) {
 }
 
 try {
-    if ($country !== '') {
-        $old = list_prospect_domain_names(25000, $country);
-        $oldText = implode("\n", $old['domains']);
-        if ($old['truncated']) {
-            $oldText .= "\n… +" . ($old['total'] - count($old['domains'])) . ' more (all used when filtering)';
-        }
-    }
+    // Team only sees a tiny uncopyable preview — filter still checks the full DB server-side
+    $previewLimit = 8;
+    $old = list_prospect_domain_names($previewLimit, '');
+    $oldPreview = array_slice($old['domains'], 0, $previewLimit);
+    $oldMore = max(0, (int) $old['total'] - count($oldPreview));
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
+
+        if ($action === 'clear_today_list') {
+            $res = clear_team_today_copy_list($uid);
+            if ($res['ok']) {
+                flash('ok', 'Cleared ' . (int) $res['count'] . ' site(s) from your copy list. Sites stay saved — use Undo if this was a mistake.');
+            } else {
+                flash('error', $res['error'] ?: 'Could not clear.');
+            }
+            redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+        }
+
+        if ($action === 'undo_clear_today_list') {
+            $res = undo_team_today_copy_clear($uid);
+            if ($res['ok']) {
+                flash('ok', 'Undo complete — restored ' . (int) $res['count'] . ' site(s) to your copy list.');
+            } else {
+                flash('error', $res['error'] ?: 'Nothing to undo.');
+            }
+            redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+        }
+
         $raw = (string) post('domains');
-        $country = trim((string) post('country'));
+        $country = canonicalize_country_name(trim((string) post('country')));
         $language = trim((string) post('language'));
         $region = (string) post('region');
         $niche = trim((string) post('niche'));
@@ -65,13 +104,36 @@ try {
             if (!empty($added['batch_id'])) {
                 $msg .= ' · saved in today’s history';
             }
-            if ((int) $added['skipped'] > 0) {
-                $msg .= ' · Skipped ' . (int) $added['skipped'] . ' already in this country';
-            }
-            flash('ok', $msg . '.');
-            $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
-            if (!empty($added['batch_id'])) {
-                $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
+        } elseif ($action === 'add_new') {
+            $clean = clean_site_list($raw, '', true);
+            $raw = $clean['text'];
+            $selected = $clean['domains'];
+            if (!$selected) {
+                flash('error', clean_site_list_summary($clean) . ' No new unique sites to add.');
+            } else {
+                $tldGate = analyze_country_tld_match($selected, $country);
+                $acked = post('confirm_tld_mismatch') === '1';
+                if ($tldGate['warn'] && !$acked) {
+                    flash('error', 'Country/TLD mismatch warning: confirm the checkbox before adding, or change the country.');
+                    $result = [
+                        'existing' => [],
+                        'new' => $selected,
+                        'invalid' => 0,
+                        'total_input' => count($selected),
+                    ];
+                    $tldCheck = $tldGate;
+                } else {
+                    $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
+                    $msg = 'Added ' . (int) $added['inserted'] . ' sites to ' . $country;
+                    if ((int) $clean['dup_db'] > 0 || (int) $added['skipped'] > 0) {
+                        $msg .= ' · skipped duplicates already in database';
+                    }
+                    if ($tldGate['warn']) {
+                        $msg .= ' · saved despite TLD mismatch warning';
+                    }
+                    flash('ok', $msg . '. Copy list updated below.');
+                    redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
+                }
             }
             redirect($redir);
         } elseif (count($domains) > 100000) {
@@ -93,6 +155,24 @@ try {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try Filter again.');
 }
 
+$todayCopy = team_today_new_sites_for_copy($uid);
+$todayText = implode("\n", $todayCopy['domains']);
+$todayByCountry = $todayCopy['by_country'] ?? [];
+
+$tldCheck = [
+    'warn' => false,
+    'message' => '',
+    'match_pct' => 100.0,
+    'signal' => 0,
+    'matched' => 0,
+    'expected' => [],
+    'top_tlds' => [],
+    'dominant_tld' => '',
+];
+if ($result && !empty($result['new'])) {
+    $tldCheck = analyze_country_tld_match($result['new'], $country);
+}
+
 $stepPaste = !$result ? 'active' : 'done';
 $stepFilter = $result ? 'active' : '';
 $stepAdd = ($result && $result['new']) ? 'active' : '';
@@ -101,7 +181,6 @@ render_header('Filter & add', 'team');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
-    ['label' => 'Our database', 'href' => 'index.php?page=team_prospects'],
     ['label' => 'Filter & add'],
 ]); ?>
 <div class="topbar">
@@ -110,11 +189,10 @@ render_header('Filter & add', 'team');
     <p class="muted">Pick a country database → paste root domains → remove ones already in that country → add only unique sites.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_batches">Add history</a>
-    <a class="btn secondary" href="index.php?page=team_prospects">Country folders</a>
+    <a class="btn secondary" href="index.php?page=team_prospect_batches">Added sites</a>
   </div>
 </div>
-<?= guide_filter_add() ?>
+<?= render_frequent_country_chips($frequent, 'index.php?page=team_prospect_check&country=') ?>
 
 <ul class="steps">
   <li class="step <?= $stepPaste ?>"><span class="num">1</span> Country + paste</li>
@@ -123,7 +201,7 @@ render_header('Filter & add', 'team');
 </ul>
 
 <form method="post" id="filter_form">
-  <input type="hidden" name="action" value="filter">
+  <input type="hidden" name="action" id="form_action" value="filter">
 
   <div class="card" style="margin-bottom:1rem">
     <div class="form-grid">
@@ -148,15 +226,24 @@ render_header('Filter & add', 'team');
 
   <div class="grid two-box">
     <div class="card box-panel panel-muted">
-      <h2>① Already in this country</h2>
+      <h2>① Already in database</h2>
       <p class="help">
-        <?php if ($country === ''): ?>
-          Select a country to load its database.
-        <?php else: ?>
-          <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> in <?= h($country) ?> · used to remove duplicates
-        <?php endif; ?>
+        <?= (int) $old['total'] ?> site<?= (int) $old['total'] === 1 ? '' : 's' ?> total · preview only (not copyable). Filter still checks everything.
       </p>
-      <textarea class="inventory-box" id="old_inventory" rows="14" readonly placeholder="Select a country first"><?= h($oldText) ?></textarea>
+      <div class="db-preview" aria-label="Database preview (not copyable)" oncopy="return false" oncut="return false" oncontextmenu="return false">
+        <?php if ($oldPreview === []): ?>
+          <p class="muted" style="margin:0">No sites in the database yet.</p>
+        <?php else: ?>
+          <ul class="db-preview-list">
+            <?php foreach ($oldPreview as $d): ?>
+              <li><?= h($d) ?></li>
+            <?php endforeach; ?>
+          </ul>
+          <?php if ($oldMore > 0): ?>
+            <p class="db-preview-more">… and <?= (int) $oldMore ?> more (hidden)</p>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
     </div>
     <div class="card box-panel">
       <h2>② Paste new sites</h2>
@@ -173,6 +260,9 @@ render_header('Filter & add', 'team');
   <div class="actions-sticky">
     <button class="btn large block" type="submit" style="max-width:420px;margin:0 auto;display:block" <?= $country === '' ? 'disabled' : '' ?> id="filter_submit">Filter against country</button>
   </div>
+  <?php if ($needsClean): ?>
+    <p class="help" style="text-align:center;margin-top:0.6rem"><strong>Tip:</strong> Click <em>Clean list</em> first, then Filter.</p>
+  <?php endif; ?>
 </form>
 
 <script>
@@ -193,6 +283,10 @@ render_header('Filter & add', 'team');
   });
   syncBtn();
 })();
+document.querySelectorAll('.db-preview').forEach(function(el){
+  el.addEventListener('selectstart', function(e){ e.preventDefault(); });
+  el.addEventListener('dragstart', function(e){ e.preventDefault(); });
+});
 </script>
 <?= sites_form_script_tag() ?>
 
@@ -201,24 +295,56 @@ render_header('Filter & add', 'team');
   <h2>Results · <?= h($country) ?></h2>
   <p class="muted" style="margin:0">
     Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in this country <strong><?= count($result['existing']) ?></strong> ·
+    Already in database <strong><?= count($result['existing']) ?></strong> ·
     Unique <strong><?= count($result['new']) ?></strong>
+    · will save into <strong><?= h($country) ?></strong>
   </p>
 </div>
 
+<?php if (!empty($tldCheck['warn'])): ?>
+<div class="card tld-warn" role="alert">
+  <h2 style="margin:0 0 0.4rem;color:var(--warn)">Possible wrong country</h2>
+  <p style="margin:0"><?= h($tldCheck['message']) ?></p>
+  <p class="help" style="margin:0.55rem 0 0">
+    Soft check only — .com/.net/.org/.eu are ignored.
+    Expected for <?= h($country) ?>:
+    <?php
+      $exp = array_slice($tldCheck['expected'] ?? [], 0, 6);
+      echo h(implode(', ', array_map(static fn($t) => '.' . $t, $exp)));
+    ?>.
+    Match on country-specific TLDs: <strong><?= (int) $tldCheck['match_pct'] ?>%</strong>
+    (<?= (int) $tldCheck['matched'] ?>/<?= (int) $tldCheck['signal'] ?>).
+  </p>
+</div>
+<?php endif; ?>
+
 <div class="grid two-box">
   <div class="card panel-muted">
-    <h2>Already known (skipped)</h2>
+    <h2>Already in database (skipped)</h2>
     <?php if ($result['existing']): ?>
-      <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['existing'], 0, 5000))) ?><?= count($result['existing']) > 5000 ? "\n… +" . (count($result['existing']) - 5000) . ' more' : '' ?></textarea>
+      <?php
+        $skipPreview = array_slice($result['existing'], 0, 8);
+        $skipMore = count($result['existing']) - count($skipPreview);
+      ?>
+      <p class="help"><?= count($result['existing']) ?> already known — preview only (not copyable).</p>
+      <div class="db-preview" aria-label="Skipped domains preview" oncopy="return false" oncut="return false" oncontextmenu="return false">
+        <ul class="db-preview-list">
+          <?php foreach ($skipPreview as $d): ?>
+            <li><?= h($d) ?></li>
+          <?php endforeach; ?>
+        </ul>
+        <?php if ($skipMore > 0): ?>
+          <p class="db-preview-more">… and <?= (int) $skipMore ?> more skipped (hidden)</p>
+        <?php endif; ?>
+      </div>
     <?php else: ?>
-      <div class="empty-state"><p>Nothing skipped — all pasted domains are new for this country.</p></div>
+      <div class="empty-state"><p>Nothing skipped — none of these domains are in the database yet.</p></div>
     <?php endif; ?>
   </div>
   <div class="card panel-ok">
-    <h2>Unique — add these</h2>
+    <h2>Unique — add into <?= h($country) ?></h2>
     <?php if ($result['new']): ?>
-      <form method="post">
+      <form method="post" id="add_unique_form">
         <input type="hidden" name="action" value="add_new">
         <input type="hidden" name="domains" value="<?= h(implode("\n", $result['new'])) ?>">
         <input type="hidden" name="country" value="<?= h($country) ?>">
@@ -227,18 +353,111 @@ render_header('Filter & add', 'team');
         <input type="hidden" name="niche" value="<?= h($niche) ?>">
         <input type="hidden" name="notes" value="<?= h($notes) ?>">
         <textarea class="inventory-box" rows="10" readonly><?= h(implode("\n", array_slice($result['new'], 0, 5000))) ?><?= count($result['new']) > 5000 ? "\n… +" . (count($result['new']) - 5000) . ' more' : '' ?></textarea>
-        <p class="help">Saves to <?= h($country) ?> and today’s history for <?= h($user['full_name'] ?: $user['username']) ?>.</p>
+        <p class="help">Saves into <?= h($country) ?>. They also appear in your copy list below.</p>
+        <?php if (!empty($tldCheck['warn'])): ?>
+          <label class="tld-confirm">
+            <input type="checkbox" name="confirm_tld_mismatch" value="1" required>
+            I confirm these sites belong in <strong><?= h($country) ?></strong> (or I accept saving them there anyway).
+          </label>
+        <?php endif; ?>
         <div class="actions-sticky">
-          <button class="btn large block" type="submit">Add to <?= h($country) ?> (<?= count($result['new']) ?>)</button>
+          <button class="btn large block" type="submit" id="add_unique_btn">
+            Add to <?= h($country) ?> (<?= count($result['new']) ?>)
+          </button>
         </div>
       </form>
+      <?php if (!empty($tldCheck['warn'])): ?>
+      <script>
+      (function(){
+        var form = document.getElementById('add_unique_form');
+        if (!form) return;
+        form.addEventListener('submit', function(e){
+          var box = form.querySelector('input[name=confirm_tld_mismatch]');
+          if (box && !box.checked) {
+            e.preventDefault();
+            alert('Please confirm the country/TLD warning checkbox first, or change the country.');
+            return;
+          }
+          if (!confirm(<?= json_encode('Save ' . count($result['new']) . ' site(s) into ' . $country . ' despite the TLD mismatch warning?', JSON_UNESCAPED_UNICODE) ?>)) {
+            e.preventDefault();
+          }
+        });
+      })();
+      </script>
+      <?php endif; ?>
     <?php else: ?>
       <div class="empty-state">
-        <p>No unique domains left — everything was already in <?= h($country) ?>.</p>
+        <p>No unique domains left — everything was already in the database.</p>
         <a class="btn secondary" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Paste a new list</a>
       </div>
     <?php endif; ?>
   </div>
 </div>
 <?php endif; ?>
+
+<div class="card" id="today_copy_list" style="margin-top:1.25rem">
+  <div class="topbar" style="margin:0;padding:0;border:0">
+    <div>
+      <h2 style="margin:0">My new sites today (copy)</h2>
+      <p class="muted" style="margin:0.35rem 0 0">
+        <?= count($todayCopy['domains']) ?> site<?= count($todayCopy['domains']) === 1 ? '' : 's' ?> in this list
+        <?php if (count($todayByCountry) > 1): ?>
+          · <?= count($todayByCountry) ?> countries
+        <?php endif; ?>
+        <?php if ((int) $todayCopy['total_today'] > count($todayCopy['domains'])): ?>
+          · <?= (int) $todayCopy['total_today'] ?> added today total
+        <?php endif; ?>
+        · copy one country at a time, or copy all. Clear when you start a fresh list (sites stay saved).
+      </p>
+    </div>
+    <div class="actions">
+      <?php if ($todayCopy['can_undo']): ?>
+        <form method="post" style="display:inline">
+          <input type="hidden" name="action" value="undo_clear_today_list">
+          <input type="hidden" name="country" value="<?= h($country) ?>">
+          <input type="hidden" name="domains" value="">
+          <button class="btn secondary" type="submit">Undo clear</button>
+        </form>
+      <?php endif; ?>
+      <?php if ($todayCopy['domains'] !== []): ?>
+        <form method="post" style="display:inline" onsubmit="return confirm(<?= h(json_encode('Clear your copy list of ' . count($todayCopy['domains']) . ' site(s)? Sites stay in the database. You can Undo after.', JSON_UNESCAPED_UNICODE)) ?>);">
+          <input type="hidden" name="action" value="clear_today_list">
+          <input type="hidden" name="country" value="<?= h($country) ?>">
+          <input type="hidden" name="domains" value="">
+          <button class="btn secondary" type="submit">Clear list</button>
+        </form>
+      <?php endif; ?>
+    </div>
+  </div>
+  <?php if ($todayCopy['domains'] === []): ?>
+    <div class="empty-state" style="margin-top:0.75rem">
+      <p><?= $todayCopy['cleared'] ? 'List cleared. Add more sites, or Undo clear.' : 'No new sites in the copy list yet — add unique sites above.' ?></p>
+    </div>
+  <?php else: ?>
+    <?php foreach ($todayByCountry as $idx => $group): ?>
+      <div style="margin-top:1rem;padding-top:<?= $idx > 0 ? '1rem' : '0.5rem' ?>;<?= $idx > 0 ? 'border-top:1px solid var(--line);' : '' ?>">
+        <div class="topbar" style="margin:0 0 0.55rem;padding:0;border:0">
+          <div>
+            <h3 style="margin:0;font-size:1.05rem"><?= h($group['label']) ?></h3>
+            <p class="muted" style="margin:0.2rem 0 0"><?= (int) $group['count'] ?> site<?= (int) $group['count'] === 1 ? '' : 's' ?></p>
+          </div>
+          <button class="btn secondary" type="button"
+            onclick="(function(){var t=document.getElementById('today_sites_copy_<?= (int) $idx ?>');t.focus();t.select();try{navigator.clipboard.writeText(t.value);}catch(e){try{document.execCommand('copy');}catch(e2){}}})();">
+            Copy <?= h($group['label']) ?>
+          </button>
+        </div>
+        <textarea class="inventory-box" id="today_sites_copy_<?= (int) $idx ?>" rows="<?= min(14, max(4, (int) $group['count'] + 1)) ?>" readonly><?= h($group['text']) ?></textarea>
+      </div>
+    <?php endforeach; ?>
+    <?php if (count($todayByCountry) > 1): ?>
+      <details style="margin-top:1.1rem">
+        <summary>All countries combined (<?= count($todayCopy['domains']) ?>)</summary>
+        <textarea class="inventory-box" id="today_sites_copy" rows="10" readonly style="margin-top:0.65rem"><?= h($todayText) ?></textarea>
+        <p class="actions" style="margin-top:0.65rem">
+          <button class="btn secondary" type="button" onclick="(function(){var t=document.getElementById('today_sites_copy');t.focus();t.select();try{navigator.clipboard.writeText(t.value);}catch(e){try{document.execCommand('copy');}catch(e2){}}})();">Copy all countries</button>
+        </p>
+      </details>
+    <?php endif; ?>
+  <?php endif; ?>
+</div>
 <?php render_footer('team'); ?>

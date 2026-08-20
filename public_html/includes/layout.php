@@ -16,11 +16,17 @@ function nav_is_active(string $navPage, string $current): bool
     $aliases = [
         'admin_prospects' => ['admin_prospect_add'],
         'admin_prospect_batches' => ['admin_prospect_batch'],
-        'admin_orders' => ['admin_order_sheet'],
-        'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
-        'team_prospects' => ['team_prospect_form'],
+        'admin_extract_sites' => [],
+        'admin_extract_emails' => [],
+        'admin_users' => ['admin_tasks'],
+        'admin_account' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
+        'team_dashboard' => ['team_tasks'],
+        'team_extract_submit' => [],
+        'team_extract_queue' => ['team_extract_work'],
+        'team_extract_final' => [],
+        'team_extract_emails' => [],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -38,7 +44,6 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
-    $cssFile = asset_url('assets/css/app.css');
     $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
@@ -47,8 +52,8 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
+    // One stylesheet URL (asset.php) — avoid loading CSS twice.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
-    echo '<link rel="stylesheet" href="' . h($cssFile) . '">';
     echo '</head><body>';
 
     if (!$user || $panel === '') {
@@ -90,9 +95,14 @@ function render_header(string $title, string $panel = ''): void
         $groups = [
             'Main' => [
                 'team_dashboard' => ['Dashboard', 'Overview'],
-                'team_prospect_check' => ['Filter & add', 'Per country → paste → add unique'],
-                'team_prospects' => ['Our database', 'Country folders → URLs'],
-                'team_prospect_batches' => ['Add history', 'Your daily adds'],
+                'team_prospect_check' => ['Filter & add', 'Paste → add unique'],
+                'team_prospect_batches' => ['Added sites', 'Your daily adds'],
+            ],
+            'Extraction' => [
+                'team_extract_submit' => ['Submit for extraction', 'Block 1 · Team 1'],
+                'team_extract_queue' => ['Claim & extract', 'Open Block 1 batch'],
+                'team_extract_final' => ['Paste extracted', 'Block 2 · final list'],
+                'team_extract_emails' => ['Add emails', 'Emails per site'],
             ],
         ];
     }
@@ -116,6 +126,7 @@ function render_header(string $title, string $panel = ''): void
     }
 
     echo '<div class="nav-group nav-group-end">';
+    echo '<a href="index.php?page=account_password">Change password</a>';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
     echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
@@ -151,6 +162,8 @@ function render_footer(string $panel = ''): void
         }
         echo '</main></div>';
     }
+    echo '<script src="' . h(script_url('js/searchable-select.js')) . '" defer></script>';
+    echo '<script src="' . h(script_url('js/live-clock.js')) . '" defer></script>';
     echo '</body></html>';
 }
 

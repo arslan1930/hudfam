@@ -18,8 +18,8 @@ render_header('Login');
       <img class="brand-logo" src="<?= h(brand_logo_url()) ?>" alt="<?= h($app) ?>">
       <h1><?= h($app) ?></h1>
     </div>
-    <p class="muted">Shared URL database — Admin adds sites, Team filters and adds unique ones.</p>
-    <?php if ($error): render_alert_box('error', $error); endif; ?>
+    <p class="muted">Shared site database — Admin manages Our database; Team filters and adds unique sites.</p>
+    <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
     <form method="post">
       <label>Username</label>
       <input type="text" name="username" required autofocus>
@@ -27,6 +27,10 @@ render_header('Login');
       <input type="password" name="password" required>
       <p style="margin-top:1.1rem"><button class="btn" type="submit">Sign in</button></p>
     </form>
+    <p class="help" style="margin-top:1rem">
+      <a href="index.php?page=forgot_password">Forgot password?</a>
+      <span class="muted"> (Admin only · verified email)</span>
+    </p>
   </div>
   <?php render_project_credit(); ?>
 </div>
