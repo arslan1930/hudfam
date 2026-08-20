@@ -23,7 +23,8 @@ if ($download === 'csv' || $download === 'xls' || $download === 'excel') {
 
 $months = order_month_names();
 $yearNow = (int) date('Y');
-$yearOptions = range(2018, max(2030, $yearNow + 2));
+$yearMax = max(2030, $yearNow + 2);
+$yearOptions = range(2018, $yearMax);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
@@ -126,6 +127,14 @@ foreach (array_reverse($items) as $row) {
         break;
     }
 }
+// Keep any stored years in the dropdown so Save cannot clamp/corrupt them.
+foreach ($items as $row) {
+    $y = (int) ($row['order_year'] ?? 0);
+    if ($y >= 2018 && !in_array($y, $yearOptions, true)) {
+        $yearOptions[] = $y;
+    }
+}
+sort($yearOptions);
 
 render_header('Order · ' . $client['name'], 'admin');
 ?>
@@ -293,9 +302,7 @@ render_header('Order · ' . $client['name'], 'admin');
           if ($yearVal < 2018) {
               $yearVal = 2018;
           }
-          if ($yearVal > 2030) {
-              $yearVal = 2030;
-          }
+          // Do not clamp high years — options already include stored values.
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
             data-row id="row-<?= $id ?>">

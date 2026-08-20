@@ -96,15 +96,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     try {
         if ($id) {
             if ($password !== '') {
+                // Editing your own password: apply immediately (no forced re-change).
+                $mustChange = ($id === $myId) ? 0 : 1;
                 db()->prepare(
-                    'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=1 WHERE id=?'
-                )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $id]);
+                    'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=?, password_hash=?, must_change_password=? WHERE id=?'
+                )->execute([$username, $full, $email, $phone, $contact, $role, $active, password_hash($password, PASSWORD_DEFAULT), $mustChange, $id]);
+                if ($id === $myId) {
+                    clear_must_change_password_flag($id);
+                    flash('ok', 'User updated. Your new password is active now.');
+                } else {
+                    flash('ok', 'User updated. They must change the password on next login.');
+                }
             } else {
                 db()->prepare(
                     'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
                 )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
+                flash('ok', 'User updated.');
             }
-            flash('ok', 'User updated.' . ($password !== '' ? ' They must change the password on next login.' : ''));
             redirect('index.php?page=admin_users');
         }
 

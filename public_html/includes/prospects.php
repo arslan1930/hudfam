@@ -1646,25 +1646,34 @@ function delete_prospect_batch(int $batchId, bool $alsoRemoveFromDb = false): ar
         return ['ok' => false, 'error' => 'Site adding history day not found.'];
     }
     $dbRemoved = 0;
-    if ($alsoRemoveFromDb) {
-        $items = get_prospect_batch_items($batchId);
-        $country = (string) ($batch['country'] ?? '');
-        $findSite = db()->prepare(
-            'SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1'
-        );
-        foreach ($items as $item) {
-            $siteId = (int) ($item['prospect_site_id'] ?? 0);
-            $domain = normalize_domain((string) ($item['domain'] ?? ''));
-            if ($siteId <= 0 && $country !== '' && $domain !== '') {
-                $findSite->execute([$country, $domain]);
-                $siteId = (int) ($findSite->fetchColumn() ?: 0);
-            }
-            if ($siteId > 0 && delete_prospect_site_by_id($siteId)) {
-                $dbRemoved++;
+    db()->beginTransaction();
+    try {
+        if ($alsoRemoveFromDb) {
+            $items = get_prospect_batch_items($batchId);
+            $country = (string) ($batch['country'] ?? '');
+            $findSite = db()->prepare(
+                'SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1'
+            );
+            foreach ($items as $item) {
+                $siteId = (int) ($item['prospect_site_id'] ?? 0);
+                $domain = normalize_domain((string) ($item['domain'] ?? ''));
+                if ($siteId <= 0 && $country !== '' && $domain !== '') {
+                    $findSite->execute([$country, $domain]);
+                    $siteId = (int) ($findSite->fetchColumn() ?: 0);
+                }
+                if ($siteId > 0 && delete_prospect_site_by_id($siteId)) {
+                    $dbRemoved++;
+                }
             }
         }
+        db()->prepare('DELETE FROM prospect_batches WHERE id=?')->execute([$batchId]);
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) {
+            db()->rollBack();
+        }
+        return ['ok' => false, 'error' => $e->getMessage()];
     }
-    db()->prepare('DELETE FROM prospect_batches WHERE id=?')->execute([$batchId]);
     return ['ok' => true, 'db_removed' => $dbRemoved];
 }
 

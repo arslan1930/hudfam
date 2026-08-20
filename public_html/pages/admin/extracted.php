@@ -453,7 +453,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <form
     method="post"
     action="<?= h($listBase) ?>"
-    onsubmit="return confirm('Remove <?= (int) $searchMatchCount ?> site(s) matching “<?= h($q) ?>”?');"
+    onsubmit="return confirm(<?= h(json_encode('Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?', JSON_UNESCAPED_UNICODE)) ?>);"
     style="margin-bottom:0.85rem"
   >
     <input type="hidden" name="action" value="remove_search">
@@ -478,7 +478,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
         <span class="extracted-plain-domain"><?= h($domain) ?></span>
         <form method="post" class="extracted-plain-remove" action="<?= h($listBase) ?>"
               data-remove-site
-              onsubmit="return confirm('Remove <?= h($domain) ?>?');">
+              onsubmit="return confirm(<?= h(json_encode('Remove ' . $domain . '?', JSON_UNESCAPED_UNICODE)) ?>);">
           <input type="hidden" name="action" value="remove_site">
           <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
           <input type="hidden" name="q" value="<?= h($q) ?>" data-remove-q>
@@ -504,7 +504,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       ?>
     </div>
     <form method="post" action="<?= h($listBase) ?>"
-          onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> URLs from <?= h($countryName) ?>?');">
+          onsubmit="return confirm(<?= h(json_encode('Remove ALL ' . (int) $countryTotal . ' URLs from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
       <button class="btn secondary small danger" type="submit">Remove all</button>
@@ -529,7 +529,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     method="post"
     action="<?= h($listBase) ?>#remove-by-list"
     enctype="multipart/form-data"
-    onsubmit="return confirm('Remove all matching sites from this list in <?= h($countryName) ?>?');"
+    onsubmit="return confirm(<?= h(json_encode('Remove all matching sites from this list in ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);"
   >
     <input type="hidden" name="action" value="remove_list">
     <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
