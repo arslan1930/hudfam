@@ -78,7 +78,7 @@ render_header('Add sites', 'admin');
     ]
 ) ?>
 
-<form class="card" method="post">
+<form class="card" method="post" action="index.php?page=admin_prospect_add">
   <div class="form-grid">
     <div>
       <label for="country">Country <span class="help">(required — type to search)</span></label>

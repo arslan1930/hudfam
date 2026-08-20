@@ -41,6 +41,20 @@ try {
         $schemaError = $e->getMessage();
     }
 }
+$orderClientCount = 0;
+$invoiceCount = 0;
+try {
+    ensure_order_schema();
+    $orderClientCount = (int) db()->query('SELECT COUNT(*) FROM order_clients')->fetchColumn();
+} catch (Throwable $e) {
+    $orderClientCount = 0;
+}
+try {
+    ensure_invoice_schema();
+    $invoiceCount = (int) db()->query('SELECT COUNT(*) FROM invoices')->fetchColumn();
+} catch (Throwable $e) {
+    $invoiceCount = 0;
+}
 
 render_header('Dashboard', 'admin');
 ?>
@@ -80,6 +94,14 @@ render_header('Dashboard', 'admin');
   <a class="launch-card" href="index.php?page=admin_prospect_add">
     <h2>Add sites</h2>
     <p>Paste websites into a country folder.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_orders">
+    <h2>Order management</h2>
+    <p>Client sheets — sites, prices, profit, live URL.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_invoices">
+    <h2>Invoices</h2>
+    <p>Generate printable invoices from completed articles.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches">
     <h2>Site adding history</h2>
