@@ -88,13 +88,40 @@ function user_must_change_password(?array $user = null): bool
     }
 }
 
+/**
+ * Sign in with username (any role), or with email for Admin accounts only.
+ * Email match is case-insensitive; ignored if more than one admin shares it.
+ */
 function attempt_login(string $username, string $password): bool
 {
     ensure_users_auth_schema();
+    $login = trim($username);
+    if ($login === '' || $password === '') {
+        return false;
+    }
+
     $stmt = db()->prepare('SELECT * FROM users WHERE username = ? AND is_active = 1 LIMIT 1');
-    $stmt->execute([$username]);
-    $user = $stmt->fetch();
-    if (!$user || !password_verify($password, $user['password_hash'])) {
+    $stmt->execute([$login]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    // Admin-only: allow signing in with the email on the Admin user profile.
+    if (!$user && str_contains($login, '@')) {
+        $byEmail = db()->prepare(
+            "SELECT * FROM users
+             WHERE role = 'admin'
+               AND email <> ''
+               AND LOWER(email) = LOWER(?)
+               AND is_active = 1
+             LIMIT 2"
+        );
+        $byEmail->execute([$login]);
+        $matches = $byEmail->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if (count($matches) === 1) {
+            $user = $matches[0];
+        }
+    }
+
+    if (!$user || !password_verify($password, (string) ($user['password_hash'] ?? ''))) {
         return false;
     }
 

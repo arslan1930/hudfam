@@ -77,6 +77,11 @@ render_header('Dashboard', 'admin');
 </div>
 
 <div class="launch-cards" id="dashboard-launch-cards">
+  <a class="launch-card" href="index.php?page=admin_semrush_research" data-dashboard-item
+    data-search="semrush research site finding">
+    <h2>Semrush Research</h2>
+    <p>Site Finding copy from Extracting Push · optional seed.</p>
+  </a>
   <a class="launch-card" href="index.php?page=admin_prospects#add-sites" data-dashboard-item
      data-search="our database add sites paste root domains country folders urls">
     <h2>Our database</h2>

@@ -753,14 +753,14 @@ function count_sites_with_emails_ready_to_push(string $country): int
 function sites_with_emails_inventory_query(
     array $filters,
     int $page = 1,
-    int $perPage = 100,
+    int $perPage = 1000,
     string $scope = 'team'
 ): array {
     ensure_sites_with_emails_schema();
     $scope = swe_normalize_scope($scope);
     $table = swe_table($scope);
     $page = max(1, $page);
-    $perPage = max(1, min(500, $perPage));
+    $perPage = max(1, min(1000, $perPage));
     $country = trim((string) ($filters['country'] ?? ''));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1' — Admin only
