@@ -257,7 +257,7 @@ function team_page_unlocked(array $user, string $page): bool
 function department_tools_help(string $slug): string
 {
     return match ($slug) {
-        'site_finding' => 'Members also get Filter & add, Our database (browse/copy), Semrush Research, and Site adding history (not only tasks).',
+        'site_finding' => 'Members also get Filter & add, Semrush Research, and Site adding history (not only tasks).',
         'site_extracting' => 'Members also get Extracting sites / Results + Push (not only tasks).',
         'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
         'communication' => 'Members also get Admin emails search, Campaign search, and Campaign drafts.',

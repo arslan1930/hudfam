@@ -327,7 +327,7 @@ function render_glossary(string $panel, bool $showTitle = true): void
     }
     echo '<dl class="glossary-list">';
     if ($panel === 'admin') {
-        echo '<div><dt>Our database</dt><dd>Country folders — browse, search, copy, download. Admin can add/remove; Team Site Finding can browse (read-only).</dd></div>';
+        echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
         echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
         echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
