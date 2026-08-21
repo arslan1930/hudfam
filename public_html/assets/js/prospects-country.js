@@ -140,6 +140,7 @@
   var meta = document.querySelector('[data-prospect-site-search-meta]');
   var emptyHint = document.querySelector('[data-prospect-site-search-empty]');
   var tbody = document.getElementById('prospect-site-tbody');
+  var tableEl = document.getElementById('prospect-site-table');
   var emptyEl = document.getElementById('prospect-site-empty');
   var pagerEl = document.getElementById('prospect-site-pager');
   var matchActions = document.getElementById('prospect-match-actions');
@@ -153,6 +154,13 @@
   var debounceTimer = null;
   var DEBOUNCE_MS = 300;
   var lastCommittedQ = String(input.value || '').trim();
+  var lastCommittedPage = (function () {
+    try {
+      return parseInt(new URL(window.location.href).searchParams.get('p') || '1', 10) || 1;
+    } catch (e) {
+      return 1;
+    }
+  })();
   var reqSeq = 0;
   var searching = false;
 
@@ -328,6 +336,9 @@
     if (tbody) {
       tbody.innerHTML = data.rows_html || '';
     }
+    if (tableEl) {
+      tableEl.hidden = !data.has_rows;
+    }
     if (emptyEl) {
       emptyEl.hidden = !!data.has_rows;
       var emptyText = emptyEl.querySelector('[data-prospect-empty-text]');
@@ -344,7 +355,8 @@
     updatePager(data);
     updateMatchActions(data);
     lastCommittedQ = String(data.q || '').trim();
-    syncAddressBar(lastCommittedQ, data.page || 1);
+    lastCommittedPage = Number(data.page || 1) || 1;
+    syncAddressBar(lastCommittedQ, lastCommittedPage);
     searching = false;
     refreshPageMatches();
     keepFocus();
@@ -376,19 +388,26 @@
     })
       .then(function (res) {
         if (!res.ok) throw new Error('search failed');
+        var ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') === -1) {
+          throw new Error('not json');
+        }
         return res.json();
       })
       .then(function (data) {
         if (seq !== reqSeq) return;
+        if (!data || !data.ok) throw new Error('bad payload');
         applyPayload(data);
       })
       .catch(function () {
         if (seq !== reqSeq) return;
+        searching = false;
         // Fallback full navigation if AJAX unavailable
         var url = new URL(window.location.href);
         if (q) url.searchParams.set('q', q);
         else url.searchParams.delete('q');
-        url.searchParams.delete('p');
+        if (pageNum > 1) url.searchParams.set('p', String(pageNum));
+        else url.searchParams.delete('p');
         url.searchParams.delete('ajax');
         window.location.href = url.toString();
       });

@@ -258,7 +258,8 @@ if (!$inCountry && !$emptyCountry) {
 
 // --- One country folder (read-only) ---
 $countryName = $emptyCountry ? '' : $sheet;
-if (!$emptyCountry) {
+$wantsAjax = (string) get('ajax') === '1';
+if (!$emptyCountry && !$wantsAjax) {
     try {
         purge_duplicate_prospect_site_rows($countryName);
     } catch (Throwable $e) {
@@ -335,8 +336,6 @@ $qs = http_build_query(array_filter([
     'per_page' => $perPage,
 ], static fn ($v) => $v !== '' && $v !== null));
 
-$wantsAjax = (string) get('ajax') === '1'
-    || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
 if ($wantsAjax && !$emptyCountry) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
@@ -344,7 +343,7 @@ if ($wantsAjax && !$emptyCountry) {
     $downloadMatchesTxtAjax = $q !== '' ? ($exportBase . '&export=download&q=' . rawurlencode($q)) : '';
     $downloadMatchesCsvAjax = $q !== '' ? ($exportBase . '&export=csv&q=' . rawurlencode($q)) : '';
     $matchesBase = $q !== '' ? prospect_export_basename($countryName, $q) : '';
-    echo json_encode([
+    $payload = [
         'ok' => true,
         'q' => $q,
         'country_total' => $countryTotal,
@@ -359,7 +358,12 @@ if ($wantsAjax && !$emptyCountry) {
         'download_matches_csv' => $downloadMatchesCsvAjax,
         'download_matches_name' => $matchesBase !== '' ? ($matchesBase . '.txt') : '',
         'qs' => $qs,
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    $flags = JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    echo json_encode($payload, $flags);
     exit;
 }
 
@@ -457,7 +461,7 @@ render_breadcrumbs([
     </div>
     <?php endif; ?>
   </div>
-  <table id="prospect-site-table">
+  <table id="prospect-site-table"<?= $rows ? '' : ' hidden' ?>>
     <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
     <tbody id="prospect-site-tbody">
     <?= prospect_site_rows_html($rows) ?>
