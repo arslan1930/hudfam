@@ -306,12 +306,24 @@ if (!str_contains($assetPhp, 'js/prospects-country.js')) {
 $prospectsCountryJs = file_get_contents($root . '/assets/js/prospects-country.js') ?: '';
 if (!str_contains($prospectsCountryJs, 'DEBOUNCE_MS')
     || !str_contains($prospectsCountryJs, 'commitServerSearch')
+    || !str_contains($prospectsCountryJs, "Accept: 'application/json'")
+    || !str_contains($prospectsCountryJs, 'preventScroll')
     || !str_contains($prospectsCountryJs, 'prospect_copy_matches')
     || !str_contains($prospectsCountryJs, 'downloadTextFile')
     || !str_contains($prospectsCountryJs, 'Clipboard blocked')) {
-    fail('prospects-country.js missing debounce / copy matches / download fallback');
+    fail('prospects-country.js missing debounce / AJAX search / copy matches / download fallback');
 } else {
-    ok('prospects-country.js debounce + copy + download fallback');
+    ok('prospects-country.js debounce + AJAX search + copy + download fallback');
+}
+if (!str_contains($adminProspects, 'prospect-match-actions')
+    || !str_contains($adminProspects, "get('ajax') === '1'")
+    || !str_contains($adminProspects, 'prospect_site_rows_html')
+    || !str_contains($teamProspects, 'prospect-match-actions')
+    || !str_contains($teamProspects, "get('ajax') === '1'")
+    || !str_contains($prospectsLib, 'function prospect_site_rows_html')) {
+    fail('Our database missing match actions beside search / AJAX rows helper');
+} else {
+    ok('Our database match actions beside search + AJAX rows');
 }
 if (!str_contains($prospectsLib, 'function prospect_export_basename')
     || !str_contains($prospectsLib, '-our-database')

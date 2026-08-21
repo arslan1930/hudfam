@@ -335,6 +335,34 @@ $qs = http_build_query(array_filter([
     'per_page' => $perPage,
 ], static fn ($v) => $v !== '' && $v !== null));
 
+$wantsAjax = (string) get('ajax') === '1'
+    || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+if ($wantsAjax && !$emptyCountry) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $exportMatchesUrlAjax = $q !== '' ? ($exportBase . '&export=domains&q=' . rawurlencode($q)) : '';
+    $downloadMatchesTxtAjax = $q !== '' ? ($exportBase . '&export=download&q=' . rawurlencode($q)) : '';
+    $downloadMatchesCsvAjax = $q !== '' ? ($exportBase . '&export=csv&q=' . rawurlencode($q)) : '';
+    $matchesBase = $q !== '' ? prospect_export_basename($countryName, $q) : '';
+    echo json_encode([
+        'ok' => true,
+        'q' => $q,
+        'country_total' => $countryTotal,
+        'match_count' => $q !== '' ? (int) $total : 0,
+        'page' => $pageNum,
+        'pages' => $pages,
+        'per_page' => $perPage,
+        'rows_html' => prospect_site_rows_html($rows),
+        'has_rows' => $rows !== [],
+        'export_matches_url' => $exportMatchesUrlAjax,
+        'download_matches_txt' => $downloadMatchesTxtAjax,
+        'download_matches_csv' => $downloadMatchesCsvAjax,
+        'download_matches_name' => $matchesBase !== '' ? ($matchesBase . '.txt') : '',
+        'qs' => $qs,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 render_header('Our database · ' . $sheetLabel, 'team');
 render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
@@ -348,9 +376,11 @@ render_breadcrumbs([
     <p class="muted">
       <span id="prospect_country_total_label"><?= (int) $countryTotal ?></span>
       site<?= (int) $countryTotal === 1 ? '' : 's' ?> in this country’s database
-      <?php if ($q !== ''): ?>
-        · <strong><?= (int) $searchMatchCount ?></strong> match<?= (int) $searchMatchCount === 1 ? '' : 'es' ?> for “<?= h($q) ?>”
-      <?php endif; ?>
+      <span id="prospect_match_line"<?= $q !== '' ? '' : ' hidden' ?>>
+        · <strong id="prospect_match_count_label"><?= (int) $searchMatchCount ?></strong>
+        match<span id="prospect_match_plural"><?= (int) $searchMatchCount === 1 ? '' : 'es' ?></span>
+        for “<span id="prospect_match_q_label"><?= h($q) ?></span>”
+      </span>
       · read-only
     </p>
   </div>
@@ -368,19 +398,6 @@ render_breadcrumbs([
       >Copy all</button>
       <a class="btn secondary" href="<?= h($downloadTxtUrl) ?>">Download .txt</a>
       <a class="btn secondary" href="<?= h($downloadCsvUrl) ?>">Download CSV</a>
-      <?php if ($q !== '' && $searchMatchCount > 0): ?>
-        <button
-          type="button"
-          class="btn secondary"
-          id="prospect_copy_matches"
-          data-export-url="<?= h($exportMatchesUrl) ?>"
-          data-download-name="<?= h($exportMatchesTxtName) ?>"
-          data-fallback-download-url="<?= h($downloadMatchesTxtUrl) ?>"
-          data-count="<?= (int) $searchMatchCount ?>"
-        >Copy matches</button>
-        <a class="btn secondary" href="<?= h($downloadMatchesTxtUrl) ?>">Matches .txt</a>
-        <a class="btn secondary" href="<?= h($downloadMatchesCsvUrl) ?>">Matches CSV</a>
-      <?php endif; ?>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All countries</a>
   </div>
@@ -410,11 +427,11 @@ render_breadcrumbs([
   </div>
 </form>
 
-<div class="card">
-  <div class="invoice-list-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
+<div class="card" id="prospect-sites-card">
+  <div class="invoice-list-toolbar prospect-site-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
     <h2 style="margin:0">Sites</h2>
-    <?php if (!$emptyCountry && $countryTotal > 0): ?>
-    <div class="actions" style="margin-left:auto;align-items:center;flex-wrap:wrap;gap:0.45rem">
+    <?php if (!$emptyCountry && ($countryTotal > 0 || $q !== '')): ?>
+    <div class="actions prospect-site-search-row" style="margin-left:auto;align-items:center;flex-wrap:wrap;gap:0.45rem">
       <label class="sheet-search" for="prospect-site-search" style="margin:0">
         <span class="visually-hidden">Search this country</span>
         <input id="prospect-site-search" type="search" placeholder="Search this country…"
@@ -423,32 +440,36 @@ render_breadcrumbs([
                title="Type to search the whole country folder · Enter = next match · Shift+Enter = previous">
         <span class="sheet-search-meta muted" data-prospect-site-search-meta hidden></span>
       </label>
+      <div class="actions prospect-match-actions" id="prospect-match-actions"
+          <?= ($q !== '' && $searchMatchCount > 0) ? '' : ' hidden' ?>>
+        <button
+          type="button"
+          class="btn secondary small"
+          id="prospect_copy_matches"
+          data-export-url="<?= h($exportMatchesUrl) ?>"
+          data-download-name="<?= h($exportMatchesTxtName !== '' ? $exportMatchesTxtName : 'matches-our-database.txt') ?>"
+          data-fallback-download-url="<?= h($downloadMatchesTxtUrl) ?>"
+          data-count="<?= (int) $searchMatchCount ?>"
+        >Copy matches</button>
+        <a class="btn secondary small" id="prospect_matches_txt" href="<?= h($downloadMatchesTxtUrl !== '' ? $downloadMatchesTxtUrl : '#') ?>">Matches .txt</a>
+        <a class="btn secondary small" id="prospect_matches_csv" href="<?= h($downloadMatchesCsvUrl !== '' ? $downloadMatchesCsvUrl : '#') ?>">Matches CSV</a>
+      </div>
     </div>
     <?php endif; ?>
   </div>
   <table id="prospect-site-table">
     <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
-    <tbody>
-    <?php foreach ($rows as $s): ?>
-      <tr data-prospect-site-row data-domain="<?= h((string) $s['domain']) ?>">
-        <td><strong><?= h($s['domain']) ?></strong></td>
-        <td class="help"><?= h($s['url'] !== '' ? $s['url'] : '—') ?></td>
-        <td><?= h($s['language'] ?: '—') ?></td>
-        <td><?= badge($s['status']) ?></td>
-        <td><?= h($s['added_by_full'] ?: $s['added_by_name'] ?: '—') ?></td>
-        <td><?= h(substr((string) $s['created_at'], 0, 10)) ?></td>
-      </tr>
-    <?php endforeach; ?>
+    <tbody id="prospect-site-tbody">
+    <?= prospect_site_rows_html($rows) ?>
     </tbody>
   </table>
-  <?php if (!$rows): ?>
-    <div class="empty-state">
-      <p><?= $q !== '' ? 'No sites in this country match your search.' : 'No sites in this country yet.' ?></p>
-    </div>
-  <?php else: ?>
+  <div id="prospect-site-empty" class="empty-state"<?= $rows ? ' hidden' : '' ?>>
+    <p data-prospect-empty-text><?= $q !== '' ? 'No sites in this country match your search.' : 'No sites in this country yet.' ?></p>
+  </div>
+  <div id="prospect-site-pager"<?= !$rows ? ' hidden' : '' ?>>
     <div class="actions" style="margin-top:0.8rem;align-items:center;gap:0.65rem;flex-wrap:wrap">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
+      <span data-prospect-page-label>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
       <?php
       render_sheet_per_page_filter([
@@ -459,7 +480,7 @@ render_breadcrumbs([
       ], $perPage);
       ?>
     </div>
-  <?php endif; ?>
+  </div>
 </div>
 <script src="<?= h(script_asset_url('js/prospects-country.js')) ?>" defer></script>
 <?php

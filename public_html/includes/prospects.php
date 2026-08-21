@@ -587,6 +587,38 @@ function prospect_duplicates_deleted_message(int $n): string
 }
 
 /**
+ * HTML for Our database country site table rows (AJAX search + initial render).
+ *
+ * @param list<array<string,mixed>> $rows
+ */
+function prospect_site_rows_html(array $rows): string
+{
+    ob_start();
+    foreach ($rows as $s) {
+        $domain = (string) ($s['domain'] ?? '');
+        $url = (string) ($s['url'] ?? '');
+        $lang = (string) ($s['language'] ?? '');
+        $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
+        $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
+        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '">';
+        echo '<td><strong>' . h($domain) . '</strong></td>';
+        echo '<td class="help">' . h($url !== '' ? $url : '—') . '</td>';
+        echo '<td>' . h($lang !== '' ? $lang : '—') . '</td>';
+        echo '<td>';
+        if (function_exists('badge')) {
+            echo badge((string) ($s['status'] ?? 'new'));
+        } else {
+            echo h((string) ($s['status'] ?? ''));
+        }
+        echo '</td>';
+        echo '<td>' . h($added !== '' ? $added : '—') . '</td>';
+        echo '<td>' . h($when) . '</td>';
+        echo '</tr>';
+    }
+    return (string) ob_get_clean();
+}
+
+/**
  * Delete extra prospect_sites rows that share the same (country, domain).
  * Keeps the lowest id. Returns how many rows were removed.
  */
