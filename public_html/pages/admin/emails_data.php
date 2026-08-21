@@ -14,10 +14,8 @@ if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
     flash('error', 'Unknown folder.');
     redirect($base);
 }
-// Clear New reminder when Admin opens Emails data.
-if (function_exists('clear_admin_new_data')) {
-    clear_admin_new_data('emails_admin', $user);
-}
+// New reminder for Emails Admin is cleared when a country sheet is opened (not hub-only).
+// See sites_with_emails_app.php (admin scope country view).
 
 // Optional repair: Admin→Final archive sync (not automatic on every hub GET).
 if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'repair_final_archive') {
@@ -101,13 +99,13 @@ if ($folder === '') {
           <a class="folder" href="<?= h($base) ?>&amp;folder=sites_with_emails">
             <h3>Sites with emails - Admin</h3>
             <p class="muted">
-              Final list from Team Push ·
+              Working list from Team Push · emailed checkpoint here ·
               <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
               · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
             </p>
           </a>
-          <?= info_icon('Final site + email archive filled when Team pushes from Sites with emails - Team. Communication Team can super-search this across all countries.', 'About Sites with emails - Admin') ?>
+          <?= info_icon('Working site + email list filled when Team pushes from Sites with emails - Team. Emailed progress is tracked here only. Final is a separate mirror without emailed marks. Communication Team can super-search Admin data across countries.', 'About Sites with emails - Admin') ?>
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">

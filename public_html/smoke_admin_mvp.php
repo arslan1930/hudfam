@@ -461,6 +461,30 @@ if (!str_contains($emailsHub, 'repair_final_archive')) {
 } else {
     ok('emails hub repair Final archive');
 }
+if (str_contains($emailsHub, 'Final list from Team Push')
+    || (str_contains($emailsHub, "clear_admin_new_data('emails_admin'")
+        && !str_contains($emailsHub, 'cleared when a country sheet'))) {
+    fail('emails hub still mislabels Admin as Final or clears New on hub open');
+} else {
+    ok('emails hub Admin naming + no hub New clear');
+}
+if (!str_contains($emailsHub, 'Working list from Team Push')
+    || !str_contains($emailsHub, 'emailed checkpoint here')) {
+    fail('emails hub missing Admin working-list copy');
+} else {
+    ok('emails hub Admin working-list copy');
+}
+$sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
+$sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
+    || !str_contains($sweLibSmoke, 'skipped_full_slots')
+    || !str_contains($sweLibSmoke, "'row_deleted' => true")
+    || !str_contains($sweAppSmoke, 'no emails left')
+    || !str_contains($sweAppSmoke, 'Admin already had 4')) {
+    fail('SWE missing push full-slot stats / Admin empty-email delete');
+} else {
+    ok('SWE push full-slot stats + Admin empty-email delete');
+}
 
 $ordersPage = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 if (!str_contains($ordersPage, 'order-client-search')) {

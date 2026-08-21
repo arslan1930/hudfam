@@ -513,6 +513,18 @@ function count_sites_with_emails_push_conflicts(string $country): int
  */
 function merge_swe_email_slots_prefer_admin(array $adminSlots, array $teamSlots): array
 {
+    return merge_swe_email_slots_prefer_admin_stats($adminSlots, $teamSlots)['slots'];
+}
+
+/**
+ * Same merge as prefer_admin, plus how many Team emails could not fit (Admin already full).
+ *
+ * @param array{0:string,1:string,2:string,3:string}|list<string> $adminSlots
+ * @param array{0:string,1:string,2:string,3:string}|list<string> $teamSlots
+ * @return array{slots: array{0:string,1:string,2:string,3:string}, dropped:int, dropped_emails:list<string>}
+ */
+function merge_swe_email_slots_prefer_admin_stats(array $adminSlots, array $teamSlots): array
+{
     $out = ['', '', '', ''];
     $seen = [];
     for ($i = 0; $i < 4; $i++) {
@@ -522,6 +534,7 @@ function merge_swe_email_slots_prefer_admin(array $adminSlots, array $teamSlots)
             $seen[strtolower($e)] = true;
         }
     }
+    $droppedEmails = [];
     foreach ($teamSlots as $raw) {
         $e = trim((string) $raw);
         if ($e === '') {
@@ -531,15 +544,24 @@ function merge_swe_email_slots_prefer_admin(array $adminSlots, array $teamSlots)
         if (isset($seen[$key])) {
             continue;
         }
+        $placed = false;
         for ($i = 0; $i < 4; $i++) {
             if ($out[$i] === '') {
                 $out[$i] = $e;
                 $seen[$key] = true;
+                $placed = true;
                 break;
             }
         }
+        if (!$placed) {
+            $droppedEmails[] = $e;
+        }
     }
-    return $out;
+    return [
+        'slots' => $out,
+        'dropped' => count($droppedEmails),
+        'dropped_emails' => $droppedEmails,
+    ];
 }
 
 /**
@@ -547,7 +569,7 @@ function merge_swe_email_slots_prefer_admin(array $adminSlots, array $teamSlots)
  * When Admin already has the domain, require $confirmOverwrite (UI confirm) then merge
  * Team emails into empty Admin slots only (never wipe filled Admin emails).
  *
- * @return array{ok:bool,error?:string,needs_confirm?:bool,pushed?:int,updated?:int,cleared?:int,domain?:string,country?:string,site_count?:int}
+ * @return array{ok:bool,error?:string,needs_confirm?:bool,pushed?:int,updated?:int,cleared?:int,skipped_full_slots?:int,dropped_emails?:list<string>,domain?:string,country?:string,site_count?:int}
  */
 function push_one_site_with_emails_team_to_admin(
     int $siteId,
@@ -608,8 +630,13 @@ function push_one_site_with_emails_team_to_admin(
         ];
     }
 
+    $droppedEmails = [];
+    $skippedFullSlots = 0;
     if ($already) {
-        $slots = merge_swe_email_slots_prefer_admin(email_slots_from_row($adminRow), $slots);
+        $merged = merge_swe_email_slots_prefer_admin_stats(email_slots_from_row($adminRow), $slots);
+        $slots = $merged['slots'];
+        $skippedFullSlots = (int) $merged['dropped'];
+        $droppedEmails = $merged['dropped_emails'];
     }
 
     $ins = db()->prepare(
@@ -665,6 +692,8 @@ function push_one_site_with_emails_team_to_admin(
         'pushed' => $already ? 0 : 1,
         'updated' => $already ? 1 : 0,
         'cleared' => $cleared,
+        'skipped_full_slots' => $skippedFullSlots,
+        'dropped_emails' => $droppedEmails,
         'domain' => $domain,
         'country' => $country,
         'site_count' => count_sites_with_emails_for_country($country, 'team'),
@@ -677,7 +706,7 @@ function push_one_site_with_emails_team_to_admin(
  * When any domain already exists in Admin, require $confirmOverwrite then merge
  * Team emails into empty Admin slots only (existing Admin emails are kept).
  *
- * @return array{ok:bool,error?:string,needs_confirm?:bool,conflicts?:int,pushed:int,updated:int,cleared:int,skipped_empty:int,country:string}
+ * @return array{ok:bool,error?:string,needs_confirm?:bool,conflicts?:int,pushed:int,updated:int,cleared:int,skipped_empty:int,skipped_full_slots:int,dropped_domains:list<string>,country:string}
  */
 function push_sites_with_emails_team_to_admin(
     string $country,
@@ -703,6 +732,8 @@ function push_sites_with_emails_team_to_admin(
             'updated' => 0,
             'cleared' => 0,
             'skipped_empty' => 0,
+            'skipped_full_slots' => 0,
+            'dropped_domains' => [],
             'country' => $country,
         ];
     }
@@ -737,6 +768,9 @@ function push_sites_with_emails_team_to_admin(
     $pushed = 0;
     $updated = 0;
     $skippedEmpty = 0;
+    $skippedFullSlots = 0;
+    /** @var list<string> $droppedDomains */
+    $droppedDomains = [];
     $pushedDomains = [];
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
         $slots = email_slots_from_row($row);
@@ -750,7 +784,14 @@ function push_sites_with_emails_team_to_admin(
         $adminRow = $adminSel->fetch(PDO::FETCH_ASSOC) ?: null;
         $already = is_array($adminRow);
         if ($already) {
-            $slots = merge_swe_email_slots_prefer_admin(email_slots_from_row($adminRow), $slots);
+            $merged = merge_swe_email_slots_prefer_admin_stats(email_slots_from_row($adminRow), $slots);
+            $slots = $merged['slots'];
+            if ((int) $merged['dropped'] > 0) {
+                $skippedFullSlots += (int) $merged['dropped'];
+                if (count($droppedDomains) < 8) {
+                    $droppedDomains[] = $domain;
+                }
+            }
         }
         $ins->execute([
             $domain,
@@ -809,6 +850,8 @@ function push_sites_with_emails_team_to_admin(
         'updated' => $updated,
         'cleared' => $cleared,
         'skipped_empty' => $skippedEmpty,
+        'skipped_full_slots' => $skippedFullSlots,
+        'dropped_domains' => $droppedDomains,
         'country' => $country,
     ];
 }
@@ -1210,6 +1253,25 @@ function save_site_with_emails_row(
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
+    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    $scopeNorm = swe_normalize_scope($scope);
+
+    // Admin / Final: clearing the last email deletes the row (same as super-search).
+    if (!$hasEmail && $id !== null && $id > 0 && ($scopeNorm === 'admin' || $origScope === 'admin_all')) {
+        $existing = get_site_with_emails($id, 'admin');
+        if (!$existing || (string) $existing['country'] !== $country) {
+            return ['ok' => false, 'error' => 'Row not found in this country.'];
+        }
+        $delDomain = (string) ($existing['domain'] ?? $domain);
+        db()->prepare('DELETE FROM sites_with_emails_admin WHERE id=?')->execute([$id]);
+        delete_sites_with_emails_admin_all_by_domain($country, $delDomain);
+        return [
+            'ok' => true,
+            'id' => $id,
+            'row_deleted' => true,
+            'domain' => $delDomain,
+        ];
+    }
 
     if ($id !== null && $id > 0) {
         $existing = get_site_with_emails($id, $scope);
@@ -1229,7 +1291,7 @@ function save_site_with_emails_row(
              SET domain=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
              WHERE id=?"
         )->execute([$domain, $slots[0], $slots[1], $slots[2], $slots[3], $id]);
-        if (swe_normalize_scope($scope) === 'admin') {
+        if ($scopeNorm === 'admin') {
             if ($oldDomain !== '' && mb_strtolower($oldDomain) !== mb_strtolower($domain)) {
                 delete_sites_with_emails_admin_all_by_domain($country, $oldDomain);
             }
@@ -1238,7 +1300,11 @@ function save_site_with_emails_row(
                 sync_sites_with_emails_admin_row_to_all($fresh);
             }
         }
-        return ['ok' => true, 'id' => $id];
+        return ['ok' => true, 'id' => $id, 'row_deleted' => false, 'domain' => $domain];
+    }
+
+    if (!$hasEmail && $scopeNorm !== 'team') {
+        return ['ok' => false, 'error' => 'Add at least one email — each Admin site must have email data.'];
     }
 
     $uid = (int) ($user['id'] ?? 0) ?: null;
