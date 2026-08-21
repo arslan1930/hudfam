@@ -533,6 +533,50 @@ function merge_swe_email_slots_prefer_admin(array $adminSlots, array $teamSlots)
 }
 
 /**
+ * Compare normalized email slot lists (order-sensitive; empty trailing ignored via normalize from email_slots_from_row).
+ *
+ * @param list<string> $a
+ * @param list<string> $b
+ */
+function swe_email_slots_equal(array $a, array $b): bool
+{
+    $norm = static function (array $slots): array {
+        $out = [];
+        for ($i = 0; $i < 4; $i++) {
+            $out[] = strtolower(trim((string) ($slots[$i] ?? '')));
+        }
+        return $out;
+    };
+    return $norm($a) === $norm($b);
+}
+
+/**
+ * When a re-push changes Admin email slots on an emailed row, clear the emailed checkpoint.
+ *
+ * @param list<string> $beforeSlots
+ * @param list<string> $afterSlots
+ */
+function swe_admin_clear_emailed_if_slots_changed(
+    string $country,
+    string $domain,
+    array $beforeSlots,
+    array $afterSlots,
+    bool $wasEmailed
+): bool {
+    if (!$wasEmailed || swe_email_slots_equal($beforeSlots, $afterSlots)) {
+        return false;
+    }
+    ensure_sites_with_emails_schema();
+    $stmt = db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=0, email_sent_at=NULL
+         WHERE country=? AND domain=? AND email_sent=1'
+    );
+    $stmt->execute([trim($country), trim($domain)]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
  * Same merge as prefer_admin, plus how many Team emails could not fit (Admin already full).
  *
  * @param array{0:string,1:string,2:string,3:string}|list<string> $adminSlots
@@ -630,7 +674,8 @@ function push_one_site_with_emails_team_to_admin(
     }
 
     $adminSel = db()->prepare(
-        "SELECT id, email1, email2, email3, email4 FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
+        "SELECT id, email1, email2, email3, email4, email_sent
+         FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
     );
     $adminSel->execute([$country, $domain]);
     $adminRow = $adminSel->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -648,8 +693,13 @@ function push_one_site_with_emails_team_to_admin(
 
     $droppedEmails = [];
     $skippedFullSlots = 0;
+    $emailedCleared = 0;
+    $beforeSlots = ['', '', '', ''];
+    $wasEmailed = false;
     if ($already) {
-        $merged = merge_swe_email_slots_prefer_admin_stats(email_slots_from_row($adminRow), $slots);
+        $beforeSlots = email_slots_from_row($adminRow);
+        $wasEmailed = (int) ($adminRow['email_sent'] ?? 0) === 1;
+        $merged = merge_swe_email_slots_prefer_admin_stats($beforeSlots, $slots);
         $slots = $merged['slots'];
         $skippedFullSlots = (int) $merged['dropped'];
         $droppedEmails = $merged['dropped_emails'];
@@ -695,6 +745,16 @@ function push_one_site_with_emails_team_to_admin(
         'pushed_by' => $uid,
     ]);
 
+    if ($already && swe_admin_clear_emailed_if_slots_changed(
+        $country,
+        $domain,
+        $beforeSlots,
+        $slots,
+        $wasEmailed
+    )) {
+        $emailedCleared = 1;
+    }
+
     $del = db()->prepare("DELETE FROM {$team} WHERE id=?");
     $del->execute([$siteId]);
     $cleared = $del->rowCount();
@@ -710,6 +770,7 @@ function push_one_site_with_emails_team_to_admin(
         'cleared' => $cleared,
         'skipped_full_slots' => $skippedFullSlots,
         'dropped_emails' => $droppedEmails,
+        'emailed_cleared' => $emailedCleared,
         'domain' => $domain,
         'country' => $country,
         'site_count' => count_sites_with_emails_for_country($country, 'team'),
@@ -750,6 +811,7 @@ function push_sites_with_emails_team_to_admin(
             'skipped_empty' => 0,
             'skipped_full_slots' => 0,
             'dropped_domains' => [],
+            'emailed_cleared' => 0,
             'country' => $country,
         ];
     }
@@ -778,13 +840,14 @@ function push_sites_with_emails_team_to_admin(
            updated_at = NOW()"
     );
     $adminSel = db()->prepare(
-        "SELECT email1, email2, email3, email4 FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
+        "SELECT email1, email2, email3, email4, email_sent FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
     );
 
     $pushed = 0;
     $updated = 0;
     $skippedEmpty = 0;
     $skippedFullSlots = 0;
+    $emailedCleared = 0;
     /** @var list<string> $droppedDomains */
     $droppedDomains = [];
     $pushedDomains = [];
@@ -799,8 +862,12 @@ function push_sites_with_emails_team_to_admin(
         $adminSel->execute([$country, $domain]);
         $adminRow = $adminSel->fetch(PDO::FETCH_ASSOC) ?: null;
         $already = is_array($adminRow);
+        $beforeSlots = ['', '', '', ''];
+        $wasEmailed = false;
         if ($already) {
-            $merged = merge_swe_email_slots_prefer_admin_stats(email_slots_from_row($adminRow), $slots);
+            $beforeSlots = email_slots_from_row($adminRow);
+            $wasEmailed = (int) ($adminRow['email_sent'] ?? 0) === 1;
+            $merged = merge_swe_email_slots_prefer_admin_stats($beforeSlots, $slots);
             $slots = $merged['slots'];
             if ((int) $merged['dropped'] > 0) {
                 $skippedFullSlots += (int) $merged['dropped'];
@@ -833,6 +900,15 @@ function push_sites_with_emails_team_to_admin(
             'extract_batch_id' => $row['extract_batch_id'] !== null ? (int) $row['extract_batch_id'] : null,
             'pushed_by' => $uid,
         ]);
+        if ($already && swe_admin_clear_emailed_if_slots_changed(
+            $country,
+            $domain,
+            $beforeSlots,
+            $slots,
+            $wasEmailed
+        )) {
+            $emailedCleared++;
+        }
         $pushedDomains[] = $domain;
         if ($already) {
             $updated++;
@@ -868,6 +944,7 @@ function push_sites_with_emails_team_to_admin(
         'skipped_empty' => $skippedEmpty,
         'skipped_full_slots' => $skippedFullSlots,
         'dropped_domains' => $droppedDomains,
+        'emailed_cleared' => $emailedCleared,
         'country' => $country,
     ];
 }

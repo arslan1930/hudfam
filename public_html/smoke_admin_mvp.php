@@ -491,6 +491,14 @@ if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_sta
 } else {
     ok('SWE push full-slot stats + Admin empty-email delete');
 }
+if (!str_contains($sweLibSmoke, 'function swe_admin_clear_emailed_if_slots_changed')
+    || !str_contains($sweLibSmoke, 'emailed_cleared')
+    || !str_contains($sweAppSmoke, 'emailed mark cleared')
+    || !str_contains($sweAppSmoke, 'cleared emailed on')) {
+    fail('SWE missing P2 re-push emailed clear');
+} else {
+    ok('SWE P2 re-push clears emailed when slots change');
+}
 if (!str_contains($sweLibSmoke, 'function swe_admin_mark_country_seen')
     || !str_contains($sweLibSmoke, 'swe_admin_country_seen')
     || !str_contains($sweAppSmoke, 'swe_admin_mark_country_seen')
