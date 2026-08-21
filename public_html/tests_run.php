@@ -1189,7 +1189,11 @@ try {
     $richSaved = save_email_campaign_draft(
         $draftPid,
         'Rich format sample',
-        '<h2 onclick="x()">Guest post offer</h2><p>Hi <strong>there</strong>, we can do <em>guest posts</em> and <u>niche edits</u>.</p><script>alert(1)</script><a href="https://evil.example">click</a>',
+        '<h2 onclick="x()">Guest post offer</h2><p>Hi <strong>there</strong>, we can do <em>guest posts</em> and <u>niche edits</u>.</p>'
+            . '<ul><li>Point one</li><li>Point two</li></ul>'
+            . '<p>See <a href="https://example.com/guide" onclick="evil()">our guide</a> '
+            . 'and <a href="javascript:alert(1)">bad</a>.</p>'
+            . '<script>alert(1)</script>',
         'offer',
         0,
         (int) $adminUser['id']
@@ -1202,11 +1206,15 @@ try {
         && str_contains($richBody, '<em>')
         && str_contains($richBody, '<u>')
         && str_contains($richBody, '<h2>')
+        && str_contains($richBody, '<ul>')
+        && str_contains($richBody, '<li>')
+        && str_contains($richBody, '<a href="https://example.com/guide">')
         && !str_contains(strtolower($richBody), '<script')
         && !str_contains(strtolower($richBody), 'onclick')
-        && !str_contains(strtolower($richBody), '<a ')
+        && !str_contains(strtolower($richBody), 'javascript:')
         && str_contains($plainFromHtml, 'Guest post offer')
-        && str_contains($plainFromHtml, 'guest posts');
+        && str_contains($plainFromHtml, 'guest posts')
+        && str_contains($plainFromHtml, 'Point one');
     $tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     $imgSaved = save_email_campaign_draft(
         $draftPid,
@@ -1230,6 +1238,11 @@ try {
     $badRemoteOnly = sanitize_email_campaign_draft_html(
         '<img src="https://evil.example/x.png" alt="x"><img src="javascript:alert(1)">'
     );
+    $sizeSoft = email_campaign_draft_size_warning(str_repeat('x', 130000));
+    $sizeHard = email_campaign_draft_size_warning(
+        '<p>big</p><img src="' . $tinyPng . '"><img src="' . $tinyPng . '"><img src="'
+        . $tinyPng . '"><img src="' . $tinyPng . '">'
+    );
     $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0), $adminUser);
     $left = count_email_campaign_drafts($draftPid);
     $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0), $adminUser);
@@ -1241,12 +1254,15 @@ try {
         && $sanitized === $richBody
         && $imgOk
         && $badRemoteOnly === ''
+        && $sizeSoft !== ''
+        && $sizeHard !== ''
         && !empty($del['ok'])
         && $left === 3
         && empty($wrongProjectDel['ok'])) {
         pass('campaign drafts update/delete stay scoped to project');
-        pass('campaign drafts keep bold/italic/underline/headings and strip unsafe HTML');
+        pass('campaign drafts keep bold/italic/underline/headings/lists/https links and strip unsafe HTML');
         pass('campaign drafts keep compressed data-URI images and strip remote/unsafe imgs');
+        pass('campaign drafts size warning for large HTML/images');
     } else {
         fail('campaign draft mutate: ' . json_encode([
             'updated' => $updated,
@@ -1259,9 +1275,50 @@ try {
             'img_count' => $imgCount,
             'img_ok' => $imgOk,
             'remote' => $badRemoteOnly,
+            'sizeSoft' => $sizeSoft,
+            'sizeHard' => $sizeHard,
             'del' => $del,
             'left' => $left,
             'wrong' => $wrongProjectDel,
+        ]));
+    }
+
+    // Batch counts + reorder within category.
+    $countMap = count_email_campaign_drafts_by_projects([$draftPid, $draftHiddenPid, 0, -1]);
+    $orderBefore = list_email_campaign_drafts($draftPid, 'offer');
+    $moveDown = ['ok' => false];
+    $moveUp = ['ok' => false];
+    $orderAfterDown = [];
+    $orderAfterUp = [];
+    if (count($orderBefore) >= 2) {
+        $firstId = (int) ($orderBefore[0]['id'] ?? 0);
+        $secondId = (int) ($orderBefore[1]['id'] ?? 0);
+        $moveDown = move_email_campaign_draft($draftPid, $firstId, 'down', $adminUser);
+        $orderAfterDown = list_email_campaign_drafts($draftPid, 'offer');
+        $moveUp = move_email_campaign_draft($draftPid, $firstId, 'up', $adminUser);
+        $orderAfterUp = list_email_campaign_drafts($draftPid, 'offer');
+        $orderOk = !empty($moveDown['ok'])
+            && !empty($moveUp['ok'])
+            && (int) ($orderAfterDown[0]['id'] ?? 0) === $secondId
+            && (int) ($orderAfterDown[1]['id'] ?? 0) === $firstId
+            && (int) ($orderAfterUp[0]['id'] ?? 0) === $firstId;
+    } else {
+        $orderOk = false;
+    }
+    if (($countMap[$draftPid] ?? -1) === $left
+        && ($countMap[$draftHiddenPid] ?? -1) === 1
+        && !array_key_exists(0, $countMap)
+        && $orderOk) {
+        pass('campaign drafts batch counts + move up/down within category');
+    } else {
+        fail('campaign drafts counts/move: ' . json_encode([
+            'countMap' => $countMap,
+            'left' => $left,
+            'moveDown' => $moveDown,
+            'moveUp' => $moveUp,
+            'before' => array_column($orderBefore, 'id'),
+            'afterDown' => array_column($orderAfterDown, 'id'),
+            'afterUp' => array_column($orderAfterUp, 'id'),
         ]));
     }
 

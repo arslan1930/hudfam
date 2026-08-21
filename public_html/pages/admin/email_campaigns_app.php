@@ -937,6 +937,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             redirect($campBase . '&project=' . $pid . '#project-drafts');
         }
+        if ($action === 'move_draft') {
+            $pid = (int) post('project_id');
+            $result = move_email_campaign_draft(
+                $pid,
+                (int) post('draft_id'),
+                (string) post('direction'),
+                $user
+            );
+            flash(
+                !empty($result['ok']) ? 'ok' : 'error',
+                !empty($result['ok'])
+                    ? 'Draft order updated.'
+                    : (string) ($result['error'] ?? 'Could not move draft.')
+            );
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
         if ($action === 'toggle_project_team_search') {
             $pid = (int) post('project_id');
             $visible = (string) post('team_search_visible') === '1';
@@ -1269,14 +1285,22 @@ if ($projectIdParam > 0) {
           </div>
           <?php if ($projectDrafts): ?>
           <ul class="camp-admin-drafts-list">
-            <?php foreach ($projectDrafts as $d):
+            <?php
+            $adminDraftTotal = count($projectDrafts);
+            foreach ($projectDrafts as $adi => $d):
                 $did = (int) $d['id'];
+                $adminCat = (string) ($d['category'] ?? '');
+                $adminCanUp = $adi > 0
+                    && (string) ($projectDrafts[$adi - 1]['category'] ?? '') === $adminCat;
+                $adminCanDown = $adi < ($adminDraftTotal - 1)
+                    && (string) ($projectDrafts[$adi + 1]['category'] ?? '') === $adminCat;
+                $adminSizeWarn = email_campaign_draft_size_warning((string) ($d['body'] ?? ''));
                 ?>
               <li>
                 <div class="camp-admin-draft-meta">
                   <strong><?= h((string) $d['title']) ?></strong>
                   <span class="muted" style="font-size:0.82rem">
-                    <?= h(email_campaign_draft_category_label((string) $d['category'])) ?>
+                    <?= h(email_campaign_draft_category_label($adminCat)) ?>
                   </span>
                   <?php if (trim((string) ($d['subject'] ?? '')) !== ''): ?>
                   <span class="help" style="display:block;margin-top:0.15rem">
@@ -1289,8 +1313,31 @@ if ($projectIdParam > 0) {
                   ?>
                   <span class="help" style="display:block;margin-top:0.2rem"><?= h($adminAttr) ?></span>
                   <?php endif; ?>
+                  <?php if ($adminSizeWarn !== ''): ?>
+                  <span class="help camp-draft-size-warn" style="display:block;margin-top:0.2rem"><?= h($adminSizeWarn) ?></span>
+                  <?php endif; ?>
                 </div>
                 <div class="actions">
+                  <?php if ($adminCanUp): ?>
+                  <form method="post" action="<?= h($projectForm) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="move_draft">
+                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                    <input type="hidden" name="draft_id" value="<?= $did ?>">
+                    <input type="hidden" name="direction" value="up">
+                    <button class="btn secondary small" type="submit" title="Move up">↑</button>
+                  </form>
+                  <?php endif; ?>
+                  <?php if ($adminCanDown): ?>
+                  <form method="post" action="<?= h($projectForm) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="move_draft">
+                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                    <input type="hidden" name="draft_id" value="<?= $did ?>">
+                    <input type="hidden" name="direction" value="down">
+                    <button class="btn secondary small" type="submit" title="Move down">↓</button>
+                  </form>
+                  <?php endif; ?>
                   <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
                   <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
                   <form method="post" action="<?= h($projectForm) ?>"
@@ -1353,7 +1400,7 @@ if ($projectIdParam > 0) {
             <div class="camp-hub-field">
               <label for="admin_draft_body">Draft text</label>
               <p class="help" style="margin:0 0 0.45rem">
-                Bold / italic / underline / headings / images are kept when Communication copies into email.
+                Bold / italic / underline / headings / lists / http(s) links / images are kept when Communication copies into email.
                 Optional subject + tokens ({domain}, {country}, {language}, {name}, {site}).
                 Paste a screenshot or use Image (auto-compressed).
               </p>
