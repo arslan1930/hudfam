@@ -14,12 +14,15 @@
     var emailSelect = root.querySelector('[data-camp-email-select]');
     var applyBtn = root.querySelector('[data-camp-apply]');
     var clearBtn = root.querySelector('[data-camp-clear]');
+    var draftsLink = root.querySelector('[data-camp-open-drafts]');
     var modeInputs = root.querySelectorAll('[data-camp-mode]');
 
     var sheetId = root.getAttribute('data-sheet-id') || '';
     var sheetName = root.getAttribute('data-sheet-name') || 'sheet';
     var suggestUrl = root.getAttribute('data-suggest-url') || '';
     var postUrl = root.getAttribute('data-post-url') || window.location.href;
+    var draftsBase = root.getAttribute('data-drafts-url') || 'index.php?page=team_email_campaigns_drafts';
+    var projectId = root.getAttribute('data-project-id') || '';
 
     var suggestions = [];
     var activeIndex = -1;
@@ -111,9 +114,33 @@
       list.hidden = false;
     }
 
+    function syncDraftsLink() {
+      if (!draftsLink) return;
+      if (!selected || !selected.domain) {
+        draftsLink.hidden = true;
+        draftsLink.setAttribute('href', '#');
+        return;
+      }
+      var url = draftsBase;
+      var pid = selected.projectId || projectId;
+      if (pid && url.indexOf('project=') === -1) {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'project=' + encodeURIComponent(pid);
+      }
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'domain=' + encodeURIComponent(selected.domain);
+      if (selected.country) {
+        url += '&country=' + encodeURIComponent(selected.country);
+      }
+      if (selected.language) {
+        url += '&language=' + encodeURIComponent(selected.language);
+      }
+      draftsLink.href = url;
+      draftsLink.hidden = false;
+    }
+
     function renderSelected() {
       if (!selectedBox || !selected) {
         if (selectedBox) selectedBox.hidden = true;
+        syncDraftsLink();
         return;
       }
       selectedBox.hidden = false;
@@ -148,6 +175,7 @@
         });
       }
       syncEmailPick();
+      syncDraftsLink();
     }
 
     function selectSuggestion(idx) {
@@ -158,6 +186,8 @@
         sheetId: item.sheet_id || sheetId,
         domain: item.domain,
         country: item.country,
+        language: item.language || '',
+        projectId: item.project_id || projectId,
         projectName: item.project_name || sheetName || '',
         emails: (item.emails || []).slice(),
         matchType: item.match_type || 'domain',
@@ -169,7 +199,7 @@
       setStatus(
         'Selected ' + item.domain + ' · ' +
         ((item.emails || []).join(', ') || 'no emails') +
-        '. Choose action, then press Enter to confirm.'
+        '. Choose action, then press Enter to confirm — or Open drafts for site.'
       );
     }
 

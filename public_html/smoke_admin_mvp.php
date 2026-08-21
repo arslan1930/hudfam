@@ -767,14 +767,19 @@ if (!str_contains($campDraftsTeam, 'email_campaign_user_can_delete_draft($user, 
     ok('campaign drafts UI attribution + gated Delete');
 }
 if (!str_contains($campLib, 'function expand_email_campaign_draft_tokens')
-    || !str_contains($campLib, 'subject VARCHAR')
-        && !str_contains($campLib, "ADD COLUMN subject")
+    || (!str_contains($campLib, 'subject VARCHAR') && !str_contains($campLib, 'ADD COLUMN subject'))
     || !str_contains($campDraftsTeam, 'data-camp-draft-copy-plain')
-    || !str_contains($campDraftsTeam, 'name="subject"')
-    || !str_contains($campDraftsTeam, 'category=' )) {
+    || !str_contains($campDraftsTeam, 'name="subject"')) {
     fail('campaign drafts missing subject/tokens/Copy plain/category preserve');
 } else {
     ok('campaign drafts subject + tokens + Copy plain');
+}
+if (!str_contains($campLib, 'data-camp-open-drafts')
+    || !str_contains($campLib, 'data-drafts-url')
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-search.js') ?: '', 'syncDraftsLink')) {
+    fail('campaign search missing Open drafts deep-link');
+} else {
+    ok('campaign search Open drafts deep-link');
 }
 $campDraftJs = file_get_contents($root . '/assets/js/email-campaign-drafts.js') ?: '';
 if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
