@@ -220,6 +220,16 @@ CREATE TABLE IF NOT EXISTS admin_data_seen (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Per-admin “seen” watermark for Sites with emails - Admin country folders
+CREATE TABLE IF NOT EXISTS swe_admin_country_seen (
+  user_id INT NOT NULL,
+  country VARCHAR(100) NOT NULL,
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, country),
+  CONSTRAINT fk_swe_admin_country_seen_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Email campaign projects (Admin) → country sheets → Communication search + drafts
 CREATE TABLE IF NOT EXISTS email_campaign_projects (
   id INT AUTO_INCREMENT PRIMARY KEY,

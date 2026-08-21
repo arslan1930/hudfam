@@ -474,6 +474,12 @@ if (!str_contains($emailsHub, 'Working list from Team Push')
 } else {
     ok('emails hub Admin working-list copy');
 }
+if (!str_contains($emailsHub, "admin_new_badge_html('emails_admin'")
+    || !str_contains($emailsHub, 'swe_admin_new_counts_by_country')) {
+    fail('emails hub missing Admin New badge / country new counts');
+} else {
+    ok('emails hub Admin New badge + country counts');
+}
 $sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
 $sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
@@ -484,6 +490,23 @@ if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_sta
     fail('SWE missing push full-slot stats / Admin empty-email delete');
 } else {
     ok('SWE push full-slot stats + Admin empty-email delete');
+}
+if (!str_contains($sweLibSmoke, 'function swe_admin_mark_country_seen')
+    || !str_contains($sweLibSmoke, 'swe_admin_country_seen')
+    || !str_contains($sweAppSmoke, 'swe_admin_mark_country_seen')
+    || !str_contains($sweAppSmoke, 'mark_all_countries_seen')
+    || !str_contains($sweAppSmoke, 'swe-country-new')) {
+    fail('SWE missing Admin country New watermark UI');
+} else {
+    ok('SWE Admin country New watermark + list +N');
+}
+$newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
+$layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
+if (!str_contains($newDataSmoke, "section !== 'emails_admin'")
+    || !str_contains($layoutSmoke, "'admin_emails_data' => 'emails_admin'")) {
+    fail('emails_admin New badge not re-enabled (nav / helper)');
+} else {
+    ok('emails_admin New badge re-enabled only');
 }
 
 $ordersPage = file_get_contents($root . '/pages/admin/orders.php') ?: '';

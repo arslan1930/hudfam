@@ -155,12 +155,19 @@ function admin_new_data_flags(?array $user = null): array
 }
 
 /**
- * New badges removed sitewide — kept as a no-op so older call sites stay safe.
+ * New badge HTML. Re-enabled only for emails_admin (Sites with emails - Admin).
+ * Our database / Extracted stay off until a later decision.
  */
 function admin_new_badge_html(string $section, ?array $user = null): string
 {
-    unset($section, $user);
-    return '';
+    $section = admin_new_data_normalize_section($section);
+    if ($section !== 'emails_admin') {
+        return '';
+    }
+    if (!admin_has_new_data($section, $user)) {
+        return '';
+    }
+    return ' <span class="admin-new-badge" title="New data — open a country to clear">New</span>';
 }
 
 /**

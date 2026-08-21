@@ -2551,9 +2551,10 @@ try {
     fail('orders/invoices: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
-// --- Admin new-data signals (UI badges removed sitewide; helpers still work) ---
+// --- Admin new-data signals (emails_admin New badge on; Our DB / Extracted off) ---
 try {
     db()->prepare('DELETE FROM admin_data_seen WHERE user_id=?')->execute([(int) $adminUser['id']]);
+    db()->prepare('DELETE FROM swe_admin_country_seen WHERE user_id=?')->execute([(int) $adminUser['id']]);
     db()->exec("DELETE FROM admin_data_signals");
     mark_admin_new_data('our_database', 3, 'Germany');
     mark_admin_new_data('extracted_sites', 2, 'Germany');
@@ -2570,10 +2571,56 @@ try {
         fail('signal not cleared');
     }
     if (admin_new_badge_html('our_database', $adminUser) === '') {
-        pass('New badge UI disabled sitewide');
+        pass('Our database New badge stays off');
     } else {
-        fail('New badge HTML still rendered');
+        fail('Our database New badge should stay off');
     }
+    if (admin_new_badge_html('extracted_sites', $adminUser) === '') {
+        pass('Extracted New badge stays off');
+    } else {
+        fail('Extracted New badge should stay off');
+    }
+    if (str_contains(admin_new_badge_html('emails_admin', $adminUser), 'admin-new-badge')) {
+        pass('emails_admin New badge HTML');
+    } else {
+        fail('emails_admin New badge missing');
+    }
+
+    // Country watermark: push-like rows after mark → count; open country → clear that country + section when alone
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfnew-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfnew-%'");
+    db()->prepare(
+        "INSERT INTO sites_with_emails_admin
+           (domain, country, language, region, email1, email2, email3, email4, pushed_by, created_at, updated_at)
+         VALUES ('txfnew-a.com','Germany','German','Europe','a@txfnew.test','','','',?, NOW(), NOW())"
+    )->execute([(int) $teamUser['id']]);
+    ensure_sites_with_emails_schema();
+    $nBefore = swe_admin_new_count_for_country($adminUser, 'Germany');
+    if ($nBefore >= 1) {
+        pass('country new count after signal');
+    } else {
+        fail('country new count expected >=1 got ' . $nBefore);
+    }
+    swe_admin_mark_country_seen($adminUser, 'Germany');
+    if (swe_admin_new_count_for_country($adminUser, 'Germany') === 0) {
+        pass('country new cleared on open');
+    } else {
+        fail('country new not cleared');
+    }
+    // Other countries in the DB may still be “new”; mark all to clear the section badge.
+    swe_admin_mark_all_countries_seen($adminUser);
+    if (!admin_has_new_data('emails_admin', $adminUser)) {
+        pass('emails_admin section cleared when all countries seen');
+    } else {
+        fail('emails_admin section still new after mark all countries seen');
+    }
+    if (admin_new_badge_html('emails_admin', $adminUser) === '') {
+        pass('emails_admin badge cleared after mark all countries seen');
+    } else {
+        fail('emails_admin badge still showing');
+    }
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfnew-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfnew-%'");
 } catch (Throwable $e) {
     fail('admin new: ' . $e->getMessage());
 }
