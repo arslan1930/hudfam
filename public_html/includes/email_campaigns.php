@@ -1527,7 +1527,7 @@ function email_campaign_rows_inventory_query(
     int $sheetId,
     array $filters = [],
     int $page = 1,
-    int $perPage = 1000
+    int $perPage = 100
 ): array {
     ensure_email_campaign_schema();
     purge_blank_email_campaign_rows($sheetId);

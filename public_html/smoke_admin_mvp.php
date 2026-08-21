@@ -538,6 +538,23 @@ if (!str_contains($sweLibSmoke, 'function delete_sites_with_emails_admin_keep_fi
 } else {
     ok('SWE Copy-all skips invalid + mark emailed keeps Final');
 }
+$sweJsSmoke = file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '';
+$helpersSmoke = file_get_contents($root . '/includes/helpers.php') ?: '';
+if (!str_contains($helpersSmoke, 'function render_sheet_shared_row_action_forms')
+    || !str_contains($helpersSmoke, 'return 100;')
+    || !str_contains($sweLibSmoke, 'Stop at the first mismatch')
+    || !str_contains($sweLibSmoke, 'Indexed prefix on domain')
+    || !str_contains($sweLibSmoke, 'function swe_admin_suggestion_from_row')
+    || !str_contains($sweAppSmoke, 'data-sheet-action="mark"')
+    || !str_contains($sweAppSmoke, 'render_sheet_shared_row_action_forms')
+    || !str_contains($sweJsSmoke, 'function scheduleFilterRows')
+    || !str_contains($sweJsSmoke, 'swe-shared-')
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '', 'function scheduleFilterRows')
+    || !str_contains(file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '', 'data-sheet-action="mark"')) {
+    fail('SWE/campaigns missing large-list perf (default 100, debounce, shared actions, prefix search)');
+} else {
+    ok('SWE large-list perf: default 100 + debounce + shared actions + prefix search');
+}
 $campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
 if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
