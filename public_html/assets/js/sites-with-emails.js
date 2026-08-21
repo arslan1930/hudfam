@@ -709,6 +709,20 @@
         var data = result.data;
         var id = result.siteId;
         var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
+        if (data.row_deleted) {
+          if (rowEl) rowEl.remove();
+          if (typeof data.site_count === 'number' && totalLabel) {
+            totalLabel.textContent = String(data.site_count);
+          }
+          updateSentStats(data);
+          setStatus(
+            'Marked emailed · removed ' + (data.domain || 'site')
+            + ' from Admin (Final kept the copy).'
+          );
+          filterRows();
+          form.removeAttribute('data-busy');
+          return;
+        }
         var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
         setRowEmailedState(rowEl, nextSent);
         updateSentStats(data);
@@ -727,12 +741,21 @@
       postAjaxForm(form, 'Could not mark checkpoint').then(function (result) {
         if (!result) return;
         var data = result.data;
-        applyEmailedUpTo(result.siteId, true);
+        var uptoId = Number(result.siteId) || 0;
+        document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
+          var rid = Number(row.getAttribute('data-site-id') || 0);
+          if (uptoId > 0 && rid > 0 && rid <= uptoId) {
+            row.remove();
+          }
+        });
+        if (typeof data.site_count === 'number' && totalLabel) {
+          totalLabel.textContent = String(data.site_count);
+        }
         updateSentStats(data);
         setStatus(
           'Marked emailed up to ' + (data.domain || 'site')
-          + (typeof data.marked === 'number' ? ' · ' + data.marked + ' newly marked' : '')
-          + '.'
+          + (typeof data.marked === 'number' ? ' · removed ' + data.marked + ' from Admin' : '')
+          + ' · Final kept the copies.'
         );
         form.removeAttribute('data-busy');
       });

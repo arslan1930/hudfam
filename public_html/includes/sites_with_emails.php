@@ -386,16 +386,19 @@ function flatten_email_inputs(array $emails): array
 
 /**
  * Compact up to 4 unique valid emails. Packed multi-email cells are split first.
- * Invalid non-empty tokens are rejected.
+ * Invalid tokens are skipped by default so one bad address does not wipe / block the rest
+ * (Copy all emails, expand, paste). Pass $strict=true to reject the whole set.
  *
  * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $emails
- * @return array{ok:bool,slots?:array{0:string,1:string,2:string,3:string},error?:string}
+ * @return array{ok:bool,slots?:array{0:string,1:string,2:string,3:string},error?:string,skipped_invalid?:list<string>}
  */
-function normalize_email_slots(array $emails): array
+function normalize_email_slots(array $emails, bool $strict = false): array
 {
     $out = ['', '', '', ''];
     $i = 0;
     $seen = [];
+    /** @var list<string> $skippedInvalid */
+    $skippedInvalid = [];
     foreach (flatten_email_inputs($emails) as $raw) {
         if ($i >= 4) {
             break;
@@ -406,7 +409,15 @@ function normalize_email_slots(array $emails): array
         }
         $n = normalize_email_value($raw);
         if ($n === '') {
-            return ['ok' => false, 'error' => 'Invalid email: ' . $raw];
+            $skippedInvalid[] = $raw;
+            if ($strict) {
+                return [
+                    'ok' => false,
+                    'error' => 'Invalid email: ' . $raw,
+                    'skipped_invalid' => $skippedInvalid,
+                ];
+            }
+            continue;
         }
         if (isset($seen[$n])) {
             continue;
@@ -415,7 +426,7 @@ function normalize_email_slots(array $emails): array
         $out[$i] = $n;
         $i++;
     }
-    return ['ok' => true, 'slots' => $out];
+    return ['ok' => true, 'slots' => $out, 'skipped_invalid' => $skippedInvalid];
 }
 
 /**
@@ -1174,9 +1185,26 @@ function count_sites_with_emails_sent_stats(string $country): array
 }
 
 /**
- * Mark one Admin row emailed / not emailed. Does not touch Final.
+ * Delete Admin row only — leave All sites with emails - Final untouched.
+ */
+function delete_sites_with_emails_admin_keep_final(int $siteId): bool
+{
+    ensure_sites_with_emails_schema();
+    $row = get_site_with_emails($siteId, 'admin');
+    if (!$row) {
+        return false;
+    }
+    sync_sites_with_emails_admin_row_to_all($row);
+    $stmt = db()->prepare('DELETE FROM sites_with_emails_admin WHERE id=?');
+    $stmt->execute([$siteId]);
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Mark one Admin row emailed → sync to Final, then remove from Admin working list.
+ * Final keeps the archive copy. Clearing emailed only applies if the row is still on Admin.
  *
- * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool}
+ * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,row_deleted?:bool,site_count?:int}
  */
 function set_site_with_emails_admin_email_sent(int $siteId, bool $sent): array
 {
@@ -1185,31 +1213,38 @@ function set_site_with_emails_admin_email_sent(int $siteId, bool $sent): array
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
     }
+    $domain = (string) $row['domain'];
+    $country = (string) $row['country'];
     if ($sent) {
-        db()->prepare(
-            'UPDATE sites_with_emails_admin
-             SET email_sent=1, email_sent_at=NOW()
-             WHERE id=?'
-        )->execute([$siteId]);
-    } else {
-        db()->prepare(
-            'UPDATE sites_with_emails_admin
-             SET email_sent=0, email_sent_at=NULL
-             WHERE id=?'
-        )->execute([$siteId]);
+        if (!delete_sites_with_emails_admin_keep_final($siteId)) {
+            return ['ok' => false, 'error' => 'Could not remove emailed site from Admin.'];
+        }
+        return [
+            'ok' => true,
+            'domain' => $domain,
+            'email_sent' => true,
+            'row_deleted' => true,
+            'site_count' => count_sites_with_emails_for_country($country, 'admin'),
+        ];
     }
+    db()->prepare(
+        'UPDATE sites_with_emails_admin
+         SET email_sent=0, email_sent_at=NULL
+         WHERE id=?'
+    )->execute([$siteId]);
     return [
         'ok' => true,
-        'domain' => (string) $row['domain'],
-        'email_sent' => $sent,
+        'domain' => $domain,
+        'email_sent' => false,
+        'row_deleted' => false,
+        'site_count' => count_sites_with_emails_for_country($country, 'admin'),
     ];
 }
 
 /**
- * Checkpoint: mark every Admin row in this country with id <= $siteId as emailed.
- * Final stays neutral (no email_sent column / no sync of this flag).
+ * Checkpoint: mark emailed up to $siteId by syncing each to Final and removing from Admin.
  *
- * @return array{ok:bool,error?:string,marked?:int,domain?:string,country?:string}
+ * @return array{ok:bool,error?:string,marked?:int,domain?:string,country?:string,site_count?:int}
  */
 function mark_sites_with_emails_admin_emailed_up_to(int $siteId): array
 {
@@ -1219,17 +1254,30 @@ function mark_sites_with_emails_admin_emailed_up_to(int $siteId): array
         return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
     }
     $country = (string) $row['country'];
-    $st = db()->prepare(
-        'UPDATE sites_with_emails_admin
-         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
-         WHERE country=? AND id<=? AND email_sent=0'
+    $domain = (string) $row['domain'];
+    $sel = db()->prepare(
+        'SELECT * FROM sites_with_emails_admin WHERE country=? AND id<=? ORDER BY id ASC'
     );
-    $st->execute([$country, $siteId]);
+    $sel->execute([$country, $siteId]);
+    $marked = 0;
+    while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+        $id = (int) ($r['id'] ?? 0);
+        if ($id < 1) {
+            continue;
+        }
+        sync_sites_with_emails_admin_row_to_all($r);
+        $del = db()->prepare('DELETE FROM sites_with_emails_admin WHERE id=?');
+        $del->execute([$id]);
+        if ($del->rowCount() > 0) {
+            $marked++;
+        }
+    }
     return [
         'ok' => true,
-        'marked' => $st->rowCount(),
-        'domain' => (string) $row['domain'],
+        'marked' => $marked,
+        'domain' => $domain,
         'country' => $country,
+        'site_count' => count_sites_with_emails_for_country($country, 'admin'),
     ];
 }
 
@@ -1430,15 +1478,15 @@ function save_site_with_emails_row(
     $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     $scopeNorm = swe_normalize_scope($scope);
 
-    // Admin / Final: clearing the last email deletes the row (same as super-search).
+    // Admin: clearing the last email removes from Admin working list; Final keeps last copy.
     if (!$hasEmail && $id !== null && $id > 0 && ($scopeNorm === 'admin' || $origScope === 'admin_all')) {
         $existing = get_site_with_emails($id, 'admin');
         if (!$existing || (string) $existing['country'] !== $country) {
             return ['ok' => false, 'error' => 'Row not found in this country.'];
         }
         $delDomain = (string) ($existing['domain'] ?? $domain);
+        sync_sites_with_emails_admin_row_to_all($existing);
         db()->prepare('DELETE FROM sites_with_emails_admin WHERE id=?')->execute([$id]);
-        delete_sites_with_emails_admin_all_by_domain($country, $delDomain);
         return [
             'ok' => true,
             'id' => $id,
@@ -1524,39 +1572,25 @@ function delete_site_with_emails(int $id, string $scope = 'team'): bool
     ensure_sites_with_emails_schema();
     $scope = swe_normalize_scope($scope);
     if ($scope === 'admin_all') {
-        // Resolve by domain/country from All, delete canonical Admin row (syncs All).
-        $row = get_site_with_emails($id, 'admin_all');
-        if (!$row) {
-            return false;
-        }
-        $admin = db()->prepare(
-            'SELECT id FROM sites_with_emails_admin WHERE country=? AND domain=? LIMIT 1'
-        );
-        $admin->execute([(string) $row['country'], (string) $row['domain']]);
-        $adminId = (int) $admin->fetchColumn();
-        if ($adminId < 1) {
-            delete_sites_with_emails_admin_all_by_domain((string) $row['country'], (string) $row['domain']);
-            return true;
-        }
-        return delete_site_with_emails($adminId, 'admin');
+        // Final-only delete — leave Admin working list alone.
+        $stmt = db()->prepare('DELETE FROM sites_with_emails_admin_all WHERE id=?');
+        $stmt->execute([$id]);
+        return $stmt->rowCount() > 0;
     }
     $table = swe_table($scope);
-    $mirrorCountry = null;
-    $mirrorDomain = null;
     if ($scope === 'admin') {
         $existing = get_site_with_emails($id, 'admin');
         if ($existing) {
-            $mirrorCountry = (string) $existing['country'];
-            $mirrorDomain = (string) $existing['domain'];
+            // Ensure Final has the latest copy, then remove from Admin only.
+            sync_sites_with_emails_admin_row_to_all($existing);
         }
+        $stmt = db()->prepare("DELETE FROM {$table} WHERE id=?");
+        $stmt->execute([$id]);
+        return $stmt->rowCount() > 0;
     }
     $stmt = db()->prepare("DELETE FROM {$table} WHERE id=?");
     $stmt->execute([$id]);
-    $ok = $stmt->rowCount() > 0;
-    if ($ok && $mirrorCountry !== null && $mirrorDomain !== null) {
-        delete_sites_with_emails_admin_all_by_domain($mirrorCountry, $mirrorDomain);
-    }
-    return $ok;
+    return $stmt->rowCount() > 0;
 }
 
 function delete_sites_with_emails_for_country(string $country, string $scope = 'team'): int
@@ -1564,16 +1598,22 @@ function delete_sites_with_emails_for_country(string $country, string $scope = '
     ensure_sites_with_emails_schema();
     $scope = swe_normalize_scope($scope);
     if ($scope === 'admin_all') {
-        $scope = 'admin';
+        $stmt = db()->prepare('DELETE FROM sites_with_emails_admin_all WHERE country=?');
+        $stmt->execute([$country]);
+        return $stmt->rowCount();
     }
     $table = swe_table($scope);
+    if ($scope === 'admin') {
+        // Push current Admin rows to Final first, then clear Admin only (Final keeps archive).
+        $sel = db()->prepare('SELECT * FROM sites_with_emails_admin WHERE country=?');
+        $sel->execute([$country]);
+        while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
+            sync_sites_with_emails_admin_row_to_all($row);
+        }
+    }
     $stmt = db()->prepare("DELETE FROM {$table} WHERE country=?");
     $stmt->execute([$country]);
-    $n = $stmt->rowCount();
-    if ($scope === 'admin') {
-        sync_sites_with_emails_admin_to_all($country);
-    }
-    return $n;
+    return $stmt->rowCount();
 }
 
 /**
@@ -1613,16 +1653,22 @@ function remove_sites_with_emails_by_list(string $country, string $raw, string $
             continue;
         }
         $dph = implode(',', array_fill(0, count($found), '?'));
+        if (swe_normalize_scope($scope) === 'admin') {
+            // Sync latest Admin data to Final before removing from the working list.
+            $syncSel = db()->prepare(
+                "SELECT * FROM {$table} WHERE country=? AND domain IN ({$dph})"
+            );
+            $syncSel->execute(array_merge([$country], $found));
+            while ($syncRow = $syncSel->fetch(PDO::FETCH_ASSOC)) {
+                sync_sites_with_emails_admin_row_to_all($syncRow);
+            }
+        }
         $del = db()->prepare(
             "DELETE FROM {$table} WHERE country=? AND domain IN ({$dph})"
         );
         $del->execute(array_merge([$country], $found));
         $removed += $del->rowCount();
-        if (swe_normalize_scope($scope) === 'admin') {
-            foreach ($found as $d) {
-                delete_sites_with_emails_admin_all_by_domain($country, (string) $d);
-            }
-        }
+        // Admin removes from working list only — Final archive is never deleted here.
     }
     return [
         'removed' => $removed,
@@ -1665,8 +1711,10 @@ function collect_sites_with_emails_all_emails(
     $out = [];
     $seen = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
-            $e = trim((string) ($row[$k] ?? ''));
+        // Split packed cells + skip invalid tokens so one bad address never blocks Copy.
+        $slots = email_slots_from_row($row);
+        foreach ($slots as $e) {
+            $e = trim((string) $e);
             if ($e === '') {
                 continue;
             }
@@ -1905,7 +1953,7 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
 
 /**
  * Remove one email slot from an Admin row; keep the site name when others remain.
- * If this was the last email, delete the whole Admin row (and Final mirror).
+ * If this was the last email, delete the Admin working row (Final archive keeps the last copy).
  *
  * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string,row_deleted?:bool}
  */
@@ -1942,7 +1990,7 @@ function remove_email_from_sites_with_emails_admin(int $siteId, string $email): 
     }
 
     $domain = (string) $row['domain'];
-    // Last email gone → remove site from Admin + Final (no empty-email rows).
+    // Last email gone → remove from Admin working list; Final keeps the archive copy.
     if ($slots === []) {
         delete_site_with_emails($siteId, 'admin');
         return [

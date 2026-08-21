@@ -1610,11 +1610,28 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
     }
 
     $find = db()->prepare(
-        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+        'SELECT id, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
     $find->execute([$sheetId, $domain]);
-    $existingId = (int) $find->fetchColumn();
+    $existing = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+    $existingId = $existing ? (int) ($existing['id'] ?? 0) : 0;
     if ($existingId > 0) {
+        $existingSlots = [
+            (string) ($existing['email1'] ?? ''),
+            (string) ($existing['email2'] ?? ''),
+            (string) ($existing['email3'] ?? ''),
+            (string) ($existing['email4'] ?? ''),
+        ];
+        if (email_campaign_slots_equal($existingSlots, $slots)) {
+            return [
+                'ok' => true,
+                'id' => $existingId,
+                'domain' => $domain,
+                'skipped_duplicate' => true,
+                'stripped_emails' => $filtered['stripped'],
+            ];
+        }
         db()->prepare(
             'UPDATE email_campaign_rows
              SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
@@ -1718,11 +1735,34 @@ function parse_email_campaign_bulk_line(string $line): ?array
 }
 
 /**
+ * Compare campaign email slots for equality (normalized, order-sensitive).
+ *
+ * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $a
+ * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $b
+ */
+function email_campaign_slots_equal(array $a, array $b): bool
+{
+    for ($i = 0; $i < 4; $i++) {
+        $left = strtolower(trim((string) ($a[$i] ?? '')));
+        $right = strtolower(trim((string) ($b[$i] ?? '')));
+        if ($left !== $right) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * Paste / import lines: site.com,email@x.com  OR  site.com email1 email2 …
  * Tuned for Admin bulk entry (1000+ rows).
  * Previously removed domains/emails are skipped (not re-added).
+ * Duplicate domains: identical emails → skip; different emails → replace.
  *
- * @return array{added:int,updated:int,skipped:int,skipped_excluded:int,skipped_emails:int,errors:list<string>}
+ * @return array{
+ *   added:int,updated:int,skipped:int,skipped_excluded:int,skipped_emails:int,
+ *   skipped_duplicate:int,errors:list<string>
+ * }
  */
 function paste_email_campaign_rows(int $sheetId, string $raw): array
 {
@@ -1743,8 +1783,11 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     $skipped = 0;
     $skippedExcluded = 0;
     $skippedEmails = 0;
+    $skippedDuplicate = 0;
     /** @var list<string> $errors */
     $errors = [];
+    /** @var array<string, array{0:string,1:string,2:string,3:string}> $seenDomains */
+    $seenDomains = [];
 
     $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
     $excludedDomains = $exclusionSets['domains'];
@@ -1752,7 +1795,8 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
 
     $pdo = db();
     $find = $pdo->prepare(
-        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+        'SELECT id, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
     $upd = $pdo->prepare(
         'UPDATE email_campaign_rows
@@ -1825,18 +1869,52 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
                 continue;
             }
 
+            // Same domain already handled in this paste with identical emails → skip.
+            if (isset($seenDomains[$domain]) && email_campaign_slots_equal($seenDomains[$domain], $slots)) {
+                $skippedDuplicate++;
+                $skipped++;
+                continue;
+            }
+
             $find->execute([$sheetId, $domain]);
-            $existingId = (int) $find->fetchColumn();
+            $existing = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+            $existingId = $existing ? (int) ($existing['id'] ?? 0) : 0;
             if ($existingId > 0) {
+                $existingSlots = [
+                    (string) ($existing['email1'] ?? ''),
+                    (string) ($existing['email2'] ?? ''),
+                    (string) ($existing['email3'] ?? ''),
+                    (string) ($existing['email4'] ?? ''),
+                ];
+                if (email_campaign_slots_equal($existingSlots, $slots)) {
+                    $skippedDuplicate++;
+                    $skipped++;
+                    $seenDomains[$domain] = $slots;
+                    continue;
+                }
                 $upd->execute([
                     $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId,
                 ]);
                 $updated++;
+                $seenDomains[$domain] = $slots;
+            } elseif (isset($seenDomains[$domain])) {
+                // Domain was inserted earlier in this paste with different emails — update that row.
+                $find->execute([$sheetId, $domain]);
+                $again = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+                $againId = $again ? (int) ($again['id'] ?? 0) : 0;
+                if ($againId > 0) {
+                    $upd->execute([
+                        $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $againId, $sheetId,
+                    ]);
+                    $updated++;
+                }
+                $seenDomains[$domain] = $slots;
             } else {
                 $ins->execute([
                     $sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3],
                 ]);
                 $added++;
+                $seenDomains[$domain] = $slots;
             }
         }
         $pdo->commit();
@@ -1856,6 +1934,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
         'skipped' => $skipped,
         'skipped_excluded' => $skippedExcluded,
         'skipped_emails' => $skippedEmails,
+        'skipped_duplicate' => $skippedDuplicate,
         'errors' => $errors,
     ];
 }
@@ -2170,19 +2249,20 @@ function save_email_campaign_sheet_grid(
  * Import rows from Sites with emails Admin or Final into a campaign sheet.
  *
  * Modes:
- * - new_only (default): add domains not on the sheet; never update existing; never re-add excluded.
- * - upsert: add new + update existing emails; still never re-add excluded (deleted on purpose).
+ * - replace (default): add new domains; identical emails → skip; different emails → replace.
+ * - new_only: add domains not on the sheet; never update existing; never re-add excluded.
+ * - upsert: add new + always update existing emails (even when identical); still never re-add excluded.
  *
  * @return array{
  *   imported:int,updated:int,skipped:int,
- *   skipped_existing:int,skipped_excluded:int,skipped_empty:int,skipped_emails:int,mode:string
+ *   skipped_existing:int,skipped_duplicate:int,skipped_excluded:int,skipped_empty:int,skipped_emails:int,mode:string
  * }
  */
 function import_email_campaign_sheet_from_swe(
     int $sheetId,
     string $sourceScope = 'admin_all',
     ?string $country = null,
-    string $mode = 'new_only'
+    string $mode = 'replace'
 ): array {
     ensure_email_campaign_schema();
     ensure_sites_with_emails_schema();
@@ -2195,8 +2275,8 @@ function import_email_campaign_sheet_from_swe(
         $sourceScope = 'admin_all';
     }
     $mode = strtolower(trim($mode));
-    if ($mode !== 'upsert') {
-        $mode = 'new_only';
+    if (!in_array($mode, ['new_only', 'upsert', 'replace'], true)) {
+        $mode = 'replace';
     }
     $table = swe_table($sourceScope);
     $pdo = db();
@@ -2229,7 +2309,13 @@ function import_email_campaign_sheet_from_swe(
            updated_at = NOW()'
     );
     $exists = $pdo->prepare(
-        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+        'SELECT id, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+    );
+    $upd = $pdo->prepare(
+        'UPDATE email_campaign_rows
+         SET country=?, language=?, region=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         WHERE id=? AND sheet_id=?'
     );
 
     $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
@@ -2239,6 +2325,7 @@ function import_email_campaign_sheet_from_swe(
     $imported = 0;
     $updated = 0;
     $skippedExisting = 0;
+    $skippedDuplicate = 0;
     $skippedExcluded = 0;
     $skippedEmpty = 0;
     $skippedEmails = 0;
@@ -2287,7 +2374,8 @@ function import_email_campaign_sheet_from_swe(
         }
 
         $exists->execute([$sheetId, $domain]);
-        $already = (int) $exists->fetchColumn() > 0;
+        $existing = $exists->fetch(PDO::FETCH_ASSOC) ?: null;
+        $already = $existing !== null;
         if ($mode === 'new_only' && $already) {
             $skippedExisting++;
             continue;
@@ -2311,12 +2399,45 @@ function import_email_campaign_sheet_from_swe(
             } else {
                 $skippedExisting++;
             }
-        } else {
+        } elseif ($mode === 'upsert') {
             $insUpsert->execute($params);
             if ($already) {
                 $updated++;
             } else {
                 $imported++;
+            }
+        } else {
+            // replace: skip identical email data; update when emails differ.
+            if ($already) {
+                $existingSlots = [
+                    (string) ($existing['email1'] ?? ''),
+                    (string) ($existing['email2'] ?? ''),
+                    (string) ($existing['email3'] ?? ''),
+                    (string) ($existing['email4'] ?? ''),
+                ];
+                if (email_campaign_slots_equal($existingSlots, $slots)) {
+                    $skippedDuplicate++;
+                    continue;
+                }
+                $upd->execute([
+                    (string) ($row['country'] ?? ''),
+                    (string) ($row['language'] ?? ''),
+                    (string) ($row['region'] ?? ''),
+                    $slots[0],
+                    $slots[1],
+                    $slots[2],
+                    $slots[3],
+                    (int) $existing['id'],
+                    $sheetId,
+                ]);
+                $updated++;
+            } else {
+                $insNew->execute($params);
+                if ($insNew->rowCount() > 0) {
+                    $imported++;
+                } else {
+                    $skippedExisting++;
+                }
             }
         }
     }
@@ -2324,8 +2445,9 @@ function import_email_campaign_sheet_from_swe(
     return [
         'imported' => $imported,
         'updated' => $updated,
-        'skipped' => $skippedEmpty + $skippedExisting + $skippedExcluded,
+        'skipped' => $skippedEmpty + $skippedExisting + $skippedExcluded + $skippedDuplicate,
         'skipped_existing' => $skippedExisting,
+        'skipped_duplicate' => $skippedDuplicate,
         'skipped_excluded' => $skippedExcluded,
         'skipped_empty' => $skippedEmpty,
         'skipped_emails' => $skippedEmails,

@@ -527,6 +527,26 @@ if (!str_contains($sweAppSmoke, '$adminVisitStarted')
 } else {
     ok('SWE chain fixes visit mark-once + updated_at + row_deleted');
 }
+if (!str_contains($sweLibSmoke, 'function delete_sites_with_emails_admin_keep_final')
+    || !str_contains($sweLibSmoke, 'skip invalid tokens so one bad address never blocks Copy')
+    || !str_contains($sweLibSmoke, 'bool $strict = false')
+    || !str_contains($sweAppSmoke, 'Mark emailed removes the site from this Admin working list')
+    || !str_contains(file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '', 'Final kept the copy')) {
+    fail('SWE missing Copy-all invalid skip / mark-emailed removes Admin keeps Final');
+} else {
+    ok('SWE Copy-all skips invalid + mark emailed keeps Final');
+}
+$campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
+$campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
+if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
+    || !str_contains($campLibSmoke, 'skipped_duplicate')
+    || !str_contains($campLibSmoke, "'replace'")
+    || !str_contains($campAppSmoke, 'duplicate domain(s) skipped')
+    || !str_contains($campAppSmoke, "import_email_campaign_sheet_from_swe(\$sheetId, \$source, \$sheetCountry, 'replace')")) {
+    fail('campaigns missing duplicate skip / replace-different-emails');
+} else {
+    ok('campaigns duplicate skip + replace different emails');
+}
 $newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
 $layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
 if (!str_contains($newDataSmoke, "section !== 'emails_admin'")
