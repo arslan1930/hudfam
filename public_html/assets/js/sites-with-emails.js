@@ -267,6 +267,12 @@
   }
   function scheduleFilterRows() {
     if (filterTimer) window.clearTimeout(filterTimer);
+    var q = searchInput ? String(searchInput.value || '').trim() : '';
+    if (!q) {
+      filterTimer = null;
+      filterRows();
+      return;
+    }
     filterTimer = window.setTimeout(function () {
       filterTimer = null;
       filterRows();
@@ -298,14 +304,14 @@
         meta.hidden = true;
         meta.textContent = '';
         matchIndex = -1;
-        return;
+      } else {
+        meta.hidden = false;
+        meta.textContent = !matchRows.length
+          ? '0 · Enter = next · Ctrl+Enter = all pages'
+          : (matchIndex >= 0
+            ? (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails'
+            : matchRows.length + ' · site + emails · Enter = next');
       }
-      meta.hidden = false;
-      meta.textContent = !matchRows.length
-        ? '0 · Enter = next · Ctrl+Enter = all pages'
-        : (matchIndex >= 0
-          ? (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails'
-          : matchRows.length + ' · site + emails · Enter = next');
     }
     document.querySelectorAll('[data-swe-q]').forEach(function (el) {
       el.value = String(searchInput.value || '');
@@ -331,6 +337,10 @@
 
   if (searchInput) {
     searchInput.addEventListener('input', function () {
+      matchIndex = -1;
+      scheduleFilterRows();
+    });
+    searchInput.addEventListener('search', function () {
       matchIndex = -1;
       scheduleFilterRows();
     });

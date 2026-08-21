@@ -1211,11 +1211,6 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   vertical-align: middle;
 }
 .swe-table tbody tr:last-child td { border-bottom: none; }
-/* Faster scrolling on long country sheets (skip off-screen row work). */
-.swe-table tbody tr[data-swe-row] {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 3.75rem;
-}
 .swe-sheet-table .swe-col-site { min-width: 10rem; width: 16%; }
 .swe-sheet-table .swe-col-num { min-width: 2.25rem; width: 2.5rem; text-align: right; }
 .swe-sheet-table .swe-col-lang { min-width: 5.5rem; width: 8%; }
@@ -4356,4 +4351,10 @@ textarea:focus-visible {
 }
 .password-toggle:hover {
   background: #f5f7fa;
+}
+
+/* Author display:flex/block rules beat the UA [hidden] stylesheet, so search
+   filters that set el.hidden would otherwise leave cards and rows visible. */
+[hidden] {
+  display: none !important;
 }

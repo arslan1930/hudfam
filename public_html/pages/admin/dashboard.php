@@ -252,6 +252,12 @@ render_header('Dashboard', 'admin');
   var filterTimer = null;
   function scheduleFilterDashboard() {
     if (filterTimer) window.clearTimeout(filterTimer);
+    var q = String(input.value || '').trim();
+    if (!q) {
+      filterTimer = null;
+      filterDashboard();
+      return;
+    }
     filterTimer = window.setTimeout(function () {
       filterTimer = null;
       filterDashboard();

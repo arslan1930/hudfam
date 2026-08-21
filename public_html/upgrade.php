@@ -3,8 +3,9 @@
  * One-time upgrade for existing Hostinger installs.
  * Requires a logged-in Admin session. Delete this file after running.
  */
-session_start();
 require __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+txf_send_security_headers();
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 

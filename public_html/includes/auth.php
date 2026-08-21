@@ -232,6 +232,67 @@ function logout_user(): void
     unset($_SESSION['user'], $_SESSION['must_change_password']);
 }
 
+const LOGIN_THROTTLE_MAX = 12;
+const LOGIN_THROTTLE_WINDOW = 600;
+
+function login_throttle_key(string $login): string
+{
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '0');
+    $ip = preg_replace('/[^0-9a-fA-F:.]/', '', $ip) ?: '0';
+    return hash('sha256', $ip . '|' . mb_strtolower(trim($login)));
+}
+
+function login_throttle_file(string $login): string
+{
+    return sys_get_temp_dir() . '/txf_login_' . login_throttle_key($login);
+}
+
+function login_throttle_blocked(string $login): bool
+{
+    $path = login_throttle_file($login);
+    if (!is_file($path)) {
+        return false;
+    }
+    $raw = @file_get_contents($path);
+    $pack = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($pack)) {
+        return false;
+    }
+    $start = (int) ($pack['start'] ?? 0);
+    $n = (int) ($pack['n'] ?? 0);
+    if ($start < 1 || (time() - $start) > LOGIN_THROTTLE_WINDOW) {
+        @unlink($path);
+        return false;
+    }
+    return $n >= LOGIN_THROTTLE_MAX;
+}
+
+function login_throttle_note_failure(string $login): void
+{
+    $path = login_throttle_file($login);
+    $now = time();
+    $n = 1;
+    $start = $now;
+    if (is_file($path)) {
+        $raw = @file_get_contents($path);
+        $pack = is_string($raw) ? json_decode($raw, true) : null;
+        if (is_array($pack) && (int) ($pack['start'] ?? 0) > 0
+            && ($now - (int) $pack['start']) <= LOGIN_THROTTLE_WINDOW) {
+            $start = (int) $pack['start'];
+            $n = (int) ($pack['n'] ?? 0) + 1;
+        }
+    }
+    @file_put_contents($path, json_encode(['start' => $start, 'n' => $n]), LOCK_EX);
+}
+
+function login_throttle_clear(string $login): void
+{
+    $path = login_throttle_file($login);
+    if (is_file($path)) {
+        @unlink($path);
+    }
+}
+
 function is_admin(?array $user = null): bool
 {
     $user = $user ?? current_user();

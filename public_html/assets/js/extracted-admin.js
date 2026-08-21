@@ -111,6 +111,12 @@
 
   function scheduleFilterUrls() {
     if (filterTimer) window.clearTimeout(filterTimer);
+    var q = input ? String(input.value || '').trim() : '';
+    if (!q) {
+      filterTimer = null;
+      filterUrls();
+      return;
+    }
     filterTimer = window.setTimeout(function () {
       filterTimer = null;
       filterUrls();

@@ -583,6 +583,27 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
 } else {
     ok('sitewide smoothness: LIMIT 1 schema, prefix campaign search, debounce, hidden presence');
 }
+$appCssSmoke = file_get_contents($root . '/assets/css/app.css') ?: '';
+$loginSmoke = file_get_contents($root . '/pages/login.php') ?: '';
+$authSmoke = file_get_contents($root . '/includes/auth.php') ?: '';
+$indexSmoke = file_get_contents($root . '/index.php') ?: '';
+$htaccessSmoke = file_get_contents($root . '/.htaccess') ?: '';
+if (str_contains($appCssSmoke, 'content-visibility: auto')
+    || !str_contains($appCssSmoke, '[hidden]')
+    || !str_contains($appCssSmoke, 'display: none !important')
+    || !str_contains($sweJsSmoke, "addEventListener('search'")
+    || !str_contains($sweLibSmoke, 'domain NOT LIKE')
+    || !str_contains($helpersSmoke, 'function txf_secure_session_start')
+    || !str_contains($helpersSmoke, 'function txf_send_security_headers')
+    || !str_contains($loginSmoke, 'csrf_field()')
+    || !str_contains($loginSmoke, 'login_throttle_blocked')
+    || !str_contains($authSmoke, 'function login_throttle_blocked')
+    || !str_contains($indexSmoke, "\$page === 'login'")
+    || !str_contains($htaccessSmoke, 'reset_admin_once')) {
+    fail('search hide / security headers / login CSRF+throttle missing');
+} else {
+    ok('search [hidden] hide + login CSRF/throttle + security headers');
+}
 $campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
 if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')

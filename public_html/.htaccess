@@ -32,8 +32,12 @@ DirectoryIndex index.php index.html
   </IfModule>
 </Files>
 
-<Files "config.sample.php">
+<FilesMatch "^(tests_run|tests_http|smoke_admin_mvp|reset_admin_once)\.php$">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>
-</Files>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>

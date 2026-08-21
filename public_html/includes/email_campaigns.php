@@ -2894,7 +2894,7 @@ function search_email_campaign_suggestions_scoped(
             FROM email_campaign_rows r
             INNER JOIN email_campaign_sheets s ON s.id = r.sheet_id
             LEFT JOIN email_campaign_projects p ON p.id = s.project_id
-            WHERE LEFT(r.domain, 8) <> '__blank_'";
+            WHERE r.domain NOT LIKE '__blank_%'";
 
     $out = [];
     $seen = [];
