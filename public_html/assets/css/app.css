@@ -1582,6 +1582,23 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   gap: 0.4rem;
   align-items: center;
 }
+.swe-fetch-stamps {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+}
+.swe-fetch-stamps li {
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+.swe-fetch-stamps li + li {
+  margin-top: 0.15rem;
+}
+.swe-fetch-stamps-inline {
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
 
 /* Admin emailed checkpoint — rule card + full-width action bar per row */
 .swe-checkpoint-rule {

@@ -397,6 +397,9 @@ if (!$inCountry) {
     }
 
     $countryRows = list_sites_with_emails_country_rows($sweScope);
+    $teamFetchesByCountry = ($isTeam && function_exists('email_campaign_fetches_grouped_by_country'))
+        ? email_campaign_fetches_grouped_by_country('team')
+        : [];
     $grandTotal = 0;
     $emailSites = 0;
     foreach ($countryRows as $r) {
@@ -519,6 +522,14 @@ if (!$inCountry) {
               </a>
               <?php if ($newN > 0): ?>
                 <span class="swe-country-new" title="New sites since your last visit">+<?= $newN ?> new</span>
+              <?php endif; ?>
+              <?php
+              $countryFetches = $teamFetchesByCountry[$cName] ?? [];
+              if ($countryFetches !== [] && function_exists('render_email_campaign_fetch_stamps')):
+                  ?>
+                <span class="swe-fetch-stamps-inline">
+                  <?php render_email_campaign_fetch_stamps($countryFetches); ?>
+                </span>
               <?php endif; ?>
             </td>
             <td class="num">
@@ -664,6 +675,9 @@ $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0
 $pushConflicts = $isTeam ? list_sites_with_emails_push_conflict_domains($countryName) : [];
 $pushConflictSet = $pushConflicts !== [] ? array_fill_keys($pushConflicts, true) : [];
 $pushConflictCount = count($pushConflicts);
+$teamCountryFetches = ($isTeam && function_exists('list_email_campaign_fetches_for_source'))
+    ? list_email_campaign_fetches_for_source('team', $countryName)
+    : [];
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $listBase = append_sheet_per_page_query($listBase, $perPage);
 if ($rowFilter !== '') {
@@ -726,6 +740,11 @@ render_breadcrumbs($crumbs);
         · <span id="swe_ready_label"><?= (int) $readyToPush ?></span> ready to Push
       <?php endif; ?>
     </p>
+    <?php
+    if ($isTeam && $teamCountryFetches !== [] && function_exists('render_email_campaign_fetch_stamps')) {
+        render_email_campaign_fetch_stamps($teamCountryFetches);
+    }
+    ?>
   </div>
   <div class="actions">
     <?php

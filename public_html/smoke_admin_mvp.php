@@ -547,6 +547,20 @@ if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
 } else {
     ok('campaigns duplicate skip + replace different emails');
 }
+if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
+    || !str_contains($campLibSmoke, 'function record_email_campaign_source_fetch')
+    || !str_contains($campLibSmoke, 'email_campaign_source_fetches')
+    || !str_contains($campLibSmoke, "['admin', 'admin_all', 'team']")
+    || !str_contains($campAppSmoke, 'Copy not emailed domains')
+    || !str_contains($campAppSmoke, "value=\"team\"")
+    || !str_contains($campAppSmoke, 'matching this filter')
+    || !str_contains($campLibSmoke, 'Already fetched to campaign')
+    || !str_contains($sweAppSmoke, 'render_email_campaign_fetch_stamps')
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '', 'data-camp-copy-domains')) {
+    fail('campaigns missing copy-not-emailed domains / Team fetch stamp');
+} else {
+    ok('campaign copy not-emailed domains + Team fetch stamps');
+}
 $newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
 $layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
 if (!str_contains($newDataSmoke, "section !== 'emails_admin'")

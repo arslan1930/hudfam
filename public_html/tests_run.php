@@ -1657,6 +1657,129 @@ try {
         fail('paste dup/replace: ' . json_encode($pasteDup) . " emailC=$emailC");
     }
 
+    // Copy not-emailed domains (campaign sheet).
+    $cUnsentId = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-c.nl' LIMIT 1"
+    )->fetchColumn();
+    $cAId = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    set_email_campaign_row_email_sent($nlSheet, $cAId, true);
+    $copyUnsent = collect_email_campaign_domains($nlSheet, '0');
+    $copySent = collect_email_campaign_domains($nlSheet, '1');
+    $copyAll = collect_email_campaign_domains($nlSheet, null);
+    if (in_array('txfcamp-nl-c.nl', $copyUnsent, true)
+        && !in_array('txfcamp-nl-a.nl', $copyUnsent, true)
+        && in_array('txfcamp-nl-a.nl', $copySent, true)
+        && in_array('txfcamp-nl-c.nl', $copyAll, true)
+        && in_array('txfcamp-nl-a.nl', $copyAll, true)) {
+        pass('campaign copy not-emailed domains filters sent vs unsent');
+    } else {
+        fail('copy domains: unsent=' . json_encode($copyUnsent)
+            . ' sent=' . json_encode($copySent) . ' all=' . json_encode($copyAll));
+    }
+
+    // Team import: copy into campaign, never delete Team rows; stamp fetched to campaign.
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'");
+    $seedTeam = db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?,?, 'Dutch', 'europe', ?, '', '', '')"
+    );
+    $seedTeam->execute(['txfcamp-nl-a.nl', 'Netherlands', 'a-team@txfcamp-nl-a.nl']);
+    $seedTeam->execute(['txfcamp-nl-d.nl', 'Netherlands', 'd@txfcamp-nl-d.nl']);
+    $teamBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    $impTeam = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $teamAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    $teamEmailA = (string) db()->query(
+        "SELECT email1 FROM sites_with_emails_team WHERE domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $campEmailA = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $dOnCamp = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-d.nl'"
+    )->fetchColumn();
+    $stamps = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $stampNames = array_column($stamps, 'campaign_name');
+    if ($teamBefore === 2 && $teamAfter === 2
+        && $teamEmailA === 'a-team@txfcamp-nl-a.nl'
+        && $campEmailA === 'a-team@txfcamp-nl-a.nl'
+        && $dOnCamp === 1
+        && (int) ($impTeam['updated'] ?? 0) >= 1
+        && (int) ($impTeam['imported'] ?? 0) >= 1
+        && in_array('NL Outreach', $stampNames, true)) {
+        pass('Team import copies into campaign without wiping Team + stamps campaign');
+    } else {
+        fail('team import: ' . json_encode([
+            'imp' => $impTeam,
+            'teamBefore' => $teamBefore,
+            'teamAfter' => $teamAfter,
+            'teamEmailA' => $teamEmailA,
+            'campEmailA' => $campEmailA,
+            'dOnCamp' => $dOnCamp,
+            'stamps' => $stampNames,
+        ]));
+    }
+
+    $firstFetchedAt = (string) ($stamps[0]['fetched_at'] ?? '');
+    usleep(1100000);
+    $impTeam2 = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $teamAfter2 = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    $stamps2 = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $secondFetchedAt = (string) ($stamps2[0]['fetched_at'] ?? '');
+    $nlOutreachStamps = 0;
+    foreach ($stamps2 as $s) {
+        if ((string) ($s['campaign_name'] ?? '') === 'NL Outreach') {
+            $nlOutreachStamps++;
+        }
+    }
+    if ($teamAfter2 === 2
+        && (int) ($impTeam2['skipped_duplicate'] ?? 0) >= 1
+        && $nlOutreachStamps === 1
+        && $secondFetchedAt !== ''
+        && $secondFetchedAt >= $firstFetchedAt) {
+        pass('second Team fetch keeps Team rows and refreshes one stamp');
+    } else {
+        fail('team refetch: ' . json_encode([
+            'imp' => $impTeam2,
+            'teamAfter2' => $teamAfter2,
+            'stamps' => count($stamps2),
+            'nlOutreachStamps' => $nlOutreachStamps,
+            'first' => $firstFetchedAt,
+            'second' => $secondFetchedAt,
+        ]));
+    }
+
+    $nlSheet2 = create_email_campaign_sheet('Netherlands', (int) $adminUser['id'], 'NL Second', false);
+    $impOther = import_email_campaign_sheet_from_swe($nlSheet2, 'team', 'Netherlands', 'replace');
+    $stampsBoth = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $bothNames = array_column($stampsBoth, 'campaign_name');
+    if (!empty($impOther['ok']) || (int) ($impOther['imported'] ?? 0) >= 1) {
+        if (in_array('NL Outreach', $bothNames, true) && in_array('NL Second', $bothNames, true)) {
+            pass('two campaigns fetching Team show two stamps');
+        } else {
+            fail('two stamps: ' . json_encode($bothNames) . ' imp=' . json_encode($impOther));
+        }
+    } else {
+        if (in_array('NL Outreach', $bothNames, true) && in_array('NL Second', $bothNames, true)) {
+            pass('two campaigns fetching Team show two stamps');
+        } else {
+            fail('two stamps: ' . json_encode($bothNames) . ' imp=' . json_encode($impOther));
+        }
+    }
+    delete_email_campaign_sheet($nlSheet2);
+
     $rowB = (int) db()->query(
         "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
         . " AND domain='txfcamp-nl-b.nl' LIMIT 1"
