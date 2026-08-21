@@ -1917,7 +1917,7 @@ try {
             fail('sent filter: sent=' . json_encode($sentDomains) . ' unsent=' . json_encode($unsentDomains));
         }
 
-        // Re-push updating an already-emailed Admin row must keep email_sent=1.
+        // Re-push that fills a new Admin slot clears emailed (slots changed).
         db()->prepare(
             "INSERT INTO sites_with_emails_team
                (domain, country, language, region, email1, email2, email3, email4)
@@ -1933,10 +1933,11 @@ try {
         $afterRepush = (int) db()->query(
             "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
         )->fetchColumn();
-        if (!empty($repush['ok']) && !empty($repush['updated']) && $afterRepush === 1) {
-            pass('Team re-push keeps Admin emailed mark');
+        if (!empty($repush['ok']) && !empty($repush['updated'])
+            && $afterRepush === 0 && (int) ($repush['emailed_cleared'] ?? 0) === 1) {
+            pass('Team re-push clears emailed when slots change');
         } else {
-            fail('re-push sent flag: ' . json_encode($repush) . " sent=$afterRepush");
+            fail('re-push emailed clear: ' . json_encode($repush) . " sent=$afterRepush");
         }
         $mergedEmails = db()->query(
             "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
@@ -1952,6 +1953,26 @@ try {
             pass('Team re-push merges new email without wiping Admin email');
         } else {
             fail('merge emails: ' . json_encode($mergedEmails));
+        }
+
+        // Identical re-push (no slot change) keeps emailed mark.
+        set_site_with_emails_admin_email_sent(
+            (int) db()->query("SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1")->fetchColumn(),
+            true
+        );
+        db()->prepare(
+            "INSERT INTO sites_with_emails_team
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsent-a.com','Germany','German','europe','a@txfsent-a.com','a2@txfsent-a.com','','')"
+        )->execute();
+        $samePush = push_sites_with_emails_team_to_admin('Germany', $teamUser, true);
+        $sameSent = (int) db()->query(
+            "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetchColumn();
+        if (!empty($samePush['ok']) && $sameSent === 1 && (int) ($samePush['emailed_cleared'] ?? 0) === 0) {
+            pass('Team re-push keeps emailed when slots unchanged');
+        } else {
+            fail('same-slot re-push: ' . json_encode($samePush) . " sent=$sameSent");
         }
 
         $unitMerge = merge_swe_email_slots_prefer_admin(

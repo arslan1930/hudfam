@@ -317,6 +317,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $oneMsg .= ' · ' . (int) $result['skipped_full_slots']
                 . ' Team email(s) not applied (Admin already had 4)';
         }
+        if ((int) ($result['emailed_cleared'] ?? 0) > 0) {
+            $oneMsg .= ' · Admin emailed mark cleared (emails changed)';
+        }
         flash('ok', $oneMsg . '.');
         $left = (int) ($result['site_count'] ?? 0);
         redirect($left > 0 ? $back : $sweBase);
@@ -360,6 +363,10 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $msg .= '…';
                 }
             }
+        }
+        if ((int) ($pushed['emailed_cleared'] ?? 0) > 0) {
+            $msg .= ' · cleared emailed on ' . (int) $pushed['emailed_cleared']
+                . ' Admin site(s) (emails changed)';
         }
         flash('ok', $msg . '.');
         // After push, stay on country if unfinished rows remain; else country list.
