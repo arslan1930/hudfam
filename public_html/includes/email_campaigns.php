@@ -2050,7 +2050,7 @@ function search_email_campaign_suggestions_scoped(
     }
     $limit = max(1, min(40, $limit));
     $like = '%' . $q . '%';
-    $sql = "SELECT r.id, r.sheet_id, r.domain, r.country, r.email1, r.email2, r.email3, r.email4,
+    $sql = "SELECT r.id, r.sheet_id, r.domain, r.country, r.language, r.email1, r.email2, r.email3, r.email4,
                    s.name AS sheet_country, s.project_name, s.project_id,
                    p.name AS project_title
             FROM email_campaign_rows r
@@ -2134,6 +2134,8 @@ function search_email_campaign_suggestions_scoped(
             'sheet_id' => (int) $row['sheet_id'],
             'domain' => $domain,
             'country' => $country,
+            'language' => trim((string) ($row['language'] ?? '')),
+            'project_id' => (int) ($row['project_id'] ?? 0),
             'project_name' => $project,
             'emails' => $emails,
             'match_type' => $matchType,
@@ -2310,7 +2312,8 @@ function render_email_campaign_super_search(
        data-project-id="<?= $pid ?>"
        data-sheet-name="<?= h($project) ?>"
        data-suggest-url="<?= h($suggestUrl) ?>"
-       data-post-url="<?= h($postBase) ?>">
+       data-post-url="<?= h($postBase) ?>"
+       data-drafts-url="index.php?page=team_email_campaigns_drafts&amp;project=<?= $pid ?>">
     <h2 style="margin-top:0"><?= label_with_info(
         $project,
         'Project search bar. Searches site + emails across every country Admin added to this project. Delete both or remove only email — updates the corresponding country sheet. Removing the last email also deletes the site row.'
@@ -2362,6 +2365,10 @@ function render_email_campaign_super_search(
       </fieldset>
       <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
         <button type="button" class="btn danger" data-camp-apply>Update (Enter)</button>
+        <a class="btn secondary" data-camp-open-drafts href="#" hidden
+           title="Open Campaign drafts with this site filled into {domain}/{country} tokens">
+          Open drafts for site
+        </a>
         <button type="button" class="btn secondary" data-camp-clear>Clear selection</button>
       </div>
     </div>
