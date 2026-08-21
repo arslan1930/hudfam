@@ -2490,6 +2490,53 @@ try {
         } else {
             fail('Final repair check did not return bool');
         }
+        if (table_has_any_row(db(), 'sites_with_emails_admin')) {
+            pass('table_has_any_row LIMIT 1 sees Admin rows');
+        } else {
+            fail('table_has_any_row missed Admin rows');
+        }
+        $cachedA = cached_scalar_count('txf_test_cached_count', static function () {
+            return 7;
+        });
+        $cachedB = cached_scalar_count('txf_test_cached_count', static function () {
+            return 99;
+        });
+        if ($cachedA === 7 && $cachedB === 7) {
+            pass('cached_scalar_count reuses first result');
+        } else {
+            fail("cached_scalar_count a=$cachedA b=$cachedB");
+        }
+
+        db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcampsug-%'");
+        db()->exec(
+            "DELETE FROM email_campaign_sheets
+             WHERE name LIKE 'txfcampsug-%' OR project_name LIKE 'txfcampsug-%'"
+        );
+        db()->exec("DELETE FROM email_campaign_projects WHERE name LIKE 'txfcampsug-%'");
+        $sugPid = create_email_campaign_project('txfcampsug-proj', (int) $adminUser['id'], true);
+        $sugSheet = add_email_campaign_country_to_project($sugPid, 'Germany', (int) $adminUser['id']);
+        upsert_email_campaign_row($sugSheet, 'txfcampsug-prefix.de', [
+            'email1' => 'findme@txfcampsug-prefix.de', 'email2' => '', 'email3' => '', 'email4' => '',
+        ]);
+        $cPrefixHits = search_email_campaign_suggestions($sugSheet, 'txfcampsug-pre', 10);
+        $cEmailHits = search_email_campaign_suggestions($sugSheet, 'findme@txfcampsug', 10);
+        $cContainsHits = search_email_campaign_suggestions($sugSheet, 'campsug-prefix', 10);
+        $cPrefixOk = in_array('txfcampsug-prefix.de', array_column($cPrefixHits, 'domain'), true);
+        $cEmailOk = in_array('txfcampsug-prefix.de', array_column($cEmailHits, 'domain'), true);
+        $cContainsOk = in_array('txfcampsug-prefix.de', array_column($cContainsHits, 'domain'), true);
+        if ($cPrefixOk && $cEmailOk && $cContainsOk) {
+            pass('Campaign super-search prefix + email + contains');
+        } else {
+            fail('campaign super-search: prefix=' . json_encode($cPrefixHits)
+                . ' email=' . json_encode($cEmailHits)
+                . ' contains=' . json_encode($cContainsHits));
+        }
+        db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcampsug-%'");
+        db()->exec(
+            "DELETE FROM email_campaign_sheets
+             WHERE name LIKE 'txfcampsug-%' OR project_name LIKE 'txfcampsug-%'"
+        );
+        db()->exec("DELETE FROM email_campaign_projects WHERE name LIKE 'txfcampsug-%'");
     }
 } catch (Throwable $e) {
     fail('admin emailed checkpoint: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());

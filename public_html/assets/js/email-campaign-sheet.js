@@ -261,7 +261,7 @@
     var row = matchRows[matchIndex];
     clearHits();
     row.classList.add('sheet-search-hit');
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: 'auto' });
     if (meta) {
       meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails';
     }

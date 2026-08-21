@@ -448,7 +448,16 @@
       status.classList.remove('domains-paste-warn');
     }
 
-    ta.addEventListener('input', updateStatus);
+    var statusTimer = null;
+    function scheduleStatus() {
+      if (statusTimer) window.clearTimeout(statusTimer);
+      statusTimer = window.setTimeout(function () {
+        statusTimer = null;
+        updateStatus();
+      }, 120);
+    }
+
+    ta.addEventListener('input', scheduleStatus);
     ta.addEventListener('paste', function () {
       setTimeout(updateStatus, 0);
     });

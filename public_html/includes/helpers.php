@@ -403,6 +403,73 @@ function sheet_per_page_default(): int
     return 100;
 }
 
+/**
+ * True when a table has at least one row. Uses LIMIT 1 — never COUNT(*) on large sheets.
+ */
+function table_has_any_row(PDO $pdo, string $table): bool
+{
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+        return false;
+    }
+    try {
+        $st = $pdo->query('SELECT 1 FROM `' . $table . '` LIMIT 1');
+        return $st !== false && $st->fetchColumn() !== false;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function table_has_index(PDO $pdo, string $table, string $indexName): bool
+{
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $table) || !preg_match('/^[a-zA-Z0-9_]+$/', $indexName)) {
+        return false;
+    }
+    try {
+        $st = $pdo->prepare(
+            'SELECT 1 FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = ?
+               AND INDEX_NAME = ?
+             LIMIT 1'
+        );
+        $st->execute([$table, $indexName]);
+        return $st->fetchColumn() !== false;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Cache a dashboard-style COUNT for a few seconds so huge tables do not get
+ * scanned on every Admin home load. Live sheet pagination still uses exact counts.
+ */
+function cached_scalar_count(string $cacheKey, callable $fn, int $ttlSeconds = 45): int
+{
+    static $local = [];
+    if (isset($local[$cacheKey])) {
+        return $local[$cacheKey];
+    }
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $pack = $_SESSION['_count_cache'][$cacheKey] ?? null;
+        if (is_array($pack) && isset($pack['n'], $pack['exp']) && (int) $pack['exp'] > time()) {
+            return $local[$cacheKey] = (int) $pack['n'];
+        }
+    }
+    try {
+        $n = (int) $fn();
+    } catch (Throwable $e) {
+        $n = 0;
+    }
+    $local[$cacheKey] = $n;
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        if (!isset($_SESSION['_count_cache']) || !is_array($_SESSION['_count_cache'])) {
+            $_SESSION['_count_cache'] = [];
+        }
+        $_SESSION['_count_cache'][$cacheKey] = ['n' => $n, 'exp' => time() + $ttlSeconds];
+    }
+    return $n;
+}
+
 function normalize_sheet_per_page(int $n): int
 {
     return in_array($n, sheet_per_page_options(), true) ? $n : sheet_per_page_default();
