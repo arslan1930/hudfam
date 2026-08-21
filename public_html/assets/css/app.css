@@ -1217,6 +1217,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   contain-intrinsic-size: auto 3.75rem;
 }
 .swe-sheet-table .swe-col-site { min-width: 10rem; width: 16%; }
+.swe-sheet-table .swe-col-num { min-width: 2.25rem; width: 2.5rem; text-align: right; }
 .swe-sheet-table .swe-col-lang { min-width: 5.5rem; width: 8%; }
 .swe-sheet-table .swe-col-email { min-width: 9rem; width: 14%; }
 .swe-sheet-table .swe-col-status { min-width: 6.5rem; width: 8%; }
@@ -1497,6 +1498,30 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 /* Admin campaign progress: light tint (Final has no sent state). */
 .swe-table tr.swe-row-emailed > td {
   background: #f6faf7;
+}
+.swe-td-num {
+  vertical-align: middle;
+  text-align: right;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+  padding-right: 0.35rem !important;
+}
+.swe-row-num {
+  display: inline-block;
+  min-width: 1.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+}
+/* Team: opened via Open until an email is entered */
+.swe-table tr.swe-row-opened > td {
+  background: #e8f3f8;
+}
+.swe-table tr.swe-row-opened .swe-row-num {
+  color: #0f4c5c;
+}
+.swe-table tr.swe-row-opened.sheet-search-hit td {
+  background: #d9ebf3 !important;
 }
 .swe-site-block {
   display: flex;
