@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'delete_draft') {
-        $result = delete_email_campaign_draft($projectId, (int) post('draft_id'));
+        $result = delete_email_campaign_draft($projectId, (int) post('draft_id'), $user);
         if (empty($result['ok'])) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not delete.')], 404);
         }
@@ -222,11 +222,18 @@ endif;
               <h3 class="camp-draft-title"><?= h($title) ?></h3>
               <span class="swe-status-badge is-ready"><?= h(email_campaign_draft_category_label($cat)) ?></span>
             </div>
+            <?php
+              $attr = email_campaign_draft_attribution($d);
+              if ($attr !== ''):
+            ?>
+            <p class="help camp-draft-attribution" style="margin:0.2rem 0 0.45rem"><?= h($attr) ?></p>
+            <?php endif; ?>
             <div class="camp-draft-preview camp-draft-rich" data-camp-draft-preview data-camp-draft-html><?= $bodyHtml ?></div>
             <div class="camp-draft-card-actions actions">
               <button type="button" class="btn small" data-camp-draft-copy
                       title="Copy with formatting for email paste">Copy</button>
               <a class="btn secondary small" href="<?= h($editHref) ?>">Edit</a>
+              <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
               <form method="post" action="<?= h($formAction) ?>" class="camp-draft-delete-form"
                     data-camp-draft-delete
                     onsubmit="return confirm(<?= h(json_encode('Delete draft “' . $title . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
@@ -237,6 +244,7 @@ endif;
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
                 <button class="btn danger small" type="submit">Delete</button>
               </form>
+              <?php endif; ?>
             </div>
             <p class="help camp-draft-copy-status" data-camp-draft-status hidden></p>
           </article>
