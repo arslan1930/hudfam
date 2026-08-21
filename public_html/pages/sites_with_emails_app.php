@@ -114,6 +114,8 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not save.'));
+        } elseif (!empty($result['row_deleted'])) {
+            flash('ok', 'Removed ' . (string) ($result['domain'] ?? 'site') . ' (no emails left).');
         } else {
             flash('ok', $id > 0 ? 'Updated row.' : 'Added site row.');
         }
@@ -304,12 +306,14 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', (string) ($result['error'] ?? 'Could not push this site.'));
             redirect($back);
         }
-        flash(
-            'ok',
-            ((!empty($result['updated'])) ? 'Merged Team emails into Admin for ' : 'Pushed ')
+        $oneMsg = ((!empty($result['updated'])) ? 'Merged Team emails into Admin for ' : 'Pushed ')
             . (string) ($result['domain'] ?? 'site')
-            . ' · cleared from Team.'
-        );
+            . ' · cleared from Team';
+        if ((int) ($result['skipped_full_slots'] ?? 0) > 0) {
+            $oneMsg .= ' · ' . (int) $result['skipped_full_slots']
+                . ' Team email(s) not applied (Admin already had 4)';
+        }
+        flash('ok', $oneMsg . '.');
         $left = (int) ($result['site_count'] ?? 0);
         redirect($left > 0 ? $back : $sweBase);
     }
@@ -341,6 +345,17 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ((int) $pushed['skipped_empty'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped_empty'] . ' without emails left here';
+        }
+        if ((int) ($pushed['skipped_full_slots'] ?? 0) > 0) {
+            $msg .= ' · ' . (int) $pushed['skipped_full_slots']
+                . ' Team email(s) not applied (Admin already had 4)';
+            $dropDom = $pushed['dropped_domains'] ?? [];
+            if (is_array($dropDom) && $dropDom !== []) {
+                $msg .= ' on ' . implode(', ', array_slice($dropDom, 0, 5));
+                if (count($dropDom) > 5) {
+                    $msg .= '…';
+                }
+            }
         }
         flash('ok', $msg . '.');
         // After push, stay on country if unfinished rows remain; else country list.

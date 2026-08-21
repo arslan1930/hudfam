@@ -1964,6 +1964,54 @@ try {
             fail('merge unit: ' . json_encode($unitMerge));
         }
 
+        $fullMerge = merge_swe_email_slots_prefer_admin_stats(
+            ['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com'],
+            ['e@x.com', 'a@x.com']
+        );
+        if ((int) ($fullMerge['dropped'] ?? 0) === 1
+            && ($fullMerge['dropped_emails'][0] ?? '') === 'e@x.com'
+            && $fullMerge['slots'] === ['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com']) {
+            pass('merge stats reports Team emails dropped when Admin full');
+        } else {
+            fail('merge stats: ' . json_encode($fullMerge));
+        }
+
+        // Admin sheet: clearing last email deletes Admin + Final row.
+        db()->prepare(
+            "INSERT INTO sites_with_emails_admin
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsent-empty.com','Germany','German','europe','solo@txfsent-empty.com','','','')
+             ON DUPLICATE KEY UPDATE email1='solo@txfsent-empty.com', email2='', email3='', email4=''"
+        )->execute();
+        sync_sites_with_emails_admin_to_all('Germany');
+        $emptyId = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-empty.com' LIMIT 1"
+        )->fetchColumn();
+        $emptySave = save_site_with_emails_row(
+            'Germany',
+            'txfsent-empty.com',
+            ['', '', '', ''],
+            $adminUser,
+            $emptyId,
+            'admin'
+        );
+        $emptyAdminLeft = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfsent-empty.com'"
+        )->fetchColumn();
+        $emptyFinalLeft = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-empty.com'"
+        )->fetchColumn();
+        if (!empty($emptySave['ok']) && !empty($emptySave['row_deleted'])
+            && $emptyAdminLeft === 0 && $emptyFinalLeft === 0) {
+            pass('Admin save with no emails deletes Admin+Final row');
+        } else {
+            fail('admin empty save: ' . json_encode([
+                'save' => $emptySave,
+                'admin' => $emptyAdminLeft,
+                'final' => $emptyFinalLeft,
+            ]));
+        }
+
         // Brand-new Team push lands unmarked at bottom.
         db()->prepare(
             "INSERT INTO sites_with_emails_team
