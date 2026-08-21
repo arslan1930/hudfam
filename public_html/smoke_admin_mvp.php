@@ -766,6 +766,24 @@ if (!str_contains($campDraftsTeam, 'email_campaign_user_can_delete_draft($user, 
 } else {
     ok('campaign drafts UI attribution + gated Delete');
 }
+if (!str_contains($campLib, 'function expand_email_campaign_draft_tokens')
+    || !str_contains($campLib, 'subject VARCHAR')
+        && !str_contains($campLib, "ADD COLUMN subject")
+    || !str_contains($campDraftsTeam, 'data-camp-draft-copy-plain')
+    || !str_contains($campDraftsTeam, 'name="subject"')
+    || !str_contains($campDraftsTeam, 'category=' )) {
+    fail('campaign drafts missing subject/tokens/Copy plain/category preserve');
+} else {
+    ok('campaign drafts subject + tokens + Copy plain');
+}
+$campDraftJs = file_get_contents($root . '/assets/js/email-campaign-drafts.js') ?: '';
+if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
+    || !str_contains($campDraftJs, 'expandTokens')
+    || !str_contains($campDraftJs, 'data-camp-draft-token')) {
+    fail('email-campaign-drafts.js missing Copy plain / tokens');
+} else {
+    ok('email-campaign-drafts.js Copy plain + tokens');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')

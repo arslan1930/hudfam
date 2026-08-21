@@ -529,15 +529,69 @@
     });
   }
 
+  function expandTokens(text, card) {
+    var domain = '';
+    var country = '';
+    var language = '';
+    var name = '';
+    if (card) {
+      domain = String(card.getAttribute('data-token-domain') || '');
+      country = String(card.getAttribute('data-token-country') || '');
+      language = String(card.getAttribute('data-token-language') || '');
+      name = String(card.getAttribute('data-token-name') || '');
+    }
+    return String(text || '')
+      .replace(/\{domain\}/gi, domain)
+      .replace(/\{site\}/gi, domain)
+      .replace(/\{country\}/gi, country)
+      .replace(/\{language\}/gi, language)
+      .replace(/\{name\}/gi, name);
+  }
+
+  function cardSubject(card) {
+    if (!card) return '';
+    return expandTokens(String(card.getAttribute('data-camp-draft-subject') || ''), card).trim();
+  }
+
+  function copyPlainText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        if (!document.execCommand('copy')) {
+          reject(new Error('Copy failed'));
+          return;
+        }
+        resolve();
+      } catch (err) {
+        reject(err);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
   function initCopyButtons() {
     document.querySelectorAll('[data-camp-draft-copy]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var card = btn.closest('[data-camp-draft-card]');
         if (!card) return;
         var htmlEl = card.querySelector('[data-camp-draft-html]');
-        var html = htmlEl ? String(htmlEl.innerHTML || '') : '';
+        var html = expandTokens(htmlEl ? String(htmlEl.innerHTML || '') : '', card);
         var plain = htmlToPlain(html);
-        if (!editorHasContent(html)) {
+        var subject = cardSubject(card);
+        if (subject) {
+          plain = 'Subject: ' + subject + '\n\n' + plain;
+          html = '<p><strong>Subject:</strong> ' + subject.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</p>' + html;
+        }
+        if (!editorHasContent(html) && !subject) {
           setStatus(card, 'This draft is empty.', true);
           return;
         }
@@ -565,8 +619,96 @@
           });
       });
     });
+
+    document.querySelectorAll('[data-camp-draft-copy-plain]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var card = btn.closest('[data-camp-draft-card]');
+        if (!card) return;
+        var htmlEl = card.querySelector('[data-camp-draft-html]');
+        var html = expandTokens(htmlEl ? String(htmlEl.innerHTML || '') : '', card);
+        var plain = htmlToPlain(html);
+        var subject = cardSubject(card);
+        if (subject) {
+          plain = 'Subject: ' + subject + '\n\n' + plain;
+        }
+        if (!plain) {
+          setStatus(card, 'This draft is empty.', true);
+          return;
+        }
+        var title = String((card.querySelector('.camp-draft-title') || {}).textContent || 'draft').trim();
+        btn.disabled = true;
+        copyPlainText(plain)
+          .then(function () {
+            setStatus(card, 'Copied “' + title + '” as plain text.');
+            var prev = btn.textContent;
+            btn.textContent = 'Copied';
+            window.setTimeout(function () {
+              btn.textContent = prev || 'Copy plain';
+              btn.disabled = false;
+            }, 1400);
+          })
+          .catch(function () {
+            setStatus(card, 'Could not copy plain text.', true);
+            btn.disabled = false;
+          });
+      });
+    });
+  }
+
+  function insertTokenAtCursor(target, token) {
+    if (!target || !token) return;
+    if (target.getAttribute && target.getAttribute('contenteditable') === 'true') {
+      target.focus();
+      try {
+        if (document.execCommand('insertText', false, token)) return;
+      } catch (err) { /* fall through */ }
+      target.innerHTML = (target.innerHTML || '') + token;
+      return;
+    }
+    if (typeof target.selectionStart === 'number') {
+      var start = target.selectionStart;
+      var end = target.selectionEnd;
+      var val = String(target.value || '');
+      target.value = val.slice(0, start) + token + val.slice(end);
+      var pos = start + token.length;
+      target.setSelectionRange(pos, pos);
+      target.focus();
+      try {
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      } catch (e2) { /* ignore */ }
+      return;
+    }
+    target.value = String(target.value || '') + token;
+  }
+
+  function initTokenButtons() {
+    document.querySelectorAll('[data-camp-draft-token]').forEach(function (btn) {
+      btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var token = btn.getAttribute('data-camp-draft-token') || '';
+        var which = btn.getAttribute('data-camp-draft-token-target') || '';
+        var target = null;
+        if (which === 'body') {
+          var editor = btn.closest('form') && btn.closest('form').querySelector('[data-camp-draft-editor]');
+          target = editor && editor.querySelector('[data-camp-draft-surface]');
+        } else if (which) {
+          target = document.getElementById(which)
+            || (btn.closest('form') && btn.closest('form').querySelector('[data-camp-draft-subject-input]'));
+        }
+        if (!target) {
+          target = btn.closest('form') && btn.closest('form').querySelector('[data-camp-draft-subject-input]');
+        }
+        insertTokenAtCursor(target, token);
+        if (target && target.closest) {
+          var ed = target.closest('[data-camp-draft-editor]');
+          if (ed) syncEditor(ed);
+        }
+      });
+    });
   }
 
   initEditors();
   initCopyButtons();
+  initTokenButtons();
 })();
