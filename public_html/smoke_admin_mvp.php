@@ -65,10 +65,14 @@ if (!str_contains($layout, 'Site adding history')) {
 } else {
     ok('nav rename Site adding history');
 }
-if (preg_match("/'team_prospects'\\s*=>/", $layout)) {
-    fail('Team nav still exposes Our database');
+if (preg_match("/'team_prospects'\\s*=>/", $layout)
+    && str_contains($layout, 'Our database')
+    && str_contains($layout, 'read-only')) {
+    ok('Team Our database browse in nav (Site Finding)');
+} elseif (preg_match("/'team_prospects'\\s*=>/", $layout)) {
+    ok('Team Our database browse in nav (Site Finding)');
 } else {
-    ok('Team Our database privatized in nav');
+    fail('Team nav missing Our database browse');
 }
 if (!str_contains($layout, 'password-toggle.js')) {
     fail('layout missing password-toggle.js');
@@ -272,10 +276,58 @@ if (!str_contains($batch, 'autosave_sites')) {
 }
 
 $teamProspects = file_get_contents($root . '/pages/team/prospects.php') ?: '';
-if (!str_contains($teamProspects, 'Admin-only')) {
-    fail('team prospects not privatized');
+if (!str_contains($teamProspects, 'read-only')
+    || !str_contains($teamProspects, 'stream_prospect_domains_plain')
+    || !str_contains($teamProspects, 'prospect-site-search')) {
+    fail('team prospects missing read-only browse / export / live search');
 } else {
-    ok('team prospects privatized');
+    ok('team prospects read-only browse + export + search');
+}
+
+$adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
+$prospectsLib = file_get_contents($root . '/includes/prospects.php') ?: '';
+if (!str_contains($prospectsLib, 'function stream_prospect_domains_plain')
+    || !str_contains($prospectsLib, 'function stream_prospect_domains_csv')
+    || !str_contains($prospectsLib, 'function count_prospect_sites_matching')
+    || !str_contains($adminProspects, 'prospect_copy_all')
+    || !str_contains($adminProspects, 'prospect_copy_matches')
+    || !str_contains($adminProspects, 'prospect-site-search')
+    || !str_contains($adminProspects, 'prospects-country.js')) {
+    fail('Our database country missing export / matches / live search');
+} else {
+    ok('Our database country export + matches + live search');
+}
+$assetPhp = file_get_contents($root . '/asset.php') ?: '';
+if (!str_contains($assetPhp, 'js/prospects-country.js')) {
+    fail('asset.php missing prospects-country.js allowlist');
+} else {
+    ok('asset allowlist prospects-country.js');
+}
+$prospectsCountryJs = file_get_contents($root . '/assets/js/prospects-country.js') ?: '';
+if (!str_contains($prospectsCountryJs, 'DEBOUNCE_MS')
+    || !str_contains($prospectsCountryJs, 'commitServerSearch')
+    || !str_contains($prospectsCountryJs, 'prospect_copy_matches')
+    || !str_contains($prospectsCountryJs, 'downloadTextFile')
+    || !str_contains($prospectsCountryJs, 'Clipboard blocked')) {
+    fail('prospects-country.js missing debounce / copy matches / download fallback');
+} else {
+    ok('prospects-country.js debounce + copy + download fallback');
+}
+if (!str_contains($prospectsLib, 'function prospect_export_basename')
+    || !str_contains($prospectsLib, '-our-database')
+    || !str_contains($adminProspects, 'data-download-name')
+    || !str_contains($adminProspects, 'data-fallback-download-url')
+    || !str_contains($teamProspects, 'data-download-name')) {
+    fail('Our database missing export basename / download-name attrs');
+} else {
+    ok('Our database export filenames + download-name attrs');
+}
+// Policy: Team browse is allowed (was privatized); stub redirect text must be gone.
+if (str_contains($teamProspects, 'Our database is private to Admin')
+    || str_contains($teamProspects, 'Admin-only')) {
+    fail('team prospects still privatized / Admin-only stub');
+} else {
+    ok('Team Our database policy: browse unlocked (not privatized)');
 }
 
 $index = file_get_contents($root . '/index.php') ?: '';

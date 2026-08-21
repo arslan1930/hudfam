@@ -47,6 +47,18 @@ if ($addCountry !== '') {
     }
 }
 
+// Stream domain list / CSV for Copy all · Download (country folder only).
+if ($inCountry && !$emptyCountry && (string) get('export') !== '') {
+    $mode = (string) get('export');
+    $exportQ = trim((string) get('q'));
+    if ($mode === 'domains' || $mode === 'download') {
+        stream_prospect_domains_plain($sheet, $mode === 'download', $exportQ);
+    }
+    if ($mode === 'csv') {
+        stream_prospect_domains_csv($sheet, $exportQ);
+    }
+}
+
 // --- Remove one site (from super search or elsewhere) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove_site') {
     $siteId = (int) post('site_id');
@@ -588,6 +600,26 @@ if ($emptyCountry) {
 }
 
 $sheetLabel = $emptyCountry ? 'No country' : $countryName;
+$countryTotal = $emptyCountry
+    ? (int) $total
+    : count_prospect_sites_matching($countryName, '');
+$searchMatchCount = ($q !== '' && !$emptyCountry)
+    ? (int) $total
+    : 0;
+$exportBase = 'index.php?page=admin_prospects&country=' . rawurlencode($emptyCountry ? '_none' : $countryName);
+$exportAllUrl = $exportBase . '&export=domains';
+$downloadTxtUrl = $exportBase . '&export=download';
+$downloadCsvUrl = $exportBase . '&export=csv';
+$exportMatchesUrl = $q !== '' ? ($exportBase . '&export=domains&q=' . rawurlencode($q)) : '';
+$downloadMatchesTxtUrl = $q !== '' ? ($exportBase . '&export=download&q=' . rawurlencode($q)) : '';
+$downloadMatchesCsvUrl = $q !== '' ? ($exportBase . '&export=csv&q=' . rawurlencode($q)) : '';
+$exportAllBasename = !$emptyCountry ? prospect_export_basename($countryName, '') : 'sites-our-database';
+$exportMatchesBasename = (!$emptyCountry && $q !== '')
+    ? prospect_export_basename($countryName, $q)
+    : '';
+$exportAllTxtName = $exportAllBasename . '.txt';
+$exportMatchesTxtName = $exportMatchesBasename !== '' ? ($exportMatchesBasename . '.txt') : '';
+
 $qs = http_build_query(array_filter([
     'page' => 'admin_prospects',
     'country' => $emptyCountry ? '_none' : $countryName,
@@ -614,15 +646,48 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
-    <p class="muted"><?= (int) $total ?> URL<?= (int) $total === 1 ? '' : 's' ?> in this country’s database · choose rows per page below</p>
+    <p class="muted">
+      <span id="prospect_country_total_label"><?= (int) $countryTotal ?></span>
+      site<?= (int) $countryTotal === 1 ? '' : 's' ?> in this country’s database
+      <?php if ($q !== ''): ?>
+        · <strong><?= (int) $searchMatchCount ?></strong> match<?= (int) $searchMatchCount === 1 ? '' : 'es' ?> for “<?= h($q) ?>”
+      <?php endif; ?>
+      · choose rows per page below
+    </p>
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
+      <button
+        type="button"
+        class="btn"
+        id="prospect_copy_all"
+        data-export-url="<?= h($exportAllUrl) ?>"
+        data-download-name="<?= h($exportAllTxtName) ?>"
+        data-fallback-download-url="<?= h($downloadTxtUrl) ?>"
+        data-count="<?= (int) $countryTotal ?>"
+        <?= $countryTotal > 0 ? '' : 'disabled' ?>
+      >Copy all</button>
+      <a class="btn secondary" href="<?= h($downloadTxtUrl) ?>">Download .txt</a>
+      <a class="btn secondary" href="<?= h($downloadCsvUrl) ?>">Download CSV</a>
+      <?php if ($q !== '' && $searchMatchCount > 0): ?>
+        <button
+          type="button"
+          class="btn secondary"
+          id="prospect_copy_matches"
+          data-export-url="<?= h($exportMatchesUrl) ?>"
+          data-download-name="<?= h($exportMatchesTxtName) ?>"
+          data-fallback-download-url="<?= h($downloadMatchesTxtUrl) ?>"
+          data-count="<?= (int) $searchMatchCount ?>"
+        >Copy matches</button>
+        <a class="btn secondary" href="<?= h($downloadMatchesTxtUrl) ?>">Matches .txt</a>
+        <a class="btn secondary" href="<?= h($downloadMatchesCsvUrl) ?>">Matches CSV</a>
+      <?php endif; ?>
       <a class="btn" href="#add-sites">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
   </div>
 </div>
+<p class="help" id="prospect_copy_status" hidden></p>
 
 <?php if (!$emptyCountry): ?>
 <div class="card" id="add-sites">
@@ -648,12 +713,13 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <?= sites_form_script_tag() ?>
 <?php endif; ?>
 
-<form class="card filters" method="get">
+<form class="card filters" method="get" id="prospect-country-filters">
   <input type="hidden" name="page" value="admin_prospects">
   <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
-  <div><label>Search</label><input name="q" value="<?= h($q) ?>" placeholder="domain or url…"></div>
-  <div><label>Status</label>
-    <select name="status">
+  <input type="hidden" name="q" id="prospect_q_hidden" value="<?= h($q) ?>">
+  <div>
+    <label>Status</label>
+    <select name="status" onchange="this.form.submit()">
       <option value="">All</option>
       <?php foreach (prospect_statuses() as $code => $label): ?>
         <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
@@ -662,21 +728,35 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </div>
   <div>
     <label for="prospects_per_page">Per page</label>
-    <select id="prospects_per_page" name="per_page">
+    <select id="prospects_per_page" name="per_page" onchange="this.form.submit()">
       <?php foreach (sheet_per_page_options() as $n): ?>
         <option value="<?= (int) $n ?>" <?= (int) $perPage === (int) $n ? 'selected' : '' ?>><?= (int) $n ?></option>
       <?php endforeach; ?>
     </select>
   </div>
-  <button class="btn" type="submit">Filter</button>
 </form>
 
 <div class="card">
-  <table>
+  <div class="invoice-list-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
+    <h2 style="margin:0">Sites</h2>
+    <?php if (!$emptyCountry && $countryTotal > 0): ?>
+    <div class="actions" style="margin-left:auto;align-items:center;flex-wrap:wrap;gap:0.45rem">
+      <label class="sheet-search" for="prospect-site-search" style="margin:0">
+        <span class="visually-hidden">Search this country</span>
+        <input id="prospect-site-search" type="search" placeholder="Search this country…"
+               value="<?= h($q) ?>"
+               autocomplete="off" spellcheck="false" data-no-draft
+               title="Type to search the whole country folder · Enter = next match · Shift+Enter = previous">
+        <span class="sheet-search-meta muted" data-prospect-site-search-meta hidden></span>
+      </label>
+    </div>
+    <?php endif; ?>
+  </div>
+  <table id="prospect-site-table">
     <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
     <tbody>
     <?php foreach ($rows as $s): ?>
-      <tr>
+      <tr data-prospect-site-row data-domain="<?= h((string) $s['domain']) ?>">
         <td><strong><?= h($s['domain']) ?></strong></td>
         <td class="help"><?= h($s['url'] !== '' ? $s['url'] : '—') ?></td>
         <td><?= h($s['language'] ?: '—') ?></td>
@@ -689,12 +769,13 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </table>
   <?php if (!$rows): ?>
     <div class="empty-state">
-      <p>No sites in this country yet.</p>
-      <?php if (!$emptyCountry): ?>
+      <p><?= $q !== '' ? 'No sites in this country match your search.' : 'No sites in this country yet.' ?></p>
+      <?php if (!$emptyCountry && $q === ''): ?>
         <a class="btn" href="#add-sites">Add sites above</a>
       <?php endif; ?>
     </div>
   <?php else: ?>
+    <p class="help sheet-search-empty" data-prospect-site-search-empty hidden>No sites on this page match (server search returned this page).</p>
     <div class="actions" style="margin-top:0.8rem;align-items:center;gap:0.65rem;flex-wrap:wrap">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <span>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
@@ -739,4 +820,5 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </form>
 </div>
 <?php endif; ?>
+<script src="<?= h(script_asset_url('js/prospects-country.js')) ?>" defer></script>
 <?php render_footer('admin'); ?>

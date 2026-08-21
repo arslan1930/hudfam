@@ -23,6 +23,7 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
         'admin_semrush_research' => ['admin_semrush_sheet'],
         'team_prospect_check' => [],
+        'team_prospects' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_semrush_research' => ['team_semrush_sheet'],
         'team_extracting' => ['team_extract_batch'],
@@ -145,6 +146,10 @@ function render_header(string $title, string $panel = ''): void
                     $groups['Main']['team_prospect_check'] = [
                         'Filter & add',
                         'Paste → filter → add new unique only',
+                    ];
+                    $groups['Main']['team_prospects'] = [
+                        'Our database',
+                        'Browse country folders · copy · download (read-only)',
                     ];
                     $groups['Main']['team_prospect_batches'] = [
                         'Site adding history',

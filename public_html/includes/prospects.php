@@ -1009,6 +1009,193 @@ function list_prospect_domain_names(int $maxDisplay = 25000, string $country = '
 }
 
 /**
+ * Count sites in one Our database country folder matching $q (domain / url / niche / notes).
+ * Empty $q → total sites in that country (or 0 for unknown country).
+ */
+function count_prospect_sites_matching(string $country, string $q = ''): int
+{
+    ensure_prospect_schema();
+    $country = trim($country);
+    if ($country === '') {
+        return 0;
+    }
+    $canon = resolve_canonical_country($country);
+    if ($canon === null) {
+        return 0;
+    }
+    $country = $canon['name'];
+    $q = trim($q);
+    if ($q === '') {
+        $stmt = db()->prepare('SELECT COUNT(*) FROM prospect_sites WHERE country=?');
+        $stmt->execute([$country]);
+        return (int) $stmt->fetchColumn();
+    }
+    $like = '%' . $q . '%';
+    $stmt = db()->prepare(
+        'SELECT COUNT(*) FROM prospect_sites
+         WHERE country=? AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)'
+    );
+    $stmt->execute([$country, $like, $like, $like, $like]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Download basename for Our database export (no extension).
+ * e.g. germany-our-database or germany-our-database-matches
+ */
+function prospect_export_basename(string $country, string $q = ''): string
+{
+    $canon = resolve_canonical_country(trim($country));
+    $label = $canon ? (string) $canon['name'] : trim($country);
+    $safe = strtolower((string) (preg_replace('/[^a-zA-Z0-9]+/', '-', $label) ?: 'sites'));
+    $safe = trim($safe, '-') ?: 'sites';
+    $suffix = trim($q) !== '' ? '-matches' : '';
+    return $safe . '-our-database' . $suffix;
+}
+
+/**
+ * Stream one domain per line for Copy all / Download .txt (optionally filtered by $q).
+ */
+function stream_prospect_domains_plain(string $country, bool $asDownload = false, string $q = ''): void
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    $canon = resolve_canonical_country($country);
+    if ($canon === null) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Country not found.\n";
+        exit;
+    }
+    $country = $canon['name'];
+    $q = trim($q);
+    $base = prospect_export_basename($country, $q);
+
+    header('Content-Type: text/plain; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    if ($asDownload) {
+        header('Content-Disposition: attachment; filename="' . $base . '.txt"');
+    }
+
+    $pdo = db();
+    try {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $stmt = $pdo->prepare(
+            'SELECT domain FROM prospect_sites
+             WHERE country=? AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)
+             ORDER BY domain ASC'
+        );
+        $stmt->execute([$country, $like, $like, $like, $like]);
+    } else {
+        $stmt = $pdo->prepare(
+            'SELECT domain FROM prospect_sites WHERE country=? ORDER BY domain ASC'
+        );
+        $stmt->execute([$country]);
+    }
+
+    $i = 0;
+    while ($domain = $stmt->fetchColumn()) {
+        echo (string) $domain, "\n";
+        $i++;
+        if ($i % 2000 === 0 && function_exists('flush')) {
+            flush();
+        }
+    }
+    $stmt->closeCursor();
+    try {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+    exit;
+}
+
+/**
+ * Stream CSV (domain column only) for one country folder (optionally filtered by $q).
+ */
+function stream_prospect_domains_csv(string $country, string $q = ''): void
+{
+    ensure_prospect_schema();
+    @set_time_limit(0);
+    $canon = resolve_canonical_country($country);
+    if ($canon === null) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Country not found.\n";
+        exit;
+    }
+    $country = $canon['name'];
+    $q = trim($q);
+    $base = prospect_export_basename($country, $q);
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    header('Content-Disposition: attachment; filename="' . $base . '.csv"');
+
+    $pdo = db();
+    try {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $stmt = $pdo->prepare(
+            'SELECT domain FROM prospect_sites
+             WHERE country=? AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)
+             ORDER BY domain ASC'
+        );
+        $stmt->execute([$country, $like, $like, $like, $like]);
+    } else {
+        $stmt = $pdo->prepare(
+            'SELECT domain FROM prospect_sites WHERE country=? ORDER BY domain ASC'
+        );
+        $stmt->execute([$country]);
+    }
+
+    // UTF-8 BOM helps Excel open the file correctly.
+    echo "\xEF\xBB\xBF";
+    echo "domain\n";
+    $i = 0;
+    while ($domain = $stmt->fetchColumn()) {
+        $d = (string) $domain;
+        if (str_contains($d, '"') || str_contains($d, ',') || str_contains($d, "\n")) {
+            echo '"' . str_replace('"', '""', $d) . "\"\n";
+        } else {
+            echo $d, "\n";
+        }
+        $i++;
+        if ($i % 2000 === 0 && function_exists('flush')) {
+            flush();
+        }
+    }
+    $stmt->closeCursor();
+    try {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+    exit;
+}
+
+/**
  * Get or create a dated batch for a user (one row per user per calendar day per country).
  */
 function get_or_create_prospect_batch(
@@ -1627,8 +1814,8 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 1
     $q = trim((string) ($filters['q'] ?? ''));
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
-        array_push($params, $like, $like, $like);
+        $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
+        array_push($params, $like, $like, $like, $like);
     }
     if (!empty($filters['country'])) {
         $where[] = 'p.country = ?';
