@@ -430,6 +430,7 @@ function parse_domain_list_strict(string $raw): array
     $lines = preg_split('/\n+/', $raw) ?: [];
     $valid = [];
     $invalid = [];
+    $duplicateCount = 0;
     foreach ($lines as $line) {
         $line = trim($line);
         if ($line === '') {
@@ -444,7 +445,12 @@ function parse_domain_list_strict(string $raw): array
             }
             $a = analyze_pasted_domain_line($chunk);
             if ($a['ok']) {
-                $valid[$a['domain']] = true;
+                $domain = (string) $a['domain'];
+                if (isset($valid[$domain])) {
+                    $duplicateCount++;
+                } else {
+                    $valid[$domain] = true;
+                }
             } else {
                 $invalid[] = ['raw' => $a['raw'], 'reason' => $a['reason']];
             }
@@ -456,6 +462,7 @@ function parse_domain_list_strict(string $raw): array
         'invalid' => $invalid,
         'valid_text' => implode("\n", $validList),
         'invalid_count' => count($invalid),
+        'duplicate_count' => $duplicateCount,
     ];
 }
 
@@ -565,6 +572,55 @@ function ensure_prospect_schema(): void
           CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+}
+
+/**
+ * User-facing copy for auto-removed duplicates in a country folder.
+ */
+function prospect_duplicates_deleted_message(int $n): string
+{
+    $n = max(0, $n);
+    if ($n === 1) {
+        return '1 duplicated found and deleted';
+    }
+    return $n . ' duplicated found and deleted';
+}
+
+/**
+ * Delete extra prospect_sites rows that share the same (country, domain).
+ * Keeps the lowest id. Returns how many rows were removed.
+ */
+function purge_duplicate_prospect_site_rows(?string $country = null): int
+{
+    ensure_prospect_schema();
+    $pdo = db();
+    $country = trim((string) $country);
+    if ($country !== '') {
+        $canon = resolve_canonical_country($country);
+        if ($canon === null) {
+            return 0;
+        }
+        $country = $canon['name'];
+        $stmt = $pdo->prepare(
+            'DELETE p1 FROM prospect_sites p1
+             INNER JOIN prospect_sites p2
+               ON p1.country = p2.country
+              AND p1.domain = p2.domain
+              AND p1.id > p2.id
+             WHERE p1.country = ?'
+        );
+        $stmt->execute([$country]);
+        return (int) $stmt->rowCount();
+    }
+
+    $removed = (int) $pdo->exec(
+        'DELETE p1 FROM prospect_sites p1
+         INNER JOIN prospect_sites p2
+           ON p1.country = p2.country
+          AND p1.domain = p2.domain
+          AND p1.id > p2.id'
+    );
+    return $removed;
 }
 
 /**
@@ -1274,6 +1330,7 @@ function add_prospect_domains(
     $empty = [
         'inserted' => 0,
         'skipped' => count($routed['existing'] ?? []),
+        'duplicated' => count($routed['existing'] ?? []),
         'batch_id' => null,
         'extract_batch_id' => null,
         'by_country' => [],
@@ -1433,9 +1490,19 @@ function add_prospect_domains(
         }
     }
 
+    $purged = 0;
+    foreach (array_keys($byCountryOut) as $destName) {
+        try {
+            $purged += purge_duplicate_prospect_site_rows((string) $destName);
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
     return [
         'inserted' => $totalInserted,
         'skipped' => $totalSkipped,
+        'duplicated' => $totalSkipped + $purged,
         'batch_id' => $selectedBatchId ?? $primaryBatchId,
         'extract_batch_id' => $selectedExtractId ?? $primaryExtractId,
         'by_country' => $byCountryOut,
@@ -1444,8 +1511,9 @@ function add_prospect_domains(
 
 /**
  * Admin: paste URLs into one country’s database (no uniqueness preview).
+ * Duplicates in the paste and domains already in that country are dropped (not updated).
  *
- * @return array{inserted:int,updated:int,total:int,batch_id:int|null,country:string}
+ * @return array{inserted:int,updated:int,duplicated:int,purged:int,total:int,batch_id:int|null,country:string}
  */
 function admin_add_urls_to_database(string $raw, array $user, string $country, string $language = ''): array
 {
@@ -1474,14 +1542,20 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
             'Remove invalid lines first (use Clean to root domains). Paste root domains only, e.g. example.com or my-site.co.uk — no https, paths, or subdomains.'
         );
     }
-    /** @var array<string,string> $rows domain => url (empty for root-domain paste) */
-    $rows = [];
-    foreach ($parsed['valid'] as $domain) {
-        $rows[$domain] = '';
-    }
+    $listDuplicates = (int) ($parsed['duplicate_count'] ?? 0);
+    /** @var list<string> $domains */
+    $domains = $parsed['valid'];
 
-    if ($rows === []) {
-        return ['inserted' => 0, 'updated' => 0, 'total' => 0, 'batch_id' => null, 'country' => $country];
+    if ($domains === []) {
+        return [
+            'inserted' => 0,
+            'updated' => 0,
+            'duplicated' => $listDuplicates,
+            'purged' => 0,
+            'total' => 0,
+            'batch_id' => null,
+            'country' => $country,
+        ];
     }
 
     $batchId = get_or_create_prospect_batch(
@@ -1494,42 +1568,49 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     );
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
-         VALUES (?,?,?,?,?,\'\',\'\',\'new\',?)
-         ON DUPLICATE KEY UPDATE
-           url = IF(VALUES(url) <> \'\', VALUES(url), url),
-           language = IF(VALUES(language) <> \'\', VALUES(language), language),
-           region = IF(VALUES(region) <> \'\', VALUES(region), region),
-           updated_at = NOW()'
+         VALUES (?,?,?,?,?,\'\',\'\',\'new\',?)'
     );
     $insItem = db()->prepare(
         'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE prospect_site_id=VALUES(prospect_site_id)'
     );
     $findId = db()->prepare(
-        'SELECT id FROM prospect_sites WHERE TRIM(country)=? AND domain=? LIMIT 1'
+        'SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1'
     );
 
     $inserted = 0;
-    $updated = 0;
+    $alreadyInDb = 0;
     db()->beginTransaction();
     try {
         $n = 0;
-        foreach ($rows as $domain => $url) {
+        foreach ($domains as $domain) {
             $findId->execute([$country, $domain]);
             $beforeId = (int) $findId->fetchColumn();
-            $ins->execute([$domain, $url, $country, $language, $region, $user['id']]);
             if ($beforeId > 0) {
-                $updated++;
-                $siteId = $beforeId;
-            } else {
-                $inserted++;
-                $siteId = (int) db()->lastInsertId();
-                if ($siteId <= 0) {
-                    $findId->execute([$country, $domain]);
-                    $siteId = (int) $findId->fetchColumn();
-                }
+                $alreadyInDb++;
+                // Duplicate of an existing country folder row — do not keep a second copy.
+                $n++;
+                continue;
             }
-            $insItem->execute([$batchId, $domain, $siteId ?: null]);
+            try {
+                $ins->execute([$domain, '', $country, $language, $region, $user['id']]);
+            } catch (Throwable $e) {
+                // Race / unique key — treat as duplicate.
+                $alreadyInDb++;
+                $n++;
+                continue;
+            }
+            $siteId = (int) db()->lastInsertId();
+            if ($siteId <= 0) {
+                $findId->execute([$country, $domain]);
+                $siteId = (int) $findId->fetchColumn();
+            }
+            if ($siteId > 0) {
+                $inserted++;
+                $insItem->execute([$batchId, $domain, $siteId]);
+            } else {
+                $alreadyInDb++;
+            }
             $n++;
             if ($n % 250 === 0) {
                 db()->commit();
@@ -1556,10 +1637,21 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         throw $e;
     }
 
+    $purged = 0;
+    try {
+        $purged = purge_duplicate_prospect_site_rows($country);
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    $duplicated = $listDuplicates + $alreadyInDb + $purged;
+
     return [
         'inserted' => $inserted,
-        'updated' => $updated,
-        'total' => count($rows),
+        'updated' => 0, // legacy key — duplicates are deleted, not updated
+        'duplicated' => $duplicated,
+        'purged' => $purged,
+        'total' => count($domains),
         'batch_id' => $batchId,
         'country' => $country,
     ];

@@ -152,16 +152,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
         }
         $result = admin_add_urls_to_database($addRaw, $user, $addCountry, $addLanguage);
-        if ($result['total'] <= 0) {
+        $dup = (int) ($result['duplicated'] ?? 0);
+        $insN = (int) ($result['inserted'] ?? 0);
+        if ($insN < 1 && $dup < 1 && (int) ($result['total'] ?? 0) < 1) {
             flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
             redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
         }
-        $msg = 'Saved ' . (int) $result['total'] . ' site(s) to ' . $result['country'] . '.';
-        $msg .= ' New: ' . (int) $result['inserted'] . '.';
-        if ((int) $result['updated'] > 0) {
-            $msg .= ' Already in this country (kept/updated): ' . (int) $result['updated'] . '.';
+        if ($insN > 0) {
+            flash('ok', 'Saved ' . $insN . ' new site(s) to ' . $result['country'] . '.');
         }
-        flash('ok', $msg);
+        if ($dup > 0) {
+            flash('fade', prospect_duplicates_deleted_message($dup) . '.');
+        }
         unset($_SESSION['admin_prospects_add_draft']);
         redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
     } catch (Throwable $e) {
@@ -556,6 +558,13 @@ if (!$inCountry && !$emptyCountry) {
 
 // --- One country database ---
 $countryName = $emptyCountry ? '' : $sheet;
+if (!$emptyCountry) {
+    try {
+        purge_duplicate_prospect_site_rows($countryName);
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
 $q = trim((string) get('q'));
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));

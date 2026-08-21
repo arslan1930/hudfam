@@ -141,8 +141,13 @@ try {
                     $tldCheck = $tldGate;
                 } else {
                     $added = add_prospect_domains($selected, $user, $country, $language, $region, $niche, $notes);
+                    $dupN = (int) ($added['duplicated'] ?? $added['skipped'] ?? 0);
                     if ((int) $added['inserted'] < 1) {
-                        flash('ok', 'No new unique sites were added — they are already in the destination country database(s).');
+                        if ($dupN > 0) {
+                            flash('fade', prospect_duplicates_deleted_message($dupN) . '.');
+                        } else {
+                            flash('ok', 'No new unique sites were added — they are already in the destination country database(s).');
+                        }
                         $result['new'] = [];
                         $raw = '';
                     } else {
@@ -170,10 +175,6 @@ try {
                         if (!empty($added['batch_id'])) {
                             $msg .= ' · saved in today’s history';
                         }
-                        $skippedTotal = (int) $added['skipped'];
-                        if ($skippedTotal > 0) {
-                            $msg .= ' · Skipped ' . $skippedTotal . ' already in destination country database(s)';
-                        }
                         if (!empty($tldGate['warn'])) {
                             $msg .= ' · saved despite TLD mismatch warning';
                         }
@@ -181,6 +182,9 @@ try {
                             $msg .= ' · sent from TLD column';
                         }
                         flash('ok', $msg . '.');
+                        if ($dupN > 0) {
+                            flash('fade', prospect_duplicates_deleted_message($dupN) . '.');
+                        }
                         prospect_filter_gate_clear();
                         // Only jump to Extracting when that tool is unlocked for this user.
                         if (!empty($added['extract_batch_id'])

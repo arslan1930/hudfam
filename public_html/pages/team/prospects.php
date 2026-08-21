@@ -258,6 +258,13 @@ if (!$inCountry && !$emptyCountry) {
 
 // --- One country folder (read-only) ---
 $countryName = $emptyCountry ? '' : $sheet;
+if (!$emptyCountry) {
+    try {
+        purge_duplicate_prospect_site_rows($countryName);
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
 $q = trim((string) get('q'));
 $status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
