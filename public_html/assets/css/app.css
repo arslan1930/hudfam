@@ -2197,6 +2197,45 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   color: #9a3412;
   white-space: nowrap;
 }
+.swe-row-chip {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.06rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.swe-row-chip.is-new {
+  color: #9a3412;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+}
+.swe-row-chip.is-updated {
+  color: #1e3a5f;
+  background: #e0effe;
+  border: 1px solid #93c5fd;
+}
+tr.swe-row-new {
+  animation: swe-row-flash 1.4s ease-out 1;
+}
+tr.swe-row-updated {
+  animation: swe-row-flash-soft 1.2s ease-out 1;
+}
+@keyframes swe-row-flash {
+  0% { background-color: #ffedd5; }
+  100% { background-color: transparent; }
+}
+@keyframes swe-row-flash-soft {
+  0% { background-color: #e0effe; }
+  100% { background-color: transparent; }
+}
+.swe-filter-sep {
+  margin: 0 0.15rem;
+}
 .badge {
   display: inline-block;
   padding: 0.12rem 0.45rem;

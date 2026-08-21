@@ -500,6 +500,15 @@ if (!str_contains($sweLibSmoke, 'function swe_admin_mark_country_seen')
 } else {
     ok('SWE Admin country New watermark + list +N');
 }
+if (!str_contains($sweLibSmoke, 'function swe_admin_row_signal')
+    || !str_contains($sweLibSmoke, 'function swe_admin_visit_since')
+    || !str_contains($sweAppSmoke, 'swe-row-chip')
+    || !str_contains($sweAppSmoke, "get('filter')")
+    || !str_contains($sweAppSmoke, 'since your last visit')) {
+    fail('SWE missing P1b row New/Updated chips / flash / filter');
+} else {
+    ok('SWE P1b row chips + flash + filter');
+}
 $newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
 $layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
 if (!str_contains($newDataSmoke, "section !== 'emails_admin'")
