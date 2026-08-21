@@ -1825,16 +1825,16 @@ try {
     db()->prepare(
         "INSERT INTO sites_with_emails_team
            (domain, country, language, region, email1, email2, email3, email4)
-         VALUES ('txfcamp-nl-e.nl','Netherlands','Dutch','europe','e@txfcamp-nl-e.nl','','','')"
+         VALUES ('txfcamp-nl-iso.nl','Netherlands','Dutch','europe','iso@txfcamp-nl-iso.nl','','','')"
     )->execute();
     $impNewUnsent = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
     $newSent = (int) db()->query(
         "SELECT email_sent FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
-        . " AND domain='txfcamp-nl-e.nl' LIMIT 1"
+        . " AND domain='txfcamp-nl-iso.nl' LIMIT 1"
     )->fetchColumn();
     $secondHasE = (int) db()->query(
         "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet2
-        . " AND domain='txfcamp-nl-e.nl'"
+        . " AND domain='txfcamp-nl-iso.nl'"
     )->fetchColumn();
     if ((int) ($impNewUnsent['imported'] ?? 0) >= 1 && $newSent === 0 && $secondHasE === 0) {
         pass('new Team domain lands unmarked and only on the campaign that fetched it');
