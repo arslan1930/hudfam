@@ -322,6 +322,17 @@ if (!str_contains($prospectsLib, 'function prospect_export_basename')
 } else {
     ok('Our database export filenames + download-name attrs');
 }
+if (!str_contains($prospectsLib, 'function purge_duplicate_prospect_site_rows')
+    || !str_contains($prospectsLib, 'function prospect_duplicates_deleted_message')
+    || !str_contains($prospectsLib, 'duplicate_count')
+    || !str_contains($adminProspects, "flash('fade'")
+    || !str_contains(file_get_contents($root . '/pages/team/prospect_check.php') ?: '', 'prospect_duplicates_deleted_message')
+    || !str_contains(file_get_contents($root . '/assets/js/alert-fade.js') ?: '', 'data-alert-fade')
+    || !str_contains($assetPhp, 'js/alert-fade.js')) {
+    fail('Our database missing auto-dedupe / fade notice');
+} else {
+    ok('Our database auto-dedupe + fade notice');
+}
 // Policy: Team browse is allowed (was privatized); stub redirect text must be gone.
 if (str_contains($teamProspects, 'Our database is private to Admin')
     || str_contains($teamProspects, 'Admin-only')) {

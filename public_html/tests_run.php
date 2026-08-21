@@ -293,6 +293,27 @@ try {
     } else {
         fail('admin_add_urls_to_database: ' . json_encode($adminAdd));
     }
+    // Re-add same domains → duplicates deleted (not updated as kept).
+    $adminDup = admin_add_urls_to_database(
+        "txfadd-site-a.com\ntxfadd-site-a.com\ntxfadd-site-b.de",
+        $adminUser,
+        $country,
+        'German'
+    );
+    if ((int) ($adminDup['inserted'] ?? -1) === 0
+        && (int) ($adminDup['duplicated'] ?? 0) >= 3
+        && str_contains(prospect_duplicates_deleted_message(3), '3 duplicated')) {
+        pass('admin_add_urls_to_database auto-deletes duplicates');
+    } else {
+        fail('admin_add duplicate delete: ' . json_encode($adminDup));
+    }
+    $parsedDup = parse_domain_list_strict("a.com\na.com\nb.com\na.com");
+    if ((int) ($parsedDup['duplicate_count'] ?? -1) === 2
+        && count($parsedDup['valid'] ?? []) === 2) {
+        pass('parse_domain_list_strict counts list duplicates');
+    } else {
+        fail('parse duplicate_count: ' . json_encode($parsedDup));
+    }
     db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfadd-%'");
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfadd-%'");
 

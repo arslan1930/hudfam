@@ -2377,6 +2377,20 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   border-color: #b7dcc8;
   color: #1f4d35;
 }
+.alert-box.alert-fade {
+  font-size: 0.92rem;
+  padding: 0.55rem 0.85rem;
+  box-shadow: 0 4px 12px rgba(31, 41, 55, 0.06);
+}
+.alert-box.alert-fade .alert-title {
+  font-size: 0.72rem;
+}
+.alert-box.alert-fade.is-fading {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
+  pointer-events: none;
+}
 .alert-box.alert-error {
   background: linear-gradient(135deg, #fdf1f1 0%, #fff7f7 55%, #ffffff 100%);
   border-color: #e0b1b1;

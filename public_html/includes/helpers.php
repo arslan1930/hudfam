@@ -134,9 +134,14 @@ function get_flashes(): array
 function render_alert_box(string $type, string $message): void
 {
     $isError = $type === 'error';
+    $fade = $type === 'fade' || $type === 'ok-fade' || $type === 'dup';
     $cls = $isError ? 'alert-error' : 'alert-ok';
-    $alertTitle = $isError ? 'Error' : 'Success';
-    echo '<div class="alert-box ' . h($cls) . '" role="alert">';
+    if ($fade) {
+        $cls .= ' alert-fade';
+    }
+    $alertTitle = $isError ? 'Error' : ($fade ? 'Notice' : 'Success');
+    echo '<div class="alert-box ' . h($cls) . '" role="alert"'
+        . ($fade ? ' data-alert-fade="1"' : '') . '>';
     echo '<div class="alert-icon" aria-hidden="true">' . ($isError ? '!' : '✓') . '</div>';
     echo '<div class="alert-body">';
     echo '<strong class="alert-title">' . h($alertTitle) . '</strong>';
