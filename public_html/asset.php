@@ -27,6 +27,7 @@ $allowed = [
     'js/nav-shell.js' => 'application/javascript; charset=utf-8',
     'js/password-toggle.js' => 'application/javascript; charset=utf-8',
     'js/prospect-batch-sheet.js' => 'application/javascript; charset=utf-8',
+    'js/prospects-country.js' => 'application/javascript; charset=utf-8',
     'js/csrf.js' => 'application/javascript; charset=utf-8',
     'js/tld-separate.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',

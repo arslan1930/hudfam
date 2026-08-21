@@ -295,6 +295,29 @@ try {
     }
     db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfadd-%'");
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfadd-%'");
+
+    // Country folder export helpers + whole-folder match count.
+    $matchAll = count_prospect_sites_matching($country, '');
+    $matchFinance = count_prospect_sites_matching($country, 'txftest-finance');
+    $matchNone = count_prospect_sites_matching($country, 'zzznomatch-xyz');
+    $unknownCountry = count_prospect_sites_matching('NotARealCountryXYZ', 'x');
+    if ($matchAll >= 2 && $matchFinance === 1 && $matchNone === 0 && $unknownCountry === 0) {
+        pass('count_prospect_sites_matching whole-folder + q scope');
+    } else {
+        fail('count_prospect_sites_matching: ' . json_encode([
+            'all' => $matchAll,
+            'finance' => $matchFinance,
+            'none' => $matchNone,
+            'unknown' => $unknownCountry,
+        ]));
+    }
+    $invQ = prospect_inventory_query(['country' => $country, 'q' => 'txftest-blog'], 1, 50);
+    if ((int) ($invQ['total'] ?? 0) === 1
+        && str_contains((string) ($invQ['rows'][0]['domain'] ?? ''), 'txftest-blog')) {
+        pass('prospect_inventory_query q filters country folder');
+    } else {
+        fail('prospect_inventory_query q: ' . json_encode($invQ));
+    }
 } catch (Throwable $e) {
     fail('prospects: ' . $e->getMessage());
 }

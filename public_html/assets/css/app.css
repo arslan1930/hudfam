@@ -2263,6 +2263,28 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   outline-offset: 2px;
   background: #f3f4f6;
 }
+#prospect-site-table tr.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: -2px;
+}
+#prospect-site-table tr.sheet-search-hit td {
+  background: #f3f4f6 !important;
+}
+#prospect_copy_status {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #f3f4f6;
+  color: var(--brand-deep);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+#prospect_copy_status.is-error {
+  color: var(--bad);
+  border-color: #e5b4b4;
+  background: #fdf2f2;
+}
 
 /* Our database — super search */
 .super-search-row {
