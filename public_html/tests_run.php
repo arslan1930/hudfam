@@ -770,7 +770,7 @@ try {
         fail('campaign last-email: ' . json_encode($rmLast) . " left=$soloLeft");
     }
 
-    // Admin emails search: last email also drops Admin + Final.
+    // Admin emails search: last email drops Admin working row; Final keeps the copy.
     db()->prepare(
         "INSERT INTO sites_with_emails_admin
            (domain, country, language, region, email1, email2, email3, email4)
@@ -788,8 +788,8 @@ try {
     $finalLeft = (int) db()->query(
         "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfcamp-admin-solo.com'"
     )->fetchColumn();
-    if (!empty($rmAdmin['ok']) && !empty($rmAdmin['row_deleted']) && $adminLeft === 0 && $finalLeft === 0) {
-        pass('admin last-email deletes Admin+Final row');
+    if (!empty($rmAdmin['ok']) && !empty($rmAdmin['row_deleted']) && $adminLeft === 0 && $finalLeft === 1) {
+        pass('admin last-email deletes Admin only; Final kept');
     } else {
         fail('admin last-email: ' . json_encode($rmAdmin) . " admin=$adminLeft final=$finalLeft");
     }
@@ -1619,6 +1619,44 @@ try {
         fail('imp2: ' . json_encode($imp2) . " emailA=$emailA");
     }
 
+    // replace mode: identical emails skipped; different emails overwrite.
+    $impReplaceSame = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'replace');
+    $emailASame = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    // Final still has a2 from earlier UPDATE — replace should update A.
+    if ((int) ($impReplaceSame['updated'] ?? 0) >= 1 && $emailASame === 'a2@txfcamp-nl-a.nl') {
+        pass('replace mode updates emails when Final differs');
+    } else {
+        fail('imp replace diff: ' . json_encode($impReplaceSame) . " emailA=$emailASame");
+    }
+    $impReplaceDup = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'replace');
+    if ((int) ($impReplaceDup['updated'] ?? 0) === 0
+        && (int) ($impReplaceDup['skipped_duplicate'] ?? 0) >= 2) {
+        pass('replace mode skips identical domain+emails');
+    } else {
+        fail('imp replace dup: ' . json_encode($impReplaceDup));
+    }
+
+    // Paste: duplicate domain with same emails skipped; different emails replace.
+    $pasteDup = paste_email_campaign_rows($nlSheet, implode("\n", [
+        'txfcamp-nl-a.nl, a2@txfcamp-nl-a.nl',
+        'txfcamp-nl-a.nl, a2@txfcamp-nl-a.nl',
+        'txfcamp-nl-c.nl, c-new@txfcamp-nl-c.nl',
+    ]));
+    $emailC = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-c.nl' LIMIT 1"
+    )->fetchColumn();
+    if ((int) ($pasteDup['skipped_duplicate'] ?? 0) >= 1
+        && (int) ($pasteDup['updated'] ?? 0) >= 1
+        && $emailC === 'c-new@txfcamp-nl-c.nl') {
+        pass('campaign paste skips identical dupes and replaces different emails');
+    } else {
+        fail('paste dup/replace: ' . json_encode($pasteDup) . " emailC=$emailC");
+    }
+
     $rowB = (int) db()->query(
         "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
         . " AND domain='txfcamp-nl-b.nl' LIMIT 1"
@@ -1867,30 +1905,30 @@ try {
 
         $one = set_site_with_emails_admin_email_sent($idA, true);
         $rowA = get_site_with_emails($idA, 'admin');
-        if (!empty($one['ok']) && (int) ($rowA['email_sent'] ?? 0) === 1) {
-            pass('mark one Admin site emailed');
+        $finalA = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-a.com'"
+        )->fetchColumn();
+        if (!empty($one['ok']) && !empty($one['row_deleted']) && $rowA === null && $finalA === 1) {
+            pass('mark one Admin site emailed removes from Admin, Final kept');
         } else {
-            fail('mark one: ' . json_encode($one));
+            fail('mark one: ' . json_encode($one) . ' row=' . json_encode($rowA) . " final=$finalA");
         }
 
         $upto = mark_sites_with_emails_admin_emailed_up_to($idB);
-        $stats = count_sites_with_emails_sent_stats('Germany');
-        $sentRows = (int) db()->query(
-            "SELECT COUNT(*) FROM sites_with_emails_admin
-             WHERE domain LIKE 'txfsent-%' AND email_sent=1"
+        $adminLeft = db()->query(
+            "SELECT domain FROM sites_with_emails_admin WHERE domain LIKE 'txfsent-%' ORDER BY id ASC"
+        )->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $finalB = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-b.com'"
         )->fetchColumn();
-        $unsentC = (int) db()->query(
-            "SELECT email_sent FROM sites_with_emails_admin WHERE id=" . (int) $idC
-        )->fetchColumn();
-        if (!empty($upto['ok']) && $sentRows === 2 && (int) $unsentC === 0
-            && (int) ($stats['sent'] ?? 0) >= 2) {
-            pass('mark up to here leaves newer rows unmarked');
+        if (!empty($upto['ok']) && (int) ($upto['marked'] ?? 0) >= 1
+            && $adminLeft === ['txfsent-c.com'] && $finalB === 1) {
+            pass('mark up to here removes older Admin rows; Final kept');
         } else {
             fail('mark up to: ' . json_encode([
                 'upto' => $upto,
-                'sentRows' => $sentRows,
-                'c' => $unsentC,
-                'stats' => $stats,
+                'adminLeft' => $adminLeft,
+                'finalB' => $finalB,
             ]));
         }
 
@@ -1908,21 +1946,24 @@ try {
         );
         $sentDomains = array_column($filterSent['rows'] ?? [], 'domain');
         $unsentDomains = array_column($filterUnsent['rows'] ?? [], 'domain');
-        if (in_array('txfsent-a.com', $sentDomains, true)
-            && in_array('txfsent-b.com', $sentDomains, true)
+        if (!in_array('txfsent-a.com', $sentDomains, true)
+            && !in_array('txfsent-b.com', $sentDomains, true)
             && in_array('txfsent-c.com', $unsentDomains, true)
-            && !in_array('txfsent-c.com', $sentDomains, true)) {
-            pass('Admin sent filter splits emailed / not emailed');
+            && !in_array('txfsent-a.com', $unsentDomains, true)) {
+            pass('Admin emailed rows leave working list (filters show remaining only)');
         } else {
             fail('sent filter: sent=' . json_encode($sentDomains) . ' unsent=' . json_encode($unsentDomains));
         }
 
-        // Re-push that fills a new Admin slot clears emailed (slots changed).
-        db()->prepare(
+        // Re-push: conflict confirm still required when Team overlaps an Admin domain.
+        db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfsent-%'");
+        $insTeam = db()->prepare(
             "INSERT INTO sites_with_emails_team
                (domain, country, language, region, email1, email2, email3, email4)
-             VALUES ('txfsent-a.com','Germany','German','europe','a2@txfsent-a.com','','','')"
-        )->execute();
+             VALUES (?,?, 'German', 'europe', ?, '', '', '')"
+        );
+        $insTeam->execute(['txfsent-a.com', 'Germany', 'a2@txfsent-a.com']);
+        $insTeam->execute(['txfsent-c.com', 'Germany', 'c@txfsent-c.com']);
         $blocked = push_sites_with_emails_team_to_admin('Germany', $teamUser, false);
         if (empty($blocked['ok']) && !empty($blocked['needs_confirm'])) {
             pass('Team re-push without confirm is blocked');
@@ -1930,41 +1971,42 @@ try {
             fail('expected needs_confirm: ' . json_encode($blocked));
         }
         $repush = push_sites_with_emails_team_to_admin('Germany', $teamUser, true);
-        $afterRepush = (int) db()->query(
-            "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
-        )->fetchColumn();
-        if (!empty($repush['ok']) && !empty($repush['updated'])
-            && $afterRepush === 0 && (int) ($repush['emailed_cleared'] ?? 0) === 1) {
-            pass('Team re-push clears emailed when slots change');
-        } else {
-            fail('re-push emailed clear: ' . json_encode($repush) . " sent=$afterRepush");
-        }
-        $mergedEmails = db()->query(
-            "SELECT email1, email2, email3, email4 FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
-        )->fetch(PDO::FETCH_ASSOC) ?: [];
-        $mergedSlots = [
-            strtolower((string) ($mergedEmails['email1'] ?? '')),
-            strtolower((string) ($mergedEmails['email2'] ?? '')),
-            strtolower((string) ($mergedEmails['email3'] ?? '')),
-            strtolower((string) ($mergedEmails['email4'] ?? '')),
-        ];
-        if (in_array('a@txfsent-a.com', $mergedSlots, true)
+        $afterRepush = db()->query(
+            "SELECT email1, email2, email3, email4, email_sent FROM sites_with_emails_admin
+             WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetch(PDO::FETCH_ASSOC) ?: null;
+        $mergedSlots = $afterRepush ? [
+            strtolower((string) ($afterRepush['email1'] ?? '')),
+            strtolower((string) ($afterRepush['email2'] ?? '')),
+            strtolower((string) ($afterRepush['email3'] ?? '')),
+            strtolower((string) ($afterRepush['email4'] ?? '')),
+        ] : [];
+        if (!empty($repush['ok']) && $afterRepush !== null
+            && (int) ($afterRepush['email_sent'] ?? 0) === 0
             && in_array('a2@txfsent-a.com', $mergedSlots, true)) {
+            pass('Team re-push re-adds emailed domain to Admin unmarked');
             pass('Team re-push merges new email without wiping Admin email');
         } else {
-            fail('merge emails: ' . json_encode($mergedEmails));
+            fail('re-push after emailed: ' . json_encode($repush) . ' row=' . json_encode($afterRepush));
         }
 
-        // Identical re-push (no slot change) keeps emailed mark.
-        set_site_with_emails_admin_email_sent(
-            (int) db()->query("SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1")->fetchColumn(),
-            true
-        );
+        // Identical re-push on an emailed-flagged row (legacy flag) keeps emailed when slots unchanged.
+        $idA2 = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetchColumn();
+        db()->prepare(
+            'UPDATE sites_with_emails_admin SET email_sent=1, email_sent_at=NOW() WHERE id=?'
+        )->execute([$idA2]);
         db()->prepare(
             "INSERT INTO sites_with_emails_team
                (domain, country, language, region, email1, email2, email3, email4)
-             VALUES ('txfsent-a.com','Germany','German','europe','a@txfsent-a.com','a2@txfsent-a.com','','')"
-        )->execute();
+             VALUES ('txfsent-a.com','Germany','German','europe',?,?,?,?)"
+        )->execute([
+            (string) ($afterRepush['email1'] ?? ''),
+            (string) ($afterRepush['email2'] ?? ''),
+            (string) ($afterRepush['email3'] ?? ''),
+            (string) ($afterRepush['email4'] ?? ''),
+        ]);
         $samePush = push_sites_with_emails_team_to_admin('Germany', $teamUser, true);
         $sameSent = (int) db()->query(
             "SELECT email_sent FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
@@ -1977,8 +2019,6 @@ try {
         $sameUpdated = (string) db()->query(
             "SELECT updated_at FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
         )->fetchColumn();
-        // Re-fetch created/updated after identical push — updated_at should not jump forward alone as "content change"
-        // (IF keeps updated_at when slots equal). Spot-check: no Updated signal vs a watermark after push.
         $sigSame = swe_admin_row_signal(
             db()->query("SELECT * FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [],
             $sameUpdated
@@ -2011,7 +2051,7 @@ try {
             fail('merge stats: ' . json_encode($fullMerge));
         }
 
-        // Admin sheet: clearing last email deletes Admin + Final row.
+        // Admin sheet: clearing last email removes from Admin; Final keeps last copy.
         db()->prepare(
             "INSERT INTO sites_with_emails_admin
                (domain, country, language, region, email1, email2, email3, email4)
@@ -2037,8 +2077,8 @@ try {
             "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-empty.com'"
         )->fetchColumn();
         if (!empty($emptySave['ok']) && !empty($emptySave['row_deleted'])
-            && $emptyAdminLeft === 0 && $emptyFinalLeft === 0) {
-            pass('Admin save with no emails deletes Admin+Final row');
+            && $emptyAdminLeft === 0 && $emptyFinalLeft === 1) {
+            pass('Admin save with no emails deletes Admin only; Final kept');
         } else {
             fail('admin empty save: ' . json_encode([
                 'save' => $emptySave,
@@ -2068,59 +2108,97 @@ try {
             fail('new push: ' . json_encode($newPush) . " sent=$newSent last=$last order=" . json_encode($order));
         }
 
-        // Clear up to here — redo a stretch (Admin only).
-        $clearUpto = clear_sites_with_emails_admin_emailed_up_to($idB);
+        // Clear emailed flags on remaining Admin rows (legacy email_sent=1).
+        $clearUpto = clear_sites_with_emails_admin_emailed_up_to($idA2);
         $sentA = (int) db()->query(
-            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idA
-        )->fetchColumn();
-        $sentB = (int) db()->query(
-            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idB
+            'SELECT email_sent FROM sites_with_emails_admin WHERE id=' . (int) $idA2
         )->fetchColumn();
         $afterClearUpto = (int) db()->query(
             "SELECT COUNT(*) FROM sites_with_emails_admin
              WHERE domain LIKE 'txfsent-%' AND email_sent=1"
         )->fetchColumn();
-        if (!empty($clearUpto['ok']) && (int) ($clearUpto['cleared'] ?? 0) >= 2
-            && $sentA === 0 && $sentB === 0 && $afterClearUpto === 0) {
+        if (!empty($clearUpto['ok']) && $sentA === 0 && $afterClearUpto === 0) {
             pass('clear up to here undoes Admin emailed marks');
         } else {
             fail('clear up to: ' . json_encode($clearUpto)
-                . " a=$sentA b=$sentB left=$afterClearUpto");
+                . " a=$sentA left=$afterClearUpto");
         }
 
-        // Redo mark, then clear all emailed for a full resend restart.
-        mark_sites_with_emails_admin_emailed_up_to($idC);
-        set_site_with_emails_admin_email_sent(
-            (int) db()->query("SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-new.com' LIMIT 1")->fetchColumn(),
-            true
-        );
+        // Mark emailed removes from Admin; clear-all is a no-op when none flagged.
+        $idCNow = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-c.com' LIMIT 1"
+        )->fetchColumn();
+        $idNew = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-new.com' LIMIT 1"
+        )->fetchColumn();
+        mark_sites_with_emails_admin_emailed_up_to($idCNow);
+        set_site_with_emails_admin_email_sent($idNew, true);
         $clearAll = clear_all_sites_with_emails_admin_emailed('Germany');
         $sentLeft = (int) db()->query(
             "SELECT COUNT(*) FROM sites_with_emails_admin
              WHERE domain LIKE 'txfsent-%' AND email_sent=1"
         )->fetchColumn();
-        if (!empty($clearAll['ok']) && (int) ($clearAll['cleared'] ?? 0) >= 3 && $sentLeft === 0) {
+        $adminAfterMark = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain LIKE 'txfsent-%'"
+        )->fetchColumn();
+        $finalAfterMark = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txfsent-%'"
+        )->fetchColumn();
+        if (!empty($clearAll['ok']) && $sentLeft === 0 && $adminAfterMark >= 1 && $finalAfterMark >= 4) {
             pass('clear all emailed resets Admin sheet for resend');
         } else {
-            fail('clear all: ' . json_encode($clearAll) . " left=$sentLeft");
+            fail('clear all: ' . json_encode($clearAll)
+                . " left=$sentLeft admin=$adminAfterMark final=$finalAfterMark");
         }
 
-        // Copy filters: not emailed vs emailed (Admin only).
-        set_site_with_emails_admin_email_sent($idA, true);
-        set_site_with_emails_admin_email_sent($idB, true);
-        set_site_with_emails_admin_email_sent($idC, false);
-        $copySent = collect_sites_with_emails_all_emails('Germany', 'admin', '1');
+        // Copy: after mark emailed, removed rows are gone from Admin copy lists.
+        // Seed a not-emailed row and copy its emails; emailed-gone domains stay in Final only.
+        db()->prepare(
+            "INSERT INTO sites_with_emails_admin
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsent-copy.com','Germany','German','europe','copy@txfsent-copy.com','','','')
+             ON DUPLICATE KEY UPDATE email1='copy@txfsent-copy.com'"
+        )->execute();
+        $copyAll = collect_sites_with_emails_all_emails('Germany', 'admin', null);
         $copyUnsent = collect_sites_with_emails_all_emails('Germany', 'admin', '0');
-        $hasA = in_array('a2@txfsent-a.com', $copySent, true) || in_array('a@txfsent-a.com', $copySent, true);
-        $hasCUnsent = in_array('c@txfsent-c.com', $copyUnsent, true);
-        $cNotInSent = !in_array('c@txfsent-c.com', $copySent, true);
-        if ($hasA && $hasCUnsent && $cNotInSent) {
+        $hasCopy = in_array('copy@txfsent-copy.com', $copyAll, true)
+            && in_array('copy@txfsent-copy.com', $copyUnsent, true);
+        // Invalid token in a packed cell must not block Copy all emails.
+        db()->prepare(
+            "UPDATE sites_with_emails_admin
+             SET email1='good@txfsent-copy.com, not-an-email, also@txfsent-copy.com'
+             WHERE domain='txfsent-copy.com'"
+        )->execute();
+        $copySkipBad = collect_sites_with_emails_all_emails('Germany', 'admin', null);
+        $hasGood = in_array('good@txfsent-copy.com', $copySkipBad, true)
+            && in_array('also@txfsent-copy.com', $copySkipBad, true);
+        $noBad = !in_array('not-an-email', $copySkipBad, true);
+        if ($hasCopy && $hasGood && $noBad) {
             pass('copy emailed / not-emailed email lists split correctly');
         } else {
-            fail('copy filters: sent=' . json_encode($copySent) . ' unsent=' . json_encode($copyUnsent));
+            fail('copy filters: all=' . json_encode($copyAll)
+                . ' skipBad=' . json_encode($copySkipBad));
+        }
+        if ($hasGood && $noBad) {
+            pass('Copy all emails skips invalid tokens sitewide');
+        } else {
+            fail('copy invalid: ' . json_encode($copySkipBad));
         }
 
         // Sync must not invent sent state on Final (no column); domains still mirror.
+        // Re-seed Admin rows that were marked emailed so sync has something to mirror.
+        foreach (['txfsent-a.com' => 'a@txfsent-a.com', 'txfsent-b.com' => 'b@txfsent-b.com', 'txfsent-c.com' => 'c@txfsent-c.com'] as $dom => $em) {
+            $exists = (int) db()->query(
+                "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain=" . db()->quote($dom)
+            )->fetchColumn();
+            if ($exists < 1) {
+                db()->prepare(
+                    "INSERT INTO sites_with_emails_admin
+                       (domain, country, language, region, email1, email2, email3, email4)
+                     VALUES (?, 'Germany', 'German', 'europe', ?, '', '', '')"
+                )->execute([$dom, $em]);
+            }
+        }
         sync_sites_with_emails_admin_to_all('Germany');
         $finalMirror = (int) db()->query(
             "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txfsent-%'"
@@ -2153,6 +2231,23 @@ try {
             pass('Final repair report added/updated/removed');
         } else {
             fail('repair report: ' . json_encode($report) . " stale=$staleLeft");
+        }
+
+        // Manual Admin remove keeps Final archive copy.
+        $rmId = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-c.com' LIMIT 1"
+        )->fetchColumn();
+        delete_site_with_emails($rmId, 'admin');
+        $rmAdmin = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfsent-c.com'"
+        )->fetchColumn();
+        $rmFinal = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-c.com'"
+        )->fetchColumn();
+        if ($rmAdmin === 0 && $rmFinal === 1) {
+            pass('Admin remove keeps Final archive copy');
+        } else {
+            fail("admin remove keep final: admin=$rmAdmin final=$rmFinal");
         }
     }
 } catch (Throwable $e) {

@@ -209,6 +209,9 @@ if ($sheetId > 0) {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
                 $msg = 'Added to sheet: '
                     . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
+                if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
+                }
                 if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
                     $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
                 }
@@ -218,10 +221,14 @@ if ($sheetId > 0) {
                 }
                 if ((int) ($result['skipped'] ?? 0) > 0
                     && (int) ($result['skipped_excluded'] ?? 0) < 1
-                    && (int) ($result['skipped_emails'] ?? 0) < 1) {
+                    && (int) ($result['skipped_emails'] ?? 0) < 1
+                    && (int) ($result['skipped_duplicate'] ?? 0) < 1) {
                     $msg .= ', ' . (int) $result['skipped'] . ' skipped';
-                } elseif ((int) ($result['skipped'] ?? 0) > (int) ($result['skipped_excluded'] ?? 0)) {
-                    $otherSkip = (int) $result['skipped'] - (int) ($result['skipped_excluded'] ?? 0);
+                } elseif ((int) ($result['skipped'] ?? 0)
+                    > ((int) ($result['skipped_excluded'] ?? 0) + (int) ($result['skipped_duplicate'] ?? 0))) {
+                    $otherSkip = (int) $result['skipped']
+                        - (int) ($result['skipped_excluded'] ?? 0)
+                        - (int) ($result['skipped_duplicate'] ?? 0);
                     if ($otherSkip > 0) {
                         $msg .= ', ' . $otherSkip . ' other skipped';
                     }
@@ -242,6 +249,9 @@ if ($sheetId > 0) {
                 $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
                 $msg = 'Imported file into sheet: '
                     . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
+                if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
+                }
                 if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
                     $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
                 }
@@ -250,7 +260,8 @@ if ($sheetId > 0) {
                         . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
                 }
                 if ((int) ($result['skipped'] ?? 0) > 0
-                    && (int) ($result['skipped_excluded'] ?? 0) < 1) {
+                    && (int) ($result['skipped_excluded'] ?? 0) < 1
+                    && (int) ($result['skipped_duplicate'] ?? 0) < 1) {
                     $msg .= ', ' . (int) $result['skipped'] . ' skipped';
                 }
                 $msg .= ' · ' . (int) ($result['lines'] ?? 0) . ' data line(s).';
@@ -266,11 +277,14 @@ if ($sheetId > 0) {
             }
             if ($action === 'import') {
                 $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
-                // Always new sites only — never update rows already on the sheet.
-                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'new_only');
+                // Skip identical domain+emails; replace when emails differ; add new domains.
+                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'replace');
                 $label = $source === 'admin' ? 'Sites with emails - Admin' : 'All sites with emails - Final';
-                $msg = 'Imported new sites into ' . $sheetCountry . ' from ' . $label . ': '
-                    . (int) $result['imported'] . ' new';
+                $msg = 'Imported into ' . $sheetCountry . ' from ' . $label . ': '
+                    . (int) $result['imported'] . ' new, ' . (int) $result['updated'] . ' updated';
+                if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate(s) skipped';
+                }
                 if ((int) ($result['skipped_existing'] ?? 0) > 0) {
                     $msg .= ', ' . (int) $result['skipped_existing'] . ' already on sheet';
                 }
@@ -813,15 +827,16 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds new sites from Final or Admin. Same domain with the same emails is skipped; different emails replace the sheet row. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
       <p class="help">
-        Imports <strong>new sites only</strong> — skips anything already on the sheet, and never re-adds sites
-        or emails that were removed (use <strong>Allow again</strong> below if a removal was a mistake).
+        Imports from Final or Admin — <strong>new sites</strong> are added, <strong>duplicate domains with the same emails</strong> are skipped,
+        and <strong>same domain with different emails</strong> replaces the sheet row.
         Paste / + Add also respect previously removed sites and emails.
+        Previously removed sites and emails are never re-added (use <strong>Allow again</strong> below if a removal was a mistake).
       </p>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Importing new sites…"
-            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites and emails are not re-added.\n\nFinal/Admin archives are not changed.');">
+            data-show-processing="Importing sites…"
+            onsubmit="return confirm('Import into <?= h($sheetCountry) ?>?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nPreviously removed sites and emails are not re-added.\n\nFinal/Admin archives are not changed.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
@@ -829,7 +844,7 @@ if ($sheetId > 0) {
           <option value="admin">Sites with emails - Admin</option>
         </select>
         <p class="actions" style="margin-top:0.75rem">
-          <button class="btn" type="submit">Import new sites into sheet</button>
+          <button class="btn" type="submit">Import into sheet</button>
         </p>
       </form>
     </div>

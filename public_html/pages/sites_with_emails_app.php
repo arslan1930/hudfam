@@ -197,6 +197,12 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not update sent mark.'));
+        } elseif ($sent && !empty($result['row_deleted'])) {
+            flash(
+                'ok',
+                'Marked emailed · removed ' . (string) ($result['domain'] ?? 'site')
+                . ' from Admin. Final archive kept the copy.'
+            );
         } else {
             flash(
                 'ok',
@@ -224,8 +230,8 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash(
                 'ok',
                 'Marked emailed up to ' . (string) ($result['domain'] ?? 'site')
-                . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked.'
-                . ' Final archive stays unchanged.'
+                . ' · removed ' . (int) ($result['marked'] ?? 0)
+                . ' from Admin. Final archive kept those copies.'
             );
         }
         redirect($back);
@@ -835,17 +841,15 @@ render_breadcrumbs($crumbs);
 
 <?php if ($sweScope === 'admin'): ?>
 <div class="card swe-checkpoint-rule" style="margin-bottom:1rem">
-  <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'How Mark emailed / Mark up to here / Clear up to here work on this Admin country sheet.') ?></h2>
+  <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'Mark emailed removes the site from this Admin working list after Final has a copy. Final never loses those rows.') ?></h2>
   <ol class="swe-checkpoint-steps">
     <li><strong>Order:</strong> oldest sites at the top · newest Team pushes at the bottom.</li>
-    <li><strong>Mark emailed:</strong> marks only that one site as done.</li>
-    <li><strong>Mark up to here:</strong> marks this site <em>and every site above it</em> as emailed (checkpoint).</li>
-    <li><strong>Clear up to here:</strong> clears emailed marks from the top through this site (redo that stretch).</li>
-    <li><strong>Clear all emailed:</strong> resets the whole country sheet for a full resend.</li>
+    <li><strong>Mark emailed:</strong> removes that one site from Admin · Final keeps the copy.</li>
+    <li><strong>Mark up to here:</strong> removes this site <em>and every site above it</em> from Admin · Final keeps those copies.</li>
+    <li><strong>Remove:</strong> also removes from Admin only · Final keeps the archive copy.</li>
   </ol>
   <p class="help" style="margin:0.55rem 0 0">
-    Highlighted rows = already emailed. Filters: All / Not emailed / Emailed.
-    These marks never sync to Final.
+    Admin is the working list from Team Push. Final is the lasting archive.
   </p>
 </div>
 <?php endif; ?>
@@ -1074,12 +1078,12 @@ render_breadcrumbs($crumbs);
               <?php if ($sweScope === 'admin'): ?>
               <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
                       form="swe-mark-<?= $sid ?>"
-                      title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
+                      title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark emailed · remove from Admin (Final keeps a copy)' ?>">
                 <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
               </button>
               <button class="btn secondary small" type="submit" form="swe-upto-<?= $sid ?>"
-                      title="Mark this site and every older site above it as emailed"
-                      onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be marked emailed.\n\nFinal archive stays unchanged.');">
+                      title="Mark emailed up to here · remove those rows from Admin (Final keeps copies)"
+                      onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be REMOVED from Admin.\n\nFinal archive keeps those copies.');">
                 Up to here
               </button>
               <button class="btn secondary small" type="submit" form="swe-clear-upto-<?= $sid ?>"
