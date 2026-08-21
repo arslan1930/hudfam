@@ -48,7 +48,8 @@
       var tag = el.tagName.toLowerCase();
       var keep = {
         p: 1, br: 1, strong: 1, b: 1, em: 1, i: 1, u: 1,
-        h1: 1, h2: 1, h3: 1, div: 1, span: 1, img: 1
+        h1: 1, h2: 1, h3: 1, div: 1, span: 1, img: 1,
+        a: 1, ul: 1, ol: 1, li: 1
       };
       if (!keep[tag]) {
         var parent = el.parentNode;
@@ -73,6 +74,24 @@
         el.setAttribute('src', src.replace(/\s+/g, ''));
         el.setAttribute('alt', String(alt).slice(0, 120));
         keptImgs += 1;
+        return;
+      }
+
+      if (tag === 'a') {
+        var href = String(el.getAttribute('href') || '').trim();
+        while (el.attributes.length) {
+          el.removeAttribute(el.attributes[0].name);
+        }
+        if (!/^https?:\/\//i.test(href) || /^(javascript|data|vbscript):/i.test(href)) {
+          var linkParent = el.parentNode;
+          if (!linkParent) return;
+          while (el.firstChild) {
+            linkParent.insertBefore(el.firstChild, el);
+          }
+          linkParent.removeChild(el);
+          return;
+        }
+        el.setAttribute('href', href);
         return;
       }
 
@@ -219,6 +238,18 @@
       h2: function () { document.execCommand('formatBlock', false, 'h2'); },
       h3: function () { document.execCommand('formatBlock', false, 'h3'); },
       p: function () { document.execCommand('formatBlock', false, 'p'); },
+      ul: function () { document.execCommand('insertUnorderedList', false, null); },
+      ol: function () { document.execCommand('insertOrderedList', false, null); },
+      link: function () {
+        var href = window.prompt('Link URL (https://…)', 'https://');
+        if (!href) return;
+        href = String(href).trim();
+        if (!/^https?:\/\//i.test(href)) {
+          window.alert('Only http:// or https:// links are allowed.');
+          return;
+        }
+        document.execCommand('createLink', false, href);
+      },
     };
     if (map[cmd]) map[cmd]();
   }

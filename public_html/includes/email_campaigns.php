@@ -2450,7 +2450,7 @@ function expand_email_campaign_draft_tokens(string $text, array $vars): string
  */
 function email_campaign_draft_allowed_tags(): array
 {
-    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'img'];
+    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'img', 'a', 'ul', 'ol', 'li'];
 }
 
 /** Max inline images (compressed data URIs) per draft. */
@@ -2510,8 +2510,8 @@ function email_campaign_draft_html_to_plain(string $html): string
         [
             '/<\s*img\b[^>]*>/i',
             '/<\s*br\s*\/?\s*>/i',
-            '/<\s*\/\s*(p|h1|h2|h3)\s*>/i',
-            '/<\s*(p|h1|h2|h3)(\s[^>]*)?>/i',
+            '/<\s*\/\s*(p|h1|h2|h3|li|ul|ol)\s*>/i',
+            '/<\s*(p|h1|h2|h3|li|ul|ol)(\s[^>]*)?>/i',
         ],
         ["\n[image]\n", "\n", "\n", "\n"],
         $html
@@ -2523,8 +2523,8 @@ function email_campaign_draft_html_to_plain(string $html): string
 }
 
 /**
- * Keep only email-safe formatting tags + compressed inline images.
- * Scripts, styles, links, and unsafe attributes are stripped.
+ * Keep only email-safe formatting tags, lists, http(s) links, and compressed inline images.
+ * Scripts, styles, and unsafe attributes/URLs are stripped.
  * (Regex-based so it works without the PHP xml/DOM extension.)
  */
 function sanitize_email_campaign_draft_html(string $html): string
@@ -2585,10 +2585,40 @@ function sanitize_email_campaign_draft_html(string $html): string
         $html
     ) ?? $html;
 
-    // Keep only formatting tags; unwrap everything else (links, spans, divs…).
-    $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3>');
+    // Pull out safe https links before strip_tags.
+    $links = [];
+    $html = preg_replace_callback(
+        '/<\s*a\b([^>]*)>(.*?)<\s*\/\s*a\s*>/is',
+        static function (array $m) use (&$links): string {
+            $attrs = (string) ($m[1] ?? '');
+            $inner = (string) ($m[2] ?? '');
+            $href = '';
+            if (preg_match('/\bhref\s*=\s*("|\')(.*?)\1/is', $attrs, $hm)) {
+                $href = html_entity_decode((string) $hm[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            } elseif (preg_match('/\bhref\s*=\s*([^\s>]+)/i', $attrs, $hm)) {
+                $href = html_entity_decode((string) $hm[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+            $href = trim($href);
+            if ($href === '' || !preg_match('#^https?://#i', $href)) {
+                // Keep inner text only when href is unsafe/missing.
+                return $inner;
+            }
+            // Block javascript: and data: disguised after decode.
+            if (preg_match('#^(javascript|data|vbscript):#i', $href)) {
+                return $inner;
+            }
+            $token = '%%CAMPLINK' . count($links) . '%%';
+            $links[] = '<a href="' . htmlspecialchars($href, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">'
+                . $inner . '</a>';
+            return $token;
+        },
+        $html
+    ) ?? $html;
 
-    // Strip attributes from remaining tags (onclick, style, href, etc.).
+    // Keep formatting + lists; unwrap everything else (spans, divs…).
+    $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3><ul><ol><li>');
+
+    // Strip attributes from remaining tags (onclick, style, etc.).
     $html = preg_replace('/<\s*([a-z0-9]+)\b[^>]*>/i', '<$1>', $html) ?? $html;
     $html = preg_replace('/<\s*\/\s*([a-z0-9]+)\s*>/i', '</$1>', $html) ?? $html;
 
@@ -2604,6 +2634,26 @@ function sanitize_email_campaign_draft_html(string $html): string
     foreach ($images as $i => $imgHtml) {
         $html = str_replace('%%CAMPIMG' . $i . '%%', $imgHtml, $html);
     }
+    foreach ($links as $i => $linkHtml) {
+        // Re-sanitize link inner HTML (no nested tags beyond allowed already stripped).
+        $html = str_replace('%%CAMPLINK' . $i . '%%', $linkHtml, $html);
+    }
+
+    // Links were tokenized with raw inner HTML — strip any leftover attributes inside.
+    $html = preg_replace_callback(
+        '/<\s*a\s+href="([^"]+)"\s*>(.*?)<\s*\/\s*a\s*>/is',
+        static function (array $m): string {
+            $href = (string) ($m[1] ?? '');
+            $inner = strip_tags((string) ($m[2] ?? ''), '<strong><b><em><i><u>');
+            $inner = preg_replace('/<\s*([a-z0-9]+)\b[^>]*>/i', '<$1>', $inner) ?? $inner;
+            $inner = preg_replace('/<\s*\/\s*([a-z0-9]+)\s*>/i', '</$1>', $inner) ?? $inner;
+            if ($inner === '') {
+                $inner = $href;
+            }
+            return '<a href="' . $href . '">' . $inner . '</a>';
+        },
+        $html
+    ) ?? $html;
 
     $html = trim($html);
     $hasImg = (bool) preg_match('/<\s*img\b/i', $html);
@@ -2645,11 +2695,15 @@ function render_email_campaign_draft_editor(
         <button type="button" class="btn secondary small" data-camp-draft-cmd="h3" title="Subheading">Subhead</button>
         <button type="button" class="btn secondary small" data-camp-draft-cmd="p" title="Normal paragraph">Normal</button>
         <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="ul" title="Bullet list">• List</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="ol" title="Numbered list">1. List</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="link" title="Insert http(s) link">Link</button>
+        <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
         <button type="button" class="btn secondary small" data-camp-draft-image title="Add image from computer">Image</button>
         <input type="file" accept="image/*" multiple hidden data-camp-draft-image-input>
       </div>
       <p class="help camp-draft-image-hint" style="margin:0;padding:0.35rem 0.65rem 0;font-size:0.8rem">
-        Paste a screenshot or add Image — compressed for email paste (max <?= (int) email_campaign_draft_max_images() ?>).
+        Lists, links (https), paste a screenshot, or add Image — compressed for email paste (max <?= (int) email_campaign_draft_max_images() ?>).
       </p>
       <div class="camp-draft-surface<?= $emptyClass ?>"
            data-camp-draft-surface
@@ -2727,6 +2781,99 @@ function count_email_campaign_drafts(int $projectId): int
     $stmt = db()->prepare('SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=?');
     $stmt->execute([$projectId]);
     return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Draft counts for many projects in one query (sidebar).
+ *
+ * @param list<int> $projectIds
+ * @return array<int,int> project_id => count
+ */
+function count_email_campaign_drafts_by_projects(array $projectIds): array
+{
+    ensure_email_campaign_schema();
+    $ids = [];
+    foreach ($projectIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $ids[$id] = 0;
+        }
+    }
+    if ($ids === []) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare(
+        "SELECT project_id, COUNT(*) AS c
+         FROM email_campaign_drafts
+         WHERE project_id IN ($placeholders)
+         GROUP BY project_id"
+    );
+    $stmt->execute(array_keys($ids));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $ids[(int) $row['project_id']] = (int) $row['c'];
+    }
+    return $ids;
+}
+
+/**
+ * Move a draft up/down within its project (+ category group).
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function move_email_campaign_draft(int $projectId, int $draftId, string $direction, ?array $actor = null): array
+{
+    ensure_email_campaign_schema();
+    $draft = get_email_campaign_draft($draftId);
+    if (!$draft || (int) ($draft['project_id'] ?? 0) !== $projectId) {
+        return ['ok' => false, 'error' => 'Draft not found in this project.'];
+    }
+    $direction = strtolower(trim($direction)) === 'up' ? 'up' : 'down';
+    $list = list_email_campaign_drafts($projectId, (string) ($draft['category'] ?? ''));
+    $idx = -1;
+    foreach ($list as $i => $row) {
+        if ((int) ($row['id'] ?? 0) === $draftId) {
+            $idx = $i;
+            break;
+        }
+    }
+    if ($idx < 0) {
+        return ['ok' => false, 'error' => 'Draft not found in list.'];
+    }
+    $swapIdx = $direction === 'up' ? $idx - 1 : $idx + 1;
+    if ($swapIdx < 0 || $swapIdx >= count($list)) {
+        return ['ok' => true]; // already at edge
+    }
+    $a = $list[$idx];
+    $b = $list[$swapIdx];
+    $orderA = (int) ($a['sort_order'] ?? 0);
+    $orderB = (int) ($b['sort_order'] ?? 0);
+    // If tied, use id spacing so swap still changes order.
+    if ($orderA === $orderB) {
+        $orderA = $idx;
+        $orderB = $swapIdx;
+    }
+    $actorId = $actor ? (int) ($actor['id'] ?? 0) : 0;
+    $upd = db()->prepare(
+        'UPDATE email_campaign_drafts SET sort_order=?, updated_by=?, updated_at=NOW() WHERE id=? AND project_id=?'
+    );
+    $upd->execute([$orderB, $actorId > 0 ? $actorId : null, (int) $a['id'], $projectId]);
+    $upd->execute([$orderA, $actorId > 0 ? $actorId : null, (int) $b['id'], $projectId]);
+    return ['ok' => true];
+}
+
+/** Soft size hint for large drafts (data-URI images / long HTML). */
+function email_campaign_draft_size_warning(string $bodyHtml): string
+{
+    $len = strlen($bodyHtml);
+    $imgs = preg_match_all('/<\s*img\b/i', $bodyHtml) ?: 0;
+    if ($len > 400000 || $imgs >= 4) {
+        return 'This draft is large (images/HTML). Some email clients (especially Outlook) may strip pictures on paste.';
+    }
+    if ($len > 120000 || $imgs >= 2) {
+        return 'Tip: large inline images may not paste cleanly into every email client — prefer Copy plain if needed.';
+    }
+    return '';
 }
 
 /** Product rule B: Admin, or the draft’s creator, may delete. */

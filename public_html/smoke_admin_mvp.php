@@ -789,6 +789,21 @@ if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
 } else {
     ok('email-campaign-drafts.js Copy plain + tokens');
 }
+if (!str_contains($campLib, 'function count_email_campaign_drafts_by_projects')
+    || !str_contains($campLib, 'function move_email_campaign_draft')
+    || !str_contains($campLib, 'function email_campaign_draft_size_warning')
+    || !str_contains($campLib, '%%CAMPLINK')
+    || !str_contains($campLib, "'ul'")
+    || !str_contains($campLib, 'data-camp-draft-cmd="link"')
+    || !str_contains($campDraftsTeam, 'count_email_campaign_drafts_by_projects')
+    || !str_contains($campDraftsTeam, 'move_draft')
+    || !str_contains($campDraftsTeam, 'camp-draft-size-warn')
+    || !str_contains($campApp, 'move_draft')
+    || !str_contains($campDraftJs, 'a: 1, ul: 1, ol: 1, li: 1')) {
+    fail('campaign drafts P2 missing batch counts / reorder / links-lists / size warn');
+} else {
+    ok('campaign drafts P2 counts + reorder + links/lists + size warn');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')
