@@ -927,7 +927,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'delete_draft') {
             $pid = (int) post('project_id');
-            $result = delete_email_campaign_draft($pid, (int) post('draft_id'));
+            $result = delete_email_campaign_draft($pid, (int) post('draft_id'), $user);
             flash(
                 !empty($result['ok']) ? 'ok' : 'error',
                 !empty($result['ok'])
@@ -1277,16 +1277,25 @@ if ($projectIdParam > 0) {
                   <span class="muted" style="font-size:0.82rem">
                     <?= h(email_campaign_draft_category_label((string) $d['category'])) ?>
                   </span>
+                  <?php
+                    $adminAttr = email_campaign_draft_attribution($d);
+                    if ($adminAttr !== ''):
+                  ?>
+                  <span class="help" style="display:block;margin-top:0.2rem"><?= h($adminAttr) ?></span>
+                  <?php endif; ?>
                 </div>
                 <div class="actions">
                   <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
+                  <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
                   <form method="post" action="<?= h($projectForm) ?>"
                         onsubmit="return confirm(<?= h(json_encode('Delete draft “' . (string) $d['title'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete_draft">
                     <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
                     <input type="hidden" name="draft_id" value="<?= $did ?>">
                     <button class="btn danger small" type="submit">Delete</button>
                   </form>
+                  <?php endif; ?>
                 </div>
               </li>
             <?php endforeach; ?>

@@ -177,6 +177,7 @@ function ensure_email_campaign_schema(): void
           body MEDIUMTEXT NOT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           created_by INT NULL,
+          updated_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX (project_id),
@@ -188,6 +189,19 @@ function ensure_email_campaign_schema(): void
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Existing installs: track who last edited (Admin-only delete still uses role check).
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_drafts')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['updated_by'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_drafts
+                 ADD COLUMN updated_by INT NULL AFTER created_by'
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore migration hiccups
+    }
 }
 
 /**
@@ -2611,7 +2625,17 @@ function get_email_campaign_draft(int $draftId): ?array
     if ($draftId < 1) {
         return null;
     }
-    $stmt = db()->prepare('SELECT * FROM email_campaign_drafts WHERE id=? LIMIT 1');
+    $stmt = db()->prepare(
+        'SELECT d.*,
+                cu.username AS created_by_username,
+                cu.full_name AS created_by_name,
+                uu.username AS updated_by_username,
+                uu.full_name AS updated_by_name
+         FROM email_campaign_drafts d
+         LEFT JOIN users cu ON cu.id = d.created_by
+         LEFT JOIN users uu ON uu.id = d.updated_by
+         WHERE d.id=? LIMIT 1'
+    );
     $stmt->execute([$draftId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row ?: null;
@@ -2626,13 +2650,21 @@ function list_email_campaign_drafts(int $projectId, ?string $category = null): a
     if ($projectId < 1) {
         return [];
     }
-    $sql = 'SELECT * FROM email_campaign_drafts WHERE project_id=?';
+    $sql = 'SELECT d.*,
+                   cu.username AS created_by_username,
+                   cu.full_name AS created_by_name,
+                   uu.username AS updated_by_username,
+                   uu.full_name AS updated_by_name
+            FROM email_campaign_drafts d
+            LEFT JOIN users cu ON cu.id = d.created_by
+            LEFT JOIN users uu ON uu.id = d.updated_by
+            WHERE d.project_id=?';
     $params = [$projectId];
     if ($category !== null && $category !== '') {
-        $sql .= ' AND category=?';
+        $sql .= ' AND d.category=?';
         $params[] = normalize_email_campaign_draft_category($category);
     }
-    $sql .= ' ORDER BY category ASC, sort_order ASC, title ASC, id ASC';
+    $sql .= ' ORDER BY d.category ASC, d.sort_order ASC, d.title ASC, d.id ASC';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -2647,6 +2679,66 @@ function count_email_campaign_drafts(int $projectId): int
     $stmt = db()->prepare('SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=?');
     $stmt->execute([$projectId]);
     return (int) $stmt->fetchColumn();
+}
+
+/** Product rule B: Admin, or the draft’s creator, may delete. */
+function email_campaign_user_can_delete_draft(?array $user, ?array $draft = null): bool
+{
+    if (!$user) {
+        return false;
+    }
+    if (function_exists('is_admin') && is_admin($user)) {
+        return true;
+    }
+    if ($draft === null) {
+        return false;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    $createdBy = (int) ($draft['created_by'] ?? 0);
+    return $uid > 0 && $createdBy > 0 && $uid === $createdBy;
+}
+
+/**
+ * Display name for a draft author column (full name, else username).
+ */
+function email_campaign_draft_person_label(?string $fullName, ?string $username): string
+{
+    $full = trim((string) $fullName);
+    if ($full !== '') {
+        return $full;
+    }
+    $user = trim((string) $username);
+    return $user !== '' ? $user : '';
+}
+
+/**
+ * Short “Created by X · Updated …” line for draft cards.
+ */
+function email_campaign_draft_attribution(array $draft): string
+{
+    $created = email_campaign_draft_person_label(
+        isset($draft['created_by_name']) ? (string) $draft['created_by_name'] : null,
+        isset($draft['created_by_username']) ? (string) $draft['created_by_username'] : null
+    );
+    $updated = email_campaign_draft_person_label(
+        isset($draft['updated_by_name']) ? (string) $draft['updated_by_name'] : null,
+        isset($draft['updated_by_username']) ? (string) $draft['updated_by_username'] : null
+    );
+    $updatedAt = trim((string) ($draft['updated_at'] ?? ''));
+    $parts = [];
+    if ($created !== '') {
+        $parts[] = 'Created by ' . $created;
+    }
+    if ($updated !== '' && (int) ($draft['updated_by'] ?? 0) > 0) {
+        $bits = 'Updated by ' . $updated;
+        if ($updatedAt !== '') {
+            $bits .= ' · ' . $updatedAt;
+        }
+        $parts[] = $bits;
+    } elseif ($updatedAt !== '' && $created !== '') {
+        $parts[] = 'Updated ' . $updatedAt;
+    }
+    return implode(' · ', $parts);
 }
 
 /**
@@ -2678,6 +2770,7 @@ function save_email_campaign_draft(
         return ['ok' => false, 'error' => 'Draft text is required.'];
     }
     $category = normalize_email_campaign_draft_category($category);
+    $actor = $actorId > 0 ? $actorId : null;
 
     if ($draftId > 0) {
         $existing = get_email_campaign_draft($draftId);
@@ -2686,34 +2779,40 @@ function save_email_campaign_draft(
         }
         db()->prepare(
             'UPDATE email_campaign_drafts
-             SET category=?, title=?, body=?, updated_at=NOW()
+             SET category=?, title=?, body=?, updated_by=?, updated_at=NOW()
              WHERE id=? AND project_id=?'
-        )->execute([$category, $title, $body, $draftId, $projectId]);
+        )->execute([$category, $title, $body, $actor, $draftId, $projectId]);
         return ['ok' => true, 'id' => $draftId];
     }
 
     db()->prepare(
-        'INSERT INTO email_campaign_drafts (project_id, category, title, body, created_by)
-         VALUES (?,?,?,?,?)'
+        'INSERT INTO email_campaign_drafts (project_id, category, title, body, created_by, updated_by)
+         VALUES (?,?,?,?,?,?)'
     )->execute([
         $projectId,
         $category,
         $title,
         $body,
-        $actorId > 0 ? $actorId : null,
+        $actor,
+        $actor,
     ]);
     return ['ok' => true, 'id' => (int) db()->lastInsertId()];
 }
 
 /**
+ * Delete a project draft. Product rule B: creator or Admin may delete.
+ *
  * @return array{ok:bool,error?:string,title?:string}
  */
-function delete_email_campaign_draft(int $projectId, int $draftId): array
+function delete_email_campaign_draft(int $projectId, int $draftId, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $draft = get_email_campaign_draft($draftId);
     if (!$draft || (int) ($draft['project_id'] ?? 0) !== $projectId) {
         return ['ok' => false, 'error' => 'Draft not found in this project.'];
+    }
+    if ($actor !== null && !email_campaign_user_can_delete_draft($actor, $draft)) {
+        return ['ok' => false, 'error' => 'Only the draft creator or Admin can delete this draft.'];
     }
     db()->prepare('DELETE FROM email_campaign_drafts WHERE id=? AND project_id=?')
         ->execute([$draftId, $projectId]);

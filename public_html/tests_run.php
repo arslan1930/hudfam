@@ -1193,11 +1193,12 @@ try {
     $badRemoteOnly = sanitize_email_campaign_draft_html(
         '<img src="https://evil.example/x.png" alt="x"><img src="javascript:alert(1)">'
     );
-    $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0));
+    $del = delete_email_campaign_draft($draftPid, (int) ($saved['id'] ?? 0), $adminUser);
     $left = count_email_campaign_drafts($draftPid);
-    $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0));
+    $wrongProjectDel = delete_email_campaign_draft($draftHiddenPid, (int) ($savedOffer['id'] ?? 0), $adminUser);
     if (!empty($updated['ok'])
         && (string) ($afterUpdate['title'] ?? '') === 'Pricing offer v2'
+        && (int) ($afterUpdate['updated_by'] ?? 0) === (int) $adminUser['id']
         && !empty($richSaved['ok'])
         && $keepsFormat
         && $sanitized === $richBody
@@ -1226,6 +1227,60 @@ try {
             'wrong' => $wrongProjectDel,
         ]));
     }
+
+    // Product rule B: creator or Admin may delete; other teammates cannot.
+    $mine = save_email_campaign_draft(
+        $draftPid,
+        'Team-owned draft',
+        'Body from teammate.',
+        'custom',
+        0,
+        (int) $teamUser['id']
+    );
+    $mineId = (int) ($mine['id'] ?? 0);
+    $mineRow = get_email_campaign_draft($mineId);
+    $otherTeam = [
+        'id' => (int) $teamUser['id'] + 99991,
+        'role' => 'team',
+        'username' => 'other_teammate',
+        'full_name' => 'Other Teammate',
+    ];
+    $deniedOther = delete_email_campaign_draft($draftPid, $mineId, $otherTeam);
+    $allowedCreator = email_campaign_user_can_delete_draft($teamUser, $mineRow);
+    $allowedAdmin = email_campaign_user_can_delete_draft($adminUser, $mineRow);
+    $deniedFlag = email_campaign_user_can_delete_draft($otherTeam, $mineRow);
+    $delAsCreator = delete_email_campaign_draft($draftPid, $mineId, $teamUser);
+    $adminOwned = save_email_campaign_draft(
+        $draftPid,
+        'Admin-owned for ACL',
+        'Admin body.',
+        'custom',
+        0,
+        (int) $adminUser['id']
+    );
+    $adminOwnedId = (int) ($adminOwned['id'] ?? 0);
+    $teamCannotDeleteAdmin = delete_email_campaign_draft($draftPid, $adminOwnedId, $teamUser);
+    $adminDeletesOwn = delete_email_campaign_draft($draftPid, $adminOwnedId, $adminUser);
+    if (empty($deniedOther['ok'])
+        && $allowedCreator
+        && $allowedAdmin
+        && !$deniedFlag
+        && !empty($delAsCreator['ok'])
+        && empty($teamCannotDeleteAdmin['ok'])
+        && !empty($adminDeletesOwn['ok'])) {
+        pass('campaign drafts delete ACL: creator or Admin only');
+    } else {
+        fail('campaign drafts ACL: ' . json_encode([
+            'deniedOther' => $deniedOther,
+            'allowedCreator' => $allowedCreator,
+            'allowedAdmin' => $allowedAdmin,
+            'deniedFlag' => $deniedFlag,
+            'delAsCreator' => $delAsCreator,
+            'teamCannot' => $teamCannotDeleteAdmin,
+            'adminDel' => $adminDeletesOwn,
+        ]));
+    }
+
     delete_email_campaign_project($draftPid);
     $goneWithProject = (int) db()->query(
         "SELECT COUNT(*) FROM email_campaign_drafts WHERE project_id=" . (int) $draftPid

@@ -749,6 +749,23 @@ if (!str_contains($openSiteJs, 'OpenSite') || !str_contains($openSiteJs, 'normal
     ok('open-site.js shared helpers');
 }
 $campApp = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
+$campDraftsTeam = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
+$campLib = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
+if (!str_contains($campLib, 'function email_campaign_user_can_delete_draft')
+    || !str_contains($campLib, 'updated_by')
+    || !str_contains($campLib, 'email_campaign_draft_attribution')
+    || !str_contains($campLib, 'Only the draft creator or Admin')) {
+    fail('campaign drafts missing creator/Admin delete ACL + authorship');
+} else {
+    ok('campaign drafts creator/Admin delete ACL + authorship');
+}
+if (!str_contains($campDraftsTeam, 'email_campaign_user_can_delete_draft($user, $d)')
+    || !str_contains($campDraftsTeam, 'camp-draft-attribution')
+    || !str_contains($campApp, 'email_campaign_draft_attribution')) {
+    fail('campaign drafts UI missing attribution / gated Delete');
+} else {
+    ok('campaign drafts UI attribution + gated Delete');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')
