@@ -953,6 +953,8 @@ function sites_with_emails_inventory_query(
     $country = trim((string) ($filters['country'] ?? ''));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1' — Admin only
+    $rowFilter = (string) ($filters['filter'] ?? ''); // '', 'new', 'updated' — Admin only
+    $since = (string) ($filters['since'] ?? ''); // watermark for new/updated filters
 
     $where = ['country = ?'];
     $params = [$country];
@@ -964,6 +966,16 @@ function sites_with_emails_inventory_query(
     if ($scope === 'admin' && ($sentFilter === '0' || $sentFilter === '1')) {
         $where[] = 'email_sent = ?';
         $params[] = (int) $sentFilter;
+    }
+    if ($scope === 'admin' && $since !== '' && ($rowFilter === 'new' || $rowFilter === 'updated')) {
+        if ($rowFilter === 'new') {
+            $where[] = 'created_at > ?';
+            $params[] = $since;
+        } else {
+            $where[] = 'updated_at > ? AND created_at <= ?';
+            $params[] = $since;
+            $params[] = $since;
+        }
     }
     $whereSql = implode(' AND ', $where);
 
@@ -2032,4 +2044,137 @@ function swe_admin_mark_all_countries_seen(?array $user = null): void
     } catch (Throwable $e) {
         // ignore
     }
+}
+
+/**
+ * Visit-scoped watermark for Admin country sheet (chips / filter / flash).
+ * Survives in-session filter navigation after DB mark-seen on open.
+ */
+function swe_admin_visit_since(?array $user, string $country, bool $startVisit = false): ?string
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        return null;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    $country = trim($country);
+    if ($uid < 1 || $country === '') {
+        return null;
+    }
+    if (!isset($_SESSION['swe_admin_visit_since']) || !is_array($_SESSION['swe_admin_visit_since'])) {
+        $_SESSION['swe_admin_visit_since'] = [];
+    }
+    if (!isset($_SESSION['swe_admin_visit_since'][$uid]) || !is_array($_SESSION['swe_admin_visit_since'][$uid])) {
+        $_SESSION['swe_admin_visit_since'][$uid] = [];
+    }
+    if ($startVisit || !isset($_SESSION['swe_admin_visit_since'][$uid][$country])) {
+        $since = swe_admin_unseen_since($uid, $country);
+        $_SESSION['swe_admin_visit_since'][$uid][$country] = $since;
+    }
+    $v = $_SESSION['swe_admin_visit_since'][$uid][$country] ?? null;
+    return ($v !== null && $v !== '') ? (string) $v : null;
+}
+
+function swe_admin_clear_visit_since(?array $user, ?string $country = null): void
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user) {
+        return;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    if ($uid < 1 || !isset($_SESSION['swe_admin_visit_since'][$uid])) {
+        return;
+    }
+    if ($country === null || trim($country) === '') {
+        unset($_SESSION['swe_admin_visit_since'][$uid]);
+        return;
+    }
+    unset($_SESSION['swe_admin_visit_since'][$uid][trim($country)]);
+}
+
+/**
+ * Row signal vs watermark: new (created after), updated (re-merged after), or ''.
+ *
+ * @param array<string,mixed> $row
+ */
+function swe_admin_row_signal(array $row, ?string $since): string
+{
+    if ($since === null || $since === '') {
+        return '';
+    }
+    $sinceTs = strtotime($since);
+    if ($sinceTs === false) {
+        return '';
+    }
+    $createdTs = strtotime((string) ($row['created_at'] ?? ''));
+    $updatedTs = strtotime((string) ($row['updated_at'] ?? ''));
+    if ($createdTs !== false && $createdTs > $sinceTs) {
+        return 'new';
+    }
+    if ($updatedTs !== false && $updatedTs > $sinceTs
+        && ($createdTs === false || $createdTs <= $sinceTs)) {
+        return 'updated';
+    }
+    return '';
+}
+
+/**
+ * Count Admin rows created after a fixed watermark (visit-scoped).
+ */
+function swe_admin_count_new_since(string $country, ?string $since): int
+{
+    $country = trim($country);
+    if ($country === '' || $since === null || $since === '') {
+        return 0;
+    }
+    try {
+        ensure_sites_with_emails_schema();
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE country=? AND created_at > ?'
+        );
+        $stmt->execute([$country, $since]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * Count Admin rows updated (but not newly created) after a fixed watermark.
+ */
+function swe_admin_count_updated_since(string $country, ?string $since): int
+{
+    $country = trim($country);
+    if ($country === '' || $since === null || $since === '') {
+        return 0;
+    }
+    try {
+        ensure_sites_with_emails_schema();
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE country=? AND updated_at > ? AND created_at <= ?'
+        );
+        $stmt->execute([$country, $since, $since]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * Count Admin rows updated (but not newly created) after watermark.
+ */
+function swe_admin_updated_count_for_country(?array $user, string $country): int
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        return 0;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    $country = trim($country);
+    if ($uid < 1 || $country === '') {
+        return 0;
+    }
+    return swe_admin_count_updated_since($country, swe_admin_unseen_since($uid, $country));
 }

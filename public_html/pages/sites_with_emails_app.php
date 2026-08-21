@@ -54,11 +54,6 @@ if ($sheet !== '' && $sheet !== 'all') {
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
 
-// Admin New: clear country watermark when opening a country sheet (not on hub/list alone).
-if ($inCountry && $sweScope === 'admin' && function_exists('swe_admin_mark_country_seen')) {
-    swe_admin_mark_country_seen($sweUser, $sheet);
-}
-
 // Exports
 if ($inCountry && (string) get('export') !== '') {
     $mode = (string) get('export');
@@ -80,6 +75,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $returnQ = trim((string) post('q'));
     $returnP = max(1, (int) (post('p') ?: 1));
     $returnSent = (string) post('sent');
+    $returnFilter = (string) post('filter');
     $returnPerPage = resolve_sheet_per_page();
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
@@ -89,6 +85,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($returnSent === '0' || $returnSent === '1') {
         $back .= '&sent=' . $returnSent;
+    }
+    if ($returnFilter === 'new' || $returnFilter === 'updated') {
+        $back .= '&filter=' . rawurlencode($returnFilter);
     }
     $back = append_sheet_per_page_query($back, $returnPerPage);
     if ($returnP > 1) {
@@ -371,6 +370,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // --- Country list ---
 if (!$inCountry) {
+    if ($sweScope === 'admin' && function_exists('swe_admin_clear_visit_since')) {
+        swe_admin_clear_visit_since($sweUser);
+    }
     if ($sweScope === 'admin' && $_SERVER['REQUEST_METHOD'] === 'POST'
         && (string) post('action') === 'mark_all_countries_seen') {
         require_csrf();
@@ -594,12 +596,48 @@ $sentFilter = (string) get('sent'); // Admin only: '', '0' (not sent), '1' (sent
 if ($sweScope !== 'admin' || ($sentFilter !== '0' && $sentFilter !== '1')) {
     $sentFilter = '';
 }
+$rowFilter = (string) get('filter'); // Admin only: '', 'new', 'updated'
+if ($sweScope !== 'admin' || ($rowFilter !== 'new' && $rowFilter !== 'updated')) {
+    $rowFilter = '';
+}
+
+// Capture New/Updated signals before marking this country seen (GET open only).
+$adminSeenSince = null;
+$adminNewOpenCount = 0;
+$adminUpdatedOpenCount = 0;
+$adminVisitStarted = false;
+if ($sweScope === 'admin' && function_exists('swe_admin_visit_since')) {
+    $uidVisit = (int) ($sweUser['id'] ?? 0);
+    $hadVisit = isset($_SESSION['swe_admin_visit_since'][$uidVisit][$countryName]);
+    $adminSeenSince = swe_admin_visit_since($sweUser, $countryName, !$hadVisit);
+    $adminVisitStarted = !$hadVisit;
+    $adminNewOpenCount = swe_admin_count_new_since($countryName, $adminSeenSince);
+    $adminUpdatedOpenCount = swe_admin_count_updated_since($countryName, $adminSeenSince);
+    if ($_SERVER['REQUEST_METHOD'] === 'GET'
+        && (string) get('export') === ''
+        && $adminVisitStarted
+        && $adminNewOpenCount > 0) {
+        $flashMsg = $adminNewOpenCount . ' new site' . ($adminNewOpenCount === 1 ? '' : 's')
+            . ' since your last visit';
+        if ($adminUpdatedOpenCount > 0) {
+            $flashMsg .= ' · ' . $adminUpdatedOpenCount . ' updated';
+        }
+        flash('ok', $flashMsg . '.');
+    }
+    // Mark seen on GET page/export open only — not on every AJAX save POST.
+    if ($_SERVER['REQUEST_METHOD'] === 'GET' && function_exists('swe_admin_mark_country_seen')) {
+        swe_admin_mark_country_seen($sweUser, $countryName);
+    }
+}
+
 $pageNum = max(1, (int) get('p', 1));
 $perPage = resolve_sheet_per_page();
 $inv = sites_with_emails_inventory_query([
     'country' => $countryName,
     'q' => $q,
     'sent' => $sentFilter,
+    'filter' => $rowFilter,
+    'since' => ($sweScope === 'admin' && $adminSeenSince !== null) ? $adminSeenSince : '',
 ], $pageNum, $perPage, $sweScope);
 $rows = $inv['rows'];
 $total = $inv['total'];
@@ -612,6 +650,9 @@ $pushConflictSet = $pushConflicts !== [] ? array_fill_keys($pushConflicts, true)
 $pushConflictCount = count($pushConflicts);
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $listBase = append_sheet_per_page_query($listBase, $perPage);
+if ($rowFilter !== '') {
+    $listBase .= '&filter=' . rawurlencode($rowFilter);
+}
 $csvUrl = $listBase . '&export=csv';
 $emailsExportUrl = $listBase . '&export=emails';
 $emailsExportUnsentUrl = $emailsExportUrl . '&sent=0';
@@ -622,6 +663,7 @@ $qsBase = [
     'country' => $countryName,
     'q' => $q,
     'sent' => $sentFilter,
+    'filter' => $rowFilter,
     'per_page' => $perPage,
 ];
 $qs = http_build_query(array_filter($qsBase, static fn ($v) => $v !== '' && $v !== null));
@@ -651,9 +693,15 @@ render_breadcrumbs($crumbs);
     ) ?></h1>
     <p class="muted">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
-      <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
+      <?= $q !== '' || $sentFilter !== '' || $rowFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
       · <?= (int) $perPage ?> per page
       · up to 4 emails each
+      <?php if ($sweScope === 'admin' && ($adminNewOpenCount > 0 || $adminUpdatedOpenCount > 0)): ?>
+        · <span class="swe-country-new">+<?= (int) $adminNewOpenCount ?> new</span>
+        <?php if ($adminUpdatedOpenCount > 0): ?>
+          · <span class="swe-row-chip is-updated"><?= (int) $adminUpdatedOpenCount ?> updated</span>
+        <?php endif; ?>
+      <?php endif; ?>
       <?php if ($sentStats): ?>
         · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
         · <span id="swe_sent_label"><?= (int) $sentStats['sent'] ?></span> emailed
@@ -820,10 +868,36 @@ render_breadcrumbs($crumbs);
             if ($q !== '') {
                 $href .= '&q=' . rawurlencode($q);
             }
+            if ($rowFilter !== '') {
+                $href .= '&filter=' . rawurlencode($rowFilter);
+            }
             if ($val !== '') {
                 $href .= '&sent=' . $val;
             }
             $active = $sentFilter === (string) $val;
+            ?>
+          <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
+        <?php endforeach; ?>
+        <span class="swe-filter-sep muted" aria-hidden="true">·</span>
+        <?php
+        $signalLinks = [
+            '' => 'All changes',
+            'new' => 'New' . ($adminNewOpenCount > 0 ? ' (' . $adminNewOpenCount . ')' : ''),
+            'updated' => 'Updated' . ($adminUpdatedOpenCount > 0 ? ' (' . $adminUpdatedOpenCount . ')' : ''),
+        ];
+        foreach ($signalLinks as $val => $label):
+            $href = $sweBase . '&country=' . rawurlencode($countryName);
+            $href = append_sheet_per_page_query($href, $perPage);
+            if ($q !== '') {
+                $href .= '&q=' . rawurlencode($q);
+            }
+            if ($sentFilter !== '') {
+                $href .= '&sent=' . $sentFilter;
+            }
+            if ($val !== '') {
+                $href .= '&filter=' . rawurlencode($val);
+            }
+            $active = $rowFilter === (string) $val;
             ?>
           <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
         <?php endforeach; ?>
@@ -838,6 +912,9 @@ render_breadcrumbs($crumbs);
           <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
           <?php if ($sentFilter !== ''): ?>
           <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+          <?php endif; ?>
+          <?php if ($rowFilter !== ''): ?>
+          <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
           <?php endif; ?>
           <button class="btn secondary small" type="submit" title="Clear every emailed mark on this Admin country sheet">
             Clear all emailed
@@ -906,6 +983,9 @@ render_breadcrumbs($crumbs);
               && (!function_exists('is_root_domain') || is_root_domain($openRoot));
           $siteOpenUrl = $siteOpenable ? ('https://' . $openRoot) : '';
           $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
+          $rowSignal = ($sweScope === 'admin' && function_exists('swe_admin_row_signal'))
+              ? swe_admin_row_signal($s, $adminSeenSince)
+              : '';
           if ($sweScope === 'admin') {
               $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
               $statusClass = $isEmailed ? 'is-emailed' : 'is-open';
@@ -921,7 +1001,8 @@ render_breadcrumbs($crumbs);
             data-has-email="<?= $hasEmail ? '1' : '0' ?>"
             data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
             data-row-num="<?= (int) $rowNum ?>"
-            class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
+            data-row-signal="<?= h($rowSignal) ?>"
+            class="<?= $isEmailed ? 'swe-row-emailed' : '' ?><?= $rowSignal !== '' ? ' swe-row-' . h($rowSignal) : '' ?>">
           <?php if ($isTeam): ?>
           <td class="swe-td-num">
             <span class="swe-row-num" title="Site #<?= (int) $rowNum ?>"><?= (int) $rowNum ?></span>
@@ -936,12 +1017,20 @@ render_breadcrumbs($crumbs);
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
+              <?php if ($rowFilter !== ''): ?>
+              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
+              <?php endif; ?>
             </form>
             <div class="swe-site-cell<?= $siteOpenable ? '' : ' is-invalid-site' ?>">
               <label class="visually-hidden" for="swe-domain-<?= $sid ?>">Site</label>
               <input id="swe-domain-<?= $sid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
                      value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site"
                      data-swe-domain>
+              <?php if ($rowSignal === 'new'): ?>
+              <span class="swe-row-chip is-new" title="Added since your last visit">New</span>
+              <?php elseif ($rowSignal === 'updated'): ?>
+              <span class="swe-row-chip is-updated" title="Emails updated since your last visit">Updated</span>
+              <?php endif; ?>
               <?php if ($siteOpenable): ?>
               <a class="swe-open-site" data-swe-open-site
                  href="<?= h($siteOpenUrl) ?>" target="_blank" rel="noopener noreferrer"
@@ -1028,6 +1117,9 @@ render_breadcrumbs($crumbs);
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
+              <?php if ($rowFilter !== ''): ?>
+              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
+              <?php endif; ?>
             </form>
             <form id="swe-upto-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-mark-upto hidden>
               <input type="hidden" name="action" value="mark_emailed_up_to">
@@ -1036,6 +1128,9 @@ render_breadcrumbs($crumbs);
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+              <?php if ($rowFilter !== ''): ?>
+              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
               <?php endif; ?>
             </form>
             <form id="swe-clear-upto-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-clear-upto hidden>
@@ -1046,6 +1141,9 @@ render_breadcrumbs($crumbs);
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
+              <?php if ($rowFilter !== ''): ?>
+              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
+              <?php endif; ?>
             </form>
             <?php endif; ?>
             <form id="swe-remove-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-remove hidden>
@@ -1055,6 +1153,9 @@ render_breadcrumbs($crumbs);
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+              <?php if ($rowFilter !== ''): ?>
+              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
               <?php endif; ?>
             </form>
           </td>
@@ -1067,7 +1168,7 @@ render_breadcrumbs($crumbs);
     No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
   </p>
 
-  <?php if (!$rows && $q === '' && $sentFilter === ''): ?>
+  <?php if (!$rows && $q === '' && $sentFilter === '' && $rowFilter === ''): ?>
   <div class="empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
@@ -1080,9 +1181,13 @@ render_breadcrumbs($crumbs);
       <p class="muted">Waiting for Team to Push from Sites with emails - Team.</p>
     <?php endif; ?>
   </div>
-  <?php elseif (!$rows && ($q !== '' || $sentFilter !== '')): ?>
+  <?php elseif (!$rows && ($q !== '' || $sentFilter !== '' || $rowFilter !== '')): ?>
   <div class="empty-state">
-    <?php if ($sentFilter === '0'): ?>
+    <?php if ($rowFilter === 'new'): ?>
+      <p>No new sites<?= $q !== '' ? ' matching this search' : '' ?> since your last visit.</p>
+    <?php elseif ($rowFilter === 'updated'): ?>
+      <p>No updated sites<?= $q !== '' ? ' matching this search' : '' ?> since your last visit.</p>
+    <?php elseif ($sentFilter === '0'): ?>
       <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
       <p class="muted">New Team pushes appear here until you mark them emailed.</p>
     <?php elseif ($sentFilter === '1'): ?>
@@ -1109,6 +1214,7 @@ render_breadcrumbs($crumbs);
           'country' => $countryName,
           'q' => $q,
           'sent' => $sentFilter,
+          'filter' => $rowFilter,
       ], $perPage);
       ?>
     </div>

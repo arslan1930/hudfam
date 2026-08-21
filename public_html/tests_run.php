@@ -2619,6 +2619,49 @@ try {
     } else {
         fail('emails_admin badge still showing');
     }
+
+    // P1b: row signals + visit watermark + inventory filter=new
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfnew-%'");
+    db()->prepare('DELETE FROM swe_admin_country_seen WHERE user_id=?')->execute([(int) $adminUser['id']]);
+    db()->prepare('DELETE FROM admin_data_seen WHERE user_id=? AND section=?')->execute([(int) $adminUser['id'], 'emails_admin']);
+    unset($_SESSION['swe_admin_visit_since']);
+    mark_admin_new_data('emails_admin', 1, 'Germany');
+    db()->prepare(
+        "INSERT INTO sites_with_emails_admin
+           (domain, country, language, region, email1, email2, email3, email4, pushed_by, created_at, updated_at)
+         VALUES
+           ('txfnew-b.com','Germany','German','Europe','b@txfnew.test','','','',?, NOW(), NOW()),
+           ('txfnew-old.com','Germany','German','Europe','old@txfnew.test','','','',?, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY))"
+    )->execute([(int) $teamUser['id'], (int) $teamUser['id']]);
+    db()->prepare(
+        "UPDATE sites_with_emails_admin SET email2='newslot@txfnew.test', updated_at=NOW()
+         WHERE domain='txfnew-old.com'"
+    )->execute();
+    $visitSince = swe_admin_visit_since($adminUser, 'Germany', true);
+    $sigNew = swe_admin_row_signal(
+        db()->query("SELECT * FROM sites_with_emails_admin WHERE domain='txfnew-b.com' LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [],
+        $visitSince
+    );
+    $sigUp = swe_admin_row_signal(
+        db()->query("SELECT * FROM sites_with_emails_admin WHERE domain='txfnew-old.com' LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [],
+        $visitSince
+    );
+    if ($sigNew === 'new' && $sigUp === 'updated') {
+        pass('row signals new + updated');
+    } else {
+        fail('row signals expected new/updated got ' . $sigNew . '/' . $sigUp);
+    }
+    $filt = sites_with_emails_inventory_query([
+        'country' => 'Germany',
+        'filter' => 'new',
+        'since' => (string) $visitSince,
+    ], 1, 100, 'admin');
+    $filtDomains = array_column($filt['rows'], 'domain');
+    if (in_array('txfnew-b.com', $filtDomains, true) && !in_array('txfnew-old.com', $filtDomains, true)) {
+        pass('inventory filter=new');
+    } else {
+        fail('filter=new wrong rows: ' . implode(',', $filtDomains));
+    }
     db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfnew-%'");
     db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfnew-%'");
 } catch (Throwable $e) {
