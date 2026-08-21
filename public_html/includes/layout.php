@@ -115,7 +115,12 @@ function render_header(string $title, string $panel = ''): void
                 'admin_account' => ['Account', 'Email verify · password'],
             ],
         ];
+        // New badge only for Emails data (emails_admin) — Our DB / Extracted stay off.
+        $adminNewByPage = [
+            'admin_emails_data' => 'emails_admin',
+        ];
     } else {
+        $adminNewByPage = [];
         $deptScoped = function_exists('user_is_department_scoped') && user_is_department_scoped($user);
         if ($deptScoped) {
             // Department members: tasks + tools for their departments.
@@ -246,7 +251,11 @@ function render_header(string $title, string $panel = ''): void
             }
             $ariaCurrent = trim($active) !== '' ? ' aria-current="page"' : '';
             echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $ariaCurrent . '>';
-            echo '<span class="nav-label">' . h($label) . '</span>';
+            echo '<span class="nav-label">' . h($label);
+            if ($panel === 'admin' && isset($adminNewByPage[$activePage]) && function_exists('admin_new_badge_html')) {
+                echo admin_new_badge_html($adminNewByPage[$activePage], $user);
+            }
+            echo '</span>';
             echo '</a>';
         }
         echo '</div>';

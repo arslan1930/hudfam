@@ -47,6 +47,15 @@ if ($folder === '') {
     $allCountryCount = count($allCountryRows);
     $archiveDrift = $allTotal !== $sweTotal;
 
+    $adminEmailsNew = function_exists('admin_has_new_data') && admin_has_new_data('emails_admin', $user);
+    $adminNewByCountry = function_exists('swe_admin_new_counts_by_country')
+        ? swe_admin_new_counts_by_country($user)
+        : [];
+    $adminNewTotal = 0;
+    foreach ($adminNewByCountry as $n) {
+        $adminNewTotal += (int) $n;
+    }
+
     $campaignSheets = list_email_campaign_sheets();
     $campaignSheetCount = count($campaignSheets);
     $campaignRowTotal = 0;
@@ -96,16 +105,19 @@ if ($folder === '') {
     <div class="card">
       <div class="folders emails-data-folders">
         <div class="folder-with-info">
-          <a class="folder" href="<?= h($base) ?>&amp;folder=sites_with_emails">
-            <h3>Sites with emails - Admin</h3>
+          <a class="folder<?= $adminEmailsNew ? ' has-admin-new' : '' ?>" href="<?= h($base) ?>&amp;folder=sites_with_emails">
+            <h3>Sites with emails - Admin<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h3>
             <p class="muted">
               Working list from Team Push · emailed checkpoint here ·
               <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $sweTotal ?> site<?= (int) $sweTotal === 1 ? '' : 's' ?>
               · <?= (int) $sweWithEmails ?> with email<?= (int) $sweWithEmails === 1 ? '' : 's' ?>
+              <?php if ($adminNewTotal > 0): ?>
+                · <span class="swe-country-new">+<?= (int) $adminNewTotal ?> new</span>
+              <?php endif; ?>
             </p>
           </a>
-          <?= info_icon('Working site + email list filled when Team pushes from Sites with emails - Team. Emailed progress is tracked here only. Final is a separate mirror without emailed marks. Communication Team can super-search Admin data across countries.', 'About Sites with emails - Admin') ?>
+          <?= info_icon('Working site + email list filled when Team pushes from Sites with emails - Team. Emailed progress is tracked here only. Final is a separate mirror without emailed marks. Communication Team can super-search Admin data across countries. Open a country to clear New for that folder.', 'About Sites with emails - Admin') ?>
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">

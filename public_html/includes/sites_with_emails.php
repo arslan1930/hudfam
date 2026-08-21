@@ -98,6 +98,22 @@ function ensure_sites_with_emails_schema(): void
         // ignore migration hiccups
     }
 
+    // Per-admin “seen” watermark for Sites with emails - Admin country folders.
+    try {
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS swe_admin_country_seen (
+              user_id INT NOT NULL,
+              country VARCHAR(100) NOT NULL,
+              last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (user_id, country),
+              CONSTRAINT fk_swe_admin_country_seen_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    } catch (Throwable $e) {
+        // ignore
+    }
+
     // Legacy single table → migrate into Team working copy once.
     try {
         $legacy = $pdo->query("SHOW TABLES LIKE 'sites_with_emails'")->fetchColumn();
@@ -1826,4 +1842,194 @@ function delete_sites_with_emails_admin_row(int $siteId): array
     }
     delete_site_with_emails($siteId, 'admin');
     return ['ok' => true, 'domain' => (string) $row['domain']];
+}
+
+/**
+ * Per-admin last-seen watermark for one Admin country folder.
+ */
+function swe_admin_country_last_seen(int $userId, string $country): ?string
+{
+    ensure_sites_with_emails_schema();
+    $userId = (int) $userId;
+    $country = trim($country);
+    if ($userId < 1 || $country === '') {
+        return null;
+    }
+    try {
+        $stmt = db()->prepare(
+            'SELECT last_seen_at FROM swe_admin_country_seen WHERE user_id=? AND country=? LIMIT 1'
+        );
+        $stmt->execute([$userId, $country]);
+        $v = $stmt->fetchColumn();
+        if ($v === false || $v === null || $v === '') {
+            return null;
+        }
+        return (string) $v;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Watermark for “new since last visit” on an Admin country.
+ * Prefers country seen → section emails_admin seen → signal last_new_at (slightly earlier so that push still counts).
+ */
+function swe_admin_unseen_since(int $userId, string $country): ?string
+{
+    $userId = (int) $userId;
+    $country = trim($country);
+    if ($userId < 1 || $country === '') {
+        return null;
+    }
+    $countrySeen = swe_admin_country_last_seen($userId, $country);
+    if ($countrySeen !== null) {
+        return $countrySeen;
+    }
+    try {
+        if (function_exists('ensure_admin_new_data_schema')) {
+            ensure_admin_new_data_schema();
+        }
+        $seen = db()->prepare(
+            'SELECT last_seen_at FROM admin_data_seen WHERE user_id=? AND section=? LIMIT 1'
+        );
+        $seen->execute([$userId, 'emails_admin']);
+        $sectionSeen = $seen->fetchColumn();
+        if ($sectionSeen !== false && $sectionSeen !== null && $sectionSeen !== '') {
+            return (string) $sectionSeen;
+        }
+        $sig = db()->prepare('SELECT last_new_at FROM admin_data_signals WHERE section=? LIMIT 1');
+        $sig->execute(['emails_admin']);
+        $lastNew = $sig->fetchColumn();
+        if ($lastNew === false || $lastNew === null || $lastNew === '') {
+            return null;
+        }
+        // Push stamps rows then mark_admin_new_data(NOW()) — nudge back so that push still counts.
+        $ts = strtotime((string) $lastNew);
+        if ($ts === false) {
+            return (string) $lastNew;
+        }
+        return date('Y-m-d H:i:s', $ts - 2);
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Count Admin rows in a country created after this admin’s watermark.
+ */
+function swe_admin_new_count_for_country(?array $user, string $country): int
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        return 0;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    $country = trim($country);
+    if ($uid < 1 || $country === '') {
+        return 0;
+    }
+    $since = swe_admin_unseen_since($uid, $country);
+    if ($since === null) {
+        return 0;
+    }
+    try {
+        ensure_sites_with_emails_schema();
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM sites_with_emails_admin
+             WHERE country=? AND created_at > ?'
+        );
+        $stmt->execute([$country, $since]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * New-site counts keyed by country (only countries with count > 0).
+ *
+ * @return array<string,int>
+ */
+function swe_admin_new_counts_by_country(?array $user = null): array
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        return [];
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    if ($uid < 1) {
+        return [];
+    }
+    try {
+        ensure_sites_with_emails_schema();
+        $countries = db()->query(
+            "SELECT DISTINCT TRIM(country) AS country
+             FROM sites_with_emails_admin
+             WHERE TRIM(country) <> ''"
+        )->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $out = [];
+        foreach ($countries as $c) {
+            $name = (string) $c;
+            $canon = resolve_canonical_country($name);
+            $label = $canon ? $canon['name'] : $name;
+            $n = swe_admin_new_count_for_country($user, $label);
+            if ($n > 0) {
+                $out[$label] = $n;
+            }
+        }
+        return $out;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Admin opened a country sheet — set country watermark; clear section New when nothing left unseen.
+ */
+function swe_admin_mark_country_seen(?array $user, string $country): void
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        return;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    $country = trim($country);
+    if ($uid < 1 || $country === '') {
+        return;
+    }
+    try {
+        ensure_sites_with_emails_schema();
+        db()->prepare(
+            'INSERT INTO swe_admin_country_seen (user_id, country, last_seen_at)
+             VALUES (?, ?, NOW())
+             ON DUPLICATE KEY UPDATE last_seen_at = NOW()'
+        )->execute([$uid, $country]);
+        $left = swe_admin_new_counts_by_country($user);
+        if ($left === [] && function_exists('clear_admin_new_data')) {
+            clear_admin_new_data('emails_admin', $user);
+        }
+    } catch (Throwable $e) {
+        // never break page load
+    }
+}
+
+/**
+ * Mark every Admin country folder as seen for this admin (and clear section New).
+ */
+function swe_admin_mark_all_countries_seen(?array $user = null): void
+{
+    $user = $user ?? (function_exists('current_user') ? current_user() : null);
+    if (!$user || ($user['role'] ?? '') !== 'admin') {
+        return;
+    }
+    try {
+        foreach (list_sites_with_emails_country_rows('admin') as $row) {
+            swe_admin_mark_country_seen($user, (string) ($row['country'] ?? ''));
+        }
+        if (function_exists('clear_admin_new_data')) {
+            clear_admin_new_data('emails_admin', $user);
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
 }

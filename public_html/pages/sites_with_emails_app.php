@@ -54,6 +54,11 @@ if ($sheet !== '' && $sheet !== 'all') {
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
 
+// Admin New: clear country watermark when opening a country sheet (not on hub/list alone).
+if ($inCountry && $sweScope === 'admin' && function_exists('swe_admin_mark_country_seen')) {
+    swe_admin_mark_country_seen($sweUser, $sheet);
+}
+
 // Exports
 if ($inCountry && (string) get('export') !== '') {
     $mode = (string) get('export');
@@ -366,12 +371,29 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // --- Country list ---
 if (!$inCountry) {
+    if ($sweScope === 'admin' && $_SERVER['REQUEST_METHOD'] === 'POST'
+        && (string) post('action') === 'mark_all_countries_seen') {
+        require_csrf();
+        if (function_exists('swe_admin_mark_all_countries_seen')) {
+            swe_admin_mark_all_countries_seen($sweUser);
+        }
+        flash('ok', 'Marked all countries as seen.');
+        redirect($sweBase);
+    }
+
     $countryRows = list_sites_with_emails_country_rows($sweScope);
     $grandTotal = 0;
     $emailSites = 0;
     foreach ($countryRows as $r) {
         $grandTotal += (int) $r['total'];
         $emailSites += (int) $r['with_emails'];
+    }
+    $adminNewByCountry = ($sweScope === 'admin' && function_exists('swe_admin_new_counts_by_country'))
+        ? swe_admin_new_counts_by_country($sweUser)
+        : [];
+    $adminNewCountryTotal = 0;
+    foreach ($adminNewByCountry as $n) {
+        $adminNewCountryTotal += (int) $n;
     }
 
     render_header($sweLabel, $swePanel);
@@ -395,7 +417,7 @@ if (!$inCountry) {
                 ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
                     ? 'Admin-only mirror of Sites with emails - Admin. Synced automatically. Not linked to Team.'
-                    : 'Final archive from Team Push. Also synced to All sites with emails - Final. Communication Team can super-search this data.')
+                    : 'Working list from Team Push. Emailed checkpoint lives here. Also synced to All sites with emails - Final. Communication Team can super-search this data.')
         ) ?></h1>
         <p class="muted">
           <?php if ($isTeam): ?>
@@ -404,15 +426,25 @@ if (!$inCountry) {
           <?php elseif ($isAdminAll): ?>
             Admin-only duplicate of Sites with emails - Admin (synced automatically; not linked to Team) ·
           <?php else: ?>
-            Final site + email list from Team Push. Also synced to All sites with emails - Final ·
+            Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
           <?= count($countryRows) ?> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?> ·
           <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> ·
           <?= (int) $emailSites ?> with email<?= (int) $emailSites === 1 ? '' : 's' ?>
+          <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
+            · <span class="swe-country-new">+<?= (int) $adminNewCountryTotal ?> new</span>
+          <?php endif; ?>
         </p>
       </div>
       <div class="actions">
         <?php if ($isAdmin): ?>
+          <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
+            <form method="post" action="<?= h($sweBase) ?>" style="display:inline">
+              <?= csrf_field() ?>
+              <input type="hidden" name="action" value="mark_all_countries_seen">
+              <button class="btn secondary" type="submit">Mark all countries seen</button>
+            </form>
+          <?php endif; ?>
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
           <?php if (team_page_unlocked($sweUser, 'team_admin_emails_delete')): ?>
@@ -463,12 +495,16 @@ if (!$inCountry) {
         <?php foreach ($countryRows as $r):
             $cName = (string) $r['country'];
             $hay = mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
+            $newN = (int) ($adminNewByCountry[$cName] ?? 0);
             ?>
           <tr data-swe-country-row data-search="<?= h($hay) ?>">
             <td>
               <a class="extracted-country-link" href="<?= h($sweBase) ?>&amp;country=<?= urlencode($cName) ?>">
                 <?= h($cName) ?>
               </a>
+              <?php if ($newN > 0): ?>
+                <span class="swe-country-new" title="New sites since your last visit">+<?= $newN ?> new</span>
+              <?php endif; ?>
             </td>
             <td class="num">
               <a class="extracted-country-count" href="<?= h($sweBase) ?>&amp;country=<?= urlencode($cName) ?>">
@@ -492,7 +528,7 @@ if (!$inCountry) {
           <p>No mirrored sites yet.</p>
           <p class="muted">They sync here whenever Sites with emails - Admin receives data.</p>
         <?php else: ?>
-          <p>No final sites yet.</p>
+          <p>No sites yet.</p>
           <p class="muted">They appear when Team pushes from Sites with emails - Team (after adding emails).</p>
         <?php endif; ?>
       </div>
