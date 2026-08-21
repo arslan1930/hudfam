@@ -174,6 +174,7 @@ function ensure_email_campaign_schema(): void
           project_id INT NOT NULL,
           category VARCHAR(40) NOT NULL DEFAULT 'custom',
           title VARCHAR(180) NOT NULL,
+          subject VARCHAR(255) NOT NULL DEFAULT '',
           body MEDIUMTEXT NOT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           created_by INT NULL,
@@ -197,6 +198,12 @@ function ensure_email_campaign_schema(): void
             $pdo->exec(
                 'ALTER TABLE email_campaign_drafts
                  ADD COLUMN updated_by INT NULL AFTER created_by'
+            );
+        }
+        if (!isset($have['subject'])) {
+            $pdo->exec(
+                "ALTER TABLE email_campaign_drafts
+                 ADD COLUMN subject VARCHAR(255) NOT NULL DEFAULT '' AFTER title"
             );
         }
     } catch (Throwable $e) {
@@ -2396,6 +2403,40 @@ function email_campaign_draft_category_label(string $category): string
 }
 
 /**
+ * Merge tokens available in draft subject/body.
+ *
+ * @return array<string,string> token without braces => help label
+ */
+function email_campaign_draft_token_defs(): array
+{
+    return [
+        'domain' => 'Site domain',
+        'site' => 'Site domain (same as domain)',
+        'country' => 'Country',
+        'language' => 'Language',
+        'name' => 'Contact name',
+    ];
+}
+
+/**
+ * Replace {domain}/{site}/{country}/{language}/{name} in HTML or plain text.
+ *
+ * @param array{domain?:string,site?:string,country?:string,language?:string,name?:string} $vars
+ */
+function expand_email_campaign_draft_tokens(string $text, array $vars): string
+{
+    $domain = trim((string) ($vars['domain'] ?? $vars['site'] ?? ''));
+    $map = [
+        '{domain}' => $domain,
+        '{site}' => $domain,
+        '{country}' => trim((string) ($vars['country'] ?? '')),
+        '{language}' => trim((string) ($vars['language'] ?? '')),
+        '{name}' => trim((string) ($vars['name'] ?? '')),
+    ];
+    return str_ireplace(array_keys($map), array_values($map), $text);
+}
+
+/**
  * Tags Communication may use in draft bodies (email-safe formatting).
  *
  * @return list<string>
@@ -2752,7 +2793,8 @@ function save_email_campaign_draft(
     string $body,
     string $category = 'custom',
     int $draftId = 0,
-    int $actorId = 0
+    int $actorId = 0,
+    string $subject = ''
 ): array {
     ensure_email_campaign_schema();
     if (!get_email_campaign_project($projectId)) {
@@ -2764,6 +2806,10 @@ function save_email_campaign_draft(
     }
     if (mb_strlen($title) > 180) {
         $title = mb_substr($title, 0, 180);
+    }
+    $subject = trim($subject);
+    if (mb_strlen($subject) > 255) {
+        $subject = mb_substr($subject, 0, 255);
     }
     $body = sanitize_email_campaign_draft_html($body);
     if ($body === '') {
@@ -2779,19 +2825,20 @@ function save_email_campaign_draft(
         }
         db()->prepare(
             'UPDATE email_campaign_drafts
-             SET category=?, title=?, body=?, updated_by=?, updated_at=NOW()
+             SET category=?, title=?, subject=?, body=?, updated_by=?, updated_at=NOW()
              WHERE id=? AND project_id=?'
-        )->execute([$category, $title, $body, $actor, $draftId, $projectId]);
+        )->execute([$category, $title, $subject, $body, $actor, $draftId, $projectId]);
         return ['ok' => true, 'id' => $draftId];
     }
 
     db()->prepare(
-        'INSERT INTO email_campaign_drafts (project_id, category, title, body, created_by, updated_by)
-         VALUES (?,?,?,?,?,?)'
+        'INSERT INTO email_campaign_drafts (project_id, category, title, subject, body, created_by, updated_by)
+         VALUES (?,?,?,?,?,?,?)'
     )->execute([
         $projectId,
         $category,
         $title,
+        $subject,
         $body,
         $actor,
         $actor,

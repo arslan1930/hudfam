@@ -1140,6 +1140,43 @@ try {
             'visible' => $visibleNames,
         ]));
     }
+    $withSubject = save_email_campaign_draft(
+        $draftPid,
+        'Subject draft',
+        'Hello {name} at {domain} in {country} ({language}).',
+        'first_outreach',
+        0,
+        (int) $adminUser['id'],
+        'Idea for {domain}'
+    );
+    $subRow = get_email_campaign_draft((int) ($withSubject['id'] ?? 0));
+    $expanded = expand_email_campaign_draft_tokens(
+        (string) ($subRow['subject'] ?? '') . '|' . email_campaign_draft_html_to_plain((string) ($subRow['body'] ?? '')),
+        [
+            'domain' => 'example.de',
+            'country' => 'Germany',
+            'language' => 'German',
+            'name' => 'Alex',
+        ]
+    );
+    $defs = email_campaign_draft_token_defs();
+    if (!empty($withSubject['ok'])
+        && (string) ($subRow['subject'] ?? '') === 'Idea for {domain}'
+        && str_contains($expanded, 'Idea for example.de')
+        && str_contains($expanded, 'Hello Alex at example.de in Germany (German).')
+        && isset($defs['domain'], $defs['site'], $defs['country'], $defs['language'], $defs['name'])) {
+        pass('campaign drafts optional subject + token expand');
+    } else {
+        fail('campaign drafts subject/tokens: ' . json_encode([
+            'saved' => $withSubject,
+            'row' => $subRow,
+            'expanded' => $expanded,
+            'defs' => array_keys($defs),
+        ]));
+    }
+    if (!empty($withSubject['ok'])) {
+        delete_email_campaign_draft($draftPid, (int) ($withSubject['id'] ?? 0), $adminUser);
+    }
     $updated = save_email_campaign_draft(
         $draftPid,
         'Pricing offer v2',

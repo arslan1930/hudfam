@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   project_id INT NOT NULL,
   category VARCHAR(40) NOT NULL DEFAULT 'custom',
   title VARCHAR(180) NOT NULL,
+  subject VARCHAR(255) NOT NULL DEFAULT '',
   body MEDIUMTEXT NOT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   created_by INT NULL,

@@ -916,7 +916,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (string) post('body'),
                 (string) post('category'),
                 $draftId,
-                (int) ($user['id'] ?? 0)
+                (int) ($user['id'] ?? 0),
+                (string) post('subject')
             );
             if (empty($result['ok'])) {
                 flash('error', (string) ($result['error'] ?? 'Could not save draft.'));
@@ -1277,6 +1278,11 @@ if ($projectIdParam > 0) {
                   <span class="muted" style="font-size:0.82rem">
                     <?= h(email_campaign_draft_category_label((string) $d['category'])) ?>
                   </span>
+                  <?php if (trim((string) ($d['subject'] ?? '')) !== ''): ?>
+                  <span class="help" style="display:block;margin-top:0.15rem">
+                    Subject: <?= h((string) $d['subject']) ?>
+                  </span>
+                  <?php endif; ?>
                   <?php
                     $adminAttr = email_campaign_draft_attribution($d);
                     if ($adminAttr !== ''):
@@ -1319,6 +1325,21 @@ if ($projectIdParam > 0) {
                      placeholder="e.g. First outreach">
             </div>
             <div class="camp-hub-field">
+              <label for="admin_draft_subject">Subject <span class="muted">(optional)</span></label>
+              <input id="admin_draft_subject" name="subject" maxlength="255"
+                     value="<?= h((string) ($editDraft['subject'] ?? '')) ?>"
+                     placeholder="e.g. Idea for {domain}"
+                     data-camp-draft-subject-input>
+              <p class="help" style="margin:0.3rem 0 0">
+                Tokens:
+                <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
+                  <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
+                          data-camp-draft-token-target="admin_draft_subject"
+                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
+                <?php endforeach; ?>
+              </p>
+            </div>
+            <div class="camp-hub-field">
               <label for="admin_draft_category">Category</label>
               <select id="admin_draft_category" name="category" required>
                 <?php
@@ -1333,7 +1354,16 @@ if ($projectIdParam > 0) {
               <label for="admin_draft_body">Draft text</label>
               <p class="help" style="margin:0 0 0.45rem">
                 Bold / italic / underline / headings / images are kept when Communication copies into email.
+                Optional subject + tokens ({domain}, {country}, {language}, {name}, {site}).
                 Paste a screenshot or use Image (auto-compressed).
+              </p>
+              <p class="help" style="margin:0 0 0.45rem">
+                Insert into body:
+                <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
+                  <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
+                          data-camp-draft-token-target="body"
+                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
+                <?php endforeach; ?>
               </p>
               <?php
               render_email_campaign_draft_editor(
