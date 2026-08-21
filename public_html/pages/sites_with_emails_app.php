@@ -434,15 +434,15 @@ if (!$inCountry) {
             $isTeam
                 ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
-                    ? 'Admin-only mirror of Sites with emails - Admin. Synced automatically. Not linked to Team.'
-                    : 'Working list from Team Push. Emailed checkpoint lives here. Also synced to All sites with emails - Final. Communication Team can super-search this data.')
+                    ? 'Admin-only archive of Sites with emails - Admin. Keeps copies after emailed/remove. Not linked to Team.'
+                    : 'Working list from Team Push. Mark emailed removes the site from this list after Final has a copy. Communication Team can super-search this data.')
         ) ?></h1>
         <p class="muted">
           <?php if ($isTeam): ?>
             Site names arrive from Extracting Results → Push.
             Add emails, then Push again to Sites with emails - Admin ·
           <?php elseif ($isAdminAll): ?>
-            Admin-only duplicate of Sites with emails - Admin (synced automatically; not linked to Team) ·
+            Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove) ·
           <?php else: ?>
             Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
@@ -527,9 +527,9 @@ if (!$inCountry) {
               $countryFetches = $teamFetchesByCountry[$cName] ?? [];
               if ($countryFetches !== [] && function_exists('render_email_campaign_fetch_stamps')):
                   ?>
-                <span class="swe-fetch-stamps-inline">
+                <div class="swe-fetch-stamps-inline">
                   <?php render_email_campaign_fetch_stamps($countryFetches); ?>
-                </span>
+                </div>
               <?php endif; ?>
             </td>
             <td class="num">

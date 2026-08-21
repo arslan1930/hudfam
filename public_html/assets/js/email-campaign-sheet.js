@@ -148,6 +148,20 @@
     if (typeof data.unsent === 'number' && unsentLabel) {
       unsentLabel.textContent = String(data.unsent);
     }
+    document.querySelectorAll('[data-camp-copy-domains]').forEach(function (btn) {
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      if (label === 'not emailed') {
+        btn.disabled = !(typeof data.unsent === 'number' && data.unsent > 0);
+      } else if (label === 'emailed') {
+        btn.disabled = !(typeof data.sent === 'number' && data.sent > 0);
+      } else {
+        var total = typeof data.total === 'number'
+          ? data.total
+          : ((typeof data.sent === 'number' ? data.sent : 0)
+            + (typeof data.unsent === 'number' ? data.unsent : 0));
+        btn.disabled = total < 1;
+      }
+    });
   }
 
   /** Update one campaign row's emailed UI without reloading (keeps scroll position). */

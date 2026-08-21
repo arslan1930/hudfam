@@ -2347,13 +2347,31 @@ try {
         $staleLeft = (int) db()->query(
             "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-stale.com'"
         )->fetchColumn();
-        if ((int) ($report['removed'] ?? 0) >= 1 && $staleLeft === 0
+        if ((int) ($report['removed'] ?? 0) === 0 && $staleLeft === 1
             && (int) ($report['updated'] ?? 0) >= 1
             && is_array($report['removed_samples'] ?? null)
             && is_array($report['updated_samples'] ?? null)) {
-            pass('Final repair report added/updated/removed');
+            pass('Final repair keeps archive-only rows and updates Admin copies');
         } else {
             fail('repair report: ' . json_encode($report) . " stale=$staleLeft");
+        }
+
+        // Mark emailed then repair must still keep the Final copy.
+        $keepId = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetchColumn();
+        set_site_with_emails_admin_email_sent($keepId, true);
+        sync_sites_with_emails_admin_to_all('Germany');
+        $finalAfterEmailedRepair = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-a.com'"
+        )->fetchColumn();
+        $adminAfterEmailedRepair = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfsent-a.com'"
+        )->fetchColumn();
+        if ($adminAfterEmailedRepair === 0 && $finalAfterEmailedRepair === 1) {
+            pass('repair after mark emailed keeps Final archive copy');
+        } else {
+            fail("repair after emailed: admin=$adminAfterEmailedRepair final=$finalAfterEmailedRepair");
         }
 
         // Manual Admin remove keeps Final archive copy.

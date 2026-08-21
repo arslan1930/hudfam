@@ -530,6 +530,8 @@ if (!str_contains($sweAppSmoke, '$adminVisitStarted')
 if (!str_contains($sweLibSmoke, 'function delete_sites_with_emails_admin_keep_final')
     || !str_contains($sweLibSmoke, 'skip invalid tokens so one bad address never blocks Copy')
     || !str_contains($sweLibSmoke, 'bool $strict = false')
+    || !str_contains($sweLibSmoke, 'Does NOT delete Final-only rows')
+    || !str_contains($sweLibSmoke, 'function sites_with_emails_final_needs_repair')
     || !str_contains($sweAppSmoke, 'Mark emailed removes the site from this Admin working list')
     || !str_contains(file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '', 'Final kept the copy')) {
     fail('SWE missing Copy-all invalid skip / mark-emailed removes Admin keeps Final');
