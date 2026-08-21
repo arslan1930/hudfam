@@ -397,6 +397,9 @@ if (!$inCountry) {
     }
 
     $countryRows = list_sites_with_emails_country_rows($sweScope);
+    $teamFetchesByCountry = ($isTeam && function_exists('email_campaign_fetches_grouped_by_country'))
+        ? email_campaign_fetches_grouped_by_country('team')
+        : [];
     $grandTotal = 0;
     $emailSites = 0;
     foreach ($countryRows as $r) {
@@ -431,15 +434,15 @@ if (!$inCountry) {
             $isTeam
                 ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
-                    ? 'Admin-only mirror of Sites with emails - Admin. Synced automatically. Not linked to Team.'
-                    : 'Working list from Team Push. Emailed checkpoint lives here. Also synced to All sites with emails - Final. Communication Team can super-search this data.')
+                    ? 'Admin-only archive of Sites with emails - Admin. Keeps copies after emailed/remove. Not linked to Team.'
+                    : 'Working list from Team Push. Mark emailed removes the site from this list after Final has a copy. Communication Team can super-search this data.')
         ) ?></h1>
         <p class="muted">
           <?php if ($isTeam): ?>
             Site names arrive from Extracting Results → Push.
             Add emails, then Push again to Sites with emails - Admin ·
           <?php elseif ($isAdminAll): ?>
-            Admin-only duplicate of Sites with emails - Admin (synced automatically; not linked to Team) ·
+            Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove) ·
           <?php else: ?>
             Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
@@ -519,6 +522,14 @@ if (!$inCountry) {
               </a>
               <?php if ($newN > 0): ?>
                 <span class="swe-country-new" title="New sites since your last visit">+<?= $newN ?> new</span>
+              <?php endif; ?>
+              <?php
+              $countryFetches = $teamFetchesByCountry[$cName] ?? [];
+              if ($countryFetches !== [] && function_exists('render_email_campaign_fetch_stamps')):
+                  ?>
+                <div class="swe-fetch-stamps-inline">
+                  <?php render_email_campaign_fetch_stamps($countryFetches); ?>
+                </div>
               <?php endif; ?>
             </td>
             <td class="num">
@@ -664,6 +675,9 @@ $readyToPush = $isTeam ? count_sites_with_emails_ready_to_push($countryName) : 0
 $pushConflicts = $isTeam ? list_sites_with_emails_push_conflict_domains($countryName) : [];
 $pushConflictSet = $pushConflicts !== [] ? array_fill_keys($pushConflicts, true) : [];
 $pushConflictCount = count($pushConflicts);
+$teamCountryFetches = ($isTeam && function_exists('list_email_campaign_fetches_for_source'))
+    ? list_email_campaign_fetches_for_source('team', $countryName)
+    : [];
 $listBase = $sweBase . '&country=' . rawurlencode($countryName);
 $listBase = append_sheet_per_page_query($listBase, $perPage);
 if ($rowFilter !== '') {
@@ -726,6 +740,11 @@ render_breadcrumbs($crumbs);
         · <span id="swe_ready_label"><?= (int) $readyToPush ?></span> ready to Push
       <?php endif; ?>
     </p>
+    <?php
+    if ($isTeam && $teamCountryFetches !== [] && function_exists('render_email_campaign_fetch_stamps')) {
+        render_email_campaign_fetch_stamps($teamCountryFetches);
+    }
+    ?>
   </div>
   <div class="actions">
     <?php

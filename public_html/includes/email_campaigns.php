@@ -225,6 +225,254 @@ function ensure_email_campaign_schema(): void
     } catch (Throwable $e) {
         // ignore migration hiccups
     }
+
+    // Campaign fetch stamps: which SWE source country was imported into which campaign sheet.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_source_fetches (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          campaign_sheet_id INT NOT NULL,
+          campaign_project_id INT NOT NULL DEFAULT 0,
+          campaign_name VARCHAR(180) NOT NULL DEFAULT '',
+          source_scope VARCHAR(20) NOT NULL DEFAULT 'team',
+          source_country VARCHAR(100) NOT NULL DEFAULT '',
+          imported INT NOT NULL DEFAULT 0,
+          updated_count INT NOT NULL DEFAULT 0,
+          skipped_duplicate INT NOT NULL DEFAULT 0,
+          fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_camp_source_fetch (source_scope, source_country, campaign_sheet_id),
+          INDEX (source_scope, source_country),
+          INDEX (campaign_sheet_id),
+          CONSTRAINT fk_camp_source_fetch_sheet
+            FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    email_campaign_ensure_source_fetch_cascade();
+}
+
+/**
+ * Older installs may have the fetches table without ON DELETE CASCADE.
+ */
+function email_campaign_ensure_source_fetch_cascade(): void
+{
+    try {
+        $pdo = db();
+        $dbName = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
+        if ($dbName === '') {
+            return;
+        }
+        $stmt = $pdo->prepare(
+            "SELECT CONSTRAINT_NAME, DELETE_RULE
+             FROM information_schema.REFERENTIAL_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = ?
+               AND TABLE_NAME = 'email_campaign_source_fetches'
+               AND CONSTRAINT_NAME = 'fk_camp_source_fetch_sheet'
+             LIMIT 1"
+        );
+        $stmt->execute([$dbName]);
+        $fk = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($fk && strtoupper((string) ($fk['DELETE_RULE'] ?? '')) === 'CASCADE') {
+            return;
+        }
+        if ($fk) {
+            $pdo->exec('ALTER TABLE email_campaign_source_fetches DROP FOREIGN KEY fk_camp_source_fetch_sheet');
+        }
+        $pdo->exec(
+            'ALTER TABLE email_campaign_source_fetches
+             ADD CONSTRAINT fk_camp_source_fetch_sheet
+             FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE'
+        );
+    } catch (Throwable $e) {
+        // ignore: table missing, no permission, or constraint already correct
+    }
+}
+
+/**
+ * Record (or refresh) that a campaign country sheet fetched a Sites-with-emails source country.
+ * Never mutates Team/Admin/Final rows.
+ *
+ * @param array{imported?:int,updated?:int,skipped_duplicate?:int} $stats
+ */
+function record_email_campaign_source_fetch(
+    int $campaignSheetId,
+    string $sourceScope,
+    string $sourceCountry,
+    array $stats = []
+): void {
+    ensure_email_campaign_schema();
+    $sheet = get_email_campaign_sheet($campaignSheetId);
+    if (!$sheet) {
+        return;
+    }
+    $sourceScope = function_exists('swe_normalize_scope')
+        ? swe_normalize_scope($sourceScope)
+        : $sourceScope;
+    $country = trim($sourceCountry);
+    if ($country === '') {
+        return;
+    }
+    $canon = function_exists('resolve_canonical_country')
+        ? resolve_canonical_country($country)
+        : null;
+    if (is_array($canon) && !empty($canon['name'])) {
+        $country = (string) $canon['name'];
+    }
+    $projectId = (int) ($sheet['project_id'] ?? 0);
+    $campaignName = email_campaign_sheet_project_name($sheet);
+    $imported = (int) ($stats['imported'] ?? 0);
+    $updated = (int) ($stats['updated'] ?? 0);
+    $skippedDup = (int) ($stats['skipped_duplicate'] ?? 0);
+
+    db()->prepare(
+        'INSERT INTO email_campaign_source_fetches
+           (campaign_sheet_id, campaign_project_id, campaign_name, source_scope, source_country,
+            imported, updated_count, skipped_duplicate, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,NOW())
+         ON DUPLICATE KEY UPDATE
+           campaign_project_id = VALUES(campaign_project_id),
+           campaign_name = VALUES(campaign_name),
+           imported = VALUES(imported),
+           updated_count = VALUES(updated_count),
+           skipped_duplicate = VALUES(skipped_duplicate),
+           fetched_at = NOW()'
+    )->execute([
+        $campaignSheetId,
+        $projectId,
+        $campaignName,
+        $sourceScope,
+        $country,
+        $imported,
+        $updated,
+        $skippedDup,
+    ]);
+}
+
+/**
+ * Fetch stamps for one SWE source country (Team / Admin / Final).
+ *
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_fetches_for_source(string $sourceScope, ?string $country = null): array
+{
+    ensure_email_campaign_schema();
+    $sourceScope = function_exists('swe_normalize_scope')
+        ? swe_normalize_scope($sourceScope)
+        : $sourceScope;
+    if ($country !== null && trim($country) !== '') {
+        $canon = function_exists('resolve_canonical_country')
+            ? resolve_canonical_country(trim($country))
+            : null;
+        $countryName = (is_array($canon) && !empty($canon['name']))
+            ? (string) $canon['name']
+            : trim($country);
+        $stmt = db()->prepare(
+            'SELECT * FROM email_campaign_source_fetches
+             WHERE source_scope=? AND source_country=?
+             ORDER BY fetched_at DESC, id DESC'
+        );
+        $stmt->execute([$sourceScope, $countryName]);
+    } else {
+        $stmt = db()->prepare(
+            'SELECT * FROM email_campaign_source_fetches
+             WHERE source_scope=?
+             ORDER BY source_country ASC, fetched_at DESC, id DESC'
+        );
+        $stmt->execute([$sourceScope]);
+    }
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
+ * Group fetch stamps by source country.
+ *
+ * @return array<string, list<array<string,mixed>>>
+ */
+function email_campaign_fetches_grouped_by_country(string $sourceScope): array
+{
+    $out = [];
+    foreach (list_email_campaign_fetches_for_source($sourceScope) as $row) {
+        $c = (string) ($row['source_country'] ?? '');
+        if ($c === '') {
+            continue;
+        }
+        $out[$c][] = $row;
+    }
+    return $out;
+}
+
+/**
+ * Render "Already fetched to campaign …" stamps.
+ *
+ * @param list<array<string,mixed>> $fetches
+ */
+function render_email_campaign_fetch_stamps(array $fetches): void
+{
+    if ($fetches === []) {
+        return;
+    }
+    echo '<ul class="swe-fetch-stamps">';
+    foreach ($fetches as $f) {
+        $name = trim((string) ($f['campaign_name'] ?? ''));
+        if ($name === '') {
+            $name = 'campaign';
+        }
+        $at = trim((string) ($f['fetched_at'] ?? ''));
+        echo '<li class="muted">Already fetched to campaign <strong>'
+            . h($name) . '</strong>';
+        if ($at !== '') {
+            echo ' · last fetch ' . h($at);
+        }
+        echo '</li>';
+    }
+    echo '</ul>';
+    echo '<p class="help swe-fetch-stamps-help">Each campaign keeps its own copy and emailed marks. This list only records who imported from this Team country.</p>';
+}
+
+/**
+ * Unique campaign-sheet domains, oldest first. $sentFilter: null/'' = all, '0' = not emailed, '1' = emailed.
+ *
+ * @return list<string>
+ */
+function collect_email_campaign_domains(int $sheetId, ?string $sentFilter = null): array
+{
+    ensure_email_campaign_schema();
+    $where = ['sheet_id = ?', "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $stmt = db()->prepare(
+        'SELECT domain FROM email_campaign_rows
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id ASC'
+    );
+    $stmt->execute($params);
+    $out = [];
+    $seen = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $d = trim((string) ($row['domain'] ?? ''));
+        if ($d === '') {
+            continue;
+        }
+        $key = mb_strtolower($d);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $d;
+    }
+    return $out;
+}
+
+function stream_email_campaign_domains_plain(int $sheetId, ?string $sentFilter = null): void
+{
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    foreach (collect_email_campaign_domains($sheetId, $sentFilter) as $domain) {
+        echo $domain, "\n";
+    }
+    exit;
 }
 
 /**
@@ -2246,7 +2494,10 @@ function save_email_campaign_sheet_grid(
 }
 
 /**
- * Import rows from Sites with emails Admin or Final into a campaign sheet.
+ * Import rows from Sites with emails Team, Admin, or Final into a campaign sheet.
+ *
+ * Never copies emailed flags (email_sent) from the source or between campaigns.
+ * New domains land unmarked. Existing emailed marks on this sheet stay.
  *
  * Modes:
  * - replace (default): add new domains; identical emails → skip; different emails → replace.
@@ -2271,7 +2522,7 @@ function import_email_campaign_sheet_from_swe(
         throw new InvalidArgumentException('Sheet not found.');
     }
     $sourceScope = swe_normalize_scope($sourceScope);
-    if (!in_array($sourceScope, ['admin', 'admin_all'], true)) {
+    if (!in_array($sourceScope, ['admin', 'admin_all', 'team'], true)) {
         $sourceScope = 'admin_all';
     }
     $mode = strtolower(trim($mode));
@@ -2307,15 +2558,17 @@ function import_email_campaign_sheet_from_swe(
            email3 = VALUES(email3),
            email4 = VALUES(email4),
            updated_at = NOW()'
+        // Never set email_sent here — emailed marks stay on this campaign sheet only.
     );
     $exists = $pdo->prepare(
-        'SELECT id, email1, email2, email3, email4
+        'SELECT id, email1, email2, email3, email4, email_sent
          FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
     $upd = $pdo->prepare(
         'UPDATE email_campaign_rows
          SET country=?, language=?, region=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
+        // Never set email_sent here — emailed marks stay on this campaign sheet only.
     );
 
     $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
@@ -2442,6 +2695,16 @@ function import_email_campaign_sheet_from_swe(
         }
     }
     $pdo->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+    $countryStamp = null;
+    if ($country !== null && trim($country) !== '') {
+        $canonStamp = resolve_canonical_country(trim($country));
+        $countryStamp = $canonStamp ? $canonStamp['name'] : trim($country);
+        record_email_campaign_source_fetch($sheetId, $sourceScope, $countryStamp, [
+            'imported' => $imported,
+            'updated' => $updated,
+            'skipped_duplicate' => $skippedDuplicate,
+        ]);
+    }
     return [
         'imported' => $imported,
         'updated' => $updated,
@@ -2452,6 +2715,8 @@ function import_email_campaign_sheet_from_swe(
         'skipped_empty' => $skippedEmpty,
         'skipped_emails' => $skippedEmails,
         'mode' => $mode,
+        'source_scope' => $sourceScope,
+        'source_country' => $countryStamp,
     ];
 }
 

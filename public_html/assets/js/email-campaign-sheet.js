@@ -148,6 +148,20 @@
     if (typeof data.unsent === 'number' && unsentLabel) {
       unsentLabel.textContent = String(data.unsent);
     }
+    document.querySelectorAll('[data-camp-copy-domains]').forEach(function (btn) {
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      if (label === 'not emailed') {
+        btn.disabled = !(typeof data.unsent === 'number' && data.unsent > 0);
+      } else if (label === 'emailed') {
+        btn.disabled = !(typeof data.sent === 'number' && data.sent > 0);
+      } else {
+        var total = typeof data.total === 'number'
+          ? data.total
+          : ((typeof data.sent === 'number' ? data.sent : 0)
+            + (typeof data.unsent === 'number' ? data.unsent : 0));
+        btn.disabled = total < 1;
+      }
+    });
   }
 
   /** Update one campaign row's emailed UI without reloading (keeps scroll position). */
@@ -590,4 +604,79 @@
   if (window.location.hash === '#add-site') {
     openAddRow();
   }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        if (!document.execCommand('copy')) reject(new Error('Copy failed'));
+        else resolve();
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
+  function bindCopyDomainsButton(btn) {
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var url = btn.getAttribute('data-export-url');
+      if (!url) return;
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      var wasDisabled = btn.disabled;
+      btn.disabled = true;
+      var loading =
+        label === 'not emailed' ? 'Loading not-emailed domains…'
+          : label === 'emailed' ? 'Loading emailed domains…'
+            : 'Loading domains…';
+      setStatus(loading, false, true);
+      showProcessing(loading);
+      fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/plain' } })
+        .then(function (res) {
+          if (!res.ok) throw new Error('Could not load domains.');
+          return res.text();
+        })
+        .then(function (text) {
+          text = String(text || '').replace(/\r\n/g, '\n').trim();
+          if (!text) {
+            throw new Error(
+              label === 'not emailed' ? 'No not-emailed domains to copy.'
+                : label === 'emailed' ? 'No emailed domains to copy.'
+                  : 'No domains to copy yet.'
+            );
+          }
+          var lines = text.split('\n').filter(Boolean);
+          return copyText(text).then(function () {
+            var kind =
+              label === 'not emailed' ? ' not-emailed'
+                : label === 'emailed' ? ' emailed'
+                  : '';
+            setStatus(
+              'Copied ' + lines.length + kind + ' domain' + (lines.length === 1 ? '' : 's') + '.'
+            );
+          });
+        })
+        .catch(function (err) {
+          setStatus(err.message || 'Copy failed.', true);
+        })
+        .then(function () {
+          hideProcessing();
+          btn.disabled = wasDisabled;
+        });
+    });
+  }
+
+  document.querySelectorAll('[data-camp-copy-domains]').forEach(bindCopyDomainsButton);
 })();

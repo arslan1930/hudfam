@@ -530,6 +530,8 @@ if (!str_contains($sweAppSmoke, '$adminVisitStarted')
 if (!str_contains($sweLibSmoke, 'function delete_sites_with_emails_admin_keep_final')
     || !str_contains($sweLibSmoke, 'skip invalid tokens so one bad address never blocks Copy')
     || !str_contains($sweLibSmoke, 'bool $strict = false')
+    || !str_contains($sweLibSmoke, 'Does NOT delete Final-only rows')
+    || !str_contains($sweLibSmoke, 'function sites_with_emails_final_needs_repair')
     || !str_contains($sweAppSmoke, 'Mark emailed removes the site from this Admin working list')
     || !str_contains(file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '', 'Final kept the copy')) {
     fail('SWE missing Copy-all invalid skip / mark-emailed removes Admin keeps Final');
@@ -546,6 +548,32 @@ if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
     fail('campaigns missing duplicate skip / replace-different-emails');
 } else {
     ok('campaigns duplicate skip + replace different emails');
+}
+if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
+    || !str_contains($campLibSmoke, 'function record_email_campaign_source_fetch')
+    || !str_contains($campLibSmoke, 'email_campaign_source_fetches')
+    || !str_contains($campLibSmoke, "['admin', 'admin_all', 'team']")
+    || !str_contains($campAppSmoke, 'Copy not emailed domains')
+    || !str_contains($campAppSmoke, "value=\"team\"")
+    || !str_contains($campAppSmoke, 'matching this filter')
+    || !str_contains($campLibSmoke, 'Already fetched to campaign')
+    || !str_contains($sweAppSmoke, 'render_email_campaign_fetch_stamps')
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '', 'data-camp-copy-domains')) {
+    fail('campaigns missing copy-not-emailed domains / Team fetch stamp');
+} else {
+    ok('campaign copy not-emailed domains + Team fetch stamps');
+}
+if (!str_contains($campLibSmoke, 'Never copies emailed flags')
+    || !str_contains($campLibSmoke, 'Never set email_sent here')
+    || !str_contains($campLibSmoke, 'function email_campaign_ensure_source_fetch_cascade')
+    || !str_contains($campLibSmoke, 'ON DELETE CASCADE')
+    || !str_contains($campLibSmoke, 'Each campaign keeps its own copy and emailed marks')
+    || !str_contains($campAppSmoke, 'This campaign’s emailed marks stay on this sheet only')
+    || !str_contains($campAppSmoke, 'Other campaigns are not affected')
+    || !str_contains($campAppSmoke, 'Team sites stay')) {
+    fail('campaigns missing emailed isolation / stamp cascade copy');
+} else {
+    ok('campaign emailed isolation + stamp cascade copy');
 }
 $newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
 $layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';

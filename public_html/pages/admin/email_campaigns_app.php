@@ -47,6 +47,14 @@ if ($sheetId > 0) {
     $pageNum = max(1, (int) get('p', 1));
     $perPage = resolve_sheet_per_page();
 
+    if ((string) get('export') === 'domains') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_domains_plain($sheetId, $sentExport);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
         $returnQ = trim((string) post('q'));
@@ -276,10 +284,20 @@ if ($sheetId > 0) {
                 redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
             }
             if ($action === 'import') {
-                $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
+                $sourceRaw = (string) post('source');
+                $source = match ($sourceRaw) {
+                    'admin' => 'admin',
+                    'team' => 'team',
+                    default => 'admin_all',
+                };
                 // Skip identical domain+emails; replace when emails differ; add new domains.
+                // Team/Admin/Final source rows are never deleted.
                 $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'replace');
-                $label = $source === 'admin' ? 'Sites with emails - Admin' : 'All sites with emails - Final';
+                $label = match ($source) {
+                    'team' => 'Sites with emails - Team',
+                    'admin' => 'Sites with emails - Admin',
+                    default => 'All sites with emails - Final',
+                };
                 $msg = 'Imported into ' . $sheetCountry . ' from ' . $label . ': '
                     . (int) $result['imported'] . ' new, ' . (int) $result['updated'] . ' updated';
                 if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
@@ -295,6 +313,11 @@ if ($sheetId > 0) {
                     $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
                 }
                 $msg .= '.';
+                if ($source === 'team') {
+                    $msg .= ' Team sheet marked fetched to '
+                        . email_campaign_sheet_project_name($sheet)
+                        . ' (Team data stayed).';
+                }
                 flash('ok', $msg);
                 $totalAfter = count_email_campaign_rows($sheetId);
                 $lastPage = max(1, (int) ceil($totalAfter / $perPage));
@@ -442,6 +465,9 @@ if ($sheetId > 0) {
         }
     }
     $formAction = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
+    $domainsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=domains';
+    $domainsExportUnsentUrl = $domainsExportUrl . '&sent=0';
+    $domainsExportSentUrl = $domainsExportUrl . '&sent=1';
     $qs = http_build_query(array_filter([
         'page' => 'admin_emails_data',
         'folder' => 'email_campaigns',
@@ -473,7 +499,7 @@ if ($sheetId > 0) {
         <p class="muted">
           Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
+          <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' matching this filter' : '' ?>
           · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
           · <span id="swe_sent_label"><?= (int) $sentStats['sent'] ?></span> emailed
           · <?= (int) $perPage ?> per page · autosave ·
@@ -552,6 +578,29 @@ if ($sheetId > 0) {
             </form>
             <?php endif; ?>
           </p>
+          <div class="swe-copy-group" role="group" aria-label="Copy domains by sent status">
+            <button type="button" class="btn secondary small" data-camp-copy-domains
+                    data-export-url="<?= h($domainsExportUnsentUrl) ?>"
+                    data-copy-label="not emailed"
+                    title="Copy site names that are not marked emailed yet"
+                    <?= ((int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
+              Copy not emailed domains
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-domains
+                    data-export-url="<?= h($domainsExportSentUrl) ?>"
+                    data-copy-label="emailed"
+                    title="Copy site names already marked emailed"
+                    <?= ((int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
+              Copy emailed domains
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-domains
+                    data-export-url="<?= h($domainsExportUrl) ?>"
+                    data-copy-label="all"
+                    title="Copy every site name on this campaign country sheet"
+                    <?= ((int) $filledCount > 0) ? '' : 'disabled' ?>>
+              Copy all domains
+            </button>
+          </div>
         </div>
         <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
           <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
@@ -744,7 +793,7 @@ if ($sheetId > 0) {
       <?php if ($rows === [] && $q === '' && $sentFilter === ''): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
-        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Final (new sites only)</strong>.</p>
+        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Team / Admin / Final</strong>.</p>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
           <button type="button" class="btn" data-camp-add-toggle>+ Add site</button>
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
@@ -754,7 +803,18 @@ if ($sheetId > 0) {
       <div class="empty-state">
         <?php if ($sentFilter === '0'): ?>
           <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
-          <p class="muted">New imports and adds appear here until you mark them emailed.</p>
+          <?php if ($q === '' && (int) $sentStats['sent'] > 0): ?>
+            <p class="muted">
+              <?= (int) $sentStats['sent'] ?> site<?= (int) $sentStats['sent'] === 1 ? ' is' : 's are' ?> emailed.
+              Open
+              <a href="<?= h(append_sheet_per_page_query($campBase . '&sheet=' . $sheetId . '&sent=1', $perPage)) ?>">Emailed</a>
+              or
+              <a href="<?= h(append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage)) ?>">All</a>
+              to see them.
+            </p>
+          <?php else: ?>
+            <p class="muted">New imports and adds appear here until you mark them emailed.</p>
+          <?php endif; ?>
         <?php elseif ($sentFilter === '1'): ?>
           <p>No emailed sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
           <p class="muted">Use “Mark emailed” or “Mark up to here” while working the campaign.</p>
@@ -827,19 +887,22 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds new sites from Final or Admin. Same domain with the same emails is skipped; different emails replace the sheet row. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds new sites from Team, Final, or Admin. Same domain with the same emails is skipped; different emails replace the sheet row. Source sheets are never deleted. Team sheets are stamped as fetched to this campaign. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
       <p class="help">
-        Imports from Final or Admin — <strong>new sites</strong> are added, <strong>duplicate domains with the same emails</strong> are skipped,
+        Imports from Team, Final, or Admin — <strong>new sites</strong> are added, <strong>duplicate domains with the same emails</strong> are skipped,
         and <strong>same domain with different emails</strong> replaces the sheet row.
+        <strong>Team data stays</strong> — importing only copies into this campaign and marks the Team country as fetched to <strong><?= h($projectName) ?></strong>.
+        This campaign’s emailed marks stay on this sheet only — other campaigns are not changed.
         Paste / + Add also respect previously removed sites and emails.
         Previously removed sites and emails are never re-added (use <strong>Allow again</strong> below if a removal was a mistake).
       </p>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Importing sites…"
-            onsubmit="return confirm('Import into <?= h($sheetCountry) ?>?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nPreviously removed sites and emails are not re-added.\n\nFinal/Admin archives are not changed.');">
+            onsubmit="return confirm('Import into <?= h($sheetCountry) ?>?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
+          <option value="team">Sites with emails - Team</option>
           <option value="admin_all">All sites with emails - Final</option>
           <option value="admin">Sites with emails - Admin</option>
         </select>
@@ -992,7 +1055,7 @@ if ($sheetId > 0) {
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Deleting country sheet…"
-            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>” and delete all its rows?');">
+            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>”?\n\nThis deletes this country’s campaign rows and the “fetched to <?= h($projectName) ?>” stamp on Team.\nOther campaigns are not affected.\nTeam sites stay.');">
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Remove country from project</button>
       </form>
@@ -1619,10 +1682,10 @@ if ($projectIdParam > 0) {
 
         <section class="card" style="margin-top:1rem">
           <h2>Danger zone</h2>
-          <p class="muted">Deletes this project and all of its country sheets, contacts, and drafts. This cannot be undone.</p>
+          <p class="muted">Deletes this project and all of its country sheets, contacts, drafts, and Team “fetched to this campaign” stamps. Team sites stay. Other campaigns are not affected.</p>
           <form method="post" action="<?= h($projectForm) ?>"
                 data-show-processing="Deleting project…"
-                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?', JSON_UNESCAPED_UNICODE)) ?>);">
+                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?\n\nTeam “fetched to ' . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.', JSON_UNESCAPED_UNICODE)) ?>);">
             <input type="hidden" name="action" value="delete_project">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <button class="btn danger" type="submit">Delete whole project</button>

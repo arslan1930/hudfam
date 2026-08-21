@@ -55,14 +55,13 @@ if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = sync_sites_with_emails_admin_to_all();
         $added = (int) ($result['added'] ?? 0);
         $updated = (int) ($result['updated'] ?? 0);
-        $removed = (int) ($result['removed'] ?? 0);
         $unchanged = (int) ($result['unchanged'] ?? 0);
         $msg = 'Final archive repaired · added ' . $added
             . ' · updated ' . $updated
             . ' · unchanged ' . $unchanged
-            . ' · removed ' . $removed . ' stale';
+            . ' · archive copies kept';
         $bits = [];
-        foreach (['added_samples' => 'Added', 'updated_samples' => 'Updated', 'removed_samples' => 'Removed'] as $key => $label) {
+        foreach (['added_samples' => 'Added', 'updated_samples' => 'Updated'] as $key => $label) {
             $samples = $result[$key] ?? [];
             if (is_array($samples) && $samples !== []) {
                 $bits[] = $label . ': ' . implode('; ', array_slice($samples, 0, 5))
@@ -150,7 +149,9 @@ if ($folder === '') {
         $allWithEmails += (int) $r['with_emails'];
     }
     $allCountryCount = count($allCountryRows);
-    $archiveDrift = $allTotal !== $sweTotal;
+    $archiveDrift = function_exists('sites_with_emails_final_needs_repair')
+        ? sites_with_emails_final_needs_repair()
+        : ($allTotal < $sweTotal);
 
     $adminEmailsNew = function_exists('admin_has_new_data') && admin_has_new_data('emails_admin', $user);
     $adminNewByCountry = function_exists('swe_admin_new_counts_by_country')
@@ -196,8 +197,9 @@ if ($folder === '') {
     <?php if ($archiveDrift): ?>
     <div class="card" style="margin-bottom:1rem">
       <p style="margin:0 0 0.65rem">
-        Final archive count (<strong><?= (int) $allTotal ?></strong>) differs from Sites with emails - Admin
-        (<strong><?= (int) $sweTotal ?></strong>).
+        Final is missing some Admin sites or has older emails
+        (Admin <strong><?= (int) $sweTotal ?></strong> · Final <strong><?= (int) $allTotal ?></strong>).
+        Repair copies Admin into Final. Rows already removed from Admin stay in Final.
       </p>
       <form method="post" action="<?= h($base) ?>">
         <?= csrf_field() ?>
@@ -232,13 +234,13 @@ if ($folder === '') {
           <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
             <h3>All sites with emails - Final</h3>
             <p class="muted">
-              Admin-only mirror of Sites with emails - Admin (not linked to Team) ·
+              Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove) ·
               <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
               · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
             </p>
           </a>
-          <?= info_icon('Admin-only mirror of Sites with emails - Admin. Stays in sync automatically. Not linked to Team.', 'About All sites with emails - Final') ?>
+          <?= info_icon('Admin-only archive of Sites with emails - Admin. Mark emailed / remove from Admin keeps a copy here. Repair copies Admin → Final and never deletes archive rows. Not linked to Team.', 'About All sites with emails - Final') ?>
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">

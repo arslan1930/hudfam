@@ -1657,6 +1657,205 @@ try {
         fail('paste dup/replace: ' . json_encode($pasteDup) . " emailC=$emailC");
     }
 
+    // Copy not-emailed domains (campaign sheet).
+    $cUnsentId = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-c.nl' LIMIT 1"
+    )->fetchColumn();
+    $cAId = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    set_email_campaign_row_email_sent($nlSheet, $cAId, true);
+    $copyUnsent = collect_email_campaign_domains($nlSheet, '0');
+    $copySent = collect_email_campaign_domains($nlSheet, '1');
+    $copyAll = collect_email_campaign_domains($nlSheet, null);
+    if (in_array('txfcamp-nl-c.nl', $copyUnsent, true)
+        && !in_array('txfcamp-nl-a.nl', $copyUnsent, true)
+        && in_array('txfcamp-nl-a.nl', $copySent, true)
+        && in_array('txfcamp-nl-c.nl', $copyAll, true)
+        && in_array('txfcamp-nl-a.nl', $copyAll, true)) {
+        pass('campaign copy not-emailed domains filters sent vs unsent');
+    } else {
+        fail('copy domains: unsent=' . json_encode($copyUnsent)
+            . ' sent=' . json_encode($copySent) . ' all=' . json_encode($copyAll));
+    }
+
+    // Team import: copy into campaign, never delete Team rows; stamp fetched to campaign.
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'");
+    $seedTeam = db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?,?, 'Dutch', 'europe', ?, '', '', '')"
+    );
+    $seedTeam->execute(['txfcamp-nl-a.nl', 'Netherlands', 'a-team@txfcamp-nl-a.nl']);
+    $seedTeam->execute(['txfcamp-nl-d.nl', 'Netherlands', 'd@txfcamp-nl-d.nl']);
+    $teamBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    $impTeam = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $teamAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    $teamEmailA = (string) db()->query(
+        "SELECT email1 FROM sites_with_emails_team WHERE domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $campEmailA = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $dOnCamp = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-d.nl'"
+    )->fetchColumn();
+    $stamps = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $stampNames = array_column($stamps, 'campaign_name');
+    if ($teamBefore === 2 && $teamAfter === 2
+        && $teamEmailA === 'a-team@txfcamp-nl-a.nl'
+        && $campEmailA === 'a-team@txfcamp-nl-a.nl'
+        && $dOnCamp === 1
+        && (int) ($impTeam['updated'] ?? 0) >= 1
+        && (int) ($impTeam['imported'] ?? 0) >= 1
+        && in_array('NL Outreach', $stampNames, true)) {
+        pass('Team import copies into campaign without wiping Team + stamps campaign');
+    } else {
+        fail('team import: ' . json_encode([
+            'imp' => $impTeam,
+            'teamBefore' => $teamBefore,
+            'teamAfter' => $teamAfter,
+            'teamEmailA' => $teamEmailA,
+            'campEmailA' => $campEmailA,
+            'dOnCamp' => $dOnCamp,
+            'stamps' => $stampNames,
+        ]));
+    }
+
+    $firstFetchedAt = (string) ($stamps[0]['fetched_at'] ?? '');
+    usleep(1100000);
+    $impTeam2 = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $teamAfter2 = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    $stamps2 = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $secondFetchedAt = (string) ($stamps2[0]['fetched_at'] ?? '');
+    $nlOutreachStamps = 0;
+    foreach ($stamps2 as $s) {
+        if ((string) ($s['campaign_name'] ?? '') === 'NL Outreach') {
+            $nlOutreachStamps++;
+        }
+    }
+    if ($teamAfter2 === 2
+        && (int) ($impTeam2['skipped_duplicate'] ?? 0) >= 1
+        && $nlOutreachStamps === 1
+        && $secondFetchedAt !== ''
+        && $secondFetchedAt >= $firstFetchedAt) {
+        pass('second Team fetch keeps Team rows and refreshes one stamp');
+    } else {
+        fail('team refetch: ' . json_encode([
+            'imp' => $impTeam2,
+            'teamAfter2' => $teamAfter2,
+            'stamps' => count($stamps2),
+            'nlOutreachStamps' => $nlOutreachStamps,
+            'first' => $firstFetchedAt,
+            'second' => $secondFetchedAt,
+        ]));
+    }
+
+    $nlSheet2 = create_email_campaign_sheet('Netherlands', (int) $adminUser['id'], 'NL Second', false);
+    $impOther = import_email_campaign_sheet_from_swe($nlSheet2, 'team', 'Netherlands', 'replace');
+    $stampsBoth = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $bothNames = array_column($stampsBoth, 'campaign_name');
+    if (in_array('NL Outreach', $bothNames, true) && in_array('NL Second', $bothNames, true)) {
+        pass('two campaigns fetching Team show two stamps');
+    } else {
+        fail('two stamps: ' . json_encode($bothNames) . ' imp=' . json_encode($impOther));
+    }
+
+    // Emailed marks are per campaign sheet — import must not copy or clobber them.
+    $idAOutreach = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $idASecond = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet2
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    set_email_campaign_row_email_sent($nlSheet, $idAOutreach, true);
+    $sentOutreach = (int) db()->query(
+        'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $idAOutreach
+    )->fetchColumn();
+    $sentSecond = (int) db()->query(
+        'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $idASecond
+    )->fetchColumn();
+    $teamStill = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    if ($idAOutreach > 0 && $idASecond > 0 && $sentOutreach === 1 && $sentSecond === 0 && $teamStill === 2) {
+        pass('campaign emailed marks are not shared across sheets');
+    } else {
+        fail("emailed isolation: ids=$idAOutreach/$idASecond outreach=$sentOutreach second=$sentSecond team=$teamStill");
+    }
+
+    $impKeepSent = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $sentAfterSame = (int) db()->query(
+        'SELECT email_sent FROM email_campaign_rows WHERE id=' . (int) $idAOutreach
+    )->fetchColumn();
+    if ((int) ($impKeepSent['skipped_duplicate'] ?? 0) >= 1 && $sentAfterSame === 1) {
+        pass('re-import identical emails keeps this campaign emailed mark');
+    } else {
+        fail('keep emailed: ' . json_encode($impKeepSent) . " sent=$sentAfterSame");
+    }
+
+    db()->prepare(
+        "UPDATE sites_with_emails_team SET email1='a-team-new@txfcamp-nl-a.nl'
+         WHERE domain='txfcamp-nl-a.nl'"
+    )->execute();
+    $impReplaceKeepSent = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $rowAAfter = db()->query(
+        'SELECT email1, email_sent FROM email_campaign_rows WHERE id=' . (int) $idAOutreach
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    if ((int) ($impReplaceKeepSent['updated'] ?? 0) >= 1
+        && (string) ($rowAAfter['email1'] ?? '') === 'a-team-new@txfcamp-nl-a.nl'
+        && (int) ($rowAAfter['email_sent'] ?? 0) === 1) {
+        pass('replace emails on import does not clear emailed mark');
+    } else {
+        fail('replace keep emailed: ' . json_encode($impReplaceKeepSent) . ' row=' . json_encode($rowAAfter));
+    }
+
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfcamp-nl-iso.nl','Netherlands','Dutch','europe','iso@txfcamp-nl-iso.nl','','','')"
+    )->execute();
+    $impNewUnsent = import_email_campaign_sheet_from_swe($nlSheet, 'team', 'Netherlands', 'replace');
+    $newSent = (int) db()->query(
+        "SELECT email_sent FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-iso.nl' LIMIT 1"
+    )->fetchColumn();
+    $secondHasE = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet2
+        . " AND domain='txfcamp-nl-iso.nl'"
+    )->fetchColumn();
+    if ((int) ($impNewUnsent['imported'] ?? 0) >= 1 && $newSent === 0 && $secondHasE === 0) {
+        pass('new Team domain lands unmarked and only on the campaign that fetched it');
+    } else {
+        fail('new unsent: ' . json_encode($impNewUnsent) . " sent=$newSent secondHasE=$secondHasE");
+    }
+
+    delete_email_campaign_sheet($nlSheet2);
+    $stampsAfterDel = list_email_campaign_fetches_for_source('team', 'Netherlands');
+    $namesAfterDel = array_column($stampsAfterDel, 'campaign_name');
+    $teamAfterDel = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'"
+    )->fetchColumn();
+    if (!in_array('NL Second', $namesAfterDel, true)
+        && in_array('NL Outreach', $namesAfterDel, true)
+        && $teamAfterDel >= 3) {
+        pass('deleting campaign sheet drops only that fetch stamp; Team stays');
+    } else {
+        fail('stamp cascade: ' . json_encode($namesAfterDel) . " team=$teamAfterDel");
+    }
+
     $rowB = (int) db()->query(
         "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
         . " AND domain='txfcamp-nl-b.nl' LIMIT 1"
@@ -2224,13 +2423,31 @@ try {
         $staleLeft = (int) db()->query(
             "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-stale.com'"
         )->fetchColumn();
-        if ((int) ($report['removed'] ?? 0) >= 1 && $staleLeft === 0
+        if ((int) ($report['removed'] ?? 0) === 0 && $staleLeft === 1
             && (int) ($report['updated'] ?? 0) >= 1
             && is_array($report['removed_samples'] ?? null)
             && is_array($report['updated_samples'] ?? null)) {
-            pass('Final repair report added/updated/removed');
+            pass('Final repair keeps archive-only rows and updates Admin copies');
         } else {
             fail('repair report: ' . json_encode($report) . " stale=$staleLeft");
+        }
+
+        // Mark emailed then repair must still keep the Final copy.
+        $keepId = (int) db()->query(
+            "SELECT id FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetchColumn();
+        set_site_with_emails_admin_email_sent($keepId, true);
+        sync_sites_with_emails_admin_to_all('Germany');
+        $finalAfterEmailedRepair = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-a.com'"
+        )->fetchColumn();
+        $adminAfterEmailedRepair = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfsent-a.com'"
+        )->fetchColumn();
+        if ($adminAfterEmailedRepair === 0 && $finalAfterEmailedRepair === 1) {
+            pass('repair after mark emailed keeps Final archive copy');
+        } else {
+            fail("repair after emailed: admin=$adminAfterEmailedRepair final=$finalAfterEmailedRepair");
         }
 
         // Manual Admin remove keeps Final archive copy.

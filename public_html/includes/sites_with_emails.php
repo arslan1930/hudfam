@@ -209,7 +209,8 @@ function sync_sites_with_emails_admin_row_to_all(array $row): void
 
 /**
  * Full mirror: Sites with emails - Admin → All sites with emails - Final.
- * Also removes All rows that no longer exist in Admin (same country+domain).
+ * Adds/updates Final from current Admin rows. Does NOT delete Final-only rows —
+ * those are archive copies (marked emailed / removed from Admin).
  *
  * @return array{
  *   upserted:int,
@@ -235,8 +236,6 @@ function sync_sites_with_emails_admin_to_all(?string $country = null): array
     $addedSamples = [];
     /** @var list<string> $updatedSamples */
     $updatedSamples = [];
-    /** @var list<string> $removedSamples */
-    $removedSamples = [];
 
     if ($country !== null && trim($country) !== '') {
         $sel = $pdo->prepare('SELECT * FROM sites_with_emails_admin WHERE country=?');
@@ -248,7 +247,6 @@ function sync_sites_with_emails_admin_to_all(?string $country = null): array
         'SELECT email1, email2, email3, email4, language, region
          FROM sites_with_emails_admin_all WHERE country=? AND domain=? LIMIT 1'
     );
-    $keep = [];
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
         $cName = (string) ($row['country'] ?? '');
         $domain = (string) ($row['domain'] ?? '');
@@ -275,38 +273,38 @@ function sync_sites_with_emails_admin_to_all(?string $country = null): array
             }
         }
         sync_sites_with_emails_admin_row_to_all($row);
-        $keep[mb_strtolower($cName) . "\0" . mb_strtolower($domain)] = true;
         $upserted++;
     }
 
-    $removed = 0;
-    if ($country !== null && trim($country) !== '') {
-        $all = $pdo->prepare('SELECT id, domain, country FROM sites_with_emails_admin_all WHERE country=?');
-        $all->execute([trim($country)]);
-    } else {
-        $all = $pdo->query('SELECT id, domain, country FROM sites_with_emails_admin_all');
-    }
-    $del = $pdo->prepare('DELETE FROM sites_with_emails_admin_all WHERE id=?');
-    while ($row = $all->fetch(PDO::FETCH_ASSOC)) {
-        $key = mb_strtolower((string) $row['country']) . "\0" . mb_strtolower((string) $row['domain']);
-        if (!isset($keep[$key])) {
-            $del->execute([(int) $row['id']]);
-            $removed++;
-            if (count($removedSamples) < 10) {
-                $removedSamples[] = (string) $row['country'] . ' · ' . (string) $row['domain'];
-            }
-        }
-    }
     return [
         'upserted' => $upserted,
         'added' => $added,
         'updated' => $updated,
         'unchanged' => $unchanged,
-        'removed' => $removed,
+        'removed' => 0,
         'added_samples' => $addedSamples,
         'updated_samples' => $updatedSamples,
-        'removed_samples' => $removedSamples,
+        'removed_samples' => [],
     ];
+}
+
+/**
+ * True when Admin has rows missing from Final or emails/meta that differ.
+ * Extra Final-only rows (archive copies) are expected and are not drift.
+ */
+function sites_with_emails_final_needs_repair(): bool
+{
+    ensure_sites_with_emails_schema();
+    $n = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin a
+         LEFT JOIN sites_with_emails_admin_all f
+           ON f.country = a.country AND f.domain = a.domain
+         WHERE f.id IS NULL
+            OR a.email1 <> f.email1 OR a.email2 <> f.email2
+            OR a.email3 <> f.email3 OR a.email4 <> f.email4
+            OR a.language <> f.language OR a.region <> f.region"
+    )->fetchColumn();
+    return $n > 0;
 }
 
 function delete_sites_with_emails_admin_all_by_domain(string $country, string $domain): void
