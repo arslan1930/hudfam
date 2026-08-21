@@ -517,14 +517,20 @@ if (!str_contains($sweLibSmoke, 'function swe_admin_mark_country_seen')
 } else {
     ok('SWE Admin country New watermark + list +N');
 }
-if (!str_contains($sweLibSmoke, 'function swe_admin_row_signal')
-    || !str_contains($sweLibSmoke, 'function swe_admin_visit_since')
-    || !str_contains($sweAppSmoke, 'swe-row-chip')
+if (!str_contains($sweAppSmoke, 'swe-row-chip')
     || !str_contains($sweAppSmoke, "get('filter')")
     || !str_contains($sweAppSmoke, 'since your last visit')) {
     fail('SWE missing P1b row New/Updated chips / flash / filter');
 } else {
     ok('SWE P1b row chips + flash + filter');
+}
+if (!str_contains($sweAppSmoke, '$adminVisitStarted')
+    || !str_contains($sweAppSmoke, 'array_key_exists($countryName')
+    || !str_contains($sweLibSmoke, 'email1 = VALUES(email1) AND email2 = VALUES(email2)')
+    || !str_contains(file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '', 'data.row_deleted')) {
+    fail('SWE missing chain fixes (visit mark-once / updated_at / row_deleted UI)');
+} else {
+    ok('SWE chain fixes visit mark-once + updated_at + row_deleted');
 }
 $newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
 $layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';

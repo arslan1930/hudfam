@@ -777,7 +777,12 @@ function push_one_site_with_emails_team_to_admin(
            region = IF(VALUES(region) <> '', VALUES(region), region),
            extract_batch_id = COALESCE(VALUES(extract_batch_id), extract_batch_id),
            pushed_by = VALUES(pushed_by),
-           updated_at = NOW()"
+           updated_at = IF(
+             email1 = VALUES(email1) AND email2 = VALUES(email2)
+               AND email3 = VALUES(email3) AND email4 = VALUES(email4),
+             updated_at,
+             NOW()
+           )"
     );
     $ins->execute([
         $domain,
@@ -896,7 +901,12 @@ function push_sites_with_emails_team_to_admin(
            region = IF(VALUES(region) <> '', VALUES(region), region),
            extract_batch_id = COALESCE(VALUES(extract_batch_id), extract_batch_id),
            pushed_by = VALUES(pushed_by),
-           updated_at = NOW()"
+           updated_at = IF(
+             email1 = VALUES(email1) AND email2 = VALUES(email2)
+               AND email3 = VALUES(email3) AND email4 = VALUES(email4),
+             updated_at,
+             NOW()
+           )"
     );
     $adminSel = db()->prepare(
         "SELECT email1, email2, email3, email4, email_sent FROM {$admin} WHERE country=? AND domain=? LIMIT 1"
@@ -2203,11 +2213,12 @@ function swe_admin_visit_since(?array $user, string $country, bool $startVisit =
     if (!isset($_SESSION['swe_admin_visit_since'][$uid]) || !is_array($_SESSION['swe_admin_visit_since'][$uid])) {
         $_SESSION['swe_admin_visit_since'][$uid] = [];
     }
-    if ($startVisit || !isset($_SESSION['swe_admin_visit_since'][$uid][$country])) {
+    if ($startVisit || !array_key_exists($country, $_SESSION['swe_admin_visit_since'][$uid])) {
         $since = swe_admin_unseen_since($uid, $country);
-        $_SESSION['swe_admin_visit_since'][$uid][$country] = $since;
+        // Empty string sentinel so array_key_exists stays true when there is no watermark.
+        $_SESSION['swe_admin_visit_since'][$uid][$country] = $since ?? '';
     }
-    $v = $_SESSION['swe_admin_visit_since'][$uid][$country] ?? null;
+    $v = $_SESSION['swe_admin_visit_since'][$uid][$country] ?? '';
     return ($v !== null && $v !== '') ? (string) $v : null;
 }
 

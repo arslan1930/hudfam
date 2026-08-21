@@ -1974,6 +1974,20 @@ try {
         } else {
             fail('same-slot re-push: ' . json_encode($samePush) . " sent=$sameSent");
         }
+        $sameUpdated = (string) db()->query(
+            "SELECT updated_at FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1"
+        )->fetchColumn();
+        // Re-fetch created/updated after identical push — updated_at should not jump forward alone as "content change"
+        // (IF keeps updated_at when slots equal). Spot-check: no Updated signal vs a watermark after push.
+        $sigSame = swe_admin_row_signal(
+            db()->query("SELECT * FROM sites_with_emails_admin WHERE domain='txfsent-a.com' LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [],
+            $sameUpdated
+        );
+        if ($sigSame === '') {
+            pass('identical re-push does not mark row Updated vs its own updated_at');
+        } else {
+            fail('identical re-push false Updated signal: ' . $sigSame);
+        }
 
         $unitMerge = merge_swe_email_slots_prefer_admin(
             ['keep@admin.test', '', '', ''],

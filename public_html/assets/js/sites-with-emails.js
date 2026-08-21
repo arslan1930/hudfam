@@ -370,6 +370,17 @@
       })
       .then(function (data) {
         form.removeAttribute('data-swe-dirty');
+        if (data && data.row_deleted) {
+          var gone = form.closest('[data-swe-row]');
+          if (gone) gone.remove();
+          if (typeof data.site_count === 'number' && totalLabel) {
+            totalLabel.textContent = String(data.site_count);
+          }
+          setStatus('Removed ' + (data.domain || 'site') + ' (no emails left).');
+          filterRows();
+          syncPushButton();
+          return data;
+        }
         var row = form.closest('[data-swe-row]');
         refreshRowSearchIndex(row);
         if (!opts.quiet) {
