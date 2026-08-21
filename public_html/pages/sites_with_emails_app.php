@@ -615,7 +615,8 @@ $adminUpdatedOpenCount = 0;
 $adminVisitStarted = false;
 if ($sweScope === 'admin' && function_exists('swe_admin_visit_since')) {
     $uidVisit = (int) ($sweUser['id'] ?? 0);
-    $hadVisit = isset($_SESSION['swe_admin_visit_since'][$uidVisit][$countryName]);
+    $visitMap = $_SESSION['swe_admin_visit_since'][$uidVisit] ?? null;
+    $hadVisit = is_array($visitMap) && array_key_exists($countryName, $visitMap);
     $adminSeenSince = swe_admin_visit_since($sweUser, $countryName, !$hadVisit);
     $adminVisitStarted = !$hadVisit;
     $adminNewOpenCount = swe_admin_count_new_since($countryName, $adminSeenSince);
@@ -631,8 +632,10 @@ if ($sweScope === 'admin' && function_exists('swe_admin_visit_since')) {
         }
         flash('ok', $flashMsg . '.');
     }
-    // Mark seen on GET page/export open only — not on every AJAX save POST.
-    if ($_SERVER['REQUEST_METHOD'] === 'GET' && function_exists('swe_admin_mark_country_seen')) {
+    // Mark seen once at visit start (not on every pagination/filter GET).
+    if ($_SERVER['REQUEST_METHOD'] === 'GET'
+        && $adminVisitStarted
+        && function_exists('swe_admin_mark_country_seen')) {
         swe_admin_mark_country_seen($sweUser, $countryName);
     }
 }
