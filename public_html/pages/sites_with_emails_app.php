@@ -878,7 +878,7 @@ render_breadcrumbs($crumbs);
     <div>
       <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Sheets can reach ~100K sites — choose how many rows per page with the Per page filter. Search matches site name or any email on that row.') ?></h2>
       <p class="help" style="margin:0.25rem 0 0">
-        Search shows both columns together (site + its emails).
+        Search filters this page after you pause typing (default 100 rows). Ctrl/Cmd+Enter searches all pages.
         <?php if ($sweScope === 'admin'): ?>
           Use <strong>Status</strong> and the Actions buttons on each row for emailed / up to here.
         <?php elseif ($isAdmin): ?>
@@ -962,7 +962,7 @@ render_breadcrumbs($crumbs);
       <input id="swe-row-search" type="search" placeholder="Search site or email…"
              value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
              <?= ($countryTotal < 1 && $q === '') ? 'disabled' : '' ?>
-             title="Filter · Enter = next match · Ctrl/Cmd+Enter = search all pages">
+             title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
       <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
     </label>
   </div>
@@ -1095,108 +1095,62 @@ render_breadcrumbs($crumbs);
           <td class="swe-td-actions">
             <div class="swe-row-actions">
               <?php if ($sweScope === 'admin'): ?>
-              <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
-                      form="swe-mark-<?= $sid ?>"
+              <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
+                      data-sheet-action="mark" data-site-id="<?= $sid ?>"
+                      data-email-sent="<?= $isEmailed ? '0' : '1' ?>" data-domain="<?= h($domain) ?>"
                       title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark emailed · remove from Admin (Final keeps a copy)' ?>">
                 <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
               </button>
-              <button class="btn secondary small" type="submit" form="swe-upto-<?= $sid ?>"
+              <button class="btn secondary small" type="button"
+                      data-sheet-action="upto" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
                       title="Mark emailed up to here · remove those rows from Admin (Final keeps copies)"
-                      onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be REMOVED from Admin.\n\nFinal archive keeps those copies.');">
+                      data-confirm="Mark emailed UP TO <?= h($domain) ?>?&#10;&#10;Every older site from the top through this row will be REMOVED from Admin.&#10;&#10;Final archive keeps those copies.">
                 Up to here
               </button>
-              <button class="btn secondary small" type="submit" form="swe-clear-upto-<?= $sid ?>"
+              <button class="btn secondary small" type="button"
+                      data-sheet-action="clear-upto" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
                       title="Clear emailed marks from the top through this site"
-                      onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older emailed site from the top through this row will be unmarked.\n\nFinal archive stays unchanged.');">
+                      data-confirm="Clear emailed UP TO <?= h($domain) ?>?&#10;&#10;Every older emailed site from the top through this row will be unmarked.&#10;&#10;Final archive stays unchanged.">
                 Clear up to
               </button>
               <?php endif; ?>
               <?php if ($isTeam):
                   $pushConfirm = $willOverwrite
-                      ? 'Push ' . $domain . ' to Sites with emails - Admin?\n\n'
+                      ? 'Push ' . $domain . ' to Sites with emails - Admin?' . "\n\n"
                         . 'This site ALREADY EXISTS in Admin. Push will MERGE Team emails into empty Admin slots '
-                        . '(existing Admin emails are kept).\n\nThis row will leave the Team working copy.'
-                      : 'Push ' . $domain . ' to Sites with emails - Admin?\n\nThis row will leave the Team working copy.';
+                        . '(existing Admin emails are kept).' . "\n\nThis row will leave the Team working copy."
+                      : 'Push ' . $domain . ' to Sites with emails - Admin?' . "\n\nThis row will leave the Team working copy.";
                   ?>
-              <button class="btn small" type="submit" form="swe-push-<?= $sid ?>"
+              <button class="btn small" type="button"
+                      data-sheet-action="push" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
                       data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
                       data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>"
+                      data-confirm="<?= h($pushConfirm) ?>"
                       title="<?= $hasEmail
                           ? ($willOverwrite ? 'Merge Team emails into empty Admin slots for this site' : 'Push this site to Admin')
-                          : 'Add at least one email first' ?>"
-                      onclick="return confirm(<?= h(json_encode($pushConfirm, JSON_UNESCAPED_UNICODE)) ?>);">Push</button>
+                          : 'Add at least one email first' ?>">Push</button>
               <?php endif; ?>
-              <button class="btn secondary small" type="submit" form="swe-remove-<?= $sid ?>"
-                      onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
+              <button class="btn secondary small" type="button"
+                      data-sheet-action="remove" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
+                      data-confirm="Remove complete row for <?= h($domain) ?>?">Remove</button>
             </div>
-            <?php if ($isTeam): ?>
-            <form id="swe-push-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-push
-                  data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>" hidden>
-              <?= csrf_field() ?>
-              <input type="hidden" name="action" value="push_site">
-              <input type="hidden" name="site_id" value="<?= $sid ?>">
-              <input type="hidden" name="confirm_overwrite" value="0" data-swe-confirm-overwrite>
-              <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
-              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-            </form>
-            <?php endif; ?>
-            <?php if ($sweScope === 'admin'): ?>
-            <form id="swe-mark-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-mark hidden>
-              <input type="hidden" name="action" value="mark_email_sent">
-              <input type="hidden" name="site_id" value="<?= $sid ?>">
-              <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
-              <input type="hidden" name="q" value="<?= h($q) ?>">
-              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-              <?php if ($sentFilter !== ''): ?>
-              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-              <?php endif; ?>
-              <?php if ($rowFilter !== ''): ?>
-              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
-              <?php endif; ?>
-            </form>
-            <form id="swe-upto-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-mark-upto hidden>
-              <input type="hidden" name="action" value="mark_emailed_up_to">
-              <input type="hidden" name="site_id" value="<?= $sid ?>">
-              <input type="hidden" name="q" value="<?= h($q) ?>">
-              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-              <?php if ($sentFilter !== ''): ?>
-              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-              <?php endif; ?>
-              <?php if ($rowFilter !== ''): ?>
-              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
-              <?php endif; ?>
-            </form>
-            <form id="swe-clear-upto-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-clear-upto hidden>
-              <input type="hidden" name="action" value="clear_emailed_up_to">
-              <input type="hidden" name="site_id" value="<?= $sid ?>">
-              <input type="hidden" name="q" value="<?= h($q) ?>">
-              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-              <?php if ($sentFilter !== ''): ?>
-              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-              <?php endif; ?>
-              <?php if ($rowFilter !== ''): ?>
-              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
-              <?php endif; ?>
-            </form>
-            <?php endif; ?>
-            <form id="swe-remove-<?= $sid ?>" method="post" action="<?= h($listBase) ?>" data-swe-remove hidden>
-              <input type="hidden" name="action" value="remove_site">
-              <input type="hidden" name="site_id" value="<?= $sid ?>">
-              <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
-              <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-              <?php if ($sentFilter !== ''): ?>
-              <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-              <?php endif; ?>
-              <?php if ($rowFilter !== ''): ?>
-              <input type="hidden" name="filter" value="<?= h($rowFilter) ?>">
-              <?php endif; ?>
-            </form>
           </td>
         </tr>
       <?php endforeach; ?>
       </tbody>
     </table>
   </div>
+  <?php
+  render_sheet_shared_row_action_forms($listBase, 'swe', [
+      'q' => $q,
+      'p' => $pageNum,
+      'sent' => $sentFilter,
+      'filter' => $rowFilter,
+      'mark' => $sweScope === 'admin',
+      'push' => $isTeam,
+      'remove' => true,
+  ]);
+  ?>
   <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
     No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
   </p>

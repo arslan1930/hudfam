@@ -399,7 +399,8 @@ function sheet_per_page_options(): array
 
 function sheet_per_page_default(): int
 {
-    return 1000;
+    // 100 keeps Emails data / campaign sheets usable; 1000 is still an explicit choice.
+    return 100;
 }
 
 function normalize_sheet_per_page(int $n): int
@@ -457,11 +458,71 @@ function render_sheet_per_page_filter(array $baseQuery, int $current): void
         echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
     }
     echo '<label for="sheet_per_page_select">Per page</label>';
-    echo '<select id="sheet_per_page_select" name="per_page" onchange="this.form.submit()" title="How many rows to show on each page">';
+    echo '<select id="sheet_per_page_select" name="per_page" onchange="this.form.submit()" title="How many rows to show on each page. Default 100 keeps large Emails data lists from freezing the browser.">';
     foreach (sheet_per_page_options() as $n) {
         echo '<option value="' . (int) $n . '"' . ($n === $current ? ' selected' : '') . '>'
             . (int) $n
             . '</option>';
     }
     echo '</select></form>';
+}
+
+/**
+ * One hidden form per row action (mark / up-to / remove / push) for the whole sheet.
+ * Buttons use data-sheet-action + data-site-id instead of a form copy on every row.
+ *
+ * @param array{
+ *   q?:string,p?:int,sent?:string,filter?:string,
+ *   mark?:bool,push?:bool,remove?:bool
+ * } $state
+ */
+function render_sheet_shared_row_action_forms(string $actionUrl, string $prefix, array $state = []): void
+{
+    $q = (string) ($state['q'] ?? '');
+    $p = (int) ($state['p'] ?? 1);
+    $sent = (string) ($state['sent'] ?? '');
+    $filter = (string) ($state['filter'] ?? '');
+    $includeMark = !empty($state['mark']);
+    $includePush = !empty($state['push']);
+    $includeRemove = ($state['remove'] ?? true) !== false;
+    $nav = '<input type="hidden" name="q" value="' . h($q) . '" data-swe-q>'
+        . '<input type="hidden" name="p" value="' . $p . '">';
+    if ($sent !== '') {
+        $nav .= '<input type="hidden" name="sent" value="' . h($sent) . '">';
+    }
+    if ($filter !== '') {
+        $nav .= '<input type="hidden" name="filter" value="' . h($filter) . '">';
+    }
+    $url = h($actionUrl);
+    $pre = h($prefix);
+    echo '<div class="sheet-shared-actions" hidden>';
+    if ($includeMark) {
+        echo '<form id="' . $pre . '-shared-mark" method="post" action="' . $url . '" data-swe-mark>'
+            . '<input type="hidden" name="action" value="mark_email_sent">'
+            . '<input type="hidden" name="site_id" value="">'
+            . '<input type="hidden" name="email_sent" value="1">'
+            . $nav . '</form>';
+        echo '<form id="' . $pre . '-shared-upto" method="post" action="' . $url . '" data-swe-mark-upto>'
+            . '<input type="hidden" name="action" value="mark_emailed_up_to">'
+            . '<input type="hidden" name="site_id" value="">'
+            . $nav . '</form>';
+        echo '<form id="' . $pre . '-shared-clear-upto" method="post" action="' . $url . '" data-swe-clear-upto>'
+            . '<input type="hidden" name="action" value="clear_emailed_up_to">'
+            . '<input type="hidden" name="site_id" value="">'
+            . $nav . '</form>';
+    }
+    if ($includePush) {
+        echo '<form id="' . $pre . '-shared-push" method="post" action="' . $url . '" data-swe-push data-admin-conflict="0">'
+            . '<input type="hidden" name="action" value="push_site">'
+            . '<input type="hidden" name="site_id" value="">'
+            . '<input type="hidden" name="confirm_overwrite" value="0" data-swe-confirm-overwrite>'
+            . $nav . '</form>';
+    }
+    if ($includeRemove) {
+        echo '<form id="' . $pre . '-shared-remove" method="post" action="' . $url . '" data-swe-remove>'
+            . '<input type="hidden" name="action" value="remove_site">'
+            . '<input type="hidden" name="site_id" value="">'
+            . $nav . '</form>';
+    }
+    echo '</div>';
 }

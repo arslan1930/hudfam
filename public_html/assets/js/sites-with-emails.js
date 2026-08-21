@@ -261,13 +261,30 @@
     syncPushButton();
   }
 
+  var filterTimer = null;
+  function sheetActionRows() {
+    return document.querySelectorAll('[data-swe-row]');
+  }
+  function scheduleFilterRows() {
+    if (filterTimer) window.clearTimeout(filterTimer);
+    filterTimer = window.setTimeout(function () {
+      filterTimer = null;
+      filterRows();
+    }, 160);
+  }
+  function maybeRefilter() {
+    if (searchInput && String(searchInput.value || '').trim()) {
+      scheduleFilterRows();
+    }
+  }
+
   function filterRows() {
     if (!searchInput) return;
     var q = String(searchInput.value || '').trim().toLowerCase();
     matchRows = [];
     clearHits();
     var shown = 0;
-    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+    sheetActionRows().forEach(function (row) {
       var hit = !q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1;
       row.hidden = !hit;
       if (hit) {
@@ -315,11 +332,15 @@
   if (searchInput) {
     searchInput.addEventListener('input', function () {
       matchIndex = -1;
-      filterRows();
+      scheduleFilterRows();
     });
     searchInput.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
+      if (filterTimer) {
+        window.clearTimeout(filterTimer);
+        filterTimer = null;
+      }
       if (e.ctrlKey || e.metaKey) {
         var url = new URL(window.location.href);
         var q = String(searchInput.value || '').trim();
@@ -331,8 +352,36 @@
       }
       jump(e.shiftKey ? -1 : 1);
     });
-    filterRows();
+    if (String(searchInput.value || '').trim()) {
+      filterRows();
+    }
   }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-sheet-action]') : null;
+    if (!btn || btn.disabled) return;
+    var kind = String(btn.getAttribute('data-sheet-action') || '');
+    var form = document.getElementById('swe-shared-' + kind)
+      || document.getElementById('camp-shared-' + kind);
+    if (!form) return;
+    e.preventDefault();
+    var confirmMsg = btn.getAttribute('data-confirm');
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    var siteInput = form.querySelector('[name="site_id"]');
+    if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
+    if (kind === 'mark') {
+      var sentInput = form.querySelector('[name="email_sent"]');
+      if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+    }
+    if (kind === 'push') {
+      form.setAttribute('data-admin-conflict', btn.getAttribute('data-admin-conflict') || '0');
+    }
+    if (typeof form.requestSubmit === 'function') {
+      form.requestSubmit();
+    } else {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    }
+  });
 
   if (pushBtn && !pushBtn.disabled) {
     pushBtn.setAttribute('data-server-ready', '1');
@@ -388,7 +437,7 @@
         } else {
           setStatus('Autosaved.');
         }
-        filterRows();
+        maybeRefilter();
         syncPushButton();
         return data;
       })
@@ -447,7 +496,7 @@
     var form = saveFormOf(input);
     var row = input.closest('[data-swe-row]');
     refreshRowSearchIndex(row);
-    filterRows();
+    maybeRefilter();
     setStatus('Pasted ' + Math.min(multi.length, 4) + ' email' + (multi.length === 1 ? '' : 's') + '.');
     // Save immediately — do not wait for debounce, or Push can miss emails 2–4.
     if (form) {
@@ -471,7 +520,7 @@
     if (input.matches('.swe-domain')) {
       refreshOpenLink(input.closest('[data-swe-row]'));
     }
-    filterRows();
+    maybeRefilter();
     scheduleAutosave(form);
     if (input.matches('[data-swe-email]') && String(input.value || '').trim() === '') {
       setStatus('Email cleared.');
@@ -548,19 +597,14 @@
       status.textContent = sent ? 'Emailed' : 'Not emailed';
     }
 
-    var markBtn = row.querySelector('button[form^="swe-mark-"]');
+    var markBtn = row.querySelector('[data-sheet-action="mark"]');
     if (markBtn) {
       markBtn.textContent = sent ? 'Clear emailed' : 'Mark emailed';
       markBtn.title = sent
         ? 'Clear emailed mark on this site only'
-        : 'Mark this site as emailed';
+        : 'Mark emailed · remove from Admin (Final keeps a copy)';
       markBtn.classList.toggle('secondary', sent);
-    }
-
-    var markForm = document.getElementById('swe-mark-' + row.getAttribute('data-site-id'));
-    if (markForm) {
-      var sentInput = markForm.querySelector('[name="email_sent"]');
-      if (sentInput) sentInput.value = sent ? '0' : '1';
+      markBtn.setAttribute('data-email-sent', sent ? '0' : '1');
     }
   }
 

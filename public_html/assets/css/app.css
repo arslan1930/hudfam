@@ -1476,11 +1476,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   white-space: nowrap;
 }
 /* Checkpoint controls stay quiet; Mark emailed stays primary when unmarked. */
+.swe-row-actions button[data-sheet-action="upto"],
+.swe-row-actions button[data-sheet-action="clear-upto"],
 .swe-row-actions button[form*="-upto-"],
 .swe-row-actions button[form*="-clear-upto-"] {
   font-weight: 600;
 }
 /* Remove is always the destructive action — visually separated. */
+.swe-row-actions button[data-sheet-action="remove"],
 .swe-row-actions button[form*="-remove-"],
 .swe-row-actions button[form*="remove"] {
   margin-top: 0.2rem;
@@ -1489,6 +1492,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   background: #fff !important;
   box-shadow: none;
 }
+.swe-row-actions button[data-sheet-action="remove"]:hover,
 .swe-row-actions button[form*="-remove-"]:hover,
 .swe-row-actions button[form*="remove"]:hover {
   filter: none;
@@ -4078,6 +4082,7 @@ textarea:focus-visible {
   .swe-row-actions {
     gap: 0.35rem;
   }
+  .swe-row-actions button[data-sheet-action="remove"],
   .swe-row-actions button[form*="-remove-"],
   .swe-row-actions button[form*="remove"] {
     margin-top: 0;

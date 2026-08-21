@@ -82,9 +82,9 @@ db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR do
 db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
-db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
-db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%'");
+db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%'");
+db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%'");
+db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%'");
 db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
@@ -1548,10 +1548,10 @@ try {
     $badClamped = resolve_sheet_per_page();
     unset($_GET['per_page'], $_SESSION['sheet_per_page']);
     $opts = sheet_per_page_options();
-    if ($defaultPp === 1000
+    if ($defaultPp === 100
         && $picked250 === 250
         && $remembered === 250
-        && $badClamped === 1000
+        && $badClamped === 100
         && $opts === [100, 250, 500, 1000]
         && normalize_sheet_per_page(500) === 500
         && str_contains(append_sheet_per_page_query('index.php?page=x', 100), 'per_page=100')) {
@@ -2465,6 +2465,30 @@ try {
             pass('Admin remove keeps Final archive copy');
         } else {
             fail("admin remove keep final: admin=$rmAdmin final=$rmFinal");
+        }
+
+        db()->prepare(
+            "INSERT INTO sites_with_emails_admin
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsug-prefix.de','Germany','German','europe','findme@txfsug-prefix.de','','','')"
+        )->execute();
+        $prefixHits = search_sites_with_emails_admin_suggestions('txfsug-pre', 10);
+        $emailHits = search_sites_with_emails_admin_suggestions('findme@txfsug', 10);
+        $containsHits = search_sites_with_emails_admin_suggestions('sug-prefix', 10);
+        $prefixOk = in_array('txfsug-prefix.de', array_column($prefixHits, 'domain'), true);
+        $emailOk = in_array('txfsug-prefix.de', array_column($emailHits, 'domain'), true);
+        $containsOk = in_array('txfsug-prefix.de', array_column($containsHits, 'domain'), true);
+        if ($prefixOk && $emailOk && $containsOk) {
+            pass('Admin super-search prefix + email + contains');
+        } else {
+            fail('super-search: prefix=' . json_encode($prefixHits)
+                . ' email=' . json_encode($emailHits)
+                . ' contains=' . json_encode($containsHits));
+        }
+        if (is_bool(sites_with_emails_final_needs_repair())) {
+            pass('Final repair check uses LIMIT 1 short-circuit');
+        } else {
+            fail('Final repair check did not return bool');
         }
     }
 } catch (Throwable $e) {

@@ -609,7 +609,7 @@ if ($sheetId > 0) {
             <input id="swe-row-search" type="search" placeholder="Search site or email…"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
                    <?= $filledCount < 1 && $q === '' && $sentFilter === '' ? 'disabled' : '' ?>
-                   title="Filter this page · Enter = next match · Ctrl/Cmd+Enter = search all pages">
+                   title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
             <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
           </label>
         </div>
@@ -726,67 +726,44 @@ if ($sheetId > 0) {
               </td>
               <td class="swe-td-actions">
                 <div class="swe-row-actions">
-                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
-                          form="camp-mark-<?= $rid ?>"
+                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
+                          data-sheet-action="mark" data-site-id="<?= $rid ?>"
+                          data-email-sent="<?= $isEmailed ? '0' : '1' ?>" data-domain="<?= h($domain) ?>"
                           title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
                     <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
                   </button>
-                  <button class="btn secondary small" type="submit" form="camp-upto-<?= $rid ?>"
+                  <button class="btn secondary small" type="button"
+                          data-sheet-action="upto" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
                           title="Mark this site and every older site above it as emailed"
-                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be marked emailed on this sheet.');">
+                          data-confirm="Mark emailed UP TO <?= h($domain) ?>?&#10;&#10;Every older site from the top through this row will be marked emailed on this sheet.">
                     Up to here
                   </button>
-                  <button class="btn secondary small" type="submit" form="camp-clear-upto-<?= $rid ?>"
+                  <button class="btn secondary small" type="button"
+                          data-sheet-action="clear-upto" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
                           title="Clear emailed marks from the top through this site"
-                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older emailed site from the top through this row will be unmarked on this sheet.');">
+                          data-confirm="Clear emailed UP TO <?= h($domain) ?>?&#10;&#10;Every older emailed site from the top through this row will be unmarked on this sheet.">
                     Clear up to
                   </button>
-                  <button class="btn secondary small" type="submit" form="camp-remove-<?= $rid ?>"
-                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
+                  <button class="btn secondary small" type="button"
+                          data-sheet-action="remove" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
+                          data-confirm="Remove complete row for <?= h($domain) ?>?">Remove</button>
                 </div>
-                <form id="camp-mark-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-mark hidden>
-                  <input type="hidden" name="action" value="mark_email_sent">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>">
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
-                <form id="camp-upto-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-mark-upto hidden>
-                  <input type="hidden" name="action" value="mark_emailed_up_to">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>">
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
-                <form id="camp-clear-upto-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-clear-upto hidden>
-                  <input type="hidden" name="action" value="clear_emailed_up_to">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>">
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
-                <form id="camp-remove-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-remove hidden>
-                  <input type="hidden" name="action" value="remove_site">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
               </td>
             </tr>
           <?php endforeach; ?>
           </tbody>
         </table>
       </div>
+      <?php
+      render_sheet_shared_row_action_forms($formAction, 'camp', [
+          'q' => $q,
+          'p' => $pageNum,
+          'sent' => $sentFilter,
+          'mark' => true,
+          'push' => false,
+          'remove' => true,
+      ]);
+      ?>
       <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
         No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
       </p>

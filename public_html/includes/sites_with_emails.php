@@ -295,16 +295,18 @@ function sync_sites_with_emails_admin_to_all(?string $country = null): array
 function sites_with_emails_final_needs_repair(): bool
 {
     ensure_sites_with_emails_schema();
-    $n = (int) db()->query(
-        "SELECT COUNT(*) FROM sites_with_emails_admin a
+    // Stop at the first mismatch — COUNT(*) over the full Admin↔Final join froze the hub.
+    $hit = db()->query(
+        "SELECT 1 FROM sites_with_emails_admin a
          LEFT JOIN sites_with_emails_admin_all f
            ON f.country = a.country AND f.domain = a.domain
          WHERE f.id IS NULL
             OR a.email1 <> f.email1 OR a.email2 <> f.email2
             OR a.email3 <> f.email3 OR a.email4 <> f.email4
-            OR a.language <> f.language OR a.region <> f.region"
+            OR a.language <> f.language OR a.region <> f.region
+         LIMIT 1"
     )->fetchColumn();
-    return $n > 0;
+    return (int) $hit === 1;
 }
 
 function delete_sites_with_emails_admin_all_by_domain(string $country, string $domain): void
@@ -1097,7 +1099,7 @@ function count_sites_with_emails_ready_to_push(string $country): int
 function sites_with_emails_inventory_query(
     array $filters,
     int $page = 1,
-    int $perPage = 1000,
+    int $perPage = 100,
     string $scope = 'team'
 ): array {
     ensure_sites_with_emails_schema();
@@ -1791,7 +1793,50 @@ function stream_sites_with_emails_emails_plain(
 }
 
 /**
+ * Map one Admin row into a super-search suggestion.
+ *
+ * @param array<string,mixed> $row
+ * @return array{id:int,domain:string,country:string,emails:list<string>,match_type:string,matched_value:string,label:string}
+ */
+function swe_admin_suggestion_from_row(array $row, string $q): array
+{
+    $domain = (string) ($row['domain'] ?? '');
+    $country = (string) ($row['country'] ?? '');
+    $emails = [];
+    foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+        $e = trim((string) ($row[$k] ?? ''));
+        if ($e !== '') {
+            $emails[] = $e;
+        }
+    }
+    $matchType = 'domain';
+    $matched = $domain;
+    $domainLower = mb_strtolower($domain);
+    if (!str_contains($domainLower, $q)) {
+        foreach ($emails as $e) {
+            if (str_contains(mb_strtolower($e), $q)) {
+                $matchType = 'email';
+                $matched = $e;
+                break;
+            }
+        }
+    }
+    $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
+    return [
+        'id' => (int) ($row['id'] ?? 0),
+        'domain' => $domain,
+        'country' => $country,
+        'emails' => $emails,
+        'match_type' => $matchType,
+        'matched_value' => $matched,
+        'label' => $domain . ' · ' . $emailPreview . ' · ' . $country,
+    ];
+}
+
+/**
  * Live suggestions from Sites with emails - Admin (site name or email).
+ *
+ * Prefix match on domain first (can use INDEX(domain)); fill leftovers with contains.
  *
  * @return list<array{
  *   id:int,domain:string,country:string,emails:list<string>,
@@ -1806,66 +1851,111 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
         return [];
     }
     $limit = max(1, min(40, $limit));
-    $like = '%' . $q . '%';
-    $stmt = db()->prepare(
-        "SELECT id, domain, country, email1, email2, email3, email4
+    $pdo = db();
+    $prefix = $q . '%';
+    $contains = '%' . $q . '%';
+    $emailQ = str_contains($q, '@');
+    $out = [];
+    $seen = [];
+
+    $take = static function (PDOStatement $stmt) use (&$out, &$seen, $q, $limit): void {
+        while (count($out) < $limit && ($row = $stmt->fetch(PDO::FETCH_ASSOC))) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id < 1 || isset($seen[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $out[] = swe_admin_suggestion_from_row($row, $q);
+        }
+    };
+
+    $select = 'SELECT id, domain, country, email1, email2, email3, email4
          FROM sites_with_emails_admin
-         WHERE LEFT(domain, 8) <> '__blank_'
-           AND (
-             domain LIKE ?
-             OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
-           )
+         WHERE LEFT(domain, 8) <> \'__blank_\'';
+
+    if (!$emailQ) {
+        // Indexed prefix on domain — typing a site name must stay fast on large sheets.
+        $stmt = $pdo->prepare(
+            $select . '
+           AND domain LIKE ?
+         ORDER BY
+           CASE WHEN LOWER(domain) = ? THEN 0 ELSE 1 END,
+           country ASC, domain ASC
+         LIMIT ' . (int) $limit
+        );
+        $stmt->execute([$prefix, $q]);
+        $take($stmt);
+    }
+
+    if (count($out) < $limit) {
+        $remain = $limit - count($out);
+        $notIn = '';
+        $params = [$contains, $contains, $contains, $contains];
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        if ($emailQ) {
+            $params[] = $q;
+            $params[] = $q;
+            $params[] = $q;
+            $params[] = $q;
+            $stmt = $pdo->prepare(
+                $select . '
+           AND (email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)
+           ' . $notIn . '
          ORDER BY
            CASE
-             WHEN LOWER(domain) = ? THEN 0
-             WHEN domain LIKE ? THEN 1
-             WHEN LOWER(email1) = ? OR LOWER(email2) = ? OR LOWER(email3) = ? OR LOWER(email4) = ? THEN 2
-             ELSE 3
+             WHEN LOWER(email1) = ? OR LOWER(email2) = ? OR LOWER(email3) = ? OR LOWER(email4) = ? THEN 0
+             ELSE 1
            END,
            country ASC, domain ASC
-         LIMIT {$limit}"
-    );
-    $stmt->execute([
-        $like, $like, $like, $like, $like,
-        $q,
-        $q . '%',
-        $q, $q, $q, $q,
-    ]);
-
-    $out = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $domain = (string) $row['domain'];
-        $country = (string) $row['country'];
-        $emails = [];
-        foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
-            $e = trim((string) ($row[$k] ?? ''));
-            if ($e !== '') {
-                $emails[] = $e;
-            }
+         LIMIT ' . (int) $remain
+            );
+            $stmt->execute($params);
+            $take($stmt);
+        } else {
+            $stmt = $pdo->prepare(
+                $select . '
+           AND (
+             email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?
+           )
+           ' . $notIn . '
+         ORDER BY country ASC, domain ASC
+         LIMIT ' . (int) $remain
+            );
+            $stmt->execute($params);
+            $take($stmt);
         }
-        $matchType = 'domain';
-        $matched = $domain;
-        $domainLower = mb_strtolower($domain);
-        if (!str_contains($domainLower, $q)) {
-            foreach ($emails as $e) {
-                if (str_contains(mb_strtolower($e), $q)) {
-                    $matchType = 'email';
-                    $matched = $e;
-                    break;
-                }
-            }
-        }
-        $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
-        $out[] = [
-            'id' => (int) $row['id'],
-            'domain' => $domain,
-            'country' => $country,
-            'emails' => $emails,
-            'match_type' => $matchType,
-            'matched_value' => $matched,
-            'label' => $domain . ' · ' . $emailPreview . ' · ' . $country,
-        ];
     }
+
+    if (!$emailQ && count($out) < $limit) {
+        $remain = $limit - count($out);
+        $params = [$contains, $prefix];
+        $notIn = '';
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        // Domain contains (not prefix) — last resort, limited.
+        $stmt = $pdo->prepare(
+            $select . '
+           AND domain LIKE ?
+           AND domain NOT LIKE ?
+           ' . $notIn . '
+         ORDER BY country ASC, domain ASC
+         LIMIT ' . (int) $remain
+        );
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
     return $out;
 }
 

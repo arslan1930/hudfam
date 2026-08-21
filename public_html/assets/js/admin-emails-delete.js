@@ -308,7 +308,7 @@
         selected = null;
         renderSelected();
         if (timer) window.clearTimeout(timer);
-        timer = window.setTimeout(function () { fetchSuggest(q); }, 180);
+        timer = window.setTimeout(function () { fetchSuggest(q); }, 280);
       });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'ArrowDown') {
