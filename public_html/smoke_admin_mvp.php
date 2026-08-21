@@ -563,6 +563,18 @@ if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
 } else {
     ok('campaign copy not-emailed domains + Team fetch stamps');
 }
+if (!str_contains($campLibSmoke, 'Never copies emailed flags')
+    || !str_contains($campLibSmoke, 'Never set email_sent here')
+    || !str_contains($campLibSmoke, 'function email_campaign_ensure_source_fetch_cascade')
+    || !str_contains($campLibSmoke, 'ON DELETE CASCADE')
+    || !str_contains($campLibSmoke, 'Each campaign keeps its own copy and emailed marks')
+    || !str_contains($campAppSmoke, 'This campaign’s emailed marks stay on this sheet only')
+    || !str_contains($campAppSmoke, 'Other campaigns are not affected')
+    || !str_contains($campAppSmoke, 'Team sites stay')) {
+    fail('campaigns missing emailed isolation / stamp cascade copy');
+} else {
+    ok('campaign emailed isolation + stamp cascade copy');
+}
 $newDataSmoke = file_get_contents($root . '/includes/admin_new_data.php') ?: '';
 $layoutSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
 if (!str_contains($newDataSmoke, "section !== 'emails_admin'")

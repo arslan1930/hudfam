@@ -892,12 +892,13 @@ if ($sheetId > 0) {
         Imports from Team, Final, or Admin — <strong>new sites</strong> are added, <strong>duplicate domains with the same emails</strong> are skipped,
         and <strong>same domain with different emails</strong> replaces the sheet row.
         <strong>Team data stays</strong> — importing only copies into this campaign and marks the Team country as fetched to <strong><?= h($projectName) ?></strong>.
+        This campaign’s emailed marks stay on this sheet only — other campaigns are not changed.
         Paste / + Add also respect previously removed sites and emails.
         Previously removed sites and emails are never re-added (use <strong>Allow again</strong> below if a removal was a mistake).
       </p>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Importing sites…"
-            onsubmit="return confirm('Import into <?= h($sheetCountry) ?>?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added.');">
+            onsubmit="return confirm('Import into <?= h($sheetCountry) ?>?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
@@ -1054,7 +1055,7 @@ if ($sheetId > 0) {
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Deleting country sheet…"
-            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>” and delete all its rows?');">
+            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>”?\n\nThis deletes this country’s campaign rows and the “fetched to <?= h($projectName) ?>” stamp on Team.\nOther campaigns are not affected.\nTeam sites stay.');">
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Remove country from project</button>
       </form>
@@ -1681,10 +1682,10 @@ if ($projectIdParam > 0) {
 
         <section class="card" style="margin-top:1rem">
           <h2>Danger zone</h2>
-          <p class="muted">Deletes this project and all of its country sheets, contacts, and drafts. This cannot be undone.</p>
+          <p class="muted">Deletes this project and all of its country sheets, contacts, drafts, and Team “fetched to this campaign” stamps. Team sites stay. Other campaigns are not affected.</p>
           <form method="post" action="<?= h($projectForm) ?>"
                 data-show-processing="Deleting project…"
-                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?', JSON_UNESCAPED_UNICODE)) ?>);">
+                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?\n\nTeam “fetched to ' . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.', JSON_UNESCAPED_UNICODE)) ?>);">
             <input type="hidden" name="action" value="delete_project">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <button class="btn danger" type="submit">Delete whole project</button>

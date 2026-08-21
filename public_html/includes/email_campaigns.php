@@ -247,6 +247,44 @@ function ensure_email_campaign_schema(): void
             FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    email_campaign_ensure_source_fetch_cascade();
+}
+
+/**
+ * Older installs may have the fetches table without ON DELETE CASCADE.
+ */
+function email_campaign_ensure_source_fetch_cascade(): void
+{
+    try {
+        $pdo = db();
+        $dbName = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
+        if ($dbName === '') {
+            return;
+        }
+        $stmt = $pdo->prepare(
+            "SELECT CONSTRAINT_NAME, DELETE_RULE
+             FROM information_schema.REFERENTIAL_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = ?
+               AND TABLE_NAME = 'email_campaign_source_fetches'
+               AND CONSTRAINT_NAME = 'fk_camp_source_fetch_sheet'
+             LIMIT 1"
+        );
+        $stmt->execute([$dbName]);
+        $fk = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($fk && strtoupper((string) ($fk['DELETE_RULE'] ?? '')) === 'CASCADE') {
+            return;
+        }
+        if ($fk) {
+            $pdo->exec('ALTER TABLE email_campaign_source_fetches DROP FOREIGN KEY fk_camp_source_fetch_sheet');
+        }
+        $pdo->exec(
+            'ALTER TABLE email_campaign_source_fetches
+             ADD CONSTRAINT fk_camp_source_fetch_sheet
+             FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE'
+        );
+    } catch (Throwable $e) {
+        // ignore: table missing, no permission, or constraint already correct
+    }
 }
 
 /**
@@ -387,6 +425,7 @@ function render_email_campaign_fetch_stamps(array $fetches): void
         echo '</li>';
     }
     echo '</ul>';
+    echo '<p class="help swe-fetch-stamps-help">Each campaign keeps its own copy and emailed marks. This list only records who imported from this Team country.</p>';
 }
 
 /**
@@ -2455,7 +2494,10 @@ function save_email_campaign_sheet_grid(
 }
 
 /**
- * Import rows from Sites with emails Admin or Final into a campaign sheet.
+ * Import rows from Sites with emails Team, Admin, or Final into a campaign sheet.
+ *
+ * Never copies emailed flags (email_sent) from the source or between campaigns.
+ * New domains land unmarked. Existing emailed marks on this sheet stay.
  *
  * Modes:
  * - replace (default): add new domains; identical emails → skip; different emails → replace.
@@ -2516,15 +2558,17 @@ function import_email_campaign_sheet_from_swe(
            email3 = VALUES(email3),
            email4 = VALUES(email4),
            updated_at = NOW()'
+        // Never set email_sent here — emailed marks stay on this campaign sheet only.
     );
     $exists = $pdo->prepare(
-        'SELECT id, email1, email2, email3, email4
+        'SELECT id, email1, email2, email3, email4, email_sent
          FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
     $upd = $pdo->prepare(
         'UPDATE email_campaign_rows
          SET country=?, language=?, region=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
+        // Never set email_sent here — emailed marks stay on this campaign sheet only.
     );
 
     $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
