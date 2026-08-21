@@ -34,16 +34,33 @@
   function boot() {
     scan(document);
     if (typeof MutationObserver !== 'undefined') {
+      var scheduled = false;
+      var pending = [];
       var obs = new MutationObserver(function (mutations) {
         for (var i = 0; i < mutations.length; i++) {
           var nodes = mutations[i].addedNodes;
           for (var j = 0; j < nodes.length; j++) {
             var n = nodes[j];
             if (!n || n.nodeType !== 1) continue;
-            if (n.matches && n.matches('form')) ensureFormField(n);
-            else if (n.querySelectorAll) scan(n);
+            if ((n.matches && n.matches('form')) || (n.querySelector && n.querySelector('form'))) {
+              pending.push(n);
+            }
           }
         }
+        if (!pending.length || scheduled) return;
+        scheduled = true;
+        var run = function () {
+          scheduled = false;
+          var batch = pending;
+          pending = [];
+          for (var k = 0; k < batch.length; k++) {
+            var node = batch[k];
+            if (node.matches && node.matches('form')) ensureFormField(node);
+            else if (node.querySelectorAll) scan(node);
+          }
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+        else setTimeout(run, 0);
       });
       obs.observe(document.documentElement, { childList: true, subtree: true });
     }

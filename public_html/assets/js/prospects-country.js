@@ -228,7 +228,7 @@
     if (row) {
       row.classList.add('sheet-search-hit');
       try {
-        row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        row.scrollIntoView({ block: 'nearest', behavior: 'auto' });
       } catch (e) {
         row.scrollIntoView(true);
       }

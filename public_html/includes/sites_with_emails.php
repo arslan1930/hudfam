@@ -118,9 +118,9 @@ function ensure_sites_with_emails_schema(): void
     try {
         $legacy = $pdo->query("SHOW TABLES LIKE 'sites_with_emails'")->fetchColumn();
         if ($legacy) {
-            $countTeam = (int) $pdo->query('SELECT COUNT(*) FROM sites_with_emails_team')->fetchColumn();
-            $countLegacy = (int) $pdo->query('SELECT COUNT(*) FROM sites_with_emails')->fetchColumn();
-            if ($countLegacy > 0 && $countTeam === 0) {
+            $countLegacy = table_has_any_row($pdo, 'sites_with_emails');
+            $countTeam = table_has_any_row($pdo, 'sites_with_emails_team');
+            if ($countLegacy && !$countTeam) {
                 $pdo->exec(
                     'INSERT IGNORE INTO sites_with_emails_team
                        (domain, country, language, region, email1, email2, email3, email4,
@@ -137,9 +137,8 @@ function ensure_sites_with_emails_schema(): void
 
     // First-time / catch-up: mirror Admin → All if All is empty but Admin has data.
     try {
-        $adminCount = (int) $pdo->query('SELECT COUNT(*) FROM sites_with_emails_admin')->fetchColumn();
-        $allCount = (int) $pdo->query('SELECT COUNT(*) FROM sites_with_emails_admin_all')->fetchColumn();
-        if ($adminCount > 0 && $allCount === 0) {
+        if (table_has_any_row($pdo, 'sites_with_emails_admin')
+            && !table_has_any_row($pdo, 'sites_with_emails_admin_all')) {
             sync_sites_with_emails_admin_to_all();
         }
     } catch (Throwable $e) {
@@ -150,12 +149,7 @@ function ensure_sites_with_emails_schema(): void
     foreach (['sites_with_emails_team', 'sites_with_emails_admin', 'sites_with_emails_admin_all'] as $tbl) {
         try {
             $idxName = 'idx_' . $tbl . '_country_id';
-            $idx = $pdo->query('SHOW INDEX FROM ' . $tbl)->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            $haveIdx = [];
-            foreach ($idx as $row) {
-                $haveIdx[(string) ($row['Key_name'] ?? '')] = true;
-            }
-            if (empty($haveIdx[$idxName])) {
+            if (!table_has_index($pdo, $tbl, $idxName)) {
                 $pdo->exec("ALTER TABLE {$tbl} ADD INDEX {$idxName} (country, id)");
             }
         } catch (Throwable $e) {
@@ -1965,19 +1959,16 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
 function render_sites_with_emails_admin_super_search(string $postBase = 'index.php?page=team_admin_emails_delete'): void
 {
     ensure_sites_with_emails_schema();
-    $total = 0;
-    $countries = 0;
-    try {
-        $total = (int) db()->query(
+    $total = cached_scalar_count('swe_admin_super_total', static function () {
+        return (int) db()->query(
             "SELECT COUNT(*) FROM sites_with_emails_admin WHERE LEFT(domain, 8) <> '__blank_'"
         )->fetchColumn();
-        $countries = (int) db()->query(
+    });
+    $countries = cached_scalar_count('swe_admin_super_countries', static function () {
+        return (int) db()->query(
             "SELECT COUNT(DISTINCT country) FROM sites_with_emails_admin WHERE TRIM(country) <> ''"
         )->fetchColumn();
-    } catch (Throwable $e) {
-        $total = 0;
-        $countries = 0;
-    }
+    });
     $uid = 'swe-admin-super-' . substr(md5($postBase), 0, 6);
     ?>
   <div class="card camp-search-card swe-admin-delete-card" style="margin-bottom:1rem"

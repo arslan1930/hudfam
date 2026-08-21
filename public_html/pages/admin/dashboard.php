@@ -1,23 +1,14 @@
 <?php
 $user = require_admin();
-$prospectTotal = 0;
-$batchCount = 0;
-$teamCount = 0;
-try {
-    $prospectTotal = (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
-} catch (Throwable $e) {
-    $prospectTotal = 0;
-}
-try {
-    $batchCount = (int) db()->query('SELECT COUNT(*) FROM prospect_batches')->fetchColumn();
-} catch (Throwable $e) {
-    $batchCount = 0;
-}
-try {
-    $teamCount = (int) db()->query("SELECT COUNT(*) FROM users WHERE role='team' AND is_active=1")->fetchColumn();
-} catch (Throwable $e) {
-    $teamCount = 0;
-}
+$prospectTotal = cached_scalar_count('dash_prospect_sites', static function () {
+    return (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
+});
+$batchCount = cached_scalar_count('dash_prospect_batches', static function () {
+    return (int) db()->query('SELECT COUNT(*) FROM prospect_batches')->fetchColumn();
+});
+$teamCount = cached_scalar_count('dash_team_users', static function () {
+    return (int) db()->query("SELECT COUNT(*) FROM users WHERE role='team' AND is_active=1")->fetchColumn();
+});
 
 $recent = [];
 try {
@@ -52,12 +43,16 @@ try {
 }
 try {
     ensure_invoice_schema();
-    $invoiceCount = (int) db()->query('SELECT COUNT(*) FROM invoices')->fetchColumn();
+    $invoiceCount = cached_scalar_count('dash_invoices', static function () {
+        return (int) db()->query('SELECT COUNT(*) FROM invoices')->fetchColumn();
+    });
 } catch (Throwable $e) {
     $invoiceCount = 0;
 }
 try {
-    $extractedCount = count_extracted_sites();
+    $extractedCount = cached_scalar_count('dash_extracted', static function () {
+        return count_extracted_sites();
+    });
 } catch (Throwable $e) {
     $extractedCount = 0;
 }
@@ -254,13 +249,22 @@ render_header('Dashboard', 'admin');
     }, 0);
   }
 
+  var filterTimer = null;
+  function scheduleFilterDashboard() {
+    if (filterTimer) window.clearTimeout(filterTimer);
+    filterTimer = window.setTimeout(function () {
+      filterTimer = null;
+      filterDashboard();
+    }, 80);
+  }
+
   input.addEventListener('input', function () {
     matchIndex = -1;
-    filterDashboard();
+    scheduleFilterDashboard();
   });
   input.addEventListener('search', function () {
     matchIndex = -1;
-    filterDashboard();
+    scheduleFilterDashboard();
   });
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {

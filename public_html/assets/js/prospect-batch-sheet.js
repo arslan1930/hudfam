@@ -28,6 +28,15 @@
   var saveAgain = false;
   var MAX_UNDO = 80;
   var SAVE_DELAY_MS = 550;
+  var countTimer = null;
+
+  function scheduleCounts() {
+    if (countTimer) window.clearTimeout(countTimer);
+    countTimer = window.setTimeout(function () {
+      countTimer = null;
+      updateCounts();
+    }, 80);
+  }
 
   function normalizeText(text) {
     return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -218,7 +227,7 @@
       redoStack = [];
       lastSnapshot = now;
     }
-    updateCounts();
+    scheduleCounts();
     syncHistoryButtons();
     scheduleAutosave();
   });

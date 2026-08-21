@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var INTERVAL_MS = 18000;
+  var INTERVAL_MS = 30000;
   var nodes = document.querySelectorAll('[data-task-presence]');
   if (!nodes.length) return;
 
@@ -67,6 +67,7 @@
   }
 
   function pingAll() {
+    if (document.hidden) return;
     nodes.forEach(ping);
   }
 

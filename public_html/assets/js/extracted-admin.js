@@ -97,6 +97,25 @@
   var matchIndex = -1;
   var meta = document.querySelector('[data-extracted-url-search-meta]');
   var empty = document.querySelector('[data-extracted-url-search-empty]');
+  var filterTimer = null;
+  var cachedRows = null;
+
+  function extractedRows() {
+    if (!cachedRows) cachedRows = document.querySelectorAll('[data-extracted-url-row]');
+    return cachedRows;
+  }
+
+  function invalidateExtractedRows() {
+    cachedRows = null;
+  }
+
+  function scheduleFilterUrls() {
+    if (filterTimer) window.clearTimeout(filterTimer);
+    filterTimer = window.setTimeout(function () {
+      filterTimer = null;
+      filterUrls();
+    }, 160);
+  }
 
   function clearHits() {
     document.querySelectorAll('#extracted-plain-list .sheet-search-hit').forEach(function (el) {
@@ -142,7 +161,7 @@
   function filterUrls() {
     if (!input) return;
     var q = String(input.value || '').trim().toLowerCase();
-    var rows = document.querySelectorAll('[data-extracted-url-row]');
+    var rows = extractedRows();
     var shown = 0;
     matchRows = [];
     clearHits();
@@ -192,7 +211,7 @@
     clearHits();
     row.hidden = false;
     row.classList.add('sheet-search-hit');
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: 'auto' });
     if (meta) {
       meta.hidden = false;
       meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
@@ -259,7 +278,10 @@
           });
         })
         .then(function (data) {
-          if (row) row.remove();
+          if (row) {
+            row.remove();
+            invalidateExtractedRows();
+          }
           if (typeof data.site_count === 'number') updateTotalLabel(data.site_count);
           setStatus('Removed ' + (data.domain || 'site') + '. Search kept — continue removing.');
           filterUrls();
@@ -285,11 +307,11 @@
     restoreSearch();
     input.addEventListener('input', function () {
       matchIndex = -1;
-      filterUrls();
+      scheduleFilterUrls();
     });
     input.addEventListener('search', function () {
       matchIndex = -1;
-      filterUrls();
+      scheduleFilterUrls();
     });
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
@@ -301,7 +323,9 @@
         jumpToMatch(e.shiftKey ? -1 : 1);
       }
     });
-    filterUrls();
+    if (String(input.value || '').trim()) {
+      filterUrls();
+    }
   }
 
   var searchAllBtn = document.getElementById('extracted_search_all_pages');

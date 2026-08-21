@@ -255,6 +255,11 @@ function ensure_email_campaign_schema(): void
  */
 function email_campaign_ensure_source_fetch_cascade(): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
     try {
         $pdo = db();
         $dbName = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
@@ -2766,6 +2771,70 @@ function search_email_campaign_suggestions_all(string $q, int $limit = 20): arra
 }
 
 /**
+ * @param array<string,mixed> $row
+ * @return array{
+ *   id:int,sheet_id:int,domain:string,country:string,language:string,project_id:int,
+ *   project_name:string,emails:list<string>,match_type:string,matched_value:string,label:string
+ * }
+ */
+function email_campaign_suggestion_from_row(array $row, string $q): array
+{
+    $domain = (string) $row['domain'];
+    $country = trim((string) ($row['country'] ?? ''));
+    if ($country === '') {
+        $country = (string) ($row['sheet_country'] ?? '');
+    }
+    $project = trim((string) ($row['project_title'] ?? ''));
+    if ($project === '') {
+        $project = trim((string) ($row['project_name'] ?? ''));
+    }
+    if ($project === '') {
+        $project = $country;
+    }
+    $emails = [];
+    foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+        $e = trim((string) ($row[$k] ?? ''));
+        if ($e !== '') {
+            $emails[] = $e;
+        }
+    }
+    $matchType = 'domain';
+    $matched = $domain;
+    $domainLower = mb_strtolower($domain);
+    if (!str_contains($domainLower, $q)) {
+        foreach ($emails as $e) {
+            if (str_contains(mb_strtolower($e), $q)) {
+                $matchType = 'email';
+                $matched = $e;
+                break;
+            }
+        }
+        if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
+            $matchType = 'country';
+            $matched = $country;
+        }
+        if ($matchType === 'domain' && str_contains(mb_strtolower($project), $q)) {
+            $matchType = 'project';
+            $matched = $project;
+        }
+    }
+    $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
+    return [
+        'id' => (int) $row['id'],
+        'sheet_id' => (int) $row['sheet_id'],
+        'domain' => $domain,
+        'country' => $country,
+        'language' => trim((string) ($row['language'] ?? '')),
+        'project_id' => (int) ($row['project_id'] ?? 0),
+        'project_name' => $project,
+        'emails' => $emails,
+        'match_type' => $matchType,
+        'matched_value' => $matched,
+        'label' => $domain . ' · ' . $emailPreview . ' · ' . $country . ' · ' . $project,
+    ];
+}
+
+/**
  * @return list<array{
  *   id:int,sheet_id:int,domain:string,country:string,project_name:string,emails:list<string>,
  *   match_type:string,matched_value:string,label:string
@@ -2802,100 +2871,138 @@ function search_email_campaign_suggestions_scoped(
         }
     }
     $limit = max(1, min(40, $limit));
-    $like = '%' . $q . '%';
-    $sql = "SELECT r.id, r.sheet_id, r.domain, r.country, r.language, r.email1, r.email2, r.email3, r.email4,
+    $prefix = $q . '%';
+    $contains = '%' . $q . '%';
+    $emailQ = str_contains($q, '@');
+    $pdo = db();
+
+    $scopeSql = '';
+    $scopeParams = [];
+    if ($sheetId !== null) {
+        $scopeSql = ' AND r.sheet_id = ?';
+        $scopeParams[] = $sheetId;
+    } elseif ($projectId !== null) {
+        $scopeSql = ' AND s.project_id = ?';
+        $scopeParams[] = $projectId;
+    } elseif ($onlyTeamVisible) {
+        $scopeSql = ' AND COALESCE(p.team_search_visible, s.team_search_visible) = 1';
+    }
+
+    $select = "SELECT r.id, r.sheet_id, r.domain, r.country, r.language, r.email1, r.email2, r.email3, r.email4,
                    s.name AS sheet_country, s.project_name, s.project_id,
                    p.name AS project_title
             FROM email_campaign_rows r
             INNER JOIN email_campaign_sheets s ON s.id = r.sheet_id
             LEFT JOIN email_campaign_projects p ON p.id = s.project_id
-            WHERE LEFT(r.domain, 8) <> '__blank_'
-              AND (
-                r.domain LIKE ?
-                OR r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?
-                OR s.name LIKE ?
-                OR s.project_name LIKE ?
-                OR p.name LIKE ?
-              )";
-    $params = [$like, $like, $like, $like, $like, $like, $like, $like];
-    if ($sheetId !== null) {
-        $sql .= ' AND r.sheet_id = ?';
-        $params[] = $sheetId;
-    } elseif ($projectId !== null) {
-        $sql .= ' AND s.project_id = ?';
-        $params[] = $projectId;
-    } elseif ($onlyTeamVisible) {
-        $sql .= ' AND COALESCE(p.team_search_visible, s.team_search_visible) = 1';
-    }
-    $sql .= " ORDER BY
-           CASE
-             WHEN r.domain = ? THEN 0
-             WHEN r.domain LIKE ? THEN 1
-             WHEN r.email1 = ? OR r.email2 = ? OR r.email3 = ? OR r.email4 = ? THEN 2
-             ELSE 3
-           END,
-           COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
-         LIMIT {$limit}";
-    $params = array_merge($params, [$q, $q . '%', $q, $q, $q, $q]);
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
+            WHERE LEFT(r.domain, 8) <> '__blank_'";
 
     $out = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $domain = (string) $row['domain'];
-        $country = trim((string) ($row['country'] ?? ''));
-        if ($country === '') {
-            $country = (string) ($row['sheet_country'] ?? '');
-        }
-        $project = trim((string) ($row['project_title'] ?? ''));
-        if ($project === '') {
-            $project = trim((string) ($row['project_name'] ?? ''));
-        }
-        if ($project === '') {
-            $project = $country;
-        }
-        $emails = [];
-        foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
-            $e = trim((string) ($row[$k] ?? ''));
-            if ($e !== '') {
-                $emails[] = $e;
+    $seen = [];
+    $take = static function (PDOStatement $stmt) use (&$out, &$seen, $q, $limit): void {
+        while (count($out) < $limit && ($row = $stmt->fetch(PDO::FETCH_ASSOC))) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id < 1 || isset($seen[$id])) {
+                continue;
             }
+            $seen[$id] = true;
+            $out[] = email_campaign_suggestion_from_row($row, $q);
         }
-        $matchType = 'domain';
-        $matched = $domain;
-        $domainLower = mb_strtolower($domain);
-        if (!str_contains($domainLower, $q)) {
-            foreach ($emails as $e) {
-                if (str_contains(mb_strtolower($e), $q)) {
-                    $matchType = 'email';
-                    $matched = $e;
-                    break;
-                }
-            }
-            if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
-                $matchType = 'country';
-                $matched = $country;
-            }
-            if ($matchType === 'domain' && str_contains(mb_strtolower($project), $q)) {
-                $matchType = 'project';
-                $matched = $project;
-            }
-        }
-        $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
-        $out[] = [
-            'id' => (int) $row['id'],
-            'sheet_id' => (int) $row['sheet_id'],
-            'domain' => $domain,
-            'country' => $country,
-            'language' => trim((string) ($row['language'] ?? '')),
-            'project_id' => (int) ($row['project_id'] ?? 0),
-            'project_name' => $project,
-            'emails' => $emails,
-            'match_type' => $matchType,
-            'matched_value' => $matched,
-            'label' => $domain . ' · ' . $emailPreview . ' · ' . $country . ' · ' . $project,
-        ];
+    };
+
+    if (!$emailQ) {
+        // Indexed prefix on domain — typing a site name must stay fast on large sheets.
+        $sql = $select . '
+              AND r.domain LIKE ?' . $scopeSql . '
+            ORDER BY
+              CASE WHEN LOWER(r.domain) = ? THEN 0 ELSE 1 END,
+              COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+            LIMIT ' . (int) $limit;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(array_merge([$prefix], $scopeParams, [$q]));
+        $take($stmt);
     }
+
+    if (count($out) < $limit) {
+        $remain = $limit - count($out);
+        $notIn = '';
+        $params = [$contains, $contains, $contains, $contains];
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        $params = array_merge($params, $scopeParams);
+        if ($emailQ) {
+            $sql = $select . '
+              AND (r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?)
+              ' . $notIn . $scopeSql . '
+            ORDER BY
+              CASE
+                WHEN LOWER(r.email1) = ? OR LOWER(r.email2) = ? OR LOWER(r.email3) = ? OR LOWER(r.email4) = ? THEN 0
+                ELSE 1
+              END,
+              COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+            LIMIT ' . (int) $remain;
+            $params = array_merge($params, [$q, $q, $q, $q]);
+        } else {
+            $sql = $select . '
+              AND (r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?)
+              ' . $notIn . $scopeSql . '
+            ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+            LIMIT ' . (int) $remain;
+        }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
+    if (!$emailQ && count($out) < $limit) {
+        $remain = $limit - count($out);
+        $notIn = '';
+        $params = [$contains, $contains, $contains];
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        $params = array_merge($params, $scopeParams);
+        $sql = $select . '
+          AND (s.name LIKE ? OR s.project_name LIKE ? OR p.name LIKE ?)
+          ' . $notIn . $scopeSql . '
+        ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+        LIMIT ' . (int) $remain;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
+    if (!$emailQ && count($out) < $limit) {
+        $remain = $limit - count($out);
+        $params = [$contains, $prefix];
+        $notIn = '';
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        $params = array_merge($params, $scopeParams);
+        // Domain contains (not prefix) — last resort, limited.
+        $sql = $select . '
+          AND r.domain LIKE ? AND r.domain NOT LIKE ?
+          ' . $notIn . $scopeSql . '
+        ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+        LIMIT ' . (int) $remain;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
     return $out;
 }
 

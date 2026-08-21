@@ -555,6 +555,34 @@ if (!str_contains($helpersSmoke, 'function render_sheet_shared_row_action_forms'
 } else {
     ok('SWE large-list perf: default 100 + debounce + shared actions + prefix search');
 }
+$extractedAdminJsSmoke = file_get_contents($root . '/assets/js/extracted-admin.js') ?: '';
+$csrfJsSmoke = file_get_contents($root . '/assets/js/csrf.js') ?: '';
+$presenceJsSmoke = file_get_contents($root . '/assets/js/task-presence.js') ?: '';
+$sitesFormJsSmoke = file_get_contents($root . '/assets/js/sites-form.js') ?: '';
+$campSearchJsSmoke = file_get_contents($root . '/assets/js/email-campaign-search.js') ?: '';
+$navJsSmoke = file_get_contents($root . '/assets/js/nav-shell.js') ?: '';
+$dashSmoke = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+$geoSmoke = file_get_contents($root . '/includes/geo.php') ?: '';
+$campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
+if (!str_contains($helpersSmoke, 'function table_has_any_row')
+    || !str_contains($helpersSmoke, 'function cached_scalar_count')
+    || !str_contains($helpersSmoke, 'function table_has_index')
+    || !str_contains($sweLibSmoke, 'table_has_any_row($pdo, \'sites_with_emails_admin\')')
+    || !str_contains($campLibSmoke, 'function email_campaign_suggestion_from_row')
+    || !str_contains($campLibSmoke, 'Indexed prefix on domain')
+    || !str_contains($extractedAdminJsSmoke, 'function scheduleFilterUrls')
+    || !str_contains($csrfJsSmoke, 'requestAnimationFrame')
+    || !str_contains($presenceJsSmoke, 'document.hidden')
+    || !str_contains($sitesFormJsSmoke, 'function scheduleStatus')
+    || !str_contains($campSearchJsSmoke, 'fetchSuggest(q); }, 280')
+    || !str_contains($navJsSmoke, "addEventListener('change'")
+    || !str_contains($dashSmoke, 'cached_scalar_count')
+    || !str_contains($geoSmoke, 'SELECT 1 FROM countries LIMIT 1')
+    || !str_contains($sweJsSmoke, "behavior: 'auto'")) {
+    fail('sitewide smoothness missing LIMIT 1 schema / prefix campaign search / debounce / hidden presence');
+} else {
+    ok('sitewide smoothness: LIMIT 1 schema, prefix campaign search, debounce, hidden presence');
+}
 $campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
 if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')

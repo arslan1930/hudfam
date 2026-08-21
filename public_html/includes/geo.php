@@ -23,8 +23,13 @@ function prospect_folder_display_label(string $countryName, string $region = '',
 
 function seed_countries_if_empty(PDO $pdo): void
 {
-    $count = (int) $pdo->query('SELECT COUNT(*) FROM countries')->fetchColumn();
-    if ($count > 0) {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $has = $pdo->query('SELECT 1 FROM countries LIMIT 1')->fetchColumn();
+    if ($has) {
         return;
     }
     $rows = [
