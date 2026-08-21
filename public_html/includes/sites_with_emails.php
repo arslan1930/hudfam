@@ -211,7 +211,16 @@ function sync_sites_with_emails_admin_row_to_all(array $row): void
  * Full mirror: Sites with emails - Admin → All sites with emails - Final.
  * Also removes All rows that no longer exist in Admin (same country+domain).
  *
- * @return array{upserted:int,removed:int}
+ * @return array{
+ *   upserted:int,
+ *   added:int,
+ *   updated:int,
+ *   unchanged:int,
+ *   removed:int,
+ *   added_samples:list<string>,
+ *   updated_samples:list<string>,
+ *   removed_samples:list<string>
+ * }
  */
 function sync_sites_with_emails_admin_to_all(?string $country = null): array
 {
@@ -219,16 +228,54 @@ function sync_sites_with_emails_admin_to_all(?string $country = null): array
     @set_time_limit(0);
     $pdo = db();
     $upserted = 0;
+    $added = 0;
+    $updated = 0;
+    $unchanged = 0;
+    /** @var list<string> $addedSamples */
+    $addedSamples = [];
+    /** @var list<string> $updatedSamples */
+    $updatedSamples = [];
+    /** @var list<string> $removedSamples */
+    $removedSamples = [];
+
     if ($country !== null && trim($country) !== '') {
         $sel = $pdo->prepare('SELECT * FROM sites_with_emails_admin WHERE country=?');
         $sel->execute([trim($country)]);
     } else {
         $sel = $pdo->query('SELECT * FROM sites_with_emails_admin');
     }
+    $exist = $pdo->prepare(
+        'SELECT email1, email2, email3, email4, language, region
+         FROM sites_with_emails_admin_all WHERE country=? AND domain=? LIMIT 1'
+    );
     $keep = [];
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
+        $cName = (string) ($row['country'] ?? '');
+        $domain = (string) ($row['domain'] ?? '');
+        $label = $cName . ' · ' . $domain;
+        $exist->execute([$cName, $domain]);
+        $prior = $exist->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($prior === null) {
+            $added++;
+            if (count($addedSamples) < 10) {
+                $addedSamples[] = $label;
+            }
+        } else {
+            $beforeSlots = email_slots_from_row($prior);
+            $afterSlots = email_slots_from_row($row);
+            $metaChanged = trim((string) ($prior['language'] ?? '')) !== trim((string) ($row['language'] ?? ''))
+                || trim((string) ($prior['region'] ?? '')) !== trim((string) ($row['region'] ?? ''));
+            if (!swe_email_slots_equal($beforeSlots, $afterSlots) || $metaChanged) {
+                $updated++;
+                if (count($updatedSamples) < 10) {
+                    $updatedSamples[] = $label;
+                }
+            } else {
+                $unchanged++;
+            }
+        }
         sync_sites_with_emails_admin_row_to_all($row);
-        $keep[mb_strtolower((string) $row['country']) . "\0" . mb_strtolower((string) $row['domain'])] = true;
+        $keep[mb_strtolower($cName) . "\0" . mb_strtolower($domain)] = true;
         $upserted++;
     }
 
@@ -245,9 +292,21 @@ function sync_sites_with_emails_admin_to_all(?string $country = null): array
         if (!isset($keep[$key])) {
             $del->execute([(int) $row['id']]);
             $removed++;
+            if (count($removedSamples) < 10) {
+                $removedSamples[] = (string) $row['country'] . ' · ' . (string) $row['domain'];
+            }
         }
     }
-    return ['upserted' => $upserted, 'removed' => $removed];
+    return [
+        'upserted' => $upserted,
+        'added' => $added,
+        'updated' => $updated,
+        'unchanged' => $unchanged,
+        'removed' => $removed,
+        'added_samples' => $addedSamples,
+        'updated_samples' => $updatedSamples,
+        'removed_samples' => $removedSamples,
+    ];
 }
 
 function delete_sites_with_emails_admin_all_by_domain(string $country, string $domain): void

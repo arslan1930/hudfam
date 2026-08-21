@@ -480,6 +480,15 @@ if (!str_contains($emailsHub, "admin_new_badge_html('emails_admin'")
 } else {
     ok('emails hub Admin New badge + country counts');
 }
+if (!str_contains($emailsHub, 'render_sites_with_emails_admin_super_search')
+    || !str_contains($emailsHub, "get('ajax') === 'suggest'")
+    || !str_contains($emailsHub, "action === 'delete_row'")
+    || !str_contains($emailsHub, 'added_samples')
+    || !str_contains($emailsHub, 'Final archive repaired · added')) {
+    fail('emails hub missing P3 super-search / Final repair report');
+} else {
+    ok('emails hub P3 super-search + Final repair report');
+}
 $sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
 $sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
