@@ -209,8 +209,22 @@ if ($sheetId > 0) {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
                 $msg = 'Added to sheet: '
                     . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped'] ?? 0) > 0) {
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_emails'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_emails'] . ' previously removed email'
+                        . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
+                }
+                if ((int) ($result['skipped'] ?? 0) > 0
+                    && (int) ($result['skipped_excluded'] ?? 0) < 1
+                    && (int) ($result['skipped_emails'] ?? 0) < 1) {
                     $msg .= ', ' . (int) $result['skipped'] . ' skipped';
+                } elseif ((int) ($result['skipped'] ?? 0) > (int) ($result['skipped_excluded'] ?? 0)) {
+                    $otherSkip = (int) $result['skipped'] - (int) ($result['skipped_excluded'] ?? 0);
+                    if ($otherSkip > 0) {
+                        $msg .= ', ' . $otherSkip . ' other skipped';
+                    }
                 }
                 $msg .= '.';
                 if ($result['errors'] !== []) {
@@ -228,7 +242,15 @@ if ($sheetId > 0) {
                 $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
                 $msg = 'Imported file into sheet: '
                     . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped'] ?? 0) > 0) {
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_emails'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_emails'] . ' previously removed email'
+                        . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
+                }
+                if ((int) ($result['skipped'] ?? 0) > 0
+                    && (int) ($result['skipped_excluded'] ?? 0) < 1) {
                     $msg .= ', ' . (int) $result['skipped'] . ' skipped';
                 }
                 $msg .= ' · ' . (int) ($result['lines'] ?? 0) . ' data line(s).';
@@ -723,14 +745,15 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites removed from this sheet are never re-added. Archives are not changed.') ?></h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
       <p class="help">
         Imports <strong>new sites only</strong> — skips anything already on the sheet, and never re-adds sites
-        that were removed (unless you Allow again below, or paste/+ Add them yourself).
+        or emails that were removed (use <strong>Allow again</strong> below if a removal was a mistake).
+        Paste / + Add also respect previously removed sites and emails.
       </p>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Importing new sites…"
-            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites are not re-added.\n\nFinal/Admin archives are not changed.');">
+            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites and emails are not re-added.\n\nFinal/Admin archives are not changed.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
@@ -744,12 +767,12 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-excluded">
-      <h2><?= label_with_info('Previously removed sites', 'Sites deleted from this Email Sheet (by Admin or Communication Team) are listed here so Final/Admin import never re-adds them. Allow again if a removal was a mistake.') ?></h2>
+      <h2><?= label_with_info('Previously removed sites', 'Sites deleted from this Email Sheet (by Admin or Communication Team) are listed here so Final/Admin import, paste, and + Add never re-add them. Allow again if a removal was a mistake.') ?></h2>
       <?php if ($excludedCount < 1): ?>
         <p class="muted" style="margin:0">No excluded sites yet. When a site is removed from this sheet, it appears here.</p>
       <?php else: ?>
         <p class="help" style="margin-top:0">
-          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from archive import.
+          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from re-add (import, paste, and + Add).
           <?php if ($excludedCount > count($excludedDomains)): ?>
             Showing first <?= count($excludedDomains) ?>.
           <?php endif; ?>
@@ -776,7 +799,7 @@ if ($sheetId > 0) {
                     <input type="hidden" name="q" value="<?= h($q) ?>">
                     <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                     <button class="btn secondary small" type="submit"
-                            title="Let the next Final/Admin import add this site again">Allow again</button>
+                            title="Let import, paste, and + Add add this site again">Allow again</button>
                   </form>
                 </td>
               </tr>

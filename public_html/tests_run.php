@@ -736,6 +736,7 @@ try {
     }
 
     // Remove one of two emails → site stays.
+    clear_email_campaign_domain_exclusion($sid, 'txfcamp-two.com');
     $up2 = upsert_email_campaign_row($sid, 'txfcamp-two.com', [
         'email1' => 'one@txfcamp-two.com',
         'email2' => 'two@txfcamp-two.com',
@@ -751,6 +752,7 @@ try {
     }
 
     // Remove last email → site row deleted.
+    clear_email_campaign_domain_exclusion($sid, 'txfcamp-solo.com');
     $solo = upsert_email_campaign_row($sid, 'txfcamp-solo.com', [
         'email1' => 'only@txfcamp-solo.com',
         'email2' => '',
@@ -1649,6 +1651,105 @@ try {
         pass('Allow again lets Final import re-add site');
     } else {
         fail('allow again: ' . json_encode($imp4) . " bAgain=$bAgain");
+    }
+
+    // P0: paste / + Add must NOT re-add a deleted domain (only Allow again lifts ban).
+    $rowC = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-c.nl' LIMIT 1"
+    )->fetchColumn();
+    $delC = delete_email_campaign_row($nlSheet, $rowC);
+    $pasteBlocked = paste_email_campaign_rows(
+        $nlSheet,
+        "txfcamp-nl-c.nl,c@txfcamp-nl-c.nl\n"
+    );
+    $cPasteBack = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-c.nl'"
+    )->fetchColumn();
+    $upsertBlocked = upsert_email_campaign_row($nlSheet, 'txfcamp-nl-c.nl', ['c@txfcamp-nl-c.nl']);
+    if (!empty($delC['ok'])
+        && (int) ($pasteBlocked['skipped_excluded'] ?? 0) >= 1
+        && $cPasteBack === 0
+        && empty($upsertBlocked['ok'])
+        && !empty($upsertBlocked['skipped_excluded'])) {
+        pass('deleted domain blocked from paste and + Add');
+    } else {
+        fail('P0 paste/+Add block: ' . json_encode([
+            'del' => $delC,
+            'paste' => $pasteBlocked,
+            'cPasteBack' => $cPasteBack,
+            'upsert' => $upsertBlocked,
+        ]));
+    }
+
+    // P1: single-email delete is sticky — that email cannot return; other emails can.
+    clear_email_campaign_domain_exclusion($nlSheet, 'txfcamp-nl-c.nl');
+    $seedTwo = upsert_email_campaign_row(
+        $nlSheet,
+        'txfcamp-nl-c.nl',
+        ['keep@txfcamp-nl-c.nl', 'drop@txfcamp-nl-c.nl']
+    );
+    $twoId = (int) ($seedTwo['id'] ?? 0);
+    $rmDrop = remove_email_from_email_campaign_row($nlSheet, $twoId, 'drop@txfcamp-nl-c.nl');
+    $emailExcluded = is_email_campaign_email_excluded($nlSheet, 'txfcamp-nl-c.nl', 'drop@txfcamp-nl-c.nl');
+    $pasteStrip = paste_email_campaign_rows(
+        $nlSheet,
+        "txfcamp-nl-c.nl,drop@txfcamp-nl-c.nl,new@txfcamp-nl-c.nl\n"
+    );
+    $emailsAfter = db()->query(
+        "SELECT email1, email2, email3, email4 FROM email_campaign_rows WHERE sheet_id="
+        . (int) $nlSheet . " AND domain='txfcamp-nl-c.nl' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $slotBag = strtolower(implode('|', array_filter([
+        (string) ($emailsAfter['email1'] ?? ''),
+        (string) ($emailsAfter['email2'] ?? ''),
+        (string) ($emailsAfter['email3'] ?? ''),
+        (string) ($emailsAfter['email4'] ?? ''),
+    ])));
+    $hasDrop = str_contains($slotBag, 'drop@txfcamp-nl-c.nl');
+    $hasNew = str_contains($slotBag, 'new@txfcamp-nl-c.nl');
+    if (!empty($rmDrop['ok'])
+        && empty($rmDrop['row_deleted'])
+        && $emailExcluded
+        && (int) ($pasteStrip['skipped_emails'] ?? 0) >= 1
+        && !$hasDrop
+        && $hasNew) {
+        pass('deleted email stays excluded from paste; other emails allowed');
+    } else {
+        fail('P1 email tombstone: ' . json_encode([
+            'rm' => $rmDrop,
+            'excluded' => $emailExcluded,
+            'paste' => $pasteStrip,
+            'slots' => $emailsAfter,
+        ]));
+    }
+
+    // Paste of only the tombstoned email → whole site line skipped (no empty rows).
+    $onlyBanned = paste_email_campaign_rows(
+        $nlSheet,
+        "txfcamp-nl-d.nl,drop@txfcamp-nl-c.nl\n"
+    );
+    // domain D never existed; banned email is for domain C — D with drop@c should still add
+    // because email exclusions are (sheet, domain, email). Use same domain C with only banned email:
+    $onlyBannedSame = paste_email_campaign_rows(
+        $nlSheet,
+        "txfcamp-nl-c.nl,drop@txfcamp-nl-c.nl\n"
+    );
+    $stillHasDrop = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-c.nl' AND ("
+        . "email1='drop@txfcamp-nl-c.nl' OR email2='drop@txfcamp-nl-c.nl'"
+        . " OR email3='drop@txfcamp-nl-c.nl' OR email4='drop@txfcamp-nl-c.nl')"
+    )->fetchColumn();
+    if ((int) ($onlyBannedSame['skipped_excluded'] ?? 0) >= 1 && $stillHasDrop === 0) {
+        pass('paste of only previously removed email skips site line');
+    } else {
+        fail('P1 only-banned paste: ' . json_encode([
+            'pasteD' => $onlyBanned,
+            'pasteC' => $onlyBannedSame,
+            'stillHasDrop' => $stillHasDrop,
+        ]));
     }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
