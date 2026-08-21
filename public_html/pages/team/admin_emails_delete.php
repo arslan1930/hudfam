@@ -19,11 +19,16 @@ if ((string) get('ajax') === 'suggest') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $q = (string) get('q');
-    echo json_encode([
-        'ok' => true,
-        'q' => $q,
-        'suggestions' => search_sites_with_emails_admin_suggestions($q, 25),
-    ]);
+    $flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS;
+    try {
+        echo json_encode([
+            'ok' => true,
+            'q' => $q,
+            'suggestions' => search_sites_with_emails_admin_suggestions($q, 25),
+        ], $flags);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'q' => $q, 'suggestions' => [], 'error' => 'Search failed.'], $flags);
+    }
     exit;
 }
 

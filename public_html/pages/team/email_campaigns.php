@@ -19,28 +19,33 @@ if ((string) get('ajax') === 'suggest') {
     $q = (string) get('q');
     $projectId = (int) get('project_id');
     $sheetId = (int) get('sheet_id'); // legacy
-    if ($projectId > 0) {
-        $project = get_email_campaign_project($projectId);
-        if (!$project || !email_campaign_project_team_visible($project)) {
-            echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
-            exit;
+    $flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS;
+    try {
+        if ($projectId > 0) {
+            $project = get_email_campaign_project($projectId);
+            if (!$project || !email_campaign_project_team_visible($project)) {
+                echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []], $flags);
+                exit;
+            }
+            $suggestions = search_email_campaign_suggestions_for_project($projectId, $q, 25);
+        } elseif ($sheetId > 0) {
+            $sheet = get_email_campaign_sheet($sheetId);
+            if (!$sheet || !email_campaign_sheet_team_visible($sheet)) {
+                echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []], $flags);
+                exit;
+            }
+            $suggestions = search_email_campaign_suggestions($sheetId, $q, 25);
+        } else {
+            $suggestions = search_email_campaign_suggestions_all($q, 25);
         }
-        $suggestions = search_email_campaign_suggestions_for_project($projectId, $q, 25);
-    } elseif ($sheetId > 0) {
-        $sheet = get_email_campaign_sheet($sheetId);
-        if (!$sheet || !email_campaign_sheet_team_visible($sheet)) {
-            echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
-            exit;
-        }
-        $suggestions = search_email_campaign_suggestions($sheetId, $q, 25);
-    } else {
-        $suggestions = search_email_campaign_suggestions_all($q, 25);
+        echo json_encode([
+            'ok' => true,
+            'q' => $q,
+            'suggestions' => $suggestions,
+        ], $flags);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'q' => $q, 'suggestions' => [], 'error' => 'Search failed.'], $flags);
     }
-    echo json_encode([
-        'ok' => true,
-        'q' => $q,
-        'suggestions' => $suggestions,
-    ]);
     exit;
 }
 

@@ -5,9 +5,9 @@
  */
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
-session_start();
-
 require __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/account.php';
@@ -2530,6 +2530,11 @@ try {
             fail('campaign super-search: prefix=' . json_encode($cPrefixHits)
                 . ' email=' . json_encode($cEmailHits)
                 . ' contains=' . json_encode($cContainsHits));
+        }
+        if (function_exists('login_throttle_blocked') && login_throttle_blocked('txf-no-such-user') === false) {
+            pass('login throttle allows first attempts');
+        } else {
+            fail('login throttle blocked a fresh login');
         }
         db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcampsug-%'");
         db()->exec(

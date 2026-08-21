@@ -1,7 +1,7 @@
 <?php
-session_start();
-
 require __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+txf_send_security_headers();
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/account.php';
@@ -199,6 +199,9 @@ if (
         str_starts_with($page, 'admin_')
         || str_starts_with($page, 'team_')
         || $page === 'account_password'
+        || $page === 'login'
+        || $page === 'forgot_password'
+        || $page === 'reset_password'
     )
 ) {
     require_csrf();

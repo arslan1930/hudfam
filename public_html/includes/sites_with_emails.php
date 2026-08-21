@@ -1865,7 +1865,7 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
 
     $select = 'SELECT id, domain, country, email1, email2, email3, email4
          FROM sites_with_emails_admin
-         WHERE LEFT(domain, 8) <> \'__blank_\'';
+         WHERE domain NOT LIKE \'__blank_%\'';
 
     if (!$emailQ) {
         // Indexed prefix on domain — typing a site name must stay fast on large sheets.
