@@ -313,6 +313,12 @@ $downloadCsvUrl = $exportBase . '&export=csv';
 $exportMatchesUrl = $q !== '' ? ($exportBase . '&export=domains&q=' . rawurlencode($q)) : '';
 $downloadMatchesTxtUrl = $q !== '' ? ($exportBase . '&export=download&q=' . rawurlencode($q)) : '';
 $downloadMatchesCsvUrl = $q !== '' ? ($exportBase . '&export=csv&q=' . rawurlencode($q)) : '';
+$exportAllBasename = !$emptyCountry ? prospect_export_basename($countryName, '') : 'sites-our-database';
+$exportMatchesBasename = (!$emptyCountry && $q !== '')
+    ? prospect_export_basename($countryName, $q)
+    : '';
+$exportAllTxtName = $exportAllBasename . '.txt';
+$exportMatchesTxtName = $exportMatchesBasename !== '' ? ($exportMatchesBasename . '.txt') : '';
 
 $qs = http_build_query(array_filter([
     'page' => $pageKey,
@@ -348,6 +354,8 @@ render_breadcrumbs([
         class="btn"
         id="prospect_copy_all"
         data-export-url="<?= h($exportAllUrl) ?>"
+        data-download-name="<?= h($exportAllTxtName) ?>"
+        data-fallback-download-url="<?= h($downloadTxtUrl) ?>"
         data-count="<?= (int) $countryTotal ?>"
         <?= $countryTotal > 0 ? '' : 'disabled' ?>
       >Copy all</button>
@@ -359,6 +367,8 @@ render_breadcrumbs([
           class="btn secondary"
           id="prospect_copy_matches"
           data-export-url="<?= h($exportMatchesUrl) ?>"
+          data-download-name="<?= h($exportMatchesTxtName) ?>"
+          data-fallback-download-url="<?= h($downloadMatchesTxtUrl) ?>"
           data-count="<?= (int) $searchMatchCount ?>"
         >Copy matches</button>
         <a class="btn secondary" href="<?= h($downloadMatchesTxtUrl) ?>">Matches .txt</a>

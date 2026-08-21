@@ -1,6 +1,7 @@
 /**
  * Our database · country folder
  * Copy all / Copy matches (streamed) + debounced whole-folder search + Enter jump.
+ * Clipboard fail → auto-download .txt fallback.
  */
 (function () {
   'use strict';
@@ -42,16 +43,34 @@
     });
   }
 
+  function downloadTextFile(filename, text) {
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'sites-our-database.txt';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    window.setTimeout(function () {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (e) { /* ignore */ }
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 500);
+  }
+
   function wireCopyButton(btn, statusEl) {
     if (!btn) return;
     btn.addEventListener('click', function () {
       var url = btn.getAttribute('data-export-url');
+      var filename = btn.getAttribute('data-download-name') || 'sites-our-database.txt';
       var count = parseInt(btn.getAttribute('data-count') || '0', 10) || 0;
       if (!url) return;
       btn.disabled = true;
       setStatus(
         statusEl,
-        'Loading ' + (count ? count.toLocaleString() : '') + ' site name' + (count === 1 ? '' : 's') + '…'
+        'Loading ' + (count ? count.toLocaleString() : '') + ' site' + (count === 1 ? '' : 's') + '…'
       );
       fetch(url, {
         method: 'GET',
@@ -66,14 +85,39 @@
           text = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
           if (!text) throw new Error('No sites to copy.');
           var lines = text.split('\n').filter(Boolean);
-          return copyText(text).then(function () {
-            setStatus(
-              statusEl,
-              'Copied ' + lines.length.toLocaleString() + ' site' + (lines.length === 1 ? '' : 's') + '.'
-            );
-          });
+          return copyText(text).then(
+            function () {
+              setStatus(
+                statusEl,
+                'Copied ' + lines.length.toLocaleString() + ' site' + (lines.length === 1 ? '' : 's') + '.'
+              );
+            },
+            function () {
+              downloadTextFile(filename, text + '\n');
+              setStatus(
+                statusEl,
+                'Clipboard blocked — downloaded ' +
+                  lines.length.toLocaleString() +
+                  ' site' +
+                  (lines.length === 1 ? '' : 's') +
+                  ' as ' +
+                  filename +
+                  '.'
+              );
+            }
+          );
         })
         .catch(function (err) {
+          var dl = btn.getAttribute('data-fallback-download-url');
+          if (dl) {
+            window.location.href = dl;
+            setStatus(
+              statusEl,
+              'Copy failed — started download instead.',
+              true
+            );
+            return;
+          }
           setStatus(
             statusEl,
             (err && err.message ? err.message : 'Copy failed.') +
@@ -201,7 +245,6 @@
       if (debounceTimer) {
         window.clearTimeout(debounceTimer);
         debounceTimer = null;
-        // Jump uses current page; if query changed, commit first.
         var q = String(input.value || '').trim();
         if (q !== lastCommittedQ) {
           commitServerSearch(q);

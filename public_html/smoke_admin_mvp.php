@@ -306,10 +306,28 @@ if (!str_contains($assetPhp, 'js/prospects-country.js')) {
 $prospectsCountryJs = file_get_contents($root . '/assets/js/prospects-country.js') ?: '';
 if (!str_contains($prospectsCountryJs, 'DEBOUNCE_MS')
     || !str_contains($prospectsCountryJs, 'commitServerSearch')
-    || !str_contains($prospectsCountryJs, 'prospect_copy_matches')) {
-    fail('prospects-country.js missing debounce / copy matches');
+    || !str_contains($prospectsCountryJs, 'prospect_copy_matches')
+    || !str_contains($prospectsCountryJs, 'downloadTextFile')
+    || !str_contains($prospectsCountryJs, 'Clipboard blocked')) {
+    fail('prospects-country.js missing debounce / copy matches / download fallback');
 } else {
-    ok('prospects-country.js debounce + copy');
+    ok('prospects-country.js debounce + copy + download fallback');
+}
+if (!str_contains($prospectsLib, 'function prospect_export_basename')
+    || !str_contains($prospectsLib, '-our-database')
+    || !str_contains($adminProspects, 'data-download-name')
+    || !str_contains($adminProspects, 'data-fallback-download-url')
+    || !str_contains($teamProspects, 'data-download-name')) {
+    fail('Our database missing export basename / download-name attrs');
+} else {
+    ok('Our database export filenames + download-name attrs');
+}
+// Policy: Team browse is allowed (was privatized); stub redirect text must be gone.
+if (str_contains($teamProspects, 'Our database is private to Admin')
+    || str_contains($teamProspects, 'Admin-only')) {
+    fail('team prospects still privatized / Admin-only stub');
+} else {
+    ok('Team Our database policy: browse unlocked (not privatized)');
 }
 
 $index = file_get_contents($root . '/index.php') ?: '';

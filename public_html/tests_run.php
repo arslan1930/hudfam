@@ -318,6 +318,16 @@ try {
     } else {
         fail('prospect_inventory_query q: ' . json_encode($invQ));
     }
+    $fnAll = prospect_export_basename($country, '');
+    $fnMatch = prospect_export_basename($country, 'txftest');
+    if ($fnAll === 'germany-our-database'
+        && $fnMatch === 'germany-our-database-matches'
+        && str_ends_with($fnAll . '.csv', '-our-database.csv')
+        && str_ends_with($fnMatch . '.txt', '-matches.txt')) {
+        pass('prospect_export_basename germany-our-database(+matches)');
+    } else {
+        fail('prospect_export_basename: ' . json_encode(['all' => $fnAll, 'match' => $fnMatch, 'country' => $country]));
+    }
 } catch (Throwable $e) {
     fail('prospects: ' . $e->getMessage());
 }

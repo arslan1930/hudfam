@@ -1040,6 +1040,20 @@ function count_prospect_sites_matching(string $country, string $q = ''): int
 }
 
 /**
+ * Download basename for Our database export (no extension).
+ * e.g. germany-our-database or germany-our-database-matches
+ */
+function prospect_export_basename(string $country, string $q = ''): string
+{
+    $canon = resolve_canonical_country(trim($country));
+    $label = $canon ? (string) $canon['name'] : trim($country);
+    $safe = strtolower((string) (preg_replace('/[^a-zA-Z0-9]+/', '-', $label) ?: 'sites'));
+    $safe = trim($safe, '-') ?: 'sites';
+    $suffix = trim($q) !== '' ? '-matches' : '';
+    return $safe . '-our-database' . $suffix;
+}
+
+/**
  * Stream one domain per line for Copy all / Download .txt (optionally filtered by $q).
  */
 function stream_prospect_domains_plain(string $country, bool $asDownload = false, string $q = ''): void
@@ -1055,17 +1069,13 @@ function stream_prospect_domains_plain(string $country, bool $asDownload = false
     }
     $country = $canon['name'];
     $q = trim($q);
-    $safeName = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $country) ?: 'sites';
-    $suffix = $q !== '' ? '-matches' : '';
+    $base = prospect_export_basename($country, $q);
 
     header('Content-Type: text/plain; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
     if ($asDownload) {
-        header(
-            'Content-Disposition: attachment; filename="'
-            . $safeName . '-our-database' . $suffix . '.txt"'
-        );
+        header('Content-Disposition: attachment; filename="' . $base . '.txt"');
     }
 
     $pdo = db();
@@ -1127,16 +1137,12 @@ function stream_prospect_domains_csv(string $country, string $q = ''): void
     }
     $country = $canon['name'];
     $q = trim($q);
-    $safeName = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $country) ?: 'sites';
-    $suffix = $q !== '' ? '-matches' : '';
+    $base = prospect_export_basename($country, $q);
 
     header('Content-Type: text/csv; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
-    header(
-        'Content-Disposition: attachment; filename="'
-        . $safeName . '-our-database' . $suffix . '.csv"'
-    );
+    header('Content-Disposition: attachment; filename="' . $base . '.csv"');
 
     $pdo = db();
     try {
