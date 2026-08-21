@@ -43,6 +43,32 @@ CREATE TABLE IF NOT EXISTS email_campaign_rows (
 --   ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent,
 --   ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent);
 
+-- Domains / emails removed on purpose — never re-add until Allow again
+CREATE TABLE IF NOT EXISTS email_campaign_excluded_domains (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_email_campaign_excluded (sheet_id, domain),
+  INDEX (sheet_id),
+  INDEX (domain),
+  CONSTRAINT fk_email_campaign_excluded_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS email_campaign_excluded_emails (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_email_campaign_excluded_email (sheet_id, domain, email),
+  INDEX (sheet_id),
+  INDEX (sheet_id, domain),
+  CONSTRAINT fk_email_campaign_excluded_email_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Communication / Admin: reusable outreach drafts per project
 CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   id INT AUTO_INCREMENT PRIMARY KEY,

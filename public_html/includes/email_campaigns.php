@@ -587,9 +587,6 @@ function email_campaign_row_email_list(array $row): array
 /**
  * @return list<array{id:int,domain:string,excluded_at:string}>
  */
-/**
- * @return list<array{id:int,domain:string,excluded_at:string}>
- */
 function list_email_campaign_excluded_domains(int $sheetId, int $limit = 200): array
 {
     ensure_email_campaign_schema();
@@ -1452,8 +1449,15 @@ function save_email_campaign_row(
         }
     }
     foreach ($oldEmails as $oldEm) {
-        if (!isset($newSet[$oldEm])) {
-            exclude_email_campaign_email($sheetId, $oldDomain !== '' ? $oldDomain : $domain, $oldEm);
+        if (isset($newSet[$oldEm])) {
+            continue;
+        }
+        // Ban on the domain it left; if renaming, ban on the new name too.
+        if ($oldDomain !== '') {
+            exclude_email_campaign_email($sheetId, $oldDomain, $oldEm);
+        }
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_email($sheetId, $domain, $oldEm);
         }
     }
 
@@ -1464,8 +1468,14 @@ function save_email_campaign_row(
     if (!$hasEmail) {
         $gone = email_campaign_row_email_list($existing);
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
-        exclude_email_campaign_domain($sheetId, $domain);
-        exclude_email_campaign_emails($sheetId, $domain, $gone);
+        exclude_email_campaign_domain($sheetId, $oldDomain !== '' ? $oldDomain : $domain);
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_domain($sheetId, $domain);
+        }
+        exclude_email_campaign_emails($sheetId, $oldDomain !== '' ? $oldDomain : $domain, $gone);
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_emails($sheetId, $domain, $gone);
+        }
         touch_email_campaign_sheet($sheetId);
         return [
             'ok' => true,
@@ -1476,9 +1486,8 @@ function save_email_campaign_row(
         ];
     }
 
-    // Cannot rename onto a previously removed domain (unless Allow again).
-    if (is_email_campaign_domain_excluded($sheetId, $domain)
-        && normalize_email_campaign_domain((string) ($existing['domain'] ?? '')) !== $domain) {
+    // Block keeping/renaming onto a previously removed domain (unless Allow again).
+    if (is_email_campaign_domain_excluded($sheetId, $domain)) {
         return [
             'ok' => false,
             'error' => $domain . ' was previously removed from this sheet. Use Allow again first.',
@@ -2128,7 +2137,7 @@ function save_email_campaign_sheet_grid(
  *
  * @return array{
  *   imported:int,updated:int,skipped:int,
- *   skipped_existing:int,skipped_excluded:int,skipped_empty:int,mode:string
+ *   skipped_existing:int,skipped_excluded:int,skipped_empty:int,skipped_emails:int,mode:string
  * }
  */
 function import_email_campaign_sheet_from_swe(

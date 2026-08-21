@@ -1751,6 +1751,35 @@ try {
             'stillHasDrop' => $stillHasDrop,
         ]));
     }
+
+    // Final import also strips tombstoned emails on a new domain.
+    exclude_email_campaign_email($nlSheet, 'txfcamp-nl-e.nl', 'bad@txfcamp-nl-e.nl');
+    db()->prepare(
+        "INSERT INTO sites_with_emails_admin_all
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfcamp-nl-e.nl','Netherlands','Dutch','europe',
+                 'bad@txfcamp-nl-e.nl','good@txfcamp-nl-e.nl','','')
+         ON DUPLICATE KEY UPDATE email1=VALUES(email1), email2=VALUES(email2), email3='', email4=''"
+    )->execute();
+    $impE = import_email_campaign_sheet_from_swe($nlSheet, 'admin_all', 'Netherlands', 'new_only');
+    $eRow = db()->query(
+        "SELECT email1, email2, email3, email4 FROM email_campaign_rows WHERE sheet_id="
+        . (int) $nlSheet . " AND domain='txfcamp-nl-e.nl' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $eBag = strtolower(implode('|', array_filter([
+        (string) ($eRow['email1'] ?? ''),
+        (string) ($eRow['email2'] ?? ''),
+        (string) ($eRow['email3'] ?? ''),
+        (string) ($eRow['email4'] ?? ''),
+    ])));
+    if ((int) ($impE['imported'] ?? 0) >= 1
+        && (int) ($impE['skipped_emails'] ?? 0) >= 1
+        && !str_contains($eBag, 'bad@txfcamp-nl-e.nl')
+        && str_contains($eBag, 'good@txfcamp-nl-e.nl')) {
+        pass('Final import strips previously removed email on new site');
+    } else {
+        fail('P1 import email strip: ' . json_encode(['imp' => $impE, 'row' => $eRow]));
+    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

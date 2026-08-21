@@ -708,11 +708,12 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-bulk-add">
-      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email.') ?></h2>
+      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email. Previously removed sites/emails on this sheet are skipped (use Allow again to restore).') ?></h2>
       <p class="help">
         Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
         (comma, tab, or semicolon). Header row is optional and skipped.
         Built for large lists — paste or upload thousands of rows at once.
+        Sites or emails previously removed from this sheet are not re-added.
       </p>
 
       <form method="post" action="<?= h($formAction) ?>" style="margin-top:0.85rem"
