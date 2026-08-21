@@ -704,6 +704,7 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
   Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
+  Opened rows stay <strong>highlighted</strong> until you enter an email in that row.
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
   <?php if ($pushConflictCount > 0): ?>
     <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before merging Team emails into empty Admin slots (existing Admin emails stay).
@@ -751,7 +752,7 @@ render_breadcrumbs($crumbs);
         <?php elseif ($isAdmin): ?>
           Edit or Backspace to clear an email · Remove deletes the complete row.
         <?php else: ?>
-          Paste up to 4 emails at once · autosave · Remove deletes the row.
+          Paste up to 4 emails at once · autosave · row # shows position · Open highlights until an email is entered · Remove deletes the row.
         <?php endif; ?>
       </p>
       <?php if ($sweScope === 'admin'): ?>
@@ -806,9 +807,15 @@ render_breadcrumbs($crumbs);
   </div>
 
   <div class="table-wrap swe-sheet-wrap">
-    <table class="swe-table swe-sheet-table<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>" id="swe-table">
+    <table class="swe-table swe-sheet-table<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>"
+           id="swe-table"
+           data-swe-country="<?= h($countryName) ?>"
+           <?= $isTeam ? 'data-swe-open-track="1"' : '' ?>>
       <thead>
         <tr>
+          <?php if ($isTeam): ?>
+          <th class="swe-col-num" scope="col" title="Row number on this page">#</th>
+          <?php endif; ?>
           <th class="swe-col-site">Site</th>
           <th class="swe-col-lang">Language</th>
           <th class="swe-col-email">Email 1</th>
@@ -820,7 +827,12 @@ render_breadcrumbs($crumbs);
         </tr>
       </thead>
       <tbody id="swe-tbody">
-      <?php foreach ($rows as $s):
+      <?php
+      $rowNumBase = max(0, ($pageNum - 1) * $perPage);
+      $rowLoop = 0;
+      foreach ($rows as $s):
+          $rowLoop++;
+          $rowNum = $rowNumBase + $rowLoop;
           $sid = (int) $s['id'];
           $formId = 'swe-save-' . $sid;
           $domain = (string) $s['domain'];
@@ -857,7 +869,13 @@ render_breadcrumbs($crumbs);
         <tr data-swe-row data-swe-emails data-search="<?= h($hay) ?>" data-site-id="<?= $sid ?>"
             data-has-email="<?= $hasEmail ? '1' : '0' ?>"
             data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
+            data-row-num="<?= (int) $rowNum ?>"
             class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
+          <?php if ($isTeam): ?>
+          <td class="swe-td-num">
+            <span class="swe-row-num" title="Site #<?= (int) $rowNum ?>"><?= (int) $rowNum ?></span>
+          </td>
+          <?php endif; ?>
           <td class="swe-td-site">
             <form id="<?= h($formId) ?>" method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
               <input type="hidden" name="action" value="save_row">

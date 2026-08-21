@@ -713,11 +713,34 @@ if (!str_contains($sweJs, 'listEligibleOpenRows')
 } else {
     ok('sites-with-emails.js Open first N + batch continue');
 }
+if (!str_contains($sweJs, 'data-swe-open-track')
+    || !str_contains($sweJs, 'markRowOpened')
+    || !str_contains($sweJs, 'swe-row-opened')
+    || !str_contains($sweJs, 'clearRowOpened')
+    || !str_contains($sweJs, 'syncAllOpenedHighlights')) {
+    fail('sites-with-emails.js missing Open highlight-until-email tracking');
+} else {
+    ok('sites-with-emails.js Open highlight until email');
+}
+if (!str_contains($sweApp, 'data-swe-open-track')
+    || !str_contains($sweApp, 'swe-col-num')
+    || !str_contains($sweApp, 'swe-row-num')
+    || !str_contains($sweApp, 'data-row-num')) {
+    fail('SWE Team missing row # / open-track markup');
+} else {
+    ok('SWE Team row numbers + open-track markup');
+}
 $sweCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($sweCss, 'swe-open-site') || !str_contains($sweCss, 'swe-open-group')) {
     fail('app.css missing SWE Open site styles');
 } else {
     ok('SWE Open site CSS');
+}
+if (!str_contains($sweCss, 'swe-row-opened') || !str_contains($sweCss, 'swe-row-num')) {
+    fail('app.css missing SWE opened-row / row-number styles');
+} else {
+    ok('SWE opened-row + row-number CSS');
+}
 
 $openSiteJs = file_get_contents($root . '/assets/js/open-site.js') ?: '';
 if (!str_contains($openSiteJs, 'OpenSite') || !str_contains($openSiteJs, 'normalizeSiteHost')) {
@@ -740,8 +763,7 @@ if (!str_contains(file_get_contents($root . '/asset.php') ?: '', "'js/open-site.
     fail('asset.php missing open-site.js allowlist');
 } else {
     ok('asset allowlist open-site.js');
-}}
-
+}
 $sitesEmailsPage = file_get_contents($root . '/pages/team/sites_emails.php') ?: '';
 if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {
     fail('team_sites_emails missing page-level unlock check');

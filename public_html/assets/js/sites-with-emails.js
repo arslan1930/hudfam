@@ -252,6 +252,11 @@
     var hasEmail = emails.some(function (e) { return e !== ''; });
     row.setAttribute('data-search', [domain, lang].concat(emails).filter(Boolean).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
+    if (hasEmail) {
+      clearRowOpened(row);
+    } else {
+      applyOpenedClass(row);
+    }
     syncRowPushButton(row);
     syncPushButton();
   }
@@ -771,6 +776,80 @@
   });
 
   // --- Open site(s) in new tabs (row Open + Open first 10–50) ---
+  // Team: highlight opened rows until any email is entered.
+  var sweTable = document.getElementById('swe-table');
+  var openTrackEnabled = !!(sweTable && sweTable.getAttribute('data-swe-open-track') === '1');
+  var OPENED_STORAGE_PREFIX = 'swe-opened:';
+
+  function openedStorageKey() {
+    var country = (sweTable && sweTable.getAttribute('data-swe-country')) || '';
+    return OPENED_STORAGE_PREFIX + String(country || 'sheet');
+  }
+
+  function readOpenedIds() {
+    if (!openTrackEnabled || !window.sessionStorage) return {};
+    try {
+      var raw = sessionStorage.getItem(openedStorageKey());
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function writeOpenedIds(map) {
+    if (!openTrackEnabled || !window.sessionStorage) return;
+    try {
+      sessionStorage.setItem(openedStorageKey(), JSON.stringify(map || {}));
+    } catch (err) { /* ignore quota */ }
+  }
+
+  function applyOpenedClass(row) {
+    if (!openTrackEnabled || !row) return;
+    if (row.getAttribute('data-has-email') === '1') {
+      row.classList.remove('swe-row-opened');
+      return;
+    }
+    var id = String(row.getAttribute('data-site-id') || '');
+    var map = readOpenedIds();
+    row.classList.toggle('swe-row-opened', !!(id && map[id]));
+  }
+
+  function markRowOpened(row) {
+    if (!openTrackEnabled || !row) return;
+    if (row.getAttribute('data-has-email') === '1') return;
+    var id = String(row.getAttribute('data-site-id') || '');
+    if (!id) return;
+    var map = readOpenedIds();
+    map[id] = 1;
+    writeOpenedIds(map);
+    row.classList.add('swe-row-opened');
+  }
+
+  function clearRowOpened(row) {
+    if (!row) return;
+    var id = String(row.getAttribute('data-site-id') || '');
+    row.classList.remove('swe-row-opened');
+    if (!openTrackEnabled || !id) return;
+    var map = readOpenedIds();
+    if (map[id]) {
+      delete map[id];
+      writeOpenedIds(map);
+    }
+  }
+
+  function syncAllOpenedHighlights() {
+    if (!openTrackEnabled) return;
+    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+      if (row.getAttribute('data-has-email') === '1') {
+        clearRowOpened(row);
+      } else {
+        applyOpenedClass(row);
+      }
+    });
+  }
+
   function normalizeSiteHost(raw) {
     var s = String(raw || '').trim();
     if (!s) return '';
@@ -856,7 +935,7 @@
 
   /** Open large goals in batches of 10 to reduce popup-blocker friction. */
   var OPEN_BATCH_SIZE = 10;
-  var openBatchState = null; // { goal: number, offset: number, urls: string[] }
+  var openBatchState = null; // { goal: number, offset: number, items: {row,url,host}[] }
   var OPEN_COUNT_STORAGE_KEY = 'swe-open-count';
 
   function clearOpenBatchState() {
@@ -909,9 +988,7 @@
     // Keep an in-progress batch aligned with the current visible eligible list.
     if (openBatchState) {
       openBatchState.goal = Math.min(openBatchState.goal, eligible.length);
-      openBatchState.urls = eligible.slice(0, openBatchState.goal).map(function (e) {
-        return e.url;
-      });
+      openBatchState.items = eligible.slice(0, openBatchState.goal);
       if (openBatchState.offset > openBatchState.goal) {
         openBatchState.offset = openBatchState.goal;
       }
@@ -984,7 +1061,7 @@
       openBatchState = {
         goal: take,
         offset: 0,
-        urls: eligible.slice(0, take).map(function (e) { return e.url; })
+        items: eligible.slice(0, take)
       };
     }
 
@@ -996,10 +1073,12 @@
 
     var start = openBatchState.offset;
     var end = Math.min(start + OPEN_BATCH_SIZE, openBatchState.goal);
-    var slice = openBatchState.urls.slice(start, end);
-    var opened = openUrlBatch(slice);
-    // Advance by attempted length so "Open next" still moves forward if some popups blocked;
-    // user can re-run first N if needed. Partial opens still report accurately.
+    var slice = (openBatchState.items || []).slice(start, end);
+    var urls = slice.map(function (item) { return item.url; });
+    var opened = openUrlBatch(urls);
+    slice.forEach(function (item) {
+      if (item && item.row) markRowOpened(item.row);
+    });
     openBatchState.offset = end;
     reportOpenBatch(opened, slice.length, openBatchState.goal, openBatchState.offset, !!fromContinue);
     if (openBatchState.offset >= openBatchState.goal) {
@@ -1015,7 +1094,10 @@
     if (!link) return;
     if (link.getAttribute('aria-disabled') === 'true' || link.classList.contains('is-disabled')) {
       e.preventDefault();
+      return;
     }
+    var row = link.closest('[data-swe-row]');
+    if (row) markRowOpened(row);
   });
 
   var openCountSelect = document.querySelector('[data-swe-open-count]');
@@ -1052,4 +1134,5 @@
   document.querySelectorAll('[data-swe-row]').forEach(refreshOpenLink);
   syncOpenBulkButton();
   syncOpenContinueButton();
+  syncAllOpenedHighlights();
 })();
