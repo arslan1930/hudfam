@@ -17,13 +17,118 @@ if ($folder !== '' && !in_array($folder, $allowedFolders, true)) {
 // New reminder for Emails Admin is cleared when a country sheet is opened (not hub-only).
 // See sites_with_emails_app.php (admin scope country view).
 
-// Optional repair: Admin→Final archive sync (not automatic on every hub GET).
-if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'repair_final_archive') {
-    $result = sync_sites_with_emails_admin_to_all();
-    $up = (int) ($result['upserted'] ?? 0);
-    $rm = (int) ($result['removed'] ?? 0);
-    flash('ok', 'Final archive repaired · synced ' . $up . ' · removed ' . $rm . ' stale.');
-    redirect($base);
+// Hub-only: Admin super-search (reuse Team Admin emails delete helpers).
+if ($folder === '' && (string) get('ajax') === 'suggest') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $q = (string) get('q');
+    echo json_encode([
+        'ok' => true,
+        'q' => $q,
+        'suggestions' => search_sites_with_emails_admin_suggestions($q, 25),
+    ]);
+    exit;
+}
+
+if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string) post('action');
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+
+    $json = static function (array $payload, int $code = 200) use ($wantsJson, $base): void {
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code($code);
+            echo json_encode($payload);
+            exit;
+        }
+        if (!empty($payload['ok'])) {
+            flash('ok', (string) ($payload['message'] ?? 'Done.'));
+        } else {
+            flash('error', (string) ($payload['error'] ?? 'Could not complete.'));
+        }
+        redirect($base);
+    };
+
+    if ($action === 'repair_final_archive') {
+        require_csrf();
+        $result = sync_sites_with_emails_admin_to_all();
+        $added = (int) ($result['added'] ?? 0);
+        $updated = (int) ($result['updated'] ?? 0);
+        $removed = (int) ($result['removed'] ?? 0);
+        $unchanged = (int) ($result['unchanged'] ?? 0);
+        $msg = 'Final archive repaired · added ' . $added
+            . ' · updated ' . $updated
+            . ' · unchanged ' . $unchanged
+            . ' · removed ' . $removed . ' stale';
+        $bits = [];
+        foreach (['added_samples' => 'Added', 'updated_samples' => 'Updated', 'removed_samples' => 'Removed'] as $key => $label) {
+            $samples = $result[$key] ?? [];
+            if (is_array($samples) && $samples !== []) {
+                $bits[] = $label . ': ' . implode('; ', array_slice($samples, 0, 5))
+                    . (count($samples) > 5 ? '…' : '');
+            }
+        }
+        if ($bits !== []) {
+            $msg .= ' · ' . implode(' · ', $bits);
+        }
+        flash('ok', $msg . '.');
+        redirect($base);
+    }
+
+    if ($action === 'delete_row') {
+        require_csrf();
+        $siteId = (int) post('site_id');
+        $before = get_site_with_emails($siteId, 'admin');
+        $result = delete_sites_with_emails_admin_row($siteId);
+        if (!$result['ok']) {
+            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Delete failed.')], 404);
+        }
+        $country = $before ? (string) $before['country'] : '';
+        $json([
+            'ok' => true,
+            'message' => 'Deleted ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . ' from Sites with emails - Admin.',
+            'domain' => (string) $result['domain'],
+            'country' => $country,
+            'mode' => 'row',
+        ]);
+    }
+
+    if ($action === 'delete_email') {
+        require_csrf();
+        $siteId = (int) post('site_id');
+        $before = get_site_with_emails($siteId, 'admin');
+        $result = remove_email_from_sites_with_emails_admin($siteId, (string) post('email'));
+        if (!$result['ok']) {
+            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
+        }
+        $country = $before ? (string) $before['country'] : '';
+        $rowDeleted = !empty($result['row_deleted']);
+        $msg = $rowDeleted
+            ? 'Removed last email from ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . ' · site row deleted from Admin + Final (no empty-email sites).'
+            : 'Removed ' . (string) ($result['removed'] ?? '') . ' from ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . '. Site name kept in Admin.';
+        $json([
+            'ok' => true,
+            'message' => $msg,
+            'domain' => (string) $result['domain'],
+            'country' => $country,
+            'emails' => $result['emails'] ?? [],
+            'removed' => (string) ($result['removed'] ?? ''),
+            'site_id' => $siteId,
+            'mode' => $rowDeleted ? 'row' : 'email',
+            'row_deleted' => $rowDeleted,
+        ]);
+    }
+
+    if ($action !== '') {
+        $json(['ok' => false, 'error' => 'Unknown action.'], 400);
+    }
 }
 
 // --- Hub ---
@@ -102,6 +207,10 @@ if ($folder === '') {
     </div>
     <?php endif; ?>
 
+    <?php if ($sweTotal > 0): ?>
+    <?php render_sites_with_emails_admin_super_search($base); ?>
+    <?php endif; ?>
+
     <div class="card">
       <div class="folders emails-data-folders">
         <div class="folder-with-info">
@@ -136,7 +245,7 @@ if ($folder === '') {
             <h3>Email campaign data</h3>
             <p class="muted">
               One sheet per country · Communication Team super search ·
-              <?= (int) $campaignSheetCount ?> countr<?= (int) $campaignSheetCount === 1 ? 'y' : 'ies' ?>
+              <?= (int) $campaignSheetCount ?> countr<?= $campaignSheetCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $campaignRowTotal ?> site<?= (int) $campaignRowTotal === 1 ? '' : 's' ?>
             </p>
           </a>

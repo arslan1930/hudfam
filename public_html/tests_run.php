@@ -2117,6 +2117,29 @@ try {
         } else {
             fail("Final mirror=$finalMirror cols=" . json_encode($finalColsAfter));
         }
+
+        // P3: repair report distinguishes added / updated / removed
+        db()->prepare(
+            "INSERT INTO sites_with_emails_admin_all
+               (domain, country, language, region, email1, email2, email3, email4)
+             VALUES ('txfsent-stale.com','Germany','German','europe','stale@x.com','','','')"
+        )->execute();
+        db()->prepare(
+            "UPDATE sites_with_emails_admin SET email2='extra@txfsent-a.com'
+             WHERE domain='txfsent-a.com'"
+        )->execute();
+        $report = sync_sites_with_emails_admin_to_all('Germany');
+        $staleLeft = (int) db()->query(
+            "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfsent-stale.com'"
+        )->fetchColumn();
+        if ((int) ($report['removed'] ?? 0) >= 1 && $staleLeft === 0
+            && (int) ($report['updated'] ?? 0) >= 1
+            && is_array($report['removed_samples'] ?? null)
+            && is_array($report['updated_samples'] ?? null)) {
+            pass('Final repair report added/updated/removed');
+        } else {
+            fail('repair report: ' . json_encode($report) . " stale=$staleLeft");
+        }
     }
 } catch (Throwable $e) {
     fail('admin emailed checkpoint: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
