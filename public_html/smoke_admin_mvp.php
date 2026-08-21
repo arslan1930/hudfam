@@ -891,6 +891,16 @@ if (!str_contains($campLib, 'email_campaign_excluded_emails')
 } else {
     ok('campaign sticky domain + email exclusions (P0/P1)');
 }
+if (!str_contains($campLib, 'function list_email_campaign_excluded_emails')
+    || !str_contains($campLib, 'function count_email_campaign_excluded_emails')
+    || !str_contains($campApp, 'allow_excluded_email')
+    || !str_contains($campApp, 'allow_excluded_emails_for_domain')
+    || !str_contains($campApp, 'Previously removed')
+    || !str_contains($campApp, 'Allow all for site')) {
+    fail('campaign missing excluded-email Admin UI (P2)');
+} else {
+    ok('campaign excluded-email Admin UI (P2)');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')

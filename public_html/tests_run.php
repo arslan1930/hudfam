@@ -1780,6 +1780,41 @@ try {
     } else {
         fail('P1 import email strip: ' . json_encode(['imp' => $impE, 'row' => $eRow]));
     }
+
+    // P2: Allow again for a single email lifts that ban only.
+    $listedBefore = count_email_campaign_excluded_emails($nlSheet);
+    $clearedOne = clear_email_campaign_email_exclusion(
+        $nlSheet,
+        'txfcamp-nl-e.nl',
+        'bad@txfcamp-nl-e.nl'
+    );
+    $stillBanned = is_email_campaign_email_excluded($nlSheet, 'txfcamp-nl-e.nl', 'bad@txfcamp-nl-e.nl');
+    $listFn = list_email_campaign_excluded_emails($nlSheet, 50);
+    if ($clearedOne && !$stillBanned && $listedBefore >= 1 && is_array($listFn)) {
+        pass('Allow again clears one excluded email');
+    } else {
+        fail('P2 allow email: ' . json_encode([
+            'cleared' => $clearedOne,
+            'stillBanned' => $stillBanned,
+            'listedBefore' => $listedBefore,
+        ]));
+    }
+
+    // P2: Allow all emails for a domain.
+    exclude_email_campaign_email($nlSheet, 'txfcamp-nl-f.nl', 'a@txfcamp-nl-f.nl');
+    exclude_email_campaign_email($nlSheet, 'txfcamp-nl-f.nl', 'b@txfcamp-nl-f.nl');
+    $clearedAll = clear_email_campaign_email_exclusions_for_domain($nlSheet, 'txfcamp-nl-f.nl');
+    $aBanned = is_email_campaign_email_excluded($nlSheet, 'txfcamp-nl-f.nl', 'a@txfcamp-nl-f.nl');
+    $bBanned = is_email_campaign_email_excluded($nlSheet, 'txfcamp-nl-f.nl', 'b@txfcamp-nl-f.nl');
+    if ($clearedAll >= 2 && !$aBanned && !$bBanned) {
+        pass('Allow all emails for site clears domain email bans');
+    } else {
+        fail('P2 allow all emails: ' . json_encode([
+            'clearedAll' => $clearedAll,
+            'a' => $aBanned,
+            'b' => $bBanned,
+        ]));
+    }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

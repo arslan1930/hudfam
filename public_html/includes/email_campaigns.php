@@ -622,6 +622,44 @@ function count_email_campaign_excluded_domains(int $sheetId): int
 }
 
 /**
+ * @return list<array{id:int,domain:string,email:string,excluded_at:string}>
+ */
+function list_email_campaign_excluded_emails(int $sheetId, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(2000, $limit));
+    $st = db()->prepare(
+        "SELECT id, domain, email, excluded_at
+         FROM email_campaign_excluded_emails
+         WHERE sheet_id=?
+         ORDER BY domain ASC, email ASC
+         LIMIT {$limit}"
+    );
+    $st->execute([$sheetId]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'domain' => (string) ($row['domain'] ?? ''),
+            'email' => (string) ($row['email'] ?? ''),
+            'excluded_at' => (string) ($row['excluded_at'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function count_email_campaign_excluded_emails(int $sheetId): int
+{
+    ensure_email_campaign_schema();
+    $st = db()->prepare(
+        'SELECT COUNT(*) FROM email_campaign_excluded_emails WHERE sheet_id=?'
+    );
+    $st->execute([$sheetId]);
+    return (int) $st->fetchColumn();
+}
+
+/**
  * Sheet "name" is always the canonical country name.
  */
 function email_campaign_sheet_country(array $sheet): string
