@@ -209,8 +209,22 @@ if ($sheetId > 0) {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
                 $msg = 'Added to sheet: '
                     . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped'] ?? 0) > 0) {
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_emails'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_emails'] . ' previously removed email'
+                        . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
+                }
+                if ((int) ($result['skipped'] ?? 0) > 0
+                    && (int) ($result['skipped_excluded'] ?? 0) < 1
+                    && (int) ($result['skipped_emails'] ?? 0) < 1) {
                     $msg .= ', ' . (int) $result['skipped'] . ' skipped';
+                } elseif ((int) ($result['skipped'] ?? 0) > (int) ($result['skipped_excluded'] ?? 0)) {
+                    $otherSkip = (int) $result['skipped'] - (int) ($result['skipped_excluded'] ?? 0);
+                    if ($otherSkip > 0) {
+                        $msg .= ', ' . $otherSkip . ' other skipped';
+                    }
                 }
                 $msg .= '.';
                 if ($result['errors'] !== []) {
@@ -228,7 +242,15 @@ if ($sheetId > 0) {
                 $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
                 $msg = 'Imported file into sheet: '
                     . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped'] ?? 0) > 0) {
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_emails'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_emails'] . ' previously removed email'
+                        . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
+                }
+                if ((int) ($result['skipped'] ?? 0) > 0
+                    && (int) ($result['skipped_excluded'] ?? 0) < 1) {
                     $msg .= ', ' . (int) $result['skipped'] . ' skipped';
                 }
                 $msg .= ' · ' . (int) ($result['lines'] ?? 0) . ' data line(s).';
@@ -280,11 +302,69 @@ if ($sheetId > 0) {
                 if ($ok) {
                     flash(
                         'ok',
-                        'Allowed “' . normalize_email_campaign_domain($domain) . '” again. '
-                        . 'Next Final/Admin import can add it if it still has emails.'
+                        'Allowed “' . normalize_email_campaign_domain($domain) . '” again '
+                        . '(including its previously removed emails). '
+                        . 'Import, paste, and + Add can add it if it has emails.'
                     );
                 } else {
                     flash('error', 'That site was not on the excluded list.');
+                }
+                redirect($back . '#camp-excluded');
+            }
+            if ($action === 'allow_excluded_email') {
+                $domain = (string) post('domain');
+                $email = (string) post('email');
+                $ok = clear_email_campaign_email_exclusion($sheetId, $domain, $email);
+                $domLabel = normalize_email_campaign_domain($domain);
+                $emLabel = function_exists('normalize_email_value')
+                    ? normalize_email_value($email)
+                    : strtolower(trim($email));
+                if ($wantsJson) {
+                    $jsonOut([
+                        'ok' => $ok,
+                        'domain' => $domLabel,
+                        'email' => $emLabel,
+                        'error' => $ok ? null : 'That email was not on the excluded list.',
+                        'message' => $ok
+                            ? ('Allowed “' . $emLabel . '” on ' . $domLabel . ' again.')
+                            : 'That email was not on the excluded list.',
+                    ], $ok ? 200 : 404);
+                }
+                if ($ok) {
+                    flash(
+                        'ok',
+                        'Allowed “' . $emLabel . '” on ' . $domLabel . ' again. '
+                        . 'Import, paste, and + Add can include that email.'
+                    );
+                } else {
+                    flash('error', 'That email was not on the excluded list.');
+                }
+                redirect($back . '#camp-excluded');
+            }
+            if ($action === 'allow_excluded_emails_for_domain') {
+                $domain = (string) post('domain');
+                $domLabel = normalize_email_campaign_domain($domain);
+                $n = clear_email_campaign_email_exclusions_for_domain($sheetId, $domain);
+                $ok = $n > 0;
+                if ($wantsJson) {
+                    $jsonOut([
+                        'ok' => $ok,
+                        'domain' => $domLabel,
+                        'cleared' => $n,
+                        'error' => $ok ? null : 'No excluded emails for that site.',
+                        'message' => $ok
+                            ? ('Allowed ' . $n . ' email' . ($n === 1 ? '' : 's') . ' on ' . $domLabel . ' again.')
+                            : 'No excluded emails for that site.',
+                    ], $ok ? 200 : 404);
+                }
+                if ($ok) {
+                    flash(
+                        'ok',
+                        'Allowed ' . $n . ' previously removed email' . ($n === 1 ? '' : 's')
+                        . ' on “' . $domLabel . '” again.'
+                    );
+                } else {
+                    flash('error', 'No excluded emails for that site.');
                 }
                 redirect($back . '#camp-excluded');
             }
@@ -338,6 +418,15 @@ if ($sheetId > 0) {
     $sentStats = count_email_campaign_sent_stats($sheetId);
     $excludedCount = count_email_campaign_excluded_domains($sheetId);
     $excludedDomains = list_email_campaign_excluded_domains($sheetId, 200);
+    $excludedEmailCount = count_email_campaign_excluded_emails($sheetId);
+    $excludedEmails = list_email_campaign_excluded_emails($sheetId, 200);
+    $excludedDomainSet = [];
+    foreach ($excludedDomains as $exDom) {
+        $d = (string) ($exDom['domain'] ?? '');
+        if ($d !== '') {
+            $excludedDomainSet[$d] = true;
+        }
+    }
     $formAction = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
     $qs = http_build_query(array_filter([
         'page' => 'admin_emails_data',
@@ -686,11 +775,12 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-bulk-add">
-      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email.') ?></h2>
+      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email. Previously removed sites/emails on this sheet are skipped (use Allow again to restore).') ?></h2>
       <p class="help">
         Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
         (comma, tab, or semicolon). Header row is optional and skipped.
         Built for large lists — paste or upload thousands of rows at once.
+        Sites or emails previously removed from this sheet are not re-added.
       </p>
 
       <form method="post" action="<?= h($formAction) ?>" style="margin-top:0.85rem"
@@ -723,14 +813,15 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites removed from this sheet are never re-added. Archives are not changed.') ?></h2>
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
       <p class="help">
         Imports <strong>new sites only</strong> — skips anything already on the sheet, and never re-adds sites
-        that were removed (unless you Allow again below, or paste/+ Add them yourself).
+        or emails that were removed (use <strong>Allow again</strong> below if a removal was a mistake).
+        Paste / + Add also respect previously removed sites and emails.
       </p>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Importing new sites…"
-            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites are not re-added.\n\nFinal/Admin archives are not changed.');">
+            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites and emails are not re-added.\n\nFinal/Admin archives are not changed.');">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
@@ -744,12 +835,15 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-excluded">
-      <h2><?= label_with_info('Previously removed sites', 'Sites deleted from this Email Sheet (by Admin or Communication Team) are listed here so Final/Admin import never re-adds them. Allow again if a removal was a mistake.') ?></h2>
+      <h2><?= label_with_info('Previously removed', 'Sites and emails deleted from this Email Sheet (by Admin or Communication Team) stay blocked from import, paste, and + Add. Allow again if a removal was a mistake.') ?></h2>
+
+      <h3 style="margin:0.85rem 0 0.45rem;font-size:1rem">Sites</h3>
       <?php if ($excludedCount < 1): ?>
         <p class="muted" style="margin:0">No excluded sites yet. When a site is removed from this sheet, it appears here.</p>
       <?php else: ?>
         <p class="help" style="margin-top:0">
-          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from archive import.
+          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from re-add (import, paste, and + Add).
+          Allow again also clears that site’s previously removed emails.
           <?php if ($excludedCount > count($excludedDomains)): ?>
             Showing first <?= count($excludedDomains) ?>.
           <?php endif; ?>
@@ -776,8 +870,86 @@ if ($sheetId > 0) {
                     <input type="hidden" name="q" value="<?= h($q) ?>">
                     <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                     <button class="btn secondary small" type="submit"
-                            title="Let the next Final/Admin import add this site again">Allow again</button>
+                            title="Let import, paste, and + Add add this site again">Allow again</button>
                   </form>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+
+      <h3 style="margin:1.15rem 0 0.45rem;font-size:1rem">Emails</h3>
+      <?php if ($excludedEmailCount < 1): ?>
+        <p class="muted" style="margin:0">No excluded emails yet. When a single email is removed (and the site stays), it appears here.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $excludedEmailCount ?> email<?= $excludedEmailCount === 1 ? '' : 's' ?> blocked from re-add on this sheet.
+          <?php if ($excludedEmailCount > count($excludedEmails)): ?>
+            Showing first <?= count($excludedEmails) ?>.
+          <?php endif; ?>
+        </p>
+        <div class="table-wrap">
+          <table class="extracted-country-table">
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Email</th>
+                <th>Removed</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php
+            $emailsPerDomain = [];
+            foreach ($excludedEmails as $exCountRow) {
+                $dKey = (string) ($exCountRow['domain'] ?? '');
+                if ($dKey === '') {
+                    continue;
+                }
+                $emailsPerDomain[$dKey] = ($emailsPerDomain[$dKey] ?? 0) + 1;
+            }
+            $emailAllowAllShown = [];
+            foreach ($excludedEmails as $exEm):
+                $emDomain = (string) ($exEm['domain'] ?? '');
+                $emAddr = (string) ($exEm['email'] ?? '');
+                $siteAlsoBlocked = isset($excludedDomainSet[$emDomain]);
+                ?>
+              <tr>
+                <td>
+                  <code><?= h($emDomain) ?></code>
+                  <?php if ($siteAlsoBlocked): ?>
+                    <span class="muted" style="display:block;font-size:0.85em">Site also blocked above</span>
+                  <?php endif; ?>
+                </td>
+                <td><code><?= h($emAddr) ?></code></td>
+                <td class="muted"><?= h((string) ($exEm['excluded_at'] ?? '')) ?></td>
+                <td class="num">
+                  <form method="post" action="<?= h($formAction) ?>" style="display:inline"
+                        data-stay-ajax data-stay-remove-row>
+                    <input type="hidden" name="action" value="allow_excluded_email">
+                    <input type="hidden" name="domain" value="<?= h($emDomain) ?>">
+                    <input type="hidden" name="email" value="<?= h($emAddr) ?>">
+                    <input type="hidden" name="q" value="<?= h($q) ?>">
+                    <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                    <button class="btn secondary small" type="submit"
+                            title="Let this email be added again on this site">Allow again</button>
+                  </form>
+                  <?php if ($emDomain !== ''
+                      && ($emailsPerDomain[$emDomain] ?? 0) > 1
+                      && empty($emailAllowAllShown[$emDomain])):
+                      $emailAllowAllShown[$emDomain] = true;
+                      ?>
+                    <form method="post" action="<?= h($formAction) ?>" style="display:inline;margin-left:0.35rem">
+                      <input type="hidden" name="action" value="allow_excluded_emails_for_domain">
+                      <input type="hidden" name="domain" value="<?= h($emDomain) ?>">
+                      <input type="hidden" name="q" value="<?= h($q) ?>">
+                      <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                      <button class="btn secondary small" type="submit"
+                              title="Allow all previously removed emails on this site">Allow all for site</button>
+                    </form>
+                  <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>

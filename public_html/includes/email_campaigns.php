@@ -134,6 +134,22 @@ function ensure_email_campaign_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
+    // Single emails removed on purpose — must not come back on re-add/import.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_excluded_emails (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sheet_id INT NOT NULL,
+          domain VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_email_campaign_excluded_email (sheet_id, domain, email),
+          INDEX (sheet_id),
+          INDEX (sheet_id, domain),
+          CONSTRAINT fk_email_campaign_excluded_email_sheet
+            FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
     // Older installs: project name / visibility / project_id + multi-country uniqueness.
     try {
         $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_sheets')->fetchAll(PDO::FETCH_COLUMN) ?: [];
@@ -357,7 +373,10 @@ function clear_email_campaign_domain_exclusion(int $sheetId, string $domainRaw):
         'DELETE FROM email_campaign_excluded_domains WHERE sheet_id=? AND domain=?'
     );
     $st->execute([$sheetId, $domain]);
-    return $st->rowCount() > 0;
+    $cleared = $st->rowCount() > 0;
+    // Allow again for the site also lifts per-email bans for that domain.
+    clear_email_campaign_email_exclusions_for_domain($sheetId, $domain);
+    return $cleared;
 }
 
 function is_email_campaign_domain_excluded(int $sheetId, string $domainRaw): bool
@@ -375,8 +394,196 @@ function is_email_campaign_domain_excluded(int $sheetId, string $domainRaw): boo
 }
 
 /**
- * @return list<array{id:int,domain:string,excluded_at:string}>
+ * Remember one email so paste/import/+ Add will not put it back on this sheet.
  */
+function exclude_email_campaign_email(int $sheetId, string $domainRaw, string $emailRaw): bool
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $email = function_exists('normalize_email_value')
+        ? normalize_email_value($emailRaw)
+        : strtolower(trim($emailRaw));
+    if ($sheetId < 1 || $domain === '' || str_starts_with($domain, '__blank_') || $email === '') {
+        return false;
+    }
+    db()->prepare(
+        'INSERT INTO email_campaign_excluded_emails (sheet_id, domain, email)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE excluded_at = VALUES(excluded_at)'
+    )->execute([$sheetId, $domain, $email]);
+    return true;
+}
+
+/**
+ * @param list<string> $emails
+ */
+function exclude_email_campaign_emails(int $sheetId, string $domainRaw, array $emails): int
+{
+    $n = 0;
+    foreach ($emails as $email) {
+        if (exclude_email_campaign_email($sheetId, $domainRaw, (string) $email)) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
+function clear_email_campaign_email_exclusion(int $sheetId, string $domainRaw, string $emailRaw): bool
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $email = function_exists('normalize_email_value')
+        ? normalize_email_value($emailRaw)
+        : strtolower(trim($emailRaw));
+    if ($sheetId < 1 || $domain === '' || $email === '') {
+        return false;
+    }
+    $st = db()->prepare(
+        'DELETE FROM email_campaign_excluded_emails
+         WHERE sheet_id=? AND domain=? AND email=?'
+    );
+    $st->execute([$sheetId, $domain, $email]);
+    return $st->rowCount() > 0;
+}
+
+function clear_email_campaign_email_exclusions_for_domain(int $sheetId, string $domainRaw): int
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    if ($sheetId < 1 || $domain === '') {
+        return 0;
+    }
+    $st = db()->prepare(
+        'DELETE FROM email_campaign_excluded_emails WHERE sheet_id=? AND domain=?'
+    );
+    $st->execute([$sheetId, $domain]);
+    return (int) $st->rowCount();
+}
+
+function is_email_campaign_email_excluded(int $sheetId, string $domainRaw, string $emailRaw): bool
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $email = function_exists('normalize_email_value')
+        ? normalize_email_value($emailRaw)
+        : strtolower(trim($emailRaw));
+    if ($sheetId < 1 || $domain === '' || $email === '') {
+        return false;
+    }
+    $st = db()->prepare(
+        'SELECT 1 FROM email_campaign_excluded_emails
+         WHERE sheet_id=? AND domain=? AND email=? LIMIT 1'
+    );
+    $st->execute([$sheetId, $domain, $email]);
+    return (int) $st->fetchColumn() > 0;
+}
+
+/**
+ * Drop previously removed emails from a slot list.
+ *
+ * @param array<int,string> $slots
+ * @return array{slots: array{0:string,1:string,2:string,3:string}, stripped: list<string>}
+ */
+function filter_email_campaign_slots_against_exclusions(
+    int $sheetId,
+    string $domainRaw,
+    array $slots,
+    ?array $excludedEmailMap = null
+): array {
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $banned = [];
+    if ($excludedEmailMap !== null) {
+        $banned = $excludedEmailMap[$domain] ?? [];
+    }
+    $kept = [];
+    $stripped = [];
+    foreach ($slots as $raw) {
+        $email = function_exists('normalize_email_value')
+            ? normalize_email_value((string) $raw)
+            : strtolower(trim((string) $raw));
+        if ($email === '') {
+            continue;
+        }
+        $isBanned = $excludedEmailMap !== null
+            ? isset($banned[$email])
+            : is_email_campaign_email_excluded($sheetId, $domain, $email);
+        if ($isBanned) {
+            $stripped[] = $email;
+            continue;
+        }
+        $kept[] = $email;
+    }
+    while (count($kept) < 4) {
+        $kept[] = '';
+    }
+    $kept = array_slice($kept, 0, 4);
+    return [
+        'slots' => [$kept[0], $kept[1], $kept[2], $kept[3]],
+        'stripped' => $stripped,
+    ];
+}
+
+/**
+ * Load sheet exclusion sets for bulk paste/import (avoid N+1 lookups).
+ *
+ * @return array{domains: array<string,true>, emails: array<string, array<string,true>>}
+ */
+function load_email_campaign_exclusion_sets(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    $domains = [];
+    $emails = [];
+    if ($sheetId < 1) {
+        return ['domains' => $domains, 'emails' => $emails];
+    }
+    $stDom = db()->prepare(
+        'SELECT domain FROM email_campaign_excluded_domains WHERE sheet_id=?'
+    );
+    $stDom->execute([$sheetId]);
+    foreach ($stDom->fetchAll(PDO::FETCH_COLUMN) ?: [] as $d) {
+        $d = (string) $d;
+        if ($d !== '') {
+            $domains[$d] = true;
+        }
+    }
+    $stEm = db()->prepare(
+        'SELECT domain, email FROM email_campaign_excluded_emails WHERE sheet_id=?'
+    );
+    $stEm->execute([$sheetId]);
+    foreach ($stEm->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $d = (string) ($row['domain'] ?? '');
+        $e = (string) ($row['email'] ?? '');
+        if ($d === '' || $e === '') {
+            continue;
+        }
+        if (!isset($emails[$d])) {
+            $emails[$d] = [];
+        }
+        $emails[$d][$e] = true;
+    }
+    return ['domains' => $domains, 'emails' => $emails];
+}
+
+/**
+ * Emails currently stored on a campaign row.
+ *
+ * @param array<string,mixed> $row
+ * @return list<string>
+ */
+function email_campaign_row_email_list(array $row): array
+{
+    $out = [];
+    foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+        $e = function_exists('normalize_email_value')
+            ? normalize_email_value((string) ($row[$k] ?? ''))
+            : strtolower(trim((string) ($row[$k] ?? '')));
+        if ($e !== '') {
+            $out[] = $e;
+        }
+    }
+    return $out;
+}
+
 /**
  * @return list<array{id:int,domain:string,excluded_at:string}>
  */
@@ -409,6 +616,44 @@ function count_email_campaign_excluded_domains(int $sheetId): int
     ensure_email_campaign_schema();
     $st = db()->prepare(
         'SELECT COUNT(*) FROM email_campaign_excluded_domains WHERE sheet_id=?'
+    );
+    $st->execute([$sheetId]);
+    return (int) $st->fetchColumn();
+}
+
+/**
+ * @return list<array{id:int,domain:string,email:string,excluded_at:string}>
+ */
+function list_email_campaign_excluded_emails(int $sheetId, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(2000, $limit));
+    $st = db()->prepare(
+        "SELECT id, domain, email, excluded_at
+         FROM email_campaign_excluded_emails
+         WHERE sheet_id=?
+         ORDER BY domain ASC, email ASC
+         LIMIT {$limit}"
+    );
+    $st->execute([$sheetId]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'domain' => (string) ($row['domain'] ?? ''),
+            'email' => (string) ($row['email'] ?? ''),
+            'excluded_at' => (string) ($row['excluded_at'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function count_email_campaign_excluded_emails(int $sheetId): int
+{
+    ensure_email_campaign_schema();
+    $st = db()->prepare(
+        'SELECT COUNT(*) FROM email_campaign_excluded_emails WHERE sheet_id=?'
     );
     $st->execute([$sheetId]);
     return (int) $st->fetchColumn();
@@ -1231,10 +1476,44 @@ function save_email_campaign_row(
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
+
+    // Tombstone emails Admin cleared from this row (intentional remove).
+    $oldEmails = email_campaign_row_email_list($existing);
+    $oldDomain = normalize_email_campaign_domain((string) ($existing['domain'] ?? ''));
+    $newSet = [];
+    foreach ($slots as $s) {
+        if ($s !== '') {
+            $newSet[$s] = true;
+        }
+    }
+    foreach ($oldEmails as $oldEm) {
+        if (isset($newSet[$oldEm])) {
+            continue;
+        }
+        // Ban on the domain it left; if renaming, ban on the new name too.
+        if ($oldDomain !== '') {
+            exclude_email_campaign_email($sheetId, $oldDomain, $oldEm);
+        }
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_email($sheetId, $domain, $oldEm);
+        }
+    }
+
+    // Never put previously removed emails back.
+    $filtered = filter_email_campaign_slots_against_exclusions($sheetId, $domain, $slots);
+    $slots = $filtered['slots'];
     $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     if (!$hasEmail) {
+        $gone = email_campaign_row_email_list($existing);
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
-        exclude_email_campaign_domain($sheetId, $domain);
+        exclude_email_campaign_domain($sheetId, $oldDomain !== '' ? $oldDomain : $domain);
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_domain($sheetId, $domain);
+        }
+        exclude_email_campaign_emails($sheetId, $oldDomain !== '' ? $oldDomain : $domain, $gone);
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_emails($sheetId, $domain, $gone);
+        }
         touch_email_campaign_sheet($sheetId);
         return [
             'ok' => true,
@@ -1242,6 +1521,14 @@ function save_email_campaign_row(
             'domain' => $domain,
             'row_deleted' => true,
             'emails' => [],
+        ];
+    }
+
+    // Block keeping/renaming onto a previously removed domain (unless Allow again).
+    if (is_email_campaign_domain_excluded($sheetId, $domain)) {
+        return [
+            'ok' => false,
+            'error' => $domain . ' was previously removed from this sheet. Use Allow again first.',
         ];
     }
 
@@ -1271,8 +1558,9 @@ function save_email_campaign_row(
 
 /**
  * Insert a new filled row (or upsert by domain).
+ * Previously removed domains/emails stay blocked until Admin Allow again.
  *
- * @return array{ok:bool,error?:string,id?:int,domain?:string}
+ * @return array{ok:bool,error?:string,id?:int,domain?:string,skipped_excluded?:bool,stripped_emails?:list<string>}
  */
 function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $emails): array
 {
@@ -1289,19 +1577,37 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
             return ['ok' => false, 'error' => 'Enter a valid site name (root domain).'];
         }
     }
+
+    if (is_email_campaign_domain_excluded($sheetId, $domain)) {
+        return [
+            'ok' => false,
+            'error' => $domain . ' was previously removed from this sheet. Use Allow again to re-add it.',
+            'skipped_excluded' => true,
+            'domain' => $domain,
+        ];
+    }
+
     $norm = normalize_email_slots($emails);
     if (!$norm['ok']) {
         return ['ok' => false, 'error' => (string) ($norm['error'] ?? 'Invalid email.')];
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
+    $filtered = filter_email_campaign_slots_against_exclusions($sheetId, $domain, $slots);
+    $slots = $filtered['slots'];
     $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     if (!$hasEmail) {
+        if ($filtered['stripped'] !== []) {
+            return [
+                'ok' => false,
+                'error' => $domain . ': all emails were previously removed from this sheet.',
+                'skipped_excluded' => true,
+                'domain' => $domain,
+                'stripped_emails' => $filtered['stripped'],
+            ];
+        }
         return ['ok' => false, 'error' => 'Add at least one email — each site must have email data.'];
     }
-
-    // Manual add / paste means Admin wants this site again — lift archive exclusion.
-    clear_email_campaign_domain_exclusion($sheetId, $domain);
 
     $find = db()->prepare(
         'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
@@ -1315,7 +1621,12 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
              WHERE id=? AND sheet_id=?'
         )->execute([$sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
         touch_email_campaign_sheet($sheetId);
-        return ['ok' => true, 'id' => $existingId, 'domain' => $domain];
+        return [
+            'ok' => true,
+            'id' => $existingId,
+            'domain' => $domain,
+            'stripped_emails' => $filtered['stripped'],
+        ];
     }
 
     db()->prepare(
@@ -1325,7 +1636,12 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
     )->execute([$sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3]]);
     $id = (int) db()->lastInsertId();
     touch_email_campaign_sheet($sheetId);
-    return ['ok' => true, 'id' => $id, 'domain' => $domain];
+    return [
+        'ok' => true,
+        'id' => $id,
+        'domain' => $domain,
+        'stripped_emails' => $filtered['stripped'],
+    ];
 }
 
 /**
@@ -1404,8 +1720,9 @@ function parse_email_campaign_bulk_line(string $line): ?array
 /**
  * Paste / import lines: site.com,email@x.com  OR  site.com email1 email2 …
  * Tuned for Admin bulk entry (1000+ rows).
+ * Previously removed domains/emails are skipped (not re-added).
  *
- * @return array{added:int,updated:int,skipped:int,errors:list<string>}
+ * @return array{added:int,updated:int,skipped:int,skipped_excluded:int,skipped_emails:int,errors:list<string>}
  */
 function paste_email_campaign_rows(int $sheetId, string $raw): array
 {
@@ -1424,8 +1741,14 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     $added = 0;
     $updated = 0;
     $skipped = 0;
+    $skippedExcluded = 0;
+    $skippedEmails = 0;
     /** @var list<string> $errors */
     $errors = [];
+
+    $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
+    $excludedDomains = $exclusionSets['domains'];
+    $excludedEmails = $exclusionSets['emails'];
 
     $pdo = db();
     $find = $pdo->prepare(
@@ -1461,6 +1784,13 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
                     continue;
                 }
             }
+
+            if (isset($excludedDomains[$domain])) {
+                $skippedExcluded++;
+                $skipped++;
+                continue;
+            }
+
             $norm = normalize_email_slots($parsed['emails']);
             if (!$norm['ok']) {
                 if (count($errors) < 25) {
@@ -1471,17 +1801,29 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
             }
             /** @var array{0:string,1:string,2:string,3:string} $slots */
             $slots = $norm['slots'] ?? ['', '', '', ''];
+            $filtered = filter_email_campaign_slots_against_exclusions(
+                $sheetId,
+                $domain,
+                $slots,
+                $excludedEmails
+            );
+            $slots = $filtered['slots'];
+            if ($filtered['stripped'] !== []) {
+                $skippedEmails += count($filtered['stripped']);
+            }
             $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
             if (!$hasEmail) {
+                if ($filtered['stripped'] !== []) {
+                    $skippedExcluded++;
+                    $skipped++;
+                    continue;
+                }
                 if (count($errors) < 25) {
                     $errors[] = $domainRaw . ': Add at least one email — each site must have email data.';
                 }
                 $skipped++;
                 continue;
             }
-
-            // Intentional paste/add lifts “never re-add” exclusion for this domain.
-            clear_email_campaign_domain_exclusion($sheetId, $domain);
 
             $find->execute([$sheetId, $domain]);
             $existingId = (int) $find->fetchColumn();
@@ -1508,7 +1850,14 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     if ($added > 0 || $updated > 0) {
         touch_email_campaign_sheet($sheetId);
     }
-    return ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+    return [
+        'added' => $added,
+        'updated' => $updated,
+        'skipped' => $skipped,
+        'skipped_excluded' => $skippedExcluded,
+        'skipped_emails' => $skippedEmails,
+        'errors' => $errors,
+    ];
 }
 
 /**
@@ -1826,7 +2175,7 @@ function save_email_campaign_sheet_grid(
  *
  * @return array{
  *   imported:int,updated:int,skipped:int,
- *   skipped_existing:int,skipped_excluded:int,skipped_empty:int,mode:string
+ *   skipped_existing:int,skipped_excluded:int,skipped_empty:int,skipped_emails:int,mode:string
  * }
  */
 function import_email_campaign_sheet_from_swe(
@@ -1882,15 +2231,17 @@ function import_email_campaign_sheet_from_swe(
     $exists = $pdo->prepare(
         'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
-    $excluded = $pdo->prepare(
-        'SELECT 1 FROM email_campaign_excluded_domains WHERE sheet_id=? AND domain=? LIMIT 1'
-    );
+
+    $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
+    $excludedDomains = $exclusionSets['domains'];
+    $excludedEmails = $exclusionSets['emails'];
 
     $imported = 0;
     $updated = 0;
     $skippedExisting = 0;
     $skippedExcluded = 0;
     $skippedEmpty = 0;
+    $skippedEmails = 0;
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
         $domainRaw = trim((string) ($row['domain'] ?? ''));
         if ($domainRaw === '') {
@@ -1915,8 +2266,22 @@ function import_email_campaign_sheet_from_swe(
             continue;
         }
 
-        $excluded->execute([$sheetId, $domain]);
-        if ((int) $excluded->fetchColumn() > 0) {
+        if (isset($excludedDomains[$domain])) {
+            $skippedExcluded++;
+            continue;
+        }
+
+        $filtered = filter_email_campaign_slots_against_exclusions(
+            $sheetId,
+            $domain,
+            $slots,
+            $excludedEmails
+        );
+        $slots = $filtered['slots'];
+        if ($filtered['stripped'] !== []) {
+            $skippedEmails += count($filtered['stripped']);
+        }
+        if ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
             $skippedExcluded++;
             continue;
         }
@@ -1963,6 +2328,7 @@ function import_email_campaign_sheet_from_swe(
         'skipped_existing' => $skippedExisting,
         'skipped_excluded' => $skippedExcluded,
         'skipped_empty' => $skippedEmpty,
+        'skipped_emails' => $skippedEmails,
         'mode' => $mode,
     ];
 }
@@ -2154,9 +2520,11 @@ function delete_email_campaign_row(int $sheetId, int $rowId): array
         return ['ok' => false, 'error' => 'Row not found in this email sheet.'];
     }
     $domain = (string) $row['domain'];
+    $emails = email_campaign_row_email_list($row);
     db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
     if (!str_starts_with($domain, '__blank_')) {
         exclude_email_campaign_domain($sheetId, $domain);
+        exclude_email_campaign_emails($sheetId, $domain, $emails);
     }
     db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
     return ['ok' => true, 'domain' => $domain];
@@ -2166,6 +2534,7 @@ function delete_email_campaign_row(int $sheetId, int $rowId): array
  * Remove one email; keep site name when other emails remain.
  * If this was the last email on the site, delete the whole row
  * (no empty email rows in campaign sheets).
+ * Removed emails are tombstoned so paste/import cannot put them back.
  *
  * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string,row_deleted?:bool}
  */
@@ -2204,6 +2573,8 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
     }
 
     $domain = (string) $row['domain'];
+    exclude_email_campaign_email($sheetId, $domain, $target);
+
     // Last email gone → drop the site row (no empty-email sites).
     if ($slots === []) {
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);

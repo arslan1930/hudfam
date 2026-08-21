@@ -879,6 +879,28 @@ if (!str_contains($campLib, 'function count_email_campaign_drafts_by_projects')
 } else {
     ok('campaign drafts P2 counts + reorder + links/lists + size warn');
 }
+if (!str_contains($campLib, 'email_campaign_excluded_emails')
+    || !str_contains($campLib, 'function exclude_email_campaign_email')
+    || !str_contains($campLib, 'function filter_email_campaign_slots_against_exclusions')
+    || !str_contains($campLib, 'function load_email_campaign_exclusion_sets')
+    || str_contains($campLib, 'Manual add / paste means Admin wants this site again')
+    || str_contains($campLib, 'Intentional paste/add lifts')
+    || !str_contains($campApp, 'Paste / + Add also respect previously removed')
+    || !str_contains($campApp, 'blocked from re-add')) {
+    fail('campaign missing sticky domain/email exclusions (P0/P1)');
+} else {
+    ok('campaign sticky domain + email exclusions (P0/P1)');
+}
+if (!str_contains($campLib, 'function list_email_campaign_excluded_emails')
+    || !str_contains($campLib, 'function count_email_campaign_excluded_emails')
+    || !str_contains($campApp, 'allow_excluded_email')
+    || !str_contains($campApp, 'allow_excluded_emails_for_domain')
+    || !str_contains($campApp, 'Previously removed')
+    || !str_contains($campApp, 'Allow all for site')) {
+    fail('campaign missing excluded-email Admin UI (P2)');
+} else {
+    ok('campaign excluded-email Admin UI (P2)');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')
