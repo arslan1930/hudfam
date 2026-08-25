@@ -371,20 +371,23 @@ function render_glossary(string $panel, bool $showTitle = true): void
     }
     echo '<dl class="glossary-list">';
     if ($panel === 'admin') {
+        echo '<div><dt>Departments</dt><dd>Assign Team users to Finding, Extracting, Email, or Communication so they only see those tools.</dd></div>';
         echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
         echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
-        echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign sheets for Communication Team search.</dd></div>';
+        echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign projects. Communication Team uses search and drafts, not the full Admin sheet.</dd></div>';
+        echo '<div><dt>Orders + Invoices</dt><dd>Client publication sheets, live URLs, printable invoices.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
-        echo '<div><dt>Your job</dt><dd>Manage Our database and Team users.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Manage Our database, departments, campaign projects, orders, and Team users.</dd></div>';
     } else {
-        echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites.</dd></div>';
+        echo '<div><dt>My departments</dt><dd>Admin assigns you to Finding, Extracting, Email, or Communication. Tools appear after that.</dd></div>';
+        echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites. Our database lists stay hidden.</dd></div>';
         echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Appears after teammates add sites.</dd></div>';
         echo '<div><dt>Sites with emails - Team</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
         echo '<div><dt>Admin emails search</dt><dd>Super search Sites with emails - Admin across all countries.</dd></div>';
-        echo '<div><dt>Campaign search</dt><dd>Super search Email campaign sheets across all countries.</dd></div>';
+        echo '<div><dt>Campaign search</dt><dd>Super search Email campaign sheets across all countries. Drafts are copy-paste into your email client.</dd></div>';
         echo '<div><dt>Site adding history</dt><dd>Sites you added, saved by day.</dd></div>';
-        echo '<div><dt>Your job</dt><dd>Filter new sites and add only the unique ones. Existing country lists stay private.</dd></div>';
+        echo '<div><dt>Your job</dt><dd>Use only the tools for your department. Existing country lists stay private to Admin.</dd></div>';
     }
     echo '</dl></div>';
 }

@@ -203,8 +203,6 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_prospect_check';
                 $pages[] = 'team_prospect_batches';
                 $pages[] = 'team_prospect_batch';
-                $pages[] = 'team_prospects';
-                $pages[] = 'team_prospect_form';
                 $pages[] = 'team_semrush_research';
                 $pages[] = 'team_semrush_sheet';
             } elseif ($slug === 'site_extracting') {

@@ -80,20 +80,6 @@ function ensure_extract_schema(): void
           CONSTRAINT fk_ec_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
-
-    // Optional work_type on tasks for deep-links
-    try {
-        ensure_tasks_schema();
-        $cols = $pdo->query('SHOW COLUMNS FROM team_tasks')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('work_type', $cols, true)) {
-            $pdo->exec(
-                "ALTER TABLE team_tasks
-                 ADD COLUMN work_type VARCHAR(40) NOT NULL DEFAULT 'sites' AFTER niche"
-            );
-        }
-    } catch (Throwable $e) {
-        // ignore
-    }
 }
 
 /** @return array<string, string> */
