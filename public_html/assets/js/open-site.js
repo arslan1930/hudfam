@@ -106,6 +106,7 @@
     var input = e.target;
     if (!input || !input.matches) return;
     if (!input.matches('[data-open-site-host], .swe-domain')) return;
+    input.title = String(input.value || '').trim();
     var cell = input.closest('[data-open-site-cell], .swe-site-cell, .open-site-cell');
     if (cell) refreshOpenCell(cell);
   });

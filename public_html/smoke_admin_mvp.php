@@ -1489,6 +1489,23 @@ if (!str_contains($sweUi, 'Copy / Open')
 } else {
     ok('Copy/Open menu + row more + mobile cards');
 }
+if (!str_contains($sweUi, 'is-dense')
+    || !str_contains($campUi, 'is-dense')
+    || !str_contains($sweUi, "placeholder' => '+'")
+    || !str_contains($campUi, "placeholder' => '+'")
+    || !str_contains($sweUi, "render_sheet_checkpoint_compact")
+    || !str_contains($campUi, "render_sheet_checkpoint_compact")
+    || !str_contains($helpersSmoke, 'function render_sheet_checkpoint_compact')
+    || !str_contains($cssUi, '.swe-sheet-table.is-dense tbody td')
+    || !str_contains($cssUi, '@media (min-width: 900px)')
+    || !str_contains($cssUi, '.main.is-sheet-app > .alert-box.alert-ok .alert-title')
+    || !str_contains($layoutUiSmoke, 'is-sheet-app')
+    || !str_contains($sweUi, "'Undo' : 'Emailed'")
+    || !str_contains($campUi, "'Undo' : 'Emailed'")) {
+    fail('sheets missing dense rows / compact emailed rule / short mark labels');
+} else {
+    ok('dense sheet rows + compact checkpoint + short Emailed/Undo');
+}
 if (!str_contains($cssUi, '@media (max-width: 899px)')
     || !str_contains($cssUi, 'table.sheet-cards-mobile tr')
     || !str_contains($cssUi, 'content: attr(data-label)')) {

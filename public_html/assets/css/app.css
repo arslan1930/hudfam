@@ -4552,6 +4552,143 @@ textarea:focus-visible {
   }
 }
 
+/* Dense sheet rows — desktop only. Mobile stacked cards keep their padding. */
+@media (min-width: 900px) {
+  .swe-sheet-table.is-dense thead th {
+    padding: 0.38rem 0.5rem;
+  }
+  .swe-sheet-table.is-dense tbody td {
+    padding: 0.2rem 0.5rem;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .swe-sheet-table.is-dense .swe-td-actions {
+    overflow: visible;
+  }
+  .swe-sheet-table.is-dense .swe-email-field,
+  .swe-sheet-table.is-dense .swe-email-field input {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .swe-sheet-table.is-dense .swe-col-site {
+    min-width: 12rem;
+    width: 24%;
+  }
+  .swe-sheet-table.is-dense .swe-col-email {
+    min-width: 7.25rem;
+    width: 12%;
+  }
+  .swe-sheet-table.is-dense .swe-col-actions {
+    min-width: 6.25rem;
+    width: 8%;
+  }
+  .swe-sheet-table.is-dense .swe-col-status {
+    min-width: 5.5rem;
+    width: 7%;
+  }
+  .swe-sheet-table.is-dense .swe-domain,
+  .swe-sheet-table.is-dense .swe-email-field input,
+  .swe-sheet-table.is-dense .swe-td-email .swe-email-field input {
+    font-size: 0.8rem;
+    padding: 0.1rem 0.28rem;
+    line-height: 1.25;
+  }
+  .swe-sheet-table.is-dense .swe-td-email .swe-email-field input,
+  .swe-sheet-table.is-dense .swe-email-field input {
+    padding-right: 1.3rem;
+  }
+  .swe-sheet-table.is-dense .swe-domain {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .swe-sheet-table.is-dense .swe-email-clear {
+    width: 1.05rem;
+    height: 1.05rem;
+    font-size: 0.88rem;
+    right: 0.12rem;
+  }
+  .swe-sheet-table.is-dense .swe-open-site {
+    padding: 0.1rem 0.36rem;
+    font-size: 0.66rem;
+  }
+  .swe-sheet-table.is-dense .swe-site-cell {
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+  }
+  .swe-sheet-table.is-dense .swe-row-chip {
+    margin-left: 0;
+    padding: 0.02rem 0.26rem;
+    font-size: 0.6rem;
+  }
+  .swe-sheet-table.is-dense .swe-row-actions {
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+  }
+  .swe-sheet-table.is-dense .swe-row-actions .btn {
+    padding: 0.14rem 0.42rem;
+    font-size: 0.74rem;
+    border-radius: 6px;
+  }
+  .swe-sheet-table.is-dense .sheet-row-more-btn {
+    min-width: 1.8rem;
+    padding: 0.14rem 0.28rem;
+  }
+  .swe-sheet-table.is-dense .swe-status-badge {
+    padding: 0.08rem 0.4rem;
+    font-size: 0.66rem;
+  }
+  .swe-sheet-table.is-dense .swe-cell-text {
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
+}
+
+.swe-email-field:not(.has-value) input::placeholder {
+  color: #c5cad3;
+  font-weight: 600;
+}
+
+.swe-checkpoint-compact {
+  margin: 0 0 0.5rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 0 8px 8px 0;
+  border-top: 1px solid #d5e0d8;
+  border-right: 1px solid #d5e0d8;
+  border-bottom: 1px solid #d5e0d8;
+  font-size: 0.9rem;
+}
+.swe-checkpoint-compact .with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.main.is-sheet-app > .alert-box {
+  margin: 0 0 0.5rem;
+  padding: 0.38rem 0.75rem;
+  box-shadow: none;
+  align-items: center;
+  border-radius: 8px;
+}
+.main.is-sheet-app > .alert-box.alert-ok .alert-title {
+  display: none;
+}
+.main.is-sheet-app > .alert-box .alert-text {
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+.main.is-sheet-app > .alert-box .alert-icon {
+  width: 1.3rem;
+  height: 1.3rem;
+  font-size: 0.72rem;
+}
+
+.swe-list-toolbar .swe-sent-filters {
+  margin-top: 0.4rem;
+}
+
 /* Author display:flex/block rules beat the UA [hidden] stylesheet, so search
    filters that set el.hidden would otherwise leave cards and rows visible. */
 [hidden] {

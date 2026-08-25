@@ -275,7 +275,8 @@ function render_header(string $title, string $panel = ''): void
     echo '<a href="index.php?page=account_password">Change password</a>';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
-    echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    $sheetApp = in_array($current, ['admin_emails_data', 'team_sites_emails', 'team_email_campaigns'], true);
+    echo '</nav></aside><main class="main' . ($sheetApp ? ' is-sheet-app' : '') . '" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
     foreach ($flashes as $flash) {
         render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }

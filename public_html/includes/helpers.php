@@ -333,6 +333,14 @@ function label_with_info(string $label, string $tip): string
         . info_icon($tip, 'About ' . $label) . '</span>';
 }
 
+/** One-line emailed-rule heading; full copy lives in the info tip. */
+function render_sheet_checkpoint_compact(string $tip): void
+{
+    echo '<p class="swe-checkpoint-rule swe-checkpoint-compact">';
+    echo label_with_info('Emailed selection rule', $tip);
+    echo '</p>';
+}
+
 /**
  * Breadcrumb trail. Each crumb: ['label' => string, 'href' => ?string]
  */

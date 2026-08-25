@@ -150,7 +150,7 @@ function render_language_typeahead(string $value = '', array $opts = []): string
  *
  * @param array{
  *   id?:string,placeholder?:string,class?:string,attrs?:string,
- *   aria_label?:string,swe?:bool
+ *   aria_label?:string,input_aria?:string,swe?:bool,form?:string
  * } $opts
  */
 function render_clearable_email_input(string $name, string $value = '', array $opts = []): string
@@ -163,6 +163,10 @@ function render_clearable_email_input(string $name, string $value = '', array $o
     $aria = (string) ($opts['aria_label'] ?? ('Clear email'));
     $swe = !empty($opts['swe']);
     $has = trim($value) !== '';
+    $inputAria = (string) ($opts['input_aria'] ?? '');
+    if ($inputAria === '' && preg_match('/^email([1-4])$/', $name, $m)) {
+        $inputAria = 'Email ' . $m[1];
+    }
 
     $html = '<div class="email-field swe-email-field' . ($has ? ' has-value' : '') . '">';
     $html .= '<input type="text" inputmode="email" name="' . h($name) . '"'
@@ -171,6 +175,7 @@ function render_clearable_email_input(string $name, string $value = '', array $o
         . ' class="' . h(trim('email-field-input ' . $extraClass)) . '"'
         . ' value="' . h($value) . '"'
         . ($placeholder !== '' ? ' placeholder="' . h($placeholder) . '"' : '')
+        . ($inputAria !== '' ? ' aria-label="' . h($inputAria) . '"' : '')
         . ' spellcheck="false" autocomplete="off"'
         . ' data-email-input'
         . ($swe ? ' data-swe-email' : '')

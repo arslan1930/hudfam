@@ -553,32 +553,25 @@ if ($sheetId > 0) {
     <p class="help">
       Admin fills <strong><?= h($sheetCountry) ?></strong> data for project <strong><?= h($projectName) ?></strong>.
       Use <strong>+ Add site</strong>, paste, file import, or import from Final.
-      Track send progress with the same <strong>emailed</strong> rule as Sites with emails - Admin (this sheet only).
     </p>
 
-    <div class="card swe-checkpoint-rule" style="margin-bottom:1rem">
-      <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'How Mark emailed / Mark up to here / Clear up to here work on this Email campaign country sheet.') ?></h2>
-      <ol class="swe-checkpoint-steps">
-        <li><strong>Order:</strong> oldest sites at the top · newest adds at the bottom.</li>
-        <li><strong>Mark emailed:</strong> marks only that one site as done.</li>
-        <li><strong>Mark up to here:</strong> marks this site <em>and every site above it</em> as emailed (checkpoint).</li>
-        <li><strong>Clear up to here:</strong> clears emailed marks from the top through this site (redo that stretch).</li>
-        <li><strong>Clear all emailed:</strong> resets this country sheet for a full resend.</li>
-      </ol>
-      <p class="help" style="margin:0.55rem 0 0">
-        Highlighted rows = already emailed. Filters: All / Not emailed / Emailed.
-        Marks stay on this sheet only (other projects / countries are separate).
-      </p>
-    </div>
+    <?php
+    render_sheet_checkpoint_compact(
+        'How Mark emailed / Mark up to here / Clear up to here work on this Email campaign country sheet. '
+        . 'Order: oldest sites at the top, newest adds at the bottom. '
+        . 'Mark emailed: marks only that one site as done. '
+        . 'Mark up to here: marks this site and every site above it as emailed (checkpoint). '
+        . 'Clear up to here: clears emailed marks from the top through this site (redo that stretch). '
+        . 'Clear all emailed: resets this country sheet for a full resend. '
+        . 'Highlighted rows = already emailed. Filters: All / Not emailed / Emailed. '
+        . 'Marks stay on this sheet only (other projects / countries are separate).'
+    );
+    ?>
 
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated — choose how many rows per page with the Per page filter (sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
-          <p class="help" style="margin:0.25rem 0 0">
-            Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-            Browse page by page — currently <?= (int) $perPage ?> per page.
-          </p>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated — choose how many rows per page with the Per page filter (sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here. Paste up to 4 emails into any email box. Edits autosave.') ?></h2>
           <p class="swe-sent-filters">
             <?php
             $sentLinks = [
@@ -663,7 +656,7 @@ if ($sheetId > 0) {
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
       <div class="table-wrap swe-sheet-wrap">
-        <table class="swe-table swe-sheet-table is-admin-checkpoint sheet-cards-mobile" id="camp-sheet-table">
+        <table class="swe-table swe-sheet-table is-admin-checkpoint is-dense sheet-cards-mobile" id="camp-sheet-table">
           <thead>
             <tr>
               <?php render_sheet_select_th(); ?>
@@ -697,16 +690,16 @@ if ($sheetId > 0) {
             </td>
             <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text muted">—</span></td>
             <td class="swe-td-email" data-label="Email 1">
-              <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+              <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 1']) ?>
             </td>
             <td class="swe-td-email" data-label="Email 2">
-              <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+              <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 2']) ?>
             </td>
             <td class="swe-td-email" data-label="Email 3">
-              <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+              <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 3']) ?>
             </td>
             <td class="swe-td-email" data-label="Email 4">
-              <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+              <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
             </td>
             <td class="swe-td-status" data-label="Status"><span class="swe-status-badge is-open" data-swe-status>New</span></td>
             <td class="swe-td-actions" data-label="Actions">
@@ -753,22 +746,23 @@ if ($sheetId > 0) {
                   <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
                   <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
                          value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site"
+                         title="<?= h($domain) ?>"
                          data-open-site-host>
                   <?= render_open_site_anchor($domain) ?>
                 </div>
               </td>
               <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text"><?= h($lang) ?></span></td>
               <td class="swe-td-email" data-label="Email 1">
-                <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+                <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 1']) ?>
               </td>
               <td class="swe-td-email" data-label="Email 2">
-                <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+                <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 2']) ?>
               </td>
               <td class="swe-td-email" data-label="Email 3">
-                <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+                <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 3']) ?>
               </td>
               <td class="swe-td-email" data-label="Email 4">
-                <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+                <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
               </td>
               <td class="swe-td-status" data-label="Status">
                 <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
@@ -778,8 +772,9 @@ if ($sheetId > 0) {
                   <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
                           data-sheet-action="mark" data-site-id="<?= $rid ?>"
                           data-email-sent="<?= $isEmailed ? '0' : '1' ?>" data-domain="<?= h($domain) ?>"
-                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
-                    <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
+                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>"
+                          aria-label="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
+                    <?= $isEmailed ? 'Undo' : 'Emailed' ?>
                   </button>
                   <?php render_sheet_row_more_open(); ?>
                   <button class="btn secondary small" type="button"
