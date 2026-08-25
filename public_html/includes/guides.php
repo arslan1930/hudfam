@@ -165,8 +165,8 @@ function guide_add_history(): string
 {
     return render_page_purpose(
         'Site adding history — who added what',
-        'Daily record of domains added by each person.',
-        'Open a date/person to see the exact domains saved that day.',
+        'Daily record of domains added by each person. The list shows recent days (paged). Older days are on later pages.',
+        'Open a date/person to see the exact domains saved that day. Editing the list autosaves: new lines are added to Our database; removed lines leave Our database unless you delete the day with that option checked. Day details (country/language) do not move sites between folders.',
         []
     );
 }

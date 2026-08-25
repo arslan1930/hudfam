@@ -378,6 +378,15 @@ if (!str_contains($adminProspects, 'id="prospect-site-table"')
 } else {
     ok('Our database country Sites table-wrap');
 }
+if (!str_contains($adminProspects, 'created_by')
+    || !str_contains($adminProspects, 'list_prospect_countries_for_creator')
+    || !str_contains($adminProspects, 'Clear person filter')
+    || !str_contains($prospectsLib, 'function list_prospect_countries_for_creator')
+    || !str_contains($prospectsLib, 'function count_prospect_batches')) {
+    fail('Our database missing created_by person filter');
+} else {
+    ok('Our database created_by person filter');
+}
 if (str_contains($adminProspects, "'status' => \$status")
     || str_contains($adminProspects, "'status' => \$status,")) {
     fail('Our database country page still applies leftover CRM status filter');
@@ -484,10 +493,87 @@ if (!str_contains($extracted, "redirect(\$sitesListUrl)") && !str_contains($extr
 } else {
     ok('extracted hub skips one-card hop');
 }
-if (!str_contains($extracted, 'extracted_search_all_pages')) {
-    fail('extracted missing Search all pages control');
+if (str_contains($extracted, 'extracted_search_all_pages')) {
+    fail('extracted still has Search all pages (should be whole-folder search)');
 } else {
-    ok('extracted Search all pages control');
+    ok('extracted Search all pages removed');
+}
+if (!str_contains($extracted, 'Search this country')
+    || !str_contains($extracted, "get('ajax')")
+    || !str_contains(file_get_contents($root . '/includes/extracted.php') ?: '', 'function extracted_url_items_html')
+    || !str_contains(file_get_contents($root . '/assets/js/extracted-admin.js') ?: '', 'Searching whole folder')) {
+    fail('extracted missing whole-folder AJAX search');
+} else {
+    ok('extracted whole-folder AJAX search');
+}
+if (!str_contains($extracted, 'csrf_field()')) {
+    fail('extracted missing csrf_field on POST forms');
+} else {
+    ok('extracted csrf_field on POST forms');
+}
+if (!str_contains($extracted, 'Last pushed')
+    || !str_contains($extracted, 'class="table-wrap"')
+    || !str_contains($extracted, 'admin_semrush_research')) {
+    fail('extracted hub missing last pushed / table-wrap / Semrush link');
+} else {
+    ok('extracted hub last pushed + table-wrap + Semrush link');
+}
+
+$semrushHubSmoke = file_get_contents($root . '/pages/admin/semrush_research.php') ?: '';
+$semrushSheetSmoke = file_get_contents($root . '/pages/admin/semrush_sheet.php') ?: '';
+if (!str_contains($semrushHubSmoke, 'json_encode')
+    || !str_contains($semrushHubSmoke, 'Extracted Sites stay unchanged')
+    || str_contains($semrushHubSmoke, "confirm('Clear ALL Semrush")) {
+    fail('Admin Semrush hub Clear confirm still uses h() inside JS string');
+} else {
+    ok('Admin Semrush hub Clear uses json_encode');
+}
+if (!str_contains($semrushHubSmoke, 'csrf_field()')
+    || !str_contains($semrushSheetSmoke, 'csrf_field()')
+    || !str_contains($semrushSheetSmoke, 'json_encode')) {
+    fail('Admin Semrush missing csrf_field or sheet json_encode confirm');
+} else {
+    ok('Admin Semrush csrf_field + sheet json_encode confirm');
+}
+if (str_contains($semrushHubSmoke, 'team_semrush_research')
+    || str_contains($semrushSheetSmoke, 'semrush_sheet_url($country, false)')) {
+    fail('Admin Semrush still links into Team chrome');
+} else {
+    ok('Admin Semrush stays in Admin chrome');
+}
+if (!str_contains($semrushHubSmoke, 'semrush-country-search')) {
+    fail('Admin Semrush hub missing country search');
+} else {
+    ok('Admin Semrush hub country search');
+}
+
+if (!str_contains($batches, 'table-wrap')
+    || !str_contains($batches, '<th>Actions</th>')
+    || !str_contains($batches, 'Repair missing days')
+    || !str_contains($batches, 'count_prospect_batches')
+    || !str_contains($batches, 'By person')) {
+    fail('history list missing table-wrap / Actions / pager / person totals / repair');
+} else {
+    ok('history list table-wrap + pager + person totals + repair');
+}
+if (!str_contains($batch, 'csrf_field()')) {
+    fail('history day missing csrf_field');
+} else {
+    ok('history day csrf_field');
+}
+if (!str_contains($batch, 'render_country_typeahead')
+    || !str_contains($batch, 'does not move sites')
+    || !str_contains($batch, 'New lines are added to Our database')
+    || str_contains($batch, 'history_also_remove_db')) {
+    fail('history day missing typeahead / autosave copy / still has live DB-remove checkbox');
+} else {
+    ok('history day typeahead + autosave copy');
+}
+if (!str_contains($batch, 'created_by=')
+    || !str_contains($batch, 'Inventory by person')) {
+    fail('history day Inventory by person missing created_by');
+} else {
+    ok('history day Inventory by person uses created_by');
 }
 
 $emailsHub = file_get_contents($root . '/pages/admin/emails_data.php') ?: '';
@@ -616,7 +702,7 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
     || !str_contains($campLibSmoke, 'function email_campaign_suggestion_from_row')
     || !str_contains($campLibSmoke, 'Indexed prefix on domain')
     || !str_contains($campLibSmoke, '$useContains = mb_strlen($q) >= 3')
-    || !str_contains($extractedAdminJsSmoke, 'function scheduleFilterUrls')
+    || !str_contains($extractedAdminJsSmoke, 'function scheduleSearch')
     || !str_contains($csrfJsSmoke, 'requestAnimationFrame')
     || !str_contains($presenceJsSmoke, 'document.hidden')
     || !str_contains($sitesFormJsSmoke, 'function scheduleStatus')
@@ -1278,7 +1364,8 @@ if (!str_contains($campLib, 'function list_email_campaign_excluded_emails')
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')
-    || !str_contains($extractedPg, 'render_open_site_anchor')
+    || (!str_contains($extractedPg, 'render_open_site_anchor')
+        && !str_contains(file_get_contents($root . '/includes/extracted.php') ?: '', 'render_open_site_anchor'))
     || !str_contains($orderSheet, 'render_open_site_anchor')
     || !str_contains($orderSheet, 'data-open-site-host')) {
     fail('Open site parity missing on Campaigns / Extracted / Orders');

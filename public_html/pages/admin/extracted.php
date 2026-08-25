@@ -254,7 +254,12 @@ if ($folder === 'extracted_sites' && !$inCountry) {
           New URLs from Team Push ·
           <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?> ·
           <?= (int) $grandTotal ?> URL<?= (int) $grandTotal === 1 ? '' : 's' ?>
+          · Push also copies site names into Semrush Research (a separate list).
+          Admin does not add URLs here — only Team Push does.
         </p>
+      </div>
+      <div class="actions">
+        <a class="btn secondary" href="index.php?page=admin_semrush_research">Semrush Research</a>
       </div>
     </div>
 
@@ -270,20 +275,25 @@ if ($folder === 'extracted_sites' && !$inCountry) {
           <span class="sheet-search-meta muted" data-extracted-country-search-meta hidden></span>
         </label>
       </div>
+      <div class="table-wrap">
       <table class="extracted-country-table" id="extracted-country-table">
         <thead>
           <tr>
             <th>Country</th>
             <th class="num">URLs</th>
+            <th>Last pushed</th>
           </tr>
         </thead>
         <tbody>
         <?php foreach ($countryRows as $r):
             $cName = (string) $r['country'];
             $cTotal = (int) $r['total'];
+            $lastPushed = (string) ($r['last_pushed_at'] ?? '');
+            $lastPushedLabel = $lastPushed !== '' ? substr($lastPushed, 0, 16) : '—';
             $searchHay = mb_strtolower(trim(
                 $cName . ' '
-                . $cTotal . ' urls'
+                . $cTotal . ' urls '
+                . $lastPushedLabel
             ));
             ?>
           <tr data-extracted-country-row data-search="<?= h($searchHay) ?>">
@@ -298,13 +308,15 @@ if ($folder === 'extracted_sites' && !$inCountry) {
                 <?= $cTotal ?>
               </a>
             </td>
+            <td class="muted"><?= h($lastPushedLabel) ?></td>
           </tr>
         <?php endforeach; ?>
           <tr class="sheet-search-empty" data-extracted-country-search-empty hidden>
-            <td colspan="2" class="muted">No countries match your search.</td>
+            <td colspan="3" class="muted">No countries match your search.</td>
           </tr>
         </tbody>
       </table>
+      </div>
       <script>
       (function () {
         var input = document.getElementById('extracted-country-search');
@@ -442,6 +454,32 @@ $qs = http_build_query(array_filter([
     'per_page' => $perPage,
 ], static fn ($v) => $v !== '' && $v !== null));
 
+$wantsAjax = (string) get('ajax') === '1';
+if ($wantsAjax) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $payload = [
+        'ok' => true,
+        'q' => $q,
+        'country_total' => $countryTotal,
+        'match_count' => $q !== '' ? (int) $searchMatchCount : 0,
+        'page' => $pageNum,
+        'pages' => $pages,
+        'per_page' => $perPage,
+        'rows_html' => extracted_url_items_html($rows, $listBase, $q, $pageNum),
+        'has_rows' => $rows !== [],
+        'list_start' => (int) (($pageNum - 1) * $perPage + 1),
+        'qs' => $qs,
+        'remove_confirm' => 'Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?',
+    ];
+    $flags = JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    echo json_encode($payload, $flags);
+    exit;
+}
+
 render_header('Extracted Sites · ' . $countryName, 'admin');
 ?>
 <?php render_breadcrumbs([
@@ -454,7 +492,11 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     <h1><?= h($countryName) ?></h1>
     <p class="muted">
       <span id="extracted_total_label"><?= (int) $countryTotal ?></span> URL<?= (int) $countryTotal === 1 ? '' : 's' ?>
-      <?= $q !== '' ? ' · ' . (int) $total . ' match' . ((int) $total === 1 ? '' : 'es') : '' ?>
+      <span id="extracted_match_line"<?= $q !== '' ? '' : ' hidden' ?>>
+        · <strong id="extracted_match_count_label"><?= (int) $searchMatchCount ?></strong>
+        match<span id="extracted_match_plural"><?= (int) $searchMatchCount === 1 ? '' : 'es' ?></span>
+        for “<span id="extracted_match_q_label"><?= h($q) ?></span>”
+      </span>
     </p>
   </div>
   <div class="actions">
@@ -475,77 +517,61 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 <div class="card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
     <h2 style="margin:0">URLs</h2>
-    <?php if ($countryTotal > 0): ?>
+    <?php if ($countryTotal > 0 || $q !== ''): ?>
     <div class="actions" style="margin-left:auto;align-items:center;flex-wrap:wrap;gap:0.45rem">
       <label class="sheet-search extracted-url-search" for="extracted-url-search" style="margin:0">
-        <span class="visually-hidden">Search URLs</span>
-        <input id="extracted-url-search" type="search" placeholder="Search…"
+        <span class="visually-hidden">Search this country</span>
+        <input id="extracted-url-search" type="search" placeholder="Search this country…"
                value="<?= h($q) ?>"
                autocomplete="off" spellcheck="false" data-no-draft
-               title="Type to filter this page · Enter = next match · Shift+Enter = previous · or use Search all pages">
+               title="Type to search the whole country folder · Enter = next match · Shift+Enter = previous">
         <span class="sheet-search-meta muted" data-extracted-url-search-meta hidden></span>
       </label>
-      <button type="button" class="btn secondary small" id="extracted_search_all_pages"
-              title="Search every page in this country (enables Remove matching)">Search all pages</button>
       <?php
       render_sheet_edit_toolbar($listBase, sheet_history_key('extracted', $countryName), [
           'q' => $q,
           'p' => $pageNum,
+          'country' => $countryName,
       ]);
       ?>
     </div>
     <?php endif; ?>
   </div>
 
-  <?php if ($q !== '' && $searchMatchCount > 0): ?>
   <form
+    id="extracted-remove-matching"
     method="post"
     action="<?= h($listBase) ?>"
     onsubmit="return confirm(<?= h(json_encode('Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?', JSON_UNESCAPED_UNICODE)) ?>);"
     style="margin-bottom:0.85rem"
+    <?= ($q !== '' && $searchMatchCount > 0) ? '' : ' hidden' ?>
   >
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_search">
-    <input type="hidden" name="q" value="<?= h($q) ?>">
+    <input type="hidden" name="q" value="<?= h($q) ?>" id="extracted_remove_q">
     <p class="help" style="margin:0 0 0.55rem">
-      Server search “<?= h($q) ?>” matches <strong><?= (int) $searchMatchCount ?></strong> URL<?= (int) $searchMatchCount === 1 ? '' : 's' ?> in this country.
+      Server search “<span id="extracted_remove_q_label"><?= h($q) ?></span>” matches
+      <strong id="extracted_remove_count_label"><?= (int) $searchMatchCount ?></strong>
+      URL<span id="extracted_remove_plural"><?= (int) $searchMatchCount === 1 ? '' : 's' ?></span> in this country.
     </p>
-    <button class="btn danger small" type="submit">Remove <?= (int) $searchMatchCount ?> matching</button>
+    <button class="btn danger small" type="submit" id="extracted_remove_matching_btn">Remove <?= (int) $searchMatchCount ?> matching</button>
   </form>
-  <?php endif; ?>
 
-  <?php if ($rows): ?>
-  <ol class="extracted-plain-list" id="extracted-plain-list" start="<?= (int) (($pageNum - 1) * $perPage + 1) ?>">
-    <?php foreach ($rows as $s):
-        $domain = (string) $s['domain'];
-        ?>
-      <li
-        class="extracted-plain-item"
-        data-extracted-url-row
-        data-search="<?= h(mb_strtolower($domain)) ?>"
-        data-site-id="<?= (int) $s['id'] ?>"
-      >
-        <label class="sheet-check">
-          <input type="checkbox" data-sheet-row-check value="<?= (int) $s['id'] ?>" aria-label="Select <?= h($domain) ?>">
-        </label>
-        <span class="extracted-plain-domain"><?= h($domain) ?></span>
-        <?= render_open_site_anchor($domain, ['class' => 'extracted-open-site']) ?>
-        <form method="post" class="extracted-plain-remove" action="<?= h($listBase) ?>"
-              data-remove-site
-              onsubmit="return confirm(<?= h(json_encode('Remove ' . $domain . '?', JSON_UNESCAPED_UNICODE)) ?>);">
-          <input type="hidden" name="action" value="remove_site">
-          <input type="hidden" name="site_id" value="<?= (int) $s['id'] ?>">
-          <input type="hidden" name="q" value="<?= h($q) ?>" data-remove-q>
-          <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-          <button class="btn secondary small" type="submit">Remove</button>
-        </form>
-      </li>
-    <?php endforeach; ?>
+  <ol class="extracted-plain-list" id="extracted-plain-list"
+      start="<?= (int) (($pageNum - 1) * $perPage + 1) ?>"
+      <?= $rows ? '' : ' hidden' ?>>
+    <?= extracted_url_items_html($rows, $listBase, $q, $pageNum) ?>
   </ol>
-  <p class="help sheet-search-empty" data-extracted-url-search-empty hidden>No URLs on this page match your search.</p>
-  <div class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+  <p class="help sheet-search-empty" data-extracted-url-search-empty hidden>No search matches on this page.</p>
+  <div id="extracted-url-empty" class="empty-state"<?= $rows ? ' hidden' : '' ?>>
+    <p data-extracted-empty-text><?= $q !== '' ? 'No search matches in this country.' : 'No URLs in this country yet.' ?></p>
+    <a class="btn secondary" href="<?= h($sitesListUrl) ?>">Back to countries</a>
+  </div>
+  <div id="extracted-url-pager" class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem"<?= $rows ? '' : ' hidden' ?>>
     <div class="actions" style="margin:0;gap:0.65rem;flex-wrap:wrap;align-items:center">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <span class="muted" data-sheet-page-status
+            data-extracted-page-label
             data-page="<?= (int) $pageNum ?>"
             data-pages="<?= (int) $pages ?>"
             data-on-page="<?= (int) count($rows) ?>"
@@ -562,17 +588,12 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     </div>
     <form method="post" action="<?= h($listBase) ?>"
           onsubmit="return confirm(<?= h(json_encode('Remove ALL ' . (int) $countryTotal . ' URLs from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
       <button class="btn secondary small danger" type="submit">Remove all</button>
     </form>
   </div>
-  <?php else: ?>
-  <div class="empty-state">
-    <p><?= $q !== '' ? 'No search matches.' : 'No URLs in this country yet.' ?></p>
-    <a class="btn secondary" href="<?= h($sitesListUrl) ?>">Back to countries</a>
-  </div>
-  <?php endif; ?>
 </div>
 
 <?php if ($countryTotal > 0): ?>
@@ -588,6 +609,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     enctype="multipart/form-data"
     onsubmit="return confirm(<?= h(json_encode('Remove all matching sites from this list in ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);"
   >
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">
     <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
     <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>

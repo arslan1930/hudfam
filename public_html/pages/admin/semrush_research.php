@@ -63,7 +63,8 @@ render_breadcrumbs([
     <p class="muted"><?= count($folders) ?> countr<?= count($folders) === 1 ? 'y' : 'ies' ?> with research sites · site names only</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_semrush_research">Team view</a>
+    <a class="btn secondary" href="index.php?page=admin_extracted">Extracted Sites</a>
+    <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
     <a class="btn" href="#add-sites">Add sites</a>
   </div>
 </div>
@@ -75,6 +76,7 @@ render_breadcrumbs([
   </p>
   <form method="post" action="<?= h($hub) ?>#add-sites" autocomplete="off"
         data-show-processing="Adding Semrush sites…">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_sites">
     <div class="form-grid">
       <?= render_country_typeahead($addCountry, [
@@ -108,31 +110,43 @@ render_breadcrumbs([
 </div>
 <?php else: ?>
 <div class="card" style="margin-top:1rem">
-  <h2 style="margin:0 0 0.65rem">Seeded countries</h2>
+  <div class="invoice-list-toolbar" style="margin-bottom:0.65rem">
+    <h2 style="margin:0">Seeded countries</h2>
+    <label class="sheet-search" for="semrush-country-search" style="margin:0">
+      <span class="visually-hidden">Search countries</span>
+      <input id="semrush-country-search" type="search" placeholder="Search country name…"
+             autocomplete="off" spellcheck="false" data-no-draft
+             title="Type a country name · Enter = next match · Shift+Enter = previous">
+      <span class="sheet-search-meta muted" data-semrush-country-search-meta hidden></span>
+    </label>
+  </div>
   <div class="table-wrap">
-    <table>
+    <table id="semrush-country-table">
       <thead>
         <tr>
           <th>Country</th>
           <th>Sites</th>
           <th>Updated</th>
-          <th></th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
       <?php foreach ($folders as $f):
           $c = (string) $f['country'];
           $sheetHref = semrush_sheet_url($c, true);
+          $updated = substr((string) $f['updated_at'], 0, 16);
+          $searchHay = mb_strtolower(trim($c . ' ' . (int) $f['total'] . ' ' . $updated));
           ?>
-        <tr>
+        <tr data-semrush-country-row data-search="<?= h($searchHay) ?>">
           <td><strong><?= h($c) ?></strong></td>
           <td><?= (int) $f['total'] ?></td>
-          <td class="muted"><?= h(substr((string) $f['updated_at'], 0, 16)) ?></td>
+          <td class="muted"><?= h($updated) ?></td>
           <td class="actions">
             <a class="btn small" href="<?= h($sheetHref) ?>">Open sheet</a>
             <a class="btn secondary small" href="<?= h($hub) ?>&amp;country=<?= rawurlencode($c) ?>#add-sites">Add more</a>
             <form method="post" action="<?= h($hub) ?>" style="display:inline"
-                  onsubmit="return confirm('Clear ALL Semrush sites and comments for <?= h($c) ?>?');">
+                  onsubmit="return confirm(<?= h(json_encode('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_country">
               <input type="hidden" name="country" value="<?= h($c) ?>">
               <button class="btn danger small" type="submit">Clear</button>
@@ -140,9 +154,98 @@ render_breadcrumbs([
           </td>
         </tr>
       <?php endforeach; ?>
+        <tr class="sheet-search-empty" data-semrush-country-search-empty hidden>
+          <td colspan="4" class="muted">No countries match your search.</td>
+        </tr>
       </tbody>
     </table>
   </div>
+  <script>
+  (function () {
+    var input = document.getElementById('semrush-country-search');
+    if (!input) return;
+    var matchRows = [];
+    var matchIndex = -1;
+    var meta = document.querySelector('[data-semrush-country-search-meta]');
+    var empty = document.querySelector('[data-semrush-country-search-empty]');
+
+    function clearHits() {
+      document.querySelectorAll('#semrush-country-table .sheet-search-hit').forEach(function (el) {
+        el.classList.remove('sheet-search-hit');
+      });
+    }
+
+    function filterCountries() {
+      var q = String(input.value || '').trim().toLowerCase();
+      var rows = document.querySelectorAll('[data-semrush-country-row]');
+      var shown = 0;
+      matchRows = [];
+      clearHits();
+      rows.forEach(function (row) {
+        var hay = String(row.getAttribute('data-search') || '');
+        var hit = !q || hay.indexOf(q) !== -1;
+        row.hidden = !hit;
+        if (hit) {
+          shown++;
+          if (q) matchRows.push(row);
+        }
+      });
+      if (empty) empty.hidden = !(q && shown === 0);
+      if (matchIndex >= matchRows.length) matchIndex = matchRows.length ? 0 : -1;
+      if (meta) {
+        if (q) {
+          meta.hidden = false;
+          meta.textContent = !matchRows.length
+            ? '0 · Enter = next'
+            : (matchIndex >= 0
+              ? (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next'
+              : matchRows.length + (matchRows.length === 1 ? ' match' : ' matches') + ' · Enter = next');
+        } else {
+          meta.hidden = true;
+          meta.textContent = '';
+          matchIndex = -1;
+        }
+      }
+    }
+
+    function jumpToMatch(dir) {
+      var q = String(input.value || '').trim();
+      if (!q) return;
+      filterCountries();
+      if (!matchRows.length) return;
+      if (matchIndex < 0) {
+        matchIndex = dir > 0 ? 0 : matchRows.length - 1;
+      } else {
+        matchIndex = (matchIndex + dir + matchRows.length) % matchRows.length;
+      }
+      var row = matchRows[matchIndex];
+      if (!row) return;
+      clearHits();
+      row.hidden = false;
+      row.classList.add('sheet-search-hit');
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (meta) {
+        meta.hidden = false;
+        meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+      }
+    }
+
+    input.addEventListener('input', function () {
+      matchIndex = -1;
+      filterCountries();
+    });
+    input.addEventListener('search', function () {
+      matchIndex = -1;
+      filterCountries();
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        jumpToMatch(e.shiftKey ? -1 : 1);
+      }
+    });
+  })();
+  </script>
 </div>
 <?php endif; ?>
 <?php render_footer('admin'); ?>

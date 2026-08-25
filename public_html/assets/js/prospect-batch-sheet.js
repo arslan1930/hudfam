@@ -16,7 +16,6 @@
   var footerCount = document.getElementById('history_footer_count');
   var countLabel = document.getElementById('history_count_label');
   var autosaveLabel = document.getElementById('history_autosave_label');
-  var alsoDb = document.getElementById('history_also_remove_db');
 
   var undoStack = [];
   var redoStack = [];
@@ -167,9 +166,6 @@
     body.set('action', 'autosave_sites');
     body.set('ajax', '1');
     body.set('sites_text', text);
-    if (alsoDb && alsoDb.checked) {
-      body.set('also_remove_db', '1');
-    }
 
     fetch(postUrl, {
       method: 'POST',

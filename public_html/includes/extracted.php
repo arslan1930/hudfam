@@ -462,6 +462,39 @@ function extracted_inventory_query(array $filters, int $pageNum = 1, int $per = 
     ];
 }
 
+/**
+ * Numbered URL list items for Admin Extracted Sites (AJAX whole-folder search).
+ *
+ * @param list<array<string,mixed>> $rows
+ */
+function extracted_url_items_html(array $rows, string $listBase, string $q, int $pageNum): string
+{
+    ob_start();
+    foreach ($rows as $s) {
+        $domain = (string) ($s['domain'] ?? '');
+        $id = (int) ($s['id'] ?? 0);
+        echo '<li class="extracted-plain-item" data-extracted-url-row data-search="'
+            . h(mb_strtolower($domain)) . '" data-site-id="' . $id . '">';
+        echo '<label class="sheet-check">';
+        echo '<input type="checkbox" data-sheet-row-check value="' . $id . '" aria-label="Select ' . h($domain) . '">';
+        echo '</label>';
+        echo '<span class="extracted-plain-domain">' . h($domain) . '</span>';
+        if (function_exists('render_open_site_anchor')) {
+            echo render_open_site_anchor($domain, ['class' => 'extracted-open-site']);
+        }
+        echo '<form method="post" class="extracted-plain-remove" action="' . h($listBase) . '" data-remove-site'
+            . ' onsubmit="return confirm(' . h(json_encode('Remove ' . $domain . '?', JSON_UNESCAPED_UNICODE)) . ');">';
+        echo function_exists('csrf_field') ? csrf_field() : '';
+        echo '<input type="hidden" name="action" value="remove_site">';
+        echo '<input type="hidden" name="site_id" value="' . $id . '">';
+        echo '<input type="hidden" name="q" value="' . h($q) . '" data-remove-q>';
+        echo '<input type="hidden" name="p" value="' . (int) $pageNum . '">';
+        echo '<button class="btn secondary small" type="submit">Remove</button>';
+        echo '</form></li>';
+    }
+    return (string) ob_get_clean();
+}
+
 function count_extracted_sites(): int
 {
     ensure_extracted_schema();
