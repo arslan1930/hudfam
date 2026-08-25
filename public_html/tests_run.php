@@ -716,6 +716,74 @@ try {
     fail('swe push: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+// --- Team / Final inline + Add site (same save_row as campaign) ---
+try {
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-add-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-add-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-add-%'");
+
+    $teamNoEmail = save_site_with_emails_row(
+        'Germany',
+        'txftest-add-team.com',
+        ['', '', '', ''],
+        $teamUser,
+        null,
+        'team'
+    );
+    $teamLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txftest-add-team.com'"
+    )->fetchColumn();
+    if (!empty($teamNoEmail['ok']) && $teamLeft === 1) {
+        pass('Team add site with no emails is allowed');
+    } else {
+        fail('Team add no-email: ' . json_encode($teamNoEmail) . " left=$teamLeft");
+    }
+
+    $finalEmpty = save_site_with_emails_row(
+        'Germany',
+        'txftest-add-final-empty.com',
+        ['', '', '', ''],
+        $adminUser,
+        null,
+        'admin_all'
+    );
+    if (empty($finalEmpty['ok'])) {
+        pass('Final add without emails is rejected');
+    } else {
+        fail('Final add without emails unexpectedly ok: ' . json_encode($finalEmpty));
+    }
+
+    $finalOk = save_site_with_emails_row(
+        'Germany',
+        'txftest-add-final.com',
+        ['one@txftest-add-final.com', '', '', ''],
+        $adminUser,
+        null,
+        'admin_all'
+    );
+    $finalAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txftest-add-final.com'"
+    )->fetchColumn();
+    $finalMirror = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txftest-add-final.com'"
+    )->fetchColumn();
+    if (!empty($finalOk['ok']) && $finalAdmin === 1 && $finalMirror === 1) {
+        pass('Final add with email writes Admin and Final');
+    } else {
+        fail('Final add with email: ' . json_encode([
+            'save' => $finalOk,
+            'admin' => $finalAdmin,
+            'final' => $finalMirror,
+        ]));
+    }
+
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-add-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-add-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-add-%'");
+} catch (Throwable $e) {
+    fail('swe inline add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Email campaign ---
 try {
     $sid = create_email_campaign_sheet('Germany', (int) $adminUser['id']);

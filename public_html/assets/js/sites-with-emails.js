@@ -1245,4 +1245,53 @@
   syncOpenBulkButton();
   syncOpenContinueButton();
   syncAllOpenedHighlights();
+
+  var addRow = document.getElementById('swe-add-row');
+  var addDomain = document.getElementById('swe_add_domain');
+  var emptyState = document.getElementById('swe-empty-state');
+
+  function openAddRow() {
+    if (!addRow) return;
+    addRow.hidden = false;
+    if (emptyState) emptyState.hidden = true;
+    if (addDomain) {
+      try { addDomain.focus({ preventScroll: false }); } catch (err) { addDomain.focus(); }
+      addDomain.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+
+  function closeAddRow() {
+    if (!addRow) return;
+    addRow.hidden = true;
+    var form = document.getElementById('swe-add-form');
+    if (form) form.reset();
+    if (addRow) {
+      addRow.querySelectorAll('.swe-email-field.has-value').forEach(function (el) {
+        el.classList.remove('has-value');
+      });
+    }
+    if (emptyState && !document.querySelector('[data-swe-row]')) {
+      emptyState.hidden = false;
+    }
+  }
+
+  document.querySelectorAll('[data-swe-add-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (addRow && !addRow.hidden && document.activeElement === addDomain) {
+        closeAddRow();
+        return;
+      }
+      openAddRow();
+    });
+  });
+  document.querySelectorAll('[data-swe-add-cancel]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeAddRow();
+    });
+  });
+  if (window.location.hash === '#add-site') {
+    openAddRow();
+  }
 })();
