@@ -1331,6 +1331,12 @@ if (!str_contains($teamSemrushHub, 'team_can_clear_semrush_country')
 } else {
     ok('Team Semrush Clear country gated in hub + sheet');
 }
+if (!str_contains($teamSemrushSheet, 'json_encode')
+    || !str_contains($teamSemrushSheet, 'Delete this comment?')) {
+    fail('Team Semrush comment delete confirm not json_encode-safe');
+} else {
+    ok('Team Semrush comment delete confirm json_encode-safe');
+}
 
 $prospectCheckT = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 if (!str_contains($prospectCheckT, 'team_page_unlocked($user, \'team_extract_batch\')')

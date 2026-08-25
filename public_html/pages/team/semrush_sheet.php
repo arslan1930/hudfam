@@ -201,7 +201,7 @@ render_breadcrumbs([
         <div class="semrush-comment-body"><?= nl2br(h((string) $c['body'])) ?></div>
         <?php if ($canDel): ?>
         <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-delete"
-              onsubmit="return confirm('Delete this comment?');">
+              onsubmit="return confirm(<?= h(json_encode('Delete this comment?', JSON_UNESCAPED_UNICODE)) ?>);">
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="delete_comment">
           <input type="hidden" name="comment_id" value="<?= $cid ?>">
