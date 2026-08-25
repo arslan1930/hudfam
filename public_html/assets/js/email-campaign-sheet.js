@@ -181,10 +181,12 @@
 
     var markBtn = row.querySelector('[data-sheet-action="mark"]');
     if (markBtn) {
-      markBtn.textContent = sent ? 'Clear emailed' : 'Mark emailed';
-      markBtn.title = sent
+      var markTitle = sent
         ? 'Clear emailed mark on this site only'
         : 'Mark this site as emailed';
+      markBtn.textContent = sent ? 'Undo' : 'Emailed';
+      markBtn.title = markTitle;
+      markBtn.setAttribute('aria-label', markTitle);
       markBtn.classList.toggle('secondary', sent);
       markBtn.setAttribute('data-email-sent', sent ? '0' : '1');
     }

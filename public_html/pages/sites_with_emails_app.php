@@ -884,45 +884,26 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Neutral duplicate archive (mirror of Admin). No campaign “emailed” marks here.
   Search finds a <strong>site + its emails</strong> together.
-  Use <strong>Open</strong> on a row or <strong>Open first 10–50</strong> to visit sites on this page in new tabs.
-</p>
-<?php else: ?>
-<p class="help">
-  Working archive from Team Push. Campaign progress is tracked on this Admin sheet only —
-  <strong>Final stays neutral</strong> (no emailed marks).
-  Use <strong>Open</strong> on a row or <strong>Open first 10–50</strong> to visit sites on this page in new tabs.
 </p>
 <?php endif; ?>
 
 <?php if ($sweScope === 'admin'): ?>
-<div class="card swe-checkpoint-rule">
-  <h2><?= label_with_info('Emailed selection rule', 'Mark emailed removes the site from this Admin working list after Final has a copy. Final never loses those rows.') ?></h2>
-  <ol class="swe-checkpoint-steps">
-    <li><strong>Order:</strong> oldest sites at the top · newest Team pushes at the bottom.</li>
-    <li><strong>Mark emailed:</strong> removes that one site from Admin · Final keeps the copy.</li>
-    <li><strong>Mark up to here:</strong> removes this site <em>and every site above it</em> from Admin · Final keeps those copies.</li>
-    <li><strong>Remove:</strong> also removes from Admin only · Final keeps the archive copy.</li>
-  </ol>
-  <p class="help swe-checkpoint-foot">
-    Admin is the working list from Team Push. Final is the lasting archive.
-  </p>
-</div>
+<?php
+render_sheet_checkpoint_compact(
+    'Mark emailed removes the site from this Admin working list after Final has a copy. Final never loses those rows. '
+    . 'Order: oldest sites at the top, newest Team pushes at the bottom. '
+    . 'Mark emailed: removes that one site from Admin; Final keeps the copy. '
+    . 'Mark up to here: removes this site and every site above it from Admin; Final keeps those copies. '
+    . 'Remove: also removes from Admin only; Final keeps the archive copy. '
+    . 'Admin is the working list from Team Push. Final is the lasting archive.'
+);
+?>
 <?php endif; ?>
 
 <div class="card">
   <div class="invoice-list-toolbar swe-list-toolbar">
     <div>
-      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Sheets can reach ~100K sites — choose how many rows per page with the Per page filter. Search matches site name or any email on that row.') ?></h2>
-      <p class="help" style="margin:0.25rem 0 0">
-        Search filters this page after you pause typing (default 100 rows). Ctrl/Cmd+Enter searches all pages.
-        <?php if ($sweScope === 'admin'): ?>
-          Use <strong>Status</strong> and the Actions buttons on each row for emailed / up to here.
-        <?php elseif ($isAdmin): ?>
-          Edit or Backspace to clear an email · Remove deletes the complete row.
-        <?php else: ?>
-          Paste up to 4 emails at once · autosave · row # shows position · Open highlights until an email is entered · Remove deletes the row.
-        <?php endif; ?>
-      </p>
+      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Sheets can reach ~100K sites — choose how many rows per page with the Per page filter. Search matches site name or any email on that row. Search filters this page after you pause typing (default 100 rows). Ctrl/Cmd+Enter searches all pages.' . ($sweScope === 'admin' ? ' Use Status and the Actions buttons on each row for emailed / up to here.' : ($isAdmin ? ' Edit or Backspace to clear an email · Remove deletes the complete row.' : ' Paste up to 4 emails at once · autosave · row # shows position · Open highlights until an email is entered · Remove deletes the row.'))) ?></h2>
       <?php if ($sweScope === 'admin'): ?>
       <p class="swe-sent-filters">
         <?php
@@ -1012,7 +993,7 @@ render_breadcrumbs($crumbs);
   </div>
 
   <div class="table-wrap swe-sheet-wrap">
-    <table class="swe-table swe-sheet-table sheet-cards-mobile<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>"
+    <table class="swe-table swe-sheet-table is-dense sheet-cards-mobile<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>"
            id="swe-table"
            data-swe-country="<?= h($countryName) ?>"
            <?= $isTeam ? 'data-swe-open-track="1"' : '' ?>>
@@ -1104,6 +1085,7 @@ render_breadcrumbs($crumbs);
               <label class="visually-hidden" for="swe-domain-<?= $sid ?>">Site</label>
               <input id="swe-domain-<?= $sid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
                      value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site"
+                     title="<?= h($domain) ?>"
                      data-swe-domain>
               <?php if ($rowSignal === 'new'): ?>
               <span class="swe-row-chip is-new" title="Added since your last visit">New</span>
@@ -1124,16 +1106,16 @@ render_breadcrumbs($crumbs);
           </td>
           <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text"><?= h($lang) ?></span></td>
           <td class="swe-td-email" data-label="Email 1">
-            <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+            <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 1']) ?>
           </td>
           <td class="swe-td-email" data-label="Email 2">
-            <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+            <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 2']) ?>
           </td>
           <td class="swe-td-email" data-label="Email 3">
-            <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+            <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 3']) ?>
           </td>
           <td class="swe-td-email" data-label="Email 4">
-            <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+            <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
           </td>
           <td class="swe-td-status" data-label="Status">
             <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
@@ -1144,8 +1126,9 @@ render_breadcrumbs($crumbs);
               <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
                       data-sheet-action="mark" data-site-id="<?= $sid ?>"
                       data-email-sent="<?= $isEmailed ? '0' : '1' ?>" data-domain="<?= h($domain) ?>"
-                      title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark emailed · remove from Admin (Final keeps a copy)' ?>">
-                <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
+                      title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark emailed · remove from Admin (Final keeps a copy)' ?>"
+                      aria-label="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark emailed · remove from Admin (Final keeps a copy)' ?>">
+                <?= $isEmailed ? 'Undo' : 'Emailed' ?>
               </button>
               <?php render_sheet_row_more_open(); ?>
               <button class="btn secondary small" type="button"
