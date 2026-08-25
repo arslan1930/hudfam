@@ -70,6 +70,13 @@
     autosaveLabel.textContent = msg || '';
   }
 
+  function lastWriterText(name, at) {
+    name = String(name || '').trim();
+    at = String(at || '').slice(0, 16);
+    if (!name && !at) return '';
+    return 'Last saved by ' + (name || 'Someone') + (at ? ' · ' + at : '');
+  }
+
   function updateCounts(n) {
     if (typeof n !== 'number') n = linesOf(ta.value).length;
     if (footerCount) {
@@ -173,6 +180,8 @@
     body.set('action', 'autosave_sites');
     body.set('ajax', '1');
     body.set('sites_text', text);
+    var writerAt = shell.getAttribute('data-writer-at') || '';
+    if (writerAt) body.set('writer_at', writerAt);
 
     fetch(postUrl, {
       method: 'POST',
@@ -185,6 +194,9 @@
     })
       .then(function (res) {
         return res.json().then(function (data) {
+          if (data && data.conflict) {
+            throw Object.assign(new Error(data.error || 'Reload to avoid overwriting.'), { conflict: true, data: data });
+          }
           if (!res.ok || !data || data.ok === false) {
             throw new Error((data && data.error) || 'Autosave failed');
           }
@@ -206,7 +218,12 @@
         }
         var n = typeof data.site_count === 'number' ? data.site_count : linesOf(ta.value).length;
         updateCounts(n);
-        setAutosaveLabel('Saved');
+        if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+        if (data.writer_name || data.writer_at) {
+          setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+        } else {
+          setAutosaveLabel('Saved');
+        }
         if (data.empty) {
           setStatus(
             data.message ||
@@ -223,7 +240,28 @@
         }
       })
       .catch(function (err) {
-        setAutosaveLabel('Save failed');
+        if (err && err.conflict) {
+          saveAgain = false;
+          var data = err.data || {};
+          if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+          if (data.domains != null) {
+            var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
+            applyingHistory = true;
+            ta.value = savedRaw;
+            lastSnapshot = normalizeText(savedRaw);
+            lastSavedText = lastSnapshot;
+            applyingHistory = false;
+            updateCounts();
+          }
+          undoStack = [];
+          redoStack = [];
+          syncHistoryButtons();
+          if (data.writer_name || data.writer_at) {
+            setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+          }
+        } else {
+          setAutosaveLabel('Save failed');
+        }
         setStatus(err.message || 'Could not autosave Sites list.', true);
       })
       .then(function () {
@@ -237,7 +275,9 @@
 
   updateCounts();
   syncHistoryButtons();
-  setAutosaveLabel('Saved');
+  if (autosaveLabel && !String(autosaveLabel.textContent || '').trim()) {
+    setAutosaveLabel('Saved');
+  }
 
   ta.addEventListener('input', function () {
     if (applyingHistory) return;

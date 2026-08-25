@@ -218,6 +218,18 @@ function csrf_field(): string
     return '<input type="hidden" name="_csrf" value="' . h(csrf_token()) . '">';
 }
 
+/** Short “Last saved by Name · YYYY-MM-DD HH:MM” (empty when unknown). */
+function last_writer_label(string $name, string $at): string
+{
+    $name = trim($name);
+    $at = $at !== '' ? substr($at, 0, 16) : '';
+    if ($name === '' && $at === '') {
+        return '';
+    }
+    $who = $name !== '' ? $name : 'Someone';
+    return $at !== '' ? ('Last saved by ' . $who . ' · ' . $at) : ('Last saved by ' . $who);
+}
+
 /** Read token from POST body or X-CSRF-Token header. */
 function csrf_request_token(): string
 {

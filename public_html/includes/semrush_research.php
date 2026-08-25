@@ -41,6 +41,16 @@ function ensure_semrush_research_schema(): void
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS semrush_sheet_meta (
+          country VARCHAR(100) NOT NULL PRIMARY KEY,
+          last_writer_id INT NULL,
+          last_writer_at TIMESTAMP NULL DEFAULT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          CONSTRAINT fk_semrush_meta_user
+            FOREIGN KEY (last_writer_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
 }
 
 /**
@@ -107,6 +117,77 @@ function list_semrush_domains_for_country(string $country): array
     return $out;
 }
 
+function semrush_sheet_writer(string $country): array
+{
+    ensure_semrush_research_schema();
+    $canon = resolve_canonical_country($country);
+    if (!$canon) {
+        return ['name' => '', 'at' => '', 'id' => 0];
+    }
+    $stmt = db()->prepare(
+        'SELECT m.last_writer_id, m.last_writer_at, u.username, u.full_name
+         FROM semrush_sheet_meta m
+         LEFT JOIN users u ON u.id = m.last_writer_id
+         WHERE m.country=? LIMIT 1'
+    );
+    $stmt->execute([$canon['name']]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $name = trim((string) (($row['full_name'] ?? '') !== '' ? $row['full_name'] : ($row['username'] ?? '')));
+    return [
+        'id' => (int) ($row['last_writer_id'] ?? 0),
+        'at' => (string) ($row['last_writer_at'] ?? ''),
+        'name' => $name,
+    ];
+}
+
+function stamp_semrush_sheet_writer(string $country, array $user): void
+{
+    ensure_semrush_research_schema();
+    $canon = resolve_canonical_country($country);
+    if (!$canon) {
+        return;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    try {
+        db()->prepare(
+            'INSERT INTO semrush_sheet_meta (country, last_writer_id, last_writer_at)
+             VALUES (?,?,NOW())
+             ON DUPLICATE KEY UPDATE last_writer_id=VALUES(last_writer_id), last_writer_at=NOW()'
+        )->execute([$canon['name'], $uid > 0 ? $uid : null]);
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
+
+/**
+ * @return array{ok:bool,conflict?:bool,error?:string,writer_name?:string,writer_at?:string}|null
+ */
+function semrush_sheet_writer_conflict(string $country, array $user, string $clientAt): ?array
+{
+    $info = semrush_sheet_writer($country);
+    $dbAt = trim($info['at']);
+    $dbWriter = (int) $info['id'];
+    $actorId = (int) ($user['id'] ?? 0);
+    if ($clientAt === '' || $dbAt === '' || $dbWriter < 1) {
+        return null;
+    }
+    if ($actorId > 0 && $dbWriter === $actorId) {
+        return null;
+    }
+    if (strcmp($dbAt, $clientAt) <= 0) {
+        return null;
+    }
+    $name = $info['name'] !== '' ? $info['name'] : 'Someone';
+    return [
+        'ok' => false,
+        'conflict' => true,
+        'error' => $name . ' saved this Semrush list at ' . substr($dbAt, 0, 16)
+            . '. Reload to avoid overwriting.',
+        'writer_name' => $name,
+        'writer_at' => $dbAt,
+    ];
+}
+
 function semrush_domains_text(string $country): string
 {
     return implode("\n", list_semrush_domains_for_country($country));
@@ -167,6 +248,9 @@ function set_semrush_domains_from_text(string $country, string $raw, array $user
         $order++;
     }
 
+    stamp_semrush_sheet_writer($countryName, $user);
+    $writer = semrush_sheet_writer($countryName);
+
     return [
         'ok' => true,
         'country' => $countryName,
@@ -175,6 +259,8 @@ function set_semrush_domains_from_text(string $country, string $raw, array $user
         'removed' => count($toRemove),
         'domains' => $list,
         'invalid' => (int) ($parsed['invalid_count'] ?? 0),
+        'writer_name' => $writer['name'],
+        'writer_at' => $writer['at'],
     ];
 }
 

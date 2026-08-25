@@ -290,6 +290,10 @@ function push_extract_results_to_extracted(
         ];
     }
 
+    if ($totalInserted > 0) {
+        stamp_extract_batch_last_pushed($extractBatchId);
+    }
+
     return [
         'inserted' => $totalInserted,
         'skipped' => $totalSkipped,

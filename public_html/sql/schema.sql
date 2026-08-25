@@ -93,6 +93,9 @@ CREATE TABLE IF NOT EXISTS extract_batches (
   site_count INT NOT NULL DEFAULT 0,
   results_text MEDIUMTEXT NULL,
   emptied_at TIMESTAMP NULL DEFAULT NULL,
+  last_pushed_at TIMESTAMP NULL DEFAULT NULL,
+  sites_writer_id INT NULL DEFAULT NULL,
+  sites_writer_at TIMESTAMP NULL DEFAULT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -483,4 +486,13 @@ CREATE TABLE IF NOT EXISTS semrush_sheet_comments (
   INDEX (country, created_at),
   CONSTRAINT fk_semrush_comment_user
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS semrush_sheet_meta (
+  country VARCHAR(100) NOT NULL PRIMARY KEY,
+  last_writer_id INT NULL,
+  last_writer_at TIMESTAMP NULL DEFAULT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_semrush_meta_user
+    FOREIGN KEY (last_writer_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

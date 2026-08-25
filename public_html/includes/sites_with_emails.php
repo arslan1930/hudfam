@@ -2183,7 +2183,7 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
 /**
  * Communication Team / Email Extracting: super search UI for Sites with emails - Admin.
  */
-function render_sites_with_emails_admin_super_search(string $postBase = 'index.php?page=team_admin_emails_delete'): void
+function render_sites_with_emails_admin_super_search(string $postBase = 'index.php?page=team_admin_emails_search'): void
 {
     ensure_sites_with_emails_schema();
     $total = cached_scalar_count('swe_admin_super_total', static function () {

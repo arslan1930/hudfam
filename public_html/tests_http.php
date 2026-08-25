@@ -594,13 +594,21 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Sites with emails')) {
 } else {
     fail('emailer blocked from Sites with emails status=' . $r['status']);
 }
-$r = req('GET', $base . '/index.php?page=team_admin_emails_delete');
+$r = req('GET', $base . '/index.php?page=team_admin_emails_search');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Admin emails search')
     && str_contains($r['body'], 'Delete both')) {
     pass('emailer can open Admin emails search');
 } else {
     fail('emailer blocked from Admin emails search status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_admin_emails_delete');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Admin emails search')
+    && str_contains($r['body'], 'Delete both')) {
+    pass('emailer can open Admin emails search via delete alias');
+} else {
+    fail('emailer blocked from Admin emails search alias status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=team_extracting');
 $loc = location($r);

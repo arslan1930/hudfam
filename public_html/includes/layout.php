@@ -27,7 +27,7 @@ function nav_is_active(string $navPage, string $current): bool
         'team_semrush_research' => ['team_semrush_sheet'],
         'team_extracting' => ['team_extract_batch'],
         'team_departments' => [],
-        'team_admin_emails_delete' => [],
+        'team_admin_emails_search' => ['team_admin_emails_delete'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -189,8 +189,8 @@ function render_header(string $title, string $panel = ''): void
                         'Add emails · Push to Admin',
                     ];
                 }
-                if (!empty($toolSet['team_admin_emails_delete'])) {
-                    $groups['Main']['team_admin_emails_delete'] = [
+                if (!empty($toolSet['team_admin_emails_search'])) {
+                    $groups['Main']['team_admin_emails_search'] = [
                         'Admin search',
                         'Admin sheet · all countries',
                     ];
@@ -225,7 +225,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Team', 'Add emails · Push to Admin'],
-                    'team_admin_emails_delete' => ['Admin search', 'Admin sheet · all countries'],
+                    'team_admin_emails_search' => ['Admin search', 'Admin sheet · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Campaign sheets · all countries'],
                     'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],

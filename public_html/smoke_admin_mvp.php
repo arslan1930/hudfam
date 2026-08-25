@@ -253,6 +253,11 @@ foreach ([
     }
 }
 ok('Team hub page-purpose guide functions');
+if (!str_contains($guidesLib, 'Dashboard can update Open / In progress / Done')) {
+    fail('departments guide still omits Dashboard status');
+} else {
+    ok('departments guide mentions Dashboard status');
+}
 $teamCampHub = file_get_contents($root . '/pages/team/email_campaigns.php') ?: '';
 $teamDraftsHub = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
 $teamAdminEmailsHub = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
@@ -525,6 +530,12 @@ if (!str_contains($accountPw, 'csrf_field()')) {
 } else {
     ok('account_password csrf_field');
 }
+if (!str_contains($indexFull, "'team_admin_emails_search'")
+    || !str_contains($indexFull, "'team_admin_emails_delete'")) {
+    fail('index.php missing Admin search route or delete alias');
+} else {
+    ok('index.php Admin search route + delete alias');
+}
 if (!str_contains($indexFull, 'Page not found')
     || !str_contains($indexFull, 'Go to dashboard')
     || !str_contains($indexFull, 'legacyPageRedirects')) {
@@ -561,6 +572,11 @@ if (!str_contains($prospectCheck, 'csrf_field()') || !str_contains($extractBatch
 } else {
     ok('Team Filter & Push csrf_field');
 }
+if (!str_contains($extractBatch, "!empty(\$conflict['conflict'])")) {
+    fail('Extracting Sites autosave treats non-conflict errors as last-writer 409');
+} else {
+    ok('Extracting Sites 409 only on last-writer conflict');
+}
 $extractingHub = file_get_contents($root . '/pages/team/extracting.php') ?: '';
 $teamHistory = file_get_contents($root . '/pages/team/prospect_batches.php') ?: '';
 if (!str_contains($extractingHub, 'table-wrap') || !str_contains($teamHistory, 'table-wrap')
@@ -568,6 +584,45 @@ if (!str_contains($extractingHub, 'table-wrap') || !str_contains($teamHistory, '
     fail('Team Extracting/history missing table-wrap or extracting guide');
 } else {
     ok('Team Extracting + history table-wrap');
+}
+if (!str_contains($extractingHub, 'Last Push')) {
+    fail('Extracting hub missing Last Push column');
+} else {
+    ok('Extracting hub Last Push');
+}
+if (!str_contains($prospectCheck, 'landed on Extracting for')) {
+    fail('Filter & add missing Extracting landing flash');
+} else {
+    ok('Filter & add Extracting landing flash');
+}
+if (!str_contains($teamHistory, 'count_prospect_batches')
+    || !str_contains($teamHistory, '$totalBatches > 100')) {
+    fail('Team history missing pager when days exceed 100');
+} else {
+    ok('Team history pager past 100 days');
+}
+$extractSitesJs = file_get_contents($root . '/assets/js/extract-sites-list.js') ?: '';
+$semrushSheetJs = file_get_contents($root . '/assets/js/semrush-sheet.js') ?: '';
+if (!str_contains($extractSitesJs, 'writer_at')
+    || !str_contains($extractSitesJs, 'data.conflict')
+    || !str_contains($extractSitesJs, 'err.conflict')
+    || !str_contains($extractSitesJs, 'lastSavedText = lastSnapshot')
+    || !str_contains($extractSitesJs, 'undoStack = []')
+    || !str_contains($semrushSheetJs, 'writer_at')
+    || !str_contains($semrushSheetJs, 'data.conflict')
+    || !str_contains($semrushSheetJs, 'err.conflict')
+    || !str_contains($semrushSheetJs, 'lastSavedText = lastSnapshot')
+    || !str_contains($semrushSheetJs, 'undoStack = []')) {
+    fail('Extracting/Semrush sheets missing last-writer conflict check');
+} else {
+    ok('Extracting + Semrush last-writer conflict');
+}
+$sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+if (!str_contains($sweAppSmoke, 'new from Push')
+    || !str_contains($sweAppSmoke, 'Last Push')) {
+    fail('Team emails hub missing Last Push / new from Push');
+} else {
+    ok('Team emails Last Push + new from Push');
 }
 
 $extracted = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
@@ -617,6 +672,12 @@ if (!str_contains($semrushHubSmoke, 'csrf_field()')
     fail('Admin Semrush missing csrf_field or sheet json_encode confirm');
 } else {
     ok('Admin Semrush csrf_field + sheet json_encode confirm');
+}
+if (!str_contains($semrushSheetSmoke, 'semrush_sheet_writer_conflict')
+    || !str_contains($semrushSheetSmoke, 'data-writer-at')) {
+    fail('Admin Semrush sheet missing last-writer conflict check');
+} else {
+    ok('Admin Semrush last-writer conflict');
 }
 if (str_contains($semrushHubSmoke, 'team_semrush_research')
     || str_contains($semrushSheetSmoke, 'semrush_sheet_url($country, false)')) {
@@ -1177,6 +1238,15 @@ if (str_contains($teamDash, 'launch-cards') || str_contains($teamDash, '$todayBa
 } else {
     ok('team dashboard dropped dead all-tools branch');
 }
+if (!str_contains($teamDash, "post('action') === 'set_status'")
+    || !str_contains($teamDash, 'csrf_field()')
+    || !str_contains($teamDash, 'team_can_set_department_task_status')
+    || !str_contains($teamDash, 'id="dashboard-search"')
+    || !str_contains($teamDash, 'data-dashboard-item')) {
+    fail('team dashboard missing status dropdown CSRF or Filter this page');
+} else {
+    ok('team dashboard status dropdown + Filter this page');
+}
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 foreach ([
@@ -1189,6 +1259,12 @@ foreach ([
     }
 }
 ok('departments helpers for D-1–D-4');
+if (!str_contains($deptLib, "\$page === 'team_admin_emails_delete'")
+    || !str_contains($deptLib, "'team_admin_emails_search'")) {
+    fail('departments ACL missing Admin search rename alias');
+} else {
+    ok('departments Admin search route alias');
+}
 
 $dashPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
 if (!str_contains($dashPage, 'departments_dashboard_stats')
@@ -1633,8 +1709,8 @@ if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {
     ok('team_sites_emails page-level unlock');
 }
 $adminEmailsDelete = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
-if (!str_contains($adminEmailsDelete, 'team_page_unlocked($user, \'team_admin_emails_delete\')')
-    && !str_contains($adminEmailsDelete, 'team_page_unlocked($user, "team_admin_emails_delete")')) {
+if (!str_contains($adminEmailsDelete, 'team_page_unlocked($user, \'team_admin_emails_search\')')
+    && !str_contains($adminEmailsDelete, 'team_page_unlocked($user, "team_admin_emails_search")')) {
     fail('admin_emails_delete missing team_page_unlocked ACL');
 } else {
     ok('admin_emails_delete uses team_page_unlocked');
@@ -1664,6 +1740,8 @@ foreach ([
     'team_page_unlocked',
     'prospect batch per country',
     'semrush Clear country is Finding not Extracting',
+    'extract last_pushed_at stamped after Push',
+    'team_page_unlocked admin emails search + delete alias',
 ] as $needle) {
     if (!str_contains($testsTeam, $needle)) {
         fail("tests_run.php missing Team coverage: {$needle}");

@@ -412,6 +412,37 @@ try {
         $batchId
     );
     pass('push extract: ' . json_encode($pushed));
+    $afterPush = get_extract_batch($batchId);
+    if (trim((string) ($afterPush['last_pushed_at'] ?? '')) !== '') {
+        pass('extract last_pushed_at stamped after Push');
+    } else {
+        fail('extract last_pushed_at empty after Push');
+    }
+    $writerSave = set_extract_batch_domains_from_text(
+        $batchId,
+        implode("\n", get_extract_batch_domains($batchId)),
+        (int) $teamUser['id']
+    );
+    $written = get_extract_batch($batchId);
+    if ((int) ($written['sites_writer_id'] ?? 0) === (int) $teamUser['id']
+        && trim((string) ($written['sites_writer_at'] ?? '')) !== '') {
+        pass('extract sites writer stamped after Sites-list save');
+    } else {
+        fail('extract sites writer missing after save: ' . json_encode($writerSave));
+    }
+    $writerConflict = extract_sites_writer_conflict($batchId, (int) $adminUser['id'], '2000-01-01 00:00:00');
+    $sameWriter = extract_sites_writer_conflict($batchId, (int) $teamUser['id'], '2000-01-01 00:00:00');
+    if (!empty($writerConflict['conflict']) && $sameWriter === null) {
+        pass('extract sites writer conflict when another user has a newer save');
+    } else {
+        fail('extract sites writer conflict unexpected: ' . json_encode([$writerConflict, $sameWriter]));
+    }
+    $missingBatch = extract_sites_writer_conflict(999999999, (int) $adminUser['id'], '2000-01-01 00:00:00');
+    if (is_array($missingBatch) && empty($missingBatch['conflict']) && ($missingBatch['ok'] ?? true) === false) {
+        pass('extract writer missing batch is an error, not a last-writer 409');
+    } else {
+        fail('extract missing batch treated as writer conflict: ' . json_encode($missingBatch));
+    }
     save_extract_batch_results($batchId, '');
     $ex = (int) db()->query("SELECT COUNT(*) FROM extracted_sites WHERE country='Germany' AND domain LIKE 'txfpush-%'")->fetchColumn();
     $swe = (int) db()->query("SELECT COUNT(*) FROM sites_with_emails_team WHERE country='Germany' AND domain LIKE 'txfpush-%'")->fetchColumn();
@@ -2851,8 +2882,8 @@ try {
                 'team_semrush_sheet',
             ],
             'site_extracting' => ['team_extracting', 'team_extract_batch'],
-            'email_extracting' => ['team_sites_emails', 'team_admin_emails_delete'],
-            'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_delete'],
+            'email_extracting' => ['team_sites_emails', 'team_admin_emails_search'],
+            'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_search'],
         };
         $missing = array_diff($expect, $pages);
         if ($missing) {
@@ -3775,6 +3806,19 @@ try {
     } else {
         fail('semrush set: ' . json_encode($replace) . ' domains=' . json_encode($after));
     }
+    if (trim((string) ($replace['writer_at'] ?? '')) !== ''
+        || (int) (semrush_sheet_writer($semCountry)['id'] ?? 0) === (int) $teamUser['id']) {
+        pass('semrush sheet writer stamped after save');
+    } else {
+        fail('semrush sheet writer missing after save: ' . json_encode($replace));
+    }
+    $semConflict = semrush_sheet_writer_conflict($semCountry, $adminUser, '2000-01-01 00:00:00');
+    $semSame = semrush_sheet_writer_conflict($semCountry, $teamUser, '2000-01-01 00:00:00');
+    if (!empty($semConflict['conflict']) && $semSame === null) {
+        pass('semrush sheet writer conflict when another user has a newer save');
+    } else {
+        fail('semrush writer conflict unexpected: ' . json_encode([$semConflict, $semSame]));
+    }
 
     $c1 = add_semrush_comment($semCountry, 'txfsem-note from team', $teamUser);
     $c2 = add_semrush_comment($semCountry, 'txfsem-note from admin', $adminUser);
@@ -3860,6 +3904,15 @@ try {
         pass('team_page_unlocked extractor tools');
     } else {
         fail('team_page_unlocked extractor unexpected');
+    }
+    $emailerUid = (int) db()->query("SELECT id FROM users WHERE username='emailer'")->fetchColumn();
+    $emailer = ['id' => $emailerUid, 'username' => 'emailer', 'role' => 'team'];
+    if ($emailerUid > 0
+        && team_page_unlocked($emailer, 'team_admin_emails_search')
+        && team_page_unlocked($emailer, 'team_admin_emails_delete')) {
+        pass('team_page_unlocked admin emails search + delete alias');
+    } else {
+        fail('team_page_unlocked admin emails search unexpected');
     }
     if ($finderUid > 0 && team_can_clear_semrush_country($finder)
         && !team_can_clear_semrush_country($extractor)) {
