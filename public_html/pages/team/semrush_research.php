@@ -52,7 +52,7 @@ render_breadcrumbs([
       <a class="btn secondary" href="index.php?page=team_prospect_check">Filter &amp; add</a>
     <?php endif; ?>
     <?php if ($isAdmin): ?>
-      <a class="btn" href="<?= h(semrush_hub_url(true)) ?>">Admin seed sites</a>
+      <a class="btn secondary" href="<?= h(semrush_hub_url(true)) ?>">Admin seed sites</a>
     <?php endif; ?>
   </div>
 </div>
@@ -95,7 +95,7 @@ render_breadcrumbs([
           <td><?= (int) $f['total'] ?></td>
           <td class="muted"><?= h(substr((string) $f['updated_at'], 0, 16)) ?></td>
           <td class="actions">
-            <a class="btn small" href="<?= h($href) ?>">Open sheet</a>
+            <a class="btn secondary small" href="<?= h($href) ?>">Open sheet</a>
             <?php if ($canClear): ?>
             <form method="post" action="<?= h($hub) ?>" style="display:inline"
                   onsubmit="return confirm(<?= h(json_encode('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">

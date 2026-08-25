@@ -171,7 +171,7 @@ render_header('Extracting · ' . $country, 'team');
     <?php render_task_presence('extract:' . $country, 'Others extracting ' . $country); ?>
     <a class="btn secondary" href="index.php?page=team_extracting">All countries</a>
     <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
-      <a class="btn" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Add more sites</a>
+      <a class="btn secondary" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Add more sites</a>
     <?php endif; ?>
   </div>
 </div>
@@ -251,7 +251,7 @@ render_header('Extracting · ' . $country, 'team');
           'placeholder' => "Paste sites…\nexample.com\nshop.de\nblog.fr",
       ]) ?>
       <div class="actions-sticky" style="margin-top:0.75rem">
-        <button class="btn large" type="submit"
+        <button class="btn large" type="submit" id="extract_push_btn"
                 title="Push Ready domains to Extracted Sites and Sites with emails - Team">Push</button>
       </div>
     </form>

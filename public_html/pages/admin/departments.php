@@ -190,6 +190,7 @@ if (!$dept) {
                 · <?= (int) $stats['overdue_count'] ?> overdue
               <?php endif; ?>
             </p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>

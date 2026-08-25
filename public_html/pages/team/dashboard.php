@@ -76,7 +76,7 @@ if ($deptScoped) {
                  title="Type to filter · Enter = next match · Shift+Enter = previous">
           <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
         </label>
-        <a class="btn" href="index.php?page=team_departments">My departments</a>
+        <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
       </div>
     </div>
 
@@ -147,7 +147,7 @@ if ($deptScoped) {
                 </td>
                 <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
                 <td>
-                  <a href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
+                  <a class="btn secondary small" href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -190,9 +190,10 @@ if ($deptScoped) {
       <div class="folders">
         <?php foreach ($toolCards as [$pageKey, $title, $hint]): ?>
           <a class="folder" href="index.php?page=<?= h($pageKey) ?>"
-             data-dashboard-item data-search="<?= h(mb_strtolower($title . ' ' . $hint)) ?>">
+             data-dashboard-item data-search="<?= h(mb_strtolower($title . ' ' . $hint . ' open')) ?>">
             <h3><?= h($title) ?></h3>
             <p class="muted"><?= h($hint) ?></p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>
@@ -211,6 +212,7 @@ if ($deptScoped) {
              data-search="<?= h(mb_strtolower((string) $d['name'] . ' ' . (int) $stats['open_tasks'] . ' open tasks')) ?>">
             <h3><?= h((string) $d['name']) ?></h3>
             <p class="muted"><?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?></p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>
@@ -345,7 +347,7 @@ render_header('Dashboard', 'team');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
-    <a class="btn" href="index.php?page=admin_dashboard">Admin dashboard</a>
+    <a class="btn secondary" href="index.php?page=admin_dashboard">Admin dashboard</a>
   </div>
 </div>
 <?php render_dashboard_help('team'); ?>

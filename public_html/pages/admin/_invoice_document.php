@@ -187,7 +187,7 @@ if ($editable && !$editRows) {
   </table>
   <?php if ($editable): ?>
     <div class="invoice-edit-add-row no-print">
-      <button type="button" class="btn crystal small" id="invoice-edit-add">+ Add item</button>
+      <button type="button" class="btn secondary small" id="invoice-edit-add">+ Add item</button>
     </div>
   <?php endif; ?>
 

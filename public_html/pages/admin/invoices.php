@@ -120,7 +120,7 @@ render_header('Invoices', 'admin');
     <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark Paid when payment arrives.</p>
   </div>
   <div class="actions">
-    <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
+    <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
 </div>
@@ -183,7 +183,7 @@ render_header('Invoices', 'admin');
         }
       ?></p>
       <?php if ($invoiceQ === '' && $invoiceFilter === '' && $invoiceClientId < 1): ?>
-      <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
+      <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
       <?php else: ?>
       <p><a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a></p>
@@ -313,7 +313,7 @@ render_header('Invoices', 'admin');
             </td>
             <td class="invoice-list-actions">
               <div class="invoice-list-actions-row">
-                <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
+                <a class="btn secondary small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
                 <form method="post" class="inline" action="<?= h($listUrl) ?>"
                       onsubmit="return confirm(<?= h(json_encode('Delete invoice ' . $inv['invoice_number'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
                   <?= csrf_field() ?>

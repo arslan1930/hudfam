@@ -65,7 +65,7 @@ render_breadcrumbs([
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_extracted">Extracted Sites</a>
     <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
-    <a class="btn" href="#add-sites">Add sites</a>
+    <a class="btn secondary" href="#add-sites">Add sites</a>
   </div>
 </div>
 
@@ -142,7 +142,7 @@ render_breadcrumbs([
           <td><?= (int) $f['total'] ?></td>
           <td class="muted"><?= h($updated) ?></td>
           <td class="actions">
-            <a class="btn small" href="<?= h($sheetHref) ?>">Open sheet</a>
+            <a class="btn secondary small" href="<?= h($sheetHref) ?>">Open sheet</a>
             <a class="btn secondary small" href="<?= h($hub) ?>&amp;country=<?= rawurlencode($c) ?>#add-sites">Add more</a>
             <form method="post" action="<?= h($hub) ?>" style="display:inline"
                   onsubmit="return confirm(<?= h(json_encode('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">

@@ -502,7 +502,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <div class="actions">
     <button
       type="button"
-      class="btn"
+      class="btn secondary"
       id="extracted_copy_all"
       data-export-url="<?= h($exportUrl) ?>"
       data-count="<?= (int) $countryTotal ?>"

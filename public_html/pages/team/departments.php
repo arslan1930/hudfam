@@ -111,10 +111,10 @@ if (!$dept) {
       <?php if ($showEmailCommShortcuts && $myDepartments): ?>
         <div class="actions">
           <?php if ($canSitesEmails): ?>
-            <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+            <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
           <?php endif; ?>
           <?php if ($canAdminEmailsSearch): ?>
-            <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_search">Admin emails search</a>
+            <a class="btn secondary" href="index.php?page=team_admin_emails_search">Admin emails search</a>
           <?php endif; ?>
           <?php if ($canCampaigns): ?>
             <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
@@ -153,24 +153,28 @@ if (!$dept) {
         <a class="folder" href="index.php?page=team_sites_emails">
           <h3>Sites with emails - Team</h3>
           <p class="muted">Add emails · Push final list to Admin</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
         <?php if ($canAdminEmailsSearch): ?>
         <a class="folder" href="index.php?page=team_admin_emails_search">
           <h3>Admin emails search</h3>
           <p class="muted">Sites with emails - Admin · all countries</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
         <?php if ($canCampaigns): ?>
         <a class="folder" href="index.php?page=team_email_campaigns">
           <h3>Campaign search</h3>
           <p class="muted">Email campaign sheets · all countries</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
         <?php if ($canCampaignDrafts): ?>
         <a class="folder" href="index.php?page=team_email_campaigns_drafts">
           <h3>Campaign drafts</h3>
           <p class="muted">Formatted outreach per project · copy for email</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
       </div>
@@ -189,6 +193,7 @@ if (!$dept) {
               <?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?>
               · <?= (int) $stats['total_tasks'] ?> total
             </p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>
@@ -269,14 +274,14 @@ render_breadcrumbs([
   <div class="actions">
     <?php if ($isEmailExtractingDept): ?>
       <?php if ($canSitesEmails): ?>
-        <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+        <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
       <?php endif; ?>
       <?php if ($canAdminEmailsSearch): ?>
         <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_search">Admin emails search</a>
       <?php endif; ?>
     <?php elseif ($isCommunicationDept): ?>
       <?php if ($canAdminEmailsSearch): ?>
-        <a class="btn" href="index.php?page=team_admin_emails_search">Admin emails search</a>
+        <a class="btn secondary" href="index.php?page=team_admin_emails_search">Admin emails search</a>
       <?php endif; ?>
       <?php if ($canCampaigns): ?>
         <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
@@ -300,12 +305,14 @@ render_breadcrumbs([
     <a class="folder" href="index.php?page=team_sites_emails">
       <h3>Sites with emails - Team</h3>
       <p class="muted">Add emails · Push final list to Admin</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
     <?php if ($canAdminEmailsSearch): ?>
     <a class="folder" href="index.php?page=team_admin_emails_search">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
   </div>
@@ -323,18 +330,21 @@ render_breadcrumbs([
     <a class="folder" href="index.php?page=team_admin_emails_search">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
     <?php if ($canCampaigns): ?>
     <a class="folder" href="index.php?page=team_email_campaigns">
       <h3>Campaign search</h3>
       <p class="muted">Email campaign sheets · all countries</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
     <?php if ($canCampaignDrafts): ?>
     <a class="folder" href="index.php?page=team_email_campaigns_drafts">
       <h3>Campaign drafts</h3>
       <p class="muted">Formatted outreach per project · copy for email</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
   </div>

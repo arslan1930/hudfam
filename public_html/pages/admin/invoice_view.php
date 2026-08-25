@@ -147,7 +147,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
     <?php if ($isManual): ?>
-      <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
+      <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <?php else: ?>
       <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
     <?php endif; ?>

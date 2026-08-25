@@ -56,5 +56,6 @@ render_header('Reset password');
     <?php endif; ?>
     <p class="help" style="margin-top:1rem"><a href="index.php?page=login">Back to sign in</a></p>
   </div>
+  <?php render_project_credit(); ?>
 </div>
 <?php render_footer(); ?>

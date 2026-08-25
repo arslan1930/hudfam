@@ -2065,5 +2065,87 @@ if (!str_contains($sweUi, 'data-swe-add-toggle')
     ok('SWE Team/Final inline + Add site');
 }
 
+$invoicesChrome = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$filterAddChrome = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
+if (!str_contains($layoutUiSmoke, 'class="app-bar"')
+    || !str_contains($layoutUiSmoke, 'mobile-page-title')
+    || !str_contains($layoutUiSmoke, 'class="app-footer project-credit"')
+    || !str_contains($layoutUiSmoke, 'app-footer-primary')
+    || !str_contains($layoutUiSmoke, 'teqnowebs.com')
+    || !str_contains($layoutUiSmoke, 'rel="noopener"')) {
+    fail('layout missing app bar / footer chrome');
+} else {
+    ok('layout app bar + Teqnowebs footer');
+}
+if (!str_contains($cssUi, '--grad-btn: linear-gradient(180deg, #374151')
+    || !str_contains($cssUi, 'background: #9ca3af')
+    || !str_contains($cssUi, '.app-bar {')
+    || !str_contains($cssUi, '.app-footer {')
+    || !str_contains($cssUi, '.app-footer-primary')
+    || !str_contains($cssUi, '0 0 0 2px #fff')) {
+    fail('CSS missing ink commit buttons or app chrome');
+} else {
+    ok('CSS ink commit buttons + app chrome');
+}
+if (!str_contains($teamDash, 'btn secondary') || !str_contains($teamDash, 'My departments')) {
+    fail('team dashboard My departments should be a secondary shortcut');
+} else {
+    ok('team dashboard My departments is secondary');
+}
+if (!str_contains($filterAddChrome, 'btn secondary')
+    || !str_contains($filterAddChrome, 'Semrush Research')) {
+    fail('Filter & add Semrush shortcut should be secondary');
+} else {
+    ok('Filter & add Semrush shortcut is secondary');
+}
+if (str_contains($invoicesChrome, 'btn crystal')) {
+    fail('invoices still uses btn crystal');
+} else {
+    ok('invoices Blank invoice is secondary not crystal');
+}
+$teamHistory = file_get_contents($root . '/pages/team/prospect_batches.php') ?: '';
+$teamHistoryDay = file_get_contents($root . '/pages/team/prospect_batch.php') ?: '';
+$accountPw = file_get_contents($root . '/pages/account_password.php') ?: '';
+if (!str_contains($teamHistory, 'render_breadcrumbs')
+    || !str_contains($teamHistoryDay, 'render_breadcrumbs')
+    || !str_contains($accountPw, 'render_breadcrumbs')) {
+    fail('Team history / Change password missing breadcrumbs');
+} else {
+    ok('Team history + Change password breadcrumbs');
+}
+if (!str_contains($helpers, 'function folder_open_cue')
+    || !str_contains($teamDash, 'folder_open_cue()')
+    || !str_contains($cssUi, '.folder-open {')) {
+    fail('folder Open cue missing from cards or CSS');
+} else {
+    ok('folder Open cue on tool cards');
+}
+if (str_contains($cssUi, '.btn.crystal')) {
+    fail('unused .btn.crystal CSS still present');
+} else {
+    ok('crystal button CSS removed');
+}
+$loginPhp = file_get_contents($root . '/pages/login.php') ?: '';
+$forgotPhp = file_get_contents($root . '/pages/forgot_password.php') ?: '';
+$resetPhp = file_get_contents($root . '/pages/reset_password.php') ?: '';
+$verifyPhp = file_get_contents($root . '/pages/verify_email.php') ?: '';
+if (!str_contains($loginPhp, 'render_project_credit()')
+    || !str_contains($forgotPhp, 'render_project_credit()')
+    || !str_contains($resetPhp, 'render_project_credit()')
+    || !str_contains($verifyPhp, 'render_project_credit()')
+    || !str_contains($loginPhp, '>Sign in</button>')
+    || !str_contains($forgotPhp, '>Send reset link</button>')) {
+    fail('logged-out pages missing Teqnowebs credit or commit buttons');
+} else {
+    ok('login/forgot/reset/verify Teqnowebs credit');
+}
+$extractBatchUi = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+if (!str_contains($extractBatchUi, 'id="extract_push_btn"')
+    || !str_contains($extractBatchUi, 'class="btn large"')) {
+    fail('Extracting Push commit button missing');
+} else {
+    ok('Extracting Push is a filled commit button');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

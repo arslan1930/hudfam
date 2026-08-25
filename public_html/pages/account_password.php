@@ -27,8 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $forced = user_must_change_password($user);
 $panel = is_admin() ? 'admin' : 'team';
+$home = is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
 render_header('Change password', $panel);
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => $home],
+    ['label' => 'Change password'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Change password</h1>

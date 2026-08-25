@@ -234,6 +234,7 @@ if ($folder === '') {
                 · <span class="swe-country-new">+<?= (int) $adminNewTotal ?> new</span>
               <?php endif; ?>
             </p>
+            <?php folder_open_cue(); ?>
           </a>
           <?= info_icon('Working site + email list filled when Team pushes from Sites with emails - Team. Emailed progress is tracked here only. Final is a separate mirror without emailed marks. Communication Team can super-search Admin data across countries. Open a country to clear New for that folder.', 'About Sites with emails - Admin') ?>
         </div>
@@ -246,6 +247,7 @@ if ($folder === '') {
               · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
               · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
             </p>
+            <?php folder_open_cue(); ?>
           </a>
           <?= info_icon('Admin-only archive of Sites with emails - Admin. Mark emailed / remove from Admin keeps a copy here. Repair copies Admin → Final and never deletes archive rows. Not linked to Team.', 'About All sites with emails - Final') ?>
         </div>
@@ -257,6 +259,7 @@ if ($folder === '') {
               <?= (int) $campaignSheetCount ?> countr<?= $campaignSheetCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $campaignRowTotal ?> site<?= (int) $campaignRowTotal === 1 ? '' : 's' ?>
             </p>
+            <?php folder_open_cue(); ?>
           </a>
           <?= info_icon('Create one Email Sheet per country with site names + emails. Communication Team searches all country sheets in one super search bar.', 'About Email campaign data') ?>
         </div>
