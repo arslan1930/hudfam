@@ -644,6 +644,14 @@ if (str_contains($sweAppSmoke, "confirm('Clear ALL emailed")
 } else {
     ok('Emails Admin/Final/Campaign confirms use json_encode');
 }
+if (substr_count($campAppSmoke, 'csrf_field()') < 21
+    || !str_contains($campAppSmoke, "value=\"create_project\"")
+    || !str_contains($campAppSmoke, "value=\"clear_all_emailed\"")
+    || !str_contains($campAppSmoke, "value=\"delete_sheet\"")) {
+    fail('Campaign POST forms missing csrf_field');
+} else {
+    ok('Campaign csrf_field on POST forms');
+}
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
     || !str_contains($sweLibSmoke, 'skipped_full_slots')
     || !str_contains($sweLibSmoke, "'row_deleted' => true")
