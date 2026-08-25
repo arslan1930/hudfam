@@ -545,7 +545,11 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <div class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
     <div class="actions" style="margin:0;gap:0.65rem;flex-wrap:wrap;align-items:center">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span class="muted">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
+      <span class="muted" data-sheet-page-status
+            data-page="<?= (int) $pageNum ?>"
+            data-pages="<?= (int) $pages ?>"
+            data-on-page="<?= (int) count($rows) ?>"
+            data-total="<?= (int) $total ?>">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
       <?php
       render_sheet_per_page_filter([

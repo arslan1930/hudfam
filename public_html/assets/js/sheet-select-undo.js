@@ -300,6 +300,26 @@
   window.SheetSelectUndo = {
     applyState: applyState,
     sync: syncRemoveButton,
+    syncPageStatus: function (shown, filtering) {
+      var el = document.querySelector('[data-sheet-page-status]');
+      if (!el) return;
+      if (!el.getAttribute('data-default-text')) {
+        el.setAttribute('data-default-text', String(el.textContent || '').replace(/\s+/g, ' ').trim());
+      }
+      if (!filtering) {
+        el.textContent = el.getAttribute('data-default-text');
+        return;
+      }
+      shown = Number(shown) || 0;
+      if (shown < 1) {
+        el.textContent = 'No search matches on this page';
+        return;
+      }
+      var page = el.getAttribute('data-page') || '1';
+      var pages = el.getAttribute('data-pages') || '1';
+      var onPage = el.getAttribute('data-on-page') || String(shown);
+      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + onPage + ' on this page';
+    },
     removed: function (ids, data) {
       if (ids && ids.length) removeRowsByIds(ids.map(String));
       applyState(data || {});

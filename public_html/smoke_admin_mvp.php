@@ -1497,7 +1497,9 @@ if (!str_contains($cssUi, '@media (max-width: 899px)')
     ok('mobile stacked sheet cards CSS');
 }
 if (!str_contains($sweUi, 'No search matches on this page')
-    || !str_contains($campUi, 'No search matches on this page')) {
+    || !str_contains($campUi, 'No search matches on this page')
+    || !str_contains($sheetSelJsSmoke, 'syncPageStatus')
+    || !str_contains($sweUi, 'data-sheet-page-status')) {
     fail('sheets missing no-search-matches empty copy');
 } else {
     ok('empty search matches copy');

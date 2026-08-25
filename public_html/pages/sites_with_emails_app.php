@@ -1243,7 +1243,11 @@ render_breadcrumbs($crumbs);
     <div class="actions actions-compact">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <?php if ($rows || $q !== ''): ?>
-        <span class="muted">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
+        <span class="muted" data-sheet-page-status
+              data-page="<?= (int) $pageNum ?>"
+              data-pages="<?= (int) $pages ?>"
+              data-on-page="<?= (int) count($rows) ?>"
+              data-total="<?= (int) $total ?>">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
       <?php endif; ?>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
       <?php
