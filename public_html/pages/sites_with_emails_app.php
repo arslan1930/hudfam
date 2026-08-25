@@ -177,7 +177,6 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $jsonOut(
                 $result + [
                     'site_count' => $left,
-                    'redirect' => $left < 1 ? $sweBase : null,
                 ],
                 !empty($result['ok']) ? 200 : 400
             );
@@ -185,9 +184,6 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         flash($result['ok'] ? 'ok' : 'error', $result['ok']
             ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's') . '.'
             : (string) ($result['error'] ?? 'Could not remove selected rows.'));
-        if ($left < 1) {
-            redirect($sweBase);
-        }
         redirect($back);
     }
 

@@ -188,7 +188,6 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             echo json_encode($result + [
                 'site_count' => $left,
-                'redirect' => $left < 1 ? $sitesListUrl : null,
             ] + (function_exists('sheet_history_state')
                 ? sheet_history_state(sheet_history_key('extracted', $countryName))
                 : []));
@@ -197,9 +196,6 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         flash($result['ok'] ? 'ok' : 'error', $result['ok']
             ? 'Removed ' . (int) $result['count'] . ' selected URL' . ((int) $result['count'] === 1 ? '' : 's') . '.'
             : (string) ($result['error'] ?? 'Could not remove selected URLs.'));
-        if ($left < 1) {
-            redirect($sitesListUrl);
-        }
         redirect($countryReturnUrl());
     }
 

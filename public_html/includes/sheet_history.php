@@ -275,16 +275,12 @@ function sheet_history_redelete_row(string $kind, array $entry, array $row): arr
 
 function ui_icon_undo(): string
 {
-    return '<svg class="sheet-history-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">'
-        . '<path fill="currentColor" d="M7.2 2.4 3 6.5l4.2 4.1V8.3c3.1 0 5.4.9 7 3.3-.5-4.1-3-6.8-7-7V2.4z"/>'
-        . '</svg>';
+    return '<span class="sheet-history-glyph" aria-hidden="true">↶</span>';
 }
 
 function ui_icon_redo(): string
 {
-    return '<svg class="sheet-history-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">'
-        . '<path fill="currentColor" d="M8.8 2.4 13 6.5 8.8 10.6V8.3c-3.1 0-5.4.9-7 3.3.5-4.1 3-6.8 7-7V2.4z"/>'
-        . '</svg>';
+    return '<span class="sheet-history-glyph" aria-hidden="true">↷</span>';
 }
 
 function render_undo_redo_arrow_buttons(string $undoId, string $redoId, string $sizeClass = 'small'): void

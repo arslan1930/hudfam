@@ -146,7 +146,6 @@ if ($sheetId > 0) {
                     $jsonOut(
                         $del + [
                             'site_count' => $left,
-                            'redirect' => $left < 1 ? $campBase : null,
                         ] + count_email_campaign_sent_stats($sheetId),
                         !empty($del['ok']) ? 200 : 400
                     );
@@ -154,7 +153,7 @@ if ($sheetId > 0) {
                 flash($del['ok'] ? 'ok' : 'error', $del['ok']
                     ? 'Removed ' . (int) $del['count'] . ' selected site' . ((int) $del['count'] === 1 ? '' : 's') . '.'
                     : (string) ($del['error'] ?? 'Could not remove selected rows.'));
-                redirect($left < 1 ? $campBase : $back);
+                redirect($back);
             }
             if ($action === 'undo_last' || $action === 'redo_last') {
                 $result = $action === 'redo_last'

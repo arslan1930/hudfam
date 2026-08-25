@@ -78,9 +78,15 @@
     }
   }
 
+  function markRowSelected(el, on) {
+    el.checked = !!on;
+    var row = rowOfCheck(el);
+    if (row) row.classList.toggle('is-sheet-selected', !!on);
+  }
+
   function setVisibleSelected(on) {
     visibleChecks().forEach(function (el) {
-      el.checked = !!on;
+      markRowSelected(el, on);
     });
     syncRemoveButton();
   }
@@ -164,6 +170,8 @@
     var t = e.target;
     if (!t || !t.matches) return;
     if (t.matches('[data-sheet-row-check]')) {
+      var row = rowOfCheck(t);
+      if (row) row.classList.toggle('is-sheet-selected', !!t.checked);
       syncRemoveButton();
       return;
     }

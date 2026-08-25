@@ -117,8 +117,26 @@ html.is-page-loading body {
   padding-left: 0.45rem;
   padding-right: 0.45rem;
 }
-.sheet-history-btn .sheet-history-icon {
+.sheet-history-btn .sheet-history-glyph {
   display: block;
+  font-size: 1.2rem;
+  line-height: 1;
+  font-weight: 700;
+}
+.sheet-check input[type="checkbox"] {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: #374151;
+  opacity: 1;
+  visibility: visible;
+  cursor: pointer;
+}
+tr.is-sheet-selected td,
+li.is-sheet-selected {
+  background: #eef2f6;
 }
 .sheet-history-form {
   display: none;
