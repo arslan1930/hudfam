@@ -61,19 +61,22 @@ if (!in_array($sort, ['name', 'updated', 'unpaid'], true)) {
 }
 $q = trim((string) get('q'));
 
-$clientsAll = list_order_clients([
+$perPage = 50;
+$pageNum = max(1, (int) get('p', 1));
+$listOpts = [
     'filter' => $filter,
     'sort' => $sort,
     'q' => $q,
-]);
-$perPage = 50;
-$pageNum = max(1, (int) get('p', 1));
-$totalClients = count($clientsAll);
+];
+$totalClients = count_order_clients($listOpts);
 $totalPages = max(1, (int) ceil($totalClients / $perPage));
 if ($pageNum > $totalPages) {
     $pageNum = $totalPages;
 }
-$clients = array_slice($clientsAll, ($pageNum - 1) * $perPage, $perPage);
+$clients = list_order_clients($listOpts + [
+    'limit' => $perPage,
+    'offset' => ($pageNum - 1) * $perPage,
+]);
 
 $listBase = 'index.php?page=admin_orders';
 $qs = static function (array $overrides) use ($filter, $sort, $q, $listBase): string {

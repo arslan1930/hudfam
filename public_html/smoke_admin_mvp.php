@@ -572,11 +572,13 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
     || !str_contains($sweLibSmoke, 'table_has_any_row($pdo, \'sites_with_emails_admin\')')
     || !str_contains($campLibSmoke, 'function email_campaign_suggestion_from_row')
     || !str_contains($campLibSmoke, 'Indexed prefix on domain')
+    || !str_contains($campLibSmoke, '$useContains = mb_strlen($q) >= 3')
     || !str_contains($extractedAdminJsSmoke, 'function scheduleFilterUrls')
     || !str_contains($csrfJsSmoke, 'requestAnimationFrame')
     || !str_contains($presenceJsSmoke, 'document.hidden')
     || !str_contains($sitesFormJsSmoke, 'function scheduleStatus')
     || !str_contains($campSearchJsSmoke, 'fetchSuggest(q); }, 280')
+    || !str_contains($campSearchJsSmoke, 'q.length < 3')
     || !str_contains($navJsSmoke, "addEventListener('change'")
     || !str_contains($dashSmoke, 'cached_scalar_count')
     || !str_contains($geoSmoke, 'SELECT 1 FROM countries LIMIT 1')
@@ -715,15 +717,24 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
 }
 ok('orders helpers for OM-1–4');
 
+$invoicesLib = file_get_contents($root . '/includes/invoices.php') ?: '';
+if (!str_contains($invoicesLib, 'function count_invoices')
+    || !str_contains($invoicesLib, 'function invoices_where_sql')
+    || !str_contains($invoicesLib, 'LIMIT ')) {
+    fail('invoices.php missing SQL paging helpers');
+} else {
+    ok('invoices SQL paging helpers');
+}
+
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

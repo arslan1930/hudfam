@@ -301,6 +301,10 @@ function list_order_clients(array $opts = []): array
     $sort = (string) ($opts['sort'] ?? 'name');
     $q = trim((string) ($opts['q'] ?? ''));
     $includeArchived = !empty($opts['include_archived']) || $filter === 'archived';
+    $limit = isset($opts['limit']) ? max(0, (int) $opts['limit']) : 0;
+    $offset = max(0, (int) ($opts['offset'] ?? 0));
+
+    [$whereSql, $params] = order_clients_where_sql($filter, $q, $includeArchived);
 
     $sql = "SELECT c.*,
                 (SELECT COUNT(*) FROM order_items i
@@ -323,7 +327,28 @@ function list_order_clients(array $opts = []): array
                   WHERE i.client_id = c.id AND i.row_type = 'site'
                     AND TRIM(i.live_url) <> ''
                     AND COALESCE(i.is_paid, 0) = 0) AS unpaid_decided
-         FROM order_clients c";
+         FROM order_clients c"
+        . $whereSql;
+    if ($sort === 'updated') {
+        $sql .= ' ORDER BY c.updated_at DESC, c.name ASC';
+    } elseif ($sort === 'unpaid') {
+        $sql .= ' ORDER BY unpaid_decided DESC, c.name ASC';
+    } else {
+        $sql .= ' ORDER BY c.name ASC';
+    }
+    if ($limit > 0) {
+        $sql .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+/**
+ * @return array{0:string,1:list<mixed>}
+ */
+function order_clients_where_sql(string $filter, string $q, bool $includeArchived): array
+{
     $where = [];
     $params = [];
     if ($filter === 'archived') {
@@ -350,19 +375,20 @@ function list_order_clients(array $opts = []): array
               AND TRIM(i.live_url) <> ''
         )";
     }
-    if ($where) {
-        $sql .= ' WHERE ' . implode(' AND ', $where);
-    }
-    if ($sort === 'updated') {
-        $sql .= ' ORDER BY c.updated_at DESC, c.name ASC';
-    } elseif ($sort === 'unpaid') {
-        $sql .= ' ORDER BY unpaid_decided DESC, c.name ASC';
-    } else {
-        $sql .= ' ORDER BY c.name ASC';
-    }
-    $stmt = db()->prepare($sql);
+    $sql = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
+    return [$sql, $params];
+}
+
+function count_order_clients(array $opts = []): int
+{
+    ensure_order_schema();
+    $filter = (string) ($opts['filter'] ?? 'all');
+    $q = trim((string) ($opts['q'] ?? ''));
+    $includeArchived = !empty($opts['include_archived']) || $filter === 'archived';
+    [$whereSql, $params] = order_clients_where_sql($filter, $q, $includeArchived);
+    $stmt = db()->prepare('SELECT COUNT(*) FROM order_clients c' . $whereSql);
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    return (int) $stmt->fetchColumn();
 }
 
 /** Count unpaid LIVE rows for one client (invoice-ready). */

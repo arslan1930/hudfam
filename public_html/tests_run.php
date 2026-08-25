@@ -1538,6 +1538,19 @@ try {
         ]));
     }
 
+    $containsHit = email_campaign_rows_inventory_query($bulkSheet, ['q' => 'scale500'], 1, 100);
+    $shortNoContains = email_campaign_rows_inventory_query($bulkSheet, ['q' => 'zz'], 1, 100);
+    if ((int) ($containsHit['total'] ?? 0) === 1
+        && str_contains((string) ($containsHit['rows'][0]['domain'] ?? ''), 'scale500')
+        && (int) ($shortNoContains['total'] ?? -1) === 0) {
+        pass('campaign search prefix-first then contains (3+ chars)');
+    } else {
+        fail('campaign prefix/contains: ' . json_encode([
+            'contains' => $containsHit['total'] ?? null,
+            'short' => $shortNoContains['total'] ?? null,
+        ]));
+    }
+
     // Sitewide Per page filter helpers (100 / 250 / 500 / 1000).
     unset($_SESSION['sheet_per_page'], $_GET['per_page'], $_POST['per_page']);
     $defaultPp = resolve_sheet_per_page();
@@ -2917,9 +2930,24 @@ try {
     } else {
         fail('order dashboard stats missing keys');
     }
+    $clientTotal = count_order_clients(['filter' => 'all']);
+    $clientPage = list_order_clients(['filter' => 'all', 'limit' => 1, 'offset' => 0]);
+    if ($clientTotal >= 1 && count($clientPage) === 1) {
+        pass('order clients SQL limit/offset');
+    } else {
+        fail("order clients paging total=$clientTotal page=" . count($clientPage));
+    }
 
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
+
+    $invTotal = count_invoices();
+    $invPage = list_invoices(['limit' => 1, 'offset' => 0]);
+    if ($invTotal >= 1 && count($invPage) === 1) {
+        pass('invoices SQL limit/offset');
+    } else {
+        fail("invoices paging total=$invTotal page=" . count($invPage));
+    }
 
     // Generate from an unpaid LIVE sheet row, then mark paid.
     $genClientId = create_order_client('Test Client Invoice Gen', 'invoice gen test', (int) $adminUser['id']);

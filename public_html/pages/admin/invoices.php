@@ -61,31 +61,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$invoicesAll = list_invoices();
 $invoiceQ = trim((string) get('q'));
-if ($invoiceQ !== '') {
-    $needle = mb_strtolower($invoiceQ);
-    $invoicesAll = array_values(array_filter(
-        $invoicesAll,
-        static function (array $inv) use ($needle): bool {
-            $hay = mb_strtolower(implode(' ', [
-                (string) ($inv['invoice_number'] ?? ''),
-                (string) ($inv['client_name'] ?? ''),
-                (string) ($inv['admin_note'] ?? ''),
-                (string) ($inv['status'] ?? ''),
-            ]));
-            return str_contains($hay, $needle);
-        }
-    ));
-}
 $perPage = 50;
 $pageNum = max(1, (int) get('p', 1));
-$totalInvoices = count($invoicesAll);
+$totalInvoices = count_invoices(['q' => $invoiceQ]);
 $totalPages = max(1, (int) ceil($totalInvoices / $perPage));
 if ($pageNum > $totalPages) {
     $pageNum = $totalPages;
 }
-$invoices = array_slice($invoicesAll, ($pageNum - 1) * $perPage, $perPage);
+$invoices = list_invoices([
+    'q' => $invoiceQ,
+    'limit' => $perPage,
+    'offset' => ($pageNum - 1) * $perPage,
+]);
 
 $invoiceListQs = static function (array $overrides) use ($invoiceQ): string {
     $params = array_merge([

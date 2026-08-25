@@ -227,15 +227,49 @@ function allocate_unique_invoice_number(): string
 /**
  * @return list<array<string,mixed>>
  */
-function list_invoices(): array
+function list_invoices(array $opts = []): array
 {
     ensure_invoice_schema();
-    return db()->query(
-        "SELECT i.*,
+    $q = trim((string) ($opts['q'] ?? ''));
+    $limit = isset($opts['limit']) ? max(0, (int) $opts['limit']) : 0;
+    $offset = max(0, (int) ($opts['offset'] ?? 0));
+    [$whereSql, $params] = invoices_where_sql($q);
+    $sql = "SELECT i.*,
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
-         FROM invoices i
-         ORDER BY i.invoice_date DESC, i.id DESC"
-    )->fetchAll();
+         FROM invoices i"
+        . $whereSql
+        . ' ORDER BY i.invoice_date DESC, i.id DESC';
+    if ($limit > 0) {
+        $sql .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+/**
+ * @return array{0:string,1:list<mixed>}
+ */
+function invoices_where_sql(string $q): array
+{
+    if ($q === '') {
+        return ['', []];
+    }
+    $like = '%' . $q . '%';
+    return [
+        ' WHERE (i.invoice_number LIKE ? OR i.client_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)',
+        [$like, $like, $like, $like, $like],
+    ];
+}
+
+function count_invoices(array $opts = []): int
+{
+    ensure_invoice_schema();
+    $q = trim((string) ($opts['q'] ?? ''));
+    [$whereSql, $params] = invoices_where_sql($q);
+    $stmt = db()->prepare('SELECT COUNT(*) FROM invoices i' . $whereSql);
+    $stmt->execute($params);
+    return (int) $stmt->fetchColumn();
 }
 
 function get_invoice(int $id): ?array
