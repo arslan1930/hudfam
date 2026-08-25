@@ -1672,9 +1672,23 @@ function email_campaign_rows_inventory_query(
     $where = ["sheet_id = ?", "LEFT(domain, 8) <> '__blank_'"];
     $params = [$sheetId];
     if ($q !== '') {
-        $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
-        $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like, $like, $like);
+        $prefixLike = $q . '%';
+        $containsLike = '%' . $q . '%';
+        $useContains = mb_strlen($q) >= 3;
+        $prefixWhere = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
+        $prefixParams = [$prefixLike, $prefixLike, $prefixLike, $prefixLike, $prefixLike];
+        $prefixCount = db()->prepare(
+            'SELECT COUNT(*) FROM email_campaign_rows WHERE ' . implode(' AND ', $where) . ' AND ' . $prefixWhere
+        );
+        $prefixCount->execute(array_merge($params, $prefixParams));
+        $prefixTotal = (int) $prefixCount->fetchColumn();
+        if ($prefixTotal > 0 || !$useContains) {
+            $where[] = $prefixWhere;
+            array_push($params, ...$prefixParams);
+        } else {
+            $where[] = $prefixWhere;
+            array_push($params, $containsLike, $containsLike, $containsLike, $containsLike, $containsLike);
+        }
     }
     if ($sentFilter === '0' || $sentFilter === '1') {
         $where[] = 'email_sent = ?';
@@ -2992,7 +3006,7 @@ function search_email_campaign_suggestions_scoped(
 ): array {
     ensure_email_campaign_schema();
     $q = trim(mb_strtolower($q));
-    if ($q === '' || mb_strlen($q) < 2) {
+    if ($q === '' || mb_strlen($q) < 3) {
         return [];
     }
     if ($sheetId !== null) {

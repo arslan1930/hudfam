@@ -207,7 +207,7 @@
       if (abortCtrl) {
         try { abortCtrl.abort(); } catch (e) {}
       }
-      if (!suggestUrl || q.length < 2) {
+      if (!suggestUrl || q.length < 3) {
         suggestions = [];
         hideSuggest();
         return;
@@ -224,7 +224,7 @@
           suggestions = (data && data.suggestions) || [];
           activeIndex = suggestions.length ? 0 : -1;
           renderSuggest();
-          if (!suggestions.length && q.length >= 2) {
+          if (!suggestions.length && q.length >= 3) {
             setStatus('No matches in “' + sheetName + '”.', true);
           } else if (suggestions.length) {
             setStatus(
