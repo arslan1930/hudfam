@@ -156,8 +156,7 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
       <p class="muted" style="margin:0.25rem 0 0">Edit the list — changes autosave. Removing a line drops it from this history day only, unless you also remove from Our database.</p>
     </div>
     <div class="actions">
-      <button type="button" class="btn secondary" id="history_undo_btn" disabled>Undo</button>
-      <button type="button" class="btn secondary" id="history_redo_btn" disabled>Redo</button>
+      <?php render_undo_redo_arrow_buttons('history_undo_btn', 'history_redo_btn', ''); ?>
       <button type="button" class="btn secondary" id="history_copy_all" <?= $siteCount ? '' : 'disabled' ?>>Copy all</button>
     </div>
   </div>

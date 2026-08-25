@@ -19,6 +19,7 @@ require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/guides.php';
 require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/semrush_research.php';
+require __DIR__ . '/includes/sheet_history.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {

@@ -600,7 +600,11 @@ function prospect_site_rows_html(array $rows): string
         $lang = (string) ($s['language'] ?? '');
         $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
         $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
-        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '">';
+        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '">';
+        echo '<td class="sheet-td-check">';
+        echo '<label class="sheet-check">';
+        echo '<input type="checkbox" data-sheet-row-check value="' . (int) ($s['id'] ?? 0) . '" aria-label="Select ' . h($domain) . '">';
+        echo '</label></td>';
         echo '<td><strong>' . h($domain) . '</strong></td>';
         echo '<td class="help">' . h($url !== '' ? $url : '—') . '</td>';
         echo '<td>' . h($lang !== '' ? $lang : '—') . '</td>';
@@ -2296,6 +2300,92 @@ function delete_prospect_site_by_id(int $id): ?array
     }
     db()->prepare('DELETE FROM prospect_sites WHERE id=?')->execute([$id]);
     return $row;
+}
+
+/**
+ * @param list<int> $ids
+ * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
+ */
+function delete_prospect_sites_by_ids(string $country, array $ids): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $snaps = [];
+    $removed = [];
+    foreach ($ids as $id) {
+        $sel = db()->prepare('SELECT * FROM prospect_sites WHERE id=? LIMIT 1');
+        $sel->execute([$id]);
+        $snap = $sel->fetch(PDO::FETCH_ASSOC);
+        if (!$snap || (string) ($snap['country'] ?? '') !== $country) {
+            continue;
+        }
+        $snaps[] = $snap;
+        if (delete_prospect_site_by_id($id)) {
+            $removed[] = ['id' => $id, 'domain' => (string) ($snap['domain'] ?? '')];
+        }
+    }
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('prospect', $country, $snaps);
+    }
+    if ($removed === []) {
+        return ['ok' => false, 'error' => 'No matching sites to remove.', 'removed' => [], 'count' => 0];
+    }
+    return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param array<string,mixed> $snap
+ * @return array{ok:bool,id?:int,already?:bool,error?:string}
+ */
+function restore_prospect_site_snapshot(array $snap): array
+{
+    ensure_prospect_schema();
+    $country = (string) ($snap['country'] ?? '');
+    $domain = (string) ($snap['domain'] ?? '');
+    if ($domain === '') {
+        return ['ok' => false, 'error' => 'Invalid site.'];
+    }
+    $dup = db()->prepare('SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1');
+    $dup->execute([$country, $domain]);
+    $existingId = (int) $dup->fetchColumn();
+    if ($existingId > 0) {
+        return ['ok' => true, 'id' => $existingId, 'already' => true];
+    }
+    $wantId = (int) ($snap['id'] ?? 0);
+    $url = (string) ($snap['url'] ?? '');
+    $language = (string) ($snap['language'] ?? '');
+    $region = (string) ($snap['region'] ?? '');
+    $niche = (string) ($snap['niche'] ?? '');
+    $notes = $snap['notes'] ?? null;
+    $status = (string) ($snap['status'] ?? 'new');
+    if (!in_array($status, ['new', 'contacting', 'replied', 'skipped'], true)) {
+        $status = 'new';
+    }
+    $createdBy = $snap['created_by'] ?? null;
+    $createdBy = $createdBy !== null && $createdBy !== '' ? (int) $createdBy : null;
+    $created = trim((string) ($snap['created_at'] ?? ''));
+    $created = $created !== '' ? $created : null;
+    $cols = 'domain, url, country, language, region, niche, notes, status, created_by, created_at';
+    $params = [$domain, $url, $country, $language, $region, $niche, $notes, $status, $createdBy, $created];
+    $ph = '?,?,?,?,?,?,?,?,?,?';
+    try {
+        if ($wantId > 0) {
+            $chk = db()->prepare('SELECT id FROM prospect_sites WHERE id=? LIMIT 1');
+            $chk->execute([$wantId]);
+            if (!(int) $chk->fetchColumn()) {
+                db()->prepare("INSERT INTO prospect_sites (id, {$cols}) VALUES (?, {$ph})")->execute(array_merge([$wantId], $params));
+                return ['ok' => true, 'id' => $wantId];
+            }
+        }
+        db()->prepare("INSERT INTO prospect_sites ({$cols}) VALUES ({$ph})")->execute($params);
+        return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+    } catch (PDOException $e) {
+        $dup->execute([$country, $domain]);
+        $existingId = (int) $dup->fetchColumn();
+        if ($existingId > 0) {
+            return ['ok' => true, 'id' => $existingId, 'already' => true];
+        }
+        return ['ok' => false, 'error' => 'Could not restore site.'];
+    }
 }
 
 function list_admin_users(bool $activeOnly = true): array

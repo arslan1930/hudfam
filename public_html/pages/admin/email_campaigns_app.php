@@ -77,9 +77,15 @@ if ($sheetId > 0) {
         }
         $wantsJson = (string) post('ajax') === '1'
             || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
-        $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson): void {
+        $histKey = function_exists('sheet_history_key')
+            ? sheet_history_key('campaign', (string) $sheetId)
+            : ('campaign:' . $sheetId);
+        $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson, $histKey): void {
             if (!$wantsJson) {
                 return;
+            }
+            if (function_exists('sheet_history_state')) {
+                $payload += sheet_history_state($histKey);
             }
             http_response_code($code);
             header('Content-Type: application/json; charset=utf-8');
@@ -128,6 +134,38 @@ if ($sheetId > 0) {
                 flash($del['ok'] ? 'ok' : 'error', $del['ok']
                     ? 'Removed ' . (string) ($del['domain'] ?? 'site') . '.'
                     : (string) ($del['error'] ?? 'Could not remove row.'));
+                redirect($back);
+            }
+            if ($action === 'remove_selected') {
+                $ids = function_exists('parse_posted_id_list')
+                    ? parse_posted_id_list(post('site_ids'))
+                    : [];
+                $del = delete_email_campaign_rows_by_ids($sheetId, $ids);
+                $left = count_email_campaign_rows($sheetId);
+                if ($wantsJson) {
+                    $jsonOut(
+                        $del + [
+                            'site_count' => $left,
+                            'redirect' => $left < 1 ? $campBase : null,
+                        ] + count_email_campaign_sent_stats($sheetId),
+                        !empty($del['ok']) ? 200 : 400
+                    );
+                }
+                flash($del['ok'] ? 'ok' : 'error', $del['ok']
+                    ? 'Removed ' . (int) $del['count'] . ' selected site' . ((int) $del['count'] === 1 ? '' : 's') . '.'
+                    : (string) ($del['error'] ?? 'Could not remove selected rows.'));
+                redirect($left < 1 ? $campBase : $back);
+            }
+            if ($action === 'undo_last' || $action === 'redo_last') {
+                $result = $action === 'redo_last'
+                    ? sheet_history_apply_redo($histKey)
+                    : sheet_history_apply_undo($histKey);
+                if ($wantsJson) {
+                    $jsonOut($result + count_email_campaign_sent_stats($sheetId), !empty($result['ok']) ? 200 : 400);
+                }
+                flash($result['ok'] ? 'ok' : 'error', $result['ok']
+                    ? ($action === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
+                    : (string) ($result['error'] ?? 'Could not undo/redo.'));
                 redirect($back);
             }
             // Campaign emailed progress — same rule as Sites with emails - Admin, per sheet.
@@ -604,6 +642,13 @@ if ($sheetId > 0) {
         </div>
         <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
           <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+          <?php
+          render_sheet_edit_toolbar($formAction, sheet_history_key('campaign', (string) $sheetId), [
+              'q' => $q,
+              'p' => $pageNum,
+              'sent' => $sentFilter,
+          ]);
+          ?>
           <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
             <span class="visually-hidden">Search sites and emails</span>
             <input id="swe-row-search" type="search" placeholder="Search site or email…"
@@ -620,6 +665,7 @@ if ($sheetId > 0) {
         <table class="swe-table swe-sheet-table is-admin-checkpoint" id="camp-sheet-table">
           <thead>
             <tr>
+              <?php render_sheet_select_th(); ?>
               <th class="swe-col-site">Site</th>
               <th class="swe-col-lang">Language</th>
               <th class="swe-col-email">Email 1</th>
@@ -632,6 +678,7 @@ if ($sheetId > 0) {
           </thead>
           <tbody id="camp-sheet-tbody">
           <tr id="camp-add-row" class="camp-add-row" hidden data-swe-emails>
+            <td class="swe-td-check sheet-td-check"></td>
             <td class="swe-td-site">
               <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form"
                     autocomplete="off" data-show-processing="Adding site…">
@@ -690,6 +737,7 @@ if ($sheetId > 0) {
                 data-has-email="<?= $hasEmail ? '1' : '0' ?>"
                 data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
                 class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
+              <?php render_sheet_select_td($rid, $domain); ?>
               <td class="swe-td-site">
                 <form id="<?= h($formId) ?>" method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
                   <input type="hidden" name="action" value="save_row">
@@ -1038,6 +1086,7 @@ if ($sheetId > 0) {
       </form>
     </div>
     <?= email_field_clear_script_tag() ?>
+    <script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
     <script src="<?= h(script_asset_url('js/email-campaign-sheet.js')) ?>" defer></script>
     <?= open_site_script_tag() ?>
     <?php

@@ -79,6 +79,21 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $returnPerPage = resolve_sheet_per_page();
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    $histKey = function_exists('sheet_history_key')
+        ? sheet_history_key('swe', $sweScope . ':' . $countryName)
+        : ('swe:' . $sweScope . ':' . $countryName);
+    $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson, $histKey): void {
+        if (!$wantsJson) {
+            return;
+        }
+        if (function_exists('sheet_history_state')) {
+            $payload += sheet_history_state($histKey);
+        }
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload);
+        exit;
+    };
     $back = $sweBase . '&country=' . rawurlencode($countryName);
     if ($returnQ !== '') {
         $back .= '&q=' . rawurlencode($returnQ);
@@ -128,34 +143,64 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'remove_site') {
         $siteId = (int) post('site_id');
-        $site = get_site_with_emails($siteId, $sweScope);
-        if (!$site || (string) $site['country'] !== $countryName) {
-            if ($wantsJson) {
-                header('Content-Type: application/json; charset=utf-8');
-                http_response_code(404);
-                echo json_encode(['ok' => false, 'error' => 'Row not found.']);
-                exit;
-            }
-            flash('error', 'Row not found.');
-            redirect($back);
-        }
-        $domain = (string) $site['domain'];
-        delete_site_with_emails($siteId, $sweScope);
+        $result = remove_sites_with_emails_by_ids($countryName, [$siteId], $sweScope);
+        $ok = !empty($result['ok']);
+        $domain = (string) (($result['removed'][0]['domain'] ?? '') ?: '');
         $left = count_sites_with_emails_for_country($countryName, $sweScope);
         if ($wantsJson) {
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'ok' => true,
+            $jsonOut([
+                'ok' => $ok,
+                'error' => $ok ? null : (string) ($result['error'] ?? 'Row not found.'),
                 'domain' => $domain,
                 'site_count' => $left,
                 'redirect' => $left < 1 ? $sweBase : null,
-            ]);
-            exit;
+            ] + (function_exists('count_sites_with_emails_sent_stats') && $sweScope === 'admin'
+                ? count_sites_with_emails_sent_stats($countryName)
+                : []), $ok ? 200 : 404);
         }
-        flash('ok', 'Removed ' . $domain . '.');
+        if (!$ok) {
+            flash('error', (string) ($result['error'] ?? 'Row not found.'));
+            redirect($back);
+        }
+        flash('ok', 'Removed ' . ($domain !== '' ? $domain : 'site') . '.');
         if ($left < 1) {
             redirect($sweBase);
         }
+        redirect($back);
+    }
+
+    if ($action === 'remove_selected') {
+        $ids = function_exists('parse_posted_id_list') ? parse_posted_id_list(post('site_ids')) : [];
+        $result = remove_sites_with_emails_by_ids($countryName, $ids, $sweScope);
+        $left = count_sites_with_emails_for_country($countryName, $sweScope);
+        if ($wantsJson) {
+            $jsonOut(
+                $result + [
+                    'site_count' => $left,
+                    'redirect' => $left < 1 ? $sweBase : null,
+                ],
+                !empty($result['ok']) ? 200 : 400
+            );
+        }
+        flash($result['ok'] ? 'ok' : 'error', $result['ok']
+            ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's') . '.'
+            : (string) ($result['error'] ?? 'Could not remove selected rows.'));
+        if ($left < 1) {
+            redirect($sweBase);
+        }
+        redirect($back);
+    }
+
+    if ($action === 'undo_last' || $action === 'redo_last') {
+        $result = $action === 'redo_last'
+            ? sheet_history_apply_redo($histKey)
+            : sheet_history_apply_undo($histKey);
+        if ($wantsJson) {
+            $jsonOut($result, !empty($result['ok']) ? 200 : 400);
+        }
+        flash($result['ok'] ? 'ok' : 'error', $result['ok']
+            ? ($action === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
+            : (string) ($result['error'] ?? 'Could not undo/redo.'));
         redirect($back);
     }
 
@@ -965,6 +1010,14 @@ render_breadcrumbs($crumbs);
              title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
       <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
     </label>
+    <?php
+    render_sheet_edit_toolbar($listBase, sheet_history_key('swe', $sweScope . ':' . $countryName), [
+        'q' => $q,
+        'p' => $pageNum,
+        'sent' => $sentFilter,
+        'filter' => $rowFilter,
+    ]);
+    ?>
   </div>
 
   <div class="table-wrap swe-sheet-wrap">
@@ -974,6 +1027,7 @@ render_breadcrumbs($crumbs);
            <?= $isTeam ? 'data-swe-open-track="1"' : '' ?>>
       <thead>
         <tr>
+          <?php render_sheet_select_th(); ?>
           <?php if ($isTeam): ?>
           <th class="swe-col-num" scope="col" title="Row number on this page">#</th>
           <?php endif; ?>
@@ -1036,6 +1090,7 @@ render_breadcrumbs($crumbs);
             data-row-num="<?= (int) $rowNum ?>"
             data-row-signal="<?= h($rowSignal) ?>"
             class="<?= $isEmailed ? 'swe-row-emailed' : '' ?><?= $rowSignal !== '' ? ' swe-row-' . h($rowSignal) : '' ?>">
+          <?php render_sheet_select_td($sid, $domain); ?>
           <?php if ($isTeam): ?>
           <td class="swe-td-num">
             <span class="swe-row-num" title="Site #<?= (int) $rowNum ?>"><?= (int) $rowNum ?></span>
@@ -1269,6 +1324,7 @@ render_breadcrumbs($crumbs);
 <?php endif; ?>
 
 <?= email_field_clear_script_tag() ?>
+<script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
 <script src="<?= h(script_asset_url('js/sites-with-emails.js')) ?>" defer></script>
 <?php
 render_footer($swePanel);

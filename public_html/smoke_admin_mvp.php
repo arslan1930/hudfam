@@ -26,6 +26,8 @@ function ok(string $msg): void
 $requiredFiles = [
     'includes/auth.php',
     'includes/layout.php',
+    'includes/sheet_history.php',
+    'assets/js/sheet-select-undo.js',
     'includes/prospects.php',
     'pages/account_password.php',
     'pages/admin/dashboard.php',
@@ -1303,6 +1305,59 @@ if (!str_contains($prospectsPhp, 'known_platform_public_suffixes')
     fail('prospects.php missing known_platform_public_suffixes');
 } else {
     ok('prospects.php platform public suffixes');
+}
+
+$sheetHistSmoke = file_get_contents($root . '/includes/sheet_history.php') ?: '';
+$campAppSmokeUi = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
+$layoutLoadSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
+$procJsSmoke = file_get_contents($root . '/assets/js/app-processing.js') ?: '';
+$sheetSelJsSmoke = file_get_contents($root . '/assets/js/sheet-select-undo.js') ?: '';
+$extractBatchArrows = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+if (!str_contains($sheetHistSmoke, 'function render_sheet_edit_toolbar')
+    || !str_contains($sheetHistSmoke, 'function render_undo_redo_arrow_buttons')
+    || !str_contains($sheetHistSmoke, 'data-sheet-select-all')
+    || !str_contains($sheetHistSmoke, 'data-sheet-undo')) {
+    fail('sheet_history missing toolbar/undo helpers');
+} else {
+    ok('sheet history toolbar helpers');
+}
+if (!str_contains($campAppSmokeUi, 'render_sheet_edit_toolbar')
+    || !str_contains($campAppSmokeUi, 'remove_selected')
+    || !str_contains($campAppSmokeUi, 'sheet-select-undo.js')) {
+    fail('Email campaign sheet missing select/undo UI');
+} else {
+    ok('Email campaign select + undo/redo');
+}
+$sweAppUndoSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+$extractedUndoSmoke = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
+$prospectsUndoSmoke = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
+if (!str_contains($sweAppUndoSmoke, 'render_sheet_edit_toolbar')
+    || !str_contains($extractedUndoSmoke, 'render_sheet_edit_toolbar')
+    || !str_contains($prospectsUndoSmoke, 'render_sheet_edit_toolbar')) {
+    fail('Select/undo toolbar not sitewide on inventory sheets');
+} else {
+    ok('Select/undo toolbar on SWE + Extracted + Our database');
+}
+if (!str_contains($extractBatchArrows, 'render_undo_redo_arrow_buttons')
+    || !str_contains(file_get_contents($root . '/pages/admin/semrush_sheet.php') ?: '', 'render_undo_redo_arrow_buttons')
+    || !str_contains(file_get_contents($root . '/pages/admin/prospect_batch.php') ?: '', 'render_undo_redo_arrow_buttons')) {
+    fail('Textarea sheets missing undo/redo arrow buttons');
+} else {
+    ok('Textarea Undo/Redo arrows');
+}
+if (!str_contains($layoutLoadSmoke, 'is-page-loading')
+    || !str_contains($layoutLoadSmoke, 'id="app-processing"')
+    || !str_contains($procJsSmoke, 'finishPageLoad')
+    || !str_contains($procJsSmoke, "show('Loading")
+    || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
+    fail('Missing page-loading overlay or select-remove JS');
+} else {
+    ok('Page loading UI + select/remove JS');
+}
+if (!str_contains($assetFull, 'js/sheet-select-undo.js')) {
+    fail('asset.php missing sheet-select-undo.js allowlist');
+} else {
+    ok('asset allowlist sheet-select-undo.js');
 }
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";

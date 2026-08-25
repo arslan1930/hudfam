@@ -1403,6 +1403,128 @@ function get_site_with_emails(int $id, string $scope = 'team'): ?array
     return $row ?: null;
 }
 
+function find_site_with_emails_id(string $country, string $domain, string $scope = 'team'): int
+{
+    ensure_sites_with_emails_schema();
+    $table = swe_table($scope);
+    $stmt = db()->prepare("SELECT id FROM {$table} WHERE country=? AND domain=? LIMIT 1");
+    $stmt->execute([$country, $domain]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * @param list<int> $ids
+ * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
+ */
+function remove_sites_with_emails_by_ids(string $country, array $ids, string $scope = 'team'): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $snaps = [];
+    $removed = [];
+    foreach ($ids as $id) {
+        $row = get_site_with_emails($id, $scope);
+        if (!$row || (string) ($row['country'] ?? '') !== $country) {
+            continue;
+        }
+        $snaps[] = $row;
+        if (delete_site_with_emails($id, $scope)) {
+            $removed[] = ['id' => $id, 'domain' => (string) ($row['domain'] ?? '')];
+        }
+    }
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('swe', $scope . ':' . $country, $snaps, ['scope' => swe_normalize_scope($scope)]);
+    }
+    if ($removed === []) {
+        return ['ok' => false, 'error' => 'No matching rows to remove.', 'removed' => [], 'count' => 0];
+    }
+    return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param array<string,mixed> $snap
+ * @return array{ok:bool,id?:int,already?:bool,error?:string}
+ */
+function restore_site_with_emails_snapshot(string $scope, array $snap): array
+{
+    ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
+    $table = swe_table($scope);
+    $country = (string) ($snap['country'] ?? '');
+    $domain = (string) ($snap['domain'] ?? '');
+    if ($country === '' || $domain === '') {
+        return ['ok' => false, 'error' => 'Invalid site.'];
+    }
+    $existingId = find_site_with_emails_id($country, $domain, $scope);
+    if ($existingId > 0) {
+        return ['ok' => true, 'id' => $existingId, 'already' => true];
+    }
+    $wantId = (int) ($snap['id'] ?? 0);
+    $language = (string) ($snap['language'] ?? '');
+    $region = (string) ($snap['region'] ?? '');
+    $e1 = (string) ($snap['email1'] ?? '');
+    $e2 = (string) ($snap['email2'] ?? '');
+    $e3 = (string) ($snap['email3'] ?? '');
+    $e4 = (string) ($snap['email4'] ?? '');
+    $batchId = $snap['extract_batch_id'] ?? null;
+    $batchId = $batchId !== null && $batchId !== '' ? (int) $batchId : null;
+    $pushedBy = $snap['pushed_by'] ?? null;
+    $pushedBy = $pushedBy !== null && $pushedBy !== '' ? (int) $pushedBy : null;
+    $created = trim((string) ($snap['created_at'] ?? ''));
+    $created = $created !== '' ? $created : null;
+    $baseCols = 'domain, country, language, region, email1, email2, email3, email4, extract_batch_id, pushed_by, created_at';
+    $baseParams = [$domain, $country, $language, $region, $e1, $e2, $e3, $e4, $batchId, $pushedBy, $created];
+    $tryInsert = static function (bool $withId, bool $withSent) use (
+        $table,
+        $wantId,
+        $baseCols,
+        $baseParams,
+        $snap,
+        $scope
+    ): int {
+        $cols = $baseCols;
+        $params = $baseParams;
+        if ($withSent && $scope === 'admin') {
+            $cols .= ', email_sent, email_sent_at';
+            $sentAt = trim((string) ($snap['email_sent_at'] ?? ''));
+            $params[] = (int) ($snap['email_sent'] ?? 0) === 1 ? 1 : 0;
+            $params[] = $sentAt !== '' ? $sentAt : null;
+        }
+        $placeholders = implode(',', array_fill(0, count($params), '?'));
+        if ($withId && $wantId > 0) {
+            $chk = db()->prepare("SELECT id FROM {$table} WHERE id=? LIMIT 1");
+            $chk->execute([$wantId]);
+            if ((int) $chk->fetchColumn() > 0) {
+                return 0;
+            }
+            db()->prepare("INSERT INTO {$table} (id, {$cols}) VALUES (?, {$placeholders})")->execute(array_merge([$wantId], $params));
+            return $wantId;
+        }
+        db()->prepare("INSERT INTO {$table} ({$cols}) VALUES ({$placeholders})")->execute($params);
+        return (int) db()->lastInsertId();
+    };
+    try {
+        $newId = $tryInsert(true, true);
+        if ($newId < 1) {
+            $newId = $tryInsert(false, true);
+        }
+        return ['ok' => true, 'id' => $newId];
+    } catch (PDOException $e) {
+        try {
+            $newId = $tryInsert(true, false);
+            if ($newId < 1) {
+                $newId = $tryInsert(false, false);
+            }
+            return ['ok' => true, 'id' => $newId];
+        } catch (PDOException $e2) {
+            $existingId = find_site_with_emails_id($country, $domain, $scope);
+            if ($existingId > 0) {
+                return ['ok' => true, 'id' => $existingId, 'already' => true];
+            }
+            return ['ok' => false, 'error' => 'Could not restore site.'];
+        }
+    }
+}
+
 /**
  * @return array{ok:bool,error?:string,id?:int}
  */

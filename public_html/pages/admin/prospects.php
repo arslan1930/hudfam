@@ -68,6 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
     if (!$removed) {
         flash('error', 'Site not found.');
     } else {
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('prospect', (string) ($removed['country'] ?? ''), [$removed]);
+        }
         flash('ok', 'Removed ' . (string) $removed['domain'] . ' from ' . ((string) ($removed['country'] ?: 'No country')) . '.');
     }
     if ($returnSuper !== '') {
@@ -77,6 +80,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
         redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
     }
     redirect('index.php?page=admin_prospects');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove_selected') {
+    $ids = function_exists('parse_posted_id_list') ? parse_posted_id_list(post('site_ids')) : [];
+    $returnCountry = trim((string) post('country'));
+    if ($returnCountry === '' || resolve_canonical_country($returnCountry) === null) {
+        flash('error', 'Open a country folder first.');
+        redirect('index.php?page=admin_prospects');
+    }
+    $canonRm = require_canonical_country($returnCountry);
+    $returnCountry = $canonRm['name'];
+    $result = delete_prospect_sites_by_ids($returnCountry, $ids);
+    $left = count_prospect_sites_matching($returnCountry, '');
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        if (empty($result['ok'])) {
+            http_response_code(400);
+        }
+        echo json_encode($result + [
+            'site_count' => $left,
+        ] + (function_exists('sheet_history_state')
+            ? sheet_history_state(sheet_history_key('prospect', $returnCountry))
+            : []));
+        exit;
+    }
+    flash($result['ok'] ? 'ok' : 'error', $result['ok']
+        ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's') . '.'
+        : (string) ($result['error'] ?? 'Could not remove selected sites.'));
+    redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && ((string) post('action') === 'undo_last' || (string) post('action') === 'redo_last')) {
+    $returnCountry = trim((string) post('country'));
+    if ($returnCountry === '' || resolve_canonical_country($returnCountry) === null) {
+        flash('error', 'Open a country folder first.');
+        redirect('index.php?page=admin_prospects');
+    }
+    $canonRm = require_canonical_country($returnCountry);
+    $returnCountry = $canonRm['name'];
+    $histKey = sheet_history_key('prospect', $returnCountry);
+    $actionHist = (string) post('action');
+    $result = $actionHist === 'redo_last'
+        ? sheet_history_apply_redo($histKey)
+        : sheet_history_apply_undo($histKey);
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        if (empty($result['ok'])) {
+            http_response_code(400);
+        }
+        echo json_encode($result);
+        exit;
+    }
+    flash($result['ok'] ? 'ok' : 'error', $result['ok']
+        ? ($actionHist === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
+        : (string) ($result['error'] ?? 'Could not undo/redo.'));
+    redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
 }
 
 // --- Remove by list from Our database (country folder) ---
@@ -795,9 +859,29 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       </div>
     </div>
     <?php endif; ?>
+    <?php if (!$emptyCountry): ?>
+    <?php
+    render_sheet_edit_toolbar(
+        'index.php?page=admin_prospects&country=' . rawurlencode($countryName),
+        sheet_history_key('prospect', $countryName),
+        [
+            'q' => $q,
+            'p' => $pageNum,
+            'country' => $countryName,
+        ]
+    );
+    ?>
+    <?php endif; ?>
   </div>
   <table id="prospect-site-table"<?= $rows ? '' : ' hidden' ?>>
-    <thead><tr><th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th></tr></thead>
+    <thead><tr>
+      <th class="sheet-col-check" scope="col">
+        <label class="sheet-check sheet-check-all">
+          <input type="checkbox" data-sheet-select-all-check title="Select all on this page" aria-label="Select all on this page">
+        </label>
+      </th>
+      <th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th>
+    </tr></thead>
     <tbody id="prospect-site-tbody">
     <?= prospect_site_rows_html($rows) ?>
     </tbody>
@@ -854,5 +938,6 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </form>
 </div>
 <?php endif; ?>
+<script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
 <script src="<?= h(script_asset_url('js/prospects-country.js')) ?>" defer></script>
 <?php render_footer('admin'); ?>
