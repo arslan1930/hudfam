@@ -6,10 +6,10 @@
 $user = require_team();
 ensure_sites_with_emails_schema();
 
-$base = 'index.php?page=team_admin_emails_delete';
+$base = 'index.php?page=team_admin_emails_search';
 
 // Allow Communication Team + Email Extracting (and unscoped team / admin).
-if (!team_page_unlocked($user, 'team_admin_emails_delete')) {
+if (!team_page_unlocked($user, 'team_admin_emails_search')) {
     flash('error', 'This tool is for Communication Team or Email Extracting.');
     redirect('index.php?page=team_departments');
 }

@@ -39,6 +39,7 @@ render_header('Extracting sites', 'team');
         <th>Country</th>
         <th>Sites</th>
         <th>Updated</th>
+        <th>Last Push</th>
         <th></th>
       </tr>
     </thead>
@@ -48,6 +49,10 @@ render_header('Extracting sites', 'team');
         <td><strong><?= h((string) $b['country']) ?></strong></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
         <td class="muted"><?= h((string) ($b['updated_at'] ?? '')) ?></td>
+        <td class="muted"><?php
+            $lastPush = trim((string) ($b['last_pushed_at'] ?? ''));
+            echo $lastPush !== '' ? h(substr($lastPush, 0, 16)) : '—';
+        ?></td>
         <td><a class="btn small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>
     <?php endforeach; ?>

@@ -86,7 +86,7 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$canAdminEmailsSearch = team_page_unlocked($user, 'team_admin_emails_delete');
+$canAdminEmailsSearch = team_page_unlocked($user, 'team_admin_emails_search');
 $canSitesEmails = team_page_unlocked($user, 'team_sites_emails');
 $canCampaigns = team_page_unlocked($user, 'team_email_campaigns');
 $canCampaignDrafts = team_page_unlocked($user, 'team_email_campaigns_drafts');
@@ -114,7 +114,7 @@ if (!$dept) {
             <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
           <?php endif; ?>
           <?php if ($canAdminEmailsSearch): ?>
-            <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+            <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_search">Admin emails search</a>
           <?php endif; ?>
           <?php if ($canCampaigns): ?>
             <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
@@ -156,7 +156,7 @@ if (!$dept) {
         </a>
         <?php endif; ?>
         <?php if ($canAdminEmailsSearch): ?>
-        <a class="folder" href="index.php?page=team_admin_emails_delete">
+        <a class="folder" href="index.php?page=team_admin_emails_search">
           <h3>Admin emails search</h3>
           <p class="muted">Sites with emails - Admin · all countries</p>
         </a>
@@ -272,11 +272,11 @@ render_breadcrumbs([
         <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
       <?php endif; ?>
       <?php if ($canAdminEmailsSearch): ?>
-        <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+        <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_search">Admin emails search</a>
       <?php endif; ?>
     <?php elseif ($isCommunicationDept): ?>
       <?php if ($canAdminEmailsSearch): ?>
-        <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+        <a class="btn" href="index.php?page=team_admin_emails_search">Admin emails search</a>
       <?php endif; ?>
       <?php if ($canCampaigns): ?>
         <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
@@ -303,7 +303,7 @@ render_breadcrumbs([
     </a>
     <?php endif; ?>
     <?php if ($canAdminEmailsSearch): ?>
-    <a class="folder" href="index.php?page=team_admin_emails_delete">
+    <a class="folder" href="index.php?page=team_admin_emails_search">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
     </a>
@@ -320,7 +320,7 @@ render_breadcrumbs([
   </p>
   <div class="folders">
     <?php if ($canAdminEmailsSearch): ?>
-    <a class="folder" href="index.php?page=team_admin_emails_delete">
+    <a class="folder" href="index.php?page=team_admin_emails_search">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
     </a>

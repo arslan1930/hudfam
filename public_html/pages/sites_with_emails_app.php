@@ -498,8 +498,8 @@ if (!$inCountry) {
           <?php endif; ?>
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
-          <?php if (team_page_unlocked($sweUser, 'team_admin_emails_delete')): ?>
-            <a class="btn" href="index.php?page=team_admin_emails_delete">Admin emails search</a>
+          <?php if (team_page_unlocked($sweUser, 'team_admin_emails_search')): ?>
+            <a class="btn" href="index.php?page=team_admin_emails_search">Admin emails search</a>
           <?php endif; ?>
           <?php if (team_page_unlocked($sweUser, 'team_extracting')): ?>
             <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
@@ -508,7 +508,7 @@ if (!$inCountry) {
       </div>
     </div>
 
-    <?php if ($isTeam && team_page_unlocked($sweUser, 'team_admin_emails_delete')): ?>
+    <?php if ($isTeam && team_page_unlocked($sweUser, 'team_admin_emails_search')): ?>
     <div class="card" style="margin-bottom:1rem">
       <h2><?= label_with_info('Admin emails search', 'Live search across Sites with emails - Admin. Delete the whole site row, or remove one email only and keep the site name.') ?></h2>
       <p class="help">
@@ -517,7 +517,7 @@ if (!$inCountry) {
         Select a match, then delete the whole row or remove one email only (site name stays).
       </p>
       <p class="actions" style="margin-top:0.65rem">
-        <a class="btn" href="index.php?page=team_admin_emails_delete">Open Admin super search</a>
+        <a class="btn" href="index.php?page=team_admin_emails_search">Open Admin super search</a>
       </p>
     </div>
     <?php endif; ?>
@@ -544,6 +544,9 @@ if (!$inCountry) {
             <th>Country</th>
             <th class="num">Sites</th>
             <th class="num">With emails</th>
+            <?php if ($isTeam): ?>
+            <th>Last Push</th>
+            <?php endif; ?>
           </tr>
         </thead>
         <tbody>
@@ -575,10 +578,25 @@ if (!$inCountry) {
               </a>
             </td>
             <td class="num muted"><?= (int) $r['with_emails'] ?></td>
+            <?php if ($isTeam):
+                $lp = trim((string) ($r['last_pushed_at'] ?? ''));
+                $recentPush = false;
+                if ($lp !== '') {
+                    $ts = strtotime($lp);
+                    $recentPush = $ts !== false && $ts >= (time() - 48 * 3600);
+                }
+                ?>
+            <td class="muted">
+              <?= $lp !== '' ? h(substr($lp, 0, 16)) : '—' ?>
+              <?php if ($recentPush): ?>
+                <span class="badge" title="Recently updated on the Team sheet (from Extracting Push or email edits)">new from Push</span>
+              <?php endif; ?>
+            </td>
+            <?php endif; ?>
           </tr>
         <?php endforeach; ?>
           <tr class="sheet-search-empty" data-swe-country-search-empty hidden>
-            <td colspan="3" class="muted">No countries match your search.</td>
+            <td colspan="<?= $isTeam ? 4 : 3 ?>" class="muted">No countries match your search.</td>
           </tr>
         </tbody>
       </table>

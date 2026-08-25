@@ -59,6 +59,20 @@ function ensure_extract_schema(): void
     } catch (Throwable $e) {
         // ignore if permissions/table differ
     }
+    foreach ([
+        'last_pushed_at' => 'TIMESTAMP NULL DEFAULT NULL',
+        'sites_writer_id' => 'INT NULL DEFAULT NULL',
+        'sites_writer_at' => 'TIMESTAMP NULL DEFAULT NULL',
+    ] as $colName => $ddl) {
+        try {
+            $col = $pdo->query("SHOW COLUMNS FROM extract_batches LIKE " . $pdo->quote($colName))->fetch(PDO::FETCH_ASSOC);
+            if (!$col) {
+                $pdo->exec("ALTER TABLE extract_batches ADD COLUMN {$colName} {$ddl}");
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
 }
 
 /**
@@ -199,22 +213,88 @@ function list_extract_batches(int $limit = 200): array
     purge_expired_empty_extract_batches();
     $limit = max(1, min(500, $limit));
     // Hide empty countries here; they may still be open on the batch page until leave / 1 hour.
-    $sql = "SELECT b.*, u.username, u.full_name
+    $sql = "SELECT b.*, u.username, u.full_name,
+                   w.username AS sites_writer_username, w.full_name AS sites_writer_name
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
+            LEFT JOIN users w ON w.id = b.sites_writer_id
             WHERE b.site_count > 0
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
     return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
+function stamp_extract_batch_last_pushed(?int $batchId): void
+{
+    if ($batchId === null || $batchId < 1) {
+        return;
+    }
+    ensure_extract_schema();
+    try {
+        db()->prepare('UPDATE extract_batches SET last_pushed_at=NOW() WHERE id=?')->execute([$batchId]);
+    } catch (Throwable $e) {
+        // ignore missing column on very old installs
+    }
+}
+
+function stamp_extract_sites_writer(int $batchId, ?int $userId): void
+{
+    if ($batchId < 1) {
+        return;
+    }
+    ensure_extract_schema();
+    try {
+        db()->prepare(
+            'UPDATE extract_batches SET sites_writer_id=?, sites_writer_at=NOW() WHERE id=?'
+        )->execute([$userId !== null && $userId > 0 ? $userId : null, $batchId]);
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
+
+/**
+ * @return array{ok:bool,conflict?:bool,error?:string,writer_name?:string,writer_at?:string}|null
+ */
+function extract_sites_writer_conflict(int $batchId, ?int $actorId, string $clientAt): ?array
+{
+    $batch = get_extract_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Batch not found.'];
+    }
+    $dbAt = trim((string) ($batch['sites_writer_at'] ?? ''));
+    $dbWriter = (int) ($batch['sites_writer_id'] ?? 0);
+    if ($clientAt === '' || $dbAt === '' || $dbWriter < 1) {
+        return null;
+    }
+    if ($actorId !== null && $actorId > 0 && $dbWriter === $actorId) {
+        return null;
+    }
+    if (strcmp($dbAt, $clientAt) <= 0) {
+        return null;
+    }
+    $name = trim((string) ($batch['sites_writer_name'] ?: $batch['sites_writer_username'] ?? ''));
+    if ($name === '') {
+        $name = 'Someone';
+    }
+    return [
+        'ok' => false,
+        'conflict' => true,
+        'error' => $name . ' saved this Sites list at ' . substr($dbAt, 0, 16)
+            . '. Reload to avoid overwriting.',
+        'writer_name' => $name,
+        'writer_at' => $dbAt,
+    ];
+}
+
 function get_extract_batch(int $batchId): ?array
 {
     ensure_extract_schema();
     $stmt = db()->prepare(
-        'SELECT b.*, u.username, u.full_name
+        'SELECT b.*, u.username, u.full_name,
+                w.username AS sites_writer_username, w.full_name AS sites_writer_name
          FROM extract_batches b
          LEFT JOIN users u ON u.id = b.created_by
+         LEFT JOIN users w ON w.id = b.sites_writer_id
          WHERE b.id=? LIMIT 1'
     );
     $stmt->execute([$batchId]);
@@ -343,11 +423,17 @@ function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $ad
     }
 
     $siteCount = refresh_extract_batch_site_count($batchId);
+    stamp_extract_sites_writer($batchId, $addedBy);
+    $fresh = get_extract_batch($batchId);
     return [
         'site_count' => $siteCount,
         'domains' => get_extract_batch_domains($batchId),
         'removed' => count($toRemove),
         'added' => count($toAdd),
+        'writer_name' => trim((string) (($fresh['sites_writer_name'] ?? '') !== ''
+            ? $fresh['sites_writer_name']
+            : ($fresh['sites_writer_username'] ?? ''))),
+        'writer_at' => (string) ($fresh['sites_writer_at'] ?? ''),
     ];
 }
 

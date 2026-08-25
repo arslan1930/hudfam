@@ -94,6 +94,7 @@ $routes = [
     'team_extracting' => 'pages/team/extracting.php',
     'team_extract_batch' => 'pages/team/extract_batch.php',
     'team_sites_emails' => 'pages/team/sites_emails.php',
+    'team_admin_emails_search' => 'pages/team/admin_emails_delete.php',
     'team_admin_emails_delete' => 'pages/team/admin_emails_delete.php',
     'team_email_campaigns' => 'pages/team/email_campaigns.php',
     'team_email_campaigns_drafts' => 'pages/team/email_campaign_drafts.php',

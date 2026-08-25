@@ -164,7 +164,17 @@ try {
                         } else {
                             $msg .= ' into ' . $country;
                         }
-                        if (!empty($added['extract_batch_id'])) {
+                        $landed = [];
+                        foreach (($added['by_country'] ?? []) as $dest => $info) {
+                            $n = (int) ($info['inserted'] ?? 0);
+                            if ($n > 0 && !empty($info['extract_batch_id'])) {
+                                $landed[] = $n . ' site' . ($n === 1 ? '' : 's')
+                                    . ' landed on Extracting for ' . $dest;
+                            }
+                        }
+                        if ($landed) {
+                            $msg .= '. ' . implode('. ', $landed);
+                        } elseif (!empty($added['extract_batch_id'])) {
                             if (function_exists('team_page_unlocked')
                                 && team_page_unlocked($user, 'team_extract_batch')) {
                                 $msg .= ' · also added to Extracting sites → Sites list (per country)';

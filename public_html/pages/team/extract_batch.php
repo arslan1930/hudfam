@@ -18,11 +18,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'autosave_sites') {
         $raw = (string) post('sites_text');
+        $actorId = (int) ($user['id'] ?? 0) ?: null;
+        $conflict = extract_sites_writer_conflict($id, $actorId, (string) post('writer_at'));
+        if ($conflict) {
+            $conflict['domains'] = get_extract_batch_domains($id);
+            if ($wantsJson) {
+                extract_json_response($conflict, 409);
+            }
+            flash('error', (string) ($conflict['error'] ?? 'Reload to avoid overwriting.'));
+            redirect('index.php?page=team_extract_batch&id=' . $id);
+        }
         try {
             $synced = set_extract_batch_domains_from_text(
                 $id,
                 $raw,
-                (int) ($user['id'] ?? 0) ?: null
+                $actorId
             );
         } catch (Throwable $e) {
             if ($wantsJson) {
@@ -40,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'added' => (int) $synced['added'],
                 'domains' => $synced['domains'],
                 'empty' => $siteCount < 1,
+                'writer_name' => (string) ($synced['writer_name'] ?? ''),
+                'writer_at' => (string) ($synced['writer_at'] ?? ''),
                 'message' => $siteCount < 1
                     ? 'Sites list empty — this country stays open here; it hides on Extracting sites and is removed after 1 hour unless new sites are added.'
                     : null,
@@ -176,6 +188,7 @@ render_header('Extracting · ' . $country, 'team');
       id="sites_list_shell"
       data-batch-id="<?= (int) $id ?>"
       data-post-url="index.php?page=team_extract_batch&amp;id=<?= (int) $id ?>"
+      data-writer-at="<?= h((string) ($batch['sites_writer_at'] ?? '')) ?>"
     >
       <div class="domains-paste-head">
         <label for="sites_list_text">Sites (root domains)</label>
@@ -200,7 +213,12 @@ render_header('Extracting · ' . $country, 'team');
       </p>
       <p class="muted" style="margin:0.35rem 0 0">
         <span id="sites_footer_count"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
-        <span id="sites_autosave_label" class="help" style="margin-left:0.5rem"></span>
+        <span id="sites_autosave_label" class="help" style="margin-left:0.5rem"><?php
+            $wName = trim((string) (($batch['sites_writer_name'] ?? '') !== ''
+                ? $batch['sites_writer_name']
+                : ($batch['sites_writer_username'] ?? '')));
+            echo h(last_writer_label($wName, (string) ($batch['sites_writer_at'] ?? '')));
+        ?></span>
       </p>
       <p class="help sites-list-status" id="sites_list_status" hidden></p>
     </div>

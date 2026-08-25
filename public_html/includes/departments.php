@@ -212,11 +212,11 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_semrush_sheet';
             } elseif ($slug === 'email_extracting') {
                 $pages[] = 'team_sites_emails';
-                $pages[] = 'team_admin_emails_delete';
+                $pages[] = 'team_admin_emails_search';
             } elseif ($slug === 'communication') {
                 $pages[] = 'team_email_campaigns';
                 $pages[] = 'team_email_campaigns_drafts';
-                $pages[] = 'team_admin_emails_delete';
+                $pages[] = 'team_admin_emails_search';
             }
         }
     } catch (Throwable $e) {
@@ -236,6 +236,9 @@ function team_page_unlocked(array $user, string $page): bool
     }
     if (($user['role'] ?? '') !== 'team') {
         return false;
+    }
+    if ($page === 'team_admin_emails_delete') {
+        $page = 'team_admin_emails_search';
     }
     $core = ['team_dashboard', 'team_departments', 'account_password', 'presence_ping', 'login', 'logout'];
     if (team_user_awaits_department($user)) {
