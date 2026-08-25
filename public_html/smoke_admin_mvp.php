@@ -939,6 +939,19 @@ if (!str_contains($invoiceGenerate, 'csrf_field()')) {
 } else {
     ok('invoice_generate csrf_field');
 }
+$invoicesListCsrf = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$invoiceViewCsrf = file_get_contents($root . '/pages/admin/invoice_view.php') ?: '';
+if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
+    || !str_contains($invoicesListCsrf, "value=\"save_note\"")
+    || !str_contains($invoicesListCsrf, "value=\"mark_paid\"")
+    || !str_contains($invoicesListCsrf, "value=\"delete\"")
+    || !str_contains($invoiceViewCsrf, 'csrf_field()')
+    || !str_contains($invoiceViewCsrf, "value=\"save_blank\"")
+    || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")) {
+    fail('Invoice list/view POST forms missing csrf_field');
+} else {
+    ok('Invoice list/view csrf_field on POST forms');
+}
 
 $adminDepts = file_get_contents($root . '/pages/admin/departments.php') ?: '';
 if (!str_contains($adminDepts, 'csrf_field()')) {
