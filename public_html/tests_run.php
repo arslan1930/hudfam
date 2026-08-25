@@ -3553,6 +3553,55 @@ try {
         remove_department_member((int) $dept['id'], $uidMine);
     }
 
+    $finderId = (int) db()->query("SELECT id FROM users WHERE username='finder'")->fetchColumn();
+    $extractorId = (int) db()->query("SELECT id FROM users WHERE username='extractor'")->fetchColumn();
+    if ($finderId > 0 && $extractorId > 0 && $dept) {
+        $named = save_department_task(
+            (int) $dept['id'],
+            'ACL named extractor',
+            '',
+            'open',
+            $extractorId,
+            null,
+            $adminUser,
+            null
+        );
+        $openDept = save_department_task(
+            (int) $dept['id'],
+            'ACL whole dept',
+            '',
+            'open',
+            null,
+            null,
+            $adminUser,
+            null
+        );
+        $namedRow = get_department_task((int) ($named['id'] ?? 0));
+        $openRow = get_department_task((int) ($openDept['id'] ?? 0));
+        $finderU = ['id' => $finderId, 'role' => 'team', 'username' => 'finder'];
+        $extractorU = ['id' => $extractorId, 'role' => 'team', 'username' => 'extractor'];
+        $okNamed = $namedRow
+            && team_can_set_department_task_status($extractorU, $namedRow)
+            && !team_can_set_department_task_status($finderU, $namedRow)
+            && team_can_set_department_task_status($adminUser, $namedRow);
+        $okWhole = $openRow
+            && team_can_set_department_task_status($finderU, $openRow)
+            && team_can_set_department_task_status($extractorU, $openRow);
+        if ($okNamed && $okWhole) {
+            pass('assignee cannot change someone else task status');
+        } else {
+            fail('task status ACL unexpected');
+        }
+        if (!empty($named['id'])) {
+            delete_department_task((int) $named['id']);
+        }
+        if (!empty($openDept['id'])) {
+            delete_department_task((int) $openDept['id']);
+        }
+    } else {
+        fail('task status ACL missing finder/extractor');
+    }
+
     $dash = departments_dashboard_stats();
     if (isset($dash['departments'], $dash['members'], $dash['open_tasks'], $dash['unassigned_team'])) {
         pass('departments dashboard stats');

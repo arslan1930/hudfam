@@ -50,6 +50,16 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'Task not found.');
             redirect($back);
         }
+        if (!team_can_set_department_task_status($user, $task)) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'error' => 'Only the assignee can update this task.']);
+                exit;
+            }
+            flash('error', 'Only the assignee can update this task.');
+            redirect($back);
+        }
         $updated = update_department_task_status($taskId, $status);
         if (!$updated) {
             if ($wantsJson) {
@@ -413,6 +423,7 @@ render_breadcrumbs([
           $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
           $overdue = department_task_is_overdue($t);
           $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
+          $canSetStatus = team_can_set_department_task_status($user, $t);
           ?>
         <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?> data-due="<?= h((string) ($t['due_date'] ?? '')) ?>">
           <td>
@@ -425,6 +436,7 @@ render_breadcrumbs([
           </td>
           <td><?= h($assignee !== '' ? $assignee : 'Whole department') ?></td>
           <td>
+            <?php if ($canSetStatus): ?>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form" data-stay-ajax>
               <?= csrf_field() ?>
@@ -436,6 +448,9 @@ render_breadcrumbs([
                 <?php endforeach; ?>
               </select>
             </form>
+            <?php else: ?>
+              <?= h(department_task_status_label((string) $t['status'])) ?>
+            <?php endif; ?>
           </td>
           <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
         </tr>

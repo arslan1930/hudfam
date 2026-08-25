@@ -1099,6 +1099,12 @@ if (!str_contains($teamDepts, 'csrf_field()')) {
 } else {
     ok('team departments csrf_field');
 }
+if (!str_contains($teamDepts, 'team_can_set_department_task_status')
+    || !str_contains($teamDepts, 'Only the assignee can update this task')) {
+    fail('team departments missing assignee status ACL');
+} else {
+    ok('team departments assignee status ACL');
+}
 if (!str_contains($teamDepts, "'mine' => 'Mine'")) {
     fail('team departments missing Mine filter');
 } else {
@@ -1276,6 +1282,7 @@ foreach ([
     'department overdue status filter',
     'department_stats overdue_count',
     'departments dashboard stats',
+    'assignee cannot change someone else task status',
     'prospect_site_rows_html has no Status column',
     'edit keeps historical assignee after remove',
 ] as $needle) {
@@ -1299,6 +1306,7 @@ if (!str_contains($deptLib, 'function team_page_unlocked')) {
     ok('team_page_unlocked helper');
 }
 if (!str_contains($deptLib, 'function team_can_clear_semrush_country')
+    || !str_contains($deptLib, 'function team_can_set_department_task_status')
     || !str_contains($deptLib, "team_semrush_research")
     || !str_contains($deptLib, 'Clear country stays with Site Finding')) {
     fail('departments.php missing Extracting Semrush unlock / Clear ACL');

@@ -262,6 +262,20 @@ function team_can_clear_semrush_country(array $user): bool
     return team_page_unlocked($user, 'team_prospect_check');
 }
 
+/** Team may change status on own assigned tasks or unassigned (whole department) tasks. Admin always. */
+function team_can_set_department_task_status(array $user, array $task): bool
+{
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    $assignee = (int) ($task['assigned_to'] ?? 0);
+    $uid = (int) ($user['id'] ?? 0);
+    if ($uid < 1) {
+        return false;
+    }
+    return $assignee < 1 || $assignee === $uid;
+}
+
 /** Short help for Admin department member assignment. */
 function department_tools_help(string $slug): string
 {
