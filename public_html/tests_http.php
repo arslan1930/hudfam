@@ -476,7 +476,9 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'folder=extr
 
 // Mobile nav markup
 $r = req('GET', $base . '/index.php?page=admin_dashboard');
-if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id="app-sidebar"')) {
+if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id="app-sidebar"')
+    && str_contains($r['body'], 'mobile-page-title') && str_contains($r['body'], 'class="app-bar"')
+    && str_contains($r['body'], 'class="app-footer')) {
     pass('mobile nav markup');
 } else {
     fail('mobile nav markup missing');

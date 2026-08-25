@@ -2065,5 +2065,40 @@ if (!str_contains($sweUi, 'data-swe-add-toggle')
     ok('SWE Team/Final inline + Add site');
 }
 
+$invoicesChrome = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$filterAddChrome = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
+if (!str_contains($layoutUiSmoke, 'class="app-bar"')
+    || !str_contains($layoutUiSmoke, 'mobile-page-title')
+    || !str_contains($layoutUiSmoke, 'class="app-footer project-credit"')
+    || !str_contains($layoutUiSmoke, 'teqnowebs.com')) {
+    fail('layout missing app bar / footer chrome');
+} else {
+    ok('layout app bar + Teqnowebs footer');
+}
+if (!str_contains($cssUi, '--grad-btn: linear-gradient(180deg, #374151')
+    || !str_contains($cssUi, 'background: #9ca3af')
+    || !str_contains($cssUi, '.app-bar {')
+    || !str_contains($cssUi, '.app-footer {')) {
+    fail('CSS missing ink commit buttons or app chrome');
+} else {
+    ok('CSS ink commit buttons + app chrome');
+}
+if (!str_contains($teamDash, 'btn secondary') || !str_contains($teamDash, 'My departments')) {
+    fail('team dashboard My departments should be a secondary shortcut');
+} else {
+    ok('team dashboard My departments is secondary');
+}
+if (!str_contains($filterAddChrome, 'btn secondary')
+    || !str_contains($filterAddChrome, 'Semrush Research')) {
+    fail('Filter & add Semrush shortcut should be secondary');
+} else {
+    ok('Filter & add Semrush shortcut is secondary');
+}
+if (str_contains($invoicesChrome, 'btn crystal')) {
+    fail('invoices still uses btn crystal');
+} else {
+    ok('invoices Blank invoice is secondary not crystal');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

@@ -1963,6 +1963,19 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 /* Departments */
 .dept-task-table td { vertical-align: top; }
 .dept-task-table .inline-form { margin: 0; display: inline; }
+.dept-task-table .inline-form select,
+.inline-form select[name="status"] {
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  min-height: 2.05rem;
+  max-width: 100%;
+}
 .dept-task-mine td { background: #f7faf7; }
 .dept-task-overdue td { background: #fdf2f2; }
 .dept-due-overdue { color: var(--bad); font-weight: 650; }
@@ -2495,8 +2508,8 @@ tr.swe-row-updated {
   text-decoration: none;
 }
 .folder:hover {
-  border-color: #9ca3af;
-  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.1);
+  border-color: #6b7280;
+  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.12);
   text-decoration: none;
 }
 
@@ -4144,6 +4157,11 @@ a.card.stat:focus-visible {
   .sidebar .nav-hint { display: none; }
   .main { padding: 1rem 0.9rem 2rem; }
   .app-bar { display: none; }
+  .app-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
   .form-grid { grid-template-columns: 1fr; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 0.15rem; }
   .panel-guide-grid { grid-template-columns: 1fr; }
