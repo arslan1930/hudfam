@@ -4560,6 +4560,16 @@ textarea:focus-visible {
   .swe-sheet-table.is-dense tbody td {
     padding: 0.2rem 0.5rem;
     white-space: nowrap;
+    min-width: 0;
+  }
+  .swe-sheet-table.is-dense .swe-td-actions {
+    overflow: visible;
+  }
+  .swe-sheet-table.is-dense .swe-email-field,
+  .swe-sheet-table.is-dense .swe-email-field input {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .swe-sheet-table.is-dense .swe-col-site {
     min-width: 12rem;
@@ -4662,7 +4672,7 @@ textarea:focus-visible {
   align-items: center;
   border-radius: 8px;
 }
-.main.is-sheet-app > .alert-box .alert-title {
+.main.is-sheet-app > .alert-box.alert-ok .alert-title {
   display: none;
 }
 .main.is-sheet-app > .alert-box .alert-text {

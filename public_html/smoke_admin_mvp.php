@@ -1498,7 +1498,7 @@ if (!str_contains($sweUi, 'is-dense')
     || !str_contains($helpersSmoke, 'function render_sheet_checkpoint_compact')
     || !str_contains($cssUi, '.swe-sheet-table.is-dense tbody td')
     || !str_contains($cssUi, '@media (min-width: 900px)')
-    || !str_contains($cssUi, '.main.is-sheet-app > .alert-box')
+    || !str_contains($cssUi, '.main.is-sheet-app > .alert-box.alert-ok .alert-title')
     || !str_contains($layoutUiSmoke, 'is-sheet-app')
     || !str_contains($sweUi, "'Undo' : 'Emailed'")
     || !str_contains($campUi, "'Undo' : 'Emailed'")) {
