@@ -3,6 +3,7 @@ $user = require_admin();
 ensure_invoice_schema();
 
 $clients = list_order_clients();
+$useClientTypeahead = count($clients) >= invoice_generate_client_typeahead_min();
 $clientId = (int) (get('client_id') ?: post('client_id'));
 $client = $clientId > 0 ? get_order_client($clientId) : null;
 $profile = $client ? get_invoice_client_profile($clientId) : null;
@@ -93,20 +94,24 @@ render_header('Generate invoice', 'admin');
   </div>
 </div>
 
-<form method="get" class="card invoice-pick-client" action="index.php">
+<form method="get" class="card invoice-pick-client" action="index.php" data-no-draft>
   <input type="hidden" name="page" value="admin_invoice_generate">
   <label for="client_id">Client sheet</label>
   <div class="invoice-pick-row">
-    <select id="client_id" name="client_id" required onchange="this.form.submit()">
+    <select id="client_id" name="client_id" required onchange="this.form.submit()"
+            <?= $useClientTypeahead ? 'data-searchable' : '' ?>>
       <option value="">Select client…</option>
       <?php foreach ($clients as $c): ?>
         <option value="<?= (int) $c['id'] ?>" <?= $clientId === (int) $c['id'] ? 'selected' : '' ?>>
-          <?= h($c['name']) ?> (<?= (int) $c['completed_count'] ?> completed)
+          <?= h(invoice_generate_client_option_label($c)) ?>
         </option>
       <?php endforeach; ?>
     </select>
     <noscript><button class="btn secondary" type="submit">Load</button></noscript>
   </div>
+  <?php if ($useClientTypeahead): ?>
+    <p class="help">Type to search — options show unpaid LIVE rows (ready to invoice) and completed count.</p>
+  <?php endif; ?>
   <?php if (!$clients): ?>
     <p class="help">No client sheets yet — create one under <a href="index.php?page=admin_orders">Order management</a> first.</p>
   <?php endif; ?>
@@ -255,5 +260,8 @@ render_header('Generate invoice', 'admin');
   });
 })();
 </script>
+<?php endif; ?>
+<?php if ($useClientTypeahead): ?>
+<script src="<?= h(script_asset_url('js/searchable-select.js')) ?>" defer></script>
 <?php endif; ?>
 <?php render_footer('admin'); ?>

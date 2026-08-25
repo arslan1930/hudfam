@@ -978,7 +978,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -990,6 +990,34 @@ if (!str_contains($invoiceGenerate, 'csrf_field()')) {
     fail('invoice_generate missing csrf_field');
 } else {
     ok('invoice_generate csrf_field');
+}
+if (!str_contains($invoiceGenerate, 'invoice_generate_client_option_label')
+    || !str_contains($invoiceGenerate, 'unpaid LIVE')
+    || !str_contains($invoiceGenerate, 'data-searchable')
+    || !str_contains($invoiceGenerate, 'js/searchable-select.js')
+    || !str_contains($invoiceGenerate, 'invoice_generate_client_typeahead_min')) {
+    fail('invoice_generate missing unpaid LIVE options or typeahead');
+} else {
+    ok('invoice_generate unpaid LIVE options + typeahead');
+}
+if (!is_file($root . '/assets/js/searchable-select.js')) {
+    fail('missing assets/js/searchable-select.js');
+} else {
+    ok('file assets/js/searchable-select.js');
+}
+$assetInvGen = file_get_contents($root . '/asset.php') ?: '';
+if (!str_contains($assetInvGen, 'js/searchable-select.js')) {
+    fail('asset.php missing searchable-select.js allowlist');
+} else {
+    ok('asset allowlist js/searchable-select.js');
+}
+$invoicesLibTypeahead = file_get_contents($root . '/includes/invoices.php') ?: '';
+if (!str_contains($invoicesLibTypeahead, 'function invoice_generate_client_option_label')
+    || !str_contains($invoicesLibTypeahead, 'unpaid LIVE')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_generate_client_typeahead_min')) {
+    fail('invoices.php missing generate client option helpers');
+} else {
+    ok('invoice generate client option helpers');
 }
 $invoicesListCsrf = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
 $invoiceViewCsrf = file_get_contents($root . '/pages/admin/invoice_view.php') ?: '';

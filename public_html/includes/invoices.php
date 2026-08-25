@@ -262,6 +262,23 @@ function invoice_list_query(array $opts = []): string
     return 'index.php?' . implode('&', $bits);
 }
 
+/** Native <select> is enough below this many clients; typeahead kicks in at or above. */
+function invoice_generate_client_typeahead_min(): int
+{
+    return 8;
+}
+
+/**
+ * @param array{name?:string,unpaid_live_count?:int|string,completed_count?:int|string} $client
+ */
+function invoice_generate_client_option_label(array $client): string
+{
+    $name = trim((string) ($client['name'] ?? ''));
+    $unpaid = (int) ($client['unpaid_live_count'] ?? 0);
+    $completed = (int) ($client['completed_count'] ?? 0);
+    return $name . ' (' . $unpaid . ' unpaid LIVE · ' . $completed . ' completed)';
+}
+
 /**
  * @return list<array<string,mixed>>
  */

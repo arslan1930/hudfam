@@ -2966,6 +2966,22 @@ try {
     } else {
         fail("unpaid LIVE count=$unpaidN expected 1");
     }
+    $optLabel = invoice_generate_client_option_label([
+        'name' => 'Opt Client',
+        'unpaid_live_count' => $unpaidN,
+        'completed_count' => 3,
+    ]);
+    if (str_contains($optLabel, 'unpaid LIVE') && str_contains($optLabel, (string) $unpaidN)
+        && str_contains($optLabel, 'completed') && str_contains($optLabel, 'Opt Client')) {
+        pass('invoice generate option unpaid LIVE');
+    } else {
+        fail('invoice generate option label missing unpaid LIVE: ' . $optLabel);
+    }
+    if (invoice_generate_client_typeahead_min() >= 8) {
+        pass('invoice generate typeahead min is 8+');
+    } else {
+        fail('invoice generate typeahead min too low');
+    }
     $listed = list_order_clients(['filter' => 'unpaid']);
     $foundUnpaid = false;
     foreach ($listed as $row) {
