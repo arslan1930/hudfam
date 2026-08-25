@@ -41,5 +41,6 @@ render_header('Forgot password');
       · Need to verify email first? Sign in, then open <strong>Account</strong>.
     </p>
   </div>
+  <?php render_project_credit(); ?>
 </div>
 <?php render_footer(); ?>

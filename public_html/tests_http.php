@@ -386,7 +386,9 @@ function login_post(string $base, string $username, string $password): array
 
 // Login page
 $r = req('GET', $base . '/index.php?page=login');
-if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_contains($r['body'], 'name="_csrf"')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_contains($r['body'], 'name="_csrf"')
+    && str_contains($r['body'], 'teqnowebs.com') && str_contains($r['body'], 'Sign in')
+    && !str_contains($r['body'], 'class="app-bar"')) {
     pass('login page');
 } else {
     fail('login page status=' . $r['status'] . ' err=' . $r['error']);
@@ -394,19 +396,22 @@ if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_c
 
 // Public auth routes (Account stack — must not 404)
 $r = req('GET', $base . '/index.php?page=forgot_password');
-if ($r['status'] === 200 && str_contains($r['body'], 'Forgot password')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Forgot password')
+    && str_contains($r['body'], 'teqnowebs.com') && !str_contains($r['body'], 'class="app-bar"')) {
     pass('forgot_password page');
 } else {
     fail('forgot_password status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=reset_password');
-if ($r['status'] === 200 && (str_contains($r['body'], 'Reset') || str_contains($r['body'], 'password'))) {
+if ($r['status'] === 200 && (str_contains($r['body'], 'Reset') || str_contains($r['body'], 'password'))
+    && str_contains($r['body'], 'teqnowebs.com')) {
     pass('reset_password page');
 } else {
     fail('reset_password status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=verify_email');
-if ($r['status'] === 200 && str_contains($r['body'], 'Verify')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Verify')
+    && str_contains($r['body'], 'teqnowebs.com')) {
     pass('verify_email page');
 } else {
     fail('verify_email status=' . $r['status']);
@@ -439,7 +444,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'app-footer'],
         'admin_prospects' => ['Our database', 'Markets'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],

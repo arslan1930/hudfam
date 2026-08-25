@@ -344,9 +344,10 @@ function render_project_credit(): void
         $uname = (string) ($user['username'] ?? '');
     }
     $credit = h($app) . ' is a project of '
-        . '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
+        . '<a href="https://teqnowebs.com" target="_blank" rel="noopener">Teqnowebs</a>';
 
     echo '<footer class="app-footer project-credit">';
+    echo '<div class="app-footer-primary">';
     if ($role !== '') {
         echo '<div class="app-footer-who">';
         echo '<strong>' . h($app) . '</strong>';
@@ -359,6 +360,7 @@ function render_project_credit(): void
         echo '</div>';
     }
     echo '<p class="app-footer-credit">' . $credit . '</p>';
+    echo '</div>';
     if ($role !== '') {
         echo '<p class="app-footer-links">';
         echo '<a href="index.php?page=account_password">Change password</a>';
