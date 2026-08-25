@@ -3008,6 +3008,12 @@ try {
 
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
+    $draftAfterBlank = count_invoices_by_work_status('draft');
+    if ($draftAfterBlank >= 1) {
+        pass('invoice draft count helper');
+    } else {
+        fail("invoice draft count helper got $draftAfterBlank");
+    }
 
     $invTotal = count_invoices();
     $invPage = list_invoices(['limit' => 1, 'offset' => 0]);
@@ -3052,6 +3058,11 @@ try {
             pass('generated invoice id=' . $genId . ' total=' . $genInv['total_amount']);
         } else {
             fail('generated invoice missing/zero');
+        }
+        if (count_invoices_unpaid() >= 1) {
+            pass('invoice unpaid-done count helper');
+        } else {
+            fail('invoice unpaid-done count helper');
         }
         mark_invoice_payment_received($genId);
         $paidRow = db()->prepare('SELECT is_paid FROM order_items WHERE id=?');

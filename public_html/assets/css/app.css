@@ -2957,6 +2957,59 @@ tr.swe-row-updated {
   width: 11rem;
   max-width: 40vw;
 }
+.grid.dashboard-stats {
+  margin-bottom: 1rem;
+}
+.grid.dashboard-stats .card.stat {
+  margin-bottom: 0;
+}
+a.card.stat {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+a.card.stat:hover {
+  border-color: var(--brand-2);
+  text-decoration: none;
+}
+a.card.stat:hover * {
+  text-decoration: none;
+}
+a.card.stat:focus-visible {
+  outline: 2px solid #4b5563;
+  outline-offset: 2px;
+}
+#dashboard-launch-cards {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.dashboard-stat-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.dashboard-attention {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+}
+.dashboard-attention a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+.dashboard-attention a:hover {
+  border-color: var(--brand-2);
+  text-decoration: none;
+}
 .launch-card.sheet-search-hit {
   outline: 2px solid #4b5563;
   outline-offset: 2px;

@@ -1063,7 +1063,9 @@ function count_sites_with_emails(string $scope = 'team'): int
 {
     ensure_sites_with_emails_schema();
     $table = swe_table($scope);
-    return (int) db()->query("SELECT COUNT(*) FROM {$table}")->fetchColumn();
+    return (int) db()->query(
+        "SELECT COUNT(*) FROM {$table} WHERE LEFT(domain, 8) <> '__blank_'"
+    )->fetchColumn();
 }
 
 function count_sites_with_emails_for_country(string $country, string $scope = 'team'): int

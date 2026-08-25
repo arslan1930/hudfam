@@ -568,6 +568,7 @@ $geoSmoke = file_get_contents($root . '/includes/geo.php') ?: '';
 $campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 if (!str_contains($helpersSmoke, 'function table_has_any_row')
     || !str_contains($helpersSmoke, 'function cached_scalar_count')
+    || !str_contains($helpersSmoke, 'function cached_count_result')
     || !str_contains($helpersSmoke, 'function table_has_index')
     || !str_contains($sweLibSmoke, 'table_has_any_row($pdo, \'sites_with_emails_admin\')')
     || !str_contains($campLibSmoke, 'function email_campaign_suggestion_from_row')
@@ -580,7 +581,7 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
     || !str_contains($campSearchJsSmoke, 'fetchSuggest(q); }, 280')
     || !str_contains($campSearchJsSmoke, 'q.length < 3')
     || !str_contains($navJsSmoke, "addEventListener('change'")
-    || !str_contains($dashSmoke, 'cached_scalar_count')
+    || !str_contains($dashSmoke, 'cached_count_result')
     || !str_contains($geoSmoke, 'SELECT 1 FROM countries LIMIT 1')
     || !str_contains($sweJsSmoke, "behavior: 'auto'")) {
     fail('sitewide smoothness missing LIMIT 1 schema / prefix campaign search / debounce / hidden presence');
@@ -727,6 +728,8 @@ ok('orders helpers for OM-1–4');
 $invoicesLib = file_get_contents($root . '/includes/invoices.php') ?: '';
 if (!str_contains($invoicesLib, 'function count_invoices')
     || !str_contains($invoicesLib, 'function invoices_where_sql')
+    || !str_contains($invoicesLib, 'function count_invoices_by_work_status')
+    || !str_contains($invoicesLib, 'function count_invoices_unpaid')
     || !str_contains($invoicesLib, 'LIMIT ')) {
     fail('invoices.php missing SQL paging helpers');
 } else {
@@ -734,7 +737,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -820,6 +823,47 @@ if (!str_contains($dashPage, 'departments_dashboard_stats')
     fail('dashboard missing departments live stats');
 } else {
     ok('dashboard departments live stats');
+}
+if (str_contains($dashPage, 'each country has its own URL database')
+    || str_contains($dashPage, 'Site adding history days')
+    || !str_contains($dashPage, 'Filter this page')
+    || !str_contains($dashPage, 'index.php?page=admin_users')
+    || !str_contains($dashPage, 'has-admin-new')
+    || !str_contains($dashPage, "admin_new_badge_html('emails_admin'")
+    || !str_contains($dashPage, 'table-wrap')
+    || !str_contains($dashPage, 'admin_prospect_batches">See all')
+    || !str_contains($dashPage, 'id="dashboard-recent-card"')
+    || !str_contains($dashPage, 'recentCard.hidden')) {
+    fail('dashboard missing chrome: Users card, Emails New, recent-adds wrap, copy');
+} else {
+    ok('dashboard chrome: Users, Emails New, recent wrap, copy');
+}
+if (!str_contains($dashPage, 'data-dashboard-attention')
+    || !str_contains($dashPage, 'count_sites_with_emails')
+    || !str_contains($dashPage, 'count_email_campaign_sheets')
+    || !str_contains($dashPage, 'count_invoices_by_work_status')
+    || !str_contains($dashPage, 'count_invoices_unpaid')
+    || !str_contains($dashPage, 'draft invoice')) {
+    fail('dashboard missing attention strip / email / invoice counts');
+} else {
+    ok('dashboard attention strip and email/invoice counts');
+}
+if (!str_contains($dashPage, 'Emails Admin')
+    || !str_contains($dashPage, 'URLs (all countries)')
+    || !str_contains($dashPage, 'Could not load')
+    || !str_contains($dashPage, 'render_admin_dashboard_stat')
+    || !str_contains($dashPage, 'Unpaid LIVE')
+    || !str_contains($dashPage, 'Unpaid invoices')) {
+    fail('dashboard stats tiles missing pipeline labels');
+} else {
+    ok('dashboard stats match pipeline');
+}
+if (!str_contains($dashPage, 'render_workflow')
+    || !str_contains($dashPage, "'Extracted Sites'")
+    || !str_contains($dashPage, "'Emails data'")) {
+    fail('dashboard missing workflow strip');
+} else {
+    ok('dashboard workflow strip');
 }
 
 $legacyTasks = file_get_contents($root . '/pages/admin/tasks.php') ?: '';
@@ -1121,6 +1165,7 @@ if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
     ok('email-campaign-drafts.js Copy plain + tokens');
 }
 if (!str_contains($campLib, 'function count_email_campaign_drafts_by_projects')
+    || !str_contains($campLib, 'function count_email_campaign_sheets')
     || !str_contains($campLib, 'function move_email_campaign_draft')
     || !str_contains($campLib, 'function email_campaign_draft_size_warning')
     || !str_contains($campLib, '%%CAMPLINK')
