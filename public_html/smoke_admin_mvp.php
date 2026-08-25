@@ -241,6 +241,32 @@ if (!str_contains($ordersHubGuide, 'guide_orders()')
 } else {
     ok('Office hubs echo Orders/Invoices/Account guides');
 }
+foreach ([
+    'guide_campaign_search',
+    'guide_campaign_drafts',
+    'guide_admin_emails_search',
+    'guide_semrush_team',
+    'guide_team_departments',
+] as $fn) {
+    if (!str_contains($guidesLib, "function {$fn}")) {
+        fail("guides.php missing {$fn}");
+    }
+}
+ok('Team hub page-purpose guide functions');
+$teamCampHub = file_get_contents($root . '/pages/team/email_campaigns.php') ?: '';
+$teamDraftsHub = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
+$teamAdminEmailsHub = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
+$teamSemrushHubGuide = file_get_contents($root . '/pages/team/semrush_research.php') ?: '';
+$teamDeptsHub = file_get_contents($root . '/pages/team/departments.php') ?: '';
+if (!str_contains($teamCampHub, 'guide_campaign_search()')
+    || !str_contains($teamDraftsHub, 'guide_campaign_drafts()')
+    || !str_contains($teamAdminEmailsHub, 'guide_admin_emails_search()')
+    || !str_contains($teamSemrushHubGuide, 'guide_semrush_team()')
+    || !str_contains($teamDeptsHub, 'guide_team_departments()')) {
+    fail('Team hubs missing page-purpose guide calls');
+} else {
+    ok('Team hubs echo page-purpose guides');
+}
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 if (!str_contains($deptLib, 'function user_deactivation_residue')) {
     fail('departments missing user_deactivation_residue');
@@ -828,6 +854,16 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
 } else {
     ok('sitewide smoothness: LIMIT 1 schema, prefix campaign search, debounce, hidden presence');
 }
+if (!str_contains($campLibSmoke, 'csrf_field()')
+    || !str_contains($sweLibSmoke, 'csrf_field()')
+    || !str_contains($campLibSmoke, 'JavaScript is required to search and update')
+    || !str_contains($sweLibSmoke, 'JavaScript is required to search and update')
+    || !str_contains($campSearchJsSmoke, 'payload._csrf')
+    || !str_contains($sweDeleteJsSmoke, 'payload._csrf')) {
+    fail('Team super-search cards missing csrf_field / JS _csrf');
+} else {
+    ok('Team super-search csrf_field + JS _csrf');
+}
 $appCssSmoke = file_get_contents($root . '/assets/css/app.css') ?: '';
 $loginSmoke = file_get_contents($root . '/pages/login.php') ?: '';
 $authSmoke = file_get_contents($root . '/includes/auth.php') ?: '';
@@ -1135,6 +1171,11 @@ if (substr_count($teamDash, "render_dashboard_help('team')") < 2
     fail('team dashboard missing How Team works / overdue on assigned tasks');
 } else {
     ok('team dashboard How Team works + overdue');
+}
+if (str_contains($teamDash, 'launch-cards') || str_contains($teamDash, '$todayBatch')) {
+    fail('team dashboard still has dead all-tools launch cards');
+} else {
+    ok('team dashboard dropped dead all-tools branch');
 }
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
