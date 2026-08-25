@@ -272,7 +272,9 @@ function extract_sites_writer_conflict(int $batchId, ?int $actorId, string $clie
     if (strcmp($dbAt, $clientAt) <= 0) {
         return null;
     }
-    $name = trim((string) ($batch['sites_writer_name'] ?: $batch['sites_writer_username'] ?? ''));
+    $name = trim((string) (($batch['sites_writer_name'] ?? '') !== ''
+        ? $batch['sites_writer_name']
+        : ($batch['sites_writer_username'] ?? '')));
     if ($name === '') {
         $name = 'Someone';
     }

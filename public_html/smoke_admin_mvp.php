@@ -657,6 +657,12 @@ if (!str_contains($semrushHubSmoke, 'csrf_field()')
 } else {
     ok('Admin Semrush csrf_field + sheet json_encode confirm');
 }
+if (!str_contains($semrushSheetSmoke, 'semrush_sheet_writer_conflict')
+    || !str_contains($semrushSheetSmoke, 'data-writer-at')) {
+    fail('Admin Semrush sheet missing last-writer conflict check');
+} else {
+    ok('Admin Semrush last-writer conflict');
+}
 if (str_contains($semrushHubSmoke, 'team_semrush_research')
     || str_contains($semrushSheetSmoke, 'semrush_sheet_url($country, false)')) {
     fail('Admin Semrush still links into Team chrome');
