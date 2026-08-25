@@ -340,6 +340,24 @@ try {
     } else {
         fail('prospect_inventory_query q: ' . json_encode($invQ));
     }
+    $rowHtml = prospect_site_rows_html([
+        [
+            'id' => 1,
+            'domain' => 'txf-status-col.example',
+            'url' => '',
+            'language' => 'English',
+            'status' => 'contacting',
+            'added_by_full' => 'Admin',
+            'created_at' => '2026-01-01 00:00:00',
+        ],
+    ]);
+    if (str_contains($rowHtml, 'data-label="Domain"')
+        && !str_contains($rowHtml, 'data-label="Status"')
+        && !str_contains($rowHtml, 'contacting')) {
+        pass('prospect_site_rows_html has no Status column');
+    } else {
+        fail('prospect_site_rows_html still shows Status: ' . $rowHtml);
+    }
     $fnAll = prospect_export_basename($country, '');
     $fnMatch = prospect_export_basename($country, 'txftest');
     if ($fnAll === 'germany-our-database'
@@ -3428,6 +3446,21 @@ try {
             pass('department overdue helper');
         } else {
             fail('department overdue helper failed');
+        }
+        $overdueList = list_department_tasks((int) $dept['id'], 'overdue', $uidMine, '');
+        $overdueIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $overdueList);
+        $overdueFilterOk = !empty($mineTask['id']) && in_array((int) $mineTask['id'], $overdueIds, true)
+            && (empty($wholeTask['id']) || !in_array((int) $wholeTask['id'], $overdueIds, true));
+        if ($overdueFilterOk) {
+            pass('department overdue status filter');
+        } else {
+            fail('department overdue status filter missed past-due open task');
+        }
+        $stOverdue = department_stats((int) $dept['id']);
+        if (isset($stOverdue['overdue_count']) && (int) $stOverdue['overdue_count'] >= 1) {
+            pass('department_stats overdue_count');
+        } else {
+            fail('department_stats overdue_count missing or zero: ' . json_encode($stOverdue));
         }
         if (!empty($mineTask['id'])) {
             delete_department_task((int) $mineTask['id']);

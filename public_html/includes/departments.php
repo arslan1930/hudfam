@@ -419,10 +419,19 @@ function department_stats(int $departmentId): array
     $open->execute([$departmentId]);
     $total = db()->prepare('SELECT COUNT(*) FROM department_tasks WHERE department_id=?');
     $total->execute([$departmentId]);
+    $overdue = db()->prepare(
+        "SELECT COUNT(*) FROM department_tasks
+         WHERE department_id=?
+           AND status IN ('open','in_progress')
+           AND due_date IS NOT NULL
+           AND due_date < CURDATE()"
+    );
+    $overdue->execute([$departmentId]);
     return [
         'member_count' => (int) $members->fetchColumn(),
         'open_tasks' => (int) $open->fetchColumn(),
         'total_tasks' => (int) $total->fetchColumn(),
+        'overdue_count' => (int) $overdue->fetchColumn(),
     ];
 }
 
@@ -462,6 +471,7 @@ function departments_dashboard_stats(): array
 
 /**
  * @param array{status?:string,assignee?:string,for_user_id?:int,q?:string} $opts
+ *        status: ''|open|in_progress|done|overdue
  *        assignee: ''|all|mine|unassigned|whole|assigned
  * @return list<array<string,mixed>>
  */
@@ -475,7 +485,11 @@ function list_department_tasks(
     ensure_departments_schema();
     $where = ['t.department_id = ?'];
     $params = [$departmentId];
-    if ($status !== '' && in_array($status, ['open', 'in_progress', 'done'], true)) {
+    if ($status === 'overdue') {
+        $where[] = "t.status IN ('open','in_progress')
+                    AND t.due_date IS NOT NULL
+                    AND t.due_date < CURDATE()";
+    } elseif ($status !== '' && in_array($status, ['open', 'in_progress', 'done'], true)) {
         $where[] = 't.status = ?';
         $params[] = $status;
     }

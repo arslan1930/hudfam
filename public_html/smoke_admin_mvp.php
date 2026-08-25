@@ -342,6 +342,48 @@ if (!str_contains($prospectsLib, 'function purge_duplicate_prospect_site_rows')
 } else {
     ok('Our database auto-dedupe + fade notice');
 }
+if (!str_contains($adminProspects, 'csrf_field()')) {
+    fail('Admin Our database POST forms missing csrf_field');
+} else {
+    ok('Admin Our database csrf_field on POST forms');
+}
+if (str_contains($adminProspects, '<th>Status</th>')
+    || str_contains($adminProspects, '<label>Status</label>')
+    || str_contains($prospectsLib, 'data-label="Status"')) {
+    fail('Our database still shows leftover CRM Status UI');
+} else {
+    ok('Our database Status filter/column removed from UI');
+}
+if (str_contains($adminProspects, 'id="prospects_per_page"')
+    || str_contains($adminProspects, 'id="prospect-country-filters"')) {
+    fail('Our database still has duplicate Per page / filters card');
+} else {
+    ok('Our database Per page only in pager');
+}
+if (!str_contains($adminProspects, 'data-open-default')
+    || !str_contains($adminProspects, "setMarketOpen(market, market.getAttribute('data-open-default') === '1')")) {
+    fail('Our database market search-clear does not restore default accordion');
+} else {
+    ok('Our database market accordion restores on search clear');
+}
+if (!str_contains($adminProspects, '$superLimit = 200')
+    || !str_contains($adminProspects, 'Showing the first')) {
+    fail('Our database super search missing truncation copy');
+} else {
+    ok('Our database super search truncation copy');
+}
+if (!str_contains($adminProspects, 'id="prospect-site-table"')
+    || !preg_match('/table-wrap[\s\S]*prospect-site-table/', $adminProspects)) {
+    fail('Our database country Sites table missing table-wrap');
+} else {
+    ok('Our database country Sites table-wrap');
+}
+if (str_contains($adminProspects, "'status' => \$status")
+    || str_contains($adminProspects, "'status' => \$status,")) {
+    fail('Our database country page still applies leftover CRM status filter');
+} else {
+    ok('Our database country page ignores leftover status= URL');
+}
 // Policy: Our database country lists stay Admin-only (Team uses Filter & add).
 if (str_contains($teamProspects, 'redirect(')
     && (str_contains($teamProspects, 'Admin-only') || str_contains($teamProspects, 'team_prospect_check'))) {
@@ -783,6 +825,34 @@ if (!str_contains($adminDepts, 'Unassigned') || !str_contains($adminDepts, 'Assi
 } else {
     ok('admin departments assignee filters');
 }
+if (!str_contains($adminDepts, "'overdue' => 'Overdue'")
+    || !str_contains($adminDepts, "\$statusFilter === \$val ? ' active-soft' : ''")) {
+    fail('admin departments missing Overdue status chip');
+} else {
+    ok('admin departments Overdue status chip');
+}
+if (!str_contains($adminDepts, "membership unlocks that department's tools")
+    || !str_contains($adminDepts, 'Open Users')) {
+    fail('admin departments hub missing tools copy / unassigned Users link');
+} else {
+    ok('admin departments hub tools copy + unassigned Users');
+}
+if (!preg_match('/id="members"[\s\S]*table-wrap[\s\S]*<table>/', $adminDepts)) {
+    fail('admin departments members table missing table-wrap');
+} else {
+    ok('admin departments members table-wrap');
+}
+if (!preg_match('/data-due-cell[\s\S]{0,80}<\/td>\s*<td>\s*<form method="post"/', $adminDepts)) {
+    fail('admin departments Delete not wrapped in td');
+} else {
+    ok('admin departments Delete Actions cell');
+}
+if (!str_contains($adminDepts, '<th>Actions</th>')
+    || !str_contains($adminDepts, '$deptFolderUrl()')) {
+    fail('admin departments Actions header / POST forms drop folder filters');
+} else {
+    ok('admin departments Actions header + filter-preserving POST');
+}
 $teamDepts = file_get_contents($root . '/pages/team/departments.php') ?: '';
 if (!str_contains($teamDepts, 'csrf_field()')) {
     fail('team departments missing csrf_field');
@@ -948,7 +1018,10 @@ foreach ([
     'remove member clears open assignee',
     'department assignee filters mine/unassigned',
     'department overdue helper',
+    'department overdue status filter',
+    'department_stats overdue_count',
     'departments dashboard stats',
+    'prospect_site_rows_html has no Status column',
     'edit keeps historical assignee after remove',
 ] as $needle) {
     if (!str_contains($testsFull, $needle)) {

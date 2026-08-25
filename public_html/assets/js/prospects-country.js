@@ -338,6 +338,8 @@
     }
     if (tableEl) {
       tableEl.hidden = !data.has_rows;
+      var wrap = document.getElementById('prospect-site-table-wrap') || tableEl.closest('.table-wrap');
+      if (wrap) wrap.hidden = !data.has_rows;
     }
     if (emptyEl) {
       emptyEl.hidden = !!data.has_rows;

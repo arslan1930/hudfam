@@ -608,13 +608,6 @@ function prospect_site_rows_html(array $rows): string
         echo '<td data-label="Domain"><strong>' . h($domain) . '</strong></td>';
         echo '<td class="help" data-label="URL">' . h($url !== '' ? $url : '—') . '</td>';
         echo '<td data-label="Language">' . h($lang !== '' ? $lang : '—') . '</td>';
-        echo '<td data-label="Status">';
-        if (function_exists('badge')) {
-            echo badge((string) ($s['status'] ?? 'new'));
-        } else {
-            echo h((string) ($s['status'] ?? ''));
-        }
-        echo '</td>';
         echo '<td data-label="Added by">' . h($added !== '' ? $added : '—') . '</td>';
         echo '<td data-label="When">' . h($when) . '</td>';
         echo '</tr>';

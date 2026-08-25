@@ -393,13 +393,15 @@ function render_sheet_edit_toolbar(string $actionUrl, string $historyKey, array 
         echo '<button type="button" class="btn secondary small" data-sheet-select-all title="Select all matching rows on this page" aria-label="Select all matching rows on this page">Select all</button>';
         echo '<button type="button" class="btn secondary small danger" data-sheet-remove-selected disabled title="Remove the selected matching rows">Remove selected</button>';
     }
+    $csrf = function_exists('csrf_field') ? csrf_field() : '';
     echo '<form id="sheet-shared-undo" class="sheet-history-form" method="post" action="' . $url . '" data-sheet-undo-form hidden>'
-        . '<input type="hidden" name="action" value="undo_last">' . $nav . '</form>';
+        . $csrf . '<input type="hidden" name="action" value="undo_last">' . $nav . '</form>';
     echo '<form id="sheet-shared-redo" class="sheet-history-form" method="post" action="' . $url . '" data-sheet-redo-form hidden>'
-        . '<input type="hidden" name="action" value="redo_last">' . $nav . '</form>';
+        . $csrf . '<input type="hidden" name="action" value="redo_last">' . $nav . '</form>';
     if ($showSelect) {
         echo '<form id="sheet-shared-remove-selected" class="sheet-history-form" method="post" action="' . $url
             . '" data-sheet-remove-selected-form hidden>'
+            . $csrf
             . '<input type="hidden" name="action" value="remove_selected">'
             . '<input type="hidden" name="site_ids" value="" data-sheet-site-ids>'
             . $nav . '</form>';
