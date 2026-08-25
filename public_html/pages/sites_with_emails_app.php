@@ -534,6 +534,10 @@ if (!$inCountry) {
           <span class="sheet-search-meta muted" data-swe-country-search-meta hidden></span>
         </label>
       </div>
+      <?php if ($isAdminAll): ?>
+      <p class="help" style="margin:0 0 0.65rem">Archive of Admin. Adding a site on a country sheet also creates the Admin working-list row.</p>
+      <?php endif; ?>
+      <div class="table-wrap">
       <table class="extracted-country-table" id="swe-country-table">
         <thead>
           <tr>
@@ -578,6 +582,7 @@ if (!$inCountry) {
           </tr>
         </tbody>
       </table>
+      </div>
       <?php else: ?>
       <div class="empty-state">
         <?php if ($isTeam): ?>

@@ -182,10 +182,12 @@ if ($folder === '') {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info('Emails data', 'Final email archives from Team Push, plus country Email Sheets for Communication Team search.') ?></h1>
-        <p class="muted">Email archives and campaign sheets for Communication Team.</p>
+        <h1><?= label_with_info('Emails data', 'Three folders: Admin is the working list from Team Push (emailed checkpoint here). Final is an Admin-only archive that keeps copies after emailed/remove. Campaign is separate country sheets with their own emailed marks.') ?></h1>
+        <p class="muted">Admin working list · Final archive · Campaign country sheets.</p>
       </div>
     </div>
+
+    <?= guide_emails_data() ?>
 
     <?php if ($sweTotal < 1 && $allTotal < 1 && $campaignSheetCount < 1): ?>
     <div class="card" style="margin-bottom:1rem">

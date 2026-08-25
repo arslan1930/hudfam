@@ -192,6 +192,12 @@ if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
 } else {
     ok('guide_admin_users updated');
 }
+if (!str_contains($guidesLib, 'function guide_emails_data')
+    || !str_contains($guidesLib, 'Super search on this hub updates Admin only')) {
+    fail('guide_emails_data missing');
+} else {
+    ok('guide_emails_data present');
+}
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 if (!str_contains($deptLib, 'function user_deactivation_residue')) {
     fail('departments missing user_deactivation_residue');
@@ -614,6 +620,12 @@ if (!str_contains($emailsHub, 'render_sites_with_emails_admin_super_search')
 } else {
     ok('emails hub P3 super-search + Final repair report');
 }
+if (!str_contains($emailsHub, 'guide_emails_data()')
+    || !str_contains($emailsHub, 'Three folders: Admin is the working list from Team Push')) {
+    fail('emails hub missing page-purpose guide or folder H1 copy');
+} else {
+    ok('emails hub page-purpose guide + folder H1');
+}
 $sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
 $sweDeleteJsSmoke = file_get_contents($root . '/assets/js/admin-emails-delete.js') ?: '';
 $teamAdminEmailsSmoke = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
@@ -651,6 +663,13 @@ if (substr_count($campAppSmoke, 'csrf_field()') < 21
     fail('Campaign POST forms missing csrf_field');
 } else {
     ok('Campaign csrf_field on POST forms');
+}
+if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
+    || !str_contains($sweAppSmoke, '<div class="table-wrap">')
+    || !str_contains($sweAppSmoke, 'also creates the Admin working-list row')) {
+    fail('SWE country list missing table-wrap or Final add-site copy');
+} else {
+    ok('SWE country list table-wrap + Final add-site copy');
 }
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
     || !str_contains($sweLibSmoke, 'skipped_full_slots')

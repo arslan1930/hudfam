@@ -205,3 +205,17 @@ function guide_admin_users(): string
         []
     );
 }
+
+function guide_emails_data(): string
+{
+    return render_page_purpose(
+        'Emails data — Admin, Final, and Campaign',
+        'Three separate stores. Admin is the working list Team Push fills. Final is an Admin-only archive. Campaign is project country sheets for Communication Team.',
+        'Super search on this hub updates Admin only. Removing the last email deletes the Admin working-list row; Final keeps its archive copy. Repair copies Admin into Final and never deletes archive rows. Campaign emailed marks stay on that project sheet.',
+        [
+            'Admin: working list from Team Push; mark emailed here.',
+            'Final: archive copy of Admin; emailed/remove keeps a copy here. Repair copies Admin → Final. Adding a site here also creates the Admin working-list row.',
+            'Campaign: create a project and country sheets. Communication Team searches the project. Emailed marks are per campaign, not Admin/Final.',
+        ]
+    );
+}
