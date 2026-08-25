@@ -113,14 +113,16 @@ function render_header(string $title, string $panel = ''): void
 
     if ($panel === 'admin') {
         $groups = [
-            'Main' => [
+            'Work' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
                 'admin_semrush_research' => ['Semrush Research', 'Site Finding copy · Extracting Push + optional seed'],
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
-                'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
+                'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign'],
+            ],
+            'Office' => [
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
@@ -183,14 +185,14 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if (!empty($toolSet['team_sites_emails'])) {
                     $groups['Main']['team_sites_emails'] = [
-                        'Sites with emails - Team',
+                        'Team',
                         'Add emails · Push to Admin',
                     ];
                 }
                 if (!empty($toolSet['team_admin_emails_delete'])) {
                     $groups['Main']['team_admin_emails_delete'] = [
-                        'Admin emails search',
-                        'Sites with emails - Admin · all countries',
+                        'Admin search',
+                        'Admin sheet · all countries',
                     ];
                 }
                 if (!empty($toolSet['team_email_campaigns'])) {
@@ -222,9 +224,9 @@ function render_header(string $title, string $panel = ''): void
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
-                    'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
-                    'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
-                    'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
+                    'team_sites_emails' => ['Team', 'Add emails · Push to Admin'],
+                    'team_admin_emails_delete' => ['Admin search', 'Admin sheet · all countries'],
+                    'team_email_campaigns' => ['Campaign search', 'Campaign sheets · all countries'],
                     'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Site adding history', 'Your daily adds'],

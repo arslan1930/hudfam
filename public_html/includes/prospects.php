@@ -601,22 +601,22 @@ function prospect_site_rows_html(array $rows): string
         $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
         $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
         echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '">';
-        echo '<td class="sheet-td-check">';
+        echo '<td class="sheet-td-check" data-label="Select">';
         echo '<label class="sheet-check">';
         echo '<input type="checkbox" data-sheet-row-check value="' . (int) ($s['id'] ?? 0) . '" aria-label="Select ' . h($domain) . '">';
         echo '</label></td>';
-        echo '<td><strong>' . h($domain) . '</strong></td>';
-        echo '<td class="help">' . h($url !== '' ? $url : '—') . '</td>';
-        echo '<td>' . h($lang !== '' ? $lang : '—') . '</td>';
-        echo '<td>';
+        echo '<td data-label="Domain"><strong>' . h($domain) . '</strong></td>';
+        echo '<td class="help" data-label="URL">' . h($url !== '' ? $url : '—') . '</td>';
+        echo '<td data-label="Language">' . h($lang !== '' ? $lang : '—') . '</td>';
+        echo '<td data-label="Status">';
         if (function_exists('badge')) {
             echo badge((string) ($s['status'] ?? 'new'));
         } else {
             echo h((string) ($s['status'] ?? ''));
         }
         echo '</td>';
-        echo '<td>' . h($added !== '' ? $added : '—') . '</td>';
-        echo '<td>' . h($when) . '</td>';
+        echo '<td data-label="Added by">' . h($added !== '' ? $added : '—') . '</td>';
+        echo '<td data-label="When">' . h($when) . '</td>';
         echo '</tr>';
     }
     return (string) ob_get_clean();

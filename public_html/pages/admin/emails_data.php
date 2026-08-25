@@ -192,8 +192,8 @@ if ($folder === '') {
       <div class="empty-state">
         <p>No email data yet.</p>
         <p class="muted">
-          Team fills <strong>Sites with emails - Admin</strong> via Push.
-          You create country sheets under <strong>Email campaign data</strong>.
+          Team fills <strong>Admin</strong> via Push.
+          You create country sheets under <strong>Campaign</strong>.
         </p>
       </div>
     </div>
@@ -222,7 +222,7 @@ if ($folder === '') {
       <div class="folders emails-data-folders">
         <div class="folder-with-info">
           <a class="folder<?= $adminEmailsNew ? ' has-admin-new' : '' ?>" href="<?= h($base) ?>&amp;folder=sites_with_emails">
-            <h3>Sites with emails - Admin<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h3>
+            <h3>Admin<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h3>
             <p class="muted">
               Working list from Team Push · emailed checkpoint here ·
               <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
@@ -237,7 +237,7 @@ if ($folder === '') {
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
-            <h3>All sites with emails - Final</h3>
+            <h3>Final</h3>
             <p class="muted">
               Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove) ·
               <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
@@ -249,7 +249,7 @@ if ($folder === '') {
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
-            <h3>Email campaign data</h3>
+            <h3>Campaign</h3>
             <p class="muted">
               One sheet per country · Communication Team super search ·
               <?= (int) $campaignSheetCount ?> countr<?= $campaignSheetCount === 1 ? 'y' : 'ies' ?>

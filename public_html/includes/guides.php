@@ -156,7 +156,7 @@ function guide_extracting(): string
             'Sites list tools: Copy, Undo, and Redo while you stay on this page.',
             'Paste into Extracting Results → Clean to root domains (Ready vs Needs attention) → Push uses Ready only. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country.',
             'Sites list is filled only with domains that were unique in that country’s Our database after Filter & add (TLD-routed).',
-            'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
+            'Add emails in Team, then Push to Admin. Final keeps archive copies; Campaign sheets are separate.',
         ]
     );
 }

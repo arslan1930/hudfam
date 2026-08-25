@@ -342,9 +342,11 @@ function render_undo_redo_arrow_buttons(string $undoId, string $redoId, string $
 {
     $size = $sizeClass !== '' ? ' ' . $sizeClass : '';
     echo '<button type="button" class="btn secondary sheet-history-btn' . h($size) . '" id="' . h($undoId)
-        . '" disabled title="Undo" aria-label="Undo">' . ui_icon_undo() . '</button>';
+        . '" disabled title="Undo" aria-label="Undo">' . ui_icon_undo()
+        . '<span class="sheet-history-text">Undo</span></button>';
     echo '<button type="button" class="btn secondary sheet-history-btn' . h($size) . '" id="' . h($redoId)
-        . '" disabled title="Redo" aria-label="Redo">' . ui_icon_redo() . '</button>';
+        . '" disabled title="Redo" aria-label="Redo">' . ui_icon_redo()
+        . '<span class="sheet-history-text">Redo</span></button>';
 }
 
 /**
@@ -381,10 +383,12 @@ function render_sheet_edit_toolbar(string $actionUrl, string $historyKey, array 
     echo '<div class="sheet-edit-toolbar" data-sheet-select-root data-sheet-history-key="' . h($historyKey) . '">';
     echo '<button type="button" class="btn secondary small sheet-history-btn" data-sheet-undo'
         . ($canUndo ? '' : ' disabled')
-        . ' title="Undo last change" aria-label="Undo last change">' . ui_icon_undo() . '</button>';
+        . ' title="Undo last change" aria-label="Undo last change">' . ui_icon_undo()
+        . '<span class="sheet-history-text">Undo</span></button>';
     echo '<button type="button" class="btn secondary small sheet-history-btn" data-sheet-redo'
         . ($canRedo ? '' : ' disabled')
-        . ' title="Redo last change" aria-label="Redo last change">' . ui_icon_redo() . '</button>';
+        . ' title="Redo last change" aria-label="Redo last change">' . ui_icon_redo()
+        . '<span class="sheet-history-text">Redo</span></button>';
     if ($showSelect) {
         echo '<button type="button" class="btn secondary small" data-sheet-select-all title="Select all matching rows on this page" aria-label="Select all matching rows on this page">Select all</button>';
         echo '<button type="button" class="btn secondary small danger" data-sheet-remove-selected disabled title="Remove the selected matching rows">Remove selected</button>';
@@ -414,8 +418,34 @@ function render_sheet_select_th(): void
 function render_sheet_select_td(int $siteId, string $domain = ''): void
 {
     $label = $domain !== '' ? 'Select ' . $domain : 'Select row';
-    echo '<td class="swe-td-check sheet-td-check">'
+    echo '<td class="swe-td-check sheet-td-check" data-label="Select">'
         . '<label class="sheet-check">'
         . '<input type="checkbox" data-sheet-row-check value="' . (int) $siteId . '" aria-label="' . h($label) . '">'
         . '</label></td>';
+}
+
+function render_sheet_tool_menu_open(string $label, string $aria = ''): void
+{
+    $aria = $aria !== '' ? $aria : $label;
+    echo '<details class="sheet-tool-menu">';
+    echo '<summary class="btn secondary sheet-tool-menu-summary">' . h($label) . '</summary>';
+    echo '<div class="sheet-tool-menu-panel" role="group" aria-label="' . h($aria) . '">';
+}
+
+function render_sheet_tool_menu_close(): void
+{
+    echo '</div></details>';
+}
+
+function render_sheet_row_more_open(): void
+{
+    echo '<details class="sheet-row-more">';
+    echo '<summary class="btn secondary small sheet-row-more-btn" title="More actions" aria-label="More actions">';
+    echo '<span aria-hidden="true">⋮</span></summary>';
+    echo '<div class="sheet-row-more-panel">';
+}
+
+function render_sheet_row_more_close(): void
+{
+    echo '</div></details>';
 }

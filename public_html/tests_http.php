@@ -442,7 +442,7 @@ foreach (
         'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data'],
         'admin_prospects' => ['Our database', 'Markets'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
-        'admin_emails_data' => ['Emails data', 'Sites with emails - Admin'],
+        'admin_emails_data' => ['Emails data', 'Working list from Team Push'],
         'admin_departments' => ['Departments', 'Site Finding'],
         'admin_orders' => ['Order'],
         'admin_invoices' => ['Invoice'],

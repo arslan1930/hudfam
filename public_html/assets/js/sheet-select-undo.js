@@ -307,6 +307,23 @@
     }
   };
 
+  document.addEventListener('toggle', function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.open) return;
+    if (!el.classList.contains('sheet-row-more') && !el.classList.contains('sheet-tool-menu')) return;
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      if (d !== el) d.open = false;
+    });
+  }, true);
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('details.sheet-row-more, details.sheet-tool-menu')) return;
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      d.open = false;
+    });
+  });
+
   document.addEventListener('hf-sheet-rows-changed', function () {
     syncRemoveButton();
   });

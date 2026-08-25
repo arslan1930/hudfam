@@ -863,7 +863,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     ?>
     <?php endif; ?>
   </div>
-  <table id="prospect-site-table"<?= $rows ? '' : ' hidden' ?>>
+  <table id="prospect-site-table" class="sheet-cards-mobile"<?= $rows ? '' : ' hidden' ?>>
     <thead><tr>
       <th class="sheet-col-check" scope="col">
         <label class="sheet-check sheet-check-all">
@@ -877,13 +877,13 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     </tbody>
   </table>
   <div id="prospect-site-empty" class="empty-state"<?= $rows ? ' hidden' : '' ?>>
-    <p data-prospect-empty-text><?= $q !== '' ? 'No sites in this country match your search.' : 'No sites in this country yet.' ?></p>
+    <p data-prospect-empty-text><?= $q !== '' ? 'No search matches in this country.' : 'No sites in this country yet.' ?></p>
     <?php if (!$emptyCountry && $q === ''): ?>
       <a class="btn" href="#add-sites" data-prospect-empty-add>Add sites above</a>
     <?php endif; ?>
   </div>
   <div id="prospect-site-pager"<?= !$rows ? ' hidden' : '' ?>>
-    <p class="help sheet-search-empty" data-prospect-site-search-empty hidden>No sites on this page match (server search returned this page).</p>
+    <p class="help sheet-search-empty" data-prospect-site-search-empty hidden>No search matches on this page.</p>
     <div class="actions" style="margin-top:0.8rem;align-items:center;gap:0.65rem;flex-wrap:wrap">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <span data-prospect-page-label>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>

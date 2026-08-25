@@ -29,9 +29,9 @@ function swe_table(string $scope): string
 function swe_label(string $scope): string
 {
     return match (swe_normalize_scope($scope)) {
-        'admin' => 'Sites with emails - Admin',
-        'admin_all' => 'All sites with emails - Final',
-        default => 'Sites with emails - Team',
+        'admin' => 'Admin',
+        'admin_all' => 'Final',
+        default => 'Team',
     };
 }
 

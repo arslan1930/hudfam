@@ -565,7 +565,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   </div>
   <?php else: ?>
   <div class="empty-state">
-    <p>No URLs<?= $q !== '' ? ' match this search' : ' in this country yet' ?>.</p>
+    <p><?= $q !== '' ? 'No search matches.' : 'No URLs in this country yet.' ?></p>
     <a class="btn secondary" href="<?= h($sitesListUrl) ?>">Back to countries</a>
   </div>
   <?php endif; ?>

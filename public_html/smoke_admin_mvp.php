@@ -1460,5 +1460,48 @@ if (!str_contains($assetFull, 'js/sheet-select-undo.js')) {
     ok('asset allowlist sheet-select-undo.js');
 }
 
+$layoutUiSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
+$sheetHistUi = file_get_contents($root . '/includes/sheet_history.php') ?: '';
+$sweUi = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+$campUi = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
+$cssUi = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($layoutUiSmoke, "'Work' =>")
+    || !str_contains($layoutUiSmoke, "'Office' =>")
+    || !str_contains($layoutUiSmoke, "'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign']")) {
+    fail('Admin sidebar missing Work vs Office groups');
+} else {
+    ok('Admin sidebar Work vs Office');
+}
+if (!str_contains($sheetHistUi, 'sheet-history-text')
+    || !str_contains($sheetHistUi, '>Undo</span>')
+    || !str_contains($sheetHistUi, 'function render_sheet_row_more_open')
+    || !str_contains($sheetHistUi, 'function render_sheet_tool_menu_open')) {
+    fail('sheet toolbar missing visible Undo/Redo or row/tool menus');
+} else {
+    ok('sheet Undo/Redo labels + menus');
+}
+if (!str_contains($sweUi, 'Copy / Open')
+    || !str_contains($sweUi, 'render_sheet_row_more_open')
+    || !str_contains($sweUi, 'sheet-cards-mobile')
+    || !str_contains($campUi, 'render_sheet_tool_menu_open')
+    || !str_contains($campUi, 'sheet-cards-mobile')) {
+    fail('SWE/campaign missing Copy/Open menu, row ⋮, or mobile cards');
+} else {
+    ok('Copy/Open menu + row more + mobile cards');
+}
+if (!str_contains($cssUi, '@media (max-width: 899px)')
+    || !str_contains($cssUi, 'table.sheet-cards-mobile tr')
+    || !str_contains($cssUi, 'content: attr(data-label)')) {
+    fail('CSS missing stacked sheet cards under 900px');
+} else {
+    ok('mobile stacked sheet cards CSS');
+}
+if (!str_contains($sweUi, 'No search matches on this page')
+    || !str_contains($campUi, 'No search matches on this page')) {
+    fail('sheets missing no-search-matches empty copy');
+} else {
+    ok('empty search matches copy');
+}
+
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
