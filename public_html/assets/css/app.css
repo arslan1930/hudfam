@@ -442,7 +442,7 @@ summary:focus-visible {
   text-transform: uppercase;
   color: #7fa3ae;
 }
-.main { padding: 1.25rem 1.5rem 2.5rem; }
+.main { padding: 1.25rem 1.5rem 2.5rem; display: flex; flex-direction: column; min-height: 100vh; }
 .app-bar {
   display: flex;
   align-items: center;
@@ -503,15 +503,65 @@ summary:focus-visible {
 .app-bar-logout {
   color: var(--brand-deep) !important;
 }
-.project-credit {
+.project-credit,
+.app-footer {
   margin: 2rem 0 0;
-  padding-top: 1rem;
+  padding: 1rem 0 0.2rem;
   border-top: 1px solid var(--line, #e5e7eb);
   font-size: 0.86rem;
-  color: var(--muted, #6b7280);
-  text-align: center;
+  color: #4b5563;
+  text-align: left;
   line-height: 1.4;
 }
+.app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1.25rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+.app-footer-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: #4b5563;
+}
+.app-footer-who strong {
+  color: var(--brand-deep);
+  font-weight: 700;
+}
+.app-footer-sep { opacity: 0.45; }
+.app-footer-credit {
+  margin: 0;
+}
+.app-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin: 0;
+}
+.app-footer a,
+.project-credit a {
+  color: var(--brand-deep, #1f2937);
+  font-weight: 600;
+  text-decoration: none;
+}
+.app-footer a:hover,
+.project-credit a:hover { text-decoration: underline; }
+.login-wrap .project-credit,
+.login-wrap .app-footer {
+  margin-top: 1.25rem;
+  border-top: none;
+  padding-top: 0;
+  color: #4b5563;
+  justify-content: center;
+  text-align: center;
+}
+.login-wrap .project-credit a,
+.login-wrap .app-footer a { color: #1f2937; }
 .draft-status {
   margin: 0 0 0.75rem;
   padding: 0.45rem 0.7rem;

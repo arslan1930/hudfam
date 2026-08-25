@@ -324,7 +324,7 @@ function render_footer(string $panel = ''): void
     echo '</body></html>';
 }
 
-/** Footer credit: TechxForm is a project of Teqnowebs. */
+/** Footer: identity + Teqnowebs credit. */
 function render_project_credit(): void
 {
     $app = 'TechxForm';
@@ -336,8 +336,34 @@ function render_project_credit(): void
     if ($app === '') {
         $app = 'TechxForm';
     }
-    echo '<p class="project-credit">';
-    echo h($app) . ' is a project of ';
-    echo '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
-    echo '</p>';
+    $user = current_user();
+    $role = '';
+    $uname = '';
+    if (is_array($user)) {
+        $role = (($user['role'] ?? '') === 'admin') ? 'Admin' : 'Team';
+        $uname = (string) ($user['username'] ?? '');
+    }
+    $credit = h($app) . ' is a project of '
+        . '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
+
+    echo '<footer class="app-footer project-credit">';
+    if ($role !== '') {
+        echo '<div class="app-footer-who">';
+        echo '<strong>' . h($app) . '</strong>';
+        echo '<span class="app-footer-sep" aria-hidden="true">·</span>';
+        echo '<span>' . h($role) . '</span>';
+        if ($uname !== '') {
+            echo '<span class="app-footer-sep" aria-hidden="true">·</span>';
+            echo '<span>' . h($uname) . '</span>';
+        }
+        echo '</div>';
+    }
+    echo '<p class="app-footer-credit">' . $credit . '</p>';
+    if ($role !== '') {
+        echo '<p class="app-footer-links">';
+        echo '<a href="index.php?page=account_password">Change password</a>';
+        echo '<a href="index.php?page=logout">Logout</a>';
+        echo '</p>';
+    }
+    echo '</footer>';
 }
