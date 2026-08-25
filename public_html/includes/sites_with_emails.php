@@ -2202,6 +2202,8 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
        data-swe-admin-delete
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
+    <?= csrf_field() ?>
+    <noscript><p class="help muted">JavaScript is required to search and update these results.</p></noscript>
     <h2 style="margin-top:0"><?= label_with_info('Admin emails search', 'Type a site or email across all countries in Sites with emails - Admin. Choose delete both or remove only email, then Enter + confirm. If you remove the last email on a site, the Admin working-list row is deleted. Final keeps its archive copy.') ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= (int) $countries ?> countr<?= (int) $countries === 1 ? 'y' : 'ies' ?> ·

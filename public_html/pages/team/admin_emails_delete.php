@@ -131,6 +131,7 @@ render_breadcrumbs([
     <?php endif; ?>
   </div>
 </div>
+<?= guide_admin_emails_search() ?>
 <?php
 render_sites_with_emails_admin_super_search($base);
 render_footer('team');

@@ -29,6 +29,7 @@ if ($awaitsDept) {
         <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
       </p>
     </div>
+    <?php render_dashboard_help('team'); ?>
     <?php
     render_footer('team');
     return;
@@ -48,6 +49,8 @@ if ($deptScoped) {
       </div>
       <a class="btn" href="index.php?page=team_departments">My departments</a>
     </div>
+
+    <?php render_dashboard_help('team'); ?>
 
     <div class="card">
       <h2>Open tasks</h2>
@@ -71,18 +74,21 @@ if ($deptScoped) {
             <tbody>
             <?php foreach ($myTasks as $t):
                 $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
+                $overdue = department_task_is_overdue($t);
+                $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
                 ?>
-              <tr class="<?= $mine ? 'dept-task-mine' : '' ?>">
+              <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>>
                 <td><?= h((string) $t['department_name']) ?></td>
                 <td>
                   <strong><?= h((string) $t['title']) ?></strong>
                   <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+                  <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
                   <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
                     <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
                   <?php endif; ?>
                 </td>
                 <td><?= h(department_task_status_label((string) $t['status'])) ?></td>
-                <td class="muted"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+                <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
                 <td>
                   <a href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
                 </td>
@@ -103,7 +109,7 @@ if ($deptScoped) {
         $toolCards[] = ['team_prospect_batches', 'Site adding history', 'Your daily adds'];
     }
     if (!empty($toolSet['team_semrush_research'])) {
-        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, clear country'];
+        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, comment'];
     }
     if (!empty($toolSet['team_extracting'])) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
@@ -155,78 +161,23 @@ if ($deptScoped) {
     return;
 }
 
-$todayBatch = null;
-$extractCount = 0;
-try {
-    $tb = db()->prepare(
-        'SELECT * FROM prospect_batches WHERE user_id=? AND batch_date=CURDATE() LIMIT 1'
-    );
-    $tb->execute([$uid]);
-    $todayBatch = $tb->fetch() ?: null;
-} catch (Throwable $e) {
-    $todayBatch = null;
-}
-try {
-    $extractCount = count_extract_batches();
-} catch (Throwable $e) {
-    $extractCount = 0;
-}
-
+// Admin viewing Team: every Team user is either waiting or assigned.
 render_header('Dashboard', 'team');
 ?>
 <div class="topbar">
   <div>
     <h1>Team dashboard</h1>
-    <p class="muted">Filter new sites against a country database, then add only the unique ones. Existing country lists stay private.</p>
+    <p class="muted">
+      You are signed in as Admin. Team members see assigned work here after you add them to a department.
+      Our database country lists stay private to Admin.
+    </p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_semrush_research">Semrush Research</a>
-    <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+    <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
+    <a class="btn" href="index.php?page=admin_dashboard">Admin dashboard</a>
   </div>
 </div>
-
 <?php render_dashboard_help('team'); ?>
+<?php
+render_footer('team');
 
-<div class="launch-cards">
-  <a class="launch-card" href="index.php?page=team_prospect_check">
-    <h2>Filter &amp; add</h2>
-    <p>Filter against the country database, then add only new unique sites.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_semrush_research">
-    <h2>Semrush Research</h2>
-    <p>From Extracting Results Push · edit, comment, clear country.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_extracting">
-    <h2>Extracting sites</h2>
-    <p><?= $extractCount > 0 ? $extractCount . ' country batch' . ($extractCount === 1 ? '' : 'es') . ' ready' : 'Waiting for sites from the team mate' ?></p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_sites_emails">
-    <h2>Sites with emails - Team</h2>
-    <p>Add emails after Extracting Results Push, then Push to Admin.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_admin_emails_delete">
-    <h2>Admin emails search</h2>
-    <p>Super search Sites with emails - Admin · update or remove.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_email_campaigns">
-    <h2>Campaign search</h2>
-    <p>Super search Email campaign sheets across all countries.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_email_campaigns_drafts">
-    <h2>Campaign drafts</h2>
-    <p>Formatted outreach / offers per project · copy keeps email formatting.</p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_departments">
-    <h2>My departments</h2>
-    <p>If Admin assigns you to a department, your tasks appear here.</p>
-  </a>
-  <a class="launch-card" href="<?= $todayBatch ? 'index.php?page=team_prospect_batch&id=' . (int) $todayBatch['id'] : 'index.php?page=team_prospect_batches' ?>">
-    <h2>Today’s history</h2>
-    <p><?= $todayBatch ? (int) $todayBatch['site_count'] . ' sites added today' : 'No adds yet today' ?></p>
-  </a>
-  <a class="launch-card" href="index.php?page=team_prospect_batches">
-    <h2>Site adding history</h2>
-    <p>Sites you added, saved by day.</p>
-  </a>
-</div>
-<?php render_footer('team'); ?>

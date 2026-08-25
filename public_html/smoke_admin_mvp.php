@@ -241,6 +241,32 @@ if (!str_contains($ordersHubGuide, 'guide_orders()')
 } else {
     ok('Office hubs echo Orders/Invoices/Account guides');
 }
+foreach ([
+    'guide_campaign_search',
+    'guide_campaign_drafts',
+    'guide_admin_emails_search',
+    'guide_semrush_team',
+    'guide_team_departments',
+] as $fn) {
+    if (!str_contains($guidesLib, "function {$fn}")) {
+        fail("guides.php missing {$fn}");
+    }
+}
+ok('Team hub page-purpose guide functions');
+$teamCampHub = file_get_contents($root . '/pages/team/email_campaigns.php') ?: '';
+$teamDraftsHub = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
+$teamAdminEmailsHub = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
+$teamSemrushHubGuide = file_get_contents($root . '/pages/team/semrush_research.php') ?: '';
+$teamDeptsHub = file_get_contents($root . '/pages/team/departments.php') ?: '';
+if (!str_contains($teamCampHub, 'guide_campaign_search()')
+    || !str_contains($teamDraftsHub, 'guide_campaign_drafts()')
+    || !str_contains($teamAdminEmailsHub, 'guide_admin_emails_search()')
+    || !str_contains($teamSemrushHubGuide, 'guide_semrush_team()')
+    || !str_contains($teamDeptsHub, 'guide_team_departments()')) {
+    fail('Team hubs missing page-purpose guide calls');
+} else {
+    ok('Team hubs echo page-purpose guides');
+}
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 if (!str_contains($deptLib, 'function user_deactivation_residue')) {
     fail('departments missing user_deactivation_residue');
@@ -535,6 +561,14 @@ if (!str_contains($prospectCheck, 'csrf_field()') || !str_contains($extractBatch
 } else {
     ok('Team Filter & Push csrf_field');
 }
+$extractingHub = file_get_contents($root . '/pages/team/extracting.php') ?: '';
+$teamHistory = file_get_contents($root . '/pages/team/prospect_batches.php') ?: '';
+if (!str_contains($extractingHub, 'table-wrap') || !str_contains($teamHistory, 'table-wrap')
+    || !str_contains($extractingHub, 'guide_extracting()')) {
+    fail('Team Extracting/history missing table-wrap or extracting guide');
+} else {
+    ok('Team Extracting + history table-wrap');
+}
 
 $extracted = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 if (!str_contains($extracted, "redirect(\$sitesListUrl)") && !str_contains($extracted, 'redirect($sitesListUrl)')) {
@@ -820,6 +854,16 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
 } else {
     ok('sitewide smoothness: LIMIT 1 schema, prefix campaign search, debounce, hidden presence');
 }
+if (!str_contains($campLibSmoke, 'csrf_field()')
+    || !str_contains($sweLibSmoke, 'csrf_field()')
+    || !str_contains($campLibSmoke, 'JavaScript is required to search and update')
+    || !str_contains($sweLibSmoke, 'JavaScript is required to search and update')
+    || !str_contains($campSearchJsSmoke, 'payload._csrf')
+    || !str_contains($sweDeleteJsSmoke, 'payload._csrf')) {
+    fail('Team super-search cards missing csrf_field / JS _csrf');
+} else {
+    ok('Team super-search csrf_field + JS _csrf');
+}
 $appCssSmoke = file_get_contents($root . '/assets/css/app.css') ?: '';
 $loginSmoke = file_get_contents($root . '/pages/login.php') ?: '';
 $authSmoke = file_get_contents($root . '/includes/auth.php') ?: '';
@@ -1099,6 +1143,12 @@ if (!str_contains($teamDepts, 'csrf_field()')) {
 } else {
     ok('team departments csrf_field');
 }
+if (!str_contains($teamDepts, 'team_can_set_department_task_status')
+    || !str_contains($teamDepts, 'Only the assignee can update this task')) {
+    fail('team departments missing assignee status ACL');
+} else {
+    ok('team departments assignee status ACL');
+}
 if (!str_contains($teamDepts, "'mine' => 'Mine'")) {
     fail('team departments missing Mine filter');
 } else {
@@ -1113,6 +1163,19 @@ if (!str_contains($teamDepts, 'dept-task-overdue') && !str_contains($adminDepts,
     fail('departments missing overdue row class');
 } else {
     ok('departments overdue styling');
+}
+$teamDash = file_get_contents($root . '/pages/team/dashboard.php') ?: '';
+if (substr_count($teamDash, "render_dashboard_help('team')") < 2
+    || !str_contains($teamDash, 'department_task_is_overdue')
+    || !str_contains($teamDash, 'dept-task-overdue')) {
+    fail('team dashboard missing How Team works / overdue on assigned tasks');
+} else {
+    ok('team dashboard How Team works + overdue');
+}
+if (str_contains($teamDash, 'launch-cards') || str_contains($teamDash, '$todayBatch')) {
+    fail('team dashboard still has dead all-tools launch cards');
+} else {
+    ok('team dashboard dropped dead all-tools branch');
 }
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
@@ -1268,6 +1331,7 @@ foreach ([
     'department overdue status filter',
     'department_stats overdue_count',
     'departments dashboard stats',
+    'assignee cannot change someone else task status',
     'prospect_site_rows_html has no Status column',
     'edit keeps historical assignee after remove',
 ] as $needle) {
@@ -1289,6 +1353,30 @@ if (!str_contains($deptLib, 'function team_page_unlocked')) {
     fail('departments.php missing team_page_unlocked');
 } else {
     ok('team_page_unlocked helper');
+}
+if (!str_contains($deptLib, 'function team_can_clear_semrush_country')
+    || !str_contains($deptLib, 'function team_can_set_department_task_status')
+    || !str_contains($deptLib, "team_semrush_research")
+    || !str_contains($deptLib, 'Clear country stays with Site Finding')) {
+    fail('departments.php missing Extracting Semrush unlock / Clear ACL');
+} else {
+    ok('Extracting Semrush unlock + Clear country ACL');
+}
+$teamSemrushHub = file_get_contents($root . '/pages/team/semrush_research.php') ?: '';
+$teamSemrushSheet = file_get_contents($root . '/pages/team/semrush_sheet.php') ?: '';
+if (!str_contains($teamSemrushHub, 'team_can_clear_semrush_country')
+    || !str_contains($teamSemrushSheet, 'team_can_clear_semrush_country')
+    || !str_contains($teamSemrushHub, 'Clear country is for Site Finding')
+    || !str_contains($teamSemrushSheet, 'Clear country is for Site Finding')) {
+    fail('Team Semrush missing Clear country gate');
+} else {
+    ok('Team Semrush Clear country gated in hub + sheet');
+}
+if (!str_contains($teamSemrushSheet, 'json_encode')
+    || !str_contains($teamSemrushSheet, 'Delete this comment?')) {
+    fail('Team Semrush comment delete confirm not json_encode-safe');
+} else {
+    ok('Team Semrush comment delete confirm json_encode-safe');
 }
 
 $prospectCheckT = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
@@ -1575,6 +1663,7 @@ foreach ([
     'push_site rejects country mismatch',
     'team_page_unlocked',
     'prospect batch per country',
+    'semrush Clear country is Finding not Extracting',
 ] as $needle) {
     if (!str_contains($testsTeam, $needle)) {
         fail("tests_run.php missing Team coverage: {$needle}");

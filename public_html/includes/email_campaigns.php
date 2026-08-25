@@ -3439,6 +3439,8 @@ function render_email_campaign_super_search(
        data-suggest-url="<?= h($suggestUrl) ?>"
        data-post-url="<?= h($postBase) ?>"
        data-drafts-url="index.php?page=team_email_campaigns_drafts&amp;project=<?= $pid ?>">
+    <?= csrf_field() ?>
+    <noscript><p class="help muted">JavaScript is required to search and update these results.</p></noscript>
     <h2 style="margin-top:0"><?= label_with_info(
         $project,
         'Project search bar. Searches site + emails across every country Admin added to this project. Delete both or remove only email — updates the corresponding country sheet. Removing the last email also deletes the site row.'
