@@ -193,9 +193,9 @@ li.is-sheet-selected {
   --font: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   --sans: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   --grad-brand: linear-gradient(165deg, #1f2937 0%, #374151 45%, #6b7280 100%);
-  --grad-btn: linear-gradient(180deg, #6b7280 0%, #4b5563 55%, #374151 100%);
+  --grad-btn: linear-gradient(180deg, #374151 0%, #1f2937 100%);
   --grad-page: linear-gradient(165deg, #e5e7eb 0%, #f3f4f6 40%, #ffffff 70%, #f9fafb 100%);
-  --focus-ring: 0 0 0 3px rgba(75, 85, 99, 0.22);
+  --focus-ring: 0 0 0 3px rgba(31, 41, 55, 0.35);
 }
 * { box-sizing: border-box; }
 body {
@@ -804,7 +804,7 @@ h2 {
   gap: 0.35rem;
   background: var(--grad-btn);
   color: #fff !important;
-  border: 1px solid transparent;
+  border: 1px solid #1f2937;
   border-radius: 10px;
   padding: 0.55rem 0.95rem;
   cursor: pointer;
@@ -812,20 +812,25 @@ h2 {
   line-height: 1.25;
   letter-spacing: 0.01em;
   text-decoration: none !important;
-  box-shadow: 0 3px 10px rgba(55, 65, 81, 0.2);
-  transition: filter 0.12s ease, background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
+  box-shadow: 0 3px 10px rgba(31, 41, 55, 0.22);
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
 }
-.btn:hover { filter: brightness(1.05); }
+.btn:hover {
+  background: #111827;
+  border-color: #111827;
+}
 .btn:focus-visible,
 button.btn:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring), 0 3px 10px rgba(55, 65, 81, 0.2);
+  box-shadow: var(--focus-ring), 0 3px 10px rgba(31, 41, 55, 0.22);
 }
 .btn:disabled,
 button.btn:disabled {
-  opacity: 0.45;
+  background: #9ca3af;
+  border-color: #9ca3af;
+  box-shadow: none;
+  color: #fff !important;
   cursor: not-allowed;
-  filter: none;
   pointer-events: none;
 }
 .btn.secondary {
@@ -835,12 +840,17 @@ button.btn:disabled {
   box-shadow: none;
 }
 .btn.secondary:hover {
-  filter: none;
   background: #fff;
   border-color: #9ca3af;
 }
+.btn.secondary:disabled,
+button.btn.secondary:disabled {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #9ca3af !important;
+}
 .btn.crystal {
-  background: linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f6f7f9 100%);
   color: var(--brand-2) !important;
   border: 1px solid var(--line);
   box-shadow: none;
@@ -848,7 +858,6 @@ button.btn:disabled {
   -webkit-backdrop-filter: none;
 }
 .btn.crystal:hover {
-  filter: none;
   background: #fff;
   border-color: #9ca3af;
 }
