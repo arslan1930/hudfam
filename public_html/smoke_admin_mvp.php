@@ -205,6 +205,26 @@ if (!str_contains($guidesLib, 'function guide_emails_data')
 } else {
     ok('guide_emails_data present');
 }
+if (!str_contains($guidesLib, 'function guide_orders')
+    || !str_contains($guidesLib, 'function guide_invoices')
+    || !str_contains($guidesLib, 'function guide_admin_account')
+    || !str_contains($guidesLib, 'Deleting a sheet keeps invoices')
+    || !str_contains($guidesLib, 'printable letterhead is Topurlz')
+    || !str_contains($guidesLib, 'Sidebar Change password updates the same password')) {
+    fail('Office page-purpose guides missing');
+} else {
+    ok('Office Orders/Invoices/Account guides present');
+}
+$ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
+$invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$accountHubGuide = file_get_contents($root . '/pages/admin/account.php') ?: '';
+if (!str_contains($ordersHubGuide, 'guide_orders()')
+    || !str_contains($invoicesHubGuide, 'guide_invoices()')
+    || !str_contains($accountHubGuide, 'guide_admin_account()')) {
+    fail('Office hubs missing page-purpose guide calls');
+} else {
+    ok('Office hubs echo Orders/Invoices/Account guides');
+}
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 if (!str_contains($deptLib, 'function user_deactivation_residue')) {
     fail('departments missing user_deactivation_residue');
