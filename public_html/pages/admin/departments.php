@@ -153,11 +153,12 @@ if (!$dept) {
         <h1>Departments</h1>
         <p class="muted">
           Office folders. Assign team members and work to each department —
-          their login shows only their department tasks.
+          membership unlocks that department's tools, and their login shows only their department tasks.
         </p>
       </div>
     </div>
 
+    <?php $hubDash = departments_dashboard_stats(); ?>
     <div class="card">
       <div class="folders">
         <?php foreach ($departments as $d):
@@ -169,6 +170,9 @@ if (!$dept) {
               <?= (int) $stats['member_count'] ?> member<?= (int) $stats['member_count'] === 1 ? '' : 's' ?>
               · <?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?>
               · <?= (int) $stats['total_tasks'] ?> total
+              <?php if ((int) ($stats['overdue_count'] ?? 0) > 0): ?>
+                · <?= (int) $stats['overdue_count'] ?> overdue
+              <?php endif; ?>
             </p>
           </a>
         <?php endforeach; ?>
@@ -179,6 +183,16 @@ if (!$dept) {
           <p class="muted">Run upgrade.php once to create the office folders.</p>
         </div>
       <?php endif; ?>
+      <?php $unassignedTeam = (int) ($hubDash['unassigned_team'] ?? 0); ?>
+      <p class="help" style="margin-top:0.85rem">
+        <?php if ($unassignedTeam > 0): ?>
+          <?= $unassignedTeam ?> active team user<?= $unassignedTeam === 1 ? '' : 's' ?>
+          not in any department.
+          <a href="index.php?page=admin_users">Open Users</a> to assign them.
+        <?php else: ?>
+          Every active team user is in a department.
+        <?php endif; ?>
+      </p>
     </div>
     <?php
     render_footer('admin');
@@ -279,6 +293,9 @@ render_breadcrumbs([
       <?= (int) $stats['member_count'] ?> member<?= (int) $stats['member_count'] === 1 ? '' : 's' ?>
       · <?= (int) $stats['open_tasks'] ?> open
       · <?= (int) $stats['total_tasks'] ?> task<?= (int) $stats['total_tasks'] === 1 ? '' : 's' ?>
+      <?php if ((int) ($stats['overdue_count'] ?? 0) > 0): ?>
+        · <?= (int) $stats['overdue_count'] ?> overdue
+      <?php endif; ?>
     </p>
   </div>
   <div class="actions">
@@ -290,6 +307,7 @@ render_breadcrumbs([
   <h2>Members</h2>
   <p class="help"><?= h(department_tools_help((string) $dept['slug'])) ?></p>
   <?php if ($members): ?>
+  <div class="table-wrap">
   <table>
     <thead>
       <tr><th>Name</th><th>Username</th><th>Email</th><th></th></tr>
@@ -324,6 +342,7 @@ render_breadcrumbs([
     <?php endforeach; ?>
     </tbody>
   </table>
+  </div>
   <?php else: ?>
   <p class="muted">No members yet. Add a Team user below.</p>
   <?php endif; ?>
@@ -364,6 +383,7 @@ render_breadcrumbs([
           'open' => 'Open',
           'in_progress' => 'In progress',
           'done' => 'Done',
+          'overdue' => 'Overdue',
       ];
       foreach ($statusLinks as $val => $lab):
           $href = $deptFolderUrl(['status' => $val, 'p' => 1]);
@@ -532,6 +552,7 @@ render_breadcrumbs([
             </form>
           </td>
           <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+          <td>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form"
                   onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">

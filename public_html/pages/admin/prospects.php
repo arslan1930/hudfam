@@ -258,7 +258,16 @@ if (is_array($draft)) {
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
     $superQ = trim((string) get('super_q'));
-    $superResults = $superQ !== '' ? search_prospect_sites_global($superQ, 200) : [];
+    $superLimit = 200;
+    $superResults = [];
+    $superTruncated = false;
+    if ($superQ !== '') {
+        $superResults = search_prospect_sites_global($superQ, $superLimit + 1);
+        $superTruncated = count($superResults) > $superLimit;
+        if ($superTruncated) {
+            $superResults = array_slice($superResults, 0, $superLimit);
+        }
+    }
     // Group matches by country for “present in multiple places”
     $superByCountry = [];
     foreach ($superResults as $hit) {
@@ -337,8 +346,14 @@ if (!$inCountry && !$emptyCountry) {
           </div>
         <?php else: ?>
           <p class="help" style="margin-top:0.85rem">
-            Found <strong><?= count($superResults) ?></strong> match<?= count($superResults) === 1 ? '' : 'es' ?>
-            in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>.
+            <?php if ($superTruncated): ?>
+              Showing the first <strong><?= (int) $superLimit ?></strong> matches
+              in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>
+              (more exist). Narrow the search to see the rest.
+            <?php else: ?>
+              Found <strong><?= count($superResults) ?></strong> match<?= count($superResults) === 1 ? '' : 'es' ?>
+              in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>.
+            <?php endif; ?>
           </p>
           <div class="table-wrap" style="margin-top:0.55rem">
             <table class="super-search-table">
@@ -373,6 +388,7 @@ if (!$inCountry && !$emptyCountry) {
                               'Remove ' . (string) $hit['domain'] . ' from ' . ($hitCountry !== '' ? $hitCountry : 'No country') . '?',
                               JSON_UNESCAPED_UNICODE
                           )) ?>);">
+                      <?= csrf_field() ?>
                       <input type="hidden" name="action" value="remove_site">
                       <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
                       <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
@@ -392,6 +408,7 @@ if (!$inCountry && !$emptyCountry) {
       <h2>Add sites</h2>
       <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
       <form method="post" action="index.php?page=admin_prospects#add-sites">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="add_sites">
         <div class="form-grid">
           <?= render_country_typeahead($addCountry, [
@@ -449,6 +466,7 @@ if (!$inCountry && !$emptyCountry) {
         ?>
       <div class="card prospect-market<?= $openByDefault ? ' is-open' : '' ?>"
            data-prospect-market
+           data-open-default="<?= $openByDefault ? '1' : '0' ?>"
            data-market-label="<?= h(mb_strtolower($regionLabel)) ?>">
         <button type="button" class="prospect-market-toggle" data-prospect-market-toggle
                 aria-expanded="<?= $openByDefault ? 'true' : 'false' ?>"
@@ -552,6 +570,7 @@ if (!$inCountry && !$emptyCountry) {
             market.hidden = shownInMarket === 0;
           } else {
             market.hidden = false;
+            setMarketOpen(market, market.getAttribute('data-open-default') === '1');
           }
         });
 
@@ -778,6 +797,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <h2>Add sites to <?= h($countryName) ?></h2>
   <p class="help">Paste root domains into this country’s Our database folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
   <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_sites">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">
     <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
@@ -796,29 +816,6 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 </div>
 <?= sites_form_script_tag() ?>
 <?php endif; ?>
-
-<form class="card filters" method="get" id="prospect-country-filters">
-  <input type="hidden" name="page" value="admin_prospects">
-  <input type="hidden" name="country" value="<?= h($emptyCountry ? '_none' : $countryName) ?>">
-  <input type="hidden" name="q" id="prospect_q_hidden" value="<?= h($q) ?>">
-  <div>
-    <label>Status</label>
-    <select name="status" onchange="this.form.submit()">
-      <option value="">All</option>
-      <?php foreach (prospect_statuses() as $code => $label): ?>
-        <option value="<?= h($code) ?>" <?= $status === $code ? 'selected' : '' ?>><?= h($label) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <div>
-    <label for="prospects_per_page">Per page</label>
-    <select id="prospects_per_page" name="per_page" onchange="this.form.submit()">
-      <?php foreach (sheet_per_page_options() as $n): ?>
-        <option value="<?= (int) $n ?>" <?= (int) $perPage === (int) $n ? 'selected' : '' ?>><?= (int) $n ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-</form>
 
 <div class="card" id="prospect-sites-card">
   <div class="invoice-list-toolbar prospect-site-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
@@ -863,6 +860,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     ?>
     <?php endif; ?>
   </div>
+  <div class="table-wrap">
   <table id="prospect-site-table" class="sheet-cards-mobile"<?= $rows ? '' : ' hidden' ?>>
     <thead><tr>
       <th class="sheet-col-check" scope="col">
@@ -870,12 +868,13 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           <input type="checkbox" data-sheet-select-all-check title="Select all matching rows on this page" aria-label="Select all matching rows on this page">
         </label>
       </th>
-      <th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th>
+      <th>Domain</th><th>URL</th><th>Language</th><th>Added by</th><th>When</th>
     </tr></thead>
     <tbody id="prospect-site-tbody">
     <?= prospect_site_rows_html($rows) ?>
     </tbody>
   </table>
+  </div>
   <div id="prospect-site-empty" class="empty-state"<?= $rows ? ' hidden' : '' ?>>
     <p data-prospect-empty-text><?= $q !== '' ? 'No search matches in this country.' : 'No sites in this country yet.' ?></p>
     <?php if (!$emptyCountry && $q === ''): ?>
@@ -893,7 +892,6 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           'page' => 'admin_prospects',
           'country' => $emptyCountry ? '_none' : $countryName,
           'q' => $q,
-          'status' => $status,
       ], $perPage);
       ?>
     </div>
@@ -916,6 +914,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
         JSON_UNESCAPED_UNICODE
     )) ?>);"
   >
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">
     <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
