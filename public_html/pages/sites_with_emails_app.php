@@ -534,6 +534,10 @@ if (!$inCountry) {
           <span class="sheet-search-meta muted" data-swe-country-search-meta hidden></span>
         </label>
       </div>
+      <?php if ($isAdminAll): ?>
+      <p class="help" style="margin:0 0 0.65rem">Archive of Admin. Adding a site on a country sheet also creates the Admin working-list row.</p>
+      <?php endif; ?>
+      <div class="table-wrap">
       <table class="extracted-country-table" id="swe-country-table">
         <thead>
           <tr>
@@ -578,6 +582,7 @@ if (!$inCountry) {
           </tr>
         </tbody>
       </table>
+      </div>
       <?php else: ?>
       <div class="empty-state">
         <?php if ($isTeam): ?>
@@ -960,7 +965,7 @@ render_sheet_checkpoint_compact(
         <?php if ($sentStats && (int) $sentStats['sent'] > 0): ?>
         <form method="post" action="<?= h($listBase) ?>" class="swe-clear-all-emailed"
               data-swe-clear-all-emailed
-              onsubmit="return confirm('Clear ALL emailed marks on <?= h($countryName) ?>?\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.');">
+              onsubmit="return confirm(<?= h(json_encode('Clear ALL emailed marks on ' . $countryName . "?\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.", JSON_UNESCAPED_UNICODE)) ?>);">
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="clear_all_emailed">
           <input type="hidden" name="q" value="<?= h($q) ?>">
@@ -1307,7 +1312,7 @@ render_sheet_checkpoint_compact(
     <?php if ($countryTotal > 0): ?>
     <form method="post" action="<?= h($listBase) ?>"
           data-show-processing="Removing all sites…"
-          onsubmit="return confirm('Remove ALL <?= (int) $countryTotal ?> sites from <?= h($countryName) ?>?');">
+          onsubmit="return confirm(<?= h(json_encode('Remove ALL ' . (int) $countryTotal . ' sites from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
@@ -1323,7 +1328,7 @@ render_sheet_checkpoint_compact(
   <p class="help">Paste site names (or 1-column CSV) to remove those rows from <?= h($countryName) ?>.</p>
   <form method="post" action="<?= h($listBase) ?>#remove-by-list" enctype="multipart/form-data"
         data-show-processing="Removing listed sites…"
-        onsubmit="return confirm('Remove matching sites from <?= h($countryName) ?>?');">
+        onsubmit="return confirm(<?= h(json_encode('Remove matching sites from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">
     <textarea name="remove_text" class="inventory-box" rows="6" placeholder="site-to-remove.com"></textarea>

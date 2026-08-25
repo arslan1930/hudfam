@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg = $rowDeleted
             ? 'Removed last email from ' . (string) $result['domain']
                 . ($country !== '' ? ' (' . $country . ')' : '')
-                . ' · site row deleted from Admin + Final (no empty-email sites).'
+                . ' · Admin working-list row deleted · Final keeps its archive copy.'
             : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
                 . ($country !== '' ? ' (' . $country . ')' : '')
                 . '. Site name kept in Admin.';
@@ -119,7 +119,7 @@ render_breadcrumbs([
       Search <strong>Sites with emails - Admin</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.
       Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
-      Removing the <strong>last</strong> email also deletes the site row from Admin + Final.
+      Removing the <strong>last</strong> email also deletes the Admin working-list row. Final keeps its archive copy.
     </p>
   </div>
   <div class="actions">
