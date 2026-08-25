@@ -787,6 +787,12 @@ render_breadcrumbs($crumbs);
         render_task_presence('swe_admin:' . $countryName, 'Others on Admin emails · ' . $countryName);
     }
     ?>
+    <?php if ($isTeam || $isAdminAll): ?>
+    <button type="button" class="btn" data-swe-add-toggle
+            title="<?= $isAdminAll
+                ? 'Add one site + at least one email · also creates the Admin working-list row'
+                : 'Add one site + up to 4 emails (emails optional)' ?>">+ Add site</button>
+    <?php endif; ?>
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
           data-show-processing="Pushing sites to Admin…"
@@ -982,6 +988,12 @@ render_sheet_checkpoint_compact(
              title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
       <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
     </label>
+    <?php if ($isTeam || $isAdminAll): ?>
+    <button type="button" class="btn small" data-swe-add-toggle
+            title="<?= $isAdminAll
+                ? 'Add one site + at least one email · also creates the Admin working-list row'
+                : 'Add one site + up to 4 emails (emails optional)' ?>">+ Add site</button>
+    <?php endif; ?>
     <?php
     render_sheet_edit_toolbar($listBase, sheet_history_key('swe', $sweScope . ':' . $countryName), [
         'q' => $q,
@@ -1014,6 +1026,48 @@ render_sheet_checkpoint_compact(
         </tr>
       </thead>
       <tbody id="swe-tbody">
+      <?php if ($isTeam || $isAdminAll): ?>
+          <tr id="swe-add-row" class="sheet-add-row" hidden data-swe-emails>
+            <td class="swe-td-check sheet-td-check" data-label="Select"></td>
+            <?php if ($isTeam): ?>
+            <td class="swe-td-num swe-col-num" data-label="Row"><span class="muted">—</span></td>
+            <?php endif; ?>
+            <td class="swe-td-site" data-label="Site">
+              <form method="post" action="<?= h($listBase) ?>" class="swe-row-form swe-add-form" id="swe-add-form"
+                    autocomplete="off" data-show-processing="Adding site…">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_row">
+                <input type="hidden" name="site_id" value="0">
+                <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
+                <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
+              </form>
+              <label class="visually-hidden" for="swe_add_domain">Site</label>
+              <input id="swe_add_domain" class="swe-domain" form="swe-add-form" name="domain" required
+                     placeholder="example.com" spellcheck="false" autocomplete="off" aria-label="Site">
+            </td>
+            <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text muted">—</span></td>
+            <td class="swe-td-email" data-label="Email 1">
+              <?= render_clearable_email_input('email1', '', ['id' => 'swe_add_e1', 'swe' => true, 'form' => 'swe-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 1']) ?>
+            </td>
+            <td class="swe-td-email" data-label="Email 2">
+              <?= render_clearable_email_input('email2', '', ['id' => 'swe_add_e2', 'swe' => true, 'form' => 'swe-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 2']) ?>
+            </td>
+            <td class="swe-td-email" data-label="Email 3">
+              <?= render_clearable_email_input('email3', '', ['id' => 'swe_add_e3', 'swe' => true, 'form' => 'swe-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 3']) ?>
+            </td>
+            <td class="swe-td-email" data-label="Email 4">
+              <?= render_clearable_email_input('email4', '', ['id' => 'swe_add_e4', 'swe' => true, 'form' => 'swe-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
+            </td>
+            <td class="swe-td-status" data-label="Status"><span class="swe-status-badge is-open">New</span></td>
+            <td class="swe-td-actions" data-label="Actions">
+              <div class="swe-row-actions">
+                <button class="btn small" type="submit" form="swe-add-form">Add row</button>
+                <button class="btn secondary small" type="button" data-swe-add-cancel>Cancel</button>
+              </div>
+            </td>
+          </tr>
+      <?php endif; ?>
       <?php
       $rowNumBase = max(0, ($pageNum - 1) * $perPage);
       $rowLoop = 0;
@@ -1191,13 +1245,19 @@ render_sheet_checkpoint_compact(
   </p>
 
   <?php if (!$rows && $q === '' && $sentFilter === '' && $rowFilter === ''): ?>
-  <div class="empty-state">
+  <div class="empty-state" id="swe-empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
-      <p class="muted">Push from Extracting Results to fill site names here.</p>
+      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push.</p>
+      <p class="actions" style="justify-content:center;margin-top:0.75rem">
+        <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
+      </p>
     <?php elseif ($isAdminAll): ?>
       <p>No mirrored sites in this country yet.</p>
-      <p class="muted">They sync here from Admin. Final stays a neutral backup (no emailed marks).</p>
+      <p class="muted">They sync here from Admin, or add a site (also creates the Admin working-list row). Each site needs at least one email.</p>
+      <p class="actions" style="justify-content:center;margin-top:0.75rem">
+        <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
+      </p>
     <?php else: ?>
       <p>No sites in this country yet.</p>
       <p class="muted">Waiting for Team to Push.</p>
@@ -1256,37 +1316,6 @@ render_sheet_checkpoint_compact(
     <?php endif; ?>
   </div>
 </div>
-
-<?php if ($isTeam): ?>
-<div class="card" style="margin-top:1rem">
-  <h2><?= label_with_info('Add site row', 'Optional manual add. Most site names arrive from Extracting Results → Push.') ?></h2>
-  <p class="help">Optional manual add. Most sites arrive from Extracting Results → Push.</p>
-  <form method="post" action="<?= h($listBase) ?>" class="swe-add-form"
-        data-show-processing="Adding site…">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="save_row">
-    <input type="hidden" name="site_id" value="0">
-    <div class="form-grid" style="gap:0.65rem">
-      <div class="full">
-        <label for="swe_add_domain">Site name</label>
-        <input id="swe_add_domain" name="domain" required placeholder="example.com" spellcheck="false">
-      </div>
-      <div class="full" data-swe-emails>
-        <label>Emails (up to 4 — paste all at once into any box)</label>
-        <div class="swe-emails swe-emails-add">
-          <?= render_clearable_email_input('email1', '', ['id' => 'swe_add_e1', 'swe' => true, 'placeholder' => 'email 1 · or paste up to 4', 'aria_label' => 'Clear email 1']) ?>
-          <?= render_clearable_email_input('email2', '', ['id' => 'swe_add_e2', 'swe' => true, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
-          <?= render_clearable_email_input('email3', '', ['id' => 'swe_add_e3', 'swe' => true, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
-          <?= render_clearable_email_input('email4', '', ['id' => 'swe_add_e4', 'swe' => true, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
-        </div>
-      </div>
-    </div>
-    <p class="actions" style="margin-top:0.85rem">
-      <button class="btn" type="submit">Add row</button>
-    </p>
-  </form>
-</div>
-<?php endif; ?>
 
 <?php if ($countryTotal > 0): ?>
 <div class="card" id="remove-by-list" style="margin-top:1rem">

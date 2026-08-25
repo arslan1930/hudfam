@@ -1521,6 +1521,16 @@ if (!str_contains($sweUi, 'No search matches on this page')
 } else {
     ok('empty search matches copy');
 }
+if (!str_contains($sweUi, 'data-swe-add-toggle')
+    || !str_contains($sweUi, 'id="swe-add-row"')
+    || !str_contains($sweUi, '$isTeam || $isAdminAll')
+    || str_contains($sweUi, 'Optional manual add. Most site names arrive')
+    || !str_contains($sweJsSmoke, 'function openAddRow')
+    || !str_contains($sweJsSmoke, 'data-swe-add-toggle')) {
+    fail('SWE Team/Final missing campaign-style + Add site row');
+} else {
+    ok('SWE Team/Final inline + Add site');
+}
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);
