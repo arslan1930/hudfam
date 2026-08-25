@@ -612,6 +612,10 @@ if (!$inCountry && !$emptyCountry) {
           matchIndex = -1;
           filterCountries();
         });
+        searchInput.addEventListener('search', function () {
+          matchIndex = -1;
+          filterCountries();
+        });
         searchInput.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -640,13 +644,11 @@ if (!$emptyCountry && !$wantsAjax) {
     }
 }
 $q = trim((string) get('q'));
-$status = (string) get('status');
 $pageNum = max(1, (int) get('p', 1));
 $perPage = resolve_sheet_per_page();
 $inv = prospect_inventory_query([
     'q' => $q,
     'country' => $countryName,
-    'status' => $status,
 ] + ($emptyCountry ? [] : []), $pageNum, $perPage);
 
 if ($emptyCountry) {
@@ -657,10 +659,6 @@ if ($emptyCountry) {
         $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
         $params[] = $like;
         $params[] = $like;
-    }
-    if ($status !== '') {
-        $where[] = 'p.status = ?';
-        $params[] = $status;
     }
     $whereSql = implode(' AND ', $where);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
@@ -707,7 +705,6 @@ $qs = http_build_query(array_filter([
     'page' => 'admin_prospects',
     'country' => $emptyCountry ? '_none' : $countryName,
     'q' => $q,
-    'status' => $status,
     'per_page' => $perPage,
 ], static fn ($v) => $v !== '' && $v !== null));
 
@@ -828,6 +825,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
                value="<?= h($q) ?>"
                autocomplete="off" spellcheck="false" data-no-draft
                title="Type to search the whole country folder · Enter = next match · Shift+Enter = previous">
+        <input type="hidden" id="prospect_q_hidden" value="<?= h($q) ?>">
         <span class="sheet-search-meta muted" data-prospect-site-search-meta hidden></span>
       </label>
       <div class="actions prospect-match-actions" id="prospect-match-actions"
@@ -860,7 +858,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     ?>
     <?php endif; ?>
   </div>
-  <div class="table-wrap">
+  <div class="table-wrap" id="prospect-site-table-wrap"<?= $rows ? '' : ' hidden' ?>>
   <table id="prospect-site-table" class="sheet-cards-mobile"<?= $rows ? '' : ' hidden' ?>>
     <thead><tr>
       <th class="sheet-col-check" scope="col">

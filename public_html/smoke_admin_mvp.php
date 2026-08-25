@@ -378,6 +378,12 @@ if (!str_contains($adminProspects, 'id="prospect-site-table"')
 } else {
     ok('Our database country Sites table-wrap');
 }
+if (str_contains($adminProspects, "'status' => \$status")
+    || str_contains($adminProspects, "'status' => \$status,")) {
+    fail('Our database country page still applies leftover CRM status filter');
+} else {
+    ok('Our database country page ignores leftover status= URL');
+}
 // Policy: Our database country lists stay Admin-only (Team uses Filter & add).
 if (str_contains($teamProspects, 'redirect(')
     && (str_contains($teamProspects, 'Admin-only') || str_contains($teamProspects, 'team_prospect_check'))) {
@@ -840,6 +846,12 @@ if (!preg_match('/data-due-cell[\s\S]{0,80}<\/td>\s*<td>\s*<form method="post"/'
     fail('admin departments Delete not wrapped in td');
 } else {
     ok('admin departments Delete Actions cell');
+}
+if (!str_contains($adminDepts, '<th>Actions</th>')
+    || !str_contains($adminDepts, '$deptFolderUrl()')) {
+    fail('admin departments Actions header / POST forms drop folder filters');
+} else {
+    ok('admin departments Actions header + filter-preserving POST');
 }
 $teamDepts = file_get_contents($root . '/pages/team/departments.php') ?: '';
 if (!str_contains($teamDepts, 'csrf_field()')) {

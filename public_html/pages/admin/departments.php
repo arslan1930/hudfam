@@ -23,6 +23,22 @@ if ($folder !== '' && !$dept) {
 if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $back = $base . '&folder=' . rawurlencode((string) $dept['slug']);
+    $keepStatus = (string) get('status');
+    if (in_array($keepStatus, ['open', 'in_progress', 'done', 'overdue'], true)) {
+        $back .= '&status=' . rawurlencode($keepStatus);
+    }
+    $keepAssignee = (string) get('assignee');
+    if (in_array($keepAssignee, ['mine', 'unassigned', 'assigned'], true)) {
+        $back .= '&assignee=' . rawurlencode($keepAssignee);
+    }
+    $keepQ = trim((string) get('q'));
+    if ($keepQ !== '') {
+        $back .= '&q=' . rawurlencode($keepQ);
+    }
+    $keepP = max(1, (int) get('p', 1));
+    if ($keepP > 1) {
+        $back .= '&p=' . $keepP;
+    }
 
     if ($action === 'add_member') {
         $uid = (int) post('user_id');
@@ -216,6 +232,9 @@ foreach ($allTeam as $u) {
     }
 }
 $statusFilter = (string) get('status');
+if (!in_array($statusFilter, ['', 'open', 'in_progress', 'done', 'overdue'], true)) {
+    $statusFilter = '';
+}
 $assigneeFilter = (string) get('assignee');
 if (!in_array($assigneeFilter, ['', 'all', 'mine', 'unassigned', 'assigned'], true)) {
     $assigneeFilter = '';
@@ -329,7 +348,7 @@ render_breadcrumbs([
         <td><?= h((string) $m['username']) ?></td>
         <td class="muted"><?= h((string) ($m['email'] ?: '—')) ?></td>
         <td>
-          <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>#members"
+          <form method="post" action="<?= h($deptFolderUrl()) ?>#members"
                 onsubmit="return confirm(<?= h(json_encode($removeMsg, JSON_UNESCAPED_UNICODE)) ?>);"
                 class="inline-form">
             <?= csrf_field() ?>
@@ -348,7 +367,7 @@ render_breadcrumbs([
   <?php endif; ?>
 
   <?php if ($available): ?>
-  <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>#members"
+  <form method="post" action="<?= h($deptFolderUrl()) ?>#members"
         class="dept-add-member" style="margin-top:0.85rem">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_member">
@@ -424,7 +443,7 @@ render_breadcrumbs([
     <button class="btn secondary small" type="submit">Search</button>
   </form>
 
-  <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>" class="dept-task-form">
+  <form method="post" action="<?= h($deptFolderUrl()) ?>" class="dept-task-form">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="save_task">
     <input type="hidden" name="task_id" value="<?= $editTask ? (int) $editTask['id'] : 0 ?>">
@@ -488,7 +507,7 @@ render_breadcrumbs([
     <p class="actions" style="margin-top:0.85rem">
       <button class="btn" type="submit"><?= $editTask ? 'Update task' : 'Assign task' ?></button>
       <?php if ($editTask): ?>
-        <a class="btn secondary" href="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>">Cancel edit</a>
+        <a class="btn secondary" href="<?= h($deptFolderUrl()) ?>">Cancel edit</a>
       <?php endif; ?>
     </p>
   </form>
@@ -519,7 +538,7 @@ render_breadcrumbs([
           <th>Assigned</th>
           <th>Status</th>
           <th>Due</th>
-          <th></th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -539,7 +558,7 @@ render_breadcrumbs([
           </td>
           <td><?= h($assignee !== '' ? $assignee : 'Whole department') ?></td>
           <td>
-            <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
+            <form method="post" action="<?= h($deptFolderUrl()) ?>"
                   class="inline-form" data-stay-ajax>
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="set_status">
@@ -553,7 +572,7 @@ render_breadcrumbs([
           </td>
           <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
           <td>
-            <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
+            <form method="post" action="<?= h($deptFolderUrl()) ?>"
                   class="inline-form"
                   onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">
               <?= csrf_field() ?>
@@ -613,6 +632,26 @@ render_breadcrumbs([
     var sel = e.target;
     if (!sel || sel.name !== 'status' || !sel.matches || !sel.matches('[data-stay-ajax-change]')) return;
     syncOverdue(sel);
+    var tr = sel.closest('tr');
+    var filter = '';
+    try { filter = String(new URLSearchParams(window.location.search).get('status') || ''); } catch (err) {}
+    if (!tr || !filter) return;
+    var stillMatches = filter === 'overdue'
+      ? tr.classList.contains('dept-task-overdue')
+      : String(sel.value || '') === filter;
+    if (stillMatches) return;
+    var tbody = tr.parentElement;
+    tr.remove();
+    if (!tbody || tbody.querySelector('tr')) return;
+    var wrap = tbody.closest('.table-wrap');
+    var card = tbody.closest('.card');
+    if (wrap) wrap.remove();
+    if (card && !card.querySelector('.empty-state')) {
+      var empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.innerHTML = '<p>No tasks with this status.</p>';
+      card.appendChild(empty);
+    }
   });
 })();
 </script>
