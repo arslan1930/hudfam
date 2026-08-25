@@ -437,6 +437,12 @@ try {
     } else {
         fail('extract sites writer conflict unexpected: ' . json_encode([$writerConflict, $sameWriter]));
     }
+    $missingBatch = extract_sites_writer_conflict(999999999, (int) $adminUser['id'], '2000-01-01 00:00:00');
+    if (is_array($missingBatch) && empty($missingBatch['conflict']) && ($missingBatch['ok'] ?? true) === false) {
+        pass('extract writer missing batch is an error, not a last-writer 409');
+    } else {
+        fail('extract missing batch treated as writer conflict: ' . json_encode($missingBatch));
+    }
     save_extract_batch_results($batchId, '');
     $ex = (int) db()->query("SELECT COUNT(*) FROM extracted_sites WHERE country='Germany' AND domain LIKE 'txfpush-%'")->fetchColumn();
     $swe = (int) db()->query("SELECT COUNT(*) FROM sites_with_emails_team WHERE country='Germany' AND domain LIKE 'txfpush-%'")->fetchColumn();

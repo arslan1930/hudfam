@@ -242,8 +242,26 @@
       .catch(function (err) {
         if (err && err.conflict) {
           saveAgain = false;
+          var data = err.data || {};
+          if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+          if (data.domains != null) {
+            var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
+            applyingHistory = true;
+            ta.value = savedRaw;
+            lastSnapshot = normalizeText(savedRaw);
+            lastSavedText = lastSnapshot;
+            applyingHistory = false;
+            updateCounts();
+          }
+          undoStack = [];
+          redoStack = [];
+          syncHistoryButtons();
+          if (data.writer_name || data.writer_at) {
+            setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+          }
+        } else {
+          setAutosaveLabel('Save failed');
         }
-        setAutosaveLabel('Save failed');
         setStatus(err.message || 'Could not autosave Sites list.', true);
       })
       .then(function () {

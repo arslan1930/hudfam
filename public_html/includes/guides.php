@@ -319,9 +319,10 @@ function guide_team_departments(): string
     return render_page_purpose(
         'My departments — tasks for your team',
         'Departments Admin assigned you to, with open tasks and due dates. Tools stay locked until you are in a department.',
-        'Open a folder to see work. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task.',
+        'Change status from Dashboard, or open a folder for filters. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task.',
         [
-            'Open a department folder for tasks and filters (including Mine and overdue).',
+            'Dashboard can update Open / In progress / Done without opening the folder.',
+            'Open a department folder for Mine, overdue, and other filters.',
             'Update status only on your named tasks, or on tasks with no named assignee.',
             'Unlocked tools appear in the sidebar and on Dashboard after assignment.',
         ]

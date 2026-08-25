@@ -426,7 +426,7 @@ function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $ad
 
     $siteCount = refresh_extract_batch_site_count($batchId);
     stamp_extract_sites_writer($batchId, $addedBy);
-    $fresh = get_extract_batch($batchId);
+    $fresh = get_extract_batch($batchId) ?? [];
     return [
         'site_count' => $siteCount,
         'domains' => get_extract_batch_domains($batchId),

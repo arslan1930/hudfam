@@ -253,6 +253,11 @@ foreach ([
     }
 }
 ok('Team hub page-purpose guide functions');
+if (!str_contains($guidesLib, 'Dashboard can update Open / In progress / Done')) {
+    fail('departments guide still omits Dashboard status');
+} else {
+    ok('departments guide mentions Dashboard status');
+}
 $teamCampHub = file_get_contents($root . '/pages/team/email_campaigns.php') ?: '';
 $teamDraftsHub = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
 $teamAdminEmailsHub = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
@@ -567,6 +572,11 @@ if (!str_contains($prospectCheck, 'csrf_field()') || !str_contains($extractBatch
 } else {
     ok('Team Filter & Push csrf_field');
 }
+if (!str_contains($extractBatch, "!empty(\$conflict['conflict'])")) {
+    fail('Extracting Sites autosave treats non-conflict errors as last-writer 409');
+} else {
+    ok('Extracting Sites 409 only on last-writer conflict');
+}
 $extractingHub = file_get_contents($root . '/pages/team/extracting.php') ?: '';
 $teamHistory = file_get_contents($root . '/pages/team/prospect_batches.php') ?: '';
 if (!str_contains($extractingHub, 'table-wrap') || !str_contains($teamHistory, 'table-wrap')
@@ -595,8 +605,14 @@ $extractSitesJs = file_get_contents($root . '/assets/js/extract-sites-list.js') 
 $semrushSheetJs = file_get_contents($root . '/assets/js/semrush-sheet.js') ?: '';
 if (!str_contains($extractSitesJs, 'writer_at')
     || !str_contains($extractSitesJs, 'data.conflict')
+    || !str_contains($extractSitesJs, 'err.conflict')
+    || !str_contains($extractSitesJs, 'lastSavedText = lastSnapshot')
+    || !str_contains($extractSitesJs, 'undoStack = []')
     || !str_contains($semrushSheetJs, 'writer_at')
-    || !str_contains($semrushSheetJs, 'data.conflict')) {
+    || !str_contains($semrushSheetJs, 'data.conflict')
+    || !str_contains($semrushSheetJs, 'err.conflict')
+    || !str_contains($semrushSheetJs, 'lastSavedText = lastSnapshot')
+    || !str_contains($semrushSheetJs, 'undoStack = []')) {
     fail('Extracting/Semrush sheets missing last-writer conflict check');
 } else {
     ok('Extracting + Semrush last-writer conflict');

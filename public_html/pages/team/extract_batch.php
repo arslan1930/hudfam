@@ -20,13 +20,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $raw = (string) post('sites_text');
         $actorId = (int) ($user['id'] ?? 0) ?: null;
         $conflict = extract_sites_writer_conflict($id, $actorId, (string) post('writer_at'));
-        if ($conflict) {
+        if (is_array($conflict) && !empty($conflict['conflict'])) {
             $conflict['domains'] = get_extract_batch_domains($id);
             if ($wantsJson) {
                 extract_json_response($conflict, 409);
             }
             flash('error', (string) ($conflict['error'] ?? 'Reload to avoid overwriting.'));
             redirect('index.php?page=team_extract_batch&id=' . $id);
+        }
+        if (is_array($conflict)) {
+            if ($wantsJson) {
+                extract_json_response($conflict, 404);
+            }
+            flash('error', (string) ($conflict['error'] ?? 'Batch not found.'));
+            redirect('index.php?page=team_extracting');
         }
         try {
             $synced = set_extract_batch_domains_from_text(
