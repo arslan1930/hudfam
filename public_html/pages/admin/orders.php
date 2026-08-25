@@ -181,7 +181,7 @@ render_header('Order management', 'admin');
                 <a class="btn small" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $c['id'] ?>">Invoice</a>
               <?php endif; ?>
               <?php if ($invCount > 0): ?>
-                <a class="btn secondary small" href="index.php?page=admin_invoices">Invoices</a>
+                <a class="btn secondary small" href="index.php?page=admin_invoices&amp;client_id=<?= (int) $c['id'] ?>">Invoices</a>
               <?php endif; ?>
               <?php if (order_client_is_archived($c)): ?>
                 <form method="post" action="index.php?page=admin_orders" style="display:inline">

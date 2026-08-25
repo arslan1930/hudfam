@@ -77,6 +77,9 @@ $listOpts = [
     'q' => $invoiceQ,
     'filter' => $invoiceFilter,
 ];
+if ($invoiceClientId > 0) {
+    $listOpts['client_id'] = $invoiceClientId;
+}
 $totalInvoices = count_invoices($listOpts);
 $totalPages = max(1, (int) ceil($totalInvoices / $perPage));
 if ($pageNum > $totalPages) {
@@ -95,6 +98,14 @@ $invoiceListQs = static function (array $overrides) use ($invoiceQ, $invoiceFilt
         'p' => $pageNum,
     ], $overrides));
 };
+
+$clientScopeLabel = '';
+if ($invoiceClientId > 0) {
+    $scopeClient = get_order_client($invoiceClientId);
+    $clientScopeLabel = $scopeClient
+        ? (string) $scopeClient['name']
+        : ('Client #' . $invoiceClientId);
+}
 
 render_header('Invoices', 'admin');
 ?>
@@ -118,7 +129,16 @@ render_header('Invoices', 'admin');
 
 <section class="card">
   <div class="invoice-list-toolbar">
-    <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
+    <h2 style="margin:0" class="with-info-heading"><?php
+      if ($invoiceClientId > 0) {
+          echo label_with_info(
+              'Invoices for ' . $clientScopeLabel,
+              'Only invoices linked to this client sheet. Blank invoices have no client and stay on All invoices.'
+          );
+      } else {
+          echo label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.');
+      }
+    ?></h2>
     <form method="get" action="index.php" class="sheet-search invoice-list-search" style="display:flex;gap:0.4rem;align-items:center;margin:0;flex-wrap:wrap">
       <input type="hidden" name="page" value="admin_invoices">
       <?php if ($invoiceClientId > 0): ?>
@@ -137,29 +157,44 @@ render_header('Invoices', 'admin');
              title="Search invoice number, client, or note">
       <button class="btn secondary small" type="submit">Search</button>
       <?php if ($invoiceQ !== '' || $invoiceFilter !== ''): ?>
-        <a class="btn secondary small" href="index.php?page=admin_invoices">Clear</a>
+        <a class="btn secondary small" href="<?= h($invoiceClientId > 0
+            ? invoice_list_query(['client_id' => $invoiceClientId])
+            : 'index.php?page=admin_invoices') ?>">Clear</a>
+      <?php endif; ?>
+      <?php if ($invoiceClientId > 0): ?>
+        <a class="btn secondary small" href="index.php?page=admin_invoices">All invoices</a>
       <?php endif; ?>
     </form>
   </div>
+  <?php if ($invoiceClientId > 0): ?>
+    <p class="muted" style="margin:0 0 0.65rem">
+      Linked to this client sheet. Blank invoices have no client and are not listed here.
+    </p>
+  <?php endif; ?>
   <?php if (!$invoices && $totalInvoices < 1): ?>
     <div class="empty-state">
       <p><?php
-        if ($invoiceQ !== '' || $invoiceFilter !== '') {
+        if ($invoiceClientId > 0 && $invoiceQ === '' && $invoiceFilter === '') {
+            echo 'No invoices linked to this client.';
+        } elseif ($invoiceQ !== '' || $invoiceFilter !== '' || $invoiceClientId > 0) {
             echo 'No invoices match this filter.';
         } else {
             echo 'No invoices yet. Generate one from unpaid completed articles on a client sheet.';
         }
       ?></p>
-      <?php if ($invoiceQ === '' && $invoiceFilter === ''): ?>
+      <?php if ($invoiceQ === '' && $invoiceFilter === '' && $invoiceClientId < 1): ?>
       <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
       <?php else: ?>
-      <p><a class="btn secondary" href="index.php?page=admin_invoices">Clear filters</a></p>
+      <p><a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a></p>
       <?php endif; ?>
     </div>
   <?php else: ?>
     <p class="muted" style="margin:0 0 0.65rem">
       <?= (int) $totalInvoices ?> invoice<?= $totalInvoices === 1 ? '' : 's' ?>
+      <?php if ($invoiceClientId > 0): ?>
+        · <?= h($clientScopeLabel) ?>
+      <?php endif; ?>
       <?php if ($invoiceFilter === 'draft'): ?>
         · Draft
       <?php elseif ($invoiceFilter === 'unpaid'): ?>

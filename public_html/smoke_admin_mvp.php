@@ -153,6 +153,13 @@ if (!str_contains($invoicesAdminPage, 'name="filter"')
 } else {
     ok('invoices.php status filter');
 }
+if (!str_contains($invoicesAdminPage, "\$listOpts['client_id']")
+    || !str_contains($invoicesAdminPage, 'Linked to this client sheet')
+    || !str_contains($invoicesAdminPage, 'name="client_id"')) {
+    fail('invoices.php missing client_id scope');
+} else {
+    ok('invoices.php client_id list scope');
+}
 $adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
 if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
     fail('Admin Our database still says Clean errors');
@@ -886,6 +893,11 @@ if (!str_contains($ordersPage, 'order-client-search')) {
 } else {
     ok('orders client search');
 }
+if (!str_contains($ordersPage, 'admin_invoices&amp;client_id=')) {
+    fail('orders Invoices link missing client_id');
+} else {
+    ok('orders Invoices link scopes by client_id');
+}
 if (!str_contains($ordersPage, 'Has unpaid LIVE') || !str_contains($ordersPage, "value=\"archived\"")) {
     fail('orders missing unpaid/archived filters');
 } else {
@@ -966,7 +978,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

@@ -3112,6 +3112,23 @@ try {
         } else {
             fail('invoice list filter unpaid');
         }
+        $clientList = list_invoices(['client_id' => (int) $genClientId]);
+        $foundGenOnClient = false;
+        $blankOnClient = false;
+        foreach ($clientList as $row) {
+            $rid = (int) ($row['id'] ?? 0);
+            if ($rid === (int) $genId) {
+                $foundGenOnClient = true;
+            }
+            if ($rid === (int) $invId) {
+                $blankOnClient = true;
+            }
+        }
+        if ($foundGenOnClient && !$blankOnClient && count($clientList) >= 1) {
+            pass('invoice list client_id excludes blanks');
+        } else {
+            fail('invoice list client_id scope leaked blanks or missed generated');
+        }
         mark_invoice_payment_received($genId);
         $paidRow = db()->prepare('SELECT is_paid FROM order_items WHERE id=?');
         $paidRow->execute([$genItemId]);
