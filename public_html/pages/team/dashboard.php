@@ -109,7 +109,7 @@ if ($deptScoped) {
         $toolCards[] = ['team_prospect_batches', 'Site adding history', 'Your daily adds'];
     }
     if (!empty($toolSet['team_semrush_research'])) {
-        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, clear country'];
+        $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, comment'];
     }
     if (!empty($toolSet['team_extracting'])) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];

@@ -1298,6 +1298,23 @@ if (!str_contains($deptLib, 'function team_page_unlocked')) {
 } else {
     ok('team_page_unlocked helper');
 }
+if (!str_contains($deptLib, 'function team_can_clear_semrush_country')
+    || !str_contains($deptLib, "team_semrush_research")
+    || !str_contains($deptLib, 'Clear country stays with Site Finding')) {
+    fail('departments.php missing Extracting Semrush unlock / Clear ACL');
+} else {
+    ok('Extracting Semrush unlock + Clear country ACL');
+}
+$teamSemrushHub = file_get_contents($root . '/pages/team/semrush_research.php') ?: '';
+$teamSemrushSheet = file_get_contents($root . '/pages/team/semrush_sheet.php') ?: '';
+if (!str_contains($teamSemrushHub, 'team_can_clear_semrush_country')
+    || !str_contains($teamSemrushSheet, 'team_can_clear_semrush_country')
+    || !str_contains($teamSemrushHub, 'Clear country is for Site Finding')
+    || !str_contains($teamSemrushSheet, 'Clear country is for Site Finding')) {
+    fail('Team Semrush missing Clear country gate');
+} else {
+    ok('Team Semrush Clear country gated in hub + sheet');
+}
 
 $prospectCheckT = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 if (!str_contains($prospectCheckT, 'team_page_unlocked($user, \'team_extract_batch\')')
@@ -1583,6 +1600,7 @@ foreach ([
     'push_site rejects country mismatch',
     'team_page_unlocked',
     'prospect batch per country',
+    'semrush Clear country is Finding not Extracting',
 ] as $needle) {
     if (!str_contains($testsTeam, $needle)) {
         fail("tests_run.php missing Team coverage: {$needle}");

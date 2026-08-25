@@ -3804,10 +3804,19 @@ try {
         fail('team_page_unlocked finder unexpected');
     }
     if ($extractorUid > 0 && team_page_unlocked($extractor, 'team_extract_batch')
-        && !team_page_unlocked($extractor, 'team_prospect_check')) {
+        && team_page_unlocked($extractor, 'team_semrush_research')
+        && team_page_unlocked($extractor, 'team_semrush_sheet')
+        && !team_page_unlocked($extractor, 'team_prospect_check')
+        && !team_can_clear_semrush_country($extractor)) {
         pass('team_page_unlocked extractor tools');
     } else {
         fail('team_page_unlocked extractor unexpected');
+    }
+    if ($finderUid > 0 && team_can_clear_semrush_country($finder)
+        && !team_can_clear_semrush_country($extractor)) {
+        pass('semrush Clear country is Finding not Extracting');
+    } else {
+        fail('semrush Clear country ACL unexpected');
     }
 
     $day = '2099-01-15';

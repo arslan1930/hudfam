@@ -14,6 +14,7 @@ if (!$canon) {
 }
 $country = $canon['name'];
 $isAdmin = is_admin($user);
+$canClear = team_can_clear_semrush_country($user);
 $base = semrush_sheet_url($country, false);
 $hub = semrush_hub_url(false);
 
@@ -72,6 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'clear_all') {
+        if (!$canClear) {
+            flash('error', 'Clear country is for Site Finding and Admin.');
+            redirect($hub);
+        }
         $result = clear_semrush_country($country);
         flash(
             !empty($result['ok']) ? 'ok' : 'error',
@@ -155,17 +160,19 @@ render_breadcrumbs([
     </p>
     <p class="help" id="semrush_list_status" hidden></p>
   </div>
+  <?php if ($canClear): ?>
   <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem"
         onsubmit="return confirm(<?= h(json_encode('Clear ALL site names and comments for ' . $country . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="clear_all">
     <button class="btn danger small" type="submit">Clear country</button>
   </form>
+  <?php endif; ?>
 </div>
 
 <div class="card" style="margin-top:1rem" id="semrush-comments">
   <h2 style="margin:0 0 0.45rem">Comments</h2>
-  <p class="help" style="margin-top:0">Notes for this country sheet (visible to Site Finding + Admin).</p>
+  <p class="help" style="margin-top:0">Notes for this country sheet (visible to Site Finding, Site Extracting, and Admin).</p>
   <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-form" autocomplete="off">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_comment">
