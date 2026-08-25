@@ -236,6 +236,17 @@ a:hover { text-decoration: underline; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mobile-page-title {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #e5e7eb;
+}
 .nav-toggle {
   appearance: none;
   border: 1px solid rgba(255,255,255,0.35);
@@ -432,6 +443,66 @@ summary:focus-visible {
   color: #7fa3ae;
 }
 .main { padding: 1.25rem 1.5rem 2.5rem; }
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: -1.25rem -1.5rem 1rem;
+  padding: 0.55rem 1.5rem;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+.app-bar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.app-bar-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.app-bar-user {
+  color: var(--brand-2);
+  font-size: 0.88rem;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-bar-account {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+.app-bar-account a {
+  color: var(--brand-2);
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+.app-bar-account a:hover {
+  color: var(--brand-deep);
+  text-decoration: underline;
+}
+.app-bar-logout {
+  color: var(--brand-deep) !important;
+}
 .project-credit {
   margin: 2rem 0 0;
   padding-top: 1rem;
@@ -2252,7 +2323,8 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   box-shadow: 0 3px 10px rgba(139, 46, 46, 0.18);
 }
 .btn.danger:hover {
-  filter: brightness(1.05);
+  background: #7a2626;
+  border-color: #7a2626;
 }
 .btn.secondary.danger {
   background: #fff;
@@ -3927,7 +3999,7 @@ a.card.stat:focus-visible {
     size: A4;
     margin: 12mm;
   }
-  .shell, .sidebar, .topbar, .breadcrumbs, .alert-box, .no-print, .project-credit, .draft-restore-banner { display: none !important; }
+  .shell, .sidebar, .topbar, .breadcrumbs, .alert-box, .no-print, .project-credit, .app-footer, .app-bar, .mobile-bar, .draft-restore-banner { display: none !important; }
   .main { padding: 0 !important; }
   .invoice-preview-wrap { background: none; padding: 0; border-radius: 0; }
   body.invoice-print-body {
@@ -4021,6 +4093,7 @@ a.card.stat:focus-visible {
   body.nav-open { overflow: hidden; }
   .sidebar .nav-hint { display: none; }
   .main { padding: 1rem 0.9rem 2rem; }
+  .app-bar { display: none; }
   .form-grid { grid-template-columns: 1fr; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 0.15rem; }
   .panel-guide-grid { grid-template-columns: 1fr; }

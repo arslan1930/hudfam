@@ -102,6 +102,7 @@ function render_header(string $title, string $panel = ''): void
     echo '<a class="mobile-brand" href="' . h($home) . '">';
     echo '<img class="brand-logo" src="' . h($logo) . '" alt="">';
     echo '<span>' . h($app) . '</span></a>';
+    echo '<span class="mobile-page-title">' . h($title) . '</span>';
     echo '</div>';
     echo '<div class="sidebar-backdrop" data-nav-backdrop hidden></div>';
     echo '<aside class="sidebar" id="app-sidebar">';
@@ -277,6 +278,17 @@ function render_header(string $title, string $panel = ''): void
     echo '</div>';
     $sheetApp = in_array($current, ['admin_emails_data', 'team_sites_emails', 'team_email_campaigns'], true);
     echo '</nav></aside><main class="main' . ($sheetApp ? ' is-sheet-app' : '') . '" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    $uname = (string) ($user['username'] ?? '');
+    echo '<div class="app-bar">';
+    echo '<div class="app-bar-meta">';
+    echo '<span class="app-bar-chip">' . h($roleLabel) . '</span>';
+    echo '<span class="app-bar-user">' . h($uname) . '</span>';
+    echo '</div>';
+    echo '<div class="app-bar-account">';
+    echo '<a href="index.php?page=account_password">Change password</a>';
+    echo '<a class="app-bar-logout" href="index.php?page=logout">Logout</a>';
+    echo '</div>';
+    echo '</div>';
     foreach ($flashes as $flash) {
         render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }
