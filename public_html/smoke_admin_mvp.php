@@ -535,6 +535,14 @@ if (!str_contains($prospectCheck, 'csrf_field()') || !str_contains($extractBatch
 } else {
     ok('Team Filter & Push csrf_field');
 }
+$extractingHub = file_get_contents($root . '/pages/team/extracting.php') ?: '';
+$teamHistory = file_get_contents($root . '/pages/team/prospect_batches.php') ?: '';
+if (!str_contains($extractingHub, 'table-wrap') || !str_contains($teamHistory, 'table-wrap')
+    || !str_contains($extractingHub, 'guide_extracting()')) {
+    fail('Team Extracting/history missing table-wrap or extracting guide');
+} else {
+    ok('Team Extracting + history table-wrap');
+}
 
 $extracted = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 if (!str_contains($extracted, "redirect(\$sitesListUrl)") && !str_contains($extracted, 'redirect($sitesListUrl)')) {

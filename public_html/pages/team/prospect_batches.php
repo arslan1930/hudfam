@@ -21,6 +21,7 @@ render_header('Site adding history', 'team');
 
 <div class="card">
   <?php if ($batches): ?>
+  <div class="table-wrap">
   <table>
     <thead>
       <tr>
@@ -43,6 +44,7 @@ render_header('Site adding history', 'team');
     <?php endforeach; ?>
     </tbody>
   </table>
+  </div>
   <?php else: ?>
   <div class="empty-state">
     <p>No batches yet.</p>

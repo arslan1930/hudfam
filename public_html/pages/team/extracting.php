@@ -32,6 +32,7 @@ render_header('Extracting sites', 'team');
 
 <?php if ($batches): ?>
 <div class="card">
+  <div class="table-wrap">
   <table>
     <thead>
       <tr>
@@ -52,6 +53,7 @@ render_header('Extracting sites', 'team');
     <?php endforeach; ?>
     </tbody>
   </table>
+  </div>
 </div>
 <?php else: ?>
 <div class="card">
