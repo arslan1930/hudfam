@@ -1141,7 +1141,7 @@ function prospect_export_basename(string $country, string $q = ''): string
 /**
  * Stream one domain per line for Copy all / Download .txt (optionally filtered by $q).
  */
-function stream_prospect_domains_plain(string $country, bool $asDownload = false, string $q = ''): void
+function stream_prospect_domains_plain(string $country, bool $asDownload = false, string $q = '', int $createdBy = 0): void
 {
     ensure_prospect_schema();
     @set_time_limit(0);
@@ -1154,6 +1154,7 @@ function stream_prospect_domains_plain(string $country, bool $asDownload = false
     }
     $country = $canon['name'];
     $q = trim($q);
+    $createdBy = max(0, $createdBy);
     $base = prospect_export_basename($country, $q);
 
     header('Content-Type: text/plain; charset=utf-8');
@@ -1172,20 +1173,20 @@ function stream_prospect_domains_plain(string $country, bool $asDownload = false
         // ignore
     }
 
+    $sql = 'SELECT domain FROM prospect_sites WHERE country=?';
+    $params = [$country];
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $stmt = $pdo->prepare(
-            'SELECT domain FROM prospect_sites
-             WHERE country=? AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)
-             ORDER BY domain ASC'
-        );
-        $stmt->execute([$country, $like, $like, $like, $like]);
-    } else {
-        $stmt = $pdo->prepare(
-            'SELECT domain FROM prospect_sites WHERE country=? ORDER BY domain ASC'
-        );
-        $stmt->execute([$country]);
+        $sql .= ' AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)';
+        array_push($params, $like, $like, $like, $like);
     }
+    if ($createdBy > 0) {
+        $sql .= ' AND created_by = ?';
+        $params[] = $createdBy;
+    }
+    $sql .= ' ORDER BY domain ASC';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
 
     $i = 0;
     while ($domain = $stmt->fetchColumn()) {
@@ -1209,7 +1210,7 @@ function stream_prospect_domains_plain(string $country, bool $asDownload = false
 /**
  * Stream CSV (domain column only) for one country folder (optionally filtered by $q).
  */
-function stream_prospect_domains_csv(string $country, string $q = ''): void
+function stream_prospect_domains_csv(string $country, string $q = '', int $createdBy = 0): void
 {
     ensure_prospect_schema();
     @set_time_limit(0);
@@ -1222,6 +1223,7 @@ function stream_prospect_domains_csv(string $country, string $q = ''): void
     }
     $country = $canon['name'];
     $q = trim($q);
+    $createdBy = max(0, $createdBy);
     $base = prospect_export_basename($country, $q);
 
     header('Content-Type: text/csv; charset=utf-8');
@@ -1238,20 +1240,20 @@ function stream_prospect_domains_csv(string $country, string $q = ''): void
         // ignore
     }
 
+    $sql = 'SELECT domain FROM prospect_sites WHERE country=?';
+    $params = [$country];
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $stmt = $pdo->prepare(
-            'SELECT domain FROM prospect_sites
-             WHERE country=? AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)
-             ORDER BY domain ASC'
-        );
-        $stmt->execute([$country, $like, $like, $like, $like]);
-    } else {
-        $stmt = $pdo->prepare(
-            'SELECT domain FROM prospect_sites WHERE country=? ORDER BY domain ASC'
-        );
-        $stmt->execute([$country]);
+        $sql .= ' AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)';
+        array_push($params, $like, $like, $like, $like);
     }
+    if ($createdBy > 0) {
+        $sql .= ' AND created_by = ?';
+        $params[] = $createdBy;
+    }
+    $sql .= ' ORDER BY domain ASC';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
 
     // UTF-8 BOM helps Excel open the file correctly.
     echo "\xEF\xBB\xBF";
@@ -1745,7 +1747,7 @@ function remove_prospect_sites_by_list(string $country, string $raw): array
     ];
 }
 
-function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = ''): array
+function list_prospect_batches(?int $userId = null, int $limit = 60, string $roleFilter = '', int $offset = 0): array
 {
     ensure_prospect_schema();
     $sql = "SELECT b.*, u.username, u.full_name, u.role
@@ -1764,10 +1766,65 @@ function list_prospect_batches(?int $userId = null, int $limit = 60, string $rol
     if ($where) {
         $sql .= ' WHERE ' . implode(' AND ', $where);
     }
-    $sql .= ' ORDER BY b.batch_date DESC, b.id DESC LIMIT ' . (int) $limit;
+    $limit = max(1, min(500, (int) $limit));
+    $offset = max(0, (int) $offset);
+    $sql .= ' ORDER BY b.batch_date DESC, b.id DESC LIMIT ' . $limit . ' OFFSET ' . $offset;
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
+}
+
+function count_prospect_batches(?int $userId = null, string $roleFilter = ''): int
+{
+    ensure_prospect_schema();
+    $sql = 'SELECT COUNT(*) FROM prospect_batches b JOIN users u ON u.id = b.user_id';
+    $where = [];
+    $params = [];
+    if ($userId) {
+        $where[] = 'b.user_id = ?';
+        $params[] = $userId;
+    }
+    if ($roleFilter === 'team' || $roleFilter === 'admin') {
+        $where[] = 'u.role = ?';
+        $params[] = $roleFilter;
+    }
+    if ($where) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Country folders that contain sites added by one person (Our database person filter).
+ *
+ * @return list<array{country:string,total:int,is_empty:bool}>
+ */
+function list_prospect_countries_for_creator(int $userId): array
+{
+    ensure_prospect_schema();
+    if ($userId < 1) {
+        return [];
+    }
+    $stmt = db()->prepare(
+        "SELECT TRIM(p.country) AS country, COUNT(*) AS total
+         FROM prospect_sites p
+         WHERE p.created_by = ?
+         GROUP BY TRIM(p.country)
+         ORDER BY total DESC, country ASC"
+    );
+    $stmt->execute([$userId]);
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $name = trim((string) ($row['country'] ?? ''));
+        $out[] = [
+            'country' => $name,
+            'total' => (int) ($row['total'] ?? 0),
+            'is_empty' => $name === '',
+        ];
+    }
+    return $out;
 }
 
 /**

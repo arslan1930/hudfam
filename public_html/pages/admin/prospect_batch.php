@@ -115,18 +115,32 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $batch['user_id'] ?>">This teammate</a>
     <a class="btn secondary" href="index.php?page=admin_prospect_batches">All history</a>
-    <a class="btn secondary" href="index.php?page=admin_prospects&amp;created_by=<?= (int) $batch['user_id'] ?>">Inventory by person</a>
+    <?php
+    $inventoryHref = 'index.php?page=admin_prospects&created_by=' . (int) $batch['user_id'];
+    $batchCountry = trim((string) ($batch['country'] ?? ''));
+    if ($batchCountry !== '' && resolve_canonical_country($batchCountry) !== null) {
+        $inventoryHref .= '&country=' . rawurlencode(resolve_canonical_country($batchCountry)['name']);
+    }
+    ?>
+    <a class="btn secondary" href="<?= h($inventoryHref) ?>">Inventory by person</a>
   </div>
 </div>
 
 <div class="card">
   <h2>Day details</h2>
+  <p class="help">This only updates this history day. It does not move sites between Our database folders.</p>
   <form method="post" action="<?= h($postUrl) ?>">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="save_meta">
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:0.75rem">
       <div>
-        <label>Country</label>
-        <input name="country" value="<?= h((string) ($batch['country'] ?? '')) ?>">
+        <?= render_country_typeahead((string) ($batch['country'] ?? ''), [
+            'id' => 'history_country',
+            'label' => 'Country',
+            'required' => false,
+            'optional' => true,
+            'help' => 'Leave blank to keep the current country. Saving does not re-file sites in Our database.',
+        ]) ?>
       </div>
       <div>
         <label>Language</label>
@@ -148,12 +162,18 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
     </p>
   </form>
 </div>
+<?= sites_form_script_tag() ?>
 
 <div class="card" id="history_sites_shell" data-post-url="<?= h($postUrl) ?>">
   <div class="topbar" style="margin-bottom:0.75rem">
     <div>
       <h2 style="margin:0">Sites</h2>
-      <p class="muted" style="margin:0.25rem 0 0">Edit the list — changes autosave. Removing a line drops it from this history day only, unless you also remove from Our database.</p>
+      <p class="muted" style="margin:0.25rem 0 0">
+        Edit the list — changes autosave.
+        <strong>New lines are added to Our database</strong> for this day’s country.
+        Removing a line drops it from this history day only.
+        To also delete those domains from Our database, use <strong>Delete this day</strong> below.
+      </p>
     </div>
     <div class="actions">
       <?php render_undo_redo_arrow_buttons('history_undo_btn', 'history_redo_btn', ''); ?>
@@ -162,11 +182,7 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
   </div>
   <p id="history_list_status" class="help" hidden></p>
   <textarea id="history_sites_text" class="inventory-box" rows="16" spellcheck="false"><?= h($sitesText) ?></textarea>
-  <div class="actions" style="margin-top:0.75rem;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
-    <label style="font-weight:500;margin:0">
-      <input type="checkbox" id="history_also_remove_db" value="1">
-      Also remove deleted lines from Our database
-    </label>
+  <div class="actions" style="margin-top:0.75rem;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0.75rem">
     <span class="muted" id="history_footer_count"><?= (int) $siteCount ?> site<?= $siteCount === 1 ? '' : 's' ?></span>
   </div>
   <?php if ($items): ?>
@@ -191,6 +207,7 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
   <h2>Delete this day</h2>
   <p class="muted">Removes the history day. Our database stays unchanged unless you check the box.</p>
   <form method="post" action="<?= h($postUrl) ?>" onsubmit="return confirm('Delete this history day? This cannot be undone.');">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete_batch">
     <label style="font-weight:500">
       <input type="checkbox" name="also_remove_db" value="1">

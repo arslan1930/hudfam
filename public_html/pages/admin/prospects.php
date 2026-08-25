@@ -21,7 +21,12 @@ $emptyCountry = ($sheet === '_none');
 if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
     $canonSheet = resolve_canonical_country($sheet);
     if ($canonSheet !== null && $canonSheet['name'] !== $sheet) {
-        redirect('index.php?page=admin_prospects&country=' . urlencode($canonSheet['name']));
+        $redir = 'index.php?page=admin_prospects&country=' . urlencode($canonSheet['name']);
+        $keepPerson = (int) get('created_by');
+        if ($keepPerson > 0) {
+            $redir .= '&created_by=' . $keepPerson;
+        }
+        redirect($redir);
     }
     if ($canonSheet === null) {
         flash('error', 'That country folder is not in the country list. Sites only live in existing countries.');
@@ -30,6 +35,38 @@ if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
     $sheet = $canonSheet['name'];
 }
 $inCountry = ($sheet !== '' && $sheet !== 'all');
+
+$filterCreatedBy = (int) get('created_by');
+if ($filterCreatedBy < 1 && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $filterCreatedBy = (int) post('created_by');
+}
+$filterCreatedUser = null;
+if ($filterCreatedBy > 0) {
+    $stmt = db()->prepare('SELECT id, username, full_name, role FROM users WHERE id=? LIMIT 1');
+    $stmt->execute([$filterCreatedBy]);
+    $filterCreatedUser = $stmt->fetch() ?: null;
+    if (!$filterCreatedUser) {
+        flash('error', 'That person was not found.');
+        redirect('index.php?page=admin_prospects');
+    }
+} else {
+    $filterCreatedBy = 0;
+}
+$filterCreatedLabel = $filterCreatedUser
+    ? trim((string) ($filterCreatedUser['full_name'] ?: $filterCreatedUser['username']))
+    : '';
+$withPerson = static function (string $url) use ($filterCreatedBy): string {
+    if ($filterCreatedBy < 1 || str_contains($url, 'created_by=')) {
+        return $url;
+    }
+    $hash = '';
+    $hashPos = strpos($url, '#');
+    if ($hashPos !== false) {
+        $hash = substr($url, $hashPos);
+        $url = substr($url, 0, $hashPos);
+    }
+    return $url . (str_contains($url, '?') ? '&' : '?') . 'created_by=' . $filterCreatedBy . $hash;
+};
 
 $addRaw = '';
 $addCountry = $inCountry && !$emptyCountry ? $sheet : trim((string) (post('country') ?: get('add_country')));
@@ -52,10 +89,10 @@ if ($inCountry && !$emptyCountry && (string) get('export') !== '') {
     $mode = (string) get('export');
     $exportQ = trim((string) get('q'));
     if ($mode === 'domains' || $mode === 'download') {
-        stream_prospect_domains_plain($sheet, $mode === 'download', $exportQ);
+        stream_prospect_domains_plain($sheet, $mode === 'download', $exportQ, $filterCreatedBy);
     }
     if ($mode === 'csv') {
-        stream_prospect_domains_csv($sheet, $exportQ);
+        stream_prospect_domains_csv($sheet, $exportQ, $filterCreatedBy);
     }
 }
 
@@ -77,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
         redirect('index.php?page=admin_prospects&super_q=' . rawurlencode($returnSuper) . '#super-search');
     }
     if ($returnCountry !== '') {
-        redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
+        redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
     }
     redirect('index.php?page=admin_prospects');
 }
@@ -110,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
     flash($result['ok'] ? 'ok' : 'error', $result['ok']
         ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's') . '.'
         : (string) ($result['error'] ?? 'Could not remove selected sites.'));
-    redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
+    redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
@@ -140,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     flash($result['ok'] ? 'ok' : 'error', $result['ok']
         ? ($actionHist === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
         : (string) ($result['error'] ?? 'Could not undo/redo.'));
-    redirect('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry));
+    redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
 }
 
 // --- Remove by list from Our database (country folder) ---
@@ -166,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
                     ? 'No matching sites removed. Check the list (root domains) and try again.'
                     : 'No sites from that list were found in ' . $result['country'] . '.'
             );
-            redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']) . '#remove-by-list');
+            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($result['country']) . '#remove-by-list'));
         }
         $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from Our database · ' . $result['country'];
         if ((int) $result['not_found'] > 0) {
@@ -176,12 +213,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
             $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
         }
         flash('ok', $msg . '.');
-        redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+        redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($result['country'])));
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect(
             $removeCountry !== ''
-                ? 'index.php?page=admin_prospects&country=' . urlencode($removeCountry) . '#remove-by-list'
+                ? $withPerson('index.php?page=admin_prospects&country=' . urlencode($removeCountry) . '#remove-by-list')
                 : 'index.php?page=admin_prospects'
         );
     }
@@ -201,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
         $addCountry = $canon['name'];
         if (trim($addRaw) === '') {
             flash('error', 'Paste at least one root domain.');
-            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'));
         }
         $parsed = parse_domain_list_strict($addRaw);
         if ($parsed['invalid_count'] > 0) {
@@ -213,14 +250,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
                     ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
                     : $addRaw,
             ];
-            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'));
         }
         $result = admin_add_urls_to_database($addRaw, $user, $addCountry, $addLanguage);
         $dup = (int) ($result['duplicated'] ?? 0);
         $insN = (int) ($result['inserted'] ?? 0);
         if ($insN < 1 && $dup < 1 && (int) ($result['total'] ?? 0) < 1) {
             flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
-            redirect('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites');
+            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'));
         }
         if ($insN > 0) {
             flash('ok', 'Saved ' . $insN . ' new site(s) to ' . $result['country'] . '.');
@@ -229,12 +266,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             flash('fade', prospect_duplicates_deleted_message($dup) . '.');
         }
         unset($_SESSION['admin_prospects_add_draft']);
-        redirect('index.php?page=admin_prospects&country=' . urlencode($result['country']));
+        redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($result['country'])));
     } catch (Throwable $e) {
         flash('error', 'Could not save sites. ' . $e->getMessage());
         redirect(
             $addCountry !== ''
-                ? 'index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'
+                ? $withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites')
                 : 'index.php?page=admin_prospects#add-sites'
         );
     }
@@ -257,6 +294,70 @@ if (is_array($draft)) {
 
 // --- Country folders (default) ---
 if (!$inCountry && !$emptyCountry) {
+    if ($filterCreatedBy > 0) {
+        $personCountries = list_prospect_countries_for_creator($filterCreatedBy);
+        $personTotal = 0;
+        foreach ($personCountries as $pc) {
+            $personTotal += (int) $pc['total'];
+        }
+        render_header('Our database · ' . $filterCreatedLabel, 'admin');
+        ?>
+        <?php render_breadcrumbs([
+            ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+            ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
+            ['label' => $filterCreatedLabel],
+        ]); ?>
+        <div class="topbar">
+          <div>
+            <h1>Sites added by <?= h($filterCreatedLabel) ?></h1>
+            <p class="muted">
+              <?= (int) $personTotal ?> site<?= (int) $personTotal === 1 ? '' : 's' ?>
+              in <?= count($personCountries) ?> countr<?= count($personCountries) === 1 ? 'y' : 'ies' ?>.
+              Open a country to see only this person’s sites. Add/remove still apply to the whole country folder.
+            </p>
+          </div>
+          <div class="actions">
+            <a class="btn secondary" href="index.php?page=admin_prospects">Clear person filter</a>
+            <a class="btn secondary" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $filterCreatedBy ?>">Site adding history</a>
+          </div>
+        </div>
+        <div class="card">
+          <?php if ($personCountries): ?>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Country</th>
+                  <th class="num">Sites</th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($personCountries as $pc):
+                  $cName = (string) $pc['country'];
+                  $isEmpty = !empty($pc['is_empty']) || $cName === '';
+                  $href = $isEmpty
+                      ? 'index.php?page=admin_prospects&country=_none&created_by=' . (int) $filterCreatedBy
+                      : 'index.php?page=admin_prospects&country=' . rawurlencode($cName) . '&created_by=' . (int) $filterCreatedBy;
+                  ?>
+                <tr>
+                  <td><a href="<?= h($href) ?>"><?= h($isEmpty ? 'No country' : $cName) ?></a></td>
+                  <td class="num"><?= (int) $pc['total'] ?></td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+          <?php else: ?>
+          <div class="empty-state">
+            <p>No Our database sites attributed to <?= h($filterCreatedLabel) ?>.</p>
+          </div>
+          <?php endif; ?>
+        </div>
+        <?php
+        render_footer('admin');
+        return;
+    }
+
     $superQ = trim((string) get('super_q'));
     $superLimit = 200;
     $superResults = [];
@@ -646,14 +747,22 @@ if (!$emptyCountry && !$wantsAjax) {
 $q = trim((string) get('q'));
 $pageNum = max(1, (int) get('p', 1));
 $perPage = resolve_sheet_per_page();
-$inv = prospect_inventory_query([
+$invFilters = [
     'q' => $q,
     'country' => $countryName,
-] + ($emptyCountry ? [] : []), $pageNum, $perPage);
+];
+if ($filterCreatedBy > 0) {
+    $invFilters['created_by'] = $filterCreatedBy;
+}
+$inv = prospect_inventory_query($invFilters + ($emptyCountry ? [] : []), $pageNum, $perPage);
 
 if ($emptyCountry) {
     $where = ["TRIM(p.country)=''"];
     $params = [];
+    if ($filterCreatedBy > 0) {
+        $where[] = 'p.created_by = ?';
+        $params[] = $filterCreatedBy;
+    }
     if ($q !== '') {
         $like = '%' . $q . '%';
         $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
@@ -683,11 +792,20 @@ if ($emptyCountry) {
 $sheetLabel = $emptyCountry ? 'No country' : $countryName;
 $countryTotal = $emptyCountry
     ? (int) $total
-    : count_prospect_sites_matching($countryName, '');
+    : ($filterCreatedBy > 0
+        ? (int) prospect_inventory_query([
+            'q' => '',
+            'country' => $countryName,
+            'created_by' => $filterCreatedBy,
+        ], 1, 1)['total']
+        : count_prospect_sites_matching($countryName, ''));
 $searchMatchCount = ($q !== '' && !$emptyCountry)
     ? (int) $total
     : 0;
 $exportBase = 'index.php?page=admin_prospects&country=' . rawurlencode($emptyCountry ? '_none' : $countryName);
+if ($filterCreatedBy > 0) {
+    $exportBase .= '&created_by=' . $filterCreatedBy;
+}
 $exportAllUrl = $exportBase . '&export=domains';
 $downloadTxtUrl = $exportBase . '&export=download';
 $downloadCsvUrl = $exportBase . '&export=csv';
@@ -706,6 +824,7 @@ $qs = http_build_query(array_filter([
     'country' => $emptyCountry ? '_none' : $countryName,
     'q' => $q,
     'per_page' => $perPage,
+    'created_by' => $filterCreatedBy > 0 ? (string) $filterCreatedBy : '',
 ], static fn ($v) => $v !== '' && $v !== null));
 
 if (!$emptyCountry && $addCountry === '') {
@@ -758,8 +877,14 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <div>
     <h1><?= h($sheetLabel) ?></h1>
     <p class="muted">
+      <?php if ($filterCreatedBy > 0): ?>
+        Showing sites added by <strong><?= h($filterCreatedLabel) ?></strong>.
+        Add/remove still apply to the whole country folder.
+        <a href="index.php?page=admin_prospects&amp;country=<?= urlencode($emptyCountry ? '_none' : $countryName) ?>">Clear person filter</a>
+        ·
+      <?php endif; ?>
       <span id="prospect_country_total_label"><?= (int) $countryTotal ?></span>
-      site<?= (int) $countryTotal === 1 ? '' : 's' ?> in this country’s database
+      site<?= (int) $countryTotal === 1 ? '' : 's' ?> <?= $filterCreatedBy > 0 ? 'added by this person' : 'in this country’s database' ?>
       <span id="prospect_match_line"<?= $q !== '' ? '' : ' hidden' ?>>
         · <strong id="prospect_match_count_label"><?= (int) $searchMatchCount ?></strong>
         match<span id="prospect_match_plural"><?= (int) $searchMatchCount === 1 ? '' : 'es' ?></span>
@@ -784,7 +909,9 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       <a class="btn secondary" href="<?= h($downloadCsvUrl) ?>">Download CSV</a>
       <a class="btn" href="#add-sites">Add sites</a>
     <?php endif; ?>
-    <a class="btn secondary" href="index.php?page=admin_prospects">All countries</a>
+    <a class="btn secondary" href="<?= h($filterCreatedBy > 0
+        ? 'index.php?page=admin_prospects&created_by=' . $filterCreatedBy
+        : 'index.php?page=admin_prospects') ?>">All countries</a>
   </div>
 </div>
 <p class="help" id="prospect_copy_status" hidden></p>
@@ -847,12 +974,14 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <?php if (!$emptyCountry): ?>
     <?php
     render_sheet_edit_toolbar(
-        'index.php?page=admin_prospects&country=' . rawurlencode($countryName),
+        'index.php?page=admin_prospects&country=' . rawurlencode($countryName)
+            . ($filterCreatedBy > 0 ? '&created_by=' . $filterCreatedBy : ''),
         sheet_history_key('prospect', $countryName),
         [
             'q' => $q,
             'p' => $pageNum,
             'country' => $countryName,
+            'created_by' => $filterCreatedBy,
         ]
     );
     ?>
@@ -890,6 +1019,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           'page' => 'admin_prospects',
           'country' => $emptyCountry ? '_none' : $countryName,
           'q' => $q,
+          'created_by' => $filterCreatedBy > 0 ? (string) $filterCreatedBy : '',
       ], $perPage);
       ?>
     </div>
