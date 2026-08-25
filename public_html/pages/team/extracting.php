@@ -22,7 +22,7 @@ render_header('Extracting sites', 'team');
   </div>
   <div class="actions">
     <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
-      <a class="btn" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+      <a class="btn secondary" href="index.php?page=team_prospect_check">Filter &amp; add</a>
     <?php else: ?>
       <span class="muted" style="align-self:center">Sites arrive from Site Finding (Filter &amp; add).</span>
     <?php endif; ?>
@@ -53,7 +53,7 @@ render_header('Extracting sites', 'team');
             $lastPush = trim((string) ($b['last_pushed_at'] ?? ''));
             echo $lastPush !== '' ? h(substr($lastPush, 0, 16)) : '—';
         ?></td>
-        <td><a class="btn small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
+        <td><a class="btn secondary small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>
     <?php endforeach; ?>
     </tbody>

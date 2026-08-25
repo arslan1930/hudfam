@@ -1422,7 +1422,7 @@ if ($projectIdParam > 0) {
       </div>
       <div class="actions">
         <?php if ($availableCountries): ?>
-          <a class="btn" href="#add-country">Add country</a>
+          <a class="btn secondary" href="#add-country">Add country</a>
         <?php endif; ?>
         <a class="btn secondary" href="<?= h($campBase) ?>">All projects</a>
       </div>
@@ -1483,7 +1483,7 @@ if ($projectIdParam > 0) {
                   </td>
                   <td class="num">
                     <div class="camp-hub-row-actions">
-                      <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
+                      <a class="btn secondary small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
                       <form method="post" action="<?= h($projectForm) ?>"
                             onsubmit="return confirm(<?= h(json_encode('Remove “' . $cName . '” from this project?', JSON_UNESCAPED_UNICODE)) ?>);">
                         <?= csrf_field() ?>
@@ -1774,7 +1774,7 @@ $projectCount = count($projects);
     </p>
   </div>
   <div class="actions">
-    <a class="btn" href="#create-project">Create project</a>
+    <a class="btn secondary" href="#create-project">Create project</a>
     <a class="btn secondary" href="<?= h($base) ?>">All folders</a>
   </div>
 </div>
@@ -1884,7 +1884,7 @@ $projectCount = count($projects);
               </td>
               <td class="num">
                 <div class="camp-hub-row-actions">
-                  <a class="btn small" href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">Open</a>
+                  <a class="btn secondary small" href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">Open</a>
                   <form method="post" action="<?= h($campBase) ?>"
                         onsubmit="return confirm(<?= h(json_encode('Delete project “' . $pName . '” and all its countries?', JSON_UNESCAPED_UNICODE)) ?>);">
                     <?= csrf_field() ?>

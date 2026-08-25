@@ -129,7 +129,7 @@ render_header('Site adding history', 'admin');
           <td class="num"><?= (int) $pt['batch_days'] ?></td>
           <td class="num"><?= (int) $pt['site_count'] ?></td>
           <td><?= h((string) ($pt['last_batch_date'] ?: '—')) ?></td>
-          <td><a class="btn small" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $pt['user_id'] ?>">Days</a></td>
+          <td><a class="btn secondary small" href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $pt['user_id'] ?>">Days</a></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -158,7 +158,7 @@ render_header('Site adding history', 'admin');
         <td><?= h($b['full_name'] ?: $b['username']) ?></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
         <td><?= h($b['country'] ?: '—') ?></td>
-        <td><a class="btn small" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $b['id'] ?>">View</a></td>
+        <td><a class="btn secondary small" href="index.php?page=admin_prospect_batch&amp;id=<?= (int) $b['id'] ?>">View</a></td>
       </tr>
     <?php endforeach; ?>
     </tbody>

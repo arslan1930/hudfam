@@ -105,7 +105,7 @@ render_header('Dashboard', 'admin');
              title="Type to filter · Enter = next match · Shift+Enter = previous">
       <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
     </label>
-    <a class="btn" href="index.php?page=admin_prospects#add-sites">Our database</a>
+    <a class="btn secondary" href="index.php?page=admin_prospects#add-sites">Our database</a>
   </div>
 </div>
 

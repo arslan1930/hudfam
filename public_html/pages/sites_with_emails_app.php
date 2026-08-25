@@ -499,7 +499,7 @@ if (!$inCountry) {
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
           <?php if (team_page_unlocked($sweUser, 'team_admin_emails_search')): ?>
-            <a class="btn" href="index.php?page=team_admin_emails_search">Admin emails search</a>
+            <a class="btn secondary" href="index.php?page=team_admin_emails_search">Admin emails search</a>
           <?php endif; ?>
           <?php if (team_page_unlocked($sweUser, 'team_extracting')): ?>
             <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
@@ -517,7 +517,7 @@ if (!$inCountry) {
         Select a match, then delete the whole row or remove one email only (site name stays).
       </p>
       <p class="actions" style="margin-top:0.65rem">
-        <a class="btn" href="index.php?page=team_admin_emails_search">Open Admin super search</a>
+        <a class="btn secondary" href="index.php?page=team_admin_emails_search">Open Admin super search</a>
       </p>
     </div>
     <?php endif; ?>

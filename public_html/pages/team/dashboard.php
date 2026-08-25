@@ -76,7 +76,7 @@ if ($deptScoped) {
                  title="Type to filter · Enter = next match · Shift+Enter = previous">
           <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
         </label>
-        <a class="btn" href="index.php?page=team_departments">My departments</a>
+        <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
       </div>
     </div>
 
@@ -147,7 +147,7 @@ if ($deptScoped) {
                 </td>
                 <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
                 <td>
-                  <a href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
+                  <a class="btn secondary small" href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -345,7 +345,7 @@ render_header('Dashboard', 'team');
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
-    <a class="btn" href="index.php?page=admin_dashboard">Admin dashboard</a>
+    <a class="btn secondary" href="index.php?page=admin_dashboard">Admin dashboard</a>
   </div>
 </div>
 <?php render_dashboard_help('team'); ?>

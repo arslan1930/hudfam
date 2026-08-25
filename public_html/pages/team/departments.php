@@ -111,10 +111,10 @@ if (!$dept) {
       <?php if ($showEmailCommShortcuts && $myDepartments): ?>
         <div class="actions">
           <?php if ($canSitesEmails): ?>
-            <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+            <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
           <?php endif; ?>
           <?php if ($canAdminEmailsSearch): ?>
-            <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_search">Admin emails search</a>
+            <a class="btn secondary" href="index.php?page=team_admin_emails_search">Admin emails search</a>
           <?php endif; ?>
           <?php if ($canCampaigns): ?>
             <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
@@ -269,14 +269,14 @@ render_breadcrumbs([
   <div class="actions">
     <?php if ($isEmailExtractingDept): ?>
       <?php if ($canSitesEmails): ?>
-        <a class="btn" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+        <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
       <?php endif; ?>
       <?php if ($canAdminEmailsSearch): ?>
         <a class="btn <?= $canSitesEmails ? 'secondary' : '' ?>" href="index.php?page=team_admin_emails_search">Admin emails search</a>
       <?php endif; ?>
     <?php elseif ($isCommunicationDept): ?>
       <?php if ($canAdminEmailsSearch): ?>
-        <a class="btn" href="index.php?page=team_admin_emails_search">Admin emails search</a>
+        <a class="btn secondary" href="index.php?page=team_admin_emails_search">Admin emails search</a>
       <?php endif; ?>
       <?php if ($canCampaigns): ?>
         <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>

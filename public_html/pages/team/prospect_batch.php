@@ -22,7 +22,7 @@ render_header('Batch ' . $batch['batch_date'], 'team');
   <div class="actions">
     <a class="btn secondary" href="index.php?page=team_prospect_batches">My batches</a>
     <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
-      <a class="btn" href="index.php?page=team_prospect_check">Filter & add</a>
+      <a class="btn secondary" href="index.php?page=team_prospect_check">Filter & add</a>
     <?php endif; ?>
     <?php if ($domains): ?>
       <button class="btn secondary" type="button" id="batch-copy-all"

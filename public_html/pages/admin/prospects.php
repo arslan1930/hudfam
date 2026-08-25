@@ -415,7 +415,7 @@ if (!$inCountry && !$emptyCountry) {
         <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
-        <a class="btn" href="#super-search">Super search</a>
+        <a class="btn secondary" href="#super-search">Super search</a>
         <a class="btn secondary" href="#add-sites">Add sites</a>
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Site adding history</a>
       </div>
@@ -897,7 +897,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <?php if (!$emptyCountry): ?>
       <button
         type="button"
-        class="btn"
+        class="btn secondary"
         id="prospect_copy_all"
         data-export-url="<?= h($exportAllUrl) ?>"
         data-download-name="<?= h($exportAllTxtName) ?>"
@@ -907,7 +907,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       >Copy all</button>
       <a class="btn secondary" href="<?= h($downloadTxtUrl) ?>">Download .txt</a>
       <a class="btn secondary" href="<?= h($downloadCsvUrl) ?>">Download CSV</a>
-      <a class="btn" href="#add-sites">Add sites</a>
+      <a class="btn secondary" href="#add-sites">Add sites</a>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($filterCreatedBy > 0
         ? 'index.php?page=admin_prospects&created_by=' . $filterCreatedBy

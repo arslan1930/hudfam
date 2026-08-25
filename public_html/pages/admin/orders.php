@@ -176,7 +176,7 @@ render_header('Order management', 'admin');
               </div>
             </div>
             <div class="order-client-actions">
-              <a class="btn small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">Open sheet</a>
+              <a class="btn secondary small" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $c['id'] ?>">Open sheet</a>
               <?php if ($unpaidLive > 0 && !order_client_is_archived($c)): ?>
                 <a class="btn small" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) $c['id'] ?>">Invoice</a>
               <?php endif; ?>

@@ -298,7 +298,7 @@ render_header('Filter & add', 'team');
       <?php render_task_presence('prospect:' . $country, 'Others adding sites for ' . $country); ?>
     <?php endif; ?>
     <?php if (team_page_unlocked($user, 'team_semrush_research')): ?>
-      <a class="btn" href="index.php?page=team_semrush_research">Semrush Research</a>
+      <a class="btn secondary" href="index.php?page=team_semrush_research">Semrush Research</a>
     <?php endif; ?>
     <?php if (team_page_unlocked($user, 'team_extracting')): ?>
       <a class="btn secondary" href="index.php?page=team_extracting">Extracting sites</a>
