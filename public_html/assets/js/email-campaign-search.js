@@ -30,6 +30,13 @@
     var timer = null;
     var abortCtrl = null;
 
+    function csrfToken() {
+      var field = root.querySelector('input[name="_csrf"]');
+      if (field && field.value) return field.value;
+      var meta = document.querySelector('meta[name="csrf-token"]');
+      return meta ? String(meta.getAttribute('content') || '') : '';
+    }
+
     function setStatus(msg, isError) {
       if (!statusEl) return;
       if (!msg) {
@@ -241,6 +248,9 @@
     }
 
     function postAction(body) {
+      var payload = body || {};
+      var tok = csrfToken();
+      if (tok && payload._csrf == null) payload._csrf = tok;
       return fetch(postUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -248,7 +258,7 @@
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           Accept: 'application/json'
         },
-        body: new URLSearchParams(body).toString()
+        body: new URLSearchParams(payload).toString()
       }).then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok || !data || data.ok === false) {
