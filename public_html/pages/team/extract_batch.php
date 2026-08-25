@@ -251,7 +251,7 @@ render_header('Extracting · ' . $country, 'team');
           'placeholder' => "Paste sites…\nexample.com\nshop.de\nblog.fr",
       ]) ?>
       <div class="actions-sticky" style="margin-top:0.75rem">
-        <button class="btn large" type="submit"
+        <button class="btn large" type="submit" id="extract_push_btn"
                 title="Push Ready domains to Extracted Sites and Sites with emails - Team">Push</button>
       </div>
     </form>

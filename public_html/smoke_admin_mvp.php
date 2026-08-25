@@ -2081,7 +2081,8 @@ if (!str_contains($cssUi, '--grad-btn: linear-gradient(180deg, #374151')
     || !str_contains($cssUi, 'background: #9ca3af')
     || !str_contains($cssUi, '.app-bar {')
     || !str_contains($cssUi, '.app-footer {')
-    || !str_contains($cssUi, '.app-footer-primary')) {
+    || !str_contains($cssUi, '.app-footer-primary')
+    || !str_contains($cssUi, '0 0 0 2px #fff')) {
     fail('CSS missing ink commit buttons or app chrome');
 } else {
     ok('CSS ink commit buttons + app chrome');
@@ -2137,6 +2138,13 @@ if (!str_contains($loginPhp, 'render_project_credit()')
     fail('logged-out pages missing Teqnowebs credit or commit buttons');
 } else {
     ok('login/forgot/reset/verify Teqnowebs credit');
+}
+$extractBatchUi = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+if (!str_contains($extractBatchUi, 'id="extract_push_btn"')
+    || !str_contains($extractBatchUi, 'class="btn large"')) {
+    fail('Extracting Push commit button missing');
+} else {
+    ok('Extracting Push is a filled commit button');
 }
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";

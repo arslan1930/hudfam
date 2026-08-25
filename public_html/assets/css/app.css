@@ -238,14 +238,16 @@ a:hover { text-decoration: underline; }
 }
 .mobile-page-title {
   margin-left: auto;
+  flex: 1 1 7rem;
   min-width: 0;
-  max-width: 46%;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.82rem;
-  font-weight: 650;
-  color: #e5e7eb;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: right;
 }
 .nav-toggle {
   appearance: none;
@@ -940,7 +942,11 @@ h2 {
 .btn:focus-visible,
 button.btn:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring), 0 3px 10px rgba(31, 41, 55, 0.22);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 5px rgba(31, 41, 55, 0.7), 0 3px 10px rgba(31, 41, 55, 0.22);
+}
+.btn.secondary:focus-visible,
+button.btn.secondary:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 .btn:disabled,
 button.btn:disabled {
@@ -4171,6 +4177,14 @@ a.card.stat:focus-visible {
     margin-left: -0.9rem;
     margin-right: -0.9rem;
     padding: 1rem 0.9rem;
+  }
+  .app-footer-primary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+  .mobile-brand span {
+    max-width: 6.5rem;
   }
   .form-grid { grid-template-columns: 1fr; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 0.15rem; }
