@@ -222,12 +222,10 @@ if ($attention):
   <a class="launch-card<?= $adminEmailsNew ? ' has-admin-new' : '' ?>" href="index.php?page=admin_emails_data" data-dashboard-item
      data-search="emails data sites with emails admin archive final campaign push">
     <h2>Emails data<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h2>
-    <p>
-      Admin <?= !empty($sweAdmin['ok']) ? number_format((int) $sweAdmin['n']) : '—' ?>
+    <p>Admin <?= !empty($sweAdmin['ok']) ? number_format((int) $sweAdmin['n']) : '—' ?>
       · Final <?= !empty($sweFinal['ok']) ? number_format((int) $sweFinal['n']) : '—' ?>
       · Campaign <?= !empty($campaignSheets['ok']) ? number_format((int) $campaignSheets['n']) : '—' ?>
-      <?= !empty($campaignSheets['ok']) && (int) $campaignSheets['n'] === 1 ? ' sheet' : ' sheets' ?>.
-    </p>
+      <?= !empty($campaignSheets['ok']) && (int) $campaignSheets['n'] === 1 ? 'sheet' : 'sheets' ?>.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_semrush_research" data-dashboard-item
     data-search="semrush research site finding">
@@ -242,14 +240,12 @@ if ($attention):
   <a class="launch-card" href="index.php?page=admin_invoices" data-dashboard-item
      data-search="invoices generate printable blank draft done payment unpaid">
     <h2>Invoices</h2>
-    <p>
-      <?php if (!empty($invoiceUnpaid['ok']) && !empty($invoiceDrafts['ok'])): ?>
+    <p><?php if (!empty($invoiceUnpaid['ok']) && !empty($invoiceDrafts['ok'])): ?>
         <?= number_format($invoiceUnpaidCount) ?> unpaid
         · <?= number_format($invoiceDraftCount) ?> draft.
       <?php else: ?>
         Generate printable invoices from completed articles.
-      <?php endif; ?>
-    </p>
+      <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_users" data-dashboard-item
      data-search="users admin team logins password department assign awaiting">
