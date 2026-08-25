@@ -113,7 +113,7 @@ if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg = $rowDeleted
             ? 'Removed last email from ' . (string) $result['domain']
                 . ($country !== '' ? ' (' . $country . ')' : '')
-                . ' · site row deleted from Admin + Final (no empty-email sites).'
+                . ' · Admin working-list row deleted · Final keeps its archive copy.'
             : 'Removed ' . (string) ($result['removed'] ?? '') . ' from ' . (string) $result['domain']
                 . ($country !== '' ? ' (' . $country . ')' : '')
                 . '. Site name kept in Admin.';

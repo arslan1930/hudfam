@@ -238,7 +238,7 @@
         var confirmMsg = isLastEmail
           ? 'Remove this email from Sites with emails - Admin?\n\n'
             + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
-            + '\n\nThis is the only email — the site row will also be deleted from Admin + Final (no empty-email sites).'
+            + '\n\nThis is the only email — the Admin working-list row is deleted. Final keeps its archive copy.'
           : 'Remove only this email from Sites with emails - Admin?\n\n'
             + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
             + '\n\nSite name stays; other emails remain.';

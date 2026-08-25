@@ -615,6 +615,21 @@ if (!str_contains($emailsHub, 'render_sites_with_emails_admin_super_search')
     ok('emails hub P3 super-search + Final repair report');
 }
 $sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
+$sweDeleteJsSmoke = file_get_contents($root . '/assets/js/admin-emails-delete.js') ?: '';
+$teamAdminEmailsSmoke = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
+if (str_contains($emailsHub, 'Admin + Final')
+    || str_contains($emailsHub, 'from Admin and Final')
+    || str_contains($sweLibSmoke, 'deleted from Admin and Final')
+    || str_contains($sweDeleteJsSmoke, 'Admin + Final')
+    || str_contains($teamAdminEmailsSmoke, 'Admin + Final')
+    || !str_contains($emailsHub, 'Final keeps its archive copy')
+    || !str_contains($sweLibSmoke, 'Final keeps its archive copy')
+    || !str_contains($sweDeleteJsSmoke, 'Final keeps its archive copy')
+    || !str_contains($teamAdminEmailsSmoke, 'Final keeps its archive copy')) {
+    fail('emails super-search still claims last-email delete wipes Final');
+} else {
+    ok('emails super-search last-email copy keeps Final');
+}
 $sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
     || !str_contains($sweLibSmoke, 'skipped_full_slots')
