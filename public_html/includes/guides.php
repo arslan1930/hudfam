@@ -257,3 +257,73 @@ function guide_admin_account(): string
         []
     );
 }
+
+function guide_campaign_search(): string
+{
+    return render_page_purpose(
+        'Campaign search — find a site in a project',
+        'One search bar per Admin project shown to Communication Team. Each bar covers every country sheet in that project.',
+        'Type a site or email, pick a result, then delete both or remove only one email. Updates go to that country’s campaign sheet. Removing the last email also deletes the site row.',
+        [
+            'Pick the project search bar Admin shared with Communication Team.',
+            'Search site name or email across all countries in that project.',
+            'Delete both, or remove only email — JavaScript is required to confirm the update.',
+        ]
+    );
+}
+
+function guide_campaign_drafts(): string
+{
+    return render_page_purpose(
+        'Campaign drafts — copy outreach for email',
+        'Reusable formatted replies, offers, and follow-ups per Admin project. Optional subject line and tokens such as {domain} and {country}.',
+        'Open a project, write or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Communication Team only — this is not the full Admin campaign editor.',
+        [
+            'Choose a project Admin turned on for Communication Team.',
+            'Save drafts with formatting; tokens fill from Campaign search when you open drafts for a site.',
+            'Copy into your email client. Delete is allowed for the creator or Admin.',
+        ]
+    );
+}
+
+function guide_admin_emails_search(): string
+{
+    return render_page_purpose(
+        'Admin search — Sites with emails, all countries',
+        'Super search across every country in Sites with emails - Admin. Results always show site + email + country together.',
+        'Search, then delete both or remove only email on that country’s Admin row. Removing the last email deletes the Admin working-list row; Final keeps its archive copy.',
+        [
+            'Type a site or email (all countries).',
+            'Choose delete both or remove only email, then Enter to confirm.',
+            'JavaScript is required. This does not open the full Admin sheet.',
+        ]
+    );
+}
+
+function guide_semrush_team(): string
+{
+    return render_page_purpose(
+        'Semrush Research — site names from Extracting Push',
+        'Country folders of site names copied when Extracting Results are pushed (same TLD routing), plus optional Admin seed. Does not change Extracted Sites.',
+        'Open a country to edit, copy, undo/redo, or comment. Site Finding and Admin can clear a whole country. Site Extracting can research here but cannot Clear.',
+        [
+            'Open a country folder after Extracting Push (or Admin seed).',
+            'Edit the list and add comments. Clear country stays with Site Finding / Admin.',
+            'Filter & add stays on Site Finding — this page is research notes, not the unique-sites filter.',
+        ]
+    );
+}
+
+function guide_team_departments(): string
+{
+    return render_page_purpose(
+        'My departments — tasks for your team',
+        'Departments Admin assigned you to, with open tasks and due dates. Tools stay locked until you are in a department.',
+        'Open a folder to see work. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task.',
+        [
+            'Open a department folder for tasks and filters (including Mine and overdue).',
+            'Update status only on your named tasks, or on tasks with no named assignee.',
+            'Unlocked tools appear in the sidebar and on Dashboard after assignment.',
+        ]
+    );
+}

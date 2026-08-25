@@ -162,6 +162,7 @@ render_breadcrumbs([
     <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
   </div>
 </div>
+<?= guide_campaign_drafts() ?>
 
 <?php if ($projects === []): ?>
 <div class="card">

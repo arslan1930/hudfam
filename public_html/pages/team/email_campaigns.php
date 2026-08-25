@@ -155,6 +155,7 @@ render_breadcrumbs([
     <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
   </div>
 </div>
+<?= guide_campaign_search() ?>
 <?php
 render_email_campaign_super_search($base);
 render_footer('team');

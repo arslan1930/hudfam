@@ -56,6 +56,7 @@ render_breadcrumbs([
     <?php endif; ?>
   </div>
 </div>
+<?= guide_semrush_team() ?>
 
 <?php if ($folders === []): ?>
 <div class="card">

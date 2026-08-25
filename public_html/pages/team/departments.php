@@ -125,6 +125,7 @@ if (!$dept) {
         </div>
       <?php endif; ?>
     </div>
+    <?= guide_team_departments() ?>
 
     <?php if (!$myDepartments && !$isAdminViewing): ?>
     <div class="card">
