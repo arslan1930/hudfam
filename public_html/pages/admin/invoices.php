@@ -2,6 +2,17 @@
 $user = require_admin();
 ensure_invoice_schema();
 
+$invoiceQ = trim((string) get('q'));
+$invoiceFilter = normalize_invoice_list_filter((string) get('filter'));
+$invoiceClientId = max(0, (int) get('client_id'));
+$pageNum = max(1, (int) get('p', 1));
+$listUrl = invoice_list_query([
+    'q' => $invoiceQ,
+    'filter' => $invoiceFilter,
+    'client_id' => $invoiceClientId,
+    'p' => $pageNum,
+]);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $wantsJson = (string) post('ajax') === '1'
@@ -25,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 delete_invoice($id);
                 flash('ok', 'Deleted invoice ' . $inv['invoice_number'] . '.');
             }
-            redirect('index.php?page=admin_invoices');
+            redirect($listUrl);
         }
         if ($action === 'mark_paid') {
             $id = (int) post('id');
@@ -46,50 +57,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 flash('ok', $msg);
             }
-            redirect('index.php?page=admin_invoices');
+            redirect($listUrl);
         }
         if ($action === 'save_note') {
             $id = (int) post('id');
             update_invoice_admin_note($id, (string) post('admin_note'));
             flash('ok', 'Note saved for invoice.');
-            redirect('index.php?page=admin_invoices#inv-' . $id);
+            redirect($listUrl . '#inv-' . $id);
         }
     } catch (Throwable $e) {
         $jsonOut(['ok' => false, 'error' => $e->getMessage()], 400);
         flash('error', $e->getMessage());
-        redirect('index.php?page=admin_invoices');
+        redirect($listUrl);
     }
 }
 
-$invoiceQ = trim((string) get('q'));
 $perPage = 50;
-$pageNum = max(1, (int) get('p', 1));
-$totalInvoices = count_invoices(['q' => $invoiceQ]);
+$listOpts = [
+    'q' => $invoiceQ,
+    'filter' => $invoiceFilter,
+];
+$totalInvoices = count_invoices($listOpts);
 $totalPages = max(1, (int) ceil($totalInvoices / $perPage));
 if ($pageNum > $totalPages) {
     $pageNum = $totalPages;
 }
-$invoices = list_invoices([
-    'q' => $invoiceQ,
+$invoices = list_invoices(array_merge($listOpts, [
     'limit' => $perPage,
     'offset' => ($pageNum - 1) * $perPage,
-]);
+]));
 
-$invoiceListQs = static function (array $overrides) use ($invoiceQ): string {
-    $params = array_merge([
-        'page' => 'admin_invoices',
+$invoiceListQs = static function (array $overrides) use ($invoiceQ, $invoiceFilter, $invoiceClientId, $pageNum): string {
+    return invoice_list_query(array_merge([
         'q' => $invoiceQ,
-        'p' => '1',
-    ], $overrides);
-    $bits = [];
-    foreach ($params as $k => $v) {
-        $v = (string) $v;
-        if ($v === '' || ($k === 'p' && $v === '1')) {
-            continue;
-        }
-        $bits[] = rawurlencode((string) $k) . '=' . rawurlencode($v);
-    }
-    return 'index.php?' . implode('&', $bits);
+        'filter' => $invoiceFilter,
+        'client_id' => $invoiceClientId,
+        'p' => $pageNum,
+    ], $overrides));
 };
 
 render_header('Invoices', 'admin');
@@ -115,29 +119,54 @@ render_header('Invoices', 'admin');
 <section class="card">
   <div class="invoice-list-toolbar">
     <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
-    <form method="get" action="index.php" class="sheet-search invoice-list-search" style="display:flex;gap:0.4rem;align-items:center;margin:0">
+    <form method="get" action="index.php" class="sheet-search invoice-list-search" style="display:flex;gap:0.4rem;align-items:center;margin:0;flex-wrap:wrap">
       <input type="hidden" name="page" value="admin_invoices">
+      <?php if ($invoiceClientId > 0): ?>
+        <input type="hidden" name="client_id" value="<?= (int) $invoiceClientId ?>">
+      <?php endif; ?>
+      <label class="visually-hidden" for="invoice-filter">Filter invoices</label>
+      <select id="invoice-filter" name="filter" aria-label="Filter invoices" onchange="this.form.submit()">
+        <option value="" <?= $invoiceFilter === '' ? 'selected' : '' ?>>All</option>
+        <option value="draft" <?= $invoiceFilter === 'draft' ? 'selected' : '' ?>>Draft</option>
+        <option value="unpaid" <?= $invoiceFilter === 'unpaid' ? 'selected' : '' ?>>Unpaid</option>
+        <option value="paid" <?= $invoiceFilter === 'paid' ? 'selected' : '' ?>>Paid</option>
+      </select>
       <label class="visually-hidden" for="invoice-search">Search invoices</label>
       <input id="invoice-search" type="search" name="q" value="<?= h($invoiceQ) ?>"
              placeholder="Search…" autocomplete="off" spellcheck="false" data-no-draft
              title="Search invoice number, client, or note">
       <button class="btn secondary small" type="submit">Search</button>
-      <?php if ($invoiceQ !== ''): ?>
+      <?php if ($invoiceQ !== '' || $invoiceFilter !== ''): ?>
         <a class="btn secondary small" href="index.php?page=admin_invoices">Clear</a>
       <?php endif; ?>
     </form>
   </div>
   <?php if (!$invoices && $totalInvoices < 1): ?>
     <div class="empty-state">
-      <p><?= $invoiceQ !== '' ? 'No invoices match this search.' : 'No invoices yet. Generate one from unpaid completed articles on a client sheet.' ?></p>
-      <?php if ($invoiceQ === ''): ?>
+      <p><?php
+        if ($invoiceQ !== '' || $invoiceFilter !== '') {
+            echo 'No invoices match this filter.';
+        } else {
+            echo 'No invoices yet. Generate one from unpaid completed articles on a client sheet.';
+        }
+      ?></p>
+      <?php if ($invoiceQ === '' && $invoiceFilter === ''): ?>
       <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
+      <?php else: ?>
+      <p><a class="btn secondary" href="index.php?page=admin_invoices">Clear filters</a></p>
       <?php endif; ?>
     </div>
   <?php else: ?>
     <p class="muted" style="margin:0 0 0.65rem">
       <?= (int) $totalInvoices ?> invoice<?= $totalInvoices === 1 ? '' : 's' ?>
+      <?php if ($invoiceFilter === 'draft'): ?>
+        · Draft
+      <?php elseif ($invoiceFilter === 'unpaid'): ?>
+        · Unpaid
+      <?php elseif ($invoiceFilter === 'paid'): ?>
+        · Paid
+      <?php endif; ?>
       <?php if ($totalPages > 1): ?>
         · page <?= (int) $pageNum ?> / <?= (int) $totalPages ?>
         · showing <?= count($invoices) ?>
@@ -197,7 +226,7 @@ render_header('Invoices', 'admin');
                     <span class="invoice-note-preview-empty">note…</span>
                   <?php endif; ?>
                 </button>
-                <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices"
+                <form method="post" class="invoice-list-note-form" action="<?= h($listUrl) ?>"
                       data-note-panel hidden>
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="save_note">
@@ -228,7 +257,7 @@ render_header('Invoices', 'admin');
               <?php elseif ($draft): ?>
                 <span class="invoice-pay-badge is-draft" title="Still needs data — open and Save as done when ready">Draft</span>
               <?php else: ?>
-                <form method="post" class="inline" action="index.php?page=admin_invoices"
+                <form method="post" class="inline" action="<?= h($listUrl) ?>"
                       data-stay-ajax data-stay-mark-paid
                       onsubmit="return confirm(<?= h(json_encode(
                           'Confirm this invoice is paid?' . "\n\n"
@@ -250,7 +279,7 @@ render_header('Invoices', 'admin');
             <td class="invoice-list-actions">
               <div class="invoice-list-actions-row">
                 <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
-                <form method="post" class="inline" action="index.php?page=admin_invoices"
+                <form method="post" class="inline" action="<?= h($listUrl) ?>"
                       onsubmit="return confirm(<?= h(json_encode('Delete invoice ' . $inv['invoice_number'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="delete">

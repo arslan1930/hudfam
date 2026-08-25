@@ -155,7 +155,7 @@ render_dashboard_help('admin');
   render_admin_dashboard_stat(
       'Unpaid invoices',
       $invoiceUnpaid,
-      'index.php?page=admin_invoices',
+      'index.php?page=admin_invoices&filter=unpaid',
       'Generated invoices waiting for payment (drafts listed underneath)',
       $invoiceSub
   );
@@ -190,7 +190,7 @@ if ($omOk && $orderUnpaidLive > 0) {
 }
 if (!empty($invoiceDrafts['ok']) && $invoiceDraftCount > 0) {
     $attention[] = [
-        'href' => 'index.php?page=admin_invoices&q=draft',
+        'href' => 'index.php?page=admin_invoices&filter=draft',
         'label' => number_format($invoiceDraftCount) . ' draft invoice' . ($invoiceDraftCount === 1 ? '' : 's'),
     ];
 }

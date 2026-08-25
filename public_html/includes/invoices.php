@@ -225,15 +225,52 @@ function allocate_unique_invoice_number(): string
 }
 
 /**
+ * List filter separate from search: draft / unpaid (unpaid+done) / paid.
+ */
+function normalize_invoice_list_filter(string $filter): string
+{
+    $filter = strtolower(trim($filter));
+    return in_array($filter, ['draft', 'unpaid', 'paid'], true) ? $filter : '';
+}
+
+/**
+ * @param array{q?:string,filter?:string,client_id?:int,p?:int} $opts
+ */
+function invoice_list_query(array $opts = []): string
+{
+    $params = ['page' => 'admin_invoices'];
+    $q = trim((string) ($opts['q'] ?? ''));
+    $filter = normalize_invoice_list_filter((string) ($opts['filter'] ?? ''));
+    $clientId = (int) ($opts['client_id'] ?? 0);
+    $p = max(1, (int) ($opts['p'] ?? 1));
+    if ($q !== '') {
+        $params['q'] = $q;
+    }
+    if ($filter !== '') {
+        $params['filter'] = $filter;
+    }
+    if ($clientId > 0) {
+        $params['client_id'] = (string) $clientId;
+    }
+    if ($p > 1) {
+        $params['p'] = (string) $p;
+    }
+    $bits = [];
+    foreach ($params as $k => $v) {
+        $bits[] = rawurlencode((string) $k) . '=' . rawurlencode((string) $v);
+    }
+    return 'index.php?' . implode('&', $bits);
+}
+
+/**
  * @return list<array<string,mixed>>
  */
 function list_invoices(array $opts = []): array
 {
     ensure_invoice_schema();
-    $q = trim((string) ($opts['q'] ?? ''));
     $limit = isset($opts['limit']) ? max(0, (int) $opts['limit']) : 0;
     $offset = max(0, (int) ($opts['offset'] ?? 0));
-    [$whereSql, $params] = invoices_where_sql($q);
+    [$whereSql, $params] = invoices_where_sql($opts);
     $sql = "SELECT i.*,
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
          FROM invoices i"
@@ -248,25 +285,42 @@ function list_invoices(array $opts = []): array
 }
 
 /**
+ * @param array{q?:string,filter?:string,client_id?:int} $opts
  * @return array{0:string,1:list<mixed>}
  */
-function invoices_where_sql(string $q): array
+function invoices_where_sql(array $opts = []): array
 {
-    if ($q === '') {
+    $clauses = [];
+    $params = [];
+    $q = trim((string) ($opts['q'] ?? ''));
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $clauses[] = '(i.invoice_number LIKE ? OR i.client_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)';
+        array_push($params, $like, $like, $like, $like, $like);
+    }
+    $filter = normalize_invoice_list_filter((string) ($opts['filter'] ?? ''));
+    if ($filter === 'draft') {
+        $clauses[] = "i.work_status='draft'";
+    } elseif ($filter === 'unpaid') {
+        $clauses[] = "i.payment_status='unpaid' AND i.work_status='done'";
+    } elseif ($filter === 'paid') {
+        $clauses[] = "i.payment_status='paid'";
+    }
+    $clientId = (int) ($opts['client_id'] ?? 0);
+    if ($clientId > 0) {
+        $clauses[] = 'i.client_id=?';
+        $params[] = $clientId;
+    }
+    if (!$clauses) {
         return ['', []];
     }
-    $like = '%' . $q . '%';
-    return [
-        ' WHERE (i.invoice_number LIKE ? OR i.client_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)',
-        [$like, $like, $like, $like, $like],
-    ];
+    return [' WHERE ' . implode(' AND ', $clauses), $params];
 }
 
 function count_invoices(array $opts = []): int
 {
     ensure_invoice_schema();
-    $q = trim((string) ($opts['q'] ?? ''));
-    [$whereSql, $params] = invoices_where_sql($q);
+    [$whereSql, $params] = invoices_where_sql($opts);
     $stmt = db()->prepare('SELECT COUNT(*) FROM invoices i' . $whereSql);
     $stmt->execute($params);
     return (int) $stmt->fetchColumn();

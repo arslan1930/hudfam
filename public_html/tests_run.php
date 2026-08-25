@@ -3032,6 +3032,19 @@ try {
     } else {
         fail("invoice draft count helper got $draftAfterBlank");
     }
+    $draftList = list_invoices(['filter' => 'draft']);
+    $foundDraft = false;
+    foreach ($draftList as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) $invId) {
+            $foundDraft = true;
+            break;
+        }
+    }
+    if ($foundDraft && count_invoices(['filter' => 'draft']) >= 1) {
+        pass('invoice list filter draft');
+    } else {
+        fail('invoice list filter draft missing blank');
+    }
 
     $invTotal = count_invoices();
     $invPage = list_invoices(['limit' => 1, 'offset' => 0]);
@@ -3082,6 +3095,23 @@ try {
         } else {
             fail('invoice unpaid-done count helper');
         }
+        $unpaidList = list_invoices(['filter' => 'unpaid']);
+        $foundUnpaid = false;
+        $draftInUnpaid = false;
+        foreach ($unpaidList as $row) {
+            $rid = (int) ($row['id'] ?? 0);
+            if ($rid === (int) $genId) {
+                $foundUnpaid = true;
+            }
+            if ($rid === (int) $invId) {
+                $draftInUnpaid = true;
+            }
+        }
+        if ($foundUnpaid && !$draftInUnpaid) {
+            pass('invoice list filter unpaid excludes drafts');
+        } else {
+            fail('invoice list filter unpaid');
+        }
         mark_invoice_payment_received($genId);
         $paidRow = db()->prepare('SELECT is_paid FROM order_items WHERE id=?');
         $paidRow->execute([$genItemId]);
@@ -3089,6 +3119,25 @@ try {
             pass('mark paid sets invoice + sheet row');
         } else {
             fail('mark paid did not update invoice/sheet');
+        }
+        $foundPaid = false;
+        foreach (list_invoices(['filter' => 'paid']) as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $genId) {
+                $foundPaid = true;
+                break;
+            }
+        }
+        $stillUnpaid = false;
+        foreach (list_invoices(['filter' => 'unpaid']) as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $genId) {
+                $stillUnpaid = true;
+                break;
+            }
+        }
+        if ($foundPaid && !$stillUnpaid) {
+            pass('invoice list filter paid');
+        } else {
+            fail('invoice list filter paid missing generated');
         }
     }
 

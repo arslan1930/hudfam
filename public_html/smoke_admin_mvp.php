@@ -144,6 +144,15 @@ if (!str_contains($invoicesAdminPage, '$perPage = 50')
 } else {
     ok('invoices.php 50/page pagination');
 }
+if (!str_contains($invoicesAdminPage, 'name="filter"')
+    || !str_contains($invoicesAdminPage, 'value="draft"')
+    || !str_contains($invoicesAdminPage, 'value="unpaid"')
+    || !str_contains($invoicesAdminPage, 'value="paid"')
+    || !str_contains($invoicesAdminPage, 'normalize_invoice_list_filter')) {
+    fail('invoices.php missing status filter');
+} else {
+    ok('invoices.php status filter');
+}
 $adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
 if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
     fail('Admin Our database still says Clean errors');
@@ -946,6 +955,10 @@ if (!str_contains($invoicesLib, 'function count_invoices')
     || !str_contains($invoicesLib, 'function invoices_where_sql')
     || !str_contains($invoicesLib, 'function count_invoices_by_work_status')
     || !str_contains($invoicesLib, 'function count_invoices_unpaid')
+    || !str_contains($invoicesLib, 'function normalize_invoice_list_filter')
+    || !str_contains($invoicesLib, 'function invoice_list_query')
+    || !str_contains($invoicesLib, "i.work_status='draft'")
+    || !str_contains($invoicesLib, "i.payment_status='unpaid' AND i.work_status='done'")
     || !str_contains($invoicesLib, 'LIMIT ')) {
     fail('invoices.php missing SQL paging helpers');
 } else {
@@ -953,7 +966,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1104,6 +1117,13 @@ if (!str_contains($dashPage, 'data-dashboard-attention')
     fail('dashboard missing attention strip / email / invoice counts');
 } else {
     ok('dashboard attention strip and email/invoice counts');
+}
+if (str_contains($dashPage, 'admin_invoices&q=draft')
+    || !str_contains($dashPage, 'admin_invoices&filter=draft')
+    || !str_contains($dashPage, 'admin_invoices&filter=unpaid')) {
+    fail('dashboard invoice tiles must use filter= not q=draft');
+} else {
+    ok('dashboard Draft/Unpaid tiles use invoice filter');
 }
 if (!str_contains($dashPage, 'Emails Admin')
     || !str_contains($dashPage, 'URLs (all countries)')
