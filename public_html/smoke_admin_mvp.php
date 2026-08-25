@@ -831,7 +831,9 @@ if (str_contains($dashPage, 'each country has its own URL database')
     || !str_contains($dashPage, 'has-admin-new')
     || !str_contains($dashPage, "admin_new_badge_html('emails_admin'")
     || !str_contains($dashPage, 'table-wrap')
-    || !str_contains($dashPage, 'admin_prospect_batches">See all')) {
+    || !str_contains($dashPage, 'admin_prospect_batches">See all')
+    || !str_contains($dashPage, 'id="dashboard-recent-card"')
+    || !str_contains($dashPage, 'recentCard.hidden')) {
     fail('dashboard missing chrome: Users card, Emails New, recent-adds wrap, copy');
 } else {
     ok('dashboard chrome: Users, Emails New, recent wrap, copy');
@@ -850,7 +852,8 @@ if (!str_contains($dashPage, 'Emails Admin')
     || !str_contains($dashPage, 'URLs (all countries)')
     || !str_contains($dashPage, 'Could not load')
     || !str_contains($dashPage, 'render_admin_dashboard_stat')
-    || !str_contains($dashPage, 'Unpaid LIVE')) {
+    || !str_contains($dashPage, 'Unpaid LIVE')
+    || !str_contains($dashPage, 'Unpaid invoices')) {
     fail('dashboard stats tiles missing pipeline labels');
 } else {
     ok('dashboard stats match pipeline');

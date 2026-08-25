@@ -2972,6 +2972,16 @@ a.card.stat:hover {
   border-color: var(--brand-2);
   text-decoration: none;
 }
+a.card.stat:hover * {
+  text-decoration: none;
+}
+a.card.stat:focus-visible {
+  outline: 2px solid #4b5563;
+  outline-offset: 2px;
+}
+#dashboard-launch-cards {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
 .dashboard-stat-sub {
   display: block;
   margin-top: 0.15rem;

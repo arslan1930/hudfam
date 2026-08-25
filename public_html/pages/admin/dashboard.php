@@ -153,10 +153,10 @@ render_dashboard_help('admin');
       'Live placements not marked paid'
   );
   render_admin_dashboard_stat(
-      'Invoices',
+      'Unpaid invoices',
       $invoiceUnpaid,
       'index.php?page=admin_invoices',
-      'Generated invoices waiting for payment',
+      'Generated invoices waiting for payment (drafts listed underneath)',
       $invoiceSub
   );
   ?>
@@ -250,7 +250,11 @@ if ($attention):
   <a class="launch-card" href="index.php?page=admin_users" data-dashboard-item
      data-search="users admin team logins password department assign awaiting">
     <h2>Users</h2>
-    <p><?= number_format($teamCount) ?> active team user<?= $teamCount === 1 ? '' : 's' ?><?php if ($deptUnassignedTeam > 0): ?> · <?= (int) $deptUnassignedTeam ?> awaiting assignment<?php endif; ?>.</p>
+    <p><?php if (!empty($team['ok'])): ?>
+        <?= number_format($teamCount) ?> active team user<?= $teamCount === 1 ? '' : 's' ?><?php if ($deptUnassignedTeam > 0): ?> · <?= (int) $deptUnassignedTeam ?> awaiting assignment<?php endif; ?>.
+      <?php else: ?>
+        Could not load team users.
+      <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches" data-dashboard-item
      data-search="site adding history who added sites by day batches">
@@ -260,7 +264,7 @@ if ($attention):
 </div>
 <p class="help dashboard-search-empty" data-dashboard-search-empty hidden style="margin-top:0.5rem">No dashboard items match your search.</p>
 
-<div class="card">
+<div class="card" id="dashboard-recent-card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.7rem">
     <h2 style="margin:0">Recent adds</h2>
     <a class="btn secondary small" href="index.php?page=admin_prospect_batches">See all</a>
@@ -306,6 +310,7 @@ if ($attention):
   var meta = document.querySelector('[data-dashboard-search-meta]');
   var emptyCards = document.querySelector('[data-dashboard-search-empty]');
   var emptyRecent = document.querySelector('[data-dashboard-recent-empty]');
+  var recentCard = document.getElementById('dashboard-recent-card');
 
   function clearHits() {
     document.querySelectorAll('.sheet-search-hit').forEach(function (el) {
@@ -332,6 +337,7 @@ if ($attention):
     });
     if (emptyCards) emptyCards.hidden = !(q && shownCards === 0);
     if (emptyRecent) emptyRecent.hidden = !(q && shownRecent === 0 && document.querySelectorAll('#dashboard-recent-table [data-dashboard-item]').length > 0);
+    if (recentCard) recentCard.hidden = !!(q && shownRecent === 0);
     if (matchIndex >= matchItems.length) matchIndex = matchItems.length ? 0 : -1;
     if (meta) {
       if (q) {
