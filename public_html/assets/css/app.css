@@ -4462,6 +4462,10 @@ textarea:focus-visible {
   list-style: none;
   cursor: pointer;
 }
+.sheet-tool-menu > summary::marker,
+.sheet-row-more > summary::marker {
+  content: none;
+}
 .sheet-tool-menu > summary::-webkit-details-marker,
 .sheet-row-more > summary::-webkit-details-marker {
   display: none;
