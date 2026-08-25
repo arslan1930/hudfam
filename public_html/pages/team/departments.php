@@ -153,24 +153,28 @@ if (!$dept) {
         <a class="folder" href="index.php?page=team_sites_emails">
           <h3>Sites with emails - Team</h3>
           <p class="muted">Add emails · Push final list to Admin</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
         <?php if ($canAdminEmailsSearch): ?>
         <a class="folder" href="index.php?page=team_admin_emails_search">
           <h3>Admin emails search</h3>
           <p class="muted">Sites with emails - Admin · all countries</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
         <?php if ($canCampaigns): ?>
         <a class="folder" href="index.php?page=team_email_campaigns">
           <h3>Campaign search</h3>
           <p class="muted">Email campaign sheets · all countries</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
         <?php if ($canCampaignDrafts): ?>
         <a class="folder" href="index.php?page=team_email_campaigns_drafts">
           <h3>Campaign drafts</h3>
           <p class="muted">Formatted outreach per project · copy for email</p>
+          <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
       </div>
@@ -189,6 +193,7 @@ if (!$dept) {
               <?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?>
               · <?= (int) $stats['total_tasks'] ?> total
             </p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>
@@ -300,12 +305,14 @@ render_breadcrumbs([
     <a class="folder" href="index.php?page=team_sites_emails">
       <h3>Sites with emails - Team</h3>
       <p class="muted">Add emails · Push final list to Admin</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
     <?php if ($canAdminEmailsSearch): ?>
     <a class="folder" href="index.php?page=team_admin_emails_search">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
   </div>
@@ -323,18 +330,21 @@ render_breadcrumbs([
     <a class="folder" href="index.php?page=team_admin_emails_search">
       <h3>Admin emails search</h3>
       <p class="muted">Sites with emails - Admin · all countries</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
     <?php if ($canCampaigns): ?>
     <a class="folder" href="index.php?page=team_email_campaigns">
       <h3>Campaign search</h3>
       <p class="muted">Email campaign sheets · all countries</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
     <?php if ($canCampaignDrafts): ?>
     <a class="folder" href="index.php?page=team_email_campaigns_drafts">
       <h3>Campaign drafts</h3>
       <p class="muted">Formatted outreach per project · copy for email</p>
+      <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
   </div>

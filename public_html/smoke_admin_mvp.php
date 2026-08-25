@@ -2099,6 +2099,28 @@ if (str_contains($invoicesChrome, 'btn crystal')) {
 } else {
     ok('invoices Blank invoice is secondary not crystal');
 }
+$teamHistory = file_get_contents($root . '/pages/team/prospect_batches.php') ?: '';
+$teamHistoryDay = file_get_contents($root . '/pages/team/prospect_batch.php') ?: '';
+$accountPw = file_get_contents($root . '/pages/account_password.php') ?: '';
+if (!str_contains($teamHistory, 'render_breadcrumbs')
+    || !str_contains($teamHistoryDay, 'render_breadcrumbs')
+    || !str_contains($accountPw, 'render_breadcrumbs')) {
+    fail('Team history / Change password missing breadcrumbs');
+} else {
+    ok('Team history + Change password breadcrumbs');
+}
+if (!str_contains($helpers, 'function folder_open_cue')
+    || !str_contains($teamDash, 'folder_open_cue()')
+    || !str_contains($cssUi, '.folder-open {')) {
+    fail('folder Open cue missing from cards or CSS');
+} else {
+    ok('folder Open cue on tool cards');
+}
+if (str_contains($cssUi, '.btn.crystal')) {
+    fail('unused .btn.crystal CSS still present');
+} else {
+    ok('crystal button CSS removed');
+}
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

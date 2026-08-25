@@ -442,12 +442,12 @@ foreach (
         'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin'],
         'admin_prospects' => ['Our database', 'Markets'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
-        'admin_emails_data' => ['Emails data', 'Working list from Team Push'],
-        'admin_departments' => ['Departments', 'Site Finding'],
+        'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
+        'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order'],
         'admin_invoices' => ['Invoice'],
         'admin_users' => ['Users'],
-        'account_password' => ['Change password'],
+        'account_password' => ['Change password', 'breadcrumbs'],
     ] as $page => $needles
 ) {
     $r = req('GET', $base . '/index.php?page=' . $page);

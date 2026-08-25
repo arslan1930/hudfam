@@ -970,18 +970,6 @@ button.btn.secondary:disabled {
   border-color: #e5e7eb;
   color: #9ca3af !important;
 }
-.btn.crystal {
-  background: linear-gradient(180deg, #ffffff 0%, #f6f7f9 100%);
-  color: var(--brand-2) !important;
-  border: 1px solid var(--line);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-.btn.crystal:hover {
-  background: #fff;
-  border-color: #9ca3af;
-}
 .btn.small { padding: 0.32rem 0.65rem; font-size: 0.84rem; font-weight: 650; }
 .btn.large { padding: 0.75rem 1.25rem; font-size: 1.05rem; }
 .btn.block { width: 100%; text-align: center; }
@@ -2498,7 +2486,9 @@ tr.swe-row-updated {
 .badge.draft, .badge.negotiating { background: #e5e7eb; color: var(--brand-deep); }
 .folders { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; }
 .folder {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -2511,6 +2501,24 @@ tr.swe-row-updated {
   border-color: #6b7280;
   box-shadow: 0 8px 22px rgba(31, 41, 55, 0.12);
   text-decoration: none;
+}
+.folder-open {
+  display: inline-block;
+  margin-top: auto;
+  padding-top: 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand-deep);
+  letter-spacing: 0.01em;
+}
+.folder:hover .folder-open,
+.folder:focus-visible .folder-open {
+  text-decoration: underline;
+}
+.folder:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), 0 8px 22px rgba(31, 41, 55, 0.12);
+  border-color: #6b7280;
 }
 
 /* Our database — expandable markets */
@@ -4219,8 +4227,8 @@ table.extracted-country-table th {
 }
 .launch-card:hover,
 .folder:hover {
-  border-color: #9ca3af;
-  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.1);
+  border-color: #6b7280;
+  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.12);
   transform: translateY(-1px);
 }
 .launch-card h2,

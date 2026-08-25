@@ -43,6 +43,10 @@ try {
 
 render_header('Site adding history', 'team');
 ?>
+<?php render_breadcrumbs([
+    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Site adding history'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Site adding history</h1>
@@ -53,7 +57,9 @@ render_header('Site adding history', 'team');
       <?php endif; ?>
     </p>
   </div>
-  <a class="btn secondary" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+  </div>
 </div>
 <?= guide_add_history() ?>
 

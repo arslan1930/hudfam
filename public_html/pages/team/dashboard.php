@@ -190,9 +190,10 @@ if ($deptScoped) {
       <div class="folders">
         <?php foreach ($toolCards as [$pageKey, $title, $hint]): ?>
           <a class="folder" href="index.php?page=<?= h($pageKey) ?>"
-             data-dashboard-item data-search="<?= h(mb_strtolower($title . ' ' . $hint)) ?>">
+             data-dashboard-item data-search="<?= h(mb_strtolower($title . ' ' . $hint . ' open')) ?>">
             <h3><?= h($title) ?></h3>
             <p class="muted"><?= h($hint) ?></p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>
@@ -211,6 +212,7 @@ if ($deptScoped) {
              data-search="<?= h(mb_strtolower((string) $d['name'] . ' ' . (int) $stats['open_tasks'] . ' open tasks')) ?>">
             <h3><?= h((string) $d['name']) ?></h3>
             <p class="muted"><?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?></p>
+            <?php folder_open_cue(); ?>
           </a>
         <?php endforeach; ?>
       </div>

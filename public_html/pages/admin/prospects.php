@@ -603,6 +603,7 @@ if (!$inCountry && !$emptyCountry) {
                   <span class="prospect-folder-count"><?= $siteCount ?></span>
                   no. of sites
                 </p>
+                <?php folder_open_cue(); ?>
               </a>
             <?php endforeach; ?>
           </div>

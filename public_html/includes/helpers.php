@@ -379,6 +379,14 @@ function render_breadcrumbs(array $crumbs): void
 }
 
 /**
+ * Visible Open cue on clickable folder/tool cards (not a filled button).
+ */
+function folder_open_cue(string $label = 'Open'): void
+{
+    echo '<span class="folder-open">' . h($label) . '</span>';
+}
+
+/**
  * Short glossary for the simple inventory panel.
  * $panel: 'admin' | 'team'
  * $showTitle: false when nested inside a collapsible help block.
