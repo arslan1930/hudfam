@@ -1735,7 +1735,11 @@ if ($projectIdParam > 0) {
           <p class="muted">Deletes this project and all of its country sheets, contacts, drafts, and Team “fetched to this campaign” stamps. Team sites stay. Other campaigns are not affected.</p>
           <form method="post" action="<?= h($projectForm) ?>"
                 data-show-processing="Deleting project…"
-                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?\n\nTeam “fetched to ' . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.', JSON_UNESCAPED_UNICODE)) ?>);">
+                onsubmit="return confirm(<?= h(json_encode(
+                    'Delete project “' . $projectName . '” and all country sheets and drafts inside it?'
+                    . "\n\nTeam “fetched to " . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.',
+                    JSON_UNESCAPED_UNICODE
+                )) ?>);">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="delete_project">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">

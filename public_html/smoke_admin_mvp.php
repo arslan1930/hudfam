@@ -656,6 +656,12 @@ if (str_contains($sweAppSmoke, "confirm('Clear ALL emailed")
 } else {
     ok('Emails Admin/Final/Campaign confirms use json_encode');
 }
+if (str_contains($campAppSmoke, 'it?\n\nTeam')
+    || !str_contains($campAppSmoke, '"\n\nTeam “fetched to "')) {
+    fail('Campaign delete-project confirm still has single-quoted \\n');
+} else {
+    ok('Campaign delete-project confirm uses real newlines');
+}
 if (substr_count($campAppSmoke, 'csrf_field()') < 21
     || !str_contains($campAppSmoke, "value=\"create_project\"")
     || !str_contains($campAppSmoke, "value=\"clear_all_emailed\"")
