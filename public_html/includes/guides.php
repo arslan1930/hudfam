@@ -219,3 +219,41 @@ function guide_emails_data(): string
         ]
     );
 }
+
+function guide_orders(): string
+{
+    return render_page_purpose(
+        'Order management — one sheet per client',
+        'Each client has an editable sheet of sites, prices, LIVE URLs, and Banner/Textlink placements. Completed means the LIVE URL is filled. Unpaid LIVE rows are ready to invoice.',
+        'Open a client to edit rows, then Generate invoice from unpaid LIVE. Archive hides a client from the default list. Deleting a sheet keeps invoices and clears the client link.',
+        [
+            'Create a client sheet, add sites, fill LIVE URL when the placement is live.',
+            'Use Invoice on unpaid LIVE rows to generate a printable bill.',
+            'Archive to hide from the default list; restore from the Archived filter.',
+        ]
+    );
+}
+
+function guide_invoices(): string
+{
+    return render_page_purpose(
+        'Invoices — printable bills',
+        'Generate from unpaid LIVE rows on a client sheet, or start a blank invoice (Draft while incomplete, Done when sent). Mark Paid when payment arrives — that writes Paid back onto linked sheet rows.',
+        'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm.',
+        [
+            'Generate invoice: pick a client and unpaid LIVE rows.',
+            'Blank invoice: fill bill-to and line items, Save as draft or Save as done.',
+            'Mark Paid on the list or the open bill when payment is received.',
+        ]
+    );
+}
+
+function guide_admin_account(): string
+{
+    return render_page_purpose(
+        'Account — email verify and password',
+        'Verify your Admin email so Forgot password can send a reset link. Team cannot self-reset; Admin sets Team passwords on Users.',
+        'Save an email, send a verification link, then you can request a 2-hour reset. Sidebar Change password updates the same password as this page.',
+        []
+    );
+}

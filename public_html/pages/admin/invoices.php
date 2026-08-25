@@ -110,6 +110,8 @@ render_header('Invoices', 'admin');
   </div>
 </div>
 
+<?= guide_invoices() ?>
+
 <section class="card">
   <div class="invoice-list-toolbar">
     <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
