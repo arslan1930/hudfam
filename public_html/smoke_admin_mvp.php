@@ -186,6 +186,13 @@ if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_ro
 } else {
     ok('users.php search and role filters');
 }
+if (str_contains($usersPage, 'shared URL database')
+    || substr_count($usersPage, 'table-wrap') < 2
+    || !str_contains($usersPage, 'Assign Team users under Departments')) {
+    fail('users.php still has shared-URL copy or missing table-wrap');
+} else {
+    ok('users.php Office copy + table-wrap');
+}
 $guidesLib = file_get_contents($root . '/includes/guides.php') ?: '';
 if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
     fail('guide_admin_users still stale');
