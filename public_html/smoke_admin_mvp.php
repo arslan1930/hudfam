@@ -186,6 +186,13 @@ if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_ro
 } else {
     ok('users.php search and role filters');
 }
+if (str_contains($usersPage, 'shared URL database')
+    || substr_count($usersPage, 'table-wrap') < 2
+    || !str_contains($usersPage, 'Assign Team users under Departments')) {
+    fail('users.php still has shared-URL copy or missing table-wrap');
+} else {
+    ok('users.php Office copy + table-wrap');
+}
 $guidesLib = file_get_contents($root . '/includes/guides.php') ?: '';
 if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
     fail('guide_admin_users still stale');
@@ -197,6 +204,26 @@ if (!str_contains($guidesLib, 'function guide_emails_data')
     fail('guide_emails_data missing');
 } else {
     ok('guide_emails_data present');
+}
+if (!str_contains($guidesLib, 'function guide_orders')
+    || !str_contains($guidesLib, 'function guide_invoices')
+    || !str_contains($guidesLib, 'function guide_admin_account')
+    || !str_contains($guidesLib, 'Deleting a sheet keeps invoices')
+    || !str_contains($guidesLib, 'printable letterhead is Topurlz')
+    || !str_contains($guidesLib, 'Sidebar Change password updates the same password')) {
+    fail('Office page-purpose guides missing');
+} else {
+    ok('Office Orders/Invoices/Account guides present');
+}
+$ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
+$invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$accountHubGuide = file_get_contents($root . '/pages/admin/account.php') ?: '';
+if (!str_contains($ordersHubGuide, 'guide_orders()')
+    || !str_contains($invoicesHubGuide, 'guide_invoices()')
+    || !str_contains($accountHubGuide, 'guide_admin_account()')) {
+    fail('Office hubs missing page-purpose guide calls');
+} else {
+    ok('Office hubs echo Orders/Invoices/Account guides');
 }
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 if (!str_contains($deptLib, 'function user_deactivation_residue')) {
@@ -938,6 +965,19 @@ if (!str_contains($invoiceGenerate, 'csrf_field()')) {
     fail('invoice_generate missing csrf_field');
 } else {
     ok('invoice_generate csrf_field');
+}
+$invoicesListCsrf = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$invoiceViewCsrf = file_get_contents($root . '/pages/admin/invoice_view.php') ?: '';
+if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
+    || !str_contains($invoicesListCsrf, "value=\"save_note\"")
+    || !str_contains($invoicesListCsrf, "value=\"mark_paid\"")
+    || !str_contains($invoicesListCsrf, "value=\"delete\"")
+    || !str_contains($invoiceViewCsrf, 'csrf_field()')
+    || !str_contains($invoiceViewCsrf, "value=\"save_blank\"")
+    || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")) {
+    fail('Invoice list/view POST forms missing csrf_field');
+} else {
+    ok('Invoice list/view csrf_field on POST forms');
 }
 
 $adminDepts = file_get_contents($root . '/pages/admin/departments.php') ?: '';

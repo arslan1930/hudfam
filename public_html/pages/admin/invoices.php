@@ -110,6 +110,8 @@ render_header('Invoices', 'admin');
   </div>
 </div>
 
+<?= guide_invoices() ?>
+
 <section class="card">
   <div class="invoice-list-toolbar">
     <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
@@ -197,6 +199,7 @@ render_header('Invoices', 'admin');
                 </button>
                 <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices"
                       data-note-panel hidden>
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="save_note">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
                   <label class="visually-hidden" for="inv-note-<?= (int) $inv['id'] ?>">
@@ -235,6 +238,7 @@ render_header('Invoices', 'admin');
                               : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
                           JSON_UNESCAPED_UNICODE
                       )) ?>);">
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="mark_paid">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
                   <button class="btn-paid invoice-list-pay-btn" type="submit" title="Mark invoice as paid">
@@ -248,6 +252,7 @@ render_header('Invoices', 'admin');
                 <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
                 <form method="post" class="inline" action="index.php?page=admin_invoices"
                       onsubmit="return confirm(<?= h(json_encode('Delete invoice ' . $inv['invoice_number'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
                   <button class="btn secondary small" type="submit">Delete</button>

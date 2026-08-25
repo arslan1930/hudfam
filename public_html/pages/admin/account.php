@@ -86,6 +86,8 @@ render_header('Account', 'admin');
   </div>
 </div>
 
+<?= guide_admin_account() ?>
+
 <div class="grid" style="grid-template-columns:1fr 1fr">
   <div class="card">
     <h2>Email</h2>

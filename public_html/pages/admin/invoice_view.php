@@ -167,6 +167,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
                     : 'Mark this invoice as payment received? Linked unpaid sheet rows will be marked Paid.',
                 JSON_UNESCAPED_UNICODE
             )) ?>);">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_paid">
         <button class="btn<?= $editable ? ' secondary' : '' ?>" type="submit">Mark payment received</button>
       </form>
@@ -186,6 +187,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 <?php if ($editable): ?>
 <form method="post" id="blank-invoice-form" class="invoice-blank-edit-form"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
+  <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_blank">
   <div class="invoice-preview-wrap">
     <?php include __DIR__ . '/_invoice_document.php'; ?>

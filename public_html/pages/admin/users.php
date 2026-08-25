@@ -377,8 +377,8 @@ render_header('Admins & users', 'admin');
 ]); ?>
 <div class="topbar">
   <div>
-    <h1>Users</h1>
-    <p class="muted">Admin and Team logins for the shared URL database.</p>
+    <h1><?= label_with_info('Users', 'Admin and Team logins. Assign Team users under Departments so they unlock tools.') ?></h1>
+    <p class="muted">Admin and Team logins. Assign Team users under Departments.</p>
   </div>
 </div>
 <?= guide_admin_users() ?>
@@ -418,6 +418,7 @@ render_header('Admins & users', 'admin');
 
 <div class="card">
   <h2>Admin directory</h2>
+  <div class="table-wrap">
   <table>
     <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Phone</th><th>Contact details</th><th>Active</th><th></th></tr></thead>
     <tbody>
@@ -435,6 +436,7 @@ render_header('Admins & users', 'admin');
     <?php if (!$admins): ?><tr><td colspan="7" class="muted">No admins<?= ($q !== '' || $roleFilter !== '' || $activeFilter !== '') ? ' match these filters' : ' yet' ?>.</td></tr><?php endif; ?>
     </tbody>
   </table>
+  </div>
 </div>
 
 <div class="grid" style="grid-template-columns:1.2fr 1fr">
@@ -475,6 +477,7 @@ render_header('Admins & users', 'admin');
       · showing <?= count($usersPage) ?>
     <?php endif; ?>
   </p>
+  <div class="table-wrap">
   <table>
     <thead>
       <tr>
@@ -517,6 +520,7 @@ render_header('Admins & users', 'admin');
     <?php endif; ?>
     </tbody>
   </table>
+  </div>
   <?php if ($totalPages > 1): ?>
   <p class="muted" style="margin-top:0.85rem">
     Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>

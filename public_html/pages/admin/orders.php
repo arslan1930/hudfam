@@ -111,6 +111,8 @@ render_header('Order management', 'admin');
   </div>
 </div>
 
+<?= guide_orders() ?>
+
 <div class="orders-layout">
   <section class="card">
     <div class="invoice-list-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
