@@ -1094,7 +1094,12 @@ if ($sheetId > 0) {
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Deleting country sheet…"
-            onsubmit="return confirm(<?= h(json_encode('Remove ' . $sheetCountry . ' from project “' . $projectName . "”?\n\nThis deletes this country’s campaign rows and the “fetched to " . $projectName . '” stamp on Team.\nOther campaigns are not affected.\nTeam sites stay.', JSON_UNESCAPED_UNICODE)) ?>);">
+            onsubmit="return confirm(<?= h(json_encode(
+                'Remove ' . $sheetCountry . ' from project “' . $projectName . "”?\n\n"
+                . "This deletes this country’s campaign rows and the “fetched to " . $projectName . "” stamp on Team.\n"
+                . "Other campaigns are not affected.\nTeam sites stay.",
+                JSON_UNESCAPED_UNICODE
+            )) ?>);">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Remove country from project</button>
