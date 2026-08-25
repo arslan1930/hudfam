@@ -300,12 +300,49 @@
   window.SheetSelectUndo = {
     applyState: applyState,
     sync: syncRemoveButton,
+    syncPageStatus: function (shown, filtering) {
+      var el = document.querySelector('[data-sheet-page-status]');
+      if (!el) return;
+      if (!el.getAttribute('data-default-text')) {
+        el.setAttribute('data-default-text', String(el.textContent || '').replace(/\s+/g, ' ').trim());
+      }
+      if (!filtering) {
+        el.textContent = el.getAttribute('data-default-text');
+        return;
+      }
+      shown = Number(shown) || 0;
+      if (shown < 1) {
+        el.textContent = 'No search matches on this page';
+        return;
+      }
+      var page = el.getAttribute('data-page') || '1';
+      var pages = el.getAttribute('data-pages') || '1';
+      var onPage = el.getAttribute('data-on-page') || String(shown);
+      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + onPage + ' on this page';
+    },
     removed: function (ids, data) {
       if (ids && ids.length) removeRowsByIds(ids.map(String));
       applyState(data || {});
       syncRemoveButton();
     }
   };
+
+  document.addEventListener('toggle', function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.open) return;
+    if (!el.classList.contains('sheet-row-more') && !el.classList.contains('sheet-tool-menu')) return;
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      if (d !== el) d.open = false;
+    });
+  }, true);
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('details.sheet-row-more, details.sheet-tool-menu')) return;
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      d.open = false;
+    });
+  });
 
   document.addEventListener('hf-sheet-rows-changed', function () {
     syncRemoveButton();

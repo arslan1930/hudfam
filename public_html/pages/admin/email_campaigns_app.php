@@ -331,9 +331,9 @@ if ($sheetId > 0) {
                 // Team/Admin/Final source rows are never deleted.
                 $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'replace');
                 $label = match ($source) {
-                    'team' => 'Sites with emails - Team',
-                    'admin' => 'Sites with emails - Admin',
-                    default => 'All sites with emails - Final',
+                    'team' => 'Team',
+                    'admin' => 'Admin',
+                    default => 'Final',
                 };
                 $msg = 'Imported into ' . $sheetCountry . ' from ' . $label . ': '
                     . (int) $result['imported'] . ' new, ' . (int) $result['updated'] . ' updated';
@@ -615,6 +615,7 @@ if ($sheetId > 0) {
             </form>
             <?php endif; ?>
           </p>
+          <?php render_sheet_tool_menu_open('Copy', 'Copy domains by emailed status'); ?>
           <div class="swe-copy-group" role="group" aria-label="Copy domains by sent status">
             <button type="button" class="btn secondary small" data-camp-copy-domains
                     data-export-url="<?= h($domainsExportUnsentUrl) ?>"
@@ -638,8 +639,9 @@ if ($sheetId > 0) {
               Copy all domains
             </button>
           </div>
+          <?php render_sheet_tool_menu_close(); ?>
         </div>
-        <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
+        <div class="actions">
           <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
           <?php
           render_sheet_edit_toolbar($formAction, sheet_history_key('campaign', (string) $sheetId), [
@@ -661,7 +663,7 @@ if ($sheetId > 0) {
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
       <div class="table-wrap swe-sheet-wrap">
-        <table class="swe-table swe-sheet-table is-admin-checkpoint" id="camp-sheet-table">
+        <table class="swe-table swe-sheet-table is-admin-checkpoint sheet-cards-mobile" id="camp-sheet-table">
           <thead>
             <tr>
               <?php render_sheet_select_th(); ?>
@@ -677,8 +679,8 @@ if ($sheetId > 0) {
           </thead>
           <tbody id="camp-sheet-tbody">
           <tr id="camp-add-row" class="camp-add-row" hidden data-swe-emails>
-            <td class="swe-td-check sheet-td-check"></td>
-            <td class="swe-td-site">
+            <td class="swe-td-check sheet-td-check" data-label="Select"></td>
+            <td class="swe-td-site" data-label="Site">
               <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form"
                     autocomplete="off" data-show-processing="Adding site…">
                 <input type="hidden" name="action" value="save_row">
@@ -693,21 +695,21 @@ if ($sheetId > 0) {
               <input id="camp_add_domain" class="swe-domain" form="camp-add-form" name="domain" required
                      placeholder="example.com" spellcheck="false" autocomplete="off" aria-label="Site">
             </td>
-            <td class="swe-td-lang"><span class="swe-cell-text muted">—</span></td>
-            <td class="swe-td-email">
+            <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text muted">—</span></td>
+            <td class="swe-td-email" data-label="Email 1">
               <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
             </td>
-            <td class="swe-td-email">
+            <td class="swe-td-email" data-label="Email 2">
               <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
             </td>
-            <td class="swe-td-email">
+            <td class="swe-td-email" data-label="Email 3">
               <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
             </td>
-            <td class="swe-td-email">
+            <td class="swe-td-email" data-label="Email 4">
               <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
             </td>
-            <td class="swe-td-status"><span class="swe-status-badge is-open" data-swe-status>New</span></td>
-            <td class="swe-td-actions">
+            <td class="swe-td-status" data-label="Status"><span class="swe-status-badge is-open" data-swe-status>New</span></td>
+            <td class="swe-td-actions" data-label="Actions">
               <div class="swe-row-actions">
                 <button class="btn small" type="submit" form="camp-add-form">Add row</button>
                 <button class="btn secondary small" type="button" id="camp-add-cancel" data-camp-add-cancel>Cancel</button>
@@ -737,7 +739,7 @@ if ($sheetId > 0) {
                 data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
                 class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
               <?php render_sheet_select_td($rid, $domain); ?>
-              <td class="swe-td-site">
+              <td class="swe-td-site" data-label="Site">
                 <form id="<?= h($formId) ?>" method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
                   <input type="hidden" name="action" value="save_row">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
@@ -755,23 +757,23 @@ if ($sheetId > 0) {
                   <?= render_open_site_anchor($domain) ?>
                 </div>
               </td>
-              <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
-              <td class="swe-td-email">
+              <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text"><?= h($lang) ?></span></td>
+              <td class="swe-td-email" data-label="Email 1">
                 <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
               </td>
-              <td class="swe-td-email">
+              <td class="swe-td-email" data-label="Email 2">
                 <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
               </td>
-              <td class="swe-td-email">
+              <td class="swe-td-email" data-label="Email 3">
                 <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
               </td>
-              <td class="swe-td-email">
+              <td class="swe-td-email" data-label="Email 4">
                 <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
               </td>
-              <td class="swe-td-status">
+              <td class="swe-td-status" data-label="Status">
                 <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
               </td>
-              <td class="swe-td-actions">
+              <td class="swe-td-actions" data-label="Actions">
                 <div class="swe-row-actions">
                   <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
                           data-sheet-action="mark" data-site-id="<?= $rid ?>"
@@ -779,6 +781,7 @@ if ($sheetId > 0) {
                           title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
                     <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
                   </button>
+                  <?php render_sheet_row_more_open(); ?>
                   <button class="btn secondary small" type="button"
                           data-sheet-action="upto" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
                           title="Mark this site and every older site above it as emailed"
@@ -794,6 +797,7 @@ if ($sheetId > 0) {
                   <button class="btn secondary small" type="button"
                           data-sheet-action="remove" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
                           data-confirm="Remove complete row for <?= h($domain) ?>?">Remove</button>
+                  <?php render_sheet_row_more_close(); ?>
                 </div>
               </td>
             </tr>
@@ -812,7 +816,7 @@ if ($sheetId > 0) {
       ]);
       ?>
       <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
-        No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
+        No search matches on this page. Try Ctrl/Cmd+Enter to search all pages.
       </p>
       <?php if ($rows === [] && $q === '' && $sentFilter === ''): ?>
       <div class="empty-state" id="camp-empty-state">
@@ -843,7 +847,7 @@ if ($sheetId > 0) {
           <p>No emailed sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
           <p class="muted">Use “Mark emailed” or “Mark up to here” while working the campaign.</p>
         <?php else: ?>
-          <p>No sites match “<?= h($q) ?>”.</p>
+          <p>No search matches<?= $q !== '' ? ' for “' . h($q) . '”' : '' ?>.</p>
         <?php endif; ?>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
           <a class="btn secondary" href="<?= h($formAction) ?>">Clear filters</a>
@@ -855,7 +859,11 @@ if ($sheetId > 0) {
           <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a>
         <?php endif; ?>
         <?php if ($pages > 1 || $total > 0): ?>
-        <span class="muted">Page <?= (int) $pageNum ?> / <?= (int) $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?><?= $q !== '' ? ' matches' : '' ?></span>
+        <span class="muted" data-sheet-page-status
+              data-page="<?= (int) $pageNum ?>"
+              data-pages="<?= (int) $pages ?>"
+              data-on-page="<?= (int) count($rows) ?>"
+              data-total="<?= (int) $total ?>">Page <?= (int) $pageNum ?> / <?= (int) $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?><?= $q !== '' ? ' matches' : '' ?></span>
         <?php endif; ?>
         <?php if ($pageNum < $pages): ?>
           <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a>
@@ -926,9 +934,9 @@ if ($sheetId > 0) {
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
-          <option value="team">Sites with emails - Team</option>
-          <option value="admin_all">All sites with emails - Final</option>
-          <option value="admin">Sites with emails - Admin</option>
+          <option value="team">Team</option>
+          <option value="admin_all">Final</option>
+          <option value="admin">Admin</option>
         </select>
         <p class="actions" style="margin-top:0.75rem">
           <button class="btn" type="submit">Import into sheet</button>

@@ -344,7 +344,7 @@
       var emptyText = emptyEl.querySelector('[data-prospect-empty-text]');
       if (emptyText) {
         emptyText.textContent = (data.q || '').trim()
-          ? 'No sites in this country match your search.'
+          ? 'No search matches in this country.'
           : 'No sites in this country yet.';
       }
       var addLink = emptyEl.querySelector('[data-prospect-empty-add]');

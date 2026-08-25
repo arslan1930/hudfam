@@ -113,15 +113,21 @@ html.is-page-loading body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.3rem;
   min-width: 2.1rem;
-  padding-left: 0.45rem;
-  padding-right: 0.45rem;
+  padding-left: 0.55rem;
+  padding-right: 0.7rem;
 }
 .sheet-history-btn .sheet-history-glyph {
   display: block;
   font-size: 1.2rem;
   line-height: 1;
   font-weight: 700;
+}
+.sheet-history-text {
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 .sheet-check input[type="checkbox"] {
   appearance: auto;
@@ -1536,13 +1542,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .swe-row-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.32rem;
-  align-items: stretch;
-  min-width: 5.75rem;
+  align-items: center;
+  min-width: 0;
 }
 .swe-sheet-table .swe-row-actions .btn {
-  width: 100%;
+  width: auto;
   justify-content: center;
   border-radius: 8px;
   white-space: nowrap;
@@ -4428,6 +4435,121 @@ textarea:focus-visible {
 }
 .password-toggle:hover {
   background: #f5f7fa;
+}
+
+.actions.is-spread {
+  justify-content: space-between;
+  margin-top: 0.85rem;
+}
+.actions.actions-compact {
+  margin: 0;
+  gap: 0.65rem;
+}
+.swe-checkpoint-rule h2 {
+  margin: 0 0 0.45rem;
+}
+.swe-checkpoint-foot {
+  margin: 0.55rem 0 0;
+}
+
+.sheet-tool-menu,
+.sheet-row-more {
+  position: relative;
+  display: inline-block;
+}
+.sheet-tool-menu > summary,
+.sheet-row-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.sheet-tool-menu > summary::marker,
+.sheet-row-more > summary::marker {
+  content: none;
+}
+.sheet-tool-menu > summary::-webkit-details-marker,
+.sheet-row-more > summary::-webkit-details-marker {
+  display: none;
+}
+.sheet-tool-menu-panel,
+.sheet-row-more-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  min-width: 14.5rem;
+  padding: 0.5rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.sheet-row-more-panel {
+  left: auto;
+  right: 0;
+  min-width: 10.5rem;
+  z-index: 35;
+}
+.sheet-row-more-panel .btn,
+.sheet-tool-menu-panel .btn {
+  width: 100%;
+  justify-content: center;
+}
+.sheet-row-more-btn {
+  min-width: 2.1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 899px) {
+  table.sheet-cards-mobile thead {
+    display: none;
+  }
+  table.sheet-cards-mobile,
+  table.sheet-cards-mobile tbody,
+  table.sheet-cards-mobile tr,
+  table.sheet-cards-mobile td {
+    display: block;
+    width: 100%;
+  }
+  table.sheet-cards-mobile tr {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin: 0 0 0.75rem;
+    padding: 0.55rem 0.7rem;
+    background: #fff;
+  }
+  table.sheet-cards-mobile td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 0.32rem 0;
+    border: 0;
+  }
+  table.sheet-cards-mobile td::before {
+    content: attr(data-label);
+    flex: 0 0 5.4rem;
+    font-size: 0.78rem;
+    font-weight: 650;
+    color: var(--muted);
+    padding-top: 0.3rem;
+  }
+  table.sheet-cards-mobile td.swe-td-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  table.sheet-cards-mobile td.swe-td-actions::before {
+    display: none;
+  }
+  table.sheet-cards-mobile .swe-row-actions {
+    width: 100%;
+  }
+  .swe-sheet-wrap {
+    overflow: visible;
+  }
 }
 
 /* Author display:flex/block rules beat the UA [hidden] stylesheet, so search

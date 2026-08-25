@@ -815,6 +815,7 @@ render_breadcrumbs($crumbs);
     </form>
     <?php endif; ?>
     <?php if ($sweScope === 'admin'): ?>
+    <?php render_sheet_tool_menu_open('Copy / Open', 'Copy emails or open sites'); ?>
     <div class="swe-copy-group" role="group" aria-label="Copy emails by sent status">
       <button type="button" class="btn secondary" data-swe-copy-emails
               data-export-url="<?= h($emailsExportUnsentUrl) ?>"
@@ -839,6 +840,7 @@ render_breadcrumbs($crumbs);
       </button>
     </div>
     <?php else: ?>
+    <?php render_sheet_tool_menu_open('Copy / Open', 'Copy emails or open sites'); ?>
     <button type="button" class="btn secondary" id="swe_copy_emails" data-swe-copy-emails
             data-export-url="<?= h($emailsExportUrl) ?>"
             data-copy-label="all"
@@ -862,6 +864,7 @@ render_breadcrumbs($crumbs);
         Open next 10
       </button>
     </div>
+    <?php render_sheet_tool_menu_close(); ?>
     <a class="btn secondary" href="<?= h($csvUrl) ?>">Download CSV / Excel</a>
     <a class="btn secondary" href="<?= h($sweBase) ?>">All countries</a>
   </div>
@@ -892,15 +895,15 @@ render_breadcrumbs($crumbs);
 <?php endif; ?>
 
 <?php if ($sweScope === 'admin'): ?>
-<div class="card swe-checkpoint-rule" style="margin-bottom:1rem">
-  <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'Mark emailed removes the site from this Admin working list after Final has a copy. Final never loses those rows.') ?></h2>
+<div class="card swe-checkpoint-rule">
+  <h2><?= label_with_info('Emailed selection rule', 'Mark emailed removes the site from this Admin working list after Final has a copy. Final never loses those rows.') ?></h2>
   <ol class="swe-checkpoint-steps">
     <li><strong>Order:</strong> oldest sites at the top · newest Team pushes at the bottom.</li>
     <li><strong>Mark emailed:</strong> removes that one site from Admin · Final keeps the copy.</li>
     <li><strong>Mark up to here:</strong> removes this site <em>and every site above it</em> from Admin · Final keeps those copies.</li>
     <li><strong>Remove:</strong> also removes from Admin only · Final keeps the archive copy.</li>
   </ol>
-  <p class="help" style="margin:0.55rem 0 0">
+  <p class="help swe-checkpoint-foot">
     Admin is the working list from Team Push. Final is the lasting archive.
   </p>
 </div>
@@ -1009,7 +1012,7 @@ render_breadcrumbs($crumbs);
   </div>
 
   <div class="table-wrap swe-sheet-wrap">
-    <table class="swe-table swe-sheet-table<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>"
+    <table class="swe-table swe-sheet-table sheet-cards-mobile<?= $sweScope === 'admin' ? ' is-admin-checkpoint' : '' ?>"
            id="swe-table"
            data-swe-country="<?= h($countryName) ?>"
            <?= $isTeam ? 'data-swe-open-track="1"' : '' ?>>
@@ -1080,11 +1083,11 @@ render_breadcrumbs($crumbs);
             class="<?= $isEmailed ? 'swe-row-emailed' : '' ?><?= $rowSignal !== '' ? ' swe-row-' . h($rowSignal) : '' ?>">
           <?php render_sheet_select_td($sid, $domain); ?>
           <?php if ($isTeam): ?>
-          <td class="swe-td-num">
+          <td class="swe-td-num" data-label="#">
             <span class="swe-row-num" title="Site #<?= (int) $rowNum ?>"><?= (int) $rowNum ?></span>
           </td>
           <?php endif; ?>
-          <td class="swe-td-site">
+          <td class="swe-td-site" data-label="Site">
             <form id="<?= h($formId) ?>" method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
               <input type="hidden" name="action" value="save_row">
               <input type="hidden" name="site_id" value="<?= $sid ?>">
@@ -1119,23 +1122,23 @@ render_breadcrumbs($crumbs);
               <?php endif; ?>
             </div>
           </td>
-          <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
-          <td class="swe-td-email">
+          <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text"><?= h($lang) ?></span></td>
+          <td class="swe-td-email" data-label="Email 1">
             <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
           </td>
-          <td class="swe-td-email">
+          <td class="swe-td-email" data-label="Email 2">
             <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
           </td>
-          <td class="swe-td-email">
+          <td class="swe-td-email" data-label="Email 3">
             <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
           </td>
-          <td class="swe-td-email">
+          <td class="swe-td-email" data-label="Email 4">
             <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
           </td>
-          <td class="swe-td-status">
+          <td class="swe-td-status" data-label="Status">
             <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
           </td>
-          <td class="swe-td-actions">
+          <td class="swe-td-actions" data-label="Actions">
             <div class="swe-row-actions">
               <?php if ($sweScope === 'admin'): ?>
               <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
@@ -1144,6 +1147,7 @@ render_breadcrumbs($crumbs);
                       title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark emailed · remove from Admin (Final keeps a copy)' ?>">
                 <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
               </button>
+              <?php render_sheet_row_more_open(); ?>
               <button class="btn secondary small" type="button"
                       data-sheet-action="upto" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
                       title="Mark emailed up to here · remove those rows from Admin (Final keeps copies)"
@@ -1159,10 +1163,10 @@ render_breadcrumbs($crumbs);
               <?php endif; ?>
               <?php if ($isTeam):
                   $pushConfirm = $willOverwrite
-                      ? 'Push ' . $domain . ' to Sites with emails - Admin?' . "\n\n"
+                      ? 'Push ' . $domain . ' to Admin?' . "\n\n"
                         . 'This site ALREADY EXISTS in Admin. Push will MERGE Team emails into empty Admin slots '
                         . '(existing Admin emails are kept).' . "\n\nThis row will leave the Team working copy."
-                      : 'Push ' . $domain . ' to Sites with emails - Admin?' . "\n\nThis row will leave the Team working copy.";
+                      : 'Push ' . $domain . ' to Admin?' . "\n\nThis row will leave the Team working copy.";
                   ?>
               <button class="btn small" type="button"
                       data-sheet-action="push" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
@@ -1172,10 +1176,15 @@ render_breadcrumbs($crumbs);
                       title="<?= $hasEmail
                           ? ($willOverwrite ? 'Merge Team emails into empty Admin slots for this site' : 'Push this site to Admin')
                           : 'Add at least one email first' ?>">Push</button>
+              <?php render_sheet_row_more_open(); ?>
               <?php endif; ?>
+              <?php if ($sweScope !== 'admin' && !$isTeam) {
+                  render_sheet_row_more_open();
+              } ?>
               <button class="btn secondary small" type="button"
                       data-sheet-action="remove" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
                       data-confirm="Remove complete row for <?= h($domain) ?>?">Remove</button>
+              <?php render_sheet_row_more_close(); ?>
             </div>
           </td>
         </tr>
@@ -1195,7 +1204,7 @@ render_breadcrumbs($crumbs);
   ]);
   ?>
   <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
-    No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
+    No search matches on this page. Try Ctrl/Cmd+Enter to search all pages.
   </p>
 
   <?php if (!$rows && $q === '' && $sentFilter === '' && $rowFilter === ''): ?>
@@ -1205,10 +1214,10 @@ render_breadcrumbs($crumbs);
       <p class="muted">Push from Extracting Results to fill site names here.</p>
     <?php elseif ($isAdminAll): ?>
       <p>No mirrored sites in this country yet.</p>
-      <p class="muted">They sync here from Sites with emails - Admin. Final stays a neutral backup (no emailed marks).</p>
+      <p class="muted">They sync here from Admin. Final stays a neutral backup (no emailed marks).</p>
     <?php else: ?>
       <p>No sites in this country yet.</p>
-      <p class="muted">Waiting for Team to Push from Sites with emails - Team.</p>
+      <p class="muted">Waiting for Team to Push.</p>
     <?php endif; ?>
   </div>
   <?php elseif (!$rows && ($q !== '' || $sentFilter !== '' || $rowFilter !== '')): ?>
@@ -1224,17 +1233,21 @@ render_breadcrumbs($crumbs);
       <p>No emailed sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
       <p class="muted">Use “Mark emailed” or “Mark up to here” while working the campaign.</p>
     <?php else: ?>
-      <p>No matching sites.</p>
+      <p>No search matches.</p>
       <p class="muted">Try a different search, or clear the filter.</p>
     <?php endif; ?>
   </div>
   <?php endif; ?>
 
-  <div class="actions" style="margin-top:0.85rem;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
-    <div class="actions" style="margin:0;gap:0.65rem;flex-wrap:wrap;align-items:center">
+  <div class="actions is-spread">
+    <div class="actions actions-compact">
       <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
       <?php if ($rows || $q !== ''): ?>
-        <span class="muted">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
+        <span class="muted" data-sheet-page-status
+              data-page="<?= (int) $pageNum ?>"
+              data-pages="<?= (int) $pages ?>"
+              data-on-page="<?= (int) count($rows) ?>"
+              data-total="<?= (int) $total ?>">Page <?= $pageNum ?> / <?= $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?></span>
       <?php endif; ?>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
       <?php

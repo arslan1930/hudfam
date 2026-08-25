@@ -326,6 +326,9 @@
     if (window.SheetSelectUndo && typeof window.SheetSelectUndo.sync === 'function') {
       window.SheetSelectUndo.sync();
     }
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.syncPageStatus === 'function') {
+      window.SheetSelectUndo.syncPageStatus(shown, !!q);
+    }
   }
 
   function jump(dir) {
