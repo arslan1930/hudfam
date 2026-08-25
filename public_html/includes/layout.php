@@ -66,14 +66,14 @@ function render_header(string $title, string $panel = ''): void
     echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
     // Early scroll restore after same-page POST actions (before paint when possible).
     echo '<script>';
-    echo '(function(){try{document.documentElement.classList.add("is-page-loading");';
+    echo '(function(){try{';
     echo 'var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
     echo 'if(p&&y&&p===location.pathname+location.search){var t=parseInt(y,10)||0;if(t>0){';
     echo 'if("scrollRestoration" in history)history.scrollRestoration="manual";';
     echo 'window.scrollTo(0,t);}}}catch(e){}})();';
     echo '</script>';
     echo '</head><body>';
-    echo '<div id="app-processing" class="app-processing is-page-load" aria-busy="true" aria-live="assertive" role="alert">';
+    echo '<div id="app-processing" class="app-processing is-page-load" hidden aria-busy="false" aria-live="assertive" role="alert">';
     echo '<div class="app-processing-card">';
     echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
     echo '<p class="app-processing-msg" data-processing-msg>Loading…</p>';
