@@ -631,6 +631,19 @@ if (str_contains($emailsHub, 'Admin + Final')
     ok('emails super-search last-email copy keeps Final');
 }
 $sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+$campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
+if (str_contains($sweAppSmoke, "confirm('Clear ALL emailed")
+    || str_contains($sweAppSmoke, "confirm('Remove ALL")
+    || str_contains($sweAppSmoke, "confirm('Remove matching sites")
+    || !str_contains($sweAppSmoke, 'json_encode')
+    || str_contains($campAppSmoke, "confirm('Clear ALL emailed")
+    || str_contains($campAppSmoke, "confirm('Import into")
+    || str_contains($campAppSmoke, "confirm('Remove <?= h(\$sheetCountry)")
+    || !str_contains($campAppSmoke, "json_encode('Clear ALL emailed marks on '")) {
+    fail('Emails Admin/Final/Campaign confirms still use h() inside JS strings');
+} else {
+    ok('Emails Admin/Final/Campaign confirms use json_encode');
+}
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
     || !str_contains($sweLibSmoke, 'skipped_full_slots')
     || !str_contains($sweLibSmoke, "'row_deleted' => true")

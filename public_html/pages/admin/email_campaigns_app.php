@@ -594,7 +594,7 @@ if ($sheetId > 0) {
             <?php if ((int) $sentStats['sent'] > 0): ?>
             <form method="post" action="<?= h($formAction) ?>" class="swe-clear-all-emailed"
                   data-swe-clear-all-emailed
-                  onsubmit="return confirm('Clear ALL emailed marks on <?= h($sheetCountry) ?> in this project?\n\nYou can resend and track this sheet from scratch.');">
+                  onsubmit="return confirm(<?= h(json_encode('Clear ALL emailed marks on ' . $sheetCountry . " in this project?\n\nYou can resend and track this sheet from scratch.", JSON_UNESCAPED_UNICODE)) ?>);">
               <input type="hidden" name="action" value="clear_all_emailed">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
@@ -925,7 +925,10 @@ if ($sheetId > 0) {
       </p>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Importing sites…"
-            onsubmit="return confirm('Import into <?= h($sheetCountry) ?>?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added.');">
+            onsubmit="return confirm(<?= h(json_encode(
+                'Import into ' . $sheetCountry . "?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added.",
+                JSON_UNESCAPED_UNICODE
+            )) ?>);">
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
@@ -1082,7 +1085,7 @@ if ($sheetId > 0) {
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
             data-show-processing="Deleting country sheet…"
-            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>”?\n\nThis deletes this country’s campaign rows and the “fetched to <?= h($projectName) ?>” stamp on Team.\nOther campaigns are not affected.\nTeam sites stay.');">
+            onsubmit="return confirm(<?= h(json_encode('Remove ' . $sheetCountry . ' from project “' . $projectName . "”?\n\nThis deletes this country’s campaign rows and the “fetched to " . $projectName . '” stamp on Team.\nOther campaigns are not affected.\nTeam sites stay.', JSON_UNESCAPED_UNICODE)) ?>);">
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Remove country from project</button>
       </form>
