@@ -29,6 +29,7 @@ if ($awaitsDept) {
         <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
       </p>
     </div>
+    <?php render_dashboard_help('team'); ?>
     <?php
     render_footer('team');
     return;
@@ -48,6 +49,8 @@ if ($deptScoped) {
       </div>
       <a class="btn" href="index.php?page=team_departments">My departments</a>
     </div>
+
+    <?php render_dashboard_help('team'); ?>
 
     <div class="card">
       <h2>Open tasks</h2>
@@ -71,18 +74,21 @@ if ($deptScoped) {
             <tbody>
             <?php foreach ($myTasks as $t):
                 $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
+                $overdue = department_task_is_overdue($t);
+                $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
                 ?>
-              <tr class="<?= $mine ? 'dept-task-mine' : '' ?>">
+              <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>>
                 <td><?= h((string) $t['department_name']) ?></td>
                 <td>
                   <strong><?= h((string) $t['title']) ?></strong>
                   <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+                  <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
                   <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
                     <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
                   <?php endif; ?>
                 </td>
                 <td><?= h(department_task_status_label((string) $t['status'])) ?></td>
-                <td class="muted"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+                <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
                 <td>
                   <a href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
                 </td>

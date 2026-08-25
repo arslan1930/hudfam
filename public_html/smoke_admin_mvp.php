@@ -1114,6 +1114,14 @@ if (!str_contains($teamDepts, 'dept-task-overdue') && !str_contains($adminDepts,
 } else {
     ok('departments overdue styling');
 }
+$teamDash = file_get_contents($root . '/pages/team/dashboard.php') ?: '';
+if (substr_count($teamDash, "render_dashboard_help('team')") < 2
+    || !str_contains($teamDash, 'department_task_is_overdue')
+    || !str_contains($teamDash, 'dept-task-overdue')) {
+    fail('team dashboard missing How Team works / overdue on assigned tasks');
+} else {
+    ok('team dashboard How Team works + overdue');
+}
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
 foreach ([
