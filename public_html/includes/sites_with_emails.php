@@ -1210,6 +1210,9 @@ function set_site_with_emails_admin_email_sent(int $siteId, bool $sent): array
     $domain = (string) $row['domain'];
     $country = (string) $row['country'];
     if ($sent) {
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('swe', 'admin:' . $country, [$row], ['scope' => 'admin']);
+        }
         if (!delete_sites_with_emails_admin_keep_final($siteId)) {
             return ['ok' => false, 'error' => 'Could not remove emailed site from Admin.'];
         }
@@ -1226,6 +1229,22 @@ function set_site_with_emails_admin_email_sent(int $siteId, bool $sent): array
          SET email_sent=0, email_sent_at=NULL
          WHERE id=?'
     )->execute([$siteId]);
+    if (function_exists('sheet_history_push_emailed')) {
+        $beforeSent = (int) ($row['email_sent'] ?? 0) === 1;
+        if ($beforeSent) {
+            sheet_history_push_emailed(
+                'swe',
+                'admin:' . $country,
+                [[
+                    'id' => $siteId,
+                    'email_sent' => 1,
+                    'email_sent_at' => $row['email_sent_at'] ?? null,
+                ]],
+                [['id' => $siteId, 'email_sent' => 0, 'email_sent_at' => null]],
+                ['scope' => 'admin']
+            );
+        }
+    }
     return [
         'ok' => true,
         'domain' => $domain,
@@ -1253,8 +1272,12 @@ function mark_sites_with_emails_admin_emailed_up_to(int $siteId): array
         'SELECT * FROM sites_with_emails_admin WHERE country=? AND id<=? ORDER BY id ASC'
     );
     $sel->execute([$country, $siteId]);
+    $snaps = $sel->fetchAll(PDO::FETCH_ASSOC);
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('swe', 'admin:' . $country, $snaps, ['scope' => 'admin']);
+    }
     $marked = 0;
-    while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+    foreach ($snaps as $r) {
         $id = (int) ($r['id'] ?? 0);
         if ($id < 1) {
             continue;
@@ -1289,12 +1312,32 @@ function clear_sites_with_emails_admin_emailed_up_to(int $siteId): array
         return ['ok' => false, 'error' => 'Site not found in Sites with emails - Admin.'];
     }
     $country = (string) $row['country'];
+    $before = [];
+    $stSel = db()->prepare(
+        'SELECT id, email_sent, email_sent_at FROM sites_with_emails_admin
+         WHERE country=? AND id<=? AND email_sent=1'
+    );
+    $stSel->execute([$country, $siteId]);
+    foreach ($stSel->fetchAll(PDO::FETCH_ASSOC) as $flag) {
+        $before[] = [
+            'id' => (int) ($flag['id'] ?? 0),
+            'email_sent' => 1,
+            'email_sent_at' => $flag['email_sent_at'] ?? null,
+        ];
+    }
     $st = db()->prepare(
         'UPDATE sites_with_emails_admin
          SET email_sent=0, email_sent_at=NULL
          WHERE country=? AND id<=? AND email_sent=1'
     );
     $st->execute([$country, $siteId]);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = ['id' => (int) $flag['id'], 'email_sent' => 0, 'email_sent_at' => null];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('swe', 'admin:' . $country, $before, $after, ['scope' => 'admin']);
+    }
     return [
         'ok' => true,
         'cleared' => $st->rowCount(),
@@ -1317,12 +1360,32 @@ function clear_all_sites_with_emails_admin_emailed(string $country): array
     if ($countryName === '') {
         return ['ok' => false, 'error' => 'Country is required.'];
     }
+    $before = [];
+    $stSel = db()->prepare(
+        'SELECT id, email_sent, email_sent_at FROM sites_with_emails_admin
+         WHERE country=? AND email_sent=1'
+    );
+    $stSel->execute([$countryName]);
+    foreach ($stSel->fetchAll(PDO::FETCH_ASSOC) as $flag) {
+        $before[] = [
+            'id' => (int) ($flag['id'] ?? 0),
+            'email_sent' => 1,
+            'email_sent_at' => $flag['email_sent_at'] ?? null,
+        ];
+    }
     $st = db()->prepare(
         'UPDATE sites_with_emails_admin
          SET email_sent=0, email_sent_at=NULL
          WHERE country=? AND email_sent=1'
     );
     $st->execute([$countryName]);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = ['id' => (int) $flag['id'], 'email_sent' => 0, 'email_sent_at' => null];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('swe', 'admin:' . $countryName, $before, $after, ['scope' => 'admin']);
+    }
     return [
         'ok' => true,
         'cleared' => $st->rowCount(),
@@ -1438,6 +1501,43 @@ function remove_sites_with_emails_by_ids(string $country, array $ids, string $sc
         return ['ok' => false, 'error' => 'No matching rows to remove.', 'removed' => [], 'count' => 0];
     }
     return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param list<array<string,mixed>> $flags
+ */
+function apply_sites_with_emails_admin_emailed_flags(array $flags): bool
+{
+    if ($flags === []) {
+        return false;
+    }
+    $n = 0;
+    foreach ($flags as $flag) {
+        if (!is_array($flag)) {
+            continue;
+        }
+        $id = (int) ($flag['id'] ?? 0);
+        if ($id < 1) {
+            continue;
+        }
+        $sent = (int) ($flag['email_sent'] ?? 0) === 1;
+        if ($sent) {
+            $at = trim((string) ($flag['email_sent_at'] ?? ''));
+            db()->prepare(
+                'UPDATE sites_with_emails_admin
+                 SET email_sent=1, email_sent_at=COALESCE(NULLIF(?, \'\'), NOW())
+                 WHERE id=?'
+            )->execute([$at, $id]);
+        } else {
+            db()->prepare(
+                'UPDATE sites_with_emails_admin
+                 SET email_sent=0, email_sent_at=NULL
+                 WHERE id=?'
+            )->execute([$id]);
+        }
+        $n++;
+    }
+    return $n > 0;
 }
 
 /**
@@ -1601,6 +1701,9 @@ function save_site_with_emails_row(
             return ['ok' => false, 'error' => 'Row not found in this country.'];
         }
         $delDomain = (string) ($existing['domain'] ?? $domain);
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('swe', 'admin:' . $country, [$existing], ['scope' => 'admin']);
+        }
         sync_sites_with_emails_admin_row_to_all($existing);
         db()->prepare('DELETE FROM sites_with_emails_admin WHERE id=?')->execute([$id]);
         return [

@@ -195,7 +195,7 @@
     showProcessing(label);
     postForm(form).then(function (data) {
       applyState(data);
-      setStatus(kind === 'redo' ? 'Redid last remove.' : 'Undid last remove.');
+      setStatus(kind === 'redo' ? 'Redid last change.' : 'Undid last change.');
       showProcessing('Loading…');
       window.location.reload();
     }).catch(function (err) {

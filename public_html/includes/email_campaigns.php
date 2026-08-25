@@ -1410,6 +1410,74 @@ function count_email_campaign_sent_stats(int $sheetId): array
  *
  * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int}
  */
+function email_campaign_emailed_flag_row(array $row): array
+{
+    return [
+        'id' => (int) ($row['id'] ?? 0),
+        'email_sent' => (int) ($row['email_sent'] ?? 0) === 1 ? 1 : 0,
+        'email_sent_at' => $row['email_sent_at'] ?? null,
+    ];
+}
+
+/**
+ * @param list<mixed> $params
+ * @return list<array{id:int,email_sent:int,email_sent_at:mixed}>
+ */
+function email_campaign_emailed_flags_where(int $sheetId, string $extraWhere, array $params): array
+{
+    $sql = 'SELECT id, email_sent, email_sent_at FROM email_campaign_rows WHERE sheet_id=?';
+    if ($extraWhere !== '') {
+        $sql .= ' AND ' . $extraWhere;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute(array_merge([$sheetId], $params));
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $out[] = email_campaign_emailed_flag_row($row);
+    }
+    return $out;
+}
+
+/**
+ * @param list<array<string,mixed>> $flags
+ */
+function apply_email_campaign_emailed_flags(int $sheetId, array $flags): bool
+{
+    if ($sheetId < 1 || $flags === []) {
+        return false;
+    }
+    $n = 0;
+    foreach ($flags as $flag) {
+        if (!is_array($flag)) {
+            continue;
+        }
+        $id = (int) ($flag['id'] ?? 0);
+        if ($id < 1) {
+            continue;
+        }
+        $sent = (int) ($flag['email_sent'] ?? 0) === 1;
+        if ($sent) {
+            $at = trim((string) ($flag['email_sent_at'] ?? ''));
+            db()->prepare(
+                'UPDATE email_campaign_rows
+                 SET email_sent=1, email_sent_at=COALESCE(NULLIF(?, \'\'), NOW())
+                 WHERE id=? AND sheet_id=?'
+            )->execute([$at, $id, $sheetId]);
+        } else {
+            db()->prepare(
+                'UPDATE email_campaign_rows
+                 SET email_sent=0, email_sent_at=NULL
+                 WHERE id=? AND sheet_id=?'
+            )->execute([$id, $sheetId]);
+        }
+        $n++;
+    }
+    if ($n > 0) {
+        touch_email_campaign_sheet($sheetId);
+    }
+    return $n > 0;
+}
+
 function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent): array
 {
     ensure_email_campaign_schema();
@@ -1417,6 +1485,16 @@ function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent)
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
     }
+    $beforeSent = (int) ($row['email_sent'] ?? 0) === 1;
+    if ($beforeSent === $sent) {
+        return [
+            'ok' => true,
+            'domain' => (string) $row['domain'],
+            'email_sent' => $sent,
+            'sheet_id' => $sheetId,
+        ];
+    }
+    $before = [email_campaign_emailed_flag_row($row)];
     if ($sent) {
         db()->prepare(
             'UPDATE email_campaign_rows
@@ -1431,6 +1509,15 @@ function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent)
         )->execute([$rowId, $sheetId]);
     }
     touch_email_campaign_sheet($sheetId);
+    $afterRow = get_email_campaign_row($rowId, $sheetId) ?: $row;
+    if (function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed(
+            'campaign',
+            (string) $sheetId,
+            $before,
+            [email_campaign_emailed_flag_row($afterRow)]
+        );
+    }
     return [
         'ok' => true,
         'domain' => (string) $row['domain'],
@@ -1451,6 +1538,11 @@ function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
     }
+    $before = email_campaign_emailed_flags_where(
+        $sheetId,
+        'id<=? AND email_sent=0 AND LEFT(domain, 8) <> \'__blank_\'',
+        [$rowId]
+    );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
          SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
@@ -1459,6 +1551,17 @@ function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     );
     $st->execute([$sheetId, $rowId]);
     touch_email_campaign_sheet($sheetId);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = [
+            'id' => (int) $flag['id'],
+            'email_sent' => 1,
+            'email_sent_at' => $flag['email_sent_at'] ?: date('Y-m-d H:i:s'),
+        ];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
+    }
     return [
         'ok' => true,
         'marked' => $st->rowCount(),
@@ -1479,6 +1582,11 @@ function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
     }
+    $before = email_campaign_emailed_flags_where(
+        $sheetId,
+        'id<=? AND email_sent=1 AND LEFT(domain, 8) <> \'__blank_\'',
+        [$rowId]
+    );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
          SET email_sent=0, email_sent_at=NULL
@@ -1487,6 +1595,13 @@ function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     );
     $st->execute([$sheetId, $rowId]);
     touch_email_campaign_sheet($sheetId);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = ['id' => (int) $flag['id'], 'email_sent' => 0, 'email_sent_at' => null];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
+    }
     return [
         'ok' => true,
         'cleared' => $st->rowCount(),
@@ -1506,6 +1621,11 @@ function clear_all_email_campaign_emailed(int $sheetId): array
     if (!get_email_campaign_sheet($sheetId)) {
         return ['ok' => false, 'error' => 'Sheet not found.'];
     }
+    $before = email_campaign_emailed_flags_where(
+        $sheetId,
+        'email_sent=1 AND LEFT(domain, 8) <> \'__blank_\'',
+        []
+    );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
          SET email_sent=0, email_sent_at=NULL
@@ -1514,6 +1634,13 @@ function clear_all_email_campaign_emailed(int $sheetId): array
     );
     $st->execute([$sheetId]);
     touch_email_campaign_sheet($sheetId);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = ['id' => (int) $flag['id'], 'email_sent' => 0, 'email_sent_at' => null];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
+    }
     return [
         'ok' => true,
         'cleared' => $st->rowCount(),
@@ -1758,6 +1885,9 @@ function save_email_campaign_row(
     $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     if (!$hasEmail) {
         $gone = email_campaign_row_email_list($existing);
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('campaign', (string) $sheetId, [$existing]);
+        }
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
         exclude_email_campaign_domain($sheetId, $oldDomain !== '' ? $oldDomain : $domain);
         if ($domain !== '' && $domain !== $oldDomain) {
@@ -3178,6 +3308,9 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
 
     // Last email gone → drop the site row (no empty-email sites).
     if ($slots === []) {
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('campaign', (string) $sheetId, [$row]);
+        }
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
         exclude_email_campaign_domain($sheetId, $domain);
         db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);

@@ -163,7 +163,7 @@ if ($sheetId > 0) {
                     $jsonOut($result + count_email_campaign_sent_stats($sheetId), !empty($result['ok']) ? 200 : 400);
                 }
                 flash($result['ok'] ? 'ok' : 'error', $result['ok']
-                    ? ($action === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
+                    ? ($action === 'redo_last' ? 'Redid last change.' : 'Undid last change.')
                     : (string) ($result['error'] ?? 'Could not undo/redo.'));
                 redirect($back);
             }
