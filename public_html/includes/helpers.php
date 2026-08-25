@@ -525,6 +525,45 @@ function cached_scalar_count(string $cacheKey, callable $fn, int $ttlSeconds = 4
     return $n;
 }
 
+/**
+ * Dashboard COUNT that reports failure instead of looking like zero.
+ * Successful counts use the same short session cache as cached_scalar_count.
+ * Failures are not cached.
+ *
+ * @return array{ok:bool,n:int}
+ */
+function cached_count_result(string $cacheKey, callable $fn, int $ttlSeconds = 45): array
+{
+    static $local = [];
+    if (isset($local[$cacheKey]) && is_array($local[$cacheKey])) {
+        return $local[$cacheKey];
+    }
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $pack = $_SESSION['_count_cache'][$cacheKey] ?? null;
+        if (is_array($pack) && isset($pack['n'], $pack['exp']) && (int) $pack['exp'] > time()) {
+            $ok = ($pack['ok'] ?? true) !== false;
+            return $local[$cacheKey] = ['ok' => $ok, 'n' => (int) $pack['n']];
+        }
+    }
+    try {
+        $result = ['ok' => true, 'n' => (int) $fn()];
+    } catch (Throwable $e) {
+        $result = ['ok' => false, 'n' => 0];
+    }
+    $local[$cacheKey] = $result;
+    if (!empty($result['ok']) && session_status() === PHP_SESSION_ACTIVE) {
+        if (!isset($_SESSION['_count_cache']) || !is_array($_SESSION['_count_cache'])) {
+            $_SESSION['_count_cache'] = [];
+        }
+        $_SESSION['_count_cache'][$cacheKey] = [
+            'n' => (int) $result['n'],
+            'ok' => true,
+            'exp' => time() + $ttlSeconds,
+        ];
+    }
+    return $result;
+}
+
 function normalize_sheet_per_page(int $n): int
 {
     return in_array($n, sheet_per_page_options(), true) ? $n : sheet_per_page_default();

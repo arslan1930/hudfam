@@ -1,13 +1,49 @@
 <?php
 $user = require_admin();
-$prospectTotal = cached_scalar_count('dash_prospect_sites', static function () {
+
+if (!function_exists('render_admin_dashboard_stat')) {
+    /**
+     * @param array{ok?:bool,n?:int} $result
+     */
+    function render_admin_dashboard_stat(string $label, array $result, string $href, string $okTitle, string $sub = ''): void
+    {
+        $ok = !empty($result['ok']);
+        $n = (int) ($result['n'] ?? 0);
+        $val = $ok ? number_format($n) : '—';
+        $title = $ok ? $okTitle : 'Could not load';
+        echo '<a class="card stat" href="' . h($href) . '" title="' . h($title) . '">';
+        echo '<span class="muted">' . h($label) . '</span>';
+        echo '<strong>' . h($val) . '</strong>';
+        if ($sub !== '') {
+            echo '<span class="dashboard-stat-sub muted">' . h($sub) . '</span>';
+        }
+        echo '</a>';
+    }
+}
+
+$prospect = cached_count_result('dash_prospect_sites', static function () {
     return (int) db()->query('SELECT COUNT(*) FROM prospect_sites')->fetchColumn();
 });
-$batchCount = cached_scalar_count('dash_prospect_batches', static function () {
-    return (int) db()->query('SELECT COUNT(*) FROM prospect_batches')->fetchColumn();
-});
-$teamCount = cached_scalar_count('dash_team_users', static function () {
+$team = cached_count_result('dash_team_users', static function () {
     return (int) db()->query("SELECT COUNT(*) FROM users WHERE role='team' AND is_active=1")->fetchColumn();
+});
+$extracted = cached_count_result('dash_extracted', static function () {
+    return count_extracted_sites();
+});
+$sweAdmin = cached_count_result('dash_swe_admin', static function () {
+    return count_sites_with_emails('admin');
+});
+$sweFinal = cached_count_result('dash_swe_final', static function () {
+    return count_sites_with_emails('admin_all');
+});
+$campaignSheets = cached_count_result('dash_campaign_sheets', static function () {
+    return count_email_campaign_sheets();
+});
+$invoiceDrafts = cached_count_result('dash_invoice_drafts', static function () {
+    return count_invoices_by_work_status('draft');
+});
+$invoiceUnpaid = cached_count_result('dash_invoice_unpaid', static function () {
+    return count_invoices_unpaid();
 });
 
 $recent = [];
@@ -18,16 +54,17 @@ try {
 }
 $orderClientCount = 0;
 $orderUnpaidLive = 0;
-$invoiceCount = 0;
-$extractedCount = 0;
+$omOk = true;
 $deptOpenTasks = 0;
 $deptMembers = 0;
 $deptUnassignedTeam = 0;
+$deptOk = true;
 try {
     $omStats = order_management_dashboard_stats();
     $orderClientCount = (int) ($omStats['clients'] ?? 0);
     $orderUnpaidLive = (int) ($omStats['unpaid_live'] ?? 0);
 } catch (Throwable $e) {
+    $omOk = false;
     $orderClientCount = 0;
     $orderUnpaidLive = 0;
 }
@@ -37,37 +74,33 @@ try {
     $deptMembers = (int) ($deptStats['members'] ?? 0);
     $deptUnassignedTeam = (int) ($deptStats['unassigned_team'] ?? 0);
 } catch (Throwable $e) {
+    $deptOk = false;
     $deptOpenTasks = 0;
     $deptMembers = 0;
     $deptUnassignedTeam = 0;
 }
-try {
-    ensure_invoice_schema();
-    $invoiceCount = cached_scalar_count('dash_invoices', static function () {
-        return (int) db()->query('SELECT COUNT(*) FROM invoices')->fetchColumn();
-    });
-} catch (Throwable $e) {
-    $invoiceCount = 0;
-}
-try {
-    $extractedCount = cached_scalar_count('dash_extracted', static function () {
-        return count_extracted_sites();
-    });
-} catch (Throwable $e) {
-    $extractedCount = 0;
+
+$adminEmailsNew = function_exists('admin_has_new_data') && admin_has_new_data('emails_admin', $user);
+$teamCount = !empty($team['ok']) ? (int) $team['n'] : 0;
+$invoiceDraftCount = !empty($invoiceDrafts['ok']) ? (int) $invoiceDrafts['n'] : 0;
+$invoiceUnpaidCount = !empty($invoiceUnpaid['ok']) ? (int) $invoiceUnpaid['n'] : 0;
+
+$invoiceSub = '';
+if (!empty($invoiceDrafts['ok']) && $invoiceDraftCount > 0) {
+    $invoiceSub = number_format($invoiceDraftCount) . ' draft';
 }
 
 render_header('Dashboard', 'admin');
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Admin dashboard', 'Overview of Our database, Extracted Sites, Emails data, departments, orders, and invoices.') ?></h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — each country has its own URL database.</p>
+    <h1><?= label_with_info('Admin dashboard', 'Home for Our database, Extracted Sites, Emails data, departments, orders, and invoices.') ?></h1>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — inventory, emails, departments, and office tools.</p>
   </div>
   <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">
     <label class="sheet-search dashboard-search" for="dashboard-search">
-      <span class="visually-hidden">Search dashboard</span>
-      <input id="dashboard-search" type="search" placeholder="Search…"
+      <span class="visually-hidden">Filter this page</span>
+      <input id="dashboard-search" type="search" placeholder="Filter this page…"
              autocomplete="off" spellcheck="false" data-no-draft
              title="Type to filter · Enter = next match · Shift+Enter = previous">
       <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
@@ -76,23 +109,101 @@ render_header('Dashboard', 'admin');
   </div>
 </div>
 
-<?php render_dashboard_help('admin'); ?>
+<?php
+render_workflow([
+    ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects', 'hint' => 'Country folders'],
+    ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted', 'hint' => 'From Extracting Push'],
+    ['label' => 'Emails data', 'href' => 'index.php?page=admin_emails_data', 'hint' => 'Admin · Final · Campaign'],
+    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders', 'hint' => 'Client sheets'],
+    ['label' => 'Invoices', 'href' => 'index.php?page=admin_invoices', 'hint' => 'Printable bills'],
+]);
+render_dashboard_help('admin');
+?>
 
-<div class="grid">
-  <div class="card stat"><span class="muted">URLs (all countries)</span><strong><?= $prospectTotal ?></strong></div>
-  <div class="card stat"><span class="muted">Site adding history days</span><strong><?= $batchCount ?></strong></div>
-  <div class="card stat"><span class="muted">Active team users</span><strong><?= $teamCount ?></strong></div>
-  <div class="card stat"><span class="muted">Extracted sites</span><strong><?= $extractedCount ?></strong></div>
-  <div class="card stat"><span class="muted">Client sheets</span><strong><?= $orderClientCount ?></strong></div>
-  <div class="card stat"><span class="muted">Invoices</span><strong><?= $invoiceCount ?></strong></div>
+<div class="grid dashboard-stats">
+  <?php
+  render_admin_dashboard_stat(
+      'URLs (all countries)',
+      $prospect,
+      'index.php?page=admin_prospects',
+      'Sites in Our database'
+  );
+  render_admin_dashboard_stat(
+      'Extracted',
+      $extracted,
+      'index.php?page=admin_extracted',
+      'Extracted Sites from Team Push'
+  );
+  render_admin_dashboard_stat(
+      'Emails Admin',
+      $sweAdmin,
+      'index.php?page=admin_emails_data&folder=sites_with_emails',
+      'Sites with emails — Admin working list'
+  );
+  render_admin_dashboard_stat(
+      'Campaigns',
+      $campaignSheets,
+      'index.php?page=admin_emails_data&folder=email_campaigns',
+      'Email campaign country sheets'
+  );
+  render_admin_dashboard_stat(
+      'Unpaid LIVE',
+      ['ok' => $omOk, 'n' => $orderUnpaidLive],
+      'index.php?page=admin_orders',
+      'Live placements not marked paid'
+  );
+  render_admin_dashboard_stat(
+      'Invoices',
+      $invoiceUnpaid,
+      'index.php?page=admin_invoices',
+      'Generated invoices waiting for payment',
+      $invoiceSub
+  );
+  ?>
 </div>
 
+<?php
+$attention = [];
+if ($deptOk && $deptUnassignedTeam > 0) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_users',
+        'label' => (int) $deptUnassignedTeam . ' team awaiting assignment',
+    ];
+}
+if ($deptOk && $deptOpenTasks > 0) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_departments',
+        'label' => (int) $deptOpenTasks . ' open task' . ($deptOpenTasks === 1 ? '' : 's'),
+    ];
+}
+if ($adminEmailsNew) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_emails_data&folder=sites_with_emails',
+        'label' => 'New Admin emails',
+    ];
+}
+if ($omOk && $orderUnpaidLive > 0) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_orders',
+        'label' => (int) $orderUnpaidLive . ' unpaid LIVE',
+    ];
+}
+if (!empty($invoiceDrafts['ok']) && $invoiceDraftCount > 0) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_invoices&q=draft',
+        'label' => number_format($invoiceDraftCount) . ' draft invoice' . ($invoiceDraftCount === 1 ? '' : 's'),
+    ];
+}
+if ($attention):
+?>
+<div class="dashboard-attention" data-dashboard-attention>
+  <?php foreach ($attention as $chip): ?>
+    <a href="<?= h((string) $chip['href']) ?>"><?= h((string) $chip['label']) ?></a>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
 <div class="launch-cards" id="dashboard-launch-cards">
-  <a class="launch-card" href="index.php?page=admin_semrush_research" data-dashboard-item
-    data-search="semrush research site finding">
-    <h2>Semrush Research</h2>
-    <p>Site Finding copy from Extracting Push · optional seed.</p>
-  </a>
   <a class="launch-card" href="index.php?page=admin_prospects#add-sites" data-dashboard-item
      data-search="our database add sites paste root domains country folders urls">
     <h2>Our database</h2>
@@ -108,10 +219,20 @@ render_header('Dashboard', 'admin');
     <h2>Extracted Sites</h2>
     <p>From Team Extracting Results Push.</p>
   </a>
-  <a class="launch-card" href="index.php?page=admin_emails_data" data-dashboard-item
-     data-search="emails data sites with emails admin archive push">
-    <h2>Emails data</h2>
-    <p>Admin archive, Final mirror, and campaign sheets.</p>
+  <a class="launch-card<?= $adminEmailsNew ? ' has-admin-new' : '' ?>" href="index.php?page=admin_emails_data" data-dashboard-item
+     data-search="emails data sites with emails admin archive final campaign push">
+    <h2>Emails data<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h2>
+    <p>
+      Admin <?= !empty($sweAdmin['ok']) ? number_format((int) $sweAdmin['n']) : '—' ?>
+      · Final <?= !empty($sweFinal['ok']) ? number_format((int) $sweFinal['n']) : '—' ?>
+      · Campaign <?= !empty($campaignSheets['ok']) ? number_format((int) $campaignSheets['n']) : '—' ?>
+      <?= !empty($campaignSheets['ok']) && (int) $campaignSheets['n'] === 1 ? ' sheet' : ' sheets' ?>.
+    </p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_semrush_research" data-dashboard-item
+    data-search="semrush research site finding">
+    <h2>Semrush Research</h2>
+    <p>Site Finding copy from Extracting Push · optional seed.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
      data-search="order management client sheets sites prices profit live url unpaid invoice">
@@ -119,9 +240,21 @@ render_header('Dashboard', 'admin');
     <p><?= (int) $orderClientCount ?> active client<?= (int) $orderClientCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — sheets, prices, profit.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_invoices" data-dashboard-item
-     data-search="invoices generate printable blank draft done payment">
+     data-search="invoices generate printable blank draft done payment unpaid">
     <h2>Invoices</h2>
-    <p>Generate printable invoices from completed articles.</p>
+    <p>
+      <?php if (!empty($invoiceUnpaid['ok']) && !empty($invoiceDrafts['ok'])): ?>
+        <?= number_format($invoiceUnpaidCount) ?> unpaid
+        · <?= number_format($invoiceDraftCount) ?> draft.
+      <?php else: ?>
+        Generate printable invoices from completed articles.
+      <?php endif; ?>
+    </p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_users" data-dashboard-item
+     data-search="users admin team logins password department assign awaiting">
+    <h2>Users</h2>
+    <p><?= number_format($teamCount) ?> active team user<?= $teamCount === 1 ? '' : 's' ?><?php if ($deptUnassignedTeam > 0): ?> · <?= (int) $deptUnassignedTeam ?> awaiting assignment<?php endif; ?>.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_prospect_batches" data-dashboard-item
      data-search="site adding history who added sites by day batches">
@@ -134,8 +267,10 @@ render_header('Dashboard', 'admin');
 <div class="card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.7rem">
     <h2 style="margin:0">Recent adds</h2>
+    <a class="btn secondary small" href="index.php?page=admin_prospect_batches">See all</a>
   </div>
   <?php if ($recent): ?>
+    <div class="table-wrap">
     <table id="dashboard-recent-table">
       <thead><tr><th>Date</th><th>Person</th><th>Sites</th><th></th></tr></thead>
       <tbody>
@@ -158,6 +293,7 @@ render_header('Dashboard', 'admin');
         </tr>
       </tbody>
     </table>
+    </div>
   <?php else: ?>
     <div class="empty-state">
       <p>No sites added yet.</p>

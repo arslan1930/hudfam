@@ -272,6 +272,27 @@ function count_invoices(array $opts = []): int
     return (int) $stmt->fetchColumn();
 }
 
+function count_invoices_by_work_status(string $status): int
+{
+    ensure_invoice_schema();
+    $status = normalize_invoice_work_status($status);
+    $stmt = db()->prepare('SELECT COUNT(*) FROM invoices WHERE work_status=?');
+    $stmt->execute([$status]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Generated invoices waiting for payment (blank drafts are counted separately).
+ */
+function count_invoices_unpaid(): int
+{
+    ensure_invoice_schema();
+    return (int) db()->query(
+        "SELECT COUNT(*) FROM invoices
+         WHERE payment_status='unpaid' AND work_status='done'"
+    )->fetchColumn();
+}
+
 function get_invoice(int $id): ?array
 {
     ensure_invoice_schema();
