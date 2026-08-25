@@ -255,6 +255,9 @@
     document.querySelectorAll('[data-swe-q]').forEach(function (el) {
       el.value = String(searchInput.value || '');
     });
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.sync === 'function') {
+      window.SheetSelectUndo.sync();
+    }
   }
 
   function jump(dir) {

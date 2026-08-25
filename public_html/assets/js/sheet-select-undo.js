@@ -1,5 +1,6 @@
 /**
- * Sheet Select / Select all / Remove selected + Undo / Redo arrows.
+ * Sheet Select all / Remove selected + Undo / Redo arrows.
+ * Selection follows live Search: hidden / display:none rows are unchecked.
  * Used on Email campaign, Sites with emails, Extracted Sites, Our database.
  */
 (function () {
@@ -11,17 +12,41 @@
     return document.querySelector('[data-sheet-select-root]');
   }
 
+  function rowOfCheck(el) {
+    return el ? el.closest('tr, li, [data-swe-row], [data-extracted-url-row], [data-prospect-site-row]') : null;
+  }
+
+  function isRowVisible(row) {
+    if (!row) return true;
+    if (row.hidden) return false;
+    if (row.getAttribute && row.getAttribute('hidden') != null) return false;
+    try {
+      if (window.getComputedStyle && getComputedStyle(row).display === 'none') return false;
+    } catch (e) { /* ignore */ }
+    return true;
+  }
+
+  function allChecks() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-sheet-row-check]'));
+  }
+
   function visibleChecks() {
-    return Array.prototype.filter.call(document.querySelectorAll('[data-sheet-row-check]'), function (el) {
-      var row = el.closest('tr, li, [data-swe-row], [data-extracted-url-row], [data-prospect-site-row]');
-      if (row && row.hidden) return false;
-      if (row && row.getAttribute && row.getAttribute('hidden') != null) return false;
-      return true;
+    return allChecks().filter(function (el) {
+      return isRowVisible(rowOfCheck(el));
     });
   }
 
   function selectedChecks() {
     return visibleChecks().filter(function (el) { return el.checked; });
+  }
+
+  function clearHiddenSelection() {
+    allChecks().forEach(function (el) {
+      var row = rowOfCheck(el);
+      if (isRowVisible(row)) return;
+      el.checked = false;
+      if (row) row.classList.remove('is-sheet-selected');
+    });
   }
 
   function setStatus(msg, isError) {
@@ -63,18 +88,35 @@
     if (redo) redo.disabled = !data.can_redo;
   }
 
+  function matchingLabel(n) {
+    return n === 1
+      ? 'Select all 1 matching row on this page'
+      : 'Select all ' + n + ' matching rows on this page';
+  }
+
   function syncRemoveButton() {
-    var root = rootEl();
-    if (!root) return;
-    var btn = root.querySelector('[data-sheet-remove-selected]');
-    if (btn) btn.disabled = selectedChecks().length < 1;
-    var all = document.querySelector('[data-sheet-select-all-check]');
+    clearHiddenSelection();
     var vis = visibleChecks();
+    var n = vis.length;
+    var c = selectedChecks().length;
+    var root = rootEl();
+    var btn = root ? root.querySelector('[data-sheet-remove-selected]') : null;
+    if (btn) {
+      btn.disabled = c < 1;
+      btn.textContent = c > 0 ? ('Remove selected (' + c + ')') : 'Remove selected';
+    }
+    var all = document.querySelector('[data-sheet-select-all-check]');
+    var title = matchingLabel(n);
     if (all) {
-      var n = vis.length;
-      var c = selectedChecks().length;
       all.checked = n > 0 && c === n;
       all.indeterminate = c > 0 && c < n;
+      all.title = title;
+      all.setAttribute('aria-label', title);
+    }
+    var selectAll = root ? root.querySelector('[data-sheet-select-all]') : null;
+    if (selectAll) {
+      selectAll.title = title;
+      selectAll.setAttribute('aria-label', title);
     }
   }
 
@@ -89,10 +131,6 @@
       markRowSelected(el, on);
     });
     syncRemoveButton();
-  }
-
-  function rowOfCheck(el) {
-    return el.closest('tr, li, [data-swe-row], [data-extracted-url-row], [data-prospect-site-row]');
   }
 
   function removeRowsByIds(ids) {
@@ -181,13 +219,8 @@
   });
 
   document.addEventListener('click', function (e) {
-    var btn = e.target && e.target.closest ? e.target.closest('[data-sheet-select], [data-sheet-select-all], [data-sheet-remove-selected], [data-sheet-undo], [data-sheet-redo]') : null;
+    var btn = e.target && e.target.closest ? e.target.closest('[data-sheet-select-all], [data-sheet-remove-selected], [data-sheet-undo], [data-sheet-redo]') : null;
     if (!btn || btn.disabled) return;
-    if (btn.hasAttribute('data-sheet-select')) {
-      e.preventDefault();
-      setVisibleSelected(true);
-      return;
-    }
     if (btn.hasAttribute('data-sheet-select-all')) {
       e.preventDefault();
       var vis = visibleChecks();
@@ -273,6 +306,10 @@
       syncRemoveButton();
     }
   };
+
+  document.addEventListener('hf-sheet-rows-changed', function () {
+    syncRemoveButton();
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', syncRemoveButton);

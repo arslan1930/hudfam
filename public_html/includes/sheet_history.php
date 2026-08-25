@@ -1,6 +1,6 @@
 <?php
 /**
- * Session undo/redo for sheet row removes, plus Select / Select all toolbar markup.
+ * Session undo/redo for sheet row removes, plus Select all / Remove selected toolbar.
  */
 
 function parse_posted_id_list($value, int $max = 2000): array
@@ -293,7 +293,7 @@ function render_undo_redo_arrow_buttons(string $undoId, string $redoId, string $
 }
 
 /**
- * Undo / Redo arrows + Select / Select all / Remove selected for a sheet of rows.
+ * Undo / Redo arrows + Select all / Remove selected for a sheet of rows.
  *
  * @param array{
  *   q?:string,p?:int,sent?:string,filter?:string,country?:string,
@@ -331,9 +331,8 @@ function render_sheet_edit_toolbar(string $actionUrl, string $historyKey, array 
         . ($canRedo ? '' : ' disabled')
         . ' title="Redo last remove" aria-label="Redo last remove">' . ui_icon_redo() . '</button>';
     if ($showSelect) {
-        echo '<button type="button" class="btn secondary small" data-sheet-select title="Select visible rows on this page">Select</button>';
-        echo '<button type="button" class="btn secondary small" data-sheet-select-all title="Select every visible row on this page">Select all</button>';
-        echo '<button type="button" class="btn secondary small danger" data-sheet-remove-selected disabled title="Remove the selected rows">Remove selected</button>';
+        echo '<button type="button" class="btn secondary small" data-sheet-select-all title="Select all matching rows on this page" aria-label="Select all matching rows on this page">Select all</button>';
+        echo '<button type="button" class="btn secondary small danger" data-sheet-remove-selected disabled title="Remove the selected matching rows">Remove selected</button>';
     }
     echo '<form id="sheet-shared-undo" class="sheet-history-form" method="post" action="' . $url . '" data-sheet-undo-form hidden>'
         . '<input type="hidden" name="action" value="undo_last">' . $nav . '</form>';
@@ -353,7 +352,7 @@ function render_sheet_select_th(): void
 {
     echo '<th class="swe-col-check sheet-col-check" scope="col">'
         . '<label class="sheet-check sheet-check-all">'
-        . '<input type="checkbox" data-sheet-select-all-check title="Select all on this page" aria-label="Select all on this page">'
+        . '<input type="checkbox" data-sheet-select-all-check title="Select all matching rows on this page" aria-label="Select all matching rows on this page">'
         . '</label></th>';
 }
 

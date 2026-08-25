@@ -1321,6 +1321,32 @@ if (!str_contains($sheetHistSmoke, 'function render_sheet_edit_toolbar')
 } else {
     ok('sheet history toolbar helpers');
 }
+if (str_contains($sheetHistSmoke, 'data-sheet-select title=')
+    || preg_match('/>Select</', $sheetHistSmoke)) {
+    fail('sheet toolbar still has extra Select button (keep Select all only)');
+} else {
+    ok('sheet toolbar has Select all without extra Select');
+}
+if (!str_contains($sheetSelJsSmoke, 'getComputedStyle')
+    || !str_contains($sheetSelJsSmoke, 'clearHiddenSelection')
+    || !str_contains($sheetSelJsSmoke, 'window.confirm')
+    || !str_contains($sheetSelJsSmoke, 'sync: syncRemoveButton')) {
+    fail('sheet-select-undo.js missing visible-row sync / confirm');
+} else {
+    ok('sheet select follows search + confirm remove');
+}
+$campFilterJs = file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '';
+$sweFilterJs = file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '';
+$extractedFilterJs = file_get_contents($root . '/assets/js/extracted-admin.js') ?: '';
+$prospectsCountryJsSel = file_get_contents($root . '/assets/js/prospects-country.js') ?: '';
+if (!str_contains($campFilterJs, 'SheetSelectUndo.sync')
+    || !str_contains($sweFilterJs, 'SheetSelectUndo.sync')
+    || !str_contains($extractedFilterJs, 'SheetSelectUndo.sync')
+    || !str_contains($prospectsCountryJsSel, 'SheetSelectUndo.sync')) {
+    fail('filter/search JS missing SheetSelectUndo.sync after hide/replace');
+} else {
+    ok('live search syncs sheet selection');
+}
 if (!str_contains($campAppSmokeUi, 'render_sheet_edit_toolbar')
     || !str_contains($campAppSmokeUi, 'remove_selected')
     || !str_contains($campAppSmokeUi, 'sheet-select-undo.js')) {
