@@ -359,7 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                 flash('ok', $appendEmailNote($appendDeactivateNote('User updated.')));
             }
             unset($_SESSION['users_form_draft']);
-            redirect(users_list_url(['edit' => '']));
+            redirect(users_list_url(['edit' => (string) $id]));
         }
 
         db()->prepare(
@@ -563,8 +563,8 @@ render_header('Admins & users', 'admin');
       <label for="users_role">Role</label>
       <select id="users_role" name="role">
         <option value="" <?= $roleFilter === '' ? 'selected' : '' ?>>All</option>
-        <option value="admin" <?= $roleFilter === 'admin' ? 'selected' : '' ?>>admin</option>
-        <option value="team" <?= $roleFilter === 'team' ? 'selected' : '' ?>>team</option>
+        <option value="admin" <?= $roleFilter === 'admin' ? 'selected' : '' ?>>Admin</option>
+        <option value="team" <?= $roleFilter === 'team' ? 'selected' : '' ?>>Team</option>
       </select>
     </div>
     <div>
@@ -604,9 +604,9 @@ render_header('Admins & users', 'admin');
         <th>Contact</th>
         <th>Departments</th>
         <th>Verified</th>
-        <th>Must change pwd</th>
+        <th>Must change</th>
         <th>Active</th>
-        <th></th>
+        <th>Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -615,26 +615,42 @@ render_header('Admins & users', 'admin');
         $uid = (int) $u['id'];
         $depts = $deptByUser[$uid] ?? [];
         $deptLabel = $depts ? implode(', ', $depts) : '—';
-        $verifiedLabel = '—';
-        if (($u['role'] ?? '') === 'admin') {
-            $verifiedLabel = admin_email_is_verified($u) ? 'Verified' : 'Not verified';
-        }
+        $isTeam = ($u['role'] ?? '') === 'team';
+        $isActive = !empty($u['is_active']);
+        $awaiting = $isTeam && $isActive && !$depts;
+        $isSelf = $uid === (int) ($me['id'] ?? 0);
+        $isEditing = $editId > 0 && $uid === $editId;
+        $roleLabel = ucfirst((string) ($u['role'] ?? ''));
       ?>
-      <tr>
-        <td><?= h($u['username']) ?></td>
+      <tr<?= $isEditing ? ' class="users-row-editing"' : '' ?>>
+        <td><?= h($u['username']) ?><?php if ($isSelf): ?> <span class="users-you">You</span><?php endif; ?></td>
         <td><?= h($u['full_name'] ?: '—') ?></td>
-        <td><span class="badge"><?= h($u['role']) ?></span></td>
+        <td><span class="badge"><?= h($roleLabel) ?></span></td>
         <td class="help"><?= h($u['email'] ?: '—') ?><?= !empty($u['phone']) ? ' · ' . h($u['phone']) : '' ?></td>
-        <td class="help"><?= h($deptLabel) ?></td>
-        <td><?= h($verifiedLabel) ?></td>
-        <td><?= !empty($u['must_change_password']) ? 'Yes' : 'No' ?></td>
-        <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
+        <td class="help">
+          <?php if ($depts): ?>
+            <?= h($deptLabel) ?>
+          <?php elseif ($awaiting): ?>
+            <span class="badge users-pill-awaiting">Awaiting</span>
+          <?php else: ?>
+            —
+          <?php endif; ?>
+        </td>
+        <td>
+          <?php if (($u['role'] ?? '') === 'admin'): ?>
+            <?php if (admin_email_is_verified($u)): ?>
+              <span class="badge agreed">Verified</span>
+            <?php else: ?>
+              <span class="badge sent">Not verified</span>
+            <?php endif; ?>
+          <?php else: ?>
+            <span class="muted">—</span>
+          <?php endif; ?>
+        </td>
+        <td><?php if (!empty($u['must_change_password'])): ?><span class="badge sent">Must change</span><?php else: ?><span class="muted">—</span><?php endif; ?></td>
+        <td><?php if ($isActive): ?><span class="badge active">Active</span><?php else: ?><span class="badge skipped">Inactive</span><?php endif; ?></td>
         <td class="actions">
           <a href="<?= h($usersListQs(['edit' => (string) $uid, 'p' => (string) $pageNum])) ?>">Edit</a>
-          <?php if ($u['role'] === 'team'): ?>
-            <a href="index.php?page=admin_departments">Departments</a>
-            <a href="index.php?page=admin_prospect_batches&amp;user=<?= $uid ?>">Site adding history</a>
-          <?php endif; ?>
         </td>
       </tr>
     <?php endforeach; ?>
@@ -669,6 +685,9 @@ render_header('Admins & users', 'admin');
       <?php if (!empty($edit['created_at'])): ?>
         · created <?= h(substr((string) $edit['created_at'], 0, 10)) ?>
       <?php endif; ?>
+      <?php if (($edit['role'] ?? '') === 'team'): ?>
+        · <a href="index.php?page=admin_prospect_batches&amp;user=<?= (int) $edit['id'] ?>">Site adding history</a>
+      <?php endif; ?>
       · <a href="<?= h($usersListQs(['edit' => ''])) ?>">Cancel edit</a>
     </p>
   <?php endif; ?>
@@ -699,8 +718,8 @@ render_header('Admins & users', 'admin');
     <textarea name="contact_details" rows="2" placeholder="Slack, secondary email, working hours…"><?= h($form['contact_details'] ?? '') ?></textarea>
     <label>Role</label>
     <select name="role">
-      <option value="team" <?= ($form['role'] ?? '')==='team'?'selected':'' ?>>team</option>
-      <option value="admin" <?= ($form['role'] ?? '')==='admin'?'selected':'' ?>>admin</option>
+      <option value="team" <?= ($form['role'] ?? '')==='team'?'selected':'' ?>>Team</option>
+      <option value="admin" <?= ($form['role'] ?? '')==='admin'?'selected':'' ?>>Admin</option>
     </select>
     <label>Password <?= $edit ? '(blank = keep)' : '(min 8 chars; blank = generate)' ?></label>
     <input type="password" name="password" id="users_password" autocomplete="new-password" minlength="8"
