@@ -93,6 +93,24 @@ function sheet_history_push_remove(string $kind, string $id, array $rows, array 
 }
 
 /**
+ * @param list<array<string,mixed>> $before
+ * @param list<array<string,mixed>> $after
+ */
+function sheet_history_push_emailed(string $kind, string $id, array $before, array $after, array $extra = []): void
+{
+    if ($before === [] && $after === []) {
+        return;
+    }
+    sheet_history_push(sheet_history_key($kind, $id), [
+        'op' => 'emailed',
+        'kind' => $kind,
+        'id' => $id,
+        'before' => $before,
+        'after' => $after,
+    ] + $extra);
+}
+
+/**
  * @return array{ok:bool,error?:string,op?:string,count?:int,reload?:bool,can_undo?:bool,can_redo?:bool}
  */
 function sheet_history_apply_undo(string $key): array
@@ -138,6 +156,28 @@ function sheet_history_apply_entry(array $entry, string $direction): array
 {
     $op = (string) ($entry['op'] ?? '');
     $kind = (string) ($entry['kind'] ?? '');
+    if ($op === 'emailed') {
+        $flags = $direction === 'undo'
+            ? ($entry['before'] ?? [])
+            : ($entry['after'] ?? []);
+        if (!is_array($flags) || $flags === []) {
+            return ['ok' => false, 'error' => 'History entry is empty.'];
+        }
+        $ok = sheet_history_apply_emailed_flags($kind, $entry, $flags);
+        if (!$ok) {
+            return [
+                'ok' => false,
+                'error' => $direction === 'undo'
+                    ? 'Could not undo the last emailed change.'
+                    : 'Could not redo the last emailed change.',
+            ];
+        }
+        return [
+            'ok' => true,
+            'op' => $direction === 'undo' ? 'undo' : 'redo',
+            'count' => count($flags),
+        ];
+    }
     $rows = $entry['rows'] ?? [];
     if (!is_array($rows) || $rows === []) {
         return ['ok' => false, 'error' => 'History entry is empty.'];
@@ -163,7 +203,7 @@ function sheet_history_apply_entry(array $entry, string $direction): array
     if ($count < 1) {
         return [
             'ok' => false,
-            'error' => $restore ? 'Could not restore the last remove.' : 'Could not redo the last remove.',
+            'error' => $restore ? 'Could not restore the last change.' : 'Could not redo the last change.',
         ];
     }
     return [
@@ -171,6 +211,21 @@ function sheet_history_apply_entry(array $entry, string $direction): array
         'op' => $restore ? 'undo' : 'redo',
         'count' => $count,
     ];
+}
+
+/**
+ * @param list<array<string,mixed>> $flags
+ */
+function sheet_history_apply_emailed_flags(string $kind, array $entry, array $flags): bool
+{
+    if ($kind === 'campaign' && function_exists('apply_email_campaign_emailed_flags')) {
+        $sheetId = (int) ($entry['id'] ?? 0);
+        return apply_email_campaign_emailed_flags($sheetId, $flags);
+    }
+    if ($kind === 'swe' && function_exists('apply_sites_with_emails_admin_emailed_flags')) {
+        return apply_sites_with_emails_admin_emailed_flags($flags);
+    }
+    return false;
 }
 
 /**
@@ -326,10 +381,10 @@ function render_sheet_edit_toolbar(string $actionUrl, string $historyKey, array 
     echo '<div class="sheet-edit-toolbar" data-sheet-select-root data-sheet-history-key="' . h($historyKey) . '">';
     echo '<button type="button" class="btn secondary small sheet-history-btn" data-sheet-undo'
         . ($canUndo ? '' : ' disabled')
-        . ' title="Undo last remove" aria-label="Undo last remove">' . ui_icon_undo() . '</button>';
+        . ' title="Undo last change" aria-label="Undo last change">' . ui_icon_undo() . '</button>';
     echo '<button type="button" class="btn secondary small sheet-history-btn" data-sheet-redo'
         . ($canRedo ? '' : ' disabled')
-        . ' title="Redo last remove" aria-label="Redo last remove">' . ui_icon_redo() . '</button>';
+        . ' title="Redo last change" aria-label="Redo last change">' . ui_icon_redo() . '</button>';
     if ($showSelect) {
         echo '<button type="button" class="btn secondary small" data-sheet-select-all title="Select all matching rows on this page" aria-label="Select all matching rows on this page">Select all</button>';
         echo '<button type="button" class="btn secondary small danger" data-sheet-remove-selected disabled title="Remove the selected matching rows">Remove selected</button>';

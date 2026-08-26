@@ -3975,6 +3975,47 @@ try {
     }
     db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfundo-%'");
     db()->prepare('DELETE FROM email_campaign_sheets WHERE id=?')->execute([$histSheet]);
+
+    $flagSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Emailed Undo', false);
+    $flagKey = sheet_history_key('campaign', (string) $flagSheet);
+    $_SESSION['sheet_history'][$flagKey] = ['undo' => [], 'redo' => []];
+    $upF = upsert_email_campaign_row($flagSheet, 'txfemailundo.de', [
+        'email1' => 'a@txfemailundo.de',
+        'email2' => '',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    $fid = (int) ($upF['id'] ?? 0);
+    $marked = set_email_campaign_row_email_sent($flagSheet, $fid, true);
+    $sent1 = (int) db()->query(
+        'SELECT email_sent FROM email_campaign_rows WHERE id=' . $fid
+    )->fetchColumn();
+    $undoFlag = sheet_history_apply_undo($flagKey);
+    $sent0 = (int) db()->query(
+        'SELECT email_sent FROM email_campaign_rows WHERE id=' . $fid
+    )->fetchColumn();
+    $redoFlag = sheet_history_apply_redo($flagKey);
+    $sent2 = (int) db()->query(
+        'SELECT email_sent FROM email_campaign_rows WHERE id=' . $fid
+    )->fetchColumn();
+    if (
+        !empty($marked['ok']) && $sent1 === 1
+        && !empty($undoFlag['ok']) && $sent0 === 0
+        && !empty($redoFlag['ok']) && $sent2 === 1
+    ) {
+        pass('campaign mark emailed undo/redo restores flag');
+    } else {
+        fail('campaign emailed undo unexpected: ' . json_encode([
+            'marked' => $marked,
+            'sent1' => $sent1,
+            'undo' => $undoFlag,
+            'sent0' => $sent0,
+            'redo' => $redoFlag,
+            'sent2' => $sent2,
+        ]));
+    }
+    db()->exec("DELETE FROM email_campaign_rows WHERE domain='txfemailundo.de'");
+    db()->prepare('DELETE FROM email_campaign_sheets WHERE id=?')->execute([$flagSheet]);
 } catch (Throwable $e) {
     fail('sheet undo/redo: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

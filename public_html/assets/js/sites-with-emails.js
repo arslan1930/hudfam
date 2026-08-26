@@ -26,6 +26,12 @@
     statusEl.classList.toggle('is-loading', !!isLoading && !isError);
   }
 
+  function syncUndoState(data) {
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+      window.SheetSelectUndo.applyState(data || {});
+    }
+  }
+
   function showProcessing(msg) {
     if (window.AppProcessing && typeof window.AppProcessing.show === 'function') {
       window.AppProcessing.show(msg);
@@ -743,6 +749,7 @@
           setRowEmailedState(row, false);
         });
         updateSentStats(data);
+        syncUndoState(data);
         setStatus(
           'Cleared all emailed marks'
           + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' sites' : '')
@@ -772,6 +779,7 @@
             totalLabel.textContent = String(data.site_count);
           }
           updateSentStats(data);
+          syncUndoState(data);
           setStatus(
             'Marked emailed · removed ' + (data.domain || 'site')
             + ' from Admin (Final kept the copy).'
@@ -783,6 +791,7 @@
         var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
         setRowEmailedState(rowEl, nextSent);
         updateSentStats(data);
+        syncUndoState(data);
         setStatus(
           (nextSent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
           + (data.domain || 'site')
@@ -809,6 +818,7 @@
           totalLabel.textContent = String(data.site_count);
         }
         updateSentStats(data);
+        syncUndoState(data);
         setStatus(
           'Marked emailed up to ' + (data.domain || 'site')
           + (typeof data.marked === 'number' ? ' · removed ' + data.marked + ' from Admin' : '')
@@ -827,6 +837,7 @@
         var data = result.data;
         applyEmailedUpTo(result.siteId, false);
         updateSentStats(data);
+        syncUndoState(data);
         setStatus(
           'Cleared emailed up to ' + (data.domain || 'site')
           + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' cleared' : '')

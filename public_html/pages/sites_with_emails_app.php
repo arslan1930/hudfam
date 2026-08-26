@@ -195,7 +195,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $jsonOut($result, !empty($result['ok']) ? 200 : 400);
         }
         flash($result['ok'] ? 'ok' : 'error', $result['ok']
-            ? ($action === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
+            ? ($action === 'redo_last' ? 'Redid last change.' : 'Undid last change.')
             : (string) ($result['error'] ?? 'Could not undo/redo.'));
         redirect($back);
     }
@@ -229,12 +229,10 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $sent = (string) post('email_sent') === '1';
         $result = set_site_with_emails_admin_email_sent($siteId, $sent);
         if ($wantsJson) {
-            header('Content-Type: application/json; charset=utf-8');
-            if (!$result['ok']) {
-                http_response_code(400);
-            }
-            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
-            exit;
+            $jsonOut(
+                $result + count_sites_with_emails_sent_stats($countryName),
+                !empty($result['ok']) ? 200 : 400
+            );
         }
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not update sent mark.'));
@@ -258,12 +256,10 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $siteId = (int) post('site_id');
         $result = mark_sites_with_emails_admin_emailed_up_to($siteId);
         if ($wantsJson) {
-            header('Content-Type: application/json; charset=utf-8');
-            if (!$result['ok']) {
-                http_response_code(400);
-            }
-            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
-            exit;
+            $jsonOut(
+                $result + count_sites_with_emails_sent_stats($countryName),
+                !empty($result['ok']) ? 200 : 400
+            );
         }
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not mark checkpoint.'));
@@ -282,12 +278,10 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $siteId = (int) post('site_id');
         $result = clear_sites_with_emails_admin_emailed_up_to($siteId);
         if ($wantsJson) {
-            header('Content-Type: application/json; charset=utf-8');
-            if (!$result['ok']) {
-                http_response_code(400);
-            }
-            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
-            exit;
+            $jsonOut(
+                $result + count_sites_with_emails_sent_stats($countryName),
+                !empty($result['ok']) ? 200 : 400
+            );
         }
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not clear checkpoint.'));
@@ -305,12 +299,10 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'clear_all_emailed' && $sweScope === 'admin') {
         $result = clear_all_sites_with_emails_admin_emailed($countryName);
         if ($wantsJson) {
-            header('Content-Type: application/json; charset=utf-8');
-            if (!$result['ok']) {
-                http_response_code(400);
-            }
-            echo json_encode($result + count_sites_with_emails_sent_stats($countryName));
-            exit;
+            $jsonOut(
+                $result + count_sites_with_emails_sent_stats($countryName),
+                !empty($result['ok']) ? 200 : 400
+            );
         }
         if (!$result['ok']) {
             flash('error', (string) ($result['error'] ?? 'Could not clear emailed marks.'));

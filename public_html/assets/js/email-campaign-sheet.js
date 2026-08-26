@@ -526,6 +526,9 @@
           setRowEmailedState(row, false);
         });
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           'Cleared all emailed marks'
           + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' sites' : '')
@@ -551,6 +554,9 @@
         var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
         setRowEmailedState(rowEl, nextSent);
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           (nextSent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
           + (data.domain || 'site')
@@ -568,6 +574,9 @@
         var data = result.data;
         applyEmailedUpTo(result.siteId, true);
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           'Marked emailed up to ' + (data.domain || 'site')
           + (typeof data.marked === 'number' ? ' · ' + data.marked + ' newly marked' : '')
@@ -586,6 +595,9 @@
         var data = result.data;
         applyEmailedUpTo(result.siteId, false);
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           'Cleared emailed up to ' + (data.domain || 'site')
           + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' cleared' : '')

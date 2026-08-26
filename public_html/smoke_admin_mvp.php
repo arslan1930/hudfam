@@ -1368,6 +1368,12 @@ $layoutLoadSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
 $procJsSmoke = file_get_contents($root . '/assets/js/app-processing.js') ?: '';
 $sheetSelJsSmoke = file_get_contents($root . '/assets/js/sheet-select-undo.js') ?: '';
 $extractBatchArrows = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+if (!str_contains($sheetHistSmoke, 'function sheet_history_push_emailed')
+    || !str_contains($sheetHistSmoke, "'op' => 'emailed'")) {
+    fail('sheet_history missing emailed undo op');
+} else {
+    ok('sheet history emailed undo');
+}
 if (!str_contains($sheetHistSmoke, 'function render_sheet_edit_toolbar')
     || !str_contains($sheetHistSmoke, 'function render_undo_redo_arrow_buttons')
     || !str_contains($sheetHistSmoke, 'data-sheet-select-all')
