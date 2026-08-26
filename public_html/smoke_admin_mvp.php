@@ -1686,6 +1686,18 @@ if (!str_contains($campLib, 'function list_email_campaign_excluded_emails')
 } else {
     ok('campaign excluded-email Admin UI (P2)');
 }
+if (!str_contains($campLib, 'function record_email_campaign_row_event')
+    || !str_contains($campLib, 'email_campaign_row_events')
+    || !str_contains($campLib, 'function list_email_campaign_row_events')
+    || !str_contains(file_get_contents($root . '/pages/team/email_campaigns.php') ?: '', 'delete_email_campaign_row($sid, $rowId, true, $user)')
+    || !str_contains(file_get_contents($root . '/pages/team/email_campaigns.php') ?: '', 'remove_email_from_email_campaign_row($sid, $rowId, (string) post(\'email\'), $user)')
+    || !str_contains($campApp, 'delete_email_campaign_row($sheetId, $rowId, true, $user)')
+    || !str_contains($campApp, 'delete_email_campaign_rows_by_ids($sheetId, $ids, $user)')
+    || !str_contains($campApp, 'save_email_campaign_row($sheetId, $rowId, (string) post(\'domain\'), $emails, $user)')) {
+    fail('campaign missing delete-who event stamp');
+} else {
+    ok('campaign delete-who event stamp');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')

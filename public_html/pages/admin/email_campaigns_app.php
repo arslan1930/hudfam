@@ -102,7 +102,7 @@ if ($sheetId > 0) {
                     (string) post('email4'),
                 ];
                 if ($rowId > 0) {
-                    $result = save_email_campaign_row($sheetId, $rowId, (string) post('domain'), $emails);
+                    $result = save_email_campaign_row($sheetId, $rowId, (string) post('domain'), $emails, $user);
                 } else {
                     $result = upsert_email_campaign_row($sheetId, (string) post('domain'), $emails);
                 }
@@ -122,7 +122,7 @@ if ($sheetId > 0) {
             }
             if ($action === 'remove_site') {
                 $rowId = (int) post('site_id');
-                $del = delete_email_campaign_row($sheetId, $rowId);
+                $del = delete_email_campaign_row($sheetId, $rowId, true, $user);
                 if ($wantsJson) {
                     $jsonOut([
                         'ok' => !empty($del['ok']),
@@ -140,7 +140,7 @@ if ($sheetId > 0) {
                 $ids = function_exists('parse_posted_id_list')
                     ? parse_posted_id_list(post('site_ids'))
                     : [];
-                $del = delete_email_campaign_rows_by_ids($sheetId, $ids);
+                $del = delete_email_campaign_rows_by_ids($sheetId, $ids, $user);
                 $left = count_email_campaign_rows($sheetId);
                 if ($wantsJson) {
                     $jsonOut(

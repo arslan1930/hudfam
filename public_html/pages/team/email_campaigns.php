@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $projectName = email_campaign_sheet_project_name($sheet);
 
     if ($action === 'delete_row') {
-        $result = delete_email_campaign_row($sid, $rowId);
+        $result = delete_email_campaign_row($sid, $rowId, true, $user);
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Delete failed.')], 404);
         }
@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'delete_email') {
-        $result = remove_email_from_email_campaign_row($sid, $rowId, (string) post('email'));
+        $result = remove_email_from_email_campaign_row($sid, $rowId, (string) post('email'), $user);
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
         }

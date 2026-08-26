@@ -69,6 +69,28 @@ CREATE TABLE IF NOT EXISTS email_campaign_excluded_emails (
     FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Who deleted a site / removed an email (survives Allow again)
+CREATE TABLE IF NOT EXISTS email_campaign_row_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  project_id INT NULL,
+  user_id INT NULL,
+  username VARCHAR(100) NOT NULL DEFAULT '',
+  full_name VARCHAR(180) NOT NULL DEFAULT '',
+  action VARCHAR(32) NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_camp_row_events_sheet (sheet_id, created_at),
+  INDEX idx_camp_row_events_project (project_id, created_at),
+  INDEX idx_camp_row_events_user (user_id),
+  INDEX idx_camp_row_events_domain (sheet_id, domain, action),
+  CONSTRAINT fk_camp_row_event_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+  CONSTRAINT fk_camp_row_event_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Communication / Admin: reusable outreach drafts per project
 CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   id INT AUTO_INCREMENT PRIMARY KEY,
