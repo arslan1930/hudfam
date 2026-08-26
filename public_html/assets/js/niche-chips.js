@@ -293,13 +293,14 @@
 
     input.addEventListener('blur', function () {
       window.setTimeout(function () {
+        if (document.activeElement === input) return;
         if (String(input.value || '').trim()) {
           pickFirstOrExact();
         }
         input.value = '';
         editingChip = null;
         closeList();
-      }, 140);
+      }, 180);
     });
 
     root.addEventListener('click', function (e) {
@@ -310,19 +311,18 @@
         e.preventDefault();
         e.stopPropagation();
         var chip = rm.closest('.niche-chip');
+        editingChip = null;
         removeChip(root, chip);
         input.focus();
         return;
       }
-      var lab = t.closest('.niche-chip-label');
-      if (lab) {
+      var chip2 = t.closest('.niche-chip');
+      if (chip2 && root.contains(chip2)) {
         e.preventDefault();
-        var chip2 = lab.closest('.niche-chip');
-        if (!chip2) return;
         editingChip = chip2;
         input.value = String(chip2.getAttribute('data-niche') || '');
         input.focus();
-        input.select();
+        if (input.select) input.select();
         refreshFilter();
       }
     });

@@ -2976,6 +2976,7 @@ tr.swe-row-updated {
   font-weight: 700;
   line-height: 1.25;
   white-space: nowrap;
+  cursor: text;
 }
 .niche-chip-label {
   overflow: hidden;
