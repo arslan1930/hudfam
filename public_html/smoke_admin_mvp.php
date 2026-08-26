@@ -222,10 +222,24 @@ if (!str_contains($usersPage, "post('action') === 'send_verify'")
 } else {
     ok('users.php send admin verification email');
 }
-if (!str_contains($usersPage, 'Must change pwd') || !str_contains($usersPage, 'Departments')) {
+if (!str_contains($usersPage, 'Must change') || !str_contains($usersPage, 'Departments')) {
     fail('users.php missing must-change / departments columns');
 } else {
     ok('users.php must-change and departments columns');
+}
+if (!str_contains($usersPage, 'users-row-editing')
+    || !str_contains($usersPage, 'users-you')
+    || !str_contains($usersPage, 'users-pill-awaiting')
+    || !str_contains($usersPage, '>Actions</th>')
+    || !str_contains($usersPage, '>Admin</option>')
+    || !str_contains($usersPage, '>Team</option>')
+    || !str_contains($usersPage, "unset(\$_SESSION['users_form_draft']);\n            redirect(users_list_url(['edit' => (string) \$id]));")
+    || str_contains($usersPage, "unset(\$_SESSION['users_form_draft']);\n            redirect(users_list_url(['edit' => '']));")
+    || str_contains($usersPage, 'admin_departments">Departments</a>')
+    || !str_contains($usersPage, 'admin_prospect_batches')) {
+    fail('users.php missing stay-on-edit / scan pills / Edit-only actions');
+} else {
+    ok('users.php stay-on-edit, row highlight, pills, Edit-only');
 }
 if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_role')) {
     fail('users.php missing search/role filters');
