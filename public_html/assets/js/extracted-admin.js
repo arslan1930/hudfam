@@ -108,6 +108,7 @@
   function invalidateExtractedRows() {
     cachedRows = null;
   }
+  document.addEventListener('hf-sheet-rows-changed', invalidateExtractedRows);
 
   function scheduleFilterUrls() {
     if (filterTimer) window.clearTimeout(filterTimer);

@@ -137,8 +137,7 @@ render_breadcrumbs([
     <div class="domains-paste-head">
       <label for="semrush_sites_text">Sites</label>
       <div class="sites-list-actions">
-        <button type="button" class="btn secondary small" id="semrush_undo_btn" disabled>Undo</button>
-        <button type="button" class="btn secondary small" id="semrush_redo_btn" disabled>Redo</button>
+        <?php render_undo_redo_arrow_buttons('semrush_undo_btn', 'semrush_redo_btn'); ?>
         <button type="button" class="btn secondary small" id="semrush_copy_all">Copy all</button>
       </div>
     </div>

@@ -179,11 +179,10 @@ render_header('Extracting · ' . $country, 'team');
     >
       <div class="domains-paste-head">
         <label for="sites_list_text">Sites (root domains)</label>
-        <div class="sites-list-actions">
-          <button type="button" class="btn secondary small" id="sites_undo_btn" disabled>Undo</button>
-          <button type="button" class="btn secondary small" id="sites_redo_btn" disabled>Redo</button>
-          <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
-        </div>
+          <div class="sites-list-actions">
+            <?php render_undo_redo_arrow_buttons('sites_undo_btn', 'sites_redo_btn'); ?>
+            <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
+          </div>
       </div>
       <textarea
         id="sites_list_text"

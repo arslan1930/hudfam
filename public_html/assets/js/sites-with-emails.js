@@ -851,6 +851,9 @@
         totalLabel.textContent = String(data.site_count);
       }
       setStatus('Removed complete row for ' + (data.domain || 'site') + '.');
+      if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+        window.SheetSelectUndo.applyState(data);
+      }
       filterRows();
       syncPushButton();
       if (data.redirect) {

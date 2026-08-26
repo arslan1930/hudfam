@@ -604,6 +604,9 @@
       }
       removeRowFromDom(result.siteId, result.data.site_count);
       updateSentStats(result.data);
+      if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+        window.SheetSelectUndo.applyState(result.data);
+      }
       setStatus('Removed ' + (result.data.domain || 'site') + '.');
       form.removeAttribute('data-busy');
       hideProcessing();

@@ -147,34 +147,76 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'remove_site') {
         $siteId = (int) post('site_id');
-        $site = get_extracted_site($siteId);
-        if (!$site || (string) $site['country'] !== $countryName) {
-            if ($wantsJson) {
-                header('Content-Type: application/json; charset=utf-8');
-                http_response_code(404);
-                echo json_encode(['ok' => false, 'error' => 'Site not found in this country.']);
-                exit;
-            }
-            flash('error', 'Site not found in this country.');
-            redirect($countryReturnUrl());
-        }
-        $domain = (string) $site['domain'];
-        delete_extracted_site($siteId);
+        $result = delete_extracted_sites_by_ids($countryName, [$siteId]);
+        $ok = !empty($result['ok']);
+        $domain = (string) (($result['removed'][0]['domain'] ?? '') ?: '');
         $left = count_extracted_sites_for_country($countryName);
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
+            if (!$ok) {
+                http_response_code(404);
+            }
+            echo json_encode((!$ok ? ['ok' => false, 'error' => 'Site not found in this country.'] : [
                 'ok' => true,
                 'domain' => $domain,
                 'site_count' => $left,
                 'redirect' => $left < 1 ? $sitesListUrl : null,
-            ]);
+            ]) + (function_exists('sheet_history_state')
+                ? sheet_history_state(sheet_history_key('extracted', $countryName))
+                : []));
             exit;
+        }
+        if (!$ok) {
+            flash('error', 'Site not found in this country.');
+            redirect($countryReturnUrl());
         }
         flash('ok', 'Removed ' . $domain . ' from ' . $countryName . '.');
         if ($left < 1) {
             redirect($sitesListUrl);
         }
+        redirect($countryReturnUrl());
+    }
+
+    if ($action === 'remove_selected') {
+        $ids = function_exists('parse_posted_id_list') ? parse_posted_id_list(post('site_ids')) : [];
+        $result = delete_extracted_sites_by_ids($countryName, $ids);
+        $left = count_extracted_sites_for_country($countryName);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (empty($result['ok'])) {
+                http_response_code(400);
+            }
+            echo json_encode($result + [
+                'site_count' => $left,
+            ] + (function_exists('sheet_history_state')
+                ? sheet_history_state(sheet_history_key('extracted', $countryName))
+                : []));
+            exit;
+        }
+        flash($result['ok'] ? 'ok' : 'error', $result['ok']
+            ? 'Removed ' . (int) $result['count'] . ' selected URL' . ((int) $result['count'] === 1 ? '' : 's') . '.'
+            : (string) ($result['error'] ?? 'Could not remove selected URLs.'));
+        redirect($countryReturnUrl());
+    }
+
+    $histKeyEx = function_exists('sheet_history_key')
+        ? sheet_history_key('extracted', $countryName)
+        : ('extracted:' . $countryName);
+    if ($action === 'undo_last' || $action === 'redo_last') {
+        $result = $action === 'redo_last'
+            ? sheet_history_apply_redo($histKeyEx)
+            : sheet_history_apply_undo($histKeyEx);
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            if (empty($result['ok'])) {
+                http_response_code(400);
+            }
+            echo json_encode($result);
+            exit;
+        }
+        flash($result['ok'] ? 'ok' : 'error', $result['ok']
+            ? ($action === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
+            : (string) ($result['error'] ?? 'Could not undo/redo.'));
         redirect($countryReturnUrl());
     }
 
@@ -445,6 +487,12 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       </label>
       <button type="button" class="btn secondary small" id="extracted_search_all_pages"
               title="Search every page in this country (enables Remove matching)">Search all pages</button>
+      <?php
+      render_sheet_edit_toolbar($listBase, sheet_history_key('extracted', $countryName), [
+          'q' => $q,
+          'p' => $pageNum,
+      ]);
+      ?>
     </div>
     <?php endif; ?>
   </div>
@@ -474,7 +522,11 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
         class="extracted-plain-item"
         data-extracted-url-row
         data-search="<?= h(mb_strtolower($domain)) ?>"
+        data-site-id="<?= (int) $s['id'] ?>"
       >
+        <label class="sheet-check">
+          <input type="checkbox" data-sheet-row-check value="<?= (int) $s['id'] ?>" aria-label="Select <?= h($domain) ?>">
+        </label>
         <span class="extracted-plain-domain"><?= h($domain) ?></span>
         <?= render_open_site_anchor($domain, ['class' => 'extracted-open-site']) ?>
         <form method="post" class="extracted-plain-remove" action="<?= h($listBase) ?>"
@@ -544,6 +596,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
 </div>
 <?php endif; ?>
 
+<script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
 <script src="<?= h(script_asset_url('js/extracted-admin.js')) ?>" defer></script>
 <?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>
