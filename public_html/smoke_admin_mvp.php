@@ -131,6 +131,15 @@ if (!str_contains($usersPage, 'users_stash_form_draft') || !str_contains($usersP
 } else {
     ok('users.php form draft on validation failure');
 }
+if (!str_contains($usersPage, 'function users_list_url')
+    || !str_contains($usersPage, 'users-layout')
+    || !str_contains($usersPage, 'Cancel edit')
+    || !str_contains($usersPage, 'id="users-save-form"')
+    || !str_contains($usersPage, 'refresh_current_user_from_db()')) {
+    fail('users.php missing filter-preserving save / stacked edit form');
+} else {
+    ok('users.php save keeps filters + stacked edit form');
+}
 if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPage = 50')) {
     fail('users.php missing 50/page pagination');
 } else {

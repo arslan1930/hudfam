@@ -33,6 +33,42 @@ function users_take_form_draft(int $id): ?array
     return is_array($fields) ? $fields : null;
 }
 
+/**
+ * Users list URL that keeps search / role / active / page (and optional edit).
+ * Safe to call during POST when the form action carried those as query params.
+ */
+function users_list_url(array $overrides = []): string
+{
+    $role = array_key_exists('role', $overrides) ? (string) $overrides['role'] : (string) ($_GET['role'] ?? '');
+    if (!in_array($role, ['admin', 'team'], true)) {
+        $role = '';
+    }
+    $active = array_key_exists('active', $overrides) ? (string) $overrides['active'] : (string) ($_GET['active'] ?? '');
+    if (!in_array($active, ['0', '1'], true)) {
+        $active = '';
+    }
+    $q = array_key_exists('q', $overrides) ? (string) $overrides['q'] : trim((string) ($_GET['q'] ?? ''));
+    $edit = array_key_exists('edit', $overrides) ? (string) $overrides['edit'] : (string) ($_GET['edit'] ?? '');
+    $p = array_key_exists('p', $overrides) ? (string) $overrides['p'] : (string) ($_GET['p'] ?? '1');
+    $params = [
+        'page' => 'admin_users',
+        'q' => $q,
+        'role' => $role,
+        'active' => $active,
+        'edit' => $edit,
+        'p' => $p,
+    ];
+    $bits = [];
+    foreach ($params as $k => $v) {
+        $v = (string) $v;
+        if ($v === '' || ($k === 'p' && $v === '1')) {
+            continue;
+        }
+        $bits[] = rawurlencode($k) . '=' . rawurlencode($v);
+    }
+    return 'index.php?' . implode('&', $bits);
+}
+
 $revealedTemp = null;
 if (!empty($_SESSION['revealed_temp_password']) && is_array($_SESSION['revealed_temp_password'])) {
     $revealedTemp = $_SESSION['revealed_temp_password'];
@@ -45,18 +81,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'generate_temp')
     $myId = (int) ($me['id'] ?? 0);
     if ($id < 1) {
         flash('error', 'Select a user to edit first.');
-        redirect('index.php?page=admin_users');
+        redirect(users_list_url(['edit' => '']));
     }
     if ($id === $myId) {
         flash('error', 'Use the password field to change your own password.');
-        redirect('index.php?page=admin_users&edit=' . $id);
+        redirect(users_list_url(['edit' => (string) $id]));
     }
     $s = db()->prepare('SELECT id, username FROM users WHERE id=? LIMIT 1');
     $s->execute([$id]);
     $target = $s->fetch() ?: null;
     if (!$target) {
         flash('error', 'User not found.');
-        redirect('index.php?page=admin_users');
+        redirect(users_list_url(['edit' => '']));
     }
     $password = generate_temp_password();
     db()->prepare(
@@ -68,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'generate_temp')
         'password' => $password,
     ];
     flash('ok', 'Temporary password generated. Copy it below (shown once). They must change it on next login.');
-    redirect('index.php?page=admin_users&edit=' . $id);
+    redirect(users_list_url(['edit' => (string) $id]));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
@@ -95,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $fail = static function (string $message) use ($id, $draftFields): void {
         users_stash_form_draft($id, $draftFields);
         flash('error', $message);
-        redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+        redirect(users_list_url(['edit' => $id ? (string) $id : '']));
     };
 
     if ($username === '') {
@@ -115,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
         $existing = $s->fetch() ?: null;
         if (!$existing) {
             flash('error', 'User not found.');
-            redirect('index.php?page=admin_users');
+            redirect(users_list_url(['edit' => '']));
         }
     }
 
@@ -210,6 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                 }
                 if ($id === $myId) {
                     clear_must_change_password_flag($id);
+                    refresh_current_user_from_db();
                     flash('ok', $appendDeactivateNote('User updated. Your new password is active now.'));
                 } else {
                     flash('ok', $appendDeactivateNote('User updated. They must change the password on next login.'));
@@ -224,10 +261,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                         'UPDATE users SET username=?, full_name=?, email=?, phone=?, contact_details=?, role=?, is_active=? WHERE id=?'
                     )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
                 }
+                if ($id === $myId) {
+                    refresh_current_user_from_db();
+                }
                 flash('ok', $appendDeactivateNote('User updated.'));
             }
             unset($_SESSION['users_form_draft']);
-            redirect('index.php?page=admin_users');
+            redirect(users_list_url(['edit' => '']));
         }
 
         db()->prepare(
@@ -242,7 +282,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
         ];
         unset($_SESSION['users_form_draft']);
         flash('ok', 'User created. Copy the temporary password below (shown once). They must change it on first login.');
-        redirect('index.php?page=admin_users');
+        redirect(users_list_url([
+            'edit' => (string) $newId,
+            'q' => '',
+            'role' => '',
+            'active' => '',
+            'p' => '1',
+        ]));
     } catch (PDOException $e) {
         users_stash_form_draft($id, $draftFields);
         $sqlState = (string) ($e->errorInfo[0] ?? '');
@@ -251,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
         } else {
             flash('error', 'Could not save. Try again or pick a different username.');
         }
-        redirect('index.php?page=admin_users' . ($id ? '&edit=' . $id : ''));
+        redirect(users_list_url(['edit' => $id ? (string) $id : '']));
     }
 }
 
@@ -263,7 +309,7 @@ if ($editId) {
     $edit = $s->fetch() ?: null;
     if (!$edit) {
         flash('error', 'User not found.');
-        redirect('index.php?page=admin_users');
+        redirect(users_list_url(['edit' => '']));
     }
 }
 
@@ -327,24 +373,14 @@ if ($pageNum > $totalPages) {
 }
 $usersPage = array_slice($users, ($pageNum - 1) * $perPage, $perPage);
 
-$usersListQs = static function (array $overrides) use ($q, $roleFilter, $activeFilter, $editId): string {
-    $params = array_merge([
-        'page' => 'admin_users',
-        'q' => $q,
-        'role' => $roleFilter,
-        'active' => $activeFilter,
-        'edit' => $editId > 0 ? (string) $editId : '',
-        'p' => '1',
-    ], $overrides);
-    $bits = [];
-    foreach ($params as $k => $v) {
-        $v = (string) $v;
-        if ($v === '' || ($k === 'p' && $v === '1')) {
-            continue;
-        }
-        $bits[] = rawurlencode((string) $k) . '=' . rawurlencode($v);
+$usersListQs = static function (array $overrides) use ($editId, $pageNum): string {
+    if (!array_key_exists('edit', $overrides) && $editId > 0) {
+        $overrides['edit'] = (string) $editId;
     }
-    return 'index.php?' . implode('&', $bits);
+    if (!array_key_exists('p', $overrides)) {
+        $overrides['p'] = (string) $pageNum;
+    }
+    return users_list_url($overrides);
 };
 $deptByUser = [];
 if (function_exists('ensure_departments_schema')) {
@@ -430,7 +466,7 @@ render_header('Admins & users', 'admin');
         <td><?= h(($u['phone'] ?? '') !== '' ? $u['phone'] : '—') ?></td>
         <td class="help"><?= h(($u['contact_details'] ?? '') !== '' ? $u['contact_details'] : '—') ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
-        <td class="actions"><a href="index.php?page=admin_users&edit=<?= (int) $u['id'] ?>">Edit</a></td>
+        <td class="actions"><a href="<?= h($usersListQs(['edit' => (string) (int) $u['id']])) ?>">Edit</a></td>
       </tr>
     <?php endforeach; ?>
     <?php if (!$admins): ?><tr><td colspan="7" class="muted">No admins<?= ($q !== '' || $roleFilter !== '' || $activeFilter !== '') ? ' match these filters' : ' yet' ?>.</td></tr><?php endif; ?>
@@ -439,7 +475,7 @@ render_header('Admins & users', 'admin');
   </div>
 </div>
 
-<div class="grid" style="grid-template-columns:1.2fr 1fr">
+<div class="users-layout">
 <div class="card">
   <h2>All users</h2>
   <form method="get" action="index.php" class="users-filters" style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:end;margin:0 0 1rem">
@@ -467,7 +503,7 @@ render_header('Admins & users', 'admin');
     </div>
     <button class="btn secondary" type="submit">Filter</button>
     <?php if ($q !== '' || $roleFilter !== '' || $activeFilter !== ''): ?>
-      <a class="btn secondary" href="index.php?page=admin_users<?= $editId ? '&edit=' . (int) $editId : '' ?>">Clear</a>
+      <a class="btn secondary" href="<?= h($usersListQs(['q' => '', 'role' => '', 'active' => '', 'p' => '1'])) ?>">Clear</a>
     <?php endif; ?>
   </form>
   <p class="muted" style="margin:0 0 0.75rem">
@@ -533,9 +569,14 @@ render_header('Admins & users', 'admin');
   </p>
   <?php endif; ?>
 </div>
-<div class="card">
+<div class="card" id="users-edit-card">
   <h2><?= $edit ? 'Edit user' : 'New admin / team user' ?></h2>
-  <form method="post" action="index.php?page=admin_users">
+  <?php if ($edit): ?>
+    <p class="help">Editing <strong><?= h((string) ($edit['username'] ?? '')) ?></strong>
+      · <a href="<?= h($usersListQs(['edit' => ''])) ?>">Cancel edit</a>
+    </p>
+  <?php endif; ?>
+  <form method="post" action="<?= h($usersListQs([])) ?>" id="users-save-form">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="id" value="<?= (int)($edit['id'] ?? 0) ?>">
@@ -569,10 +610,15 @@ render_header('Admins & users', 'admin');
       </p>
     <?php endif; ?>
     <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !empty($form['is_active']) ? 'checked' : '' ?>> Active</label>
-    <p class="actions" style="margin-top:1rem"><button class="btn" type="submit">Save</button></p>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save</button>
+      <?php if ($edit): ?>
+        <a class="btn secondary" href="<?= h($usersListQs(['edit' => ''])) ?>">Cancel</a>
+      <?php endif; ?>
+    </p>
   </form>
   <?php if ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0)): ?>
-  <form method="post" action="index.php?page=admin_users" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border, #ddd)"
+  <form method="post" action="<?= h($usersListQs([])) ?>" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border, #ddd)"
         onsubmit="return confirm(<?= json_encode('Generate a temporary password for ' . (string) ($edit['username'] ?? 'this user') . '? They must change it on next login.', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>);">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="generate_temp">
@@ -585,9 +631,7 @@ render_header('Admins & users', 'admin');
 </div>
 <script>
 (function () {
-  var form = document.querySelector('form[action="index.php?page=admin_users"] input[name="action"][value="save"]');
-  if (!form) return;
-  form = form.closest('form');
+  var form = document.getElementById('users-save-form');
   var pwd = document.getElementById('users_password');
   if (!form || !pwd) return;
   form.addEventListener('submit', function (e) {
