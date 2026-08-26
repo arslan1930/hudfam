@@ -25,6 +25,12 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+/** Escape %, _, and \\ so SQL LIKE is a literal substring search. */
+function users_like_escape(string $q): string
+{
+    return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+}
+
 function txf_request_is_https(): bool
 {
     if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') {

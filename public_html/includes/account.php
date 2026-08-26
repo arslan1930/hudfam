@@ -132,7 +132,7 @@ function send_admin_email_verification(array $user): array
     }
     $email = trim((string) ($user['email'] ?? ''));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return ['ok' => false, 'error' => 'Add a valid email on your account first.'];
+        return ['ok' => false, 'error' => 'Add a valid admin email first.'];
     }
     $token = create_auth_token((int) $user['id'], 'email_verify', 48);
     $link = public_page_url('verify_email', ['token' => $token]);

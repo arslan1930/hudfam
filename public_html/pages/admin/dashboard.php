@@ -166,7 +166,7 @@ render_dashboard_help('admin');
 $attention = [];
 if ($deptOk && $deptUnassignedTeam > 0) {
     $attention[] = [
-        'href' => 'index.php?page=admin_users',
+        'href' => 'index.php?page=admin_users&role=team&unassigned=1',
         'label' => (int) $deptUnassignedTeam . ' team awaiting assignment',
     ];
 }
