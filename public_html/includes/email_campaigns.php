@@ -2154,7 +2154,7 @@ function clear_all_email_campaign_emailed(int $sheetId): array
  * Paginated Email Sheet rows — same model as Our database / Sites with emails.
  * Never load 100K rows into one page; use page + optional site/email search.
  *
- * @param array{q?:string,sent?:string} $filters sent: '', '0', '1'
+ * @param array{q?:string,sent?:string,batch?:int} $filters sent: '', '0', '1'; batch: send_batch_id
  * @return array{rows:list<array<string,mixed>>,total:int,pages:int,page:int,per_page:int}
  */
 function email_campaign_rows_inventory_query(
@@ -2170,6 +2170,7 @@ function email_campaign_rows_inventory_query(
     $perPage = max(1, min(1000, $perPage));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1'
+    $batchFilter = (int) ($filters['batch'] ?? 0);
 
     $where = ["sheet_id = ?", "LEFT(domain, 8) <> '__blank_'"];
     $params = [$sheetId];
@@ -2195,6 +2196,10 @@ function email_campaign_rows_inventory_query(
     if ($sentFilter === '0' || $sentFilter === '1') {
         $where[] = 'email_sent = ?';
         $params[] = (int) $sentFilter;
+    }
+    if ($batchFilter > 0) {
+        $where[] = 'send_batch_id = ?';
+        $params[] = $batchFilter;
     }
     $whereSql = implode(' AND ', $where);
 
