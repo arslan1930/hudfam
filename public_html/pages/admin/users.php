@@ -50,11 +50,16 @@ function users_list_url(array $overrides = []): string
     $q = array_key_exists('q', $overrides) ? (string) $overrides['q'] : trim((string) ($_GET['q'] ?? ''));
     $edit = array_key_exists('edit', $overrides) ? (string) $overrides['edit'] : (string) ($_GET['edit'] ?? '');
     $p = array_key_exists('p', $overrides) ? (string) $overrides['p'] : (string) ($_GET['p'] ?? '1');
+    $unassigned = array_key_exists('unassigned', $overrides) ? (string) $overrides['unassigned'] : (string) ($_GET['unassigned'] ?? '');
+    if ($unassigned !== '1') {
+        $unassigned = '';
+    }
     $params = [
         'page' => 'admin_users',
         'q' => $q,
         'role' => $role,
         'active' => $active,
+        'unassigned' => $unassigned,
         'edit' => $edit,
         'p' => $p,
     ];
@@ -287,6 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
             'q' => '',
             'role' => '',
             'active' => '',
+            'unassigned' => '',
             'p' => '1',
         ]));
     } catch (PDOException $e) {
@@ -338,6 +344,7 @@ $activeFilter = (string) get('active');
 if (!in_array($activeFilter, ['0', '1'], true)) {
     $activeFilter = '';
 }
+$unassignedFilter = (string) get('unassigned') === '1';
 
 $sql = 'SELECT * FROM users WHERE 1=1';
 $params = [];
@@ -354,6 +361,10 @@ if ($activeFilter !== '') {
     $sql .= ' AND is_active=?';
     $params[] = (int) $activeFilter;
 }
+if ($unassignedFilter) {
+    $sql .= " AND role='team' AND is_active=1
+              AND NOT EXISTS (SELECT 1 FROM department_members m WHERE m.user_id = users.id)";
+}
 $sql .= ' ORDER BY role, full_name, username';
 if ($params) {
     $stmt = db()->prepare($sql);
@@ -362,7 +373,6 @@ if ($params) {
 } else {
     $users = db()->query($sql)->fetchAll();
 }
-$admins = array_values(array_filter($users, fn($u) => $u['role'] === 'admin'));
 
 $perPage = 50;
 $pageNum = max(1, (int) get('p', 1));
@@ -452,32 +462,9 @@ render_header('Admins & users', 'admin');
 </script>
 <?php endif; ?>
 
-<div class="card">
-  <h2>Admin directory</h2>
-  <div class="table-wrap">
-  <table>
-    <thead><tr><th>Name</th><th>Username</th><th>Email</th><th>Phone</th><th>Contact details</th><th>Active</th><th></th></tr></thead>
-    <tbody>
-    <?php foreach ($admins as $u): ?>
-      <tr>
-        <td><strong><?= h($u['full_name'] ?: '—') ?></strong></td>
-        <td><?= h($u['username']) ?></td>
-        <td><?= h($u['email'] ?: '—') ?></td>
-        <td><?= h(($u['phone'] ?? '') !== '' ? $u['phone'] : '—') ?></td>
-        <td class="help"><?= h(($u['contact_details'] ?? '') !== '' ? $u['contact_details'] : '—') ?></td>
-        <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
-        <td class="actions"><a href="<?= h($usersListQs(['edit' => (string) (int) $u['id']])) ?>">Edit</a></td>
-      </tr>
-    <?php endforeach; ?>
-    <?php if (!$admins): ?><tr><td colspan="7" class="muted">No admins<?= ($q !== '' || $roleFilter !== '' || $activeFilter !== '') ? ' match these filters' : ' yet' ?>.</td></tr><?php endif; ?>
-    </tbody>
-  </table>
-  </div>
-</div>
-
 <div class="users-layout">
 <div class="card">
-  <h2>All users</h2>
+  <h2>Users</h2>
   <form method="get" action="index.php" class="users-filters" style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:end;margin:0 0 1rem">
     <input type="hidden" name="page" value="admin_users">
     <?php if ($editId): ?><input type="hidden" name="edit" value="<?= (int) $editId ?>"><?php endif; ?>
@@ -501,9 +488,16 @@ render_header('Admins & users', 'admin');
         <option value="0" <?= $activeFilter === '0' ? 'selected' : '' ?>>No</option>
       </select>
     </div>
+    <div>
+      <label for="users_unassigned">Departments</label>
+      <select id="users_unassigned" name="unassigned">
+        <option value="" <?= !$unassignedFilter ? 'selected' : '' ?>>All</option>
+        <option value="1" <?= $unassignedFilter ? 'selected' : '' ?>>Awaiting assignment</option>
+      </select>
+    </div>
     <button class="btn secondary" type="submit">Filter</button>
-    <?php if ($q !== '' || $roleFilter !== '' || $activeFilter !== ''): ?>
-      <a class="btn secondary" href="<?= h($usersListQs(['q' => '', 'role' => '', 'active' => '', 'p' => '1'])) ?>">Clear</a>
+    <?php if ($q !== '' || $roleFilter !== '' || $activeFilter !== '' || $unassignedFilter): ?>
+      <a class="btn secondary" href="<?= h($usersListQs(['q' => '', 'role' => '', 'active' => '', 'unassigned' => '', 'p' => '1'])) ?>">Clear</a>
     <?php endif; ?>
   </form>
   <p class="muted" style="margin:0 0 0.75rem">
@@ -552,7 +546,13 @@ render_header('Admins & users', 'admin');
       </tr>
     <?php endforeach; ?>
     <?php if (!$usersPage): ?>
-      <tr><td colspan="8" class="muted">No users match these filters.</td></tr>
+      <tr><td colspan="8" class="muted"><?php
+        if ($unassignedFilter) {
+            echo 'No team awaiting assignment — assign under Departments.';
+        } else {
+            echo 'No users match these filters.';
+        }
+      ?></td></tr>
     <?php endif; ?>
     </tbody>
   </table>

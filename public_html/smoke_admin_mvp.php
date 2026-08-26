@@ -212,11 +212,25 @@ if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_ro
     ok('users.php search and role filters');
 }
 if (str_contains($usersPage, 'shared URL database')
-    || substr_count($usersPage, 'table-wrap') < 2
+    || substr_count($usersPage, 'table-wrap') < 1
+    || str_contains($usersPage, 'Admin directory')
     || !str_contains($usersPage, 'Assign Team users under Departments')) {
-    fail('users.php still has shared-URL copy or missing table-wrap');
+    fail('users.php still has shared-URL copy or admin directory');
 } else {
-    ok('users.php Office copy + table-wrap');
+    ok('users.php Office copy + single users table');
+}
+if (!str_contains($usersPage, 'users_unassigned')
+    || !str_contains($usersPage, 'Awaiting assignment')
+    || !str_contains($usersPage, 'NOT EXISTS (SELECT 1 FROM department_members')) {
+    fail('users.php missing awaiting-department filter');
+} else {
+    ok('users.php awaiting-department filter');
+}
+$dashPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+if (!str_contains($dashPage, 'admin_users&role=team&unassigned=1')) {
+    fail('dashboard awaiting-assignment chip missing Users unassigned filter');
+} else {
+    ok('dashboard awaiting-assignment opens Users unassigned filter');
 }
 $guidesLib = file_get_contents($root . '/includes/guides.php') ?: '';
 if (!str_contains($guidesLib, 'Assign Team users under Departments')) {

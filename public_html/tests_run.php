@@ -4316,6 +4316,43 @@ try {
     fail('users U-5: ' . $e->getMessage());
 }
 
+// --- Admin Users U-6: awaiting-department list matches dashboard count ---
+try {
+    $u6 = 'u6_wait_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$u6, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U6 Wait', $u6 . '@example.test']);
+    $id6 = (int) db()->lastInsertId();
+    $awaitSql = "SELECT id FROM users
+         WHERE role='team' AND is_active=1
+           AND NOT EXISTS (SELECT 1 FROM department_members m WHERE m.user_id = users.id)
+           AND id=?";
+    $st = db()->prepare($awaitSql);
+    $st->execute([$id6]);
+    $waiting = (bool) $st->fetchColumn();
+    $dept = db()->query('SELECT id FROM departments WHERE is_active=1 ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    $assigned = false;
+    $waitingAfter = true;
+    if ($dept && function_exists('add_department_member')) {
+        add_department_member((int) $dept['id'], $id6, $adminUser);
+        $st->execute([$id6]);
+        $waitingAfter = (bool) $st->fetchColumn();
+        $assigned = true;
+        db()->prepare('DELETE FROM department_members WHERE user_id=?')->execute([$id6]);
+    }
+    db()->prepare('DELETE FROM users WHERE id=?')->execute([$id6]);
+    if (!$waiting) {
+        fail('new team user was not awaiting department');
+    } elseif ($assigned && $waitingAfter) {
+        fail('team user still awaiting after department assign');
+    } else {
+        pass('awaiting-department filter matches unassigned team');
+    }
+} catch (Throwable $e) {
+    fail('users U-6: ' . $e->getMessage());
+}
+
 // --- Sheet undo / redo + bulk remove ---
 try {
     $histSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Undo Sheet', false);
