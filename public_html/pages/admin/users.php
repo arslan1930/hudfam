@@ -207,6 +207,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     if ($username === '') {
         $fail('Username required.');
     }
+    if (preg_match('/\s/u', $username)) {
+        $fail('Username cannot contain spaces.');
+    }
+    if (strlen($username) > 100) {
+        $fail('Username must be 100 characters or fewer.');
+    }
+    $taken = db()->prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id<>? LIMIT 1');
+    $taken->execute([$username, $id]);
+    if ($taken->fetchColumn()) {
+        $fail('Could not save — username must be unique.');
+    }
     if ($role === 'admin' && $full === '') {
         $fail('Admins need a unique full name.');
     }
@@ -425,8 +436,8 @@ $unassignedFilter = (string) get('unassigned') === '1';
 $sql = 'SELECT * FROM users WHERE 1=1';
 $params = [];
 if ($q !== '') {
-    $sql .= ' AND (username LIKE ? OR full_name LIKE ? OR email LIKE ? OR phone LIKE ?)';
-    $like = '%' . $q . '%';
+    $sql .= " AND (username LIKE ? ESCAPE '\\\\' OR full_name LIKE ? ESCAPE '\\\\' OR email LIKE ? ESCAPE '\\\\' OR phone LIKE ? ESCAPE '\\\\')";
+    $like = '%' . users_like_escape($q) . '%';
     $params = array_merge($params, [$like, $like, $like, $like]);
 }
 if ($roleFilter !== '') {
@@ -655,6 +666,9 @@ render_header('Admins & users', 'admin');
   <h2><?= $edit ? 'Edit user' : 'New admin / team user' ?></h2>
   <?php if ($edit): ?>
     <p class="help">Editing <strong><?= h((string) ($edit['username'] ?? '')) ?></strong>
+      <?php if (!empty($edit['created_at'])): ?>
+        · created <?= h(substr((string) $edit['created_at'], 0, 10)) ?>
+      <?php endif; ?>
       · <a href="<?= h($usersListQs(['edit' => ''])) ?>">Cancel edit</a>
     </p>
   <?php endif; ?>
