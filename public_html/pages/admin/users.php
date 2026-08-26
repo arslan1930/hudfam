@@ -132,6 +132,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'send_verify') {
     redirect(users_list_url(['edit' => (string) $id]));
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save_departments') {
+    $id = (int) post('id');
+    if ($id < 1) {
+        flash('error', 'Select a user to edit first.');
+        redirect(users_list_url(['edit' => '']));
+    }
+    $target = load_user_by_id($id);
+    if (!$target) {
+        flash('error', 'User not found.');
+        redirect(users_list_url(['edit' => '']));
+    }
+    if (($target['role'] ?? '') !== 'team') {
+        flash('error', 'Departments are for Team users. Admins already see every tool.');
+        redirect(users_list_url(['edit' => (string) $id]));
+    }
+    $wanted = array_map('intval', (array) ($_POST['dept_ids'] ?? []));
+    $validIds = [];
+    foreach (list_departments(true) as $dept) {
+        $validIds[] = (int) ($dept['id'] ?? 0);
+    }
+    $wanted = array_values(array_filter(
+        array_unique($wanted),
+        static fn (int $did) => $did > 0 && in_array($did, $validIds, true)
+    ));
+    $current = user_department_ids($id);
+    $added = 0;
+    $removed = 0;
+    foreach ($wanted as $did) {
+        if (!in_array($did, $current, true) && add_department_member($did, $id, $me)) {
+            $added++;
+        }
+    }
+    foreach ($current as $did) {
+        if (!in_array($did, $wanted, true) && remove_department_member($did, $id)) {
+            $removed++;
+        }
+    }
+    if ($added < 1 && $removed < 1) {
+        flash('ok', 'Departments unchanged.');
+    } else {
+        flash('ok', 'Departments updated (' . $added . ' added, ' . $removed . ' removed).');
+    }
+    redirect(users_list_url(['edit' => (string) $id]));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $id = (int) post('id');
     $username = trim((string) post('username'));
@@ -239,20 +284,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $justDeactivated = $id > 0 && $wasActive && $active === 0;
 
     $appendDeactivateNote = static function (string $msg) use ($id, $justDeactivated): string {
-        if (!$justDeactivated || !function_exists('user_deactivation_residue')) {
+        if (!$justDeactivated) {
             return $msg;
         }
-        $res = user_deactivation_residue($id);
-        $m = (int) ($res['memberships'] ?? 0);
-        $t = (int) ($res['open_tasks'] ?? 0);
-        if ($m < 1 && $t < 1) {
-            return $msg;
+        if (function_exists('user_deactivation_residue')) {
+            $res = user_deactivation_residue($id);
+            $m = (int) ($res['memberships'] ?? 0);
+            $t = (int) ($res['open_tasks'] ?? 0);
+            if ($m > 0 || $t > 0) {
+                $extra = ' Still in ' . $m . ' department(s)';
+                if ($t > 0) {
+                    $extra .= ', assigned on ' . $t . ' open task(s)';
+                }
+                $msg .= $extra . ' — review under Departments (memberships were not auto-removed).';
+            }
         }
-        $extra = ' Still in ' . $m . ' department(s)';
-        if ($t > 0) {
-            $extra .= ', assigned on ' . $t . ' open task(s)';
-        }
-        return $msg . $extra . ' — review under Departments (memberships were not auto-removed).';
+        return $msg . ' They cannot sign in again; open sessions end on their next request.';
     };
 
     $appendEmailNote = static function (string $msg) use ($role, $email, $clearEmailVerify): string {
@@ -645,17 +692,23 @@ render_header('Admins & users', 'admin');
     <input type="password" name="password" id="users_password" autocomplete="new-password" minlength="8"
            data-editing-other="<?= ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0)) ? '1' : '0' ?>">
     <p class="help">Passwords must be at least 8 characters (not demo defaults). Admin emails must be unique.</p>
-    <?php if ($edit && ($edit['role'] ?? '') === 'team'): ?>
-      <p class="help">
-        Departments:
-        <?php
-          $editDepts = $deptByUser[(int) $edit['id']] ?? [];
-          echo $editDepts ? h(implode(', ', $editDepts)) : 'none yet';
-        ?>
-        · <a href="index.php?page=admin_departments">Assign in Departments</a>
-      </p>
+    <?php if ($edit && ($edit['role'] ?? '') === 'admin'): ?>
+      <p class="help">Admins see all tools; departments are for Team.</p>
     <?php endif; ?>
-    <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !empty($form['is_active']) ? 'checked' : '' ?>> Active</label>
+    <label style="font-weight:500;margin-top:0.8rem"><input type="checkbox" name="is_active" value="1" <?= !empty($form['is_active']) ? 'checked' : '' ?>
+           id="users_is_active"
+           <?php if ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0) && !empty($edit['is_active'])): ?>
+             <?php
+               $res = function_exists('user_deactivation_residue')
+                   ? user_deactivation_residue((int) $edit['id'])
+                   : ['memberships' => 0, 'open_tasks' => 0];
+             ?>
+             data-deactivate-user="<?= h((string) ($edit['username'] ?? 'this user')) ?>"
+             data-memberships="<?= (int) ($res['memberships'] ?? 0) ?>"
+             data-open-tasks="<?= (int) ($res['open_tasks'] ?? 0) ?>"
+           <?php endif; ?>
+           > Active</label>
+    <p class="help">Uncheck to deactivate — they cannot log in. Do not delete users (site-adding history stays).</p>
     <p class="actions" style="margin-top:1rem">
       <button class="btn" type="submit">Save</button>
       <?php if ($edit): ?>
@@ -663,6 +716,33 @@ render_header('Admins & users', 'admin');
       <?php endif; ?>
     </p>
   </form>
+  <?php if ($edit && ($edit['role'] ?? '') === 'team'): ?>
+  <form method="post" action="<?= h($usersListQs([])) ?>" id="users-dept-form" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border, #ddd)">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="save_departments">
+    <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
+    <p class="help" style="margin-top:0">Tick departments to unlock tools. Uncheck to remove. This does not change the profile fields above.</p>
+    <?php
+      $allDepartments = function_exists('list_departments') ? list_departments(true) : [];
+      $editDeptIds = user_department_ids((int) $edit['id']);
+    ?>
+    <?php if (!$allDepartments): ?>
+      <p class="muted">No departments yet. Run upgrade.php once.</p>
+    <?php else: ?>
+      <?php foreach ($allDepartments as $dept): ?>
+        <?php $did = (int) ($dept['id'] ?? 0); ?>
+        <label style="font-weight:500;display:block">
+          <input type="checkbox" name="dept_ids[]" value="<?= $did ?>" <?= in_array($did, $editDeptIds, true) ? 'checked' : '' ?>>
+          <?= h((string) ($dept['name'] ?? '')) ?>
+        </label>
+      <?php endforeach; ?>
+      <p class="actions" style="margin-top:0.75rem">
+        <button class="btn secondary" type="submit">Save departments</button>
+        <a href="index.php?page=admin_departments">Open Departments</a>
+      </p>
+    <?php endif; ?>
+  </form>
+  <?php endif; ?>
   <?php if ($edit && (int) ($edit['id'] ?? 0) !== (int) ($me['id'] ?? 0)): ?>
   <form method="post" action="<?= h($usersListQs([])) ?>" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border, #ddd)"
         onsubmit="return confirm(<?= json_encode('Generate a temporary password for ' . (string) ($edit['username'] ?? 'this user') . '? They must change it on next login.', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>);">
@@ -690,6 +770,22 @@ render_header('Admins & users', 'admin');
   var pwd = document.getElementById('users_password');
   if (!form || !pwd) return;
   form.addEventListener('submit', function (e) {
+    var active = document.getElementById('users_is_active');
+    if (active && active.getAttribute('data-deactivate-user') && !active.checked) {
+      var name = active.getAttribute('data-deactivate-user') || 'this user';
+      var m = parseInt(active.getAttribute('data-memberships') || '0', 10) || 0;
+      var t = parseInt(active.getAttribute('data-open-tasks') || '0', 10) || 0;
+      var msg = 'Deactivate ' + name + '? They cannot sign in again.';
+      if (m > 0 || t > 0) {
+        msg += ' Still in ' + m + ' department(s)';
+        if (t > 0) msg += ', assigned on ' + t + ' open task(s)';
+        msg += '. Memberships are not removed automatically.';
+      }
+      if (!window.confirm(msg)) {
+        e.preventDefault();
+        return;
+      }
+    }
     if (pwd.getAttribute('data-editing-other') !== '1') return;
     if (!String(pwd.value || '').trim()) return;
     if (!window.confirm('Set a new password for this user? They must change it on next login.')) {

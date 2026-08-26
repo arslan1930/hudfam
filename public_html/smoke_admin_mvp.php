@@ -313,6 +313,19 @@ if (!str_contains($usersPage, 'user_deactivation_residue') || !str_contains($use
 } else {
     ok('users.php deactivate residue messaging');
 }
+if (!str_contains($usersPage, "post('action') === 'save_departments'")
+    || !str_contains($usersPage, 'Save departments')
+    || !str_contains($usersPage, 'name="dept_ids[]"')) {
+    fail('users.php missing save_departments form');
+} else {
+    ok('users.php assign departments from edit card');
+}
+$guidesLibDeact = file_get_contents($root . '/includes/guides.php') ?: '';
+if (!str_contains($guidesLibDeact, 'Deactivate instead of delete')) {
+    fail('guide_admin_users missing deactivate-instead-of-delete');
+} else {
+    ok('guide_admin_users deactivate instead of delete');
+}
 $indexRoutes = file_get_contents($root . '/index.php') ?: '';
 foreach (['admin_account', 'forgot_password', 'reset_password', 'verify_email'] as $route) {
     if (!str_contains($indexRoutes, "'{$route}'")) {

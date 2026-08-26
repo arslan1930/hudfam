@@ -4380,6 +4380,38 @@ try {
     fail('users U-7: ' . $e->getMessage());
 }
 
+// --- Admin Users U-8: department assign/remove helpers ---
+try {
+    $u8 = 'u8_dept_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$u8, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U8 Dept', $u8 . '@example.test']);
+    $id8 = (int) db()->lastInsertId();
+    $dept = db()->query('SELECT id FROM departments WHERE is_active=1 ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    if (!$dept) {
+        db()->prepare('DELETE FROM users WHERE id=?')->execute([$id8]);
+        fail('users U-8: no department to assign');
+    } else {
+        $did = (int) $dept['id'];
+        $okAdd = add_department_member($did, $id8, $adminUser);
+        $idsAfter = user_department_ids($id8);
+        $okRem = remove_department_member($did, $id8);
+        $idsGone = user_department_ids($id8);
+        db()->prepare('DELETE FROM department_members WHERE user_id=?')->execute([$id8]);
+        db()->prepare('DELETE FROM users WHERE id=?')->execute([$id8]);
+        if (!$okAdd || !in_array($did, $idsAfter, true)) {
+            fail('add_department_member from Users flow failed');
+        } elseif (!$okRem || in_array($did, $idsGone, true)) {
+            fail('remove_department_member from Users flow failed');
+        } else {
+            pass('Users department assign/remove helpers');
+        }
+    }
+} catch (Throwable $e) {
+    fail('users U-8: ' . $e->getMessage());
+}
+
 // --- Sheet undo / redo + bulk remove ---
 try {
     $histSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Undo Sheet', false);
