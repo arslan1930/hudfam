@@ -4409,6 +4409,12 @@ try {
             'txfcamp-who-del.de',
             'drop@txfcamp-who-del.de'
         ) === $whoExpect
+        && email_campaign_who_for_exclusion(
+            map_email_campaign_latest_event_who($whoSheet),
+            'remove_email',
+            'txfcamp-who-del.de',
+            'keep@txfcamp-who-del.de'
+        ) === $whoExpect
     ) {
         pass('campaign delete events stamp teammate and survive Allow again');
     } else {

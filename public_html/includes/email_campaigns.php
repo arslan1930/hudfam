@@ -1115,6 +1115,10 @@ function email_campaign_who_for_exclusion(array $whoMap, string $action, string 
     $ev = null;
     if ($action === 'remove_email') {
         $ev = $whoMap['remove_email'][$domain . "\0" . $email] ?? null;
+        // Whole-site delete stamps delete_site only; still show who on tombstoned emails.
+        if (!is_array($ev)) {
+            $ev = $whoMap['delete_site'][$domain] ?? null;
+        }
     } else {
         $ev = $whoMap['delete_site'][$domain] ?? null;
     }
