@@ -201,6 +201,9 @@
       }
     }
     persistSearch();
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.sync === 'function') {
+      window.SheetSelectUndo.sync();
+    }
   }
 
   function jumpToMatch(dir) {

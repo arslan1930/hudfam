@@ -877,7 +877,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
     <thead><tr>
       <th class="sheet-col-check" scope="col">
         <label class="sheet-check sheet-check-all">
-          <input type="checkbox" data-sheet-select-all-check title="Select all on this page" aria-label="Select all on this page">
+          <input type="checkbox" data-sheet-select-all-check title="Select all matching rows on this page" aria-label="Select all matching rows on this page">
         </label>
       </th>
       <th>Domain</th><th>URL</th><th>Language</th><th>Status</th><th>Added by</th><th>When</th>

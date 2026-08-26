@@ -360,6 +360,9 @@
     searching = false;
     refreshPageMatches();
     keepFocus();
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.sync === 'function') {
+      window.SheetSelectUndo.sync();
+    }
   }
 
   function buildAjaxUrl(q, pageNum) {

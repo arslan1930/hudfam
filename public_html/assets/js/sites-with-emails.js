@@ -317,6 +317,9 @@
       el.value = String(searchInput.value || '');
     });
     if (typeof syncOpenBulkButton === 'function') syncOpenBulkButton();
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.sync === 'function') {
+      window.SheetSelectUndo.sync();
+    }
   }
 
   function jump(dir) {
