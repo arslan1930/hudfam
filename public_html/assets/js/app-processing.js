@@ -6,20 +6,23 @@
  *   AppProcessing.hide()
  *   <form data-show-processing="Paste sites…">…</form>
  *
- * Page-load: html.is-page-loading shows the overlay until the document is ready.
- * In-app link clicks and unmarked form submits show "Loading…" until the next page paints.
+ * First paint: overlay stays hidden (no flash). Same-origin navigations and
+ * unmarked form posts show "Loading…" only after NAV_DELAY_MS. Long posts with
+ * data-show-processing / AppProcessing.show() appear immediately.
  */
 (function () {
   'use strict';
   if (window.__HF_APP_PROCESSING__) return;
   window.__HF_APP_PROCESSING__ = true;
 
+  var NAV_DELAY_MS = 200;
   var overlay = null;
   var msgEl = null;
   var subEl = null;
   var depth = 0;
-  var pageLoadOpen = true;
+  var pageLoadOpen = false;
   var navArmed = false;
+  var navTimer = null;
 
   function ensure() {
     overlay = document.getElementById('app-processing');
@@ -64,10 +67,18 @@
     document.documentElement.classList.remove('is-page-loading');
   }
 
+  function clearNavTimer() {
+    if (navTimer) {
+      window.clearTimeout(navTimer);
+      navTimer = null;
+    }
+  }
+
   function show(msg) {
     if (!ensure()) {
       return;
     }
+    clearNavTimer();
     depth += 1;
     pageLoadOpen = false;
     setCopy(msg || 'Processing…', 'Please wait — do not close this page.');
@@ -85,20 +96,27 @@
   function hideAll() {
     depth = 0;
     pageLoadOpen = false;
+    clearNavTimer();
+    navArmed = false;
     hideOverlay();
   }
 
   function finishPageLoad() {
-    if (!pageLoadOpen && depth < 1) {
-      document.documentElement.classList.remove('is-page-loading');
-      return;
-    }
     pageLoadOpen = false;
     if (depth > 0) {
       document.documentElement.classList.remove('is-page-loading');
       return;
     }
     hideOverlay();
+  }
+
+  function armDelayedLoading(msg) {
+    clearNavTimer();
+    navArmed = true;
+    navTimer = window.setTimeout(function () {
+      navTimer = null;
+      show(msg || 'Loading…');
+    }, NAV_DELAY_MS);
   }
 
   function sameOriginUrl(href) {
@@ -138,19 +156,26 @@
       var msg = marked
         ? (form.getAttribute('data-show-processing') || 'Processing…')
         : 'Loading…';
-      window.setTimeout(function () {
-        if (e.defaultPrevented) {
-          return;
-        }
-        show(msg);
-        if (marked) {
+      if (marked) {
+        window.setTimeout(function () {
+          if (e.defaultPrevented) {
+            return;
+          }
+          show(msg);
           Array.prototype.forEach.call(
             form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])'),
             function (btn) {
               btn.disabled = true;
             }
           );
+        }, 0);
+        return;
+      }
+      window.setTimeout(function () {
+        if (e.defaultPrevented) {
+          return;
         }
+        armDelayedLoading(msg);
       }, 0);
     },
     true
@@ -172,14 +197,14 @@
       }
       var url = sameOriginUrl(a.href);
       if (!shouldShowNav(url)) return;
-      navArmed = true;
-      show('Loading…');
+      armDelayedLoading('Loading…');
     },
     true
   );
 
   window.addEventListener('pageshow', function (ev) {
     navArmed = false;
+    clearNavTimer();
     if (ev.persisted) {
       hideAll();
     }

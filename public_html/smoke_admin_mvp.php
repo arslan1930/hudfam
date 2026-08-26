@@ -1371,12 +1371,14 @@ if (!str_contains($extractBatchArrows, 'render_undo_redo_arrow_buttons')
 } else {
     ok('Textarea Undo/Redo arrows');
 }
-if (!str_contains($layoutLoadSmoke, 'is-page-loading')
-    || !str_contains($layoutLoadSmoke, 'id="app-processing"')
+if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
+    || !str_contains($layoutLoadSmoke, 'hidden aria-busy="false"')
+    || str_contains($layoutLoadSmoke, 'classList.add("is-page-loading")')
     || !str_contains($procJsSmoke, 'finishPageLoad')
-    || !str_contains($procJsSmoke, "show('Loading")
+    || !str_contains($procJsSmoke, 'NAV_DELAY_MS')
+    || !str_contains($procJsSmoke, 'armDelayedLoading')
     || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
-    fail('Missing page-loading overlay or select-remove JS');
+    fail('Missing delayed loading overlay or select-remove JS');
 } else {
     ok('Page loading UI + select/remove JS');
 }
