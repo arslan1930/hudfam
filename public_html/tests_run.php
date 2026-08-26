@@ -4252,6 +4252,70 @@ try {
     fail('users U-4: ' . $e->getMessage());
 }
 
+// --- Admin Users U-5: session refresh ends inactive / demoted sessions ---
+try {
+    if (!function_exists('refresh_current_user_from_db')) {
+        fail('refresh_current_user_from_db missing');
+    } else {
+        $u5 = 'u5_kick_' . substr(bin2hex(random_bytes(3)), 0, 6);
+        db()->prepare(
+            "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+             VALUES (?,?,?,?, 'team', 1, 0)"
+        )->execute([$u5, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U5 Kick', $u5 . '@example.test']);
+        $id5 = (int) db()->lastInsertId();
+        $_SESSION['user'] = [
+            'id' => $id5,
+            'username' => $u5,
+            'full_name' => 'U5 Kick',
+            'role' => 'team',
+            'must_change_password' => 0,
+        ];
+        $alive = refresh_current_user_from_db();
+        $stillOn = current_user();
+        db()->prepare('UPDATE users SET is_active=0 WHERE id=?')->execute([$id5]);
+        $dead = refresh_current_user_from_db();
+        $afterOff = current_user();
+
+        $u5a = 'u5_admin_' . substr(bin2hex(random_bytes(3)), 0, 6);
+        db()->prepare(
+            "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+             VALUES (?,?,?,?, 'admin', 1, 0)"
+        )->execute([$u5a, password_hash('TestAdmin8z', PASSWORD_DEFAULT), 'U5 Admin', $u5a . '@example.test']);
+        $id5a = (int) db()->lastInsertId();
+        $_SESSION['user'] = [
+            'id' => $id5a,
+            'username' => $u5a,
+            'full_name' => 'U5 Admin',
+            'role' => 'admin',
+            'must_change_password' => 0,
+        ];
+        db()->prepare("UPDATE users SET role='team' WHERE id=?")->execute([$id5a]);
+        $demoted = refresh_current_user_from_db();
+        $afterDemo = current_user();
+
+        $none = ['ok' => true];
+        unset($_SESSION['user']);
+        $none = refresh_current_user_from_db();
+
+        db()->prepare('DELETE FROM users WHERE id IN (?,?)')->execute([$id5, $id5a]);
+
+        if (empty($alive['ok']) || !$stillOn || (int) ($stillOn['id'] ?? 0) !== $id5) {
+            fail('refresh left an active user signed out');
+        } elseif (!empty($dead['ok']) || $afterOff) {
+            fail('refresh did not end inactive session');
+        } elseif (empty($demoted['ok']) || ($afterDemo['role'] ?? '') !== 'team'
+            || empty($demoted['role_changed'])) {
+            fail('refresh did not apply admin→team demote: ' . json_encode($demoted));
+        } elseif (empty($none['ok'])) {
+            fail('refresh without a session should be ok');
+        } else {
+            pass('refresh_current_user_from_db kicks inactive and updates demoted role');
+        }
+    }
+} catch (Throwable $e) {
+    fail('users U-5: ' . $e->getMessage());
+}
+
 // --- Sheet undo / redo + bulk remove ---
 try {
     $histSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Undo Sheet', false);

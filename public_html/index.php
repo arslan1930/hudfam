@@ -34,6 +34,13 @@ try {
 }
 
 $page = (string) ($_GET['page'] ?? '');
+if (current_user() && $page !== 'logout') {
+    $refreshed = refresh_current_user_from_db();
+    if (empty($refreshed['ok'])) {
+        flash('error', 'Your account is no longer active. Sign in again.');
+        redirect('index.php?page=login');
+    }
+}
 if ($page === '' && current_user()) {
     $u = current_user();
     if (user_must_change_password($u)) {

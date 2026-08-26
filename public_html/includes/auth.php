@@ -52,6 +52,63 @@ function current_user(): ?array
     return $_SESSION['user'] ?? null;
 }
 
+/**
+ * Reload the signed-in user from the database. Ends the session when the
+ * account is missing or inactive so deactivate/demote take effect on the
+ * next request (does not redirect — caller decides).
+ *
+ * @return array{ok:bool,reason?:string,role_changed?:bool,old_role?:string,new_role?:string}
+ */
+function refresh_current_user_from_db(): array
+{
+    $user = current_user();
+    if (!$user) {
+        return ['ok' => true];
+    }
+    $id = (int) ($user['id'] ?? 0);
+    if ($id < 1) {
+        logout_user();
+        return ['ok' => false, 'reason' => 'invalid'];
+    }
+    try {
+        ensure_users_auth_schema();
+        $stmt = db()->prepare(
+            'SELECT id, username, full_name, role, is_active, must_change_password
+             FROM users WHERE id=? LIMIT 1'
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+        // Do not kick everyone off during a brief DB/schema blip.
+        return ['ok' => true];
+    }
+    if (!$row || (int) ($row['is_active'] ?? 0) !== 1) {
+        logout_user();
+        return ['ok' => false, 'reason' => 'inactive'];
+    }
+    $oldRole = (string) ($user['role'] ?? '');
+    $newRole = (string) ($row['role'] ?? '');
+    $mustChange = (int) ($row['must_change_password'] ?? 0) === 1;
+    $_SESSION['user'] = [
+        'id' => (int) $row['id'],
+        'username' => $row['username'],
+        'full_name' => $row['full_name'],
+        'role' => $newRole,
+        'must_change_password' => $mustChange ? 1 : 0,
+    ];
+    if ($mustChange) {
+        $_SESSION['must_change_password'] = true;
+    } else {
+        unset($_SESSION['must_change_password']);
+    }
+    return [
+        'ok' => true,
+        'role_changed' => $oldRole !== '' && $oldRole !== $newRole,
+        'old_role' => $oldRole,
+        'new_role' => $newRole,
+    ];
+}
+
 function require_login(): array
 {
     $user = current_user();

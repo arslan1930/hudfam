@@ -92,7 +92,7 @@ if (!str_contains($index, 'user_must_change_password')) {
 }
 
 $auth = file_get_contents($root . '/includes/auth.php') ?: '';
-foreach (['ensure_users_auth_schema', 'change_user_password', 'user_must_change_password', 'known_weak_passwords'] as $fn) {
+foreach (['ensure_users_auth_schema', 'change_user_password', 'user_must_change_password', 'known_weak_passwords', 'refresh_current_user_from_db'] as $fn) {
     if (!str_contains($auth, "function {$fn}")) {
         fail("auth missing {$fn}");
     } else {
@@ -513,6 +513,12 @@ if (!str_contains($indexFull, 'require_csrf()') || !str_contains($indexFull, "st
     fail('index.php missing Admin CSRF gate');
 } else {
     ok('index.php Admin CSRF gate');
+}
+if (!str_contains($indexFull, 'refresh_current_user_from_db()')
+    || !str_contains($indexFull, 'Your account is no longer active')) {
+    fail('index.php missing session refresh on deactivate');
+} else {
+    ok('index.php reloads user and ends inactive sessions');
 }
 if (!str_contains($indexFull, "str_starts_with(\$page, 'team_')")) {
     fail('index.php missing Team CSRF gate');
