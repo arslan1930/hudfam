@@ -140,6 +140,20 @@ if (!str_contains($usersPage, 'function users_list_url')
 } else {
     ok('users.php save keeps filters + stacked edit form');
 }
+if (!str_contains($usersPage, 'users_like_escape')
+    || !str_contains($usersPage, 'Username cannot contain spaces')
+    || !str_contains($usersPage, 'LOWER(username) = LOWER(?)')
+    || !str_contains($usersPage, 'ESCAPE')) {
+    fail('users.php missing username uniqueness / LIKE escape');
+} else {
+    ok('users.php username unique pre-check + escaped search');
+}
+$helpersLike = file_get_contents($root . '/includes/helpers.php') ?: '';
+if (!str_contains($helpersLike, 'function users_like_escape')) {
+    fail('helpers missing users_like_escape');
+} else {
+    ok('helpers users_like_escape');
+}
 if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPage = 50')) {
     fail('users.php missing 50/page pagination');
 } else {
@@ -200,6 +214,13 @@ if (!str_contains($usersPage, 'generate_temp')) {
     fail('users.php missing generate_temp action');
 } else {
     ok('users.php generate temporary password on edit');
+}
+if (!str_contains($usersPage, "post('action') === 'send_verify'")
+    || !str_contains($usersPage, 'Send verification email')
+    || !str_contains($usersPage, 'admin_email_is_verified')) {
+    fail('users.php missing send_verify for admin email');
+} else {
+    ok('users.php send admin verification email');
 }
 if (!str_contains($usersPage, 'Must change pwd') || !str_contains($usersPage, 'Departments')) {
     fail('users.php missing must-change / departments columns');
@@ -305,6 +326,19 @@ if (!str_contains($usersPage, 'user_deactivation_residue') || !str_contains($use
     fail('users.php missing deactivate residue messaging');
 } else {
     ok('users.php deactivate residue messaging');
+}
+if (!str_contains($usersPage, "post('action') === 'save_departments'")
+    || !str_contains($usersPage, 'Save departments')
+    || !str_contains($usersPage, 'name="dept_ids[]"')) {
+    fail('users.php missing save_departments form');
+} else {
+    ok('users.php assign departments from edit card');
+}
+$guidesLibDeact = file_get_contents($root . '/includes/guides.php') ?: '';
+if (!str_contains($guidesLibDeact, 'Deactivate instead of delete')) {
+    fail('guide_admin_users missing deactivate-instead-of-delete');
+} else {
+    ok('guide_admin_users deactivate instead of delete');
 }
 $indexRoutes = file_get_contents($root . '/index.php') ?: '';
 foreach (['admin_account', 'forgot_password', 'reset_password', 'verify_email'] as $route) {
