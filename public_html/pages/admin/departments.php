@@ -205,7 +205,7 @@ if (!$dept) {
         <?php if ($unassignedTeam > 0): ?>
           <?= $unassignedTeam ?> active team user<?= $unassignedTeam === 1 ? '' : 's' ?>
           not in any department.
-          <a href="index.php?page=admin_users">Open Users</a> to assign them.
+          <a href="index.php?page=admin_users&amp;role=team&amp;unassigned=1">Open Users</a> to assign them.
         <?php else: ?>
           Every active team user is in a department.
         <?php endif; ?>

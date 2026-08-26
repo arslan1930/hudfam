@@ -4252,6 +4252,199 @@ try {
     fail('users U-4: ' . $e->getMessage());
 }
 
+// --- Admin Users U-5: session refresh ends inactive / demoted sessions ---
+try {
+    if (!function_exists('refresh_current_user_from_db')) {
+        fail('refresh_current_user_from_db missing');
+    } else {
+        $u5 = 'u5_kick_' . substr(bin2hex(random_bytes(3)), 0, 6);
+        db()->prepare(
+            "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+             VALUES (?,?,?,?, 'team', 1, 0)"
+        )->execute([$u5, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U5 Kick', $u5 . '@example.test']);
+        $id5 = (int) db()->lastInsertId();
+        $_SESSION['user'] = [
+            'id' => $id5,
+            'username' => $u5,
+            'full_name' => 'U5 Kick',
+            'role' => 'team',
+            'must_change_password' => 0,
+        ];
+        $alive = refresh_current_user_from_db();
+        $stillOn = current_user();
+        db()->prepare('UPDATE users SET is_active=0 WHERE id=?')->execute([$id5]);
+        $dead = refresh_current_user_from_db();
+        $afterOff = current_user();
+
+        $u5a = 'u5_admin_' . substr(bin2hex(random_bytes(3)), 0, 6);
+        db()->prepare(
+            "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+             VALUES (?,?,?,?, 'admin', 1, 0)"
+        )->execute([$u5a, password_hash('TestAdmin8z', PASSWORD_DEFAULT), 'U5 Admin', $u5a . '@example.test']);
+        $id5a = (int) db()->lastInsertId();
+        $_SESSION['user'] = [
+            'id' => $id5a,
+            'username' => $u5a,
+            'full_name' => 'U5 Admin',
+            'role' => 'admin',
+            'must_change_password' => 0,
+        ];
+        db()->prepare("UPDATE users SET role='team' WHERE id=?")->execute([$id5a]);
+        $demoted = refresh_current_user_from_db();
+        $afterDemo = current_user();
+
+        $none = ['ok' => true];
+        unset($_SESSION['user']);
+        $none = refresh_current_user_from_db();
+
+        db()->prepare('DELETE FROM users WHERE id IN (?,?)')->execute([$id5, $id5a]);
+
+        if (empty($alive['ok']) || !$stillOn || (int) ($stillOn['id'] ?? 0) !== $id5) {
+            fail('refresh left an active user signed out');
+        } elseif (!empty($dead['ok']) || $afterOff) {
+            fail('refresh did not end inactive session');
+        } elseif (empty($demoted['ok']) || ($afterDemo['role'] ?? '') !== 'team'
+            || empty($demoted['role_changed'])) {
+            fail('refresh did not apply admin→team demote: ' . json_encode($demoted));
+        } elseif (empty($none['ok'])) {
+            fail('refresh without a session should be ok');
+        } else {
+            pass('refresh_current_user_from_db kicks inactive and updates demoted role');
+        }
+    }
+} catch (Throwable $e) {
+    fail('users U-5: ' . $e->getMessage());
+}
+
+// --- Admin Users U-6: awaiting-department list matches dashboard count ---
+try {
+    $u6 = 'u6_wait_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$u6, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U6 Wait', $u6 . '@example.test']);
+    $id6 = (int) db()->lastInsertId();
+    $awaitSql = "SELECT id FROM users
+         WHERE role='team' AND is_active=1
+           AND NOT EXISTS (SELECT 1 FROM department_members m WHERE m.user_id = users.id)
+           AND id=?";
+    $st = db()->prepare($awaitSql);
+    $st->execute([$id6]);
+    $waiting = (bool) $st->fetchColumn();
+    $dept = db()->query('SELECT id FROM departments WHERE is_active=1 ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    $assigned = false;
+    $waitingAfter = true;
+    if ($dept && function_exists('add_department_member')) {
+        add_department_member((int) $dept['id'], $id6, $adminUser);
+        $st->execute([$id6]);
+        $waitingAfter = (bool) $st->fetchColumn();
+        $assigned = true;
+        db()->prepare('DELETE FROM department_members WHERE user_id=?')->execute([$id6]);
+    }
+    db()->prepare('DELETE FROM users WHERE id=?')->execute([$id6]);
+    if (!$waiting) {
+        fail('new team user was not awaiting department');
+    } elseif ($assigned && $waitingAfter) {
+        fail('team user still awaiting after department assign');
+    } else {
+        pass('awaiting-department filter matches unassigned team');
+    }
+} catch (Throwable $e) {
+    fail('users U-6: ' . $e->getMessage());
+}
+
+// --- Admin Users U-7: send_admin_email_verification guards ---
+try {
+    $teamReject = send_admin_email_verification([
+        'id' => 1,
+        'role' => 'team',
+        'username' => 'x',
+        'full_name' => '',
+        'email' => 'x@example.test',
+    ]);
+    $emptyReject = send_admin_email_verification([
+        'id' => 1,
+        'role' => 'admin',
+        'username' => 'x',
+        'full_name' => '',
+        'email' => '',
+    ]);
+    if (!empty($teamReject['ok'])) {
+        fail('send_admin_email_verification allowed team user');
+    } elseif (!empty($emptyReject['ok']) || !str_contains((string) ($emptyReject['error'] ?? ''), 'valid admin email')) {
+        fail('send_admin_email_verification empty-email copy: ' . json_encode($emptyReject));
+    } else {
+        pass('send_admin_email_verification rejects team and empty email');
+    }
+} catch (Throwable $e) {
+    fail('users U-7: ' . $e->getMessage());
+}
+
+// --- Admin Users U-8: department assign/remove helpers ---
+try {
+    $u8 = 'u8_dept_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$u8, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U8 Dept', $u8 . '@example.test']);
+    $id8 = (int) db()->lastInsertId();
+    $dept = db()->query('SELECT id FROM departments WHERE is_active=1 ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    if (!$dept) {
+        db()->prepare('DELETE FROM users WHERE id=?')->execute([$id8]);
+        fail('users U-8: no department to assign');
+    } else {
+        $did = (int) $dept['id'];
+        $okAdd = add_department_member($did, $id8, $adminUser);
+        $idsAfter = user_department_ids($id8);
+        $okRem = remove_department_member($did, $id8);
+        $idsGone = user_department_ids($id8);
+        db()->prepare('DELETE FROM department_members WHERE user_id=?')->execute([$id8]);
+        db()->prepare('DELETE FROM users WHERE id=?')->execute([$id8]);
+        if (!$okAdd || !in_array($did, $idsAfter, true)) {
+            fail('add_department_member from Users flow failed');
+        } elseif (!$okRem || in_array($did, $idsGone, true)) {
+            fail('remove_department_member from Users flow failed');
+        } else {
+            pass('Users department assign/remove helpers');
+        }
+    }
+} catch (Throwable $e) {
+    fail('users U-8: ' . $e->getMessage());
+}
+
+// --- Admin Users U-9: username unique + LIKE escape ---
+try {
+    if (users_like_escape('%_x') !== '\\%\\_x') {
+        fail('users_like_escape did not escape percent/underscore: ' . users_like_escape('%_x'));
+    } else {
+        pass('users_like_escape escapes LIKE wildcards');
+    }
+    $u9a = 'u9_uniq_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    $u9b = strtoupper($u9a);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$u9a, password_hash('DeptTest9x', PASSWORD_DEFAULT), 'U9 A', $u9a . '@example.test']);
+    $id9 = (int) db()->lastInsertId();
+    $st = db()->prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id<>? LIMIT 1');
+    $st->execute([$u9b, 0]);
+    $dup = (bool) $st->fetchColumn();
+    $like = '%' . users_like_escape('%') . '%';
+    $hit = db()->prepare("SELECT COUNT(*) FROM users WHERE username LIKE ? ESCAPE '\\\\' AND id=?");
+    $hit->execute([$like, $id9]);
+    $wildcardHits = (int) $hit->fetchColumn();
+    db()->prepare('DELETE FROM users WHERE id=?')->execute([$id9]);
+    if (!$dup) {
+        fail('case-insensitive username taken check missed existing user');
+    } elseif ($wildcardHits !== 0) {
+        fail('escaped % search matched a normal username');
+    } else {
+        pass('username unique is case-insensitive and search does not treat % as all');
+    }
+} catch (Throwable $e) {
+    fail('users U-9: ' . $e->getMessage());
+}
+
 // --- Sheet undo / redo + bulk remove ---
 try {
     $histSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Undo Sheet', false);

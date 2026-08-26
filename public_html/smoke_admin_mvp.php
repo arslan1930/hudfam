@@ -92,7 +92,7 @@ if (!str_contains($index, 'user_must_change_password')) {
 }
 
 $auth = file_get_contents($root . '/includes/auth.php') ?: '';
-foreach (['ensure_users_auth_schema', 'change_user_password', 'user_must_change_password', 'known_weak_passwords'] as $fn) {
+foreach (['ensure_users_auth_schema', 'change_user_password', 'user_must_change_password', 'known_weak_passwords', 'refresh_current_user_from_db'] as $fn) {
     if (!str_contains($auth, "function {$fn}")) {
         fail("auth missing {$fn}");
     } else {
@@ -130,6 +130,29 @@ if (!str_contains($usersPage, 'users_stash_form_draft') || !str_contains($usersP
     fail('users.php missing form draft preserve');
 } else {
     ok('users.php form draft on validation failure');
+}
+if (!str_contains($usersPage, 'function users_list_url')
+    || !str_contains($usersPage, 'users-layout')
+    || !str_contains($usersPage, 'Cancel edit')
+    || !str_contains($usersPage, 'id="users-save-form"')
+    || !str_contains($usersPage, 'refresh_current_user_from_db()')) {
+    fail('users.php missing filter-preserving save / stacked edit form');
+} else {
+    ok('users.php save keeps filters + stacked edit form');
+}
+if (!str_contains($usersPage, 'users_like_escape')
+    || !str_contains($usersPage, 'Username cannot contain spaces')
+    || !str_contains($usersPage, 'LOWER(username) = LOWER(?)')
+    || !str_contains($usersPage, 'ESCAPE')) {
+    fail('users.php missing username uniqueness / LIKE escape');
+} else {
+    ok('users.php username unique pre-check + escaped search');
+}
+$helpersLike = file_get_contents($root . '/includes/helpers.php') ?: '';
+if (!str_contains($helpersLike, 'function users_like_escape')) {
+    fail('helpers missing users_like_escape');
+} else {
+    ok('helpers users_like_escape');
 }
 if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPage = 50')) {
     fail('users.php missing 50/page pagination');
@@ -192,6 +215,13 @@ if (!str_contains($usersPage, 'generate_temp')) {
 } else {
     ok('users.php generate temporary password on edit');
 }
+if (!str_contains($usersPage, "post('action') === 'send_verify'")
+    || !str_contains($usersPage, 'Send verification email')
+    || !str_contains($usersPage, 'admin_email_is_verified')) {
+    fail('users.php missing send_verify for admin email');
+} else {
+    ok('users.php send admin verification email');
+}
 if (!str_contains($usersPage, 'Must change pwd') || !str_contains($usersPage, 'Departments')) {
     fail('users.php missing must-change / departments columns');
 } else {
@@ -203,11 +233,25 @@ if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_ro
     ok('users.php search and role filters');
 }
 if (str_contains($usersPage, 'shared URL database')
-    || substr_count($usersPage, 'table-wrap') < 2
+    || substr_count($usersPage, 'table-wrap') < 1
+    || str_contains($usersPage, 'Admin directory')
     || !str_contains($usersPage, 'Assign Team users under Departments')) {
-    fail('users.php still has shared-URL copy or missing table-wrap');
+    fail('users.php still has shared-URL copy or admin directory');
 } else {
-    ok('users.php Office copy + table-wrap');
+    ok('users.php Office copy + single users table');
+}
+if (!str_contains($usersPage, 'users_unassigned')
+    || !str_contains($usersPage, 'Awaiting assignment')
+    || !str_contains($usersPage, 'NOT EXISTS (SELECT 1 FROM department_members')) {
+    fail('users.php missing awaiting-department filter');
+} else {
+    ok('users.php awaiting-department filter');
+}
+$dashPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+if (!str_contains($dashPage, 'admin_users&role=team&unassigned=1')) {
+    fail('dashboard awaiting-assignment chip missing Users unassigned filter');
+} else {
+    ok('dashboard awaiting-assignment opens Users unassigned filter');
 }
 $guidesLib = file_get_contents($root . '/includes/guides.php') ?: '';
 if (!str_contains($guidesLib, 'Assign Team users under Departments')) {
@@ -282,6 +326,19 @@ if (!str_contains($usersPage, 'user_deactivation_residue') || !str_contains($use
     fail('users.php missing deactivate residue messaging');
 } else {
     ok('users.php deactivate residue messaging');
+}
+if (!str_contains($usersPage, "post('action') === 'save_departments'")
+    || !str_contains($usersPage, 'Save departments')
+    || !str_contains($usersPage, 'name="dept_ids[]"')) {
+    fail('users.php missing save_departments form');
+} else {
+    ok('users.php assign departments from edit card');
+}
+$guidesLibDeact = file_get_contents($root . '/includes/guides.php') ?: '';
+if (!str_contains($guidesLibDeact, 'Deactivate instead of delete')) {
+    fail('guide_admin_users missing deactivate-instead-of-delete');
+} else {
+    ok('guide_admin_users deactivate instead of delete');
 }
 $indexRoutes = file_get_contents($root . '/index.php') ?: '';
 foreach (['admin_account', 'forgot_password', 'reset_password', 'verify_email'] as $route) {
@@ -513,6 +570,12 @@ if (!str_contains($indexFull, 'require_csrf()') || !str_contains($indexFull, "st
     fail('index.php missing Admin CSRF gate');
 } else {
     ok('index.php Admin CSRF gate');
+}
+if (!str_contains($indexFull, 'refresh_current_user_from_db()')
+    || !str_contains($indexFull, 'Your account is no longer active')) {
+    fail('index.php missing session refresh on deactivate');
+} else {
+    ok('index.php reloads user and ends inactive sessions');
 }
 if (!str_contains($indexFull, "str_starts_with(\$page, 'team_')")) {
     fail('index.php missing Team CSRF gate');
