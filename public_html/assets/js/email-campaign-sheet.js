@@ -165,7 +165,7 @@
   }
 
   /** Update one campaign row's emailed UI without reloading (keeps scroll position). */
-  function setRowEmailedState(row, emailed) {
+  function setRowEmailedState(row, emailed, batchInfo) {
     if (!row) return;
     var sent = !!emailed;
     row.setAttribute('data-email-sent', sent ? '1' : '0');
@@ -176,7 +176,20 @@
       status.classList.toggle('is-emailed', sent);
       status.classList.toggle('is-open', !sent);
       status.classList.remove('is-ready', 'is-archive');
-      status.textContent = sent ? 'Emailed' : 'Not emailed';
+      var label = sent ? 'Emailed' : 'Not emailed';
+      var title = '';
+      if (sent && batchInfo && batchInfo.name) {
+        label = 'Emailed · ' + String(batchInfo.name);
+        if (batchInfo.who) {
+          title = 'Sent by ' + String(batchInfo.who);
+        }
+      }
+      status.textContent = label;
+      if (title) {
+        status.title = title;
+      } else {
+        status.removeAttribute('title');
+      }
     }
 
     var markBtn = row.querySelector('[data-sheet-action="mark"]');
@@ -192,12 +205,23 @@
     }
   }
 
-  function applyEmailedUpTo(siteId, emailed) {
+  function batchInfoFromData(data) {
+    if (!data || !data.batch_name) return null;
+    return {
+      name: String(data.batch_name || ''),
+      who: String(data.batch_who || '')
+    };
+  }
+
+  function applyEmailedUpTo(siteId, emailed, batchInfo) {
     var maxId = parseInt(siteId, 10) || 0;
     document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
       var id = parseInt(row.getAttribute('data-site-id') || '0', 10);
       if (id > 0 && id <= maxId) {
-        setRowEmailedState(row, emailed);
+        if (emailed && row.getAttribute('data-email-sent') === '1') {
+          return;
+        }
+        setRowEmailedState(row, emailed, emailed ? batchInfo : null);
       }
     });
   }
@@ -557,7 +581,7 @@
         var id = result.siteId;
         var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
         var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
-        setRowEmailedState(rowEl, nextSent);
+        setRowEmailedState(rowEl, nextSent, nextSent ? batchInfoFromData(data) : null);
         updateSentStats(data);
         if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
           window.SheetSelectUndo.applyState(data);
@@ -573,11 +597,29 @@
 
     if (form.matches('[data-swe-mark-upto]')) {
       e.preventDefault();
+      var suggestEl = document.querySelector('[data-camp-batch-suggest]');
+      var suggest = suggestEl ? String(suggestEl.getAttribute('data-camp-batch-suggest') || '') : '';
+      var batchName = window.prompt(
+        'Name this send batch (Team 1 = Batch A, next stretch = Batch B).',
+        suggest
+      );
+      if (batchName === null) {
+        form.removeAttribute('data-busy');
+        return;
+      }
+      var hidden = form.querySelector('[name="batch_name"]');
+      if (!hidden) {
+        hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'batch_name';
+        form.appendChild(hidden);
+      }
+      hidden.value = String(batchName).trim();
       setStatus('Marking emailed up to here…', false, true);
       postAjaxForm(form, 'Could not mark checkpoint').then(function (result) {
         if (!result) return;
         var data = result.data;
-        applyEmailedUpTo(result.siteId, true);
+        applyEmailedUpTo(result.siteId, true, batchInfoFromData(data));
         updateSentStats(data);
         if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
           window.SheetSelectUndo.applyState(data);
@@ -585,6 +627,7 @@
         setStatus(
           'Marked emailed up to ' + (data.domain || 'site')
           + (typeof data.marked === 'number' ? ' · ' + data.marked + ' newly marked' : '')
+          + (data.batch_name ? ' · batch “' + data.batch_name + '”' : '')
           + '.'
         );
         form.removeAttribute('data-busy');

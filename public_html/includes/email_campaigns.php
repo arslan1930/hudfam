@@ -66,12 +66,14 @@ function ensure_email_campaign_schema(): void
           email4 VARCHAR(255) NOT NULL DEFAULT '',
           email_sent TINYINT(1) NOT NULL DEFAULT 0,
           email_sent_at TIMESTAMP NULL DEFAULT NULL,
+          send_batch_id INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_email_campaign_sheet_domain (sheet_id, domain),
           INDEX (sheet_id),
           INDEX idx_email_campaign_sheet_id (sheet_id, id),
           INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent),
+          INDEX idx_email_campaign_send_batch (send_batch_id),
           INDEX (domain),
           INDEX (country),
           CONSTRAINT fk_email_campaign_row_sheet
@@ -94,6 +96,15 @@ function ensure_email_campaign_schema(): void
             $pdo->exec(
                 'ALTER TABLE email_campaign_rows
                  ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent'
+            );
+        }
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['send_batch_id'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_rows
+                 ADD COLUMN send_batch_id INT NULL AFTER email_sent_at,
+                 ADD INDEX idx_email_campaign_send_batch (send_batch_id)'
             );
         }
         $idx = $pdo->query('SHOW INDEX FROM email_campaign_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -246,6 +257,28 @@ function ensure_email_campaign_schema(): void
           CONSTRAINT fk_camp_row_event_sheet
             FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
           CONSTRAINT fk_camp_row_event_user
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    // Named send batches: who marked emailed (Mark up to here / Mark emailed).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_send_batches (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sheet_id INT NOT NULL,
+          project_id INT NULL,
+          name VARCHAR(180) NOT NULL,
+          user_id INT NULL,
+          username VARCHAR(100) NOT NULL DEFAULT '',
+          full_name VARCHAR(180) NOT NULL DEFAULT '',
+          site_count INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_camp_send_batch_sheet (sheet_id, created_at),
+          INDEX idx_camp_send_batch_project (project_id, created_at),
+          INDEX idx_camp_send_batch_user (user_id),
+          CONSTRAINT fk_camp_send_batch_sheet
+            FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+          CONSTRAINT fk_camp_send_batch_user
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
@@ -1126,6 +1159,202 @@ function email_campaign_who_for_exclusion(array $whoMap, string $action, string 
 }
 
 /**
+ * @param array<string,mixed>|null $actor
+ * @return array{id:int,username:string,full_name:string}
+ */
+function email_campaign_resolve_actor(?array $actor = null): array
+{
+    if ($actor === null && function_exists('current_user')) {
+        $cu = current_user();
+        $actor = is_array($cu) ? $cu : null;
+    }
+    return [
+        'id' => (int) ($actor['id'] ?? 0),
+        'username' => trim((string) ($actor['username'] ?? '')),
+        'full_name' => trim((string) ($actor['full_name'] ?? '')),
+    ];
+}
+
+function email_campaign_send_batch_who_label(array $batch): string
+{
+    return email_campaign_event_who_label($batch);
+}
+
+/**
+ * Status badge for an emailed campaign row: "Emailed · Batch A" + who in the title.
+ *
+ * @param array<string,mixed>|null $batch
+ * @return array{label:string,title:string}
+ */
+function email_campaign_row_emailed_status(?array $batch): array
+{
+    if (!is_array($batch) || $batch === []) {
+        return ['label' => 'Emailed', 'title' => ''];
+    }
+    $name = trim((string) ($batch['name'] ?? ''));
+    $who = email_campaign_send_batch_who_label($batch);
+    return [
+        'label' => $name !== '' ? ('Emailed · ' . $name) : 'Emailed',
+        'title' => ($who !== '' && $who !== '—') ? ('Sent by ' . $who) : '',
+    ];
+}
+
+function email_campaign_default_send_batch_name(?array $actor, int $count): string
+{
+    $who = email_campaign_resolve_actor($actor);
+    $label = $who['username'] !== '' ? $who['username'] : 'Admin';
+    $n = max(0, $count);
+    return $label . ' · ' . date('Y-m-d') . ' · ' . $n;
+}
+
+/**
+ * @param array<string,mixed>|null $actor
+ * @return array{ok:bool,id?:int,name?:string,error?:string}
+ */
+function create_email_campaign_send_batch(
+    int $sheetId,
+    string $name,
+    int $siteCount,
+    ?array $actor = null
+): array {
+    ensure_email_campaign_schema();
+    if ($sheetId < 1 || $siteCount < 1) {
+        return ['ok' => false, 'error' => 'Nothing to batch.'];
+    }
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
+        return ['ok' => false, 'error' => 'Sheet not found.'];
+    }
+    $who = email_campaign_resolve_actor($actor);
+    $name = trim($name);
+    if ($name === '') {
+        $name = email_campaign_default_send_batch_name($who, $siteCount);
+    }
+    if (mb_strlen($name) > 180) {
+        $name = mb_substr($name, 0, 180);
+    }
+    $projectId = (int) ($sheet['project_id'] ?? 0);
+    db()->prepare(
+        'INSERT INTO email_campaign_send_batches
+         (sheet_id, project_id, name, user_id, username, full_name, site_count)
+         VALUES (?,?,?,?,?,?,?)'
+    )->execute([
+        $sheetId,
+        $projectId > 0 ? $projectId : null,
+        $name,
+        $who['id'] > 0 ? $who['id'] : null,
+        $who['username'],
+        $who['full_name'],
+        $siteCount,
+    ]);
+    $id = (int) db()->lastInsertId();
+    return ['ok' => true, 'id' => $id, 'name' => $name];
+}
+
+function get_email_campaign_send_batch(int $batchId, ?int $sheetId = null): ?array
+{
+    ensure_email_campaign_schema();
+    if ($batchId < 1) {
+        return null;
+    }
+    $sql = 'SELECT b.*, s.name AS country,
+                   (SELECT COUNT(*) FROM email_campaign_rows r
+                    WHERE r.send_batch_id = b.id AND r.email_sent=1) AS live_count
+            FROM email_campaign_send_batches b
+            LEFT JOIN email_campaign_sheets s ON s.id = b.sheet_id
+            WHERE b.id=?';
+    $params = [$batchId];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND b.sheet_id=?';
+        $params[] = $sheetId;
+    }
+    $sql .= ' LIMIT 1';
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_send_batches(?int $sheetId = null, ?int $projectId = null, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(500, $limit));
+    $sql = 'SELECT b.*, s.name AS country,
+                   (SELECT COUNT(*) FROM email_campaign_rows r
+                    WHERE r.send_batch_id = b.id AND r.email_sent=1) AS live_count
+            FROM email_campaign_send_batches b
+            LEFT JOIN email_campaign_sheets s ON s.id = b.sheet_id
+            WHERE 1=1';
+    $params = [];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND b.sheet_id=?';
+        $params[] = $sheetId;
+    }
+    if ($projectId !== null && $projectId > 0) {
+        $sql .= ' AND b.project_id=?';
+        $params[] = $projectId;
+    }
+    $sql .= " ORDER BY b.created_at DESC, b.id DESC LIMIT {$limit}";
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'sheet_id' => (int) ($row['sheet_id'] ?? 0),
+            'project_id' => (int) ($row['project_id'] ?? 0),
+            'name' => (string) ($row['name'] ?? ''),
+            'user_id' => (int) ($row['user_id'] ?? 0),
+            'username' => (string) ($row['username'] ?? ''),
+            'full_name' => (string) ($row['full_name'] ?? ''),
+            'site_count' => (int) ($row['site_count'] ?? 0),
+            'live_count' => (int) ($row['live_count'] ?? 0),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'country' => (string) ($row['country'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+/**
+ * @return array<int,array<string,mixed>>
+ */
+function map_email_campaign_send_batches(int $sheetId): array
+{
+    $map = [];
+    foreach (list_email_campaign_send_batches($sheetId, null, 500) as $b) {
+        $map[(int) $b['id']] = $b;
+    }
+    return $map;
+}
+
+/**
+ * Sites currently tagged to a send batch (domain + emails).
+ *
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_send_batch_rows(int $batchId, int $limit = 2000): array
+{
+    ensure_email_campaign_schema();
+    if ($batchId < 1) {
+        return [];
+    }
+    $limit = max(1, min(5000, $limit));
+    $st = db()->prepare(
+        "SELECT id, domain, email1, email2, email3, email4, email_sent, email_sent_at, send_batch_id
+         FROM email_campaign_rows
+         WHERE send_batch_id=? AND LEFT(domain, 8) <> '__blank_'
+         ORDER BY id ASC
+         LIMIT {$limit}"
+    );
+    $st->execute([$batchId]);
+    return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
  * Sheet "name" is always the canonical country name.
  */
 function email_campaign_sheet_country(array $sheet): string
@@ -1625,26 +1854,29 @@ function count_email_campaign_sent_stats(int $sheetId): array
 }
 
 /**
- * Mark one campaign sheet row emailed / not emailed.
+ * Snapshot of emailed flags (and send batch) for undo/redo.
  *
- * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int}
+ * @return array{id:int,email_sent:int,email_sent_at:mixed,send_batch_id:?int}
  */
 function email_campaign_emailed_flag_row(array $row): array
 {
+    $batchId = (int) ($row['send_batch_id'] ?? 0);
+
     return [
         'id' => (int) ($row['id'] ?? 0),
         'email_sent' => (int) ($row['email_sent'] ?? 0) === 1 ? 1 : 0,
         'email_sent_at' => $row['email_sent_at'] ?? null,
+        'send_batch_id' => $batchId > 0 ? $batchId : null,
     ];
 }
 
 /**
  * @param list<mixed> $params
- * @return list<array{id:int,email_sent:int,email_sent_at:mixed}>
+ * @return list<array{id:int,email_sent:int,email_sent_at:mixed,send_batch_id:?int}>
  */
 function email_campaign_emailed_flags_where(int $sheetId, string $extraWhere, array $params): array
 {
-    $sql = 'SELECT id, email_sent, email_sent_at FROM email_campaign_rows WHERE sheet_id=?';
+    $sql = 'SELECT id, email_sent, email_sent_at, send_batch_id FROM email_campaign_rows WHERE sheet_id=?';
     if ($extraWhere !== '') {
         $sql .= ' AND ' . $extraWhere;
     }
@@ -1675,17 +1907,18 @@ function apply_email_campaign_emailed_flags(int $sheetId, array $flags): bool
             continue;
         }
         $sent = (int) ($flag['email_sent'] ?? 0) === 1;
+        $batchId = (int) ($flag['send_batch_id'] ?? 0);
         if ($sent) {
             $at = trim((string) ($flag['email_sent_at'] ?? ''));
             db()->prepare(
                 'UPDATE email_campaign_rows
-                 SET email_sent=1, email_sent_at=COALESCE(NULLIF(?, \'\'), NOW())
+                 SET email_sent=1, email_sent_at=COALESCE(NULLIF(?, \'\'), NOW()), send_batch_id=?
                  WHERE id=? AND sheet_id=?'
-            )->execute([$at, $id, $sheetId]);
+            )->execute([$at, $batchId > 0 ? $batchId : null, $id, $sheetId]);
         } else {
             db()->prepare(
                 'UPDATE email_campaign_rows
-                 SET email_sent=0, email_sent_at=NULL
+                 SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
                  WHERE id=? AND sheet_id=?'
             )->execute([$id, $sheetId]);
         }
@@ -1697,7 +1930,11 @@ function apply_email_campaign_emailed_flags(int $sheetId, array $flags): bool
     return $n > 0;
 }
 
-function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent): array
+/**
+ * @param array<string,mixed>|null $actor
+ * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int,batch_id?:?int,batch_name?:string,batch_who?:string}
+ */
+function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -1706,24 +1943,39 @@ function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent)
     }
     $beforeSent = (int) ($row['email_sent'] ?? 0) === 1;
     if ($beforeSent === $sent) {
+        $existingBatchId = (int) ($row['send_batch_id'] ?? 0);
+        $existing = $existingBatchId > 0 ? get_email_campaign_send_batch($existingBatchId, $sheetId) : null;
         return [
             'ok' => true,
             'domain' => (string) $row['domain'],
             'email_sent' => $sent,
             'sheet_id' => $sheetId,
+            'batch_id' => $existing ? (int) $existing['id'] : null,
+            'batch_name' => $existing ? (string) $existing['name'] : '',
+            'batch_who' => $existing ? email_campaign_send_batch_who_label($existing) : '',
         ];
     }
     $before = [email_campaign_emailed_flag_row($row)];
+    $batchId = 0;
+    $batchName = '';
+    $batchWho = '';
     if ($sent) {
+        $created = create_email_campaign_send_batch($sheetId, '', 1, $actor);
+        if (empty($created['ok'])) {
+            return ['ok' => false, 'error' => (string) ($created['error'] ?? 'Could not record send batch.')];
+        }
+        $batchId = (int) ($created['id'] ?? 0);
+        $batchName = (string) ($created['name'] ?? '');
+        $batchWho = email_campaign_send_batch_who_label(email_campaign_resolve_actor($actor));
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET email_sent=1, email_sent_at=NOW()
+             SET email_sent=1, email_sent_at=NOW(), send_batch_id=?
              WHERE id=? AND sheet_id=?'
-        )->execute([$rowId, $sheetId]);
+        )->execute([$batchId > 0 ? $batchId : null, $rowId, $sheetId]);
     } else {
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET email_sent=0, email_sent_at=NULL
+             SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
              WHERE id=? AND sheet_id=?'
         )->execute([$rowId, $sheetId]);
     }
@@ -1742,15 +1994,20 @@ function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent)
         'domain' => (string) $row['domain'],
         'email_sent' => $sent,
         'sheet_id' => $sheetId,
+        'batch_id' => $batchId > 0 ? $batchId : null,
+        'batch_name' => $batchName,
+        'batch_who' => $batchWho,
     ];
 }
 
 /**
  * Checkpoint: mark every row on this sheet with id <= $rowId as emailed.
+ * Newly marked rows get a named send batch (who + which stretch).
  *
- * @return array{ok:bool,error?:string,marked?:int,domain?:string,sheet_id?:int}
+ * @param array<string,mixed>|null $actor
+ * @return array{ok:bool,error?:string,marked?:int,domain?:string,sheet_id?:int,batch_id?:?int,batch_name?:string,batch_who?:string}
  */
-function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
+function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId, string $batchName = '', ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -1762,13 +2019,25 @@ function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
         'id<=? AND email_sent=0 AND LEFT(domain, 8) <> \'__blank_\'',
         [$rowId]
     );
+    $batchId = 0;
+    $resolvedName = '';
+    $batchWho = '';
+    if ($before !== []) {
+        $created = create_email_campaign_send_batch($sheetId, $batchName, count($before), $actor);
+        if (empty($created['ok'])) {
+            return ['ok' => false, 'error' => (string) ($created['error'] ?? 'Could not name this send batch.')];
+        }
+        $batchId = (int) ($created['id'] ?? 0);
+        $resolvedName = (string) ($created['name'] ?? '');
+        $batchWho = email_campaign_send_batch_who_label(email_campaign_resolve_actor($actor));
+    }
     $st = db()->prepare(
         "UPDATE email_campaign_rows
-         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
+         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW()), send_batch_id=?
          WHERE sheet_id=? AND id<=? AND email_sent=0
            AND LEFT(domain, 8) <> '__blank_'"
     );
-    $st->execute([$sheetId, $rowId]);
+    $st->execute([$batchId > 0 ? $batchId : null, $sheetId, $rowId]);
     touch_email_campaign_sheet($sheetId);
     $after = [];
     foreach ($before as $flag) {
@@ -1776,6 +2045,7 @@ function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
             'id' => (int) $flag['id'],
             'email_sent' => 1,
             'email_sent_at' => $flag['email_sent_at'] ?: date('Y-m-d H:i:s'),
+            'send_batch_id' => $batchId > 0 ? $batchId : null,
         ];
     }
     if ($before !== [] && function_exists('sheet_history_push_emailed')) {
@@ -1786,6 +2056,9 @@ function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
         'marked' => $st->rowCount(),
         'domain' => (string) $row['domain'],
         'sheet_id' => $sheetId,
+        'batch_id' => $batchId > 0 ? $batchId : null,
+        'batch_name' => $resolvedName,
+        'batch_who' => $batchWho,
     ];
 }
 
@@ -1808,7 +2081,7 @@ function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
-         SET email_sent=0, email_sent_at=NULL
+         SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
          WHERE sheet_id=? AND id<=? AND email_sent=1
            AND LEFT(domain, 8) <> '__blank_'"
     );
@@ -1816,7 +2089,12 @@ function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     touch_email_campaign_sheet($sheetId);
     $after = [];
     foreach ($before as $flag) {
-        $after[] = ['id' => (int) $flag['id'], 'email_sent' => 0, 'email_sent_at' => null];
+        $after[] = [
+            'id' => (int) $flag['id'],
+            'email_sent' => 0,
+            'email_sent_at' => null,
+            'send_batch_id' => null,
+        ];
     }
     if ($before !== [] && function_exists('sheet_history_push_emailed')) {
         sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
@@ -1847,7 +2125,7 @@ function clear_all_email_campaign_emailed(int $sheetId): array
     );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
-         SET email_sent=0, email_sent_at=NULL
+         SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
          WHERE sheet_id=? AND email_sent=1
            AND LEFT(domain, 8) <> '__blank_'"
     );
@@ -1855,7 +2133,12 @@ function clear_all_email_campaign_emailed(int $sheetId): array
     touch_email_campaign_sheet($sheetId);
     $after = [];
     foreach ($before as $flag) {
-        $after[] = ['id' => (int) $flag['id'], 'email_sent' => 0, 'email_sent_at' => null];
+        $after[] = [
+            'id' => (int) $flag['id'],
+            'email_sent' => 0,
+            'email_sent_at' => null,
+            'send_batch_id' => null,
+        ];
     }
     if ($before !== [] && function_exists('sheet_history_push_emailed')) {
         sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
