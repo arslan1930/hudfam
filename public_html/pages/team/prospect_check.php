@@ -64,7 +64,7 @@ try {
         $country = trim((string) post('country'));
         $language = trim((string) post('language'));
         $region = (string) post('region');
-        $niche = trim((string) post('niche'));
+        $niche = prospect_format_niches(prospect_parse_niches(trim((string) post('niche'))));
         $notes = trim((string) post('notes'));
         $parsed = parse_domain_list_strict($raw);
         $domains = $parsed['valid'];
@@ -336,7 +336,15 @@ render_header('Filter & add', 'team');
           <?php endforeach; ?>
         </select>
       </div>
-      <div><label>Niche</label><input name="niche" value="<?= h($niche) ?>"></div>
+      <div class="full">
+        <label for="niche_q">Niche</label>
+        <?= render_niche_chip_box($niche, [
+            'name' => 'niche',
+            'id' => 'niche',
+            'placeholder' => 'Type a niche, Enter to add',
+        ]) ?>
+        <p class="help">English niches. Type to add, × to remove. A site can have more than one.</p>
+      </div>
       <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
     </div>
   </div>
@@ -437,6 +445,8 @@ render_header('Filter & add', 'team');
 })();
 </script>
 <?= sites_form_script_tag() ?>
+<?= prospect_niche_taxonomy_script() ?>
+<?= niche_chips_script_tag() ?>
 
 <?php if ($result): ?>
 <div class="card">

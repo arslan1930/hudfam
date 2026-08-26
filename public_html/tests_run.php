@@ -351,12 +351,105 @@ try {
             'created_at' => '2026-01-01 00:00:00',
         ],
     ]);
-    if (str_contains($rowHtml, 'data-label="Domain"')
+    if (str_contains($rowHtml, 'data-label="Niche"')
+        && str_contains($rowHtml, 'data-label="Domain"')
+        && strpos($rowHtml, 'data-label="Niche"') < strpos($rowHtml, 'data-label="Domain"')
+        && str_contains($rowHtml, 'data-niche-chips')
         && !str_contains($rowHtml, 'data-label="Status"')
         && !str_contains($rowHtml, 'contacting')) {
-        pass('prospect_site_rows_html has no Status column');
+        pass('prospect_site_rows_html Niche before Domain, no Status');
     } else {
-        fail('prospect_site_rows_html still shows Status: ' . $rowHtml);
+        fail('prospect_site_rows_html niche/status: ' . $rowHtml);
+    }
+
+    $parsedNiches = prospect_parse_niches('Health, fitness, Health, salud, Guest posts');
+    if ($parsedNiches === ['Health', 'Fitness', 'Guest posts']) {
+        pass('prospect_parse_niches alias + unique + keep unknown');
+    } else {
+        fail('prospect_parse_niches: ' . json_encode($parsedNiches));
+    }
+    if (prospect_format_niches(['fitness', 'Health']) === 'Health, Fitness'
+        && prospect_normalize_niche_label('e-commerce') === 'E-commerce'
+        && prospect_normalized_niche_filter('all') === ''
+        && prospect_normalized_niche_filter('No niche') === '_none'
+        && prospect_normalized_niche_filter('health') === 'Health') {
+        pass('prospect niche format + filter tokens');
+    } else {
+        fail('prospect niche format/filter: ' . json_encode([
+            'fmt' => prospect_format_niches(['fitness', 'Health']),
+            'ecom' => prospect_normalize_niche_label('e-commerce'),
+            'all' => prospect_normalized_niche_filter('all'),
+            'none' => prospect_normalized_niche_filter('No niche'),
+            'health' => prospect_normalized_niche_filter('health'),
+        ]));
+    }
+    $fromDe = prospect_suggest_niches_from_domain('gesundheit-magazin.de');
+    $fromBrand = prospect_suggest_niches_from_domain('acme24.de');
+    if (in_array('Health', $fromDe, true) && in_array('Magazine', $fromDe, true) && $fromBrand === []) {
+        pass('prospect_suggest_niches_from_domain Health+Magazine / blank brand');
+    } else {
+        fail('prospect suggest: ' . json_encode(['de' => $fromDe, 'brand' => $fromBrand]));
+    }
+    $kwOnce = prospect_niche_domain_keywords();
+    $kwTwice = prospect_niche_domain_keywords();
+    $fromAiTools = prospect_suggest_niches_from_domain('aitools.io');
+    if ($kwOnce === $kwTwice
+        && isset($kwOnce['aitools'])
+        && in_array('AI', $fromAiTools, true)) {
+        pass('prospect_niche_domain_keywords compact cache stays stable');
+    } else {
+        fail('prospect domain keywords cache: ' . json_encode([
+            'same' => $kwOnce === $kwTwice,
+            'aitools' => isset($kwOnce['aitools']),
+            'suggest' => $fromAiTools,
+        ]));
+    }
+    $mergedNew = prospect_niches_for_new_site('fitness-blog.de', 'Health');
+    if ($mergedNew === 'Blog, Health, Fitness') {
+        pass('prospect_niches_for_new_site merges human + domain');
+    } else {
+        fail('prospect_niches_for_new_site: ' . $mergedNew);
+    }
+
+    db()->prepare(
+        "UPDATE prospect_sites SET niche=? WHERE country=? AND domain=?"
+    )->execute(['Health, Fitness', $country, 'txftest-finance-de.com']);
+    db()->prepare(
+        "UPDATE prospect_sites SET niche='' WHERE country=? AND domain=?"
+    )->execute([$country, 'txftest-blog-de.de']);
+    $invHealth = prospect_inventory_query(['country' => $country, 'niche' => 'Health'], 1, 50);
+    $invNone = prospect_inventory_query(['country' => $country, 'niche' => '_none'], 1, 50);
+    $healthDomains = array_column($invHealth['rows'] ?? [], 'domain');
+    $noneDomains = array_column($invNone['rows'] ?? [], 'domain');
+    $healthHit = in_array('txftest-finance-de.com', $healthDomains, true);
+    $noneHit = in_array('txftest-blog-de.de', $noneDomains, true);
+    $healthMissBlog = !in_array('txftest-blog-de.de', $healthDomains, true);
+    if ($healthHit && $noneHit && $healthMissBlog
+        && count_prospect_sites_matching($country, '', 'Health') >= 1
+        && count_prospect_sites_matching($country, '', '_none') >= 1) {
+        pass('prospect niche filter contains Health / No niche');
+    } else {
+        fail('prospect niche filter: ' . json_encode([
+            'health' => $healthDomains,
+            'none' => $noneDomains,
+            'countH' => count_prospect_sites_matching($country, '', 'Health'),
+            'countN' => count_prospect_sites_matching($country, '', '_none'),
+        ]));
+    }
+    $stFin = db()->prepare("SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1");
+    $stFin->execute([$country, 'txftest-finance-de.com']);
+    $finId = (int) $stFin->fetchColumn();
+    $savedNiches = $finId > 0 ? update_prospect_site_niches($finId, 'Medical, health') : null;
+    if (is_array($savedNiches) && ($savedNiches['niche'] ?? '') === 'Health, Medical') {
+        pass('update_prospect_site_niches autosave parse');
+    } else {
+        fail('update_prospect_site_niches: ' . json_encode($savedNiches));
+    }
+    $nfSql = prospect_sql_niche_filter('p.niche', 'Health');
+    if ($nfSql['sql'] !== '' && ($nfSql['params'][0] ?? '') === 'Health') {
+        pass('prospect_sql_niche_filter FIND_IN_SET Health');
+    } else {
+        fail('prospect_sql_niche_filter: ' . json_encode($nfSql));
     }
     $fnAll = prospect_export_basename($country, '');
     $fnMatch = prospect_export_basename($country, 'txftest');

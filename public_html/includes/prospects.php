@@ -6,6 +6,8 @@
  * Admin Add sites saves directly (no uniqueness preview).
  */
 
+require_once __DIR__ . '/prospect_niches.php';
+
 /** Strip protocol/path → bare host for storage/lookup (does not validate apex-only). */
 function normalize_domain(string $value): string
 {
@@ -486,7 +488,7 @@ function ensure_prospect_schema(): void
           country VARCHAR(100) NOT NULL DEFAULT '',
           language VARCHAR(50) NOT NULL DEFAULT '',
           region VARCHAR(40) NOT NULL DEFAULT '',
-          niche VARCHAR(255) NOT NULL DEFAULT '',
+          niche VARCHAR(512) NOT NULL DEFAULT '',
           notes TEXT,
           status ENUM('new','contacting','replied','skipped') NOT NULL DEFAULT 'new',
           created_by INT NULL,
@@ -533,7 +535,7 @@ function ensure_prospect_schema(): void
           country VARCHAR(100) NOT NULL DEFAULT '',
           language VARCHAR(50) NOT NULL DEFAULT '',
           region VARCHAR(40) NOT NULL DEFAULT '',
-          niche VARCHAR(255) NOT NULL DEFAULT '',
+          niche VARCHAR(512) NOT NULL DEFAULT '',
           notes TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -572,6 +574,17 @@ function ensure_prospect_schema(): void
           CONSTRAINT fk_pbi_site FOREIGN KEY (prospect_site_id) REFERENCES prospect_sites(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    foreach (['prospect_sites', 'prospect_batches'] as $table) {
+        try {
+            $col = $pdo->query("SHOW COLUMNS FROM {$table} LIKE 'niche'")->fetch(PDO::FETCH_ASSOC);
+            $type = strtolower((string) ($col['Type'] ?? ''));
+            if ($type !== '' && !str_contains($type, '512') && !str_starts_with($type, 'text')) {
+                $pdo->exec("ALTER TABLE {$table} MODIFY niche VARCHAR(512) NOT NULL DEFAULT ''");
+            }
+        } catch (Throwable $e) {
+            // ignore — CREATE above already has the wider column on new installs
+        }
+    }
 }
 
 /**
@@ -598,13 +611,25 @@ function prospect_site_rows_html(array $rows): string
         $domain = (string) ($s['domain'] ?? '');
         $url = (string) ($s['url'] ?? '');
         $lang = (string) ($s['language'] ?? '');
+        $niche = (string) ($s['niche'] ?? '');
         $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
         $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
-        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '">';
+        $hay = mb_strtolower(trim($domain . ' ' . $url . ' ' . $niche . ' ' . $lang . ' ' . $added));
+        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '"'
+            . ' data-search="' . h($hay) . '">';
         echo '<td class="sheet-td-check" data-label="Select">';
         echo '<label class="sheet-check">';
         echo '<input type="checkbox" data-sheet-row-check value="' . (int) ($s['id'] ?? 0) . '" aria-label="Select ' . h($domain) . '">';
         echo '</label></td>';
+        echo '<td class="prospect-niche-td" data-label="Niche">';
+        echo render_niche_chip_box($niche, [
+            'name' => '',
+            'id' => 'niche_' . (int) ($s['id'] ?? 0),
+            'siteId' => (int) ($s['id'] ?? 0),
+            'autosave' => true,
+            'compact' => true,
+        ]);
+        echo '</td>';
         echo '<td data-label="Domain"><strong>' . h($domain) . '</strong></td>';
         echo '<td class="help" data-label="URL">' . h($url !== '' ? $url : '—') . '</td>';
         echo '<td data-label="Language">' . h($lang !== '' ? $lang : '—') . '</td>';
@@ -1097,7 +1122,7 @@ function list_prospect_domain_names(int $maxDisplay = 25000, string $country = '
  * Count sites in one Our database country folder matching $q (domain / url / niche / notes).
  * Empty $q → total sites in that country (or 0 for unknown country).
  */
-function count_prospect_sites_matching(string $country, string $q = ''): int
+function count_prospect_sites_matching(string $country, string $q = '', string $niche = ''): int
 {
     ensure_prospect_schema();
     $country = trim($country);
@@ -1110,17 +1135,20 @@ function count_prospect_sites_matching(string $country, string $q = ''): int
     }
     $country = $canon['name'];
     $q = trim($q);
-    if ($q === '') {
-        $stmt = db()->prepare('SELECT COUNT(*) FROM prospect_sites WHERE country=?');
-        $stmt->execute([$country]);
-        return (int) $stmt->fetchColumn();
+    $sql = 'SELECT COUNT(*) FROM prospect_sites WHERE country=?';
+    $params = [$country];
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $sql .= ' AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)';
+        array_push($params, $like, $like, $like, $like);
     }
-    $like = '%' . $q . '%';
-    $stmt = db()->prepare(
-        'SELECT COUNT(*) FROM prospect_sites
-         WHERE country=? AND (domain LIKE ? OR url LIKE ? OR niche LIKE ? OR notes LIKE ?)'
-    );
-    $stmt->execute([$country, $like, $like, $like, $like]);
+    $nf = prospect_sql_niche_filter('niche', $niche);
+    if ($nf['sql'] !== '') {
+        $sql .= ' AND ' . $nf['sql'];
+        array_push($params, ...$nf['params']);
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
     return (int) $stmt->fetchColumn();
 }
 
@@ -1141,7 +1169,7 @@ function prospect_export_basename(string $country, string $q = ''): string
 /**
  * Stream one domain per line for Copy all / Download .txt (optionally filtered by $q).
  */
-function stream_prospect_domains_plain(string $country, bool $asDownload = false, string $q = '', int $createdBy = 0): void
+function stream_prospect_domains_plain(string $country, bool $asDownload = false, string $q = '', int $createdBy = 0, string $niche = ''): void
 {
     ensure_prospect_schema();
     @set_time_limit(0);
@@ -1184,6 +1212,11 @@ function stream_prospect_domains_plain(string $country, bool $asDownload = false
         $sql .= ' AND created_by = ?';
         $params[] = $createdBy;
     }
+    $nf = prospect_sql_niche_filter('niche', $niche);
+    if ($nf['sql'] !== '') {
+        $sql .= ' AND ' . $nf['sql'];
+        array_push($params, ...$nf['params']);
+    }
     $sql .= ' ORDER BY domain ASC';
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -1210,7 +1243,7 @@ function stream_prospect_domains_plain(string $country, bool $asDownload = false
 /**
  * Stream CSV (domain column only) for one country folder (optionally filtered by $q).
  */
-function stream_prospect_domains_csv(string $country, string $q = '', int $createdBy = 0): void
+function stream_prospect_domains_csv(string $country, string $q = '', int $createdBy = 0, string $niche = ''): void
 {
     ensure_prospect_schema();
     @set_time_limit(0);
@@ -1250,6 +1283,11 @@ function stream_prospect_domains_csv(string $country, string $q = '', int $creat
     if ($createdBy > 0) {
         $sql .= ' AND created_by = ?';
         $params[] = $createdBy;
+    }
+    $nf = prospect_sql_niche_filter('niche', $niche);
+    if ($nf['sql'] !== '') {
+        $sql .= ' AND ' . $nf['sql'];
+        array_push($params, ...$nf['params']);
     }
     $sql .= ' ORDER BY domain ASC';
     $stmt = $pdo->prepare($sql);
@@ -1297,6 +1335,7 @@ function get_or_create_prospect_batch(
     ensure_prospect_schema();
     $date = $batchDate && preg_match('/^\d{4}-\d{2}-\d{2}$/', $batchDate) ? $batchDate : date('Y-m-d');
     $country = trim($country);
+    $niche = prospect_format_niches(prospect_parse_niches($niche));
     $stmt = db()->prepare(
         'SELECT id FROM prospect_batches WHERE user_id=? AND batch_date=? AND country=? LIMIT 1'
     );
@@ -1353,6 +1392,7 @@ function add_prospect_domains(
     if (function_exists('normalize_site_language')) {
         $language = normalize_site_language($language, $selectedCountry);
     }
+    $niche = prospect_format_niches(prospect_parse_niches($niche));
 
     $domains = array_values(array_unique(array_filter(array_map('normalize_domain', $domains))));
     $routed = filter_domains_routed_against_prospects($domains, $selectedCountry);
@@ -1441,12 +1481,13 @@ function add_prospect_domains(
             $n = 0;
             foreach ($toAdd as $d) {
                 try {
+                    $siteNiche = prospect_niches_for_new_site($d, $niche);
                     $ins->execute([
                         $d,
                         $destCountry,
                         $destLanguage,
                         $destRegion,
-                        $niche,
+                        $siteNiche,
                         $notes,
                         $user['id'],
                     ]);
@@ -1599,7 +1640,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     );
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
-         VALUES (?,?,?,?,?,\'\',\'\',\'new\',?)'
+         VALUES (?,?,?,?,?,?,\'\',\'new\',?)'
     );
     $insItem = db()->prepare(
         'INSERT INTO prospect_batch_items (batch_id, domain, prospect_site_id) VALUES (?,?,?)
@@ -1624,7 +1665,8 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
                 continue;
             }
             try {
-                $ins->execute([$domain, '', $country, $language, $region, $user['id']]);
+                $siteNiche = prospect_niches_for_new_site($domain, '');
+                $ins->execute([$domain, '', $country, $language, $region, $siteNiche, $user['id']]);
             } catch (Throwable $e) {
                 // Race / unique key — treat as duplicate.
                 $alreadyInDb++;
@@ -2015,6 +2057,11 @@ function prospect_inventory_query(array $filters, int $pageNum = 1, int $per = 1
         $where[] = 'p.created_by = ?';
         $params[] = (int) $filters['created_by'];
     }
+    $nf = prospect_sql_niche_filter('p.niche', (string) ($filters['niche'] ?? ''));
+    if ($nf['sql'] !== '') {
+        $where[] = $nf['sql'];
+        array_push($params, ...$nf['params']);
+    }
     $whereSql = implode(' AND ', $where);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
     $count->execute($params);
@@ -2125,7 +2172,7 @@ function update_prospect_batch_meta(
     $country = trim($country);
     $language = trim($language);
     $region = trim($region);
-    $niche = trim($niche);
+    $niche = prospect_format_niches(prospect_parse_niches($niche));
     $notes = trim($notes);
     if ($country !== '') {
         try {
@@ -2248,7 +2295,7 @@ function set_prospect_batch_domains_from_text(
                             $country,
                             $language,
                             $region,
-                            $niche,
+                            prospect_niches_for_new_site($d, $niche),
                             $notes,
                             $ownerId > 0 ? $ownerId : null,
                         ]);

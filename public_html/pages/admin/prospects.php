@@ -26,6 +26,14 @@ if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
         if ($keepPerson > 0) {
             $redir .= '&created_by=' . $keepPerson;
         }
+        $keepQ = trim((string) get('q'));
+        if ($keepQ !== '') {
+            $redir .= '&q=' . rawurlencode($keepQ);
+        }
+        $keepNiche = prospect_normalized_niche_filter((string) get('niche'));
+        if ($keepNiche !== '') {
+            $redir .= '&niche=' . rawurlencode($keepNiche);
+        }
         redirect($redir);
     }
     if ($canonSheet === null) {
@@ -40,6 +48,7 @@ $filterCreatedBy = (int) get('created_by');
 if ($filterCreatedBy < 1 && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $filterCreatedBy = (int) post('created_by');
 }
+$nicheFilter = prospect_normalized_niche_filter((string) (post('niche_filter') ?: get('niche')));
 $filterCreatedUser = null;
 if ($filterCreatedBy > 0) {
     $stmt = db()->prepare('SELECT id, username, full_name, role FROM users WHERE id=? LIMIT 1');
@@ -88,11 +97,12 @@ if ($addCountry !== '') {
 if ($inCountry && !$emptyCountry && (string) get('export') !== '') {
     $mode = (string) get('export');
     $exportQ = trim((string) get('q'));
+    $exportNiche = prospect_normalized_niche_filter((string) get('niche'));
     if ($mode === 'domains' || $mode === 'download') {
-        stream_prospect_domains_plain($sheet, $mode === 'download', $exportQ, $filterCreatedBy);
+        stream_prospect_domains_plain($sheet, $mode === 'download', $exportQ, $filterCreatedBy, $exportNiche);
     }
     if ($mode === 'csv') {
-        stream_prospect_domains_csv($sheet, $exportQ, $filterCreatedBy);
+        stream_prospect_domains_csv($sheet, $exportQ, $filterCreatedBy, $exportNiche);
     }
 }
 
@@ -115,6 +125,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
     }
     if ($returnCountry !== '') {
         redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
+    }
+    redirect('index.php?page=admin_prospects');
+}
+
+// --- Save niches on a country-sheet row (chip box autosave) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'save_niche') {
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    $saved = update_prospect_site_niches((int) post('site_id'), (string) post('niche'));
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        if (!$saved) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => 'Site not found.']);
+            exit;
+        }
+        echo json_encode([
+            'ok' => true,
+            'id' => (int) $saved['id'],
+            'niche' => (string) ($saved['niche'] ?? ''),
+        ]);
+        exit;
+    }
+    if (!$saved) {
+        flash('error', 'Site not found.');
+    } else {
+        flash('ok', 'Niche saved.');
+    }
+    $backCountry = is_array($saved)
+        ? trim((string) ($saved['country'] ?? ''))
+        : trim((string) post('country'));
+    if ($backCountry !== '') {
+        redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($backCountry)));
     }
     redirect('index.php?page=admin_prospects');
 }
@@ -460,6 +504,7 @@ if (!$inCountry && !$emptyCountry) {
             <table class="super-search-table">
               <thead>
                 <tr>
+                  <th>Niche</th>
                   <th>Site</th>
                   <th>Country</th>
                   <th>Language</th>
@@ -476,6 +521,14 @@ if (!$inCountry && !$emptyCountry) {
                       . '&q=' . rawurlencode((string) $hit['domain']);
                   ?>
                 <tr>
+                  <td><?php
+                    $hitNiches = prospect_parse_niches((string) ($hit['niche'] ?? ''));
+                    if ($hitNiches === []) {
+                        echo '—';
+                    } else {
+                        echo h(prospect_format_niches($hitNiches));
+                    }
+                  ?></td>
                   <td><strong><?= h((string) $hit['domain']) ?></strong></td>
                   <td>
                     <?= h($countryLabel) ?>
@@ -744,6 +797,11 @@ if (!$emptyCountry && !$wantsAjax) {
     } catch (Throwable $e) {
         // ignore
     }
+    try {
+        backfill_blank_prospect_niches($countryName, 400);
+    } catch (Throwable $e) {
+        // ignore
+    }
 }
 $q = trim((string) get('q'));
 $pageNum = max(1, (int) get('p', 1));
@@ -751,6 +809,7 @@ $perPage = resolve_sheet_per_page();
 $invFilters = [
     'q' => $q,
     'country' => $countryName,
+    'niche' => $nicheFilter,
 ];
 if ($filterCreatedBy > 0) {
     $invFilters['created_by'] = $filterCreatedBy;
@@ -766,9 +825,16 @@ if ($emptyCountry) {
     }
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $where[] = '(p.domain LIKE ? OR p.url LIKE ?)';
+        $where[] = '(p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR p.notes LIKE ?)';
         $params[] = $like;
         $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+    }
+    $nf = prospect_sql_niche_filter('p.niche', $nicheFilter);
+    if ($nf['sql'] !== '') {
+        $where[] = $nf['sql'];
+        array_push($params, ...$nf['params']);
     }
     $whereSql = implode(' AND ', $where);
     $count = db()->prepare("SELECT COUNT(*) FROM prospect_sites p WHERE $whereSql");
@@ -793,19 +859,21 @@ if ($emptyCountry) {
 $sheetLabel = $emptyCountry ? 'No country' : $countryName;
 $countryTotal = $emptyCountry
     ? (int) $total
-    : ($filterCreatedBy > 0
-        ? (int) prospect_inventory_query([
-            'q' => '',
-            'country' => $countryName,
-            'created_by' => $filterCreatedBy,
-        ], 1, 1)['total']
-        : count_prospect_sites_matching($countryName, ''));
+    : (int) prospect_inventory_query(array_filter([
+        'q' => '',
+        'country' => $countryName,
+        'created_by' => $filterCreatedBy > 0 ? $filterCreatedBy : null,
+        'niche' => $nicheFilter,
+    ], static fn ($v) => $v !== '' && $v !== null), 1, 1)['total'];
 $searchMatchCount = ($q !== '' && !$emptyCountry)
     ? (int) $total
     : 0;
 $exportBase = 'index.php?page=admin_prospects&country=' . rawurlencode($emptyCountry ? '_none' : $countryName);
 if ($filterCreatedBy > 0) {
     $exportBase .= '&created_by=' . $filterCreatedBy;
+}
+if ($nicheFilter !== '') {
+    $exportBase .= '&niche=' . rawurlencode($nicheFilter);
 }
 $exportAllUrl = $exportBase . '&export=domains';
 $downloadTxtUrl = $exportBase . '&export=download';
@@ -824,6 +892,7 @@ $qs = http_build_query(array_filter([
     'page' => 'admin_prospects',
     'country' => $emptyCountry ? '_none' : $countryName,
     'q' => $q,
+    'niche' => $nicheFilter,
     'per_page' => $perPage,
     'created_by' => $filterCreatedBy > 0 ? (string) $filterCreatedBy : '',
 ], static fn ($v) => $v !== '' && $v !== null));
@@ -886,6 +955,11 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       <?php endif; ?>
       <span id="prospect_country_total_label"><?= (int) $countryTotal ?></span>
       site<?= (int) $countryTotal === 1 ? '' : 's' ?> <?= $filterCreatedBy > 0 ? 'added by this person' : 'in this country’s database' ?>
+      <?php if ($nicheFilter === '_none'): ?>
+        · <strong>No niche</strong>
+      <?php elseif ($nicheFilter !== ''): ?>
+        · niche <strong><?= h($nicheFilter) ?></strong>
+      <?php endif; ?>
       <span id="prospect_match_line"<?= $q !== '' ? '' : ' hidden' ?>>
         · <strong id="prospect_match_count_label"><?= (int) $searchMatchCount ?></strong>
         match<span id="prospect_match_plural"><?= (int) $searchMatchCount === 1 ? '' : 'es' ?></span>
@@ -945,7 +1019,18 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <div class="card" id="prospect-sites-card">
   <div class="invoice-list-toolbar prospect-site-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
     <h2 style="margin:0">Sites</h2>
-    <?php if (!$emptyCountry && ($countryTotal > 0 || $q !== '')): ?>
+    <?php if (!$emptyCountry): ?>
+      <?= render_prospect_niche_filter_bar(
+          'index.php?page=admin_prospects&country=' . rawurlencode($countryName),
+          $nicheFilter,
+          array_filter([
+              'q' => $q,
+              'created_by' => $filterCreatedBy > 0 ? (string) $filterCreatedBy : '',
+              'per_page' => (string) $perPage,
+          ], static fn ($v) => $v !== '' && $v !== null)
+      ) ?>
+    <?php endif; ?>
+    <?php if (!$emptyCountry && ($countryTotal > 0 || $q !== '' || $nicheFilter !== '')): ?>
     <div class="actions prospect-site-search-row" style="margin-left:auto;align-items:center;flex-wrap:wrap;gap:0.45rem">
       <label class="sheet-search" for="prospect-site-search" style="margin:0">
         <span class="visually-hidden">Search this country</span>
@@ -983,6 +1068,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
             'p' => $pageNum,
             'country' => $countryName,
             'created_by' => $filterCreatedBy,
+            'niche' => $nicheFilter,
         ]
     );
     ?>
@@ -996,7 +1082,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           <input type="checkbox" data-sheet-select-all-check title="Select all matching rows on this page" aria-label="Select all matching rows on this page">
         </label>
       </th>
-      <th>Domain</th><th>URL</th><th>Language</th><th>Added by</th><th>When</th>
+      <th>Niche</th><th>Domain</th><th>URL</th><th>Language</th><th>Added by</th><th>When</th>
     </tr></thead>
     <tbody id="prospect-site-tbody">
     <?= prospect_site_rows_html($rows) ?>
@@ -1020,6 +1106,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           'page' => 'admin_prospects',
           'country' => $emptyCountry ? '_none' : $countryName,
           'q' => $q,
+          'niche' => $nicheFilter,
           'created_by' => $filterCreatedBy > 0 ? (string) $filterCreatedBy : '',
       ], $perPage);
       ?>
@@ -1057,5 +1144,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 </div>
 <?php endif; ?>
 <script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
+<?= prospect_niche_taxonomy_script() ?>
+<?= niche_chips_script_tag() ?>
 <script src="<?= h(script_asset_url('js/prospects-country.js')) ?>" defer></script>
 <?php render_footer('admin'); ?>

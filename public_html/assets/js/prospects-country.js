@@ -335,6 +335,9 @@
     if (!data || !data.ok) return;
     if (tbody) {
       tbody.innerHTML = data.rows_html || '';
+      if (window.NicheChips && typeof window.NicheChips.init === 'function') {
+        window.NicheChips.init(tbody);
+      }
     }
     if (tableEl) {
       tableEl.hidden = !data.has_rows;
