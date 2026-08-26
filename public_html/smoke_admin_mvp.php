@@ -201,6 +201,13 @@ if (!str_contains($usersPage, 'generate_temp')) {
 } else {
     ok('users.php generate temporary password on edit');
 }
+if (!str_contains($usersPage, "post('action') === 'send_verify'")
+    || !str_contains($usersPage, 'Send verification email')
+    || !str_contains($usersPage, 'admin_email_is_verified')) {
+    fail('users.php missing send_verify for admin email');
+} else {
+    ok('users.php send admin verification email');
+}
 if (!str_contains($usersPage, 'Must change pwd') || !str_contains($usersPage, 'Departments')) {
     fail('users.php missing must-change / departments columns');
 } else {

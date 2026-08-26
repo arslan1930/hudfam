@@ -4353,6 +4353,33 @@ try {
     fail('users U-6: ' . $e->getMessage());
 }
 
+// --- Admin Users U-7: send_admin_email_verification guards ---
+try {
+    $teamReject = send_admin_email_verification([
+        'id' => 1,
+        'role' => 'team',
+        'username' => 'x',
+        'full_name' => '',
+        'email' => 'x@example.test',
+    ]);
+    $emptyReject = send_admin_email_verification([
+        'id' => 1,
+        'role' => 'admin',
+        'username' => 'x',
+        'full_name' => '',
+        'email' => '',
+    ]);
+    if (!empty($teamReject['ok'])) {
+        fail('send_admin_email_verification allowed team user');
+    } elseif (!empty($emptyReject['ok']) || !str_contains((string) ($emptyReject['error'] ?? ''), 'valid admin email')) {
+        fail('send_admin_email_verification empty-email copy: ' . json_encode($emptyReject));
+    } else {
+        pass('send_admin_email_verification rejects team and empty email');
+    }
+} catch (Throwable $e) {
+    fail('users U-7: ' . $e->getMessage());
+}
+
 // --- Sheet undo / redo + bulk remove ---
 try {
     $histSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Undo Sheet', false);

@@ -112,6 +112,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'generate_temp')
     redirect(users_list_url(['edit' => (string) $id]));
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'send_verify') {
+    $id = (int) post('id');
+    if ($id < 1) {
+        flash('error', 'Select a user to edit first.');
+        redirect(users_list_url(['edit' => '']));
+    }
+    $target = load_user_by_id($id);
+    if (!$target) {
+        flash('error', 'User not found.');
+        redirect(users_list_url(['edit' => '']));
+    }
+    $result = send_admin_email_verification($target);
+    if (!empty($result['ok'])) {
+        flash('ok', 'Verification email sent to ' . trim((string) ($target['email'] ?? '')) . '.');
+    } else {
+        flash('error', (string) ($result['error'] ?? 'Could not send verification email.'));
+    }
+    redirect(users_list_url(['edit' => (string) $id]));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
     $id = (int) post('id');
     $username = trim((string) post('username'));
@@ -235,6 +255,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
         return $msg . $extra . ' — review under Departments (memberships were not auto-removed).';
     };
 
+    $appendEmailNote = static function (string $msg) use ($role, $email, $clearEmailVerify): string {
+        if ($role === 'admin' && $email === '') {
+            $msg .= ' This admin has no email — they cannot use Forgot password or email login.';
+        } elseif ($clearEmailVerify) {
+            $msg .= ' They must verify the new address. You can send a link from this form.';
+        }
+        return $msg;
+    };
+
     try {
         if ($id) {
             if ($password !== '') {
@@ -252,9 +281,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                 if ($id === $myId) {
                     clear_must_change_password_flag($id);
                     refresh_current_user_from_db();
-                    flash('ok', $appendDeactivateNote('User updated. Your new password is active now.'));
+                    flash('ok', $appendEmailNote($appendDeactivateNote('User updated. Your new password is active now.')));
                 } else {
-                    flash('ok', $appendDeactivateNote('User updated. They must change the password on next login.'));
+                    flash('ok', $appendEmailNote($appendDeactivateNote('User updated. They must change the password on next login.')));
                 }
             } else {
                 if ($clearEmailVerify) {
@@ -269,7 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                 if ($id === $myId) {
                     refresh_current_user_from_db();
                 }
-                flash('ok', $appendDeactivateNote('User updated.'));
+                flash('ok', $appendEmailNote($appendDeactivateNote('User updated.')));
             }
             unset($_SESSION['users_form_draft']);
             redirect(users_list_url(['edit' => '']));
@@ -286,7 +315,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
             'password' => $password,
         ];
         unset($_SESSION['users_form_draft']);
-        flash('ok', 'User created. Copy the temporary password below (shown once). They must change it on first login.');
+        flash('ok', $appendEmailNote('User created. Copy the temporary password below (shown once). They must change it on first login.'));
         redirect(users_list_url([
             'edit' => (string) $newId,
             'q' => '',
@@ -516,6 +545,7 @@ render_header('Admins & users', 'admin');
         <th>Role</th>
         <th>Contact</th>
         <th>Departments</th>
+        <th>Verified</th>
         <th>Must change pwd</th>
         <th>Active</th>
         <th></th>
@@ -527,6 +557,10 @@ render_header('Admins & users', 'admin');
         $uid = (int) $u['id'];
         $depts = $deptByUser[$uid] ?? [];
         $deptLabel = $depts ? implode(', ', $depts) : '—';
+        $verifiedLabel = '—';
+        if (($u['role'] ?? '') === 'admin') {
+            $verifiedLabel = admin_email_is_verified($u) ? 'Verified' : 'Not verified';
+        }
       ?>
       <tr>
         <td><?= h($u['username']) ?></td>
@@ -534,6 +568,7 @@ render_header('Admins & users', 'admin');
         <td><span class="badge"><?= h($u['role']) ?></span></td>
         <td class="help"><?= h($u['email'] ?: '—') ?><?= !empty($u['phone']) ? ' · ' . h($u['phone']) : '' ?></td>
         <td class="help"><?= h($deptLabel) ?></td>
+        <td><?= h($verifiedLabel) ?></td>
         <td><?= !empty($u['must_change_password']) ? 'Yes' : 'No' ?></td>
         <td><?= $u['is_active'] ? 'Yes' : 'No' ?></td>
         <td class="actions">
@@ -546,7 +581,7 @@ render_header('Admins & users', 'admin');
       </tr>
     <?php endforeach; ?>
     <?php if (!$usersPage): ?>
-      <tr><td colspan="8" class="muted"><?php
+      <tr><td colspan="9" class="muted"><?php
         if ($unassignedFilter) {
             echo 'No team awaiting assignment — assign under Departments.';
         } else {
@@ -586,6 +621,17 @@ render_header('Admins & users', 'admin');
     <input name="full_name" value="<?= h($form['full_name'] ?? '') ?>">
     <label>Email</label>
     <input name="email" value="<?= h($form['email'] ?? '') ?>" type="email">
+    <?php if ($edit && ($edit['role'] ?? '') === 'admin'): ?>
+      <p class="help">
+        <?php if (admin_email_is_verified($edit)): ?>
+          Email is <strong>verified</strong> — Forgot password can send a reset.
+        <?php elseif (trim((string) ($edit['email'] ?? '')) !== ''): ?>
+          Email is <strong>not verified</strong>. Send a link below after Save if you just changed it.
+        <?php else: ?>
+          No email — this admin cannot use Forgot password or email login.
+        <?php endif; ?>
+      </p>
+    <?php endif; ?>
     <label>Phone</label>
     <input name="phone" value="<?= h($form['phone'] ?? '') ?>">
     <label>Contact details</label>
@@ -625,6 +671,15 @@ render_header('Admins & users', 'admin');
     <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
     <p class="help" style="margin-top:0">Reset without typing a password — shows once on the next page.</p>
     <button class="btn secondary" type="submit">Generate temporary password</button>
+  </form>
+  <?php endif; ?>
+  <?php if ($edit && ($edit['role'] ?? '') === 'admin' && trim((string) ($edit['email'] ?? '')) !== '' && !admin_email_is_verified($edit)): ?>
+  <form method="post" action="<?= h($usersListQs([])) ?>" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border, #ddd)">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="send_verify">
+    <input type="hidden" name="id" value="<?= (int) $edit['id'] ?>">
+    <p class="help" style="margin-top:0">Sends a 48-hour verification link to <?= h((string) $edit['email']) ?>.</p>
+    <button class="btn secondary" type="submit">Send verification email</button>
   </form>
   <?php endif; ?>
 </div>
