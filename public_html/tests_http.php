@@ -503,6 +503,21 @@ foreach ([
         fail('asset ' . $path . ' status=' . $r['status']);
     }
 }
+$cssMtime = is_file(__DIR__ . '/assets/css/app.css') ? (string) filemtime(__DIR__ . '/assets/css/app.css') : '';
+$r = req('GET', $base . '/asset.php?f=css/app.css&v=' . rawurlencode($cssMtime));
+if ($r['status'] === 200
+    && stripos($r['headers'], 'immutable') !== false
+    && stripos($r['headers'], 'max-age=31536000') !== false) {
+    pass('asset long-cache when v matches mtime');
+} else {
+    fail('asset missing immutable cache when v matches');
+}
+$r = req('GET', $base . '/asset.php?f=css/app.css');
+if ($r['status'] === 200 && stripos($r['headers'], 'no-cache') !== false) {
+    pass('asset revalidates when v missing');
+} else {
+    fail('asset without v should no-cache');
+}
 
 // install.php locked
 $r = req('GET', $base . '/install.php');

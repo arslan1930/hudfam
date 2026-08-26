@@ -310,7 +310,7 @@ function render_footer(string $panel = ''): void
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
             if ($panel === 'admin' || $panel === 'team') {
-                echo '<script src="' . h(script_asset_url('js/csrf.js')) . '"></script>';
+                echo '<script src="' . h(script_asset_url('js/csrf.js')) . '" defer></script>';
             }
             echo '<script src="' . h(script_asset_url('js/stay-scroll.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';

@@ -3570,10 +3570,17 @@ try {
             fail('department overdue status filter missed past-due open task');
         }
         $stOverdue = department_stats((int) $dept['id']);
+        $stMap = department_stats_map([(int) $dept['id']]);
         if (isset($stOverdue['overdue_count']) && (int) $stOverdue['overdue_count'] >= 1) {
             pass('department_stats overdue_count');
         } else {
             fail('department_stats overdue_count missing or zero: ' . json_encode($stOverdue));
+        }
+        if (($stMap[(int) $dept['id']]['overdue_count'] ?? 0) === (int) $stOverdue['overdue_count']
+            && ($stMap[(int) $dept['id']]['open_tasks'] ?? -1) === (int) $stOverdue['open_tasks']) {
+            pass('department_stats_map matches department_stats');
+        } else {
+            fail('department_stats_map mismatch: ' . json_encode(['map' => $stMap, 'one' => $stOverdue]));
         }
         if (!empty($mineTask['id'])) {
             delete_department_task((int) $mineTask['id']);

@@ -158,6 +158,7 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // --- Hub ---
 if (!$dept) {
     $departments = list_departments(true);
+    department_stats_map(array_map(static fn ($d) => (int) $d['id'], $departments));
     render_header('Departments', 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],

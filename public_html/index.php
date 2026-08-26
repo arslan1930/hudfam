@@ -4,6 +4,26 @@ txf_secure_session_start();
 txf_send_security_headers();
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
+
+if (!file_exists(__DIR__ . '/config.php')) {
+    header('Location: install.php');
+    exit;
+}
+
+$page = (string) ($_GET['page'] ?? '');
+
+// Presence polls every ~30s — skip the full include graph (campaigns, invoices, …).
+if ($page === 'presence_ping') {
+    require __DIR__ . '/includes/presence.php';
+    $cu = current_user();
+    if ($cu && user_must_change_password($cu)) {
+        flash('error', 'Change your password before continuing.');
+        redirect('index.php?page=account_password');
+    }
+    require __DIR__ . '/pages/presence_ping.php';
+    exit;
+}
+
 require __DIR__ . '/includes/account.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
@@ -21,11 +41,6 @@ require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/semrush_research.php';
 require __DIR__ . '/includes/sheet_history.php';
 require __DIR__ . '/includes/layout.php';
-
-if (!file_exists(__DIR__ . '/config.php')) {
-    header('Location: install.php');
-    exit;
-}
 
 try {
     ensure_users_auth_schema();

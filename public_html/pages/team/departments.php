@@ -11,6 +11,7 @@ $base = 'index.php?page=team_departments';
 
 // Admins can browse all; team only their memberships.
 $myDepartments = $isAdminViewing ? list_departments(true) : list_departments_for_user($uid);
+department_stats_map(array_map(static fn ($d) => (int) $d['id'], $myDepartments));
 $allowedSlugs = array_map(static fn ($d) => (string) $d['slug'], $myDepartments);
 
 $folder = (string) get('folder');
