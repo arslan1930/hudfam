@@ -4353,6 +4353,74 @@ try {
     fail('sheet undo/redo: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+// --- Campaign delete-who: events survive Allow again ---
+try {
+    ensure_email_campaign_schema();
+    $whoPid = create_email_campaign_project('TXF Who Deleted', (int) $adminUser['id'], true);
+    $whoSheet = add_email_campaign_country_to_project($whoPid, 'Germany', (int) $adminUser['id']);
+    $upWho = upsert_email_campaign_row($whoSheet, 'txfcamp-who-del.de', [
+        'keep@txfcamp-who-del.de',
+        'drop@txfcamp-who-del.de',
+    ]);
+    $whoId = (int) ($upWho['id'] ?? 0);
+    $rmWho = remove_email_from_email_campaign_row(
+        $whoSheet,
+        $whoId,
+        'drop@txfcamp-who-del.de',
+        $teamUser
+    );
+    $evEmail = list_email_campaign_row_events($whoSheet, null, 20);
+    $emailHit = null;
+    foreach ($evEmail as $ev) {
+        if (($ev['action'] ?? '') === 'remove_email' && ($ev['email'] ?? '') === 'drop@txfcamp-who-del.de') {
+            $emailHit = $ev;
+            break;
+        }
+    }
+    $delWho = delete_email_campaign_row($whoSheet, $whoId, true, $teamUser);
+    $evSite = list_email_campaign_row_events($whoSheet, null, 20);
+    $siteHit = null;
+    foreach ($evSite as $ev) {
+        if (($ev['action'] ?? '') === 'delete_site' && ($ev['domain'] ?? '') === 'txfcamp-who-del.de') {
+            $siteHit = $ev;
+            break;
+        }
+    }
+    $beforeAllow = count_email_campaign_row_events($whoSheet);
+    clear_email_campaign_domain_exclusion($whoSheet, 'txfcamp-who-del.de');
+    $afterAllow = count_email_campaign_row_events($whoSheet);
+    if (
+        !empty($rmWho['ok']) && empty($rmWho['row_deleted'])
+        && $emailHit && (int) ($emailHit['user_id'] ?? 0) === (int) $teamUser['id']
+        && ($emailHit['username'] ?? '') === 'teammate'
+        && !empty($delWho['ok'])
+        && $siteHit && (int) ($siteHit['user_id'] ?? 0) === (int) $teamUser['id']
+        && ($siteHit['domain'] ?? '') === 'txfcamp-who-del.de'
+        && $beforeAllow === $afterAllow && $afterAllow >= 2
+    ) {
+        pass('campaign delete events stamp teammate and survive Allow again');
+    } else {
+        fail('campaign delete-who: ' . json_encode([
+            'rm' => $rmWho,
+            'emailHit' => $emailHit,
+            'del' => $delWho,
+            'siteHit' => $siteHit,
+            'before' => $beforeAllow,
+            'after' => $afterAllow,
+        ]));
+    }
+    db()->exec("DELETE FROM email_campaign_rows WHERE domain='txfcamp-who-del.de'");
+    db()->exec("DELETE FROM email_campaign_row_events WHERE domain='txfcamp-who-del.de'");
+    if ($whoSheet) {
+        db()->prepare('DELETE FROM email_campaign_sheets WHERE id=?')->execute([$whoSheet]);
+    }
+    if ($whoPid) {
+        delete_email_campaign_project($whoPid);
+    }
+} catch (Throwable $e) {
+    fail('campaign delete-who: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 echo "\n==== SUMMARY ====\n";
 echo 'passed: ' . count($ok) . "\n";
 echo 'failed: ' . count($errors) . "\n";

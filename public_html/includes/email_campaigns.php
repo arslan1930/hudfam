@@ -226,7 +226,30 @@ function ensure_email_campaign_schema(): void
         // ignore migration hiccups
     }
 
-    // Campaign fetch stamps: which SWE source country was imported into which campaign sheet.
+    // Who deleted a site / removed an email — survives Allow again.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_row_events (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sheet_id INT NOT NULL,
+          project_id INT NULL,
+          user_id INT NULL,
+          username VARCHAR(100) NOT NULL DEFAULT '',
+          full_name VARCHAR(180) NOT NULL DEFAULT '',
+          action VARCHAR(32) NOT NULL,
+          domain VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL DEFAULT '',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_camp_row_events_sheet (sheet_id, created_at),
+          INDEX idx_camp_row_events_project (project_id, created_at),
+          INDEX idx_camp_row_events_user (user_id),
+          INDEX idx_camp_row_events_domain (sheet_id, domain, action),
+          CONSTRAINT fk_camp_row_event_sheet
+            FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+          CONSTRAINT fk_camp_row_event_user
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS email_campaign_source_fetches (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -910,6 +933,176 @@ function count_email_campaign_excluded_emails(int $sheetId): int
     );
     $st->execute([$sheetId]);
     return (int) $st->fetchColumn();
+}
+
+/**
+ * Durable log of who deleted a site or removed an email. Not cleared by Allow again.
+ *
+ * @param array<string,mixed>|null $actor
+ */
+function record_email_campaign_row_event(
+    int $sheetId,
+    string $action,
+    string $domain,
+    string $email = '',
+    ?array $actor = null
+): void {
+    ensure_email_campaign_schema();
+    if (!in_array($action, ['delete_site', 'remove_email'], true)) {
+        return;
+    }
+    $domain = function_exists('normalize_email_campaign_domain')
+        ? normalize_email_campaign_domain($domain)
+        : strtolower(trim($domain));
+    if ($sheetId < 1 || $domain === '' || str_starts_with($domain, '__blank_')) {
+        return;
+    }
+    if ($actor === null && function_exists('current_user')) {
+        $cu = current_user();
+        $actor = is_array($cu) ? $cu : null;
+    }
+    $userId = (int) ($actor['id'] ?? 0);
+    $username = trim((string) ($actor['username'] ?? ''));
+    $fullName = trim((string) ($actor['full_name'] ?? ''));
+    $sheet = get_email_campaign_sheet($sheetId);
+    $projectId = $sheet ? (int) ($sheet['project_id'] ?? 0) : 0;
+    $emailNorm = '';
+    if ($action === 'remove_email') {
+        $emailNorm = function_exists('normalize_email_value')
+            ? normalize_email_value($email)
+            : strtolower(trim($email));
+    }
+    try {
+        db()->prepare(
+            'INSERT INTO email_campaign_row_events
+             (sheet_id, project_id, user_id, username, full_name, action, domain, email)
+             VALUES (?,?,?,?,?,?,?,?)'
+        )->execute([
+            $sheetId,
+            $projectId > 0 ? $projectId : null,
+            $userId > 0 ? $userId : null,
+            $username,
+            $fullName,
+            $action,
+            $domain,
+            $emailNorm,
+        ]);
+    } catch (Throwable $e) {
+        // Never fail the delete / remove.
+    }
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_row_events(?int $sheetId = null, ?int $projectId = null, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(2000, $limit));
+    $sql = 'SELECT e.id, e.sheet_id, e.project_id, e.user_id, e.username, e.full_name,
+                   e.action, e.domain, e.email, e.created_at,
+                   s.name AS country
+            FROM email_campaign_row_events e
+            LEFT JOIN email_campaign_sheets s ON s.id = e.sheet_id
+            WHERE 1=1';
+    $params = [];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND e.sheet_id=?';
+        $params[] = $sheetId;
+    }
+    if ($projectId !== null && $projectId > 0) {
+        $sql .= ' AND e.project_id=?';
+        $params[] = $projectId;
+    }
+    $sql .= " ORDER BY e.created_at DESC, e.id DESC LIMIT {$limit}";
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'sheet_id' => (int) ($row['sheet_id'] ?? 0),
+            'project_id' => (int) ($row['project_id'] ?? 0),
+            'user_id' => (int) ($row['user_id'] ?? 0),
+            'username' => (string) ($row['username'] ?? ''),
+            'full_name' => (string) ($row['full_name'] ?? ''),
+            'action' => (string) ($row['action'] ?? ''),
+            'domain' => (string) ($row['domain'] ?? ''),
+            'email' => (string) ($row['email'] ?? ''),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'country' => (string) ($row['country'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function count_email_campaign_row_events(?int $sheetId = null, ?int $projectId = null): int
+{
+    ensure_email_campaign_schema();
+    $sql = 'SELECT COUNT(*) FROM email_campaign_row_events WHERE 1=1';
+    $params = [];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND sheet_id=?';
+        $params[] = $sheetId;
+    }
+    if ($projectId !== null && $projectId > 0) {
+        $sql .= ' AND project_id=?';
+        $params[] = $projectId;
+    }
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    return (int) $st->fetchColumn();
+}
+
+/**
+ * Latest event per domain (delete_site) or domain+email (remove_email) on a sheet.
+ *
+ * @return array{delete_site:array<string,array<string,mixed>>,remove_email:array<string,array<string,mixed>>}
+ */
+function map_email_campaign_latest_event_who(int $sheetId): array
+{
+    $map = ['delete_site' => [], 'remove_email' => []];
+    if ($sheetId < 1) {
+        return $map;
+    }
+    foreach (list_email_campaign_row_events($sheetId, null, 2000) as $ev) {
+        $action = (string) ($ev['action'] ?? '');
+        $domain = (string) ($ev['domain'] ?? '');
+        if ($domain === '' || !isset($map[$action])) {
+            continue;
+        }
+        if ($action === 'remove_email') {
+            $key = $domain . "\0" . (string) ($ev['email'] ?? '');
+            if (!isset($map['remove_email'][$key])) {
+                $map['remove_email'][$key] = $ev;
+            }
+        } elseif (!isset($map['delete_site'][$domain])) {
+            $map['delete_site'][$domain] = $ev;
+        }
+    }
+    return $map;
+}
+
+/**
+ * Display label for an event actor (username snapshot, then full name).
+ *
+ * @param array<string,mixed> $event
+ */
+function email_campaign_event_who_label(array $event): string
+{
+    $user = trim((string) ($event['username'] ?? ''));
+    $full = trim((string) ($event['full_name'] ?? ''));
+    if ($user !== '' && $full !== '' && strcasecmp($user, $full) !== 0) {
+        return $user . ' · ' . $full;
+    }
+    if ($user !== '') {
+        return $user;
+    }
+    if ($full !== '') {
+        return $full;
+    }
+    return '—';
 }
 
 /**
@@ -1833,13 +2026,15 @@ function add_blank_email_campaign_rows(int $sheetId, int $count = 1): int
  * Save one site + up to 4 emails row (Sites with emails workflow).
  * Clearing the last email deletes the whole row.
  *
+ * @param array<string,mixed>|null $actor
  * @return array{ok:bool,error?:string,id?:int,domain?:string,row_deleted?:bool,emails?:list<string>}
  */
 function save_email_campaign_row(
     int $sheetId,
     int $rowId,
     string $domainRaw,
-    array $emails
+    array $emails,
+    ?array $actor = null
 ): array {
     ensure_email_campaign_schema();
     if (!get_email_campaign_sheet($sheetId)) {
@@ -1918,6 +2113,7 @@ function save_email_campaign_row(
             exclude_email_campaign_emails($sheetId, $domain, $gone);
         }
         touch_email_campaign_sheet($sheetId);
+        record_email_campaign_row_event($sheetId, 'delete_site', $oldDomain !== '' ? $oldDomain : $domain, '', $actor);
         return [
             'ok' => true,
             'id' => $rowId,
@@ -1949,6 +2145,12 @@ function save_email_campaign_row(
          WHERE id=? AND sheet_id=?'
     )->execute([$domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
     touch_email_campaign_sheet($sheetId);
+    $eventDomain = $oldDomain !== '' ? $oldDomain : $domain;
+    foreach ($oldEmails as $oldEm) {
+        if (!isset($newSet[$oldEm])) {
+            record_email_campaign_row_event($sheetId, 'remove_email', $eventDomain, $oldEm, $actor);
+        }
+    }
     return [
         'ok' => true,
         'id' => $rowId,
@@ -3169,7 +3371,7 @@ function search_email_campaign_suggestions_scoped(
     return $out;
 }
 
-function delete_email_campaign_row(int $sheetId, int $rowId, bool $recordHistory = true): array
+function delete_email_campaign_row(int $sheetId, int $rowId, bool $recordHistory = true, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -3182,6 +3384,7 @@ function delete_email_campaign_row(int $sheetId, int $rowId, bool $recordHistory
     if (!str_starts_with($domain, '__blank_')) {
         exclude_email_campaign_domain($sheetId, $domain);
         exclude_email_campaign_emails($sheetId, $domain, $emails);
+        record_email_campaign_row_event($sheetId, 'delete_site', $domain, '', $actor);
     }
     db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
     if ($recordHistory && function_exists('sheet_history_push_remove')) {
@@ -3194,7 +3397,7 @@ function delete_email_campaign_row(int $sheetId, int $rowId, bool $recordHistory
  * @param list<int> $ids
  * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
  */
-function delete_email_campaign_rows_by_ids(int $sheetId, array $ids): array
+function delete_email_campaign_rows_by_ids(int $sheetId, array $ids, ?array $actor = null): array
 {
     $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
     $snaps = [];
@@ -3205,7 +3408,7 @@ function delete_email_campaign_rows_by_ids(int $sheetId, array $ids): array
             continue;
         }
         $snaps[] = $row;
-        $del = delete_email_campaign_row($sheetId, $id, false);
+        $del = delete_email_campaign_row($sheetId, $id, false, $actor);
         if (!empty($del['ok'])) {
             $removed[] = ['id' => $id, 'domain' => (string) ($del['domain'] ?? '')];
         }
@@ -3287,9 +3490,10 @@ function restore_email_campaign_row_snapshot(int $sheetId, array $snap): array
  * (no empty email rows in campaign sheets).
  * Removed emails are tombstoned so paste/import cannot put them back.
  *
+ * @param array<string,mixed>|null $actor
  * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string,row_deleted?:bool}
  */
-function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $email): array
+function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $email, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -3334,6 +3538,7 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
         exclude_email_campaign_domain($sheetId, $domain);
         db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+        record_email_campaign_row_event($sheetId, 'delete_site', $domain, '', $actor);
         return [
             'ok' => true,
             'domain' => $domain,
@@ -3354,6 +3559,7 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
     db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
 
     $left = array_values(array_filter($slots, static fn ($e) => $e !== ''));
+    record_email_campaign_row_event($sheetId, 'remove_email', $domain, $target, $actor);
     return [
         'ok' => true,
         'domain' => $domain,
