@@ -292,10 +292,43 @@ function department_tools_help(string $slug): string
 }
 
 /**
+ * @return array<int,list<array<string,mixed>>>
+ */
+function &department_list_for_user_cache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
+/**
+ * @return array<int,array{member_count:int,open_tasks:int,total_tasks:int,overdue_count:int}>
+ */
+function &department_stats_cache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
+function department_query_cache_clear(): void
+{
+    $lists = &department_list_for_user_cache();
+    $lists = [];
+    $stats = &department_stats_cache();
+    $stats = [];
+}
+
+/**
  * @return list<array<string,mixed>>
  */
 function list_departments_for_user(int $userId): array
 {
+    if ($userId < 1) {
+        return [];
+    }
+    $cache = &department_list_for_user_cache();
+    if (isset($cache[$userId])) {
+        return $cache[$userId];
+    }
     ensure_departments_schema();
     $stmt = db()->prepare(
         'SELECT d.*
@@ -305,7 +338,8 @@ function list_departments_for_user(int $userId): array
          ORDER BY d.sort_order ASC, d.name ASC'
     );
     $stmt->execute([$userId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $cache[$userId] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    return $cache[$userId];
 }
 
 /**
@@ -357,6 +391,7 @@ function add_department_member(int $departmentId, int $userId, array $admin): bo
          VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE assigned_by = VALUES(assigned_by)'
     )->execute([$departmentId, $userId, $adminId]);
+    department_query_cache_clear();
     return true;
 }
 
@@ -367,7 +402,11 @@ function remove_department_member(int $departmentId, int $userId): bool
         'DELETE FROM department_members WHERE department_id=? AND user_id=?'
     );
     $stmt->execute([$departmentId, $userId]);
-    return $stmt->rowCount() > 0;
+    $ok = $stmt->rowCount() > 0;
+    if ($ok) {
+        department_query_cache_clear();
+    }
+    return $ok;
 }
 
 /**
@@ -389,7 +428,11 @@ function clear_open_department_task_assignees(int $departmentId, int $userId): i
            AND status IN ('open','in_progress')"
     );
     $stmt->execute([$departmentId, $userId]);
-    return (int) $stmt->rowCount();
+    $n = (int) $stmt->rowCount();
+    if ($n > 0) {
+        department_query_cache_clear();
+    }
+    return $n;
 }
 
 /** Count open/in_progress tasks assigned to this user in the department. */
@@ -434,33 +477,97 @@ function user_deactivation_residue(int $userId): array
 }
 
 /**
- * @return array{member_count:int,open_tasks:int,total_tasks:int}
+ * @return array{member_count:int,open_tasks:int,total_tasks:int,overdue_count:int}
  */
 function department_stats(int $departmentId): array
 {
-    ensure_departments_schema();
-    $members = db()->prepare('SELECT COUNT(*) FROM department_members WHERE department_id=?');
-    $members->execute([$departmentId]);
-    $open = db()->prepare(
-        "SELECT COUNT(*) FROM department_tasks WHERE department_id=? AND status IN ('open','in_progress')"
-    );
-    $open->execute([$departmentId]);
-    $total = db()->prepare('SELECT COUNT(*) FROM department_tasks WHERE department_id=?');
-    $total->execute([$departmentId]);
-    $overdue = db()->prepare(
-        "SELECT COUNT(*) FROM department_tasks
-         WHERE department_id=?
-           AND status IN ('open','in_progress')
-           AND due_date IS NOT NULL
-           AND due_date < CURDATE()"
-    );
-    $overdue->execute([$departmentId]);
-    return [
-        'member_count' => (int) $members->fetchColumn(),
-        'open_tasks' => (int) $open->fetchColumn(),
-        'total_tasks' => (int) $total->fetchColumn(),
-        'overdue_count' => (int) $overdue->fetchColumn(),
+    $map = department_stats_map([$departmentId]);
+    return $map[$departmentId] ?? [
+        'member_count' => 0,
+        'open_tasks' => 0,
+        'total_tasks' => 0,
+        'overdue_count' => 0,
     ];
+}
+
+/**
+ * Batch stats for department cards (one members query + one tasks query).
+ *
+ * @param list<int> $departmentIds
+ * @return array<int,array{member_count:int,open_tasks:int,total_tasks:int,overdue_count:int}>
+ */
+function department_stats_map(array $departmentIds): array
+{
+    ensure_departments_schema();
+    $cache = &department_stats_cache();
+    $ids = [];
+    foreach ($departmentIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    $ids = array_values(array_unique($ids));
+    $missing = [];
+    foreach ($ids as $id) {
+        if (!isset($cache[$id])) {
+            $missing[] = $id;
+        }
+    }
+    if ($missing !== []) {
+        $in = implode(',', $missing);
+        foreach ($missing as $id) {
+            $cache[$id] = [
+                'member_count' => 0,
+                'open_tasks' => 0,
+                'total_tasks' => 0,
+                'overdue_count' => 0,
+            ];
+        }
+        try {
+            $memberRows = db()->query(
+                "SELECT department_id, COUNT(*) AS c
+                 FROM department_members
+                 WHERE department_id IN ({$in})
+                 GROUP BY department_id"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($memberRows as $row) {
+                $did = (int) ($row['department_id'] ?? 0);
+                if (isset($cache[$did])) {
+                    $cache[$did]['member_count'] = (int) ($row['c'] ?? 0);
+                }
+            }
+            $taskRows = db()->query(
+                "SELECT department_id,
+                        COUNT(*) AS total_tasks,
+                        SUM(status IN ('open','in_progress')) AS open_tasks,
+                        SUM(
+                          status IN ('open','in_progress')
+                          AND due_date IS NOT NULL
+                          AND due_date < CURDATE()
+                        ) AS overdue_count
+                 FROM department_tasks
+                 WHERE department_id IN ({$in})
+                 GROUP BY department_id"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($taskRows as $row) {
+                $did = (int) ($row['department_id'] ?? 0);
+                if (!isset($cache[$did])) {
+                    continue;
+                }
+                $cache[$did]['total_tasks'] = (int) ($row['total_tasks'] ?? 0);
+                $cache[$did]['open_tasks'] = (int) ($row['open_tasks'] ?? 0);
+                $cache[$did]['overdue_count'] = (int) ($row['overdue_count'] ?? 0);
+            }
+        } catch (Throwable $e) {
+            // Keep zeros if tables are mid-upgrade.
+        }
+    }
+    $out = [];
+    foreach ($ids as $id) {
+        $out[$id] = $cache[$id];
+    }
+    return $out;
 }
 
 /**
@@ -665,6 +772,7 @@ function save_department_task(
                  SET title=?, notes=?, status=?, assigned_to=?, due_date=?, updated_at=NOW()
                  WHERE id=?'
             )->execute([$title, $notes !== '' ? $notes : null, $status, $assignedTo, $due, $taskId]);
+            department_query_cache_clear();
             return ['ok' => true, 'id' => $taskId, 'added_member' => $addedMember];
         }
 
@@ -681,6 +789,7 @@ function save_department_task(
             $actorId,
             $due,
         ]);
+        department_query_cache_clear();
         return ['ok' => true, 'id' => (int) db()->lastInsertId(), 'added_member' => $addedMember];
     } catch (Throwable $e) {
         return ['ok' => false, 'error' => 'Could not save task. Try again or run upgrade.php.'];
@@ -692,7 +801,11 @@ function delete_department_task(int $taskId): bool
     ensure_departments_schema();
     $stmt = db()->prepare('DELETE FROM department_tasks WHERE id=?');
     $stmt->execute([$taskId]);
-    return $stmt->rowCount() > 0;
+    $ok = $stmt->rowCount() > 0;
+    if ($ok) {
+        department_query_cache_clear();
+    }
+    return $ok;
 }
 
 function update_department_task_status(int $taskId, string $status): bool
@@ -705,7 +818,11 @@ function update_department_task_status(int $taskId, string $status): bool
         'UPDATE department_tasks SET status=?, updated_at=NOW() WHERE id=?'
     );
     $stmt->execute([$status, $taskId]);
-    return $stmt->rowCount() > 0;
+    $ok = $stmt->rowCount() > 0;
+    if ($ok) {
+        department_query_cache_clear();
+    }
+    return $ok;
 }
 
 /**

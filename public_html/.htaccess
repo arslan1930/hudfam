@@ -41,3 +41,16 @@ DirectoryIndex index.php index.html
     Deny from all
   </IfModule>
 </FilesMatch>
+
+# Compress text when LiteSpeed/Apache serves it (including asset.php MIME types).
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Long-cache only real files under assets/ (not asset.php — that sets Cache-Control itself).
+<IfModule mod_expires.c>
+  <FilesMatch "\.(css|js|svg|png|ico)$">
+    ExpiresActive On
+    ExpiresDefault "access plus 1 year"
+  </FilesMatch>
+</IfModule>

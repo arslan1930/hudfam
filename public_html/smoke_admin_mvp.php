@@ -1385,6 +1385,21 @@ if (!preg_match('/upgrade/', $htaccessSmoke)) {
 } else {
     ok('.htaccess blocks upgrade.php');
 }
+$assetSpeed = file_get_contents($root . '/asset.php') ?: '';
+$indexSpeed = file_get_contents($root . '/index.php') ?: '';
+$layoutSpeed = file_get_contents($root . '/includes/layout.php') ?: '';
+$deptSpeed = file_get_contents($root . '/includes/departments.php') ?: '';
+if (!str_contains($assetSpeed, 'immutable')
+    || !str_contains($indexSpeed, "\$page === 'presence_ping'")
+    || !str_contains($indexSpeed, 'skip the full include graph')
+    || !str_contains($layoutSpeed, "js/csrf.js')")
+    || !str_contains($layoutSpeed, "script_asset_url('js/csrf.js')) . '\" defer")
+    || !str_contains($htaccessSmoke, 'mod_deflate')
+    || !str_contains($deptSpeed, 'function department_stats_map')) {
+    fail('site speed missing asset cache / light presence ping / csrf defer / deflate / batched dept stats');
+} else {
+    ok('site speed: long-cache assets, light presence ping, deferred csrf, batched dept stats');
+}
 $deptToolsSmoke = file_get_contents($root . '/includes/departments.php') ?: '';
 if (str_contains($deptToolsSmoke, "\$pages[] = 'team_prospects'")) {
     fail('Site Finding still unlocks team_prospects browse');
@@ -1406,6 +1421,7 @@ foreach ([
     'department overdue helper',
     'department overdue status filter',
     'department_stats overdue_count',
+    'department_stats_map matches department_stats',
     'departments dashboard stats',
     'assignee cannot change someone else task status',
     'prospect_site_rows_html has no Status column',
@@ -1770,7 +1786,8 @@ if (!str_contains($httpSmoke, 'Waiting for assignment')
     ok('tests_http.php ACL + extracted hub asserts');
 }
 if (!str_contains($httpSmoke, 'forgot_password page')
-    || !str_contains($httpSmoke, 'admin_account redirects when logged out')) {
+    || !str_contains($httpSmoke, 'admin_account redirects when logged out')
+    || !str_contains($httpSmoke, 'asset long-cache when v matches mtime')) {
     fail('tests_http.php missing Account/forgot route asserts');
 } else {
     ok('tests_http.php Account/forgot route asserts');

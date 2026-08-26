@@ -7,6 +7,9 @@ $deptScoped = user_is_department_scoped($user);
 $awaitsDept = team_user_awaits_department($user);
 $myDepartments = $deptScoped ? list_departments_for_user($uid) : [];
 $myTasks = $deptScoped ? list_open_tasks_for_user($uid, 40) : [];
+if ($myDepartments) {
+    department_stats_map(array_map(static fn ($d) => (int) $d['id'], $myDepartments));
+}
 
 if ($deptScoped && $_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'set_status') {
     $taskId = (int) post('task_id');

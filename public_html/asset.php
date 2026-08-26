@@ -63,8 +63,14 @@ if (!is_file($path)) {
 $mtime = filemtime($path) ?: time();
 $etag = '"' . md5($path . $mtime . filesize($path)) . '"';
 header('Content-Type: ' . $allowed[$f]);
-// Always revalidate — max-age=86400 kept teammates on broken JS after deploys.
-header('Cache-Control: no-cache, must-revalidate');
+// URLs already bust with ?v=filemtime (stylesheet_url / script_asset_url).
+// When v matches, cache for a year so navigations skip PHP revalidation.
+$v = (string) ($_GET['v'] ?? '');
+if ($v !== '' && $v === (string) $mtime) {
+    header('Cache-Control: public, max-age=31536000, immutable');
+} else {
+    header('Cache-Control: no-cache, must-revalidate');
+}
 header('ETag: ' . $etag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 
