@@ -7,7 +7,6 @@
 
   var itemsCache = null;
   var saveTimers = new WeakMap();
-  var editingChip = null;
 
   function loadItems(root) {
     if (itemsCache) return itemsCache;
@@ -142,7 +141,11 @@
     }
     var exists = labels.some(function (l) { return norm(l) === key; });
     if (exists) {
-      if (replaceChip && replaceChip.parentNode) replaceChip.remove();
+      if (replaceChip && replaceChip.parentNode) {
+        replaceChip.remove();
+        setHidden(root, currentLabels(root));
+        scheduleSave(root);
+      }
       return false;
     }
     if (replaceChip && replaceChip.parentNode) {
@@ -174,6 +177,7 @@
     var open = false;
     var active = -1;
     var filtered = [];
+    var editingChip = null;
 
     function closeList() {
       open = false;

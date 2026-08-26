@@ -296,7 +296,8 @@ function prospect_niche_domain_keywords(): array
             $compact[$key] = $label;
         }
     }
-    return $compact;
+    $map = $compact;
+    return $map;
 }
 
 function prospect_normalize_niche_label(string $raw): string

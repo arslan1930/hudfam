@@ -423,9 +423,11 @@ if (!str_contains($nichesLib, 'function prospect_parse_niches')
     || !str_contains($adminProspects, '<th>Niche</th>')
     || !str_contains($teamCheck, 'render_niche_chip_box')
     || !str_contains($histDay, 'render_niche_chip_box')
+    || !str_contains($nichesLib, '$map = $compact')
     || !str_contains($nicheJs, 'data-niche-remove')
     || !str_contains($nicheJs, 'save_niche')
     || !str_contains($nicheJs, 'prospect-niche-menu-search')
+    || !str_contains($nicheJs, 'scheduleSave(root)')
     || !str_contains($assetPhp, 'js/niche-chips.js')) {
     fail('Our database missing multi-niche chips / filter / autosave');
 } else {

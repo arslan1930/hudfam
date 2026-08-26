@@ -390,6 +390,20 @@ try {
     } else {
         fail('prospect suggest: ' . json_encode(['de' => $fromDe, 'brand' => $fromBrand]));
     }
+    $kwOnce = prospect_niche_domain_keywords();
+    $kwTwice = prospect_niche_domain_keywords();
+    $fromAiTools = prospect_suggest_niches_from_domain('aitools.io');
+    if ($kwOnce === $kwTwice
+        && isset($kwOnce['aitools'])
+        && in_array('AI', $fromAiTools, true)) {
+        pass('prospect_niche_domain_keywords compact cache stays stable');
+    } else {
+        fail('prospect domain keywords cache: ' . json_encode([
+            'same' => $kwOnce === $kwTwice,
+            'aitools' => isset($kwOnce['aitools']),
+            'suggest' => $fromAiTools,
+        ]));
+    }
     $mergedNew = prospect_niches_for_new_site('fitness-blog.de', 'Health');
     if ($mergedNew === 'Blog, Health, Fitness') {
         pass('prospect_niches_for_new_site merges human + domain');
