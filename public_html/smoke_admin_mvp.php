@@ -343,8 +343,8 @@ if (!str_contains($prospectsLib, 'function purge_duplicate_prospect_site_rows')
     ok('Our database auto-dedupe + fade notice');
 }
 // Policy: Our database country lists stay Admin-only (Team uses Filter & add).
-if (str_contains($teamProspects, 'Our database is private to Admin')
-    && str_contains($teamProspects, 'Admin-only')) {
+if (str_contains($teamProspects, 'redirect(')
+    && (str_contains($teamProspects, 'Admin-only') || str_contains($teamProspects, 'team_prospect_check'))) {
     ok('Team Our database privatized (Admin-only stub)');
 } else {
     fail('team prospects not privatized / Admin-only stub');
@@ -823,13 +823,68 @@ if (!str_contains($indexFull, "'admin_tasks'")) {
     ok('index.php admin_tasks legacy route');
 }
 
-$extractSites = file_get_contents($root . '/pages/admin/extract_sites.php') ?: '';
-if (str_contains($extractSites, 'page=admin_tasks')) {
-    fail('extract_sites still links to admin_tasks');
-} elseif (!str_contains($extractSites, 'admin_departments')) {
-    fail('extract_sites missing Departments CTA');
+$legacyExtractPages = [
+    'pages/admin/extract_sites.php',
+    'pages/admin/extract_emails.php',
+    'pages/team/extract_submit.php',
+    'pages/team/extract_queue.php',
+    'pages/team/extract_work.php',
+    'pages/team/extract_final.php',
+    'pages/team/extract_emails.php',
+];
+$legacyStillThere = [];
+foreach ($legacyExtractPages as $rel) {
+    if (is_file($root . '/' . $rel)) {
+        $legacyStillThere[] = $rel;
+    }
+}
+if ($legacyStillThere) {
+    fail('legacy extract pages still on disk: ' . implode(', ', $legacyStillThere));
 } else {
-    ok('extract_sites CTA points at Departments');
+    ok('legacy extract pages removed (routes still redirect)');
+}
+if (!str_contains($indexFull, "'admin_extract_sites'")
+    || !str_contains($indexFull, "'team_extract_submit'")) {
+    fail('index.php missing legacy extract redirects');
+} else {
+    ok('legacy extract routes still redirect');
+}
+$accountLibSmoke = file_get_contents($root . '/includes/account.php') ?: '';
+if (str_contains($accountLibSmoke, 'CREATE TABLE IF NOT EXISTS team_tasks')) {
+    fail('ensure_tasks_schema still creates team_tasks');
+} else {
+    ok('team_tasks schema is not auto-created');
+}
+$hostingerMd = file_get_contents(dirname($root) . '/public_html/HOSTINGER.md') ?: file_get_contents($root . '/HOSTINGER.md') ?: '';
+if (str_contains($hostingerMd, 'includes/inventory.php`, `email_campaigns.php')
+    || str_contains($hostingerMd, 'No Catalog, Emails, Orders')) {
+    fail('HOSTINGER.md still tells you to delete live Emails/Orders modules');
+} else {
+    ok('HOSTINGER.md matches live Emails/Orders app');
+}
+$cfgSample = file_get_contents($root . '/config.sample.php') ?: '';
+if (!str_contains($cfgSample, "'127.0.0.1'")) {
+    fail('config.sample.php should default db_host to 127.0.0.1');
+} else {
+    ok('config.sample.php uses 127.0.0.1');
+}
+$htaccessSmoke = file_get_contents($root . '/.htaccess') ?: '';
+if (!preg_match('/upgrade/', $htaccessSmoke)) {
+    fail('.htaccess does not block upgrade.php');
+} else {
+    ok('.htaccess blocks upgrade.php');
+}
+$deptToolsSmoke = file_get_contents($root . '/includes/departments.php') ?: '';
+if (str_contains($deptToolsSmoke, "\$pages[] = 'team_prospects'")) {
+    fail('Site Finding still unlocks team_prospects browse');
+} else {
+    ok('Site Finding tools omit Our database browse');
+}
+$teamProspectStub = file_get_contents($root . '/pages/team/prospects.php') ?: '';
+if (str_contains($teamProspectStub, "flash('error'")) {
+    fail('team_prospects stub still flashes an error');
+} else {
+    ok('team_prospects quietly redirects to Filter & add');
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';

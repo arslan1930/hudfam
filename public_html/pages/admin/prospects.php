@@ -387,16 +387,6 @@ if (!$inCountry && !$emptyCountry) {
         <?php endif; ?>
       <?php endif; ?>
     </div>
-    <?= render_page_purpose(
-        'Our database — one folder per country',
-        'Sites are stored separately for each country.',
-        'Open a country folder to browse, or use Add sites below to paste into a country database.',
-        [
-            'Add sites with the form below (Our database only).',
-            'Or open a country folder to browse and add more there.',
-            'Team Filter & add checks against the same country lists.',
-        ]
-    ) ?>
 
     <div class="card" id="add-sites">
       <h2>Add sites</h2>

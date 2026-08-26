@@ -40,47 +40,9 @@ function ensure_account_schema(): void
 
 function ensure_tasks_schema(): void
 {
-    static $done = false;
-    if ($done) {
-        return;
-    }
-    $done = true;
-    ensure_account_schema();
-    db()->exec(
-        "CREATE TABLE IF NOT EXISTS team_tasks (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          title VARCHAR(200) NOT NULL,
-          notes TEXT NULL,
-          country VARCHAR(100) NOT NULL DEFAULT '',
-          language VARCHAR(50) NOT NULL DEFAULT '',
-          niche VARCHAR(255) NOT NULL DEFAULT '',
-          work_type VARCHAR(40) NOT NULL DEFAULT 'sites',
-          target_count INT NULL,
-          status ENUM('open','in_progress','done','cancelled') NOT NULL DEFAULT 'open',
-          assigned_to INT NOT NULL,
-          created_by INT NOT NULL,
-          due_date DATE NULL,
-          completed_at DATETIME NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (assigned_to, status),
-          INDEX (created_by),
-          INDEX (country),
-          INDEX (due_date),
-          CONSTRAINT fk_task_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE,
-          CONSTRAINT fk_task_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
-    try {
-        $cols = db()->query('SHOW COLUMNS FROM team_tasks')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('work_type', $cols, true)) {
-            db()->exec(
-                "ALTER TABLE team_tasks ADD COLUMN work_type VARCHAR(40) NOT NULL DEFAULT 'sites' AFTER niche"
-            );
-        }
-    } catch (Throwable $e) {
-        // ignore
-    }
+    // Retired: Assign tasks UI redirects to Departments. Do not CREATE/ALTER
+    // team_tasks on each request. Existing installs keep the table; old rows
+    // are not migrated.
 }
 
 function load_user_by_id(int $id): ?array
@@ -290,26 +252,34 @@ function list_team_tasks(?int $assignedTo = null, string $status = '', int $limi
     }
     $sql .= ' ORDER BY FIELD(t.status,\'open\',\'in_progress\',\'done\',\'cancelled\'), t.due_date IS NULL, t.due_date ASC, t.id DESC LIMIT '
         . (int) $limit;
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll();
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    } catch (Throwable $e) {
+        return [];
+    }
 }
 
 function get_team_task(int $id): ?array
 {
     ensure_tasks_schema();
-    $stmt = db()->prepare(
-        "SELECT t.*,
-                a.username AS assignee_username, a.full_name AS assignee_name,
-                c.username AS creator_username, c.full_name AS creator_name
-         FROM team_tasks t
-         INNER JOIN users a ON a.id = t.assigned_to
-         INNER JOIN users c ON c.id = t.created_by
-         WHERE t.id=? LIMIT 1"
-    );
-    $stmt->execute([$id]);
-    $row = $stmt->fetch();
-    return $row ?: null;
+    try {
+        $stmt = db()->prepare(
+            "SELECT t.*,
+                    a.username AS assignee_username, a.full_name AS assignee_name,
+                    c.username AS creator_username, c.full_name AS creator_name
+             FROM team_tasks t
+             INNER JOIN users a ON a.id = t.assigned_to
+             INNER JOIN users c ON c.id = t.created_by
+             WHERE t.id=? LIMIT 1"
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
 }
 
 /**
@@ -448,9 +418,13 @@ function task_status_label(string $status): string
 function count_open_tasks_for_user(int $userId): int
 {
     ensure_tasks_schema();
-    $stmt = db()->prepare(
-        "SELECT COUNT(*) FROM team_tasks WHERE assigned_to=? AND status IN ('open','in_progress')"
-    );
-    $stmt->execute([$userId]);
-    return (int) $stmt->fetchColumn();
+    try {
+        $stmt = db()->prepare(
+            "SELECT COUNT(*) FROM team_tasks WHERE assigned_to=? AND status IN ('open','in_progress')"
+        );
+        $stmt->execute([$userId]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
 }

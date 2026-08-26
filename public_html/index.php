@@ -169,27 +169,15 @@ if (
 }
 
 // Department members only see assigned work + tools for their departments.
-$deptOnlyAllowed = [
-    'login',
-    'logout',
-    'account_password',
-    'team_dashboard',
-    'team_departments',
-    'presence_ping',
-];
 if (
     $cu
     && ($cu['role'] ?? '') === 'team'
     && user_is_department_scoped($cu)
+    && function_exists('team_page_unlocked')
+    && !team_page_unlocked($cu, $page)
 ) {
-    foreach (department_tool_pages_for_user($cu) as $toolPage) {
-        $deptOnlyAllowed[] = $toolPage;
-    }
-    $deptOnlyAllowed = array_values(array_unique($deptOnlyAllowed));
-    if (!in_array($page, $deptOnlyAllowed, true)) {
-        flash('error', 'Your login only shows work and tools for your department.');
-        redirect('index.php?page=team_departments');
-    }
+    flash('error', 'Your login only shows work and tools for your department.');
+    redirect('index.php?page=team_departments');
 }
 
 // CSRF: every Admin and Team POST (forms + AJAX) must carry a valid token.
