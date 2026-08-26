@@ -4323,28 +4323,40 @@ try {
     $sent1 = (int) db()->query(
         'SELECT email_sent FROM email_campaign_rows WHERE id=' . $fid
     )->fetchColumn();
+    $batchAtMark = (int) db()->query(
+        'SELECT send_batch_id FROM email_campaign_rows WHERE id=' . $fid
+    )->fetchColumn();
     $undoFlag = sheet_history_apply_undo($flagKey);
     $sent0 = (int) db()->query(
         'SELECT email_sent FROM email_campaign_rows WHERE id=' . $fid
+    )->fetchColumn();
+    $batchAfterUndo = (int) db()->query(
+        'SELECT send_batch_id FROM email_campaign_rows WHERE id=' . $fid
     )->fetchColumn();
     $redoFlag = sheet_history_apply_redo($flagKey);
     $sent2 = (int) db()->query(
         'SELECT email_sent FROM email_campaign_rows WHERE id=' . $fid
     )->fetchColumn();
+    $batchAfterRedo = (int) db()->query(
+        'SELECT send_batch_id FROM email_campaign_rows WHERE id=' . $fid
+    )->fetchColumn();
     if (
-        !empty($marked['ok']) && $sent1 === 1
-        && !empty($undoFlag['ok']) && $sent0 === 0
-        && !empty($redoFlag['ok']) && $sent2 === 1
+        !empty($marked['ok']) && $sent1 === 1 && $batchAtMark > 0
+        && !empty($undoFlag['ok']) && $sent0 === 0 && $batchAfterUndo === 0
+        && !empty($redoFlag['ok']) && $sent2 === 1 && $batchAfterRedo === $batchAtMark
     ) {
         pass('campaign mark emailed undo/redo restores flag');
     } else {
         fail('campaign emailed undo unexpected: ' . json_encode([
             'marked' => $marked,
             'sent1' => $sent1,
+            'batchAtMark' => $batchAtMark,
             'undo' => $undoFlag,
             'sent0' => $sent0,
+            'batchAfterUndo' => $batchAfterUndo,
             'redo' => $redoFlag,
             'sent2' => $sent2,
+            'batchAfterRedo' => $batchAfterRedo,
         ]));
     }
     db()->exec("DELETE FROM email_campaign_rows WHERE domain='txfemailundo.de'");
@@ -4437,6 +4449,172 @@ try {
     }
 } catch (Throwable $e) {
     fail('campaign delete-who: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Campaign named send batches (who emailed which stretch) ---
+try {
+    ensure_email_campaign_schema();
+    db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-batch-%'");
+    db()->exec(
+        "DELETE FROM email_campaign_sheets
+         WHERE name LIKE 'txfcamp-batch-%' OR project_name LIKE 'TXF Send Batches%'"
+    );
+    db()->exec("DELETE FROM email_campaign_projects WHERE name LIKE 'TXF Send Batches%'");
+
+    $campCols = db()->query('SHOW COLUMNS FROM email_campaign_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $batchTable = db()->query("SHOW TABLES LIKE 'email_campaign_send_batches'")->fetch(PDO::FETCH_NUM);
+    if (in_array('send_batch_id', $campCols, true) && $batchTable) {
+        pass('campaign send_batch_id column + send_batches table');
+    } else {
+        fail('campaign missing send batches schema: cols=' . json_encode($campCols));
+    }
+
+    $bPid = create_email_campaign_project('TXF Send Batches', (int) $adminUser['id'], false);
+    $bSheet = add_email_campaign_country_to_project($bPid, 'Germany', (int) $adminUser['id']);
+    foreach (
+        [
+            'txfcamp-batch-a.com',
+            'txfcamp-batch-b.com',
+            'txfcamp-batch-c.com',
+            'txfcamp-batch-d.com',
+        ] as $dom
+    ) {
+        upsert_email_campaign_row($bSheet, $dom, [
+            'email1' => 'x@' . $dom,
+            'email2' => '',
+            'email3' => '',
+            'email4' => '',
+        ]);
+    }
+    $bIds = db()->query(
+        'SELECT id, domain FROM email_campaign_rows
+         WHERE sheet_id=' . (int) $bSheet . " AND domain LIKE 'txfcamp-batch-%'
+         ORDER BY id ASC"
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if (count($bIds) !== 4) {
+        fail('txfcamp-batch seed count=' . count($bIds));
+    } else {
+        $idA = (int) $bIds[0]['id'];
+        $idB = (int) $bIds[1]['id'];
+        $idC = (int) $bIds[2]['id'];
+        $idD = (int) $bIds[3]['id'];
+
+        $uptoA = mark_email_campaign_emailed_up_to($bSheet, $idB, 'Batch A', $teamUser);
+        $rowA = get_email_campaign_row($idA, $bSheet);
+        $rowB = get_email_campaign_row($idB, $bSheet);
+        $rowC = get_email_campaign_row($idC, $bSheet);
+        $batchAId = (int) ($rowA['send_batch_id'] ?? 0);
+        $batchA = $batchAId > 0 ? get_email_campaign_send_batch($batchAId, $bSheet) : null;
+        $statusA = email_campaign_row_emailed_status($batchA);
+        if (
+            !empty($uptoA['ok'])
+            && (int) ($uptoA['marked'] ?? 0) === 2
+            && $batchAId > 0
+            && (int) ($rowB['send_batch_id'] ?? 0) === $batchAId
+            && (int) ($rowC['email_sent'] ?? 0) === 0
+            && ($batchA['name'] ?? '') === 'Batch A'
+            && ($batchA['username'] ?? '') === 'teammate'
+            && (int) ($batchA['site_count'] ?? 0) === 2
+            && str_contains((string) ($statusA['label'] ?? ''), 'Batch A')
+            && str_contains((string) ($statusA['title'] ?? ''), 'teammate')
+        ) {
+            pass('campaign mark up to here names Batch A and stamps teammate');
+        } else {
+            fail('campaign Batch A: ' . json_encode([
+                'upto' => $uptoA,
+                'batchA' => $batchA,
+                'a' => $rowA['send_batch_id'] ?? null,
+                'b' => $rowB['send_batch_id'] ?? null,
+                'cSent' => $rowC['email_sent'] ?? null,
+                'status' => $statusA,
+            ]));
+        }
+
+        $uptoB = mark_email_campaign_emailed_up_to($bSheet, $idC, 'Batch B', $adminUser);
+        $rowC2 = get_email_campaign_row($idC, $bSheet);
+        $rowA2 = get_email_campaign_row($idA, $bSheet);
+        $batchBId = (int) ($rowC2['send_batch_id'] ?? 0);
+        $batchB = $batchBId > 0 ? get_email_campaign_send_batch($batchBId, $bSheet) : null;
+        if (
+            !empty($uptoB['ok'])
+            && (int) ($uptoB['marked'] ?? 0) === 1
+            && $batchBId > 0
+            && $batchBId !== $batchAId
+            && (int) ($rowA2['send_batch_id'] ?? 0) === $batchAId
+            && ($batchB['name'] ?? '') === 'Batch B'
+            && ($batchB['username'] ?? '') === 'admin'
+        ) {
+            pass('campaign second checkpoint is a new Batch B');
+        } else {
+            fail('campaign Batch B: ' . json_encode([
+                'upto' => $uptoB,
+                'batchB' => $batchB,
+                'aStill' => $rowA2['send_batch_id'] ?? null,
+            ]));
+        }
+
+        $listed = list_email_campaign_send_batches($bSheet);
+        $listedNames = array_column($listed, 'name');
+        $batchRows = list_email_campaign_send_batch_rows($batchAId);
+        $batchDomains = array_column($batchRows, 'domain');
+        if (
+            in_array('Batch A', $listedNames, true)
+            && in_array('Batch B', $listedNames, true)
+            && in_array('txfcamp-batch-a.com', $batchDomains, true)
+            && in_array('txfcamp-batch-b.com', $batchDomains, true)
+            && !in_array('txfcamp-batch-c.com', $batchDomains, true)
+        ) {
+            pass('campaign list send batches and Batch A rows');
+        } else {
+            fail('campaign list batches: ' . json_encode([
+                'names' => $listedNames,
+                'domains' => $batchDomains,
+            ]));
+        }
+
+        $clear = clear_email_campaign_emailed_up_to($bSheet, $idB);
+        $rowA3 = get_email_campaign_row($idA, $bSheet);
+        $rowC3 = get_email_campaign_row($idC, $bSheet);
+        $stillA = get_email_campaign_send_batch($batchAId, $bSheet);
+        if (
+            !empty($clear['ok'])
+            && (int) ($rowA3['email_sent'] ?? 0) === 0
+            && (int) ($rowA3['send_batch_id'] ?? 0) === 0
+            && (int) ($rowC3['send_batch_id'] ?? 0) === $batchBId
+            && is_array($stillA)
+            && ($stillA['name'] ?? '') === 'Batch A'
+            && (int) ($stillA['live_count'] ?? -1) === 0
+        ) {
+            pass('campaign clear unlinks send_batch_id and keeps Batch A history');
+        } else {
+            fail('campaign clear batch: ' . json_encode([
+                'clear' => $clear,
+                'aSent' => $rowA3['email_sent'] ?? null,
+                'aBatch' => $rowA3['send_batch_id'] ?? null,
+                'cBatch' => $rowC3['send_batch_id'] ?? null,
+                'stillA' => $stillA,
+            ]));
+        }
+
+        $emptyName = mark_email_campaign_emailed_up_to($bSheet, $idD, '', $adminUser);
+        $defaultName = (string) ($emptyName['batch_name'] ?? '');
+        if (
+            !empty($emptyName['ok'])
+            && (int) ($emptyName['marked'] ?? 0) >= 1
+            && str_contains($defaultName, 'admin')
+            && str_contains($defaultName, date('Y-m-d'))
+        ) {
+            pass('campaign empty batch name gets username · date default');
+        } else {
+            fail('campaign default batch name: ' . json_encode($emptyName));
+        }
+    }
+
+    if ($bPid) {
+        delete_email_campaign_project($bPid);
+    }
+} catch (Throwable $e) {
+    fail('campaign send batches: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";

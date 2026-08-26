@@ -1707,6 +1707,23 @@ if (!str_contains($campLib, 'function email_campaign_who_for_exclusion')
 } else {
     ok('campaign delete-who Admin UI');
 }
+$campJsBatches = file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '';
+$campSql = file_get_contents($root . '/sql/upgrade_email_campaigns.sql') ?: '';
+if (!str_contains($campLib, 'function create_email_campaign_send_batch')
+    || !str_contains($campLib, 'function mark_email_campaign_emailed_up_to')
+    || !str_contains($campLib, 'email_campaign_send_batches')
+    || !str_contains($campLib, 'send_batch_id')
+    || !str_contains($campApp, "post('batch_name')")
+    || !str_contains($campApp, 'email_campaign_row_emailed_status')
+    || !str_contains($campApp, 'data-camp-batch-suggest')
+    || !str_contains($campJsBatches, 'window.prompt')
+    || !str_contains($campJsBatches, 'batch_name')
+    || !str_contains($campJsBatches, 'Name this send batch')
+    || !str_contains($campSql, 'email_campaign_send_batches')) {
+    fail('campaign missing named send-batch stamp / prompt');
+} else {
+    ok('campaign named send-batch stamp + prompt');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')

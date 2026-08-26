@@ -171,7 +171,7 @@ if ($sheetId > 0) {
             if ($action === 'mark_email_sent') {
                 $rowId = (int) post('site_id');
                 $sent = (string) post('email_sent') === '1';
-                $result = set_email_campaign_row_email_sent($sheetId, $rowId, $sent);
+                $result = set_email_campaign_row_email_sent($sheetId, $rowId, $sent, $user);
                 if ($wantsJson) {
                     $jsonOut(
                         $result + count_email_campaign_sent_stats($sheetId),
@@ -191,7 +191,12 @@ if ($sheetId > 0) {
             }
             if ($action === 'mark_emailed_up_to') {
                 $rowId = (int) post('site_id');
-                $result = mark_email_campaign_emailed_up_to($sheetId, $rowId);
+                $result = mark_email_campaign_emailed_up_to(
+                    $sheetId,
+                    $rowId,
+                    (string) post('batch_name'),
+                    $user
+                );
                 if ($wantsJson) {
                     $jsonOut(
                         $result + count_email_campaign_sent_stats($sheetId),
@@ -204,7 +209,11 @@ if ($sheetId > 0) {
                     flash(
                         'ok',
                         'Marked emailed up to ' . (string) ($result['domain'] ?? 'site')
-                        . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked.'
+                        . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked'
+                        . ((string) ($result['batch_name'] ?? '') !== ''
+                            ? ' · batch “' . (string) $result['batch_name'] . '”'
+                            : '')
+                        . '.'
                     );
                 }
                 redirect($back);
@@ -502,6 +511,10 @@ if ($sheetId > 0) {
         }
     }
     $whoMap = map_email_campaign_latest_event_who($sheetId);
+    $sendBatchMap = map_email_campaign_send_batches($sheetId);
+    $batchSuggest = trim((string) ($user['username'] ?? '')) !== ''
+        ? trim((string) $user['username']) . ' · ' . date('Y-m-d')
+        : 'Admin · ' . date('Y-m-d');
     $formAction = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
     $domainsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=domains';
     $domainsExportUnsentUrl = $domainsExportUrl . '&sent=0';
@@ -564,6 +577,8 @@ if ($sheetId > 0) {
         . 'Mark up to here: marks this site and every site above it as emailed (checkpoint). '
         . 'Clear up to here: clears emailed marks from the top through this site (redo that stretch). '
         . 'Clear all emailed: resets this country sheet for a full resend. '
+        . 'Mark up to here names a send batch (Batch A, Batch B, …) and records who marked it. '
+        . 'The next stretch is a new batch. Status shows the batch name; Batches lists who emailed whom. '
         . 'Highlighted rows = already emailed. Filters: All / Not emailed / Emailed. '
         . 'Marks stay on this sheet only (other projects / countries are separate).'
     );
@@ -658,7 +673,8 @@ if ($sheetId > 0) {
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
       <div class="table-wrap swe-sheet-wrap">
-        <table class="swe-table swe-sheet-table is-admin-checkpoint is-dense sheet-cards-mobile" id="camp-sheet-table">
+        <table class="swe-table swe-sheet-table is-admin-checkpoint is-dense sheet-cards-mobile" id="camp-sheet-table"
+               data-camp-batch-suggest="<?= h($batchSuggest) ?>">
           <thead>
             <tr>
               <?php render_sheet_select_th(); ?>
@@ -726,7 +742,11 @@ if ($sheetId > 0) {
               $e4 = (string) $r['email4'];
               $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
               $isEmailed = (int) ($r['email_sent'] ?? 0) === 1;
-              $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
+              $rowBatchId = (int) ($r['send_batch_id'] ?? 0);
+              $rowBatch = ($isEmailed && $rowBatchId > 0) ? ($sendBatchMap[$rowBatchId] ?? null) : null;
+              $emailedStatus = $isEmailed ? email_campaign_row_emailed_status($rowBatch) : null;
+              $statusLabel = $isEmailed ? (string) $emailedStatus['label'] : 'Not emailed';
+              $statusTitle = $isEmailed ? (string) $emailedStatus['title'] : '';
               $statusClass = $isEmailed ? 'is-emailed' : 'is-open';
               $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
               ?>
@@ -769,7 +789,8 @@ if ($sheetId > 0) {
                 <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
               </td>
               <td class="swe-td-status" data-label="Status">
-                <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
+                <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status
+                      <?= $statusTitle !== '' ? 'title="' . h($statusTitle) . '"' : '' ?>><?= h($statusLabel) ?></span>
               </td>
               <td class="swe-td-actions" data-label="Actions">
                 <div class="swe-row-actions">
