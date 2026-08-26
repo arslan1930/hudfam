@@ -3762,11 +3762,13 @@ function restore_email_campaign_row_snapshot(int $sheetId, array $snap): array
     $sent = (int) ($snap['email_sent'] ?? 0) === 1 ? 1 : 0;
     $sentAt = trim((string) ($snap['email_sent_at'] ?? ''));
     $sentAt = $sentAt !== '' ? $sentAt : null;
+    $batchId = (int) ($snap['send_batch_id'] ?? 0);
+    $batchId = $batchId > 0 ? $batchId : null;
     $created = trim((string) ($snap['created_at'] ?? ''));
     $created = $created !== '' ? $created : null;
-    $cols = 'sheet_id, domain, country, language, region, email1, email2, email3, email4, email_sent, email_sent_at, created_at';
-    $vals = '?,?,?,?,?,?,?,?,?,?,?,?';
-    $params = [$sheetId, $domain, $country, $language, $region, $e1, $e2, $e3, $e4, $sent, $sentAt, $created];
+    $cols = 'sheet_id, domain, country, language, region, email1, email2, email3, email4, email_sent, email_sent_at, send_batch_id, created_at';
+    $vals = '?,?,?,?,?,?,?,?,?,?,?,?,?';
+    $params = [$sheetId, $domain, $country, $language, $region, $e1, $e2, $e3, $e4, $sent, $sentAt, $batchId, $created];
     try {
         if ($wantId > 0) {
             $chk = db()->prepare('SELECT id FROM email_campaign_rows WHERE id=? LIMIT 1');

@@ -4576,6 +4576,29 @@ try {
             ]));
         }
 
+        $delA = delete_email_campaign_row($bSheet, $idA, true, $adminUser);
+        $goneA = get_email_campaign_row($idA, $bSheet);
+        $undoDel = sheet_history_apply_undo(sheet_history_key('campaign', (string) $bSheet));
+        $backA = get_email_campaign_row($idA, $bSheet);
+        if (
+            !empty($delA['ok'])
+            && !$goneA
+            && !empty($undoDel['ok'])
+            && (int) ($backA['email_sent'] ?? 0) === 1
+            && (int) ($backA['send_batch_id'] ?? 0) === $batchAId
+        ) {
+            pass('campaign undo remove restores send_batch_id');
+        } else {
+            fail('campaign undo remove batch: ' . json_encode([
+                'del' => $delA,
+                'gone' => $goneA ? 'still there' : null,
+                'undo' => $undoDel,
+                'backSent' => $backA['email_sent'] ?? null,
+                'backBatch' => $backA['send_batch_id'] ?? null,
+                'expect' => $batchAId,
+            ]));
+        }
+
         $clear = clear_email_campaign_emailed_up_to($bSheet, $idB);
         $rowA3 = get_email_campaign_row($idA, $bSheet);
         $rowC3 = get_email_campaign_row($idC, $bSheet);
