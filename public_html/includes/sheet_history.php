@@ -373,6 +373,10 @@ function render_sheet_edit_toolbar(string $actionUrl, string $historyKey, array 
     if ($sent !== '') {
         $nav .= '<input type="hidden" name="sent" value="' . h($sent) . '">';
     }
+    $batch = (int) ($opts['batch'] ?? 0);
+    if ($batch > 0) {
+        $nav .= '<input type="hidden" name="batch" value="' . $batch . '">';
+    }
     if ($filter !== '') {
         $nav .= '<input type="hidden" name="filter" value="' . h($filter) . '">';
     }

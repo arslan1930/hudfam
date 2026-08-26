@@ -44,6 +44,7 @@ if ($sheetId > 0) {
     if ($sentFilter !== '0' && $sentFilter !== '1') {
         $sentFilter = '';
     }
+    $batchFilter = max(0, (int) get('batch'));
     $pageNum = max(1, (int) get('p', 1));
     $perPage = resolve_sheet_per_page();
 
@@ -70,6 +71,10 @@ if ($sheetId > 0) {
         }
         if ($returnSent !== '') {
             $back .= '&sent=' . $returnSent;
+        }
+        $returnBatch = max(0, (int) post('batch'));
+        if ($returnBatch > 0) {
+            $back .= '&batch=' . $returnBatch;
         }
         $back = append_sheet_per_page_query($back, $returnPerPage);
         if ($returnP > 1) {
@@ -484,9 +489,13 @@ if ($sheetId > 0) {
         }
     }
 
+    $openBatch = $batchFilter > 0 ? get_email_campaign_send_batch($batchFilter, $sheetId) : null;
+    if ($batchFilter > 0 && !$openBatch) {
+        $batchFilter = 0;
+    }
     $inv = email_campaign_rows_inventory_query(
         $sheetId,
-        ['q' => $q, 'sent' => $sentFilter],
+        ['q' => $q, 'sent' => $sentFilter, 'batch' => $batchFilter],
         $pageNum,
         $perPage
     );
@@ -494,7 +503,7 @@ if ($sheetId > 0) {
     $total = (int) $inv['total'];
     $pages = (int) $inv['pages'];
     $pageNum = (int) $inv['page'];
-    $sheetTotal = ($q !== '' || $sentFilter !== '')
+    $sheetTotal = ($q !== '' || $sentFilter !== '' || $batchFilter > 0)
         ? count_email_campaign_rows($sheetId)
         : $total;
     $filledCount = $sheetTotal;
@@ -511,7 +520,14 @@ if ($sheetId > 0) {
         }
     }
     $whoMap = map_email_campaign_latest_event_who($sheetId);
-    $sendBatchMap = map_email_campaign_send_batches($sheetId);
+    $sendBatches = list_email_campaign_send_batches($sheetId);
+    $sendBatchMap = [];
+    foreach ($sendBatches as $b) {
+        $sendBatchMap[(int) $b['id']] = $b;
+    }
+    if ($openBatch && isset($sendBatchMap[(int) ($openBatch['id'] ?? 0)])) {
+        $openBatch = $sendBatchMap[(int) $openBatch['id']];
+    }
     $batchSuggest = trim((string) ($user['username'] ?? '')) !== ''
         ? trim((string) $user['username']) . ' · ' . date('Y-m-d')
         : 'Admin · ' . date('Y-m-d');
@@ -525,6 +541,7 @@ if ($sheetId > 0) {
         'sheet' => $sheetId,
         'q' => $q,
         'sent' => $sentFilter,
+        'batch' => $batchFilter > 0 ? $batchFilter : null,
         'per_page' => $perPage,
     ], static fn ($v) => $v !== '' && $v !== null));
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
@@ -550,9 +567,12 @@ if ($sheetId > 0) {
         <p class="muted">
           Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' matching this filter' : '' ?>
+          <?= $q !== '' || $sentFilter !== '' || $batchFilter > 0 ? ' · ' . (int) $total . ' matching this filter' : '' ?>
           · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
           · <span id="swe_sent_label"><?= (int) $sentStats['sent'] ?></span> emailed
+          <?php if ($sendBatches !== []): ?>
+            · <a href="#camp-batches"><?= count($sendBatches) ?> send batch<?= count($sendBatches) === 1 ? '' : 'es' ?></a>
+          <?php endif; ?>
           · <?= (int) $perPage ?> per page · autosave ·
           Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
         </p>
@@ -600,6 +620,9 @@ if ($sheetId > 0) {
                 if ($q !== '') {
                     $href .= '&q=' . rawurlencode($q);
                 }
+                if ($batchFilter > 0) {
+                    $href .= '&batch=' . $batchFilter;
+                }
                 if ($val !== '') {
                     $href .= '&sent=' . $val;
                 }
@@ -618,6 +641,9 @@ if ($sheetId > 0) {
               <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+              <?php endif; ?>
+              <?php if ($batchFilter > 0): ?>
+              <input type="hidden" name="batch" value="<?= (int) $batchFilter ?>">
               <?php endif; ?>
               <button class="btn secondary small" type="submit" title="Clear every emailed mark on this Email campaign sheet">
                 Clear all emailed
@@ -650,6 +676,35 @@ if ($sheetId > 0) {
             </button>
           </div>
           <?php render_sheet_tool_menu_close(); ?>
+          <?php render_sheet_tool_menu_open('Batches', 'Named send batches — who emailed which stretch'); ?>
+          <div id="camp-batches" class="swe-copy-group" role="group" aria-label="Send batches on this country sheet">
+            <?php if ($sendBatches === []): ?>
+              <p class="muted" style="margin:0">No send batches yet. Mark up to here names a batch (Batch A, then Batch B).</p>
+            <?php else: ?>
+              <?php foreach ($sendBatches as $b):
+                  $bid = (int) ($b['id'] ?? 0);
+                  $bName = (string) ($b['name'] ?? '');
+                  $bWho = email_campaign_send_batch_who_label($b);
+                  $bLive = (int) ($b['live_count'] ?? 0);
+                  $bOrig = (int) ($b['site_count'] ?? 0);
+                  $bWhen = (string) ($b['created_at'] ?? '');
+                  $bHref = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId . '&batch=' . $bid, $perPage);
+                  $bTitle = $bName . ' · ' . $bWho
+                      . ($bWhen !== '' ? ' · ' . $bWhen : '')
+                      . ' · ' . $bLive . ' still marked'
+                      . ($bOrig > 0 ? ' / ' . $bOrig . ' originally' : '');
+                  ?>
+                <a class="btn small <?= $batchFilter === $bid ? '' : 'secondary' ?>"
+                   href="<?= h($bHref) ?>"
+                   title="<?= h($bTitle) ?>">
+                  <?= h($bName !== '' ? $bName : 'Untitled') ?>
+                  · <?= h($bWho !== '' && $bWho !== '—' ? $bWho : 'unknown') ?>
+                  · <?= (int) $bLive ?><?= $bOrig > 0 && $bOrig !== $bLive ? '/' . $bOrig : '' ?>
+                </a>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+          <?php render_sheet_tool_menu_close(); ?>
         </div>
         <div class="actions">
           <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
@@ -658,19 +713,44 @@ if ($sheetId > 0) {
               'q' => $q,
               'p' => $pageNum,
               'sent' => $sentFilter,
+              'batch' => $batchFilter,
           ]);
           ?>
           <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
             <span class="visually-hidden">Search sites and emails</span>
             <input id="swe-row-search" type="search" placeholder="Search site or email…"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
-                   <?= $filledCount < 1 && $q === '' && $sentFilter === '' ? 'disabled' : '' ?>
+                   <?= $filledCount < 1 && $q === '' && $sentFilter === '' && $batchFilter < 1 ? 'disabled' : '' ?>
                    title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
             <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
           </label>
         </div>
       </div>
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
+
+      <?php if ($openBatch):
+          $openWho = email_campaign_send_batch_who_label($openBatch);
+          $openLive = (int) ($openBatch['live_count'] ?? 0);
+          $openOrig = (int) ($openBatch['site_count'] ?? 0);
+          $openWhen = (string) ($openBatch['created_at'] ?? '');
+          $sheetAllHref = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
+          ?>
+      <div class="card" id="camp-batch-open" style="margin:0 0 0.75rem">
+        <h2 style="margin:0"><?= h((string) ($openBatch['name'] ?? 'Send batch')) ?></h2>
+        <p class="muted" style="margin:0.35rem 0 0">
+          Sent by <strong><?= h($openWho !== '' && $openWho !== '—' ? $openWho : 'unknown') ?></strong>
+          <?php if ($openWhen !== ''): ?> · <?= h($openWhen) ?><?php endif; ?>
+          · <?= (int) $openOrig ?> originally
+          · <?= (int) $openLive ?> still marked
+        </p>
+        <p class="help" style="margin:0.35rem 0 0">
+          Sites and emails for this stretch are in the table<?= $openLive < 1 ? ' (none still marked — Clear unlinked them; this batch stays as history)' : '' ?>.
+        </p>
+        <p class="actions" style="margin:0.5rem 0 0">
+          <a class="btn secondary small" href="<?= h($sheetAllHref) ?>">Show all sites</a>
+        </p>
+      </div>
+      <?php endif; ?>
 
       <div class="table-wrap swe-sheet-wrap">
         <table class="swe-table swe-sheet-table is-admin-checkpoint is-dense sheet-cards-mobile" id="camp-sheet-table"
@@ -701,6 +781,9 @@ if ($sheetId > 0) {
                 <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                 <?php if ($sentFilter !== ''): ?>
                 <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                <?php endif; ?>
+                <?php if ($batchFilter > 0): ?>
+                <input type="hidden" name="batch" value="<?= (int) $batchFilter ?>">
                 <?php endif; ?>
               </form>
               <label class="visually-hidden" for="camp_add_domain">Site</label>
@@ -764,6 +847,9 @@ if ($sheetId > 0) {
                   <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                   <?php if ($sentFilter !== ''): ?>
                   <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
+                  <?php endif; ?>
+                  <?php if ($batchFilter > 0): ?>
+                  <input type="hidden" name="batch" value="<?= (int) $batchFilter ?>">
                   <?php endif; ?>
                 </form>
                 <div class="swe-site-cell open-site-cell" data-open-site-cell>
@@ -830,6 +916,7 @@ if ($sheetId > 0) {
           'q' => $q,
           'p' => $pageNum,
           'sent' => $sentFilter,
+          'batch' => $batchFilter,
           'mark' => true,
           'push' => false,
           'remove' => true,
@@ -838,7 +925,7 @@ if ($sheetId > 0) {
       <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
         No search matches on this page. Try Ctrl/Cmd+Enter to search all pages.
       </p>
-      <?php if ($rows === [] && $q === '' && $sentFilter === ''): ?>
+      <?php if ($rows === [] && $q === '' && $sentFilter === '' && $batchFilter < 1): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
         <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Team / Admin / Final</strong>.</p>
@@ -847,9 +934,12 @@ if ($sheetId > 0) {
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
         </p>
       </div>
-      <?php elseif ($rows === [] && ($q !== '' || $sentFilter !== '')): ?>
+      <?php elseif ($rows === [] && ($q !== '' || $sentFilter !== '' || $batchFilter > 0)): ?>
       <div class="empty-state">
-        <?php if ($sentFilter === '0'): ?>
+        <?php if ($openBatch): ?>
+          <p>No sites still marked in this batch<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+          <p class="muted">Clear up to here unlinks rows from the batch; the batch stays so you can see who sent it.</p>
+        <?php elseif ($sentFilter === '0'): ?>
           <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
           <?php if ($q === '' && (int) $sentStats['sent'] > 0): ?>
             <p class="muted">
@@ -1435,6 +1525,8 @@ if ($projectIdParam > 0) {
     }
     $removedEvents = list_email_campaign_row_events(null, $projectIdParam, 200);
     $removedCount = count_email_campaign_row_events(null, $projectIdParam);
+    $projectBatches = list_email_campaign_send_batches(null, $projectIdParam, 200);
+    $projectBatchCount = count($projectBatches);
 
     render_header($projectName, 'admin');
     render_breadcrumbs([
@@ -1451,6 +1543,9 @@ if ($projectIdParam > 0) {
           <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
           · <?= (int) $siteTotal ?> site<?= (int) $siteTotal === 1 ? '' : 's' ?>
           · Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
+          <?php if ($projectBatchCount > 0): ?>
+            · <a href="#camp-batches"><?= (int) $projectBatchCount ?> send batch<?= $projectBatchCount === 1 ? '' : 'es' ?></a>
+          <?php endif; ?>
           <?php if ($removedCount > 0): ?>
             · <a href="#camp-removed"><?= (int) $removedCount ?> removed</a>
           <?php endif; ?>
@@ -1783,6 +1878,82 @@ if ($projectIdParam > 0) {
           </form>
         </section>
       </aside>
+    </div>
+
+    <div class="card" style="margin-top:1rem" id="camp-batches">
+      <h2><?= label_with_info('Send batches', 'Who marked emailed on a country sheet, and which named stretch (Batch A, Batch B). Mark up to here names a batch. Open shows the sites and emails still tagged to that stretch.') ?></h2>
+      <?php if ($projectBatchCount < 1): ?>
+        <p class="muted" style="margin:0">No send batches yet. On a country sheet, Mark up to here names a batch and records who marked it.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $projectBatchCount ?> batch<?= $projectBatchCount === 1 ? '' : 'es' ?>
+          on this project.
+          <?php if ($projectBatchCount > count($projectBatches)): ?>
+            Showing the <?= count($projectBatches) ?> most recent.
+          <?php endif; ?>
+        </p>
+        <div class="invoice-list-toolbar camp-hub-toolbar">
+          <label class="sheet-search" for="camp-project-batch-search">
+            <span class="visually-hidden">Search send batches</span>
+            <input id="camp-project-batch-search" type="search" placeholder="Find a batch, person, or country…"
+                   autocomplete="off" spellcheck="false" data-no-draft>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="extracted-country-table camp-hub-table" id="camp-project-batch-table">
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Country</th>
+                <th>Who</th>
+                <th class="num">Sites</th>
+                <th>When</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($projectBatches as $b):
+                $bName = (string) ($b['name'] ?? '');
+                $bCountry = (string) ($b['country'] ?? '');
+                $bWho = email_campaign_send_batch_who_label($b);
+                $bLive = (int) ($b['live_count'] ?? 0);
+                $bOrig = (int) ($b['site_count'] ?? 0);
+                $bWhen = (string) ($b['created_at'] ?? '');
+                $bSheet = (int) ($b['sheet_id'] ?? 0);
+                $bId = (int) ($b['id'] ?? 0);
+                $bHref = $bSheet > 0 && $bId > 0
+                    ? ($campBase . '&sheet=' . $bSheet . '&batch=' . $bId)
+                    : $projectForm;
+                $bCount = (string) $bLive . ($bOrig > 0 && $bOrig !== $bLive ? '/' . $bOrig : '');
+                $bHay = mb_strtolower($bName . ' ' . $bCountry . ' ' . $bWho);
+                ?>
+              <tr data-camp-batch-row data-search="<?= h($bHay) ?>">
+                <td><?= h($bName !== '' ? $bName : 'Untitled') ?></td>
+                <td><?= h($bCountry !== '' ? $bCountry : '—') ?></td>
+                <td><?= h($bWho !== '' && $bWho !== '—' ? $bWho : '—') ?></td>
+                <td class="num" title="Still marked / originally"><?= h($bCount) ?></td>
+                <td class="muted"><?= h($bWhen !== '' ? $bWhen : '—') ?></td>
+                <td class="num">
+                  <a class="btn secondary small" href="<?= h($bHref) ?>">Open</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <script>
+        (function () {
+          var input = document.getElementById('camp-project-batch-search');
+          if (!input) return;
+          input.addEventListener('input', function () {
+            var q = String(input.value || '').trim().toLowerCase();
+            document.querySelectorAll('[data-camp-batch-row]').forEach(function (row) {
+              row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+            });
+          });
+        })();
+        </script>
+      <?php endif; ?>
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-removed">

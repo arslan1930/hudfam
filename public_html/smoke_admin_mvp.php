@@ -1724,6 +1724,17 @@ if (!str_contains($campLib, 'function create_email_campaign_send_batch')
 } else {
     ok('campaign named send-batch stamp + prompt');
 }
+if (!str_contains($campApp, "render_sheet_tool_menu_open('Batches'")
+    || !str_contains($campApp, 'id="camp-batch-open"')
+    || !str_contains($campApp, "get('batch')")
+    || !str_contains($campApp, "post('batch')")
+    || !str_contains($campApp, 'id="camp-batches"')
+    || !str_contains($campApp, "'batch' => \$batchFilter")
+    || !str_contains($campLib, 'send_batch_id = ?')) {
+    fail('campaign missing Batches menu / open filter');
+} else {
+    ok('campaign Batches menu + open filter');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')

@@ -4557,18 +4557,45 @@ try {
         $listedNames = array_column($listed, 'name');
         $batchRows = list_email_campaign_send_batch_rows($batchAId);
         $batchDomains = array_column($batchRows, 'domain');
+        $filterBatch = email_campaign_rows_inventory_query($bSheet, ['batch' => $batchAId], 1, 100);
+        $filterDomains = array_column($filterBatch['rows'] ?? [], 'domain');
         if (
             in_array('Batch A', $listedNames, true)
             && in_array('Batch B', $listedNames, true)
             && in_array('txfcamp-batch-a.com', $batchDomains, true)
             && in_array('txfcamp-batch-b.com', $batchDomains, true)
             && !in_array('txfcamp-batch-c.com', $batchDomains, true)
+            && $filterDomains === $batchDomains
         ) {
             pass('campaign list send batches and Batch A rows');
         } else {
             fail('campaign list batches: ' . json_encode([
                 'names' => $listedNames,
                 'domains' => $batchDomains,
+                'filter' => $filterDomains,
+            ]));
+        }
+
+        $delA = delete_email_campaign_row($bSheet, $idA, true, $adminUser);
+        $goneA = get_email_campaign_row($idA, $bSheet);
+        $undoDel = sheet_history_apply_undo(sheet_history_key('campaign', (string) $bSheet));
+        $backA = get_email_campaign_row($idA, $bSheet);
+        if (
+            !empty($delA['ok'])
+            && !$goneA
+            && !empty($undoDel['ok'])
+            && (int) ($backA['email_sent'] ?? 0) === 1
+            && (int) ($backA['send_batch_id'] ?? 0) === $batchAId
+        ) {
+            pass('campaign undo remove restores send_batch_id');
+        } else {
+            fail('campaign undo remove batch: ' . json_encode([
+                'del' => $delA,
+                'gone' => $goneA ? 'still there' : null,
+                'undo' => $undoDel,
+                'backSent' => $backA['email_sent'] ?? null,
+                'backBatch' => $backA['send_batch_id'] ?? null,
+                'expect' => $batchAId,
             ]));
         }
 

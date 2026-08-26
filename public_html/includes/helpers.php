@@ -671,6 +671,10 @@ function render_sheet_shared_row_action_forms(string $actionUrl, string $prefix,
     if ($sent !== '') {
         $nav .= '<input type="hidden" name="sent" value="' . h($sent) . '">';
     }
+    $batch = (int) ($state['batch'] ?? 0);
+    if ($batch > 0) {
+        $nav .= '<input type="hidden" name="batch" value="' . $batch . '">';
+    }
     if ($filter !== '') {
         $nav .= '<input type="hidden" name="filter" value="' . h($filter) . '">';
     }
