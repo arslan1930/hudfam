@@ -25,6 +25,50 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+function txf_request_is_https(): bool
+{
+    if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') {
+        return true;
+    }
+    if ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+        return true;
+    }
+    return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+}
+
+/** HttpOnly + SameSite cookies. Call instead of bare session_start(). */
+function txf_secure_session_start(): void
+{
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        return;
+    }
+    if (PHP_SAPI !== 'cli' && !headers_sent()) {
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'secure' => txf_request_is_https(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+        header_remove('X-Powered-By');
+    }
+    session_start();
+}
+
+function txf_send_security_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    if (txf_request_is_https()) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+}
+
 /**
  * Hidden multi-line POST field (domain lists, notes, etc.).
  * Never put multi-line values in <input type="hidden"> — browsers turn

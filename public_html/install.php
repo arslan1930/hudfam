@@ -3,8 +3,9 @@
  * One-time installer for Hostinger shared hosting.
  * Open https://yourdomain.com/install.php then delete this file.
  */
-session_start();
 require_once __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+txf_send_security_headers();
 
 $error = '';
 $done = false;

@@ -12,7 +12,12 @@ if (current_user()) {
 }
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (attempt_login(trim(post('username')), (string) post('password'))) {
+    $userName = trim(post('username'));
+    $password = (string) post('password');
+    if (login_throttle_blocked($userName)) {
+        $error = 'Too many sign-in attempts. Wait a few minutes and try again.';
+    } elseif (attempt_login($userName, $password)) {
+        login_throttle_clear($userName);
         if (user_must_change_password()) {
             flash('error', 'Change your password before continuing.');
             redirect('index.php?page=account_password');
@@ -26,8 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'index.php?page=team_departments'
                 : 'index.php?page=team_dashboard'
         );
+    } else {
+        login_throttle_note_failure($userName);
+        $error = 'Invalid username or password.';
     }
-    $error = 'Invalid username or password.';
 }
 $app = app_config()['app_name'] ?? 'TechxForm';
 render_header('Login');
@@ -41,6 +48,7 @@ render_header('Login');
     <p class="muted">Shared site database — Admin manages Our database; Team filters and adds unique sites.</p>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
     <form method="post">
+      <?= csrf_field() ?>
       <label for="login_username">Username</label>
       <input id="login_username" type="text" name="username" required autofocus
              autocomplete="username"

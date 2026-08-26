@@ -5,9 +5,9 @@
  */
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
-session_start();
-
 require __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/account.php';
@@ -23,6 +23,7 @@ require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/semrush_research.php';
+require __DIR__ . '/includes/sheet_history.php';
 
 $errors = [];
 $ok = [];
@@ -2531,6 +2532,11 @@ try {
                 . ' email=' . json_encode($cEmailHits)
                 . ' contains=' . json_encode($cContainsHits));
         }
+        if (function_exists('login_throttle_blocked') && login_throttle_blocked('txf-no-such-user') === false) {
+            pass('login throttle allows first attempts');
+        } else {
+            fail('login throttle blocked a fresh login');
+        }
         db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcampsug-%'");
         db()->exec(
             "DELETE FROM email_campaign_sheets
@@ -3913,6 +3919,66 @@ try {
     }
 } catch (Throwable $e) {
     fail('users U-4: ' . $e->getMessage());
+}
+
+// --- Sheet undo / redo + bulk remove ---
+try {
+    $histSheet = create_email_campaign_sheet('Germany', (int) $adminUser['id'], 'TXF Undo Sheet', false);
+    $histKey = sheet_history_key('campaign', (string) $histSheet);
+    $_SESSION['sheet_history'][$histKey] = ['undo' => [], 'redo' => []];
+    $upA = upsert_email_campaign_row($histSheet, 'txfundo-a.be', [
+        'email1' => 'a@txfundo-a.be',
+        'email2' => '',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    $upB = upsert_email_campaign_row($histSheet, 'txfundo-b.be', [
+        'email1' => 'b@txfundo-b.be',
+        'email2' => '',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    $idA = (int) ($upA['id'] ?? 0);
+    $idB = (int) ($upB['id'] ?? 0);
+    $bulk = delete_email_campaign_rows_by_ids($histSheet, [$idA, $idB]);
+    $gone = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $histSheet
+        . " AND domain LIKE 'txfundo-%'"
+    )->fetchColumn();
+    $excluded = is_email_campaign_domain_excluded($histSheet, 'txfundo-a.be');
+    $undone = sheet_history_apply_undo($histKey);
+    $back = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $histSheet
+        . " AND domain LIKE 'txfundo-%'"
+    )->fetchColumn();
+    $excludedAfter = is_email_campaign_domain_excluded($histSheet, 'txfundo-a.be');
+    $redone = sheet_history_apply_redo($histKey);
+    $goneAgain = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $histSheet
+        . " AND domain LIKE 'txfundo-%'"
+    )->fetchColumn();
+    if (
+        !empty($bulk['ok']) && (int) $bulk['count'] === 2 && $gone === 0 && $excluded
+        && !empty($undone['ok']) && $back === 2 && !$excludedAfter
+        && !empty($redone['ok']) && $goneAgain === 0
+    ) {
+        pass('campaign bulk remove + undo restores rows and clears exclusions + redo');
+    } else {
+        fail('campaign undo/redo unexpected: ' . json_encode([
+            'bulk' => $bulk,
+            'gone' => $gone,
+            'excluded' => $excluded,
+            'undone' => $undone,
+            'back' => $back,
+            'excludedAfter' => $excludedAfter,
+            'redone' => $redone,
+            'goneAgain' => $goneAgain,
+        ]));
+    }
+    db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfundo-%'");
+    db()->prepare('DELETE FROM email_campaign_sheets WHERE id=?')->execute([$histSheet]);
+} catch (Throwable $e) {
+    fail('sheet undo/redo: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";

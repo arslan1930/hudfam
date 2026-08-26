@@ -364,9 +364,29 @@ function location(array $res): string
     return '';
 }
 
+function login_csrf_token(string $base): string
+{
+    $r = req('GET', $base . '/index.php?page=login');
+    if (preg_match('/name="_csrf"\s+value="([^"]+)"/', $r['body'], $m)) {
+        return html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+    }
+    return '';
+}
+
+function login_post(string $base, string $username, string $password): array
+{
+    return req('POST', $base . '/index.php?page=login', [
+        'body' => http_build_query([
+            'username' => $username,
+            'password' => $password,
+            '_csrf' => login_csrf_token($base),
+        ]),
+    ]);
+}
+
 // Login page
 $r = req('GET', $base . '/index.php?page=login');
-if ($r['status'] === 200 && str_contains($r['body'], 'name="username"')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_contains($r['body'], 'name="_csrf"')) {
     pass('login page');
 } else {
     fail('login page status=' . $r['status'] . ' err=' . $r['error']);
@@ -400,9 +420,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && (str_contains($loc, 'login') ||
 }
 
 // Bad login
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'admin', 'password' => 'wrong']),
-]);
+$r = login_post($base, 'admin', 'wrong');
 if ($r['status'] === 200 && (str_contains($r['body'], 'Invalid') || str_contains($r['body'], 'invalid'))) {
     pass('bad login stays on form');
 } else {
@@ -410,9 +428,7 @@ if ($r['status'] === 200 && (str_contains($r['body'], 'Invalid') || str_contains
 }
 
 // Admin login
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'admin', 'password' => 'TestAdmin9x']),
-]);
+$r = login_post($base, 'admin', 'TestAdmin9x');
 $loc = location($r);
 if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashboard')) {
     pass('admin login redirect');
@@ -499,9 +515,7 @@ if ($r['status'] === 200 && (str_contains($r['body'], 'Run upgrade') || str_cont
 
 // Logout + unassigned teammate (waiting dashboard — tools locked until Admin assigns)
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'teammate', 'password' => 'TestTeam8z']),
-]);
+$r = login_post($base, 'teammate', 'TestTeam8z');
 $loc = location($r);
 if ($r['status'] >= 300 && $r['status'] < 400 && (str_contains($loc, 'team_dashboard') || str_contains($loc, 'team_departments'))) {
     pass('team login redirect');
@@ -528,9 +542,7 @@ if ($r['status'] >= 300 && $r['status'] < 400
 
 // Dept-scoped finder can open Filter; cannot open Extracting
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'finder', 'password' => 'DeptTest9x']),
-]);
+$r = login_post($base, 'finder', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_prospect_check');
 if ($r['status'] === 200
     && (str_contains($r['body'], 'Filter') || str_contains($r['body'], 'Paste'))
@@ -557,9 +569,7 @@ if (($r['status'] >= 300 && str_contains($loc, 'team_departments')) || str_conta
 
 // Extractor can open Extracting
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'extractor', 'password' => 'DeptTest9x']),
-]);
+$r = login_post($base, 'extractor', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_extracting');
 if ($r['status'] === 200 && str_contains($r['body'], 'Extracting')) {
     pass('extractor can open Extracting');
@@ -569,9 +579,7 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Extracting')) {
 
 // Email Extracting folder shows tool shortcuts
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'emailer', 'password' => 'DeptTest9x']),
-]);
+$r = login_post($base, 'emailer', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_departments&folder=email_extracting');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Email Extracting tools')
@@ -604,9 +612,7 @@ if ($r['status'] >= 300 || str_contains($r['body'], 'only shows') || str_contain
 
 // Communication tools
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'comms', 'password' => 'DeptTest9x']),
-]);
+$r = login_post($base, 'comms', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_email_campaigns');
 if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')) {
     pass('comms can open Campaign search');

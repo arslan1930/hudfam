@@ -9,10 +9,11 @@
  *
  * Do NOT leave this file on the server.
  */
-session_start();
+require_once __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+txf_send_security_headers();
 header('Content-Type: text/html; charset=utf-8');
 
-require_once __DIR__ . '/includes/helpers.php';
 require_once __DIR__ . '/includes/db.php';
 
 $confirm = (string) ($_GET['confirm'] ?? '');

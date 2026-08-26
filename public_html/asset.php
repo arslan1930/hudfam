@@ -20,6 +20,7 @@ $allowed = [
     'js/semrush-sheet.js' => 'application/javascript; charset=utf-8',
     'js/email-field-clear.js' => 'application/javascript; charset=utf-8',
     'js/app-processing.js' => 'application/javascript; charset=utf-8',
+    'js/sheet-select-undo.js' => 'application/javascript; charset=utf-8',
     'js/stay-scroll.js' => 'application/javascript; charset=utf-8',
     'js/task-presence.js' => 'application/javascript; charset=utf-8',
     'js/draft-autosave.js' => 'application/javascript; charset=utf-8',

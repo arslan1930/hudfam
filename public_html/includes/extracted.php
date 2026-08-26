@@ -631,6 +631,87 @@ function delete_extracted_site(int $id): bool
 }
 
 /**
+ * @param list<int> $ids
+ * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
+ */
+function delete_extracted_sites_by_ids(string $country, array $ids): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $snaps = [];
+    $removed = [];
+    foreach ($ids as $id) {
+        $row = get_extracted_site($id);
+        if (!$row || (string) ($row['country'] ?? '') !== $country) {
+            continue;
+        }
+        $snaps[] = $row;
+        if (delete_extracted_site($id)) {
+            $removed[] = ['id' => $id, 'domain' => (string) ($row['domain'] ?? '')];
+        }
+    }
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('extracted', $country, $snaps);
+    }
+    if ($removed === []) {
+        return ['ok' => false, 'error' => 'No matching URLs to remove.', 'removed' => [], 'count' => 0];
+    }
+    return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param array<string,mixed> $snap
+ * @return array{ok:bool,id?:int,already?:bool,error?:string}
+ */
+function restore_extracted_site_snapshot(array $snap): array
+{
+    ensure_extracted_schema();
+    $country = (string) ($snap['country'] ?? '');
+    $domain = (string) ($snap['domain'] ?? '');
+    if ($country === '' || $domain === '') {
+        return ['ok' => false, 'error' => 'Invalid site.'];
+    }
+    $dup = db()->prepare('SELECT id FROM extracted_sites WHERE country=? AND domain=? LIMIT 1');
+    $dup->execute([$country, $domain]);
+    $existingId = (int) $dup->fetchColumn();
+    if ($existingId > 0) {
+        return ['ok' => true, 'id' => $existingId, 'already' => true];
+    }
+    $wantId = (int) ($snap['id'] ?? 0);
+    $url = (string) ($snap['url'] ?? '');
+    $language = (string) ($snap['language'] ?? '');
+    $region = (string) ($snap['region'] ?? '');
+    $notes = $snap['notes'] ?? null;
+    $batchId = $snap['extract_batch_id'] ?? null;
+    $batchId = $batchId !== null && $batchId !== '' ? (int) $batchId : null;
+    $pushedBy = $snap['pushed_by'] ?? null;
+    $pushedBy = $pushedBy !== null && $pushedBy !== '' ? (int) $pushedBy : null;
+    $created = trim((string) ($snap['created_at'] ?? ''));
+    $created = $created !== '' ? $created : null;
+    $cols = 'domain, url, country, language, region, notes, extract_batch_id, pushed_by, created_at';
+    $params = [$domain, $url, $country, $language, $region, $notes, $batchId, $pushedBy, $created];
+    $ph = '?,?,?,?,?,?,?,?,?';
+    try {
+        if ($wantId > 0) {
+            $chk = db()->prepare('SELECT id FROM extracted_sites WHERE id=? LIMIT 1');
+            $chk->execute([$wantId]);
+            if (!(int) $chk->fetchColumn()) {
+                db()->prepare("INSERT INTO extracted_sites (id, {$cols}) VALUES (?, {$ph})")->execute(array_merge([$wantId], $params));
+                return ['ok' => true, 'id' => $wantId];
+            }
+        }
+        db()->prepare("INSERT INTO extracted_sites ({$cols}) VALUES ({$ph})")->execute($params);
+        return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+    } catch (PDOException $e) {
+        $dup->execute([$country, $domain]);
+        $existingId = (int) $dup->fetchColumn();
+        if ($existingId > 0) {
+            return ['ok' => true, 'id' => $existingId, 'already' => true];
+        }
+        return ['ok' => false, 'error' => 'Could not restore URL.'];
+    }
+}
+
+/**
  * Delete every extracted site for a country.
  */
 function delete_extracted_sites_for_country(string $country): int

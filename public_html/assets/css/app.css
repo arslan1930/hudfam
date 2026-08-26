@@ -51,6 +51,9 @@
 .app-processing[hidden] {
   display: none !important;
 }
+html.is-page-loading #app-processing {
+  display: flex !important;
+}
 .app-processing-card {
   background: #fff;
   border: 1px solid var(--line, #d1d5db);
@@ -90,10 +93,75 @@ html.is-app-processing body {
 html.is-app-processing body {
   overflow: hidden;
 }
+html.is-page-loading,
+html.is-page-loading body {
+  cursor: progress;
+}
 #swe_status.is-loading {
   color: var(--brand-deep, #1f2937);
   border-color: #cfd4da;
   background: #f3f4f6;
+}
+
+.sheet-edit-toolbar {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.sheet-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
+}
+.sheet-history-btn .sheet-history-glyph {
+  display: block;
+  font-size: 1.2rem;
+  line-height: 1;
+  font-weight: 700;
+}
+.sheet-check input[type="checkbox"] {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: #374151;
+  opacity: 1;
+  visibility: visible;
+  cursor: pointer;
+}
+tr.is-sheet-selected td,
+li.is-sheet-selected {
+  background: #eef2f6;
+}
+.sheet-history-form {
+  display: none;
+}
+.sheet-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  cursor: pointer;
+}
+.sheet-check input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: #4b5563;
+}
+.swe-td-check,
+.sheet-td-check {
+  text-align: center;
+  vertical-align: middle;
+  width: 2.1rem;
+}
+.extracted-plain-item .sheet-check {
+  flex: 0 0 auto;
 }
 
 :root {
@@ -1211,12 +1279,16 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   vertical-align: middle;
 }
 .swe-table tbody tr:last-child td { border-bottom: none; }
-/* Faster scrolling on long country sheets (skip off-screen row work). */
-.swe-table tbody tr[data-swe-row] {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 3.75rem;
-}
 .swe-sheet-table .swe-col-site { min-width: 10rem; width: 16%; }
+.swe-sheet-table .swe-col-check,
+.sheet-col-check {
+  width: 2.1rem;
+  min-width: 2.1rem;
+  max-width: 2.4rem;
+  text-align: center;
+  padding-left: 0.45rem;
+  padding-right: 0.25rem;
+}
 .swe-sheet-table .swe-col-num { min-width: 2.25rem; width: 2.5rem; text-align: right; }
 .swe-sheet-table .swe-col-lang { min-width: 5.5rem; width: 8%; }
 .swe-sheet-table .swe-col-email { min-width: 9rem; width: 14%; }
@@ -4356,4 +4428,10 @@ textarea:focus-visible {
 }
 .password-toggle:hover {
   background: #f5f7fa;
+}
+
+/* Author display:flex/block rules beat the UA [hidden] stylesheet, so search
+   filters that set el.hidden would otherwise leave cards and rows visible. */
+[hidden] {
+  display: none !important;
 }

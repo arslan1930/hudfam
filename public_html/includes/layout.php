@@ -58,14 +58,27 @@ function render_header(string $title, string $panel = ''): void
     }
     // One stylesheet URL (asset.php) — avoid loading CSS twice (parse cost / jank).
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
+    echo '<style>';
+    echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(31,35,40,.42)}';
+    echo 'html.is-page-loading body{overflow:hidden}';
+    echo '</style>';
+    echo '<noscript><style>html.is-page-loading #app-processing{display:none!important}html.is-page-loading body{overflow:auto}</style></noscript>';
+    echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
     // Early scroll restore after same-page POST actions (before paint when possible).
     echo '<script>';
-    echo '(function(){try{var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
+    echo '(function(){try{document.documentElement.classList.add("is-page-loading");';
+    echo 'var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
     echo 'if(p&&y&&p===location.pathname+location.search){var t=parseInt(y,10)||0;if(t>0){';
     echo 'if("scrollRestoration" in history)history.scrollRestoration="manual";';
     echo 'window.scrollTo(0,t);}}}catch(e){}})();';
     echo '</script>';
     echo '</head><body>';
+    echo '<div id="app-processing" class="app-processing is-page-load" aria-busy="true" aria-live="assertive" role="alert">';
+    echo '<div class="app-processing-card">';
+    echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
+    echo '<p class="app-processing-msg" data-processing-msg>Loading…</p>';
+    echo '<p class="app-processing-sub muted" data-processing-sub>Please wait.</p>';
+    echo '</div></div>';
 
     if (!$user || $panel === '') {
         return;
@@ -284,7 +297,6 @@ function render_footer(string $panel = ''): void
             if ($panel === 'admin' || $panel === 'team') {
                 echo '<script src="' . h(script_asset_url('js/csrf.js')) . '"></script>';
             }
-            echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/stay-scroll.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/info-tips.js')) . '" defer></script>';
@@ -293,13 +305,6 @@ function render_footer(string $panel = ''): void
             echo '<script src="' . h(script_asset_url('js/alert-fade.js')) . '" defer></script>';
         }
         echo '</main></div>';
-        // Global Processing / Loading overlay (Admin + Team shell).
-        echo '<div id="app-processing" class="app-processing" hidden aria-busy="false" aria-live="assertive" role="alert">';
-        echo '<div class="app-processing-card">';
-        echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
-        echo '<p class="app-processing-msg" data-processing-msg>Processing…</p>';
-        echo '<p class="app-processing-sub muted">Please wait — do not close this page.</p>';
-        echo '</div></div>';
     }
     echo '</body></html>';
 }

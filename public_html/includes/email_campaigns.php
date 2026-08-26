@@ -2739,6 +2739,19 @@ function get_email_campaign_row(int $rowId, ?int $sheetId = null): ?array
     return $row ?: null;
 }
 
+function get_email_campaign_row_by_domain(int $sheetId, string $domainRaw): ?array
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    if ($sheetId < 1 || $domain === '') {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT * FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1');
+    $stmt->execute([$sheetId, $domain]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
 /**
  * Live suggestions within one country sheet.
  *
@@ -2894,7 +2907,7 @@ function search_email_campaign_suggestions_scoped(
             FROM email_campaign_rows r
             INNER JOIN email_campaign_sheets s ON s.id = r.sheet_id
             LEFT JOIN email_campaign_projects p ON p.id = s.project_id
-            WHERE LEFT(r.domain, 8) <> '__blank_'";
+            WHERE r.domain NOT LIKE '__blank_%'";
 
     $out = [];
     $seen = [];
@@ -3006,7 +3019,7 @@ function search_email_campaign_suggestions_scoped(
     return $out;
 }
 
-function delete_email_campaign_row(int $sheetId, int $rowId): array
+function delete_email_campaign_row(int $sheetId, int $rowId, bool $recordHistory = true): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -3021,7 +3034,101 @@ function delete_email_campaign_row(int $sheetId, int $rowId): array
         exclude_email_campaign_emails($sheetId, $domain, $emails);
     }
     db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+    if ($recordHistory && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('campaign', (string) $sheetId, [$row]);
+    }
     return ['ok' => true, 'domain' => $domain];
+}
+
+/**
+ * @param list<int> $ids
+ * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
+ */
+function delete_email_campaign_rows_by_ids(int $sheetId, array $ids): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $snaps = [];
+    $removed = [];
+    foreach ($ids as $id) {
+        $row = get_email_campaign_row($id, $sheetId);
+        if (!$row) {
+            continue;
+        }
+        $snaps[] = $row;
+        $del = delete_email_campaign_row($sheetId, $id, false);
+        if (!empty($del['ok'])) {
+            $removed[] = ['id' => $id, 'domain' => (string) ($del['domain'] ?? '')];
+        }
+    }
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('campaign', (string) $sheetId, $snaps);
+    }
+    if ($removed === []) {
+        return ['ok' => false, 'error' => 'No matching rows to remove.', 'removed' => [], 'count' => 0];
+    }
+    return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param array<string,mixed> $snap
+ * @return array{ok:bool,id?:int,already?:bool,error?:string}
+ */
+function restore_email_campaign_row_snapshot(int $sheetId, array $snap): array
+{
+    ensure_email_campaign_schema();
+    if ($sheetId < 1) {
+        return ['ok' => false, 'error' => 'Missing sheet.'];
+    }
+    $domain = normalize_email_campaign_domain((string) ($snap['domain'] ?? ''));
+    if ($domain === '') {
+        return ['ok' => false, 'error' => 'Invalid site.'];
+    }
+    if (!str_starts_with($domain, '__blank_') && function_exists('clear_email_campaign_domain_exclusion')) {
+        clear_email_campaign_domain_exclusion($sheetId, $domain);
+    }
+    $existing = get_email_campaign_row_by_domain($sheetId, $domain);
+    if ($existing) {
+        return ['ok' => true, 'id' => (int) $existing['id'], 'already' => true];
+    }
+    $wantId = (int) ($snap['id'] ?? 0);
+    $country = (string) ($snap['country'] ?? '');
+    $language = (string) ($snap['language'] ?? '');
+    $region = (string) ($snap['region'] ?? '');
+    $e1 = (string) ($snap['email1'] ?? '');
+    $e2 = (string) ($snap['email2'] ?? '');
+    $e3 = (string) ($snap['email3'] ?? '');
+    $e4 = (string) ($snap['email4'] ?? '');
+    $sent = (int) ($snap['email_sent'] ?? 0) === 1 ? 1 : 0;
+    $sentAt = trim((string) ($snap['email_sent_at'] ?? ''));
+    $sentAt = $sentAt !== '' ? $sentAt : null;
+    $created = trim((string) ($snap['created_at'] ?? ''));
+    $created = $created !== '' ? $created : null;
+    $cols = 'sheet_id, domain, country, language, region, email1, email2, email3, email4, email_sent, email_sent_at, created_at';
+    $vals = '?,?,?,?,?,?,?,?,?,?,?,?';
+    $params = [$sheetId, $domain, $country, $language, $region, $e1, $e2, $e3, $e4, $sent, $sentAt, $created];
+    try {
+        if ($wantId > 0) {
+            $chk = db()->prepare('SELECT id FROM email_campaign_rows WHERE id=? LIMIT 1');
+            $chk->execute([$wantId]);
+            if (!(int) $chk->fetchColumn()) {
+                db()->prepare(
+                    "INSERT INTO email_campaign_rows (id, {$cols}) VALUES (?, {$vals})"
+                )->execute(array_merge([$wantId], $params));
+                db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+                return ['ok' => true, 'id' => $wantId];
+            }
+        }
+        db()->prepare("INSERT INTO email_campaign_rows ({$cols}) VALUES ({$vals})")->execute($params);
+        $newId = (int) db()->lastInsertId();
+        db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+        return ['ok' => true, 'id' => $newId];
+    } catch (PDOException $e) {
+        $existing = get_email_campaign_row_by_domain($sheetId, $domain);
+        if ($existing) {
+            return ['ok' => true, 'id' => (int) $existing['id'], 'already' => true];
+        }
+        return ['ok' => false, 'error' => 'Could not restore site.'];
+    }
 }
 
 /**
