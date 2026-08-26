@@ -12,8 +12,6 @@ if (!isset($invoice) || !is_array($invoice)) {
 $items = $items ?? [];
 $editable = !empty($editable);
 $logo = topurlz_logo_url();
-$logoFile = asset_url('assets/img/topurlz-logo.png');
-$logoSvg = asset_url('assets/img/topurlz-logo.svg');
 $lineNo = 0;
 $adminNote = function_exists('invoice_admin_note')
     ? invoice_admin_note($invoice)
@@ -32,8 +30,7 @@ if ($editable && !$editRows) {
 ?>
 <article class="invoice-doc<?= $editable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-logohead">
-    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz"
-         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
+    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz" width="240" height="62">
   </header>
 
   <section class="invoice-doc-ids">

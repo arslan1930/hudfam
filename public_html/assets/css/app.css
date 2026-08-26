@@ -3810,7 +3810,7 @@ a.card.stat:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0.9rem 1.25rem 0.25rem;
+  padding: 1.15rem 1.35rem 0.9rem;
   background: #fff;
   border: 0;
   box-shadow: none;
@@ -3836,14 +3836,18 @@ a.card.stat:focus-visible {
   z-index: 0;
 }
 .invoice-doc-logo {
-  height: 52px;
+  height: 62px;
   width: auto;
-  max-width: 260px;
+  max-width: 300px;
   display: block;
   object-fit: contain;
-  border-radius: 10px;
+  object-position: left center;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 .invoice-doc-ids {
   display: flex;
@@ -4025,8 +4029,9 @@ a.card.stat:focus-visible {
 /* Keep the full invoice grid on the Print/PDF page (ignore narrow popup width). */
 .invoice-print-body .invoice-doc-logohead {
   display: flex !important;
+  align-items: center !important;
   justify-content: flex-start !important;
-  padding: 0.9rem 1.25rem 0.25rem !important;
+  padding: 1.15rem 1.35rem 0.9rem !important;
 }
 .invoice-print-body .invoice-doc-ids {
   display: flex !important;
@@ -4055,8 +4060,12 @@ a.card.stat:focus-visible {
   width: 100% !important;
 }
 .invoice-print-body .invoice-doc-logo {
-  height: 52px !important;
-  max-width: 260px !important;
+  height: 58px !important;
+  width: auto !important;
+  max-width: 280px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
+  border-radius: 0 !important;
 }
 .invoice-print-body .invoice-doc-admin-note {
   background: transparent;
@@ -4125,8 +4134,12 @@ a.card.stat:focus-visible {
     padding: 0.2rem 0 0 !important;
   }
   .invoice-doc-logo {
-    height: 48px !important;
-    max-width: 240px !important;
+    height: 56px !important;
+    width: auto !important;
+    max-width: 280px !important;
+    object-fit: contain !important;
+    object-position: left center !important;
+    border-radius: 0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -4199,7 +4212,7 @@ a.card.stat:focus-visible {
   body:not(.invoice-print-body) .invoice-party-from { border-right: none; border-bottom: 1px solid #dbe3ec; }
   body:not(.invoice-print-body) .invoice-doc-ids { flex-direction: column; gap: 0.65rem; }
   body:not(.invoice-print-body) .invoice-doc-table { table-layout: auto; }
-  body:not(.invoice-print-body) .invoice-doc-logo { height: 40px; max-width: 200px; }
+  body:not(.invoice-print-body) .invoice-doc-logo { height: 52px; max-width: 260px; }
 }
 
 /* =========================================================
