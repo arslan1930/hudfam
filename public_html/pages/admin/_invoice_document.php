@@ -31,7 +31,7 @@ if ($editable && !$editRows) {
 <article class="invoice-doc<?= $editable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-masthead">
     <div class="invoice-doc-logohead">
-      <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz" width="294" height="80">
+      <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz" width="308" height="80">
     </div>
     <section class="invoice-doc-ids">
       <div>
