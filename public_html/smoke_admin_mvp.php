@@ -2146,6 +2146,18 @@ if (!str_contains($extractBatchUi, 'id="extract_push_btn"')
 } else {
     ok('Extracting Push is a filled commit button');
 }
+$invDoc = file_get_contents($root . '/pages/admin/_invoice_document.php') ?: '';
+if (!is_file($root . '/assets/img/topurlz-logo.png')
+    || !str_contains($invDoc, 'invoice-doc-masthead')
+    || !str_contains($invDoc, 'invoice-doc-logo')
+    || !str_contains($cssUi, 'object-position: left center')
+    || !str_contains($cssUi, '.invoice-doc-masthead')
+    || str_contains($cssUi, '.invoice-doc-logo {\n  height: 52px')
+    || str_contains($cssUi, '.invoice-doc-logo {\n  height: 62px')) {
+    fail('invoice topUrlz logo alignment CSS/PNG missing');
+} else {
+    ok('invoice topUrlz logo PNG + masthead alignment');
+}
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";
 exit($failures === 0 ? 0 : 1);

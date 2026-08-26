@@ -12,8 +12,6 @@ if (!isset($invoice) || !is_array($invoice)) {
 $items = $items ?? [];
 $editable = !empty($editable);
 $logo = topurlz_logo_url();
-$logoFile = asset_url('assets/img/topurlz-logo.png');
-$logoSvg = asset_url('assets/img/topurlz-logo.svg');
 $lineNo = 0;
 $adminNote = function_exists('invoice_admin_note')
     ? invoice_admin_note($invoice)
@@ -31,36 +29,36 @@ if ($editable && !$editRows) {
 }
 ?>
 <article class="invoice-doc<?= $editable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
-  <header class="invoice-doc-logohead">
-    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz"
-         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
+  <header class="invoice-doc-masthead">
+    <div class="invoice-doc-logohead">
+      <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz" width="308" height="80">
+    </div>
+    <section class="invoice-doc-ids">
+      <div>
+        <span class="invoice-k">Invoice No.</span>
+        <strong><?= h($invoice['invoice_number']) ?></strong>
+        <?php if ($editable): ?>
+          <label class="visually-hidden" for="admin_note">Note</label>
+          <div class="invoice-note-box invoice-doc-note-box has-note" data-invoice-note-box data-note-always-open>
+            <textarea id="admin_note" class="invoice-edit-note" name="admin_note" maxlength="255"
+                      rows="2" placeholder="Write a note…" data-note-input
+                      data-no-draft><?= h($adminNote) ?></textarea>
+          </div>
+        <?php elseif ($adminNote !== ''): ?>
+          <div class="invoice-doc-admin-note"><?= nl2br(h($adminNote), false) ?></div>
+        <?php endif; ?>
+      </div>
+      <div>
+        <span class="invoice-k">Date</span>
+        <?php if ($editable): ?>
+          <input class="invoice-edit-date" name="invoice_date" type="date"
+                 value="<?= h((string) $invoice['invoice_date']) ?>" required>
+        <?php else: ?>
+          <strong><?= h(format_invoice_date((string) $invoice['invoice_date'])) ?></strong>
+        <?php endif; ?>
+      </div>
+    </section>
   </header>
-
-  <section class="invoice-doc-ids">
-    <div>
-      <span class="invoice-k">Invoice No.</span>
-      <strong><?= h($invoice['invoice_number']) ?></strong>
-      <?php if ($editable): ?>
-        <label class="visually-hidden" for="admin_note">Note</label>
-        <div class="invoice-note-box invoice-doc-note-box has-note" data-invoice-note-box data-note-always-open>
-          <textarea id="admin_note" class="invoice-edit-note" name="admin_note" maxlength="255"
-                    rows="2" placeholder="Write a note…" data-note-input
-                    data-no-draft><?= h($adminNote) ?></textarea>
-        </div>
-      <?php elseif ($adminNote !== ''): ?>
-        <div class="invoice-doc-admin-note"><?= nl2br(h($adminNote), false) ?></div>
-      <?php endif; ?>
-    </div>
-    <div>
-      <span class="invoice-k">Date</span>
-      <?php if ($editable): ?>
-        <input class="invoice-edit-date" name="invoice_date" type="date"
-               value="<?= h((string) $invoice['invoice_date']) ?>" required>
-      <?php else: ?>
-        <strong><?= h(format_invoice_date((string) $invoice['invoice_date'])) ?></strong>
-      <?php endif; ?>
-    </div>
-  </section>
 
   <section class="invoice-doc-parties">
     <div class="invoice-party invoice-party-from">
