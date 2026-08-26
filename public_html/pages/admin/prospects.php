@@ -42,6 +42,8 @@ if (!$emptyCountry && $sheet !== '' && $sheet !== 'all') {
     }
     $sheet = $canonSheet['name'];
 }
+$inCountry = ($sheet !== '' && $sheet !== 'all');
+
 $filterCreatedBy = (int) get('created_by');
 if ($filterCreatedBy < 1 && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $filterCreatedBy = (int) post('created_by');
