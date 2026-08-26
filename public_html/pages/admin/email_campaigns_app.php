@@ -501,6 +501,7 @@ if ($sheetId > 0) {
             $excludedDomainSet[$d] = true;
         }
     }
+    $whoMap = map_email_campaign_latest_event_who($sheetId);
     $formAction = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
     $domainsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=domains';
     $domainsExportUnsentUrl = $domainsExportUrl . '&sent=0';
@@ -949,7 +950,7 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-excluded">
-      <h2><?= label_with_info('Previously removed', 'Sites and emails deleted from this Email Sheet (by Admin or Communication Team) stay blocked from import, paste, and + Add. Allow again if a removal was a mistake.') ?></h2>
+      <h2><?= label_with_info('Previously removed', 'Sites and emails deleted from this Email Sheet (by Admin or Communication Team) stay blocked from import, paste, and + Add. Who is the person who last deleted that site or email. Allow again does not erase the name — it only lets the site/email be added again.') ?></h2>
 
       <h3 style="margin:0.85rem 0 0.45rem;font-size:1rem">Sites</h3>
       <?php if ($excludedCount < 1): ?>
@@ -967,14 +968,19 @@ if ($sheetId > 0) {
             <thead>
               <tr>
                 <th>Site</th>
+                <th>Who</th>
                 <th>Removed</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-            <?php foreach ($excludedDomains as $ex): ?>
+            <?php foreach ($excludedDomains as $ex):
+                $exDomain = (string) $ex['domain'];
+                $exWho = email_campaign_who_for_exclusion($whoMap, 'delete_site', $exDomain);
+                ?>
               <tr>
-                <td><code><?= h((string) $ex['domain']) ?></code></td>
+                <td><code><?= h($exDomain) ?></code></td>
+                <td><?= h($exWho) ?></td>
                 <td class="muted"><?= h((string) $ex['excluded_at']) ?></td>
                 <td class="num">
                   <form method="post" action="<?= h($formAction) ?>" style="display:inline"
@@ -1011,6 +1017,7 @@ if ($sheetId > 0) {
               <tr>
                 <th>Site</th>
                 <th>Email</th>
+                <th>Who</th>
                 <th>Removed</th>
                 <th></th>
               </tr>
@@ -1030,6 +1037,7 @@ if ($sheetId > 0) {
                 $emDomain = (string) ($exEm['domain'] ?? '');
                 $emAddr = (string) ($exEm['email'] ?? '');
                 $siteAlsoBlocked = isset($excludedDomainSet[$emDomain]);
+                $emWho = email_campaign_who_for_exclusion($whoMap, 'remove_email', $emDomain, $emAddr);
                 ?>
               <tr>
                 <td>
@@ -1039,6 +1047,7 @@ if ($sheetId > 0) {
                   <?php endif; ?>
                 </td>
                 <td><code><?= h($emAddr) ?></code></td>
+                <td><?= h($emWho) ?></td>
                 <td class="muted"><?= h((string) ($exEm['excluded_at'] ?? '')) ?></td>
                 <td class="num">
                   <form method="post" action="<?= h($formAction) ?>" style="display:inline"
@@ -1081,7 +1090,8 @@ if ($sheetId > 0) {
       <p class="help">
         <?php if ($teamVisible): ?>
           Communication Team sees one search bar for project <strong><?= h($projectName) ?></strong>
-          covering every country in it. Deletes that match <strong><?= h($sheetCountry) ?></strong> update this sheet.
+          covering every country in it. Deletes that match <strong><?= h($sheetCountry) ?></strong> update this sheet
+          and show under <a href="#camp-excluded">Previously removed</a> with who deleted them.
         <?php else: ?>
           Communication Team search is <strong>hidden</strong> for this project.
           Turn it on from
@@ -1402,6 +1412,8 @@ if ($projectIdParam > 0) {
         $editDraft = null;
         $editDraftId = 0;
     }
+    $removedEvents = list_email_campaign_row_events(null, $projectIdParam, 200);
+    $removedCount = count_email_campaign_row_events(null, $projectIdParam);
 
     render_header($projectName, 'admin');
     render_breadcrumbs([
@@ -1418,6 +1430,9 @@ if ($projectIdParam > 0) {
           <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
           · <?= (int) $siteTotal ?> site<?= (int) $siteTotal === 1 ? '' : 's' ?>
           · Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
+          <?php if ($removedCount > 0): ?>
+            · <a href="#camp-removed"><?= (int) $removedCount ?> removed</a>
+          <?php endif; ?>
         </p>
       </div>
       <div class="actions">
@@ -1748,6 +1763,84 @@ if ($projectIdParam > 0) {
         </section>
       </aside>
     </div>
+
+    <div class="card" style="margin-top:1rem" id="camp-removed">
+      <h2><?= label_with_info('Removed', 'Who deleted a site or email on any country sheet in this project. Communication Team share one search bar — this list is how Admin sees who removed what. Allow again on a country sheet does not erase these rows.') ?></h2>
+      <?php if ($removedCount < 1): ?>
+        <p class="muted" style="margin:0">Nothing removed yet. Team or Admin deletes from a country sheet appear here with the site name and who did it.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $removedCount ?> removal<?= $removedCount === 1 ? '' : 's' ?>
+          recorded on this project.
+          <?php if ($removedCount > count($removedEvents)): ?>
+            Showing the <?= count($removedEvents) ?> most recent.
+          <?php endif; ?>
+        </p>
+        <div class="invoice-list-toolbar camp-hub-toolbar">
+          <label class="sheet-search" for="camp-project-removed-search">
+            <span class="visually-hidden">Search removed sites</span>
+            <input id="camp-project-removed-search" type="search" placeholder="Find a site, email, or person…"
+                   autocomplete="off" spellcheck="false" data-no-draft>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="extracted-country-table camp-hub-table" id="camp-project-removed-table">
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th>Site</th>
+                <th>What</th>
+                <th>Who</th>
+                <th>When</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($removedEvents as $ev):
+                $evCountry = (string) ($ev['country'] ?? '');
+                $evDomain = (string) ($ev['domain'] ?? '');
+                $evEmail = (string) ($ev['email'] ?? '');
+                $evAction = (string) ($ev['action'] ?? '');
+                $evWhat = $evAction === 'remove_email'
+                    ? ('Email · ' . ($evEmail !== '' ? $evEmail : '—'))
+                    : 'Site';
+                $evWho = email_campaign_event_who_label($ev);
+                $evWhen = (string) ($ev['created_at'] ?? '');
+                $evSheet = (int) ($ev['sheet_id'] ?? 0);
+                $evHref = $evSheet > 0
+                    ? ($campBase . '&sheet=' . $evSheet . '#camp-excluded')
+                    : $projectForm;
+                $evHay = mb_strtolower($evCountry . ' ' . $evDomain . ' ' . $evEmail . ' ' . $evWhat . ' ' . $evWho);
+                ?>
+              <tr data-camp-removed-row data-search="<?= h($evHay) ?>">
+                <td><?= h($evCountry !== '' ? $evCountry : '—') ?></td>
+                <td><code><?= h($evDomain !== '' ? $evDomain : '—') ?></code></td>
+                <td><?= h($evWhat) ?></td>
+                <td><?= h($evWho) ?></td>
+                <td class="muted"><?= h($evWhen !== '' ? $evWhen : '—') ?></td>
+                <td class="num">
+                  <a class="btn secondary small" href="<?= h($evHref) ?>">Open</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <script>
+        (function () {
+          var input = document.getElementById('camp-project-removed-search');
+          if (!input) return;
+          input.addEventListener('input', function () {
+            var q = String(input.value || '').trim().toLowerCase();
+            document.querySelectorAll('[data-camp-removed-row]').forEach(function (row) {
+              row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+            });
+          });
+        })();
+        </script>
+      <?php endif; ?>
+    </div>
+
     <script src="<?= h(script_asset_url('js/email-campaign-drafts.js')) ?>" defer></script>
     <?php
     render_footer('admin');

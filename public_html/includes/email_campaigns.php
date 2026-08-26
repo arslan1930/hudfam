@@ -1106,6 +1106,26 @@ function email_campaign_event_who_label(array $event): string
 }
 
 /**
+ * Who last deleted this excluded site (or this excluded email).
+ *
+ * @param array{delete_site:array<string,array<string,mixed>>,remove_email:array<string,array<string,mixed>>} $whoMap
+ */
+function email_campaign_who_for_exclusion(array $whoMap, string $action, string $domain, string $email = ''): string
+{
+    $ev = null;
+    if ($action === 'remove_email') {
+        $ev = $whoMap['remove_email'][$domain . "\0" . $email] ?? null;
+        // Whole-site delete stamps delete_site only; still show who on tombstoned emails.
+        if (!is_array($ev)) {
+            $ev = $whoMap['delete_site'][$domain] ?? null;
+        }
+    } else {
+        $ev = $whoMap['delete_site'][$domain] ?? null;
+    }
+    return is_array($ev) ? email_campaign_event_who_label($ev) : '—';
+}
+
+/**
  * Sheet "name" is always the canonical country name.
  */
 function email_campaign_sheet_country(array $sheet): string

@@ -4389,6 +4389,7 @@ try {
     $beforeAllow = count_email_campaign_row_events($whoSheet);
     clear_email_campaign_domain_exclusion($whoSheet, 'txfcamp-who-del.de');
     $afterAllow = count_email_campaign_row_events($whoSheet);
+    $whoExpect = email_campaign_event_who_label($teamUser);
     if (
         !empty($rmWho['ok']) && empty($rmWho['row_deleted'])
         && $emailHit && (int) ($emailHit['user_id'] ?? 0) === (int) $teamUser['id']
@@ -4397,6 +4398,23 @@ try {
         && $siteHit && (int) ($siteHit['user_id'] ?? 0) === (int) $teamUser['id']
         && ($siteHit['domain'] ?? '') === 'txfcamp-who-del.de'
         && $beforeAllow === $afterAllow && $afterAllow >= 2
+        && email_campaign_who_for_exclusion(
+            map_email_campaign_latest_event_who($whoSheet),
+            'delete_site',
+            'txfcamp-who-del.de'
+        ) === $whoExpect
+        && email_campaign_who_for_exclusion(
+            map_email_campaign_latest_event_who($whoSheet),
+            'remove_email',
+            'txfcamp-who-del.de',
+            'drop@txfcamp-who-del.de'
+        ) === $whoExpect
+        && email_campaign_who_for_exclusion(
+            map_email_campaign_latest_event_who($whoSheet),
+            'remove_email',
+            'txfcamp-who-del.de',
+            'keep@txfcamp-who-del.de'
+        ) === $whoExpect
     ) {
         pass('campaign delete events stamp teammate and survive Allow again');
     } else {

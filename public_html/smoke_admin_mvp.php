@@ -1698,6 +1698,15 @@ if (!str_contains($campLib, 'function record_email_campaign_row_event')
 } else {
     ok('campaign delete-who event stamp');
 }
+if (!str_contains($campLib, 'function email_campaign_who_for_exclusion')
+    || !str_contains($campApp, 'email_campaign_who_for_exclusion($whoMap, \'delete_site\'')
+    || !str_contains($campApp, 'email_campaign_who_for_exclusion($whoMap, \'remove_email\'')
+    || !str_contains($campApp, 'id="camp-removed"')
+    || !str_contains($campApp, '<th>Who</th>')) {
+    fail('campaign missing delete-who Admin UI');
+} else {
+    ok('campaign delete-who Admin UI');
+}
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
 $orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')
