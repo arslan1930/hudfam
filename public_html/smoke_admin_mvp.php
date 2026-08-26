@@ -140,6 +140,20 @@ if (!str_contains($usersPage, 'function users_list_url')
 } else {
     ok('users.php save keeps filters + stacked edit form');
 }
+if (!str_contains($usersPage, 'users_like_escape')
+    || !str_contains($usersPage, 'Username cannot contain spaces')
+    || !str_contains($usersPage, 'LOWER(username) = LOWER(?)')
+    || !str_contains($usersPage, 'ESCAPE')) {
+    fail('users.php missing username uniqueness / LIKE escape');
+} else {
+    ok('users.php username unique pre-check + escaped search');
+}
+$helpersLike = file_get_contents($root . '/includes/helpers.php') ?: '';
+if (!str_contains($helpersLike, 'function users_like_escape')) {
+    fail('helpers missing users_like_escape');
+} else {
+    ok('helpers users_like_escape');
+}
 if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPage = 50')) {
     fail('users.php missing 50/page pagination');
 } else {
