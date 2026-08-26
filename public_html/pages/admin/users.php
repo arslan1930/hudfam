@@ -647,7 +647,7 @@ render_header('Admins & users', 'admin');
             <span class="muted">—</span>
           <?php endif; ?>
         </td>
-        <td><?php if (!empty($u['must_change_password'])): ?><span class="badge sent">Must change</span><?php endif; ?></td>
+        <td><?php if (!empty($u['must_change_password'])): ?><span class="badge sent">Must change</span><?php else: ?><span class="muted">—</span><?php endif; ?></td>
         <td><?php if ($isActive): ?><span class="badge active">Active</span><?php else: ?><span class="badge skipped">Inactive</span><?php endif; ?></td>
         <td class="actions">
           <a href="<?= h($usersListQs(['edit' => (string) $uid, 'p' => (string) $pageNum])) ?>">Edit</a>

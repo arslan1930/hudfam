@@ -241,6 +241,12 @@ if (!str_contains($usersPage, 'users-row-editing')
 } else {
     ok('users.php stay-on-edit, row highlight, pills, Edit-only');
 }
+$appCssUsers = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($appCssUsers, '.badge.users-pill-awaiting')) {
+    fail('app.css Awaiting pill must beat .badge background (use .badge.users-pill-awaiting)');
+} else {
+    ok('app.css Awaiting pill specificity');
+}
 if (!str_contains($usersPage, 'name="q"') || !str_contains($usersPage, 'users_role')) {
     fail('users.php missing search/role filters');
 } else {
