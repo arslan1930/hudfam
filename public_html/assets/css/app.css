@@ -3805,12 +3805,22 @@ a.card.stat:focus-visible {
   line-height: 1.45;
   overflow: hidden;
 }
-/* Shared by sheet + blank invoices: logo only, no gradient header bar. */
+/* Shared by sheet + blank invoices: logo left, invoice no/date right. */
+.invoice-doc-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem 2rem;
+  padding: 1.15rem 1.35rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #dbe3ec;
+}
 .invoice-doc-logohead {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 1.15rem 1.35rem 0.9rem;
+  flex: 0 0 auto;
+  padding: 0;
   background: #fff;
   border: 0;
   box-shadow: none;
@@ -3836,9 +3846,9 @@ a.card.stat:focus-visible {
   z-index: 0;
 }
 .invoice-doc-logo {
-  height: 62px;
+  height: 80px;
   width: auto;
-  max-width: 300px;
+  max-width: 340px;
   display: block;
   object-fit: contain;
   object-position: left center;
@@ -3846,17 +3856,21 @@ a.card.stat:focus-visible {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  flex-shrink: 0;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 .invoice-doc-ids {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.25rem 2rem;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 0.85rem 1.35rem;
-  border-bottom: 1px solid #dbe3ec;
+  gap: 1.25rem 2.25rem;
+  justify-content: flex-end;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  padding: 0;
+  border-bottom: 0;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.92rem;
   background: #fff;
@@ -4027,19 +4041,29 @@ a.card.stat:focus-visible {
   overflow: visible;
 }
 /* Keep the full invoice grid on the Print/PDF page (ignore narrow popup width). */
+.invoice-print-body .invoice-doc-masthead {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1.25rem 2rem !important;
+  padding: 1.05rem 1.35rem 0.95rem !important;
+}
 .invoice-print-body .invoice-doc-logohead {
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  padding: 1.15rem 1.35rem 0.9rem !important;
+  padding: 0 !important;
 }
 .invoice-print-body .invoice-doc-ids {
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: wrap !important;
-  justify-content: space-between !important;
+  justify-content: flex-end !important;
   align-items: flex-start !important;
-  gap: 1.25rem 2rem !important;
+  gap: 1.25rem 2.25rem !important;
+  margin-left: auto !important;
+  padding: 0 !important;
 }
 .invoice-print-body .invoice-doc-parties {
   display: grid !important;
@@ -4060,9 +4084,9 @@ a.card.stat:focus-visible {
   width: 100% !important;
 }
 .invoice-print-body .invoice-doc-logo {
-  height: 58px !important;
+  height: 72px !important;
   width: auto !important;
-  max-width: 280px !important;
+  max-width: 320px !important;
   object-fit: contain !important;
   object-position: left center !important;
   border-radius: 0 !important;
@@ -4099,15 +4123,23 @@ a.card.stat:focus-visible {
     width: 100% !important;
     overflow: visible !important;
   }
+  .invoice-doc-masthead {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
   .invoice-doc-logohead {
     display: flex !important;
     justify-content: flex-start !important;
+    padding: 0 !important;
   }
   .invoice-doc-ids {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
-    justify-content: space-between !important;
+    justify-content: flex-end !important;
+    padding: 0 !important;
   }
   .invoice-doc-parties {
     display: grid !important;
@@ -4134,9 +4166,9 @@ a.card.stat:focus-visible {
     padding: 0.2rem 0 0 !important;
   }
   .invoice-doc-logo {
-    height: 56px !important;
+    height: 68px !important;
     width: auto !important;
-    max-width: 280px !important;
+    max-width: 300px !important;
     object-fit: contain !important;
     object-position: left center !important;
     border-radius: 0 !important;
@@ -4210,9 +4242,20 @@ a.card.stat:focus-visible {
   body:not(.invoice-print-body) .invoice-doc-parties,
   body:not(.invoice-print-body) .invoice-doc-summary { grid-template-columns: 1fr; }
   body:not(.invoice-print-body) .invoice-party-from { border-right: none; border-bottom: 1px solid #dbe3ec; }
-  body:not(.invoice-print-body) .invoice-doc-ids { flex-direction: column; gap: 0.65rem; }
+  body:not(.invoice-print-body) .invoice-doc-masthead {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  body:not(.invoice-print-body) .invoice-doc-ids {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
+    width: 100%;
+    gap: 0.65rem 1.5rem;
+  }
   body:not(.invoice-print-body) .invoice-doc-table { table-layout: auto; }
-  body:not(.invoice-print-body) .invoice-doc-logo { height: 52px; max-width: 260px; }
+  body:not(.invoice-print-body) .invoice-doc-logo { height: 64px; max-width: 280px; }
 }
 
 /* =========================================================
