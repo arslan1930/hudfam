@@ -29,6 +29,8 @@ $requiredFiles = [
     'includes/sheet_history.php',
     'assets/js/sheet-select-undo.js',
     'includes/prospects.php',
+    'includes/prospect_niches.php',
+    'assets/js/niche-chips.js',
     'pages/account_password.php',
     'pages/admin/dashboard.php',
     'pages/admin/prospect_batches.php',
@@ -48,7 +50,7 @@ foreach ($requiredFiles as $rel) {
 }
 
 $asset = file_get_contents($root . '/asset.php') ?: '';
-foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js'] as $key) {
+foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js'] as $key) {
     if (!str_contains($asset, $key)) {
         fail("asset.php missing allowlist {$key}");
     } else {
@@ -402,6 +404,32 @@ if (!str_contains($adminProspects, 'prospect-match-actions')
     fail('Our database missing match actions beside search / AJAX rows helper');
 } else {
     ok('Our database match actions beside search + AJAX rows');
+}
+$nichesLib = file_get_contents($root . '/includes/prospect_niches.php') ?: '';
+$nicheJs = file_get_contents($root . '/assets/js/niche-chips.js') ?: '';
+$teamCheck = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
+$histDay = file_get_contents($root . '/pages/admin/prospect_batch.php') ?: '';
+if (!str_contains($nichesLib, 'function prospect_parse_niches')
+    || !str_contains($nichesLib, 'function render_niche_chip_box')
+    || !str_contains($nichesLib, 'function render_prospect_niche_filter_bar')
+    || !str_contains($prospectsLib, 'require_once __DIR__ . \'/prospect_niches.php\'')
+    || !str_contains($prospectsLib, 'VARCHAR(512)')
+    || !str_contains($adminProspects, '<th>Niche</th><th>Domain</th>')
+    || !str_contains($adminProspects, 'render_prospect_niche_filter_bar')
+    || !str_contains($adminProspects, "post('action') === 'save_niche'")
+    || !str_contains($adminProspects, 'No niche')
+    || !str_contains($adminProspects, 'prospect_niche_taxonomy_script')
+    || !str_contains($adminProspects, 'niche_chips_script_tag')
+    || !str_contains($adminProspects, '<th>Niche</th>')
+    || !str_contains($teamCheck, 'render_niche_chip_box')
+    || !str_contains($histDay, 'render_niche_chip_box')
+    || !str_contains($nicheJs, 'data-niche-remove')
+    || !str_contains($nicheJs, 'save_niche')
+    || !str_contains($nicheJs, 'prospect-niche-menu-search')
+    || !str_contains($assetPhp, 'js/niche-chips.js')) {
+    fail('Our database missing multi-niche chips / filter / autosave');
+} else {
+    ok('Our database multi-niche chips + filter + autosave');
 }
 if (!str_contains($prospectsLib, 'function prospect_export_basename')
     || !str_contains($prospectsLib, '-our-database')
@@ -1408,7 +1436,7 @@ foreach ([
     'department_stats overdue_count',
     'departments dashboard stats',
     'assignee cannot change someone else task status',
-    'prospect_site_rows_html has no Status column',
+    'prospect_site_rows_html Niche before Domain, no Status',
     'edit keeps historical assignee after remove',
 ] as $needle) {
     if (!str_contains($testsFull, $needle)) {

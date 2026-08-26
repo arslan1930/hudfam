@@ -2934,6 +2934,130 @@ tr.swe-row-updated {
 }
 .typeahead-help { margin: 0.35rem 0 0; }
 
+/* Our database — multi-niche chip box */
+.niche-chip-box {
+  position: relative;
+  min-width: 9.5rem;
+}
+.niche-chip-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 2.15rem;
+  padding: 0.22rem 0.4rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.niche-chip-box.is-compact .niche-chip-control {
+  min-height: 1.85rem;
+  padding: 0.14rem 0.32rem;
+  border-radius: 8px;
+}
+.niche-chip-box:focus-within .niche-chip-control {
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.08);
+}
+.niche-chip-list {
+  display: contents;
+}
+.niche-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  max-width: 100%;
+  padding: 0.08rem 0.18rem 0.08rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2f6;
+  border: 1px solid #d5dbe3;
+  color: var(--brand-deep);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.niche-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.niche-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.niche-chip-x:hover,
+.niche-chip-x:focus-visible {
+  background: #dbe3ec;
+  color: var(--brand-deep);
+}
+.niche-chip-input {
+  flex: 1 1 5.5rem;
+  min-width: 4.5rem;
+  width: auto;
+  margin: 0;
+  padding: 0.12rem 0.15rem;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+}
+.niche-chip-suggest {
+  z-index: 50;
+}
+.prospect-niche-td {
+  min-width: 11rem;
+  vertical-align: middle;
+}
+.prospect-niche-filters {
+  margin: 0 !important;
+}
+.niche-filter-menu > .sheet-tool-menu-panel {
+  min-width: 18.5rem;
+  max-height: 22rem;
+  overflow: auto;
+  right: 0;
+  left: auto;
+}
+.niche-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin-bottom: 0.45rem;
+}
+.niche-filter-group-label {
+  flex: 1 0 100%;
+  margin: 0.15rem 0 0.05rem;
+  font-weight: 700;
+}
+.niche-filter-item.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: 1px;
+}
+.super-search-table .niche-chip-box.is-compact .niche-chip-control {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+}
+.super-search-table .niche-chip-x,
+.super-search-table .niche-chip-input {
+  display: none;
+}
+
 .domains-paste-head {
   display: flex;
   align-items: center;

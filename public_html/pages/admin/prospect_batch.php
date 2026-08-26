@@ -150,9 +150,14 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
         <label>Region</label>
         <input name="region" value="<?= h((string) ($batch['region'] ?? '')) ?>">
       </div>
-      <div>
-        <label>Niche</label>
-        <input name="niche" value="<?= h((string) ($batch['niche'] ?? '')) ?>">
+      <div class="full" style="grid-column:1/-1">
+        <label for="history_niche_q">Niche</label>
+        <?= render_niche_chip_box((string) ($batch['niche'] ?? ''), [
+            'name' => 'niche',
+            'id' => 'history_niche',
+            'placeholder' => 'Type a niche, Enter to add',
+        ]) ?>
+        <p class="help">English niches for this history day. Type to add, × to remove.</p>
       </div>
     </div>
     <label>Notes</label>
@@ -163,6 +168,8 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
   </form>
 </div>
 <?= sites_form_script_tag() ?>
+<?= prospect_niche_taxonomy_script() ?>
+<?= niche_chips_script_tag() ?>
 
 <div class="card" id="history_sites_shell" data-post-url="<?= h($postUrl) ?>">
   <div class="topbar" style="margin-bottom:0.75rem">
