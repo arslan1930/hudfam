@@ -916,6 +916,12 @@ h2 {
   margin-bottom: 0.35rem;
 }
 .grid { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.users-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
 .stat strong { display: block; font-size: 1.5rem; font-family: var(--font); color: var(--brand-deep); }
 .btn, button.btn {
   display: inline-flex;
@@ -4187,6 +4193,7 @@ a.card.stat:focus-visible {
     max-width: 6.5rem;
   }
   .form-grid { grid-template-columns: 1fr; }
+  .users-layout { grid-template-columns: 1fr; }
   .glossary-list > div { grid-template-columns: 1fr; gap: 0.15rem; }
   .panel-guide-grid { grid-template-columns: 1fr; }
   .orders-layout { grid-template-columns: 1fr; }
