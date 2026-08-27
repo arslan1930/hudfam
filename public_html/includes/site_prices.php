@@ -1579,11 +1579,10 @@ function render_site_price_sheet_tbody(array $rows, array $viewer, ?array $laneC
     $isAdmin = ($viewer['role'] ?? '') === 'admin';
     foreach ($groups as $lane => $items) {
         $count = $laneCounts[$lane] ?? count($items);
-        if ($items === [] && ($laneCounts === null || (int) $count === 0)) {
-            $html .= render_site_price_lane_header($lane, 0, $isAdmin);
-            continue;
-        }
-        if ($items === [] && $laneCounts !== null) {
+        if ($items === []) {
+            if ($laneCounts === null) {
+                $html .= render_site_price_lane_header($lane, 0, $isAdmin);
+            }
             continue;
         }
         $html .= render_site_price_lane_header($lane, (int) $count, $isAdmin);
