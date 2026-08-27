@@ -1662,9 +1662,12 @@ function render_site_price_sheet_row(array $row, array $viewer): string
         . ' data-added-by="' . h((string) ($view['added_by_label'] ?? '')) . '"'
         . ' data-search="' . h($hay) . '">';
 
-    $html .= '<td class="site-price-check-td" data-label="">'
-        . '<input type="checkbox" class="site-price-check" data-site-price-select data-no-draft'
-        . ' data-domain="' . h($domain) . '" aria-label="Select ' . h($domain) . '"></td>';
+    $html .= '<td class="site-price-check-td" data-label="">';
+    if ($isAdmin) {
+        $html .= '<input type="checkbox" class="site-price-check" data-site-price-select data-no-draft'
+            . ' data-domain="' . h($domain) . '" aria-label="Select ' . h($domain) . '">';
+    }
+    $html .= '</td>';
 
     $html .= '<td data-label="Website">';
     if ($locked) {
@@ -1675,6 +1678,10 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     } else {
         $html .= '<input type="text" class="site-price-input" data-site-price-domain value="' . h($domain) . '"'
             . ' autocomplete="off" spellcheck="false" data-no-draft aria-label="Website">';
+    }
+    if (!$isAdmin && $domain !== '') {
+        $html .= ' <button type="button" class="btn secondary small" data-site-price-copy-one data-domain="'
+            . h($domain) . '" title="Copy this website" aria-label="Copy ' . h($domain) . '">Copy</button>';
     }
     $html .= '</td>';
 
@@ -1913,7 +1920,7 @@ function render_site_price_filters(
     }
     $html .= '</div>';
     $html .= '<div class="actions">';
-    $html .= render_site_price_toolbar();
+    $html .= render_site_price_toolbar($isAdmin);
     if ($country !== '') {
         $html .= render_site_price_per_page_filter($pageKey, $country, $perPage, $filters);
     }
@@ -1948,31 +1955,34 @@ function site_price_sheet_pack(
     return $pack;
 }
 
-function render_site_price_jump_bar(string $preset = ''): string
+function render_site_price_jump_bar(string $preset = '', bool $isAdmin = true): string
 {
-    $open = trim($preset) !== '' ? ' open' : '';
-    $html = '<details class="site-price-jump-wrap"' . $open . '>';
-    $html .= '<summary class="btn-link">Find in other countries</summary>';
-    $html .= '<div class="site-price-jump" data-site-price-jump>';
+    if (!$isAdmin) {
+        return '';
+    }
+    $html = '<div class="site-price-jump-wrap site-price-jump-top" data-site-price-jump>';
     $html .= '<label class="sheet-search" for="site-price-jump-q" style="margin:0">';
     $html .= '<span class="visually-hidden">Search all countries</span>';
     $html .= '<input id="site-price-jump-q" type="search" data-site-price-jump-q value="' . h($preset) . '"'
         . ' placeholder="Search all countries…" autocomplete="off" spellcheck="false" data-no-draft'
-        . ' title="Search every country, then jump to the matching row">';
+        . ' title="Search every country sheet, then open the matching row">';
     $html .= '</label>';
-    $html .= '<button type="button" class="btn secondary small" data-site-price-jump-go>Jump</button>';
+    $html .= '<button type="button" class="btn" data-site-price-jump-go>Search</button>';
     $html .= '<span class="muted site-price-jump-status" data-site-price-jump-status></span>';
     $html .= '<button type="button" class="btn-link" data-site-price-jump-prev hidden>Prev</button>';
     $html .= '<button type="button" class="btn-link" data-site-price-jump-next hidden>Next</button>';
+    $html .= '<ul class="site-price-jump-results" data-site-price-jump-results hidden></ul>';
     $html .= '</div>';
-    $html .= '</details>';
     return $html;
 }
 
-function render_site_price_toolbar(): string
+function render_site_price_toolbar(bool $isAdmin = true): string
 {
+    if (!$isAdmin) {
+        return '';
+    }
     $html = '<button type="button" class="btn secondary small" data-site-price-copy-selected'
-        . ' title="Copies ticked websites on this page.">Copy selected</button>';
+        . ' title="Copies ticked websites on this page (not every site).">Copy selected</button>';
     return $html;
 }
 
@@ -2123,6 +2133,9 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         $perPagePost = resolve_site_price_per_page();
         $pagePost = max(1, (int) post('p', get('p', 1)));
         if ($action === 'jump_search') {
+            if (!$isAdmin) {
+                $jsonOut(['ok' => false, 'error' => 'Only Admin can search all countries.'], 403);
+            }
             try {
                 $matches = site_price_jump_search((string) post('q'), $pageKey, $perPagePost);
                 $jsonOut([
@@ -2338,6 +2351,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
       </div>
     </div>
 
+    <?= $isAdmin ? render_site_price_jump_bar((string) get('jump'), true) : '' ?>
     <?= render_site_price_filters(
         $user,
         $pack['all'] ?? $rows,
@@ -2347,7 +2361,6 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         $filters,
         ['matching' => (int) $total, 'total_all' => (int) ($pack['total_all'] ?? $total)]
     ) ?>
-    <?= render_site_price_jump_bar((string) get('jump')) ?>
     <div class="site-price-switcher">
       <?= render_site_price_country_tabs($countryName, $pageKey, ['per_page' => $perPage]) ?>
     </div>
@@ -2376,7 +2389,9 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
           <thead>
             <tr>
               <th class="site-price-check-th">
+                <?php if ($isAdmin): ?>
                 <input type="checkbox" data-site-price-select-all data-no-draft aria-label="Select visible rows">
+                <?php endif; ?>
               </th>
               <th>Website</th>
               <th>Niche</th>
@@ -2430,8 +2445,15 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
       in <?= count($folders) ?> countr<?= count($folders) === 1 ? 'y' : 'ies' ?>.
       Open a country to see that sheet.
     </p>
+    <?php if ($isAdmin): ?>
+    <p class="help site-price-status-msg" data-site-price-status-msg role="status" hidden></p>
+    <?php endif; ?>
   </div>
 </div>
+
+<?php if ($isAdmin): ?>
+<?= render_site_price_jump_bar('', true) ?>
+<?php endif; ?>
 
 <?= guide_site_prices() ?>
 
@@ -2541,6 +2563,9 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
   });
 })();
 </script>
+<?php endif; ?>
+<?php if ($isAdmin): ?>
+    <?= site_prices_script_tag() ?>
 <?php endif; ?>
     <?php
     render_footer($panel);
