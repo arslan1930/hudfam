@@ -754,7 +754,8 @@ try {
 
     $adminHtml = render_site_price_sheet_tbody([$relocked], $adminUser);
     $teamHtml = render_site_price_sheet_tbody([$relocked], $teamUser);
-    $pageSrc = (string) file_get_contents(__DIR__ . '/pages/admin/site_prices.php');
+    $pageSrc = (string) file_get_contents(__DIR__ . '/pages/admin/site_prices.php')
+        . (string) file_get_contents(__DIR__ . '/includes/site_prices.php');
     $noExport = !preg_match('/Copy all|Download \.txt|Download CSV/', $pageSrc)
         && !str_contains($adminHtml, 'Copy all')
         && !str_contains($teamHtml, 'Copy all');
@@ -888,6 +889,87 @@ try {
         pass('site_price custom status delete when unused');
     } else {
         fail('site_price custom status lingered');
+    }
+
+    db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
+    db()->exec("DELETE FROM site_price_statuses WHERE slug LIKE 'follow_up_txf' OR slug LIKE 'txfprice%'");
+
+    $idPeople = site_price_add_row_for_user([
+        'country' => $country,
+        'domain' => 'txfprice-people.de',
+        'price_note' => '40 euro',
+    ], $teamUser);
+    $idPeople = (int) ($idPeople['id'] ?? 0);
+    $fresh = get_site_price_row($idPeople) ?: [];
+    $teamClaimFail = false;
+    try {
+        site_price_claim_row($idPeople, $teamUser);
+    } catch (RuntimeException $e) {
+        $teamClaimFail = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $claimed = site_price_claim_row($idPeople, $adminUser);
+    $adminName = (string) ($adminUser['username'] ?? '');
+    $adminFull = trim((string) (($adminUser['full_name'] ?? '') ?: $adminName));
+    $eventsAdmin = list_site_price_events($idPeople, $adminUser);
+    $eventsTeam = list_site_price_events($idPeople, $teamUser);
+    $teamHistHtml = render_site_price_history_html($idPeople, $teamUser);
+    $adminHistHtml = render_site_price_history_html($idPeople, $adminUser);
+    $teamActorAdmin = false;
+    $teamLeakedActor = false;
+    foreach ($eventsTeam as $ev) {
+        if ((string) ($ev['kind'] ?? '') === 'manage' || (string) ($ev['actor_role'] ?? '') === 'admin') {
+            if ((string) ($ev['actor_label'] ?? '') === 'Admin') {
+                $teamActorAdmin = true;
+            }
+        }
+        if (isset($ev['actor_id']) || isset($ev['actor_username']) || isset($ev['actor_full'])) {
+            $teamLeakedActor = true;
+        }
+        if ($adminName !== '' && str_contains((string) ($ev['actor_label'] ?? ''), $adminName)) {
+            $teamLeakedActor = true;
+        }
+    }
+    $peopleAdmin = render_site_price_sheet_row($claimed, $adminUser);
+    $peopleTeam = render_site_price_sheet_row($claimed, $teamUser);
+    $tabs = render_site_price_country_tabs($country, 'admin_site_prices');
+    $tabsTeam = render_site_price_country_tabs($country, 'team_site_prices');
+    $savedByAdmin = site_price_save_row($idPeople, ['extra_note' => 'mgr'], $adminUser);
+    $claimOk = $teamClaimFail
+        && (int) ($fresh['managed_by'] ?? 0) === 0
+        && (int) ($claimed['managed_by'] ?? 0) === (int) ($adminUser['id'] ?? 0)
+        && (int) ($savedByAdmin['managed_by'] ?? 0) === (int) ($adminUser['id'] ?? 0);
+    $histOk = $teamActorAdmin && !$teamLeakedActor
+        && str_contains($teamHistHtml, 'Admin')
+        && ($adminName === '' || !str_contains($teamHistHtml, $adminName))
+        && ($adminFull === '' || $adminFull === 'Admin' || !str_contains($teamHistHtml, $adminFull))
+        && str_contains($adminHistHtml, 'Took as manager');
+    $peopleOk = str_contains($peopleAdmin, 'Added by')
+        && str_contains($peopleAdmin, 'Managed by')
+        && str_contains($peopleAdmin, 'Take')
+        && str_contains($peopleAdmin, 'History')
+        && str_contains($peopleTeam, 'Added by')
+        && str_contains($peopleTeam, 'History')
+        && !str_contains($peopleTeam, 'Managed by')
+        && !str_contains($peopleTeam, 'Take')
+        && ($adminName === '' || !str_contains($peopleTeam, $adminName));
+    $tabsOk = str_contains($tabs, 'site-price-country-tabs')
+        && str_contains($tabs, $country)
+        && str_contains($tabs, 'page=admin_site_prices')
+        && str_contains($tabsTeam, 'page=team_site_prices')
+        && str_contains($pageSrc, 'People');
+    if ($claimOk && $histOk && $peopleOk && $tabsOk) {
+        pass('site_price people + history hide admin names + country tabs');
+    } else {
+        fail('site_price people/history/tabs: ' . json_encode([
+            'claim' => $claimOk,
+            'hist' => $histOk,
+            'people' => $peopleOk,
+            'tabs' => $tabsOk,
+            'managed' => $claimed['managed_by'] ?? null,
+            'fresh_mgr' => $fresh['managed_by'] ?? null,
+            'team_actor' => $teamActorAdmin,
+            'leak' => $teamLeakedActor,
+        ]));
     }
 
     db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");

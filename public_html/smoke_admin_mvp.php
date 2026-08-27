@@ -241,18 +241,19 @@ $ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 $invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
 $accountHubGuide = file_get_contents($root . '/pages/admin/account.php') ?: '';
 $sitePricesHubGuide = file_get_contents($root . '/pages/admin/site_prices.php') ?: '';
+$sitePricesLib = file_get_contents($root . '/includes/site_prices.php') ?: '';
 if (!str_contains($ordersHubGuide, 'guide_orders()')
     || !str_contains($invoicesHubGuide, 'guide_invoices()')
     || !str_contains($accountHubGuide, 'guide_admin_account()')
-    || !str_contains($sitePricesHubGuide, 'guide_site_prices()')
-    || !str_contains($sitePricesHubGuide, 'Open a country sheet')
-    || !str_contains($sitePricesHubGuide, 'data-site-price-sheet')
-    || !str_contains($sitePricesHubGuide, 'data-no-draft')) {
+    || !str_contains($sitePricesHubGuide, 'site_price_run_page')
+    || !str_contains($sitePricesLib, 'guide_site_prices()')
+    || !str_contains($sitePricesLib, 'Open a country sheet')
+    || !str_contains($sitePricesLib, 'data-site-price-sheet')
+    || !str_contains($sitePricesLib, 'data-no-draft')) {
     fail('Office hubs missing page-purpose guide calls');
 } else {
     ok('Office hubs echo Orders/Invoices/Account/Website prices guides');
 }
-$sitePricesLib = file_get_contents($root . '/includes/site_prices.php') ?: '';
 $schemaSql = file_get_contents($root . '/sql/schema.sql') ?: '';
 $upgradePhp = file_get_contents($root . '/upgrade.php') ?: '';
 $indexPhp = file_get_contents($root . '/index.php') ?: '';
@@ -277,11 +278,13 @@ if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
 $sitePricesJs = file_get_contents($root . '/assets/js/site-prices.js') ?: '';
 $sitePricesCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 $assetPrices = file_get_contents($root . '/asset.php') ?: '';
-if (!str_contains($sitePricesHubGuide, "'save_row'")
-    || !str_contains($sitePricesHubGuide, "'unlock_row'")
-    || !str_contains($sitePricesHubGuide, 'site_prices_script_tag')
+if (!str_contains($sitePricesLib, "'save_row'")
+    || !str_contains($sitePricesLib, "'unlock_row'")
+    || !str_contains($sitePricesLib, 'site_prices_script_tag')
     || str_contains($sitePricesHubGuide, 'Copy all')
+    || str_contains($sitePricesLib, 'Copy all')
     || preg_match('/Download \.txt|Download CSV/', $sitePricesHubGuide)
+    || preg_match('/Download \.txt|Download CSV/', $sitePricesLib)
     || !str_contains($sitePricesLib, 'data-site-price-add')
     || !str_contains($sitePricesLib, 'Unlock')
     || !str_contains($sitePricesJs, "post('save_row'")
@@ -293,9 +296,9 @@ if (!str_contains($sitePricesHubGuide, "'save_row'")
 } else {
     ok('Website prices add-row + per-row save + identity lock');
 }
-if (!str_contains($sitePricesHubGuide, "'reorder_lane'")
-    || !str_contains($sitePricesHubGuide, "'add_status'")
-    || !str_contains($sitePricesHubGuide, 'status-words')
+if (!str_contains($sitePricesLib, "'reorder_lane'")
+    || !str_contains($sitePricesLib, "'add_status'")
+    || !str_contains($sitePricesLib, 'status-words')
     || !str_contains($sitePricesLib, 'function site_price_add_custom_status')
     || !str_contains($sitePricesLib, 'function site_price_reorder_lane')
     || !str_contains($sitePricesLib, 'data-site-price-lane')
@@ -306,6 +309,21 @@ if (!str_contains($sitePricesHubGuide, "'reorder_lane'")
     fail('Website prices lanes / custom statuses / Admin drag missing');
 } else {
     ok('Website prices lanes + custom statuses + Admin drag');
+}
+if (!str_contains($sitePricesLib, 'function site_price_claim_row')
+    || !str_contains($sitePricesLib, 'function render_site_price_history_html')
+    || !str_contains($sitePricesLib, 'function render_site_price_country_tabs')
+    || !str_contains($sitePricesLib, 'site-price-country-tabs')
+    || !str_contains($sitePricesLib, "'claim_row'")
+    || !str_contains($sitePricesLib, "'row_history'")
+    || !str_contains($sitePricesLib, '>People</th>')
+    || !str_contains($sitePricesJs, "post('row_history'")
+    || !str_contains($sitePricesJs, "post('claim_row'")
+    || !str_contains($sitePricesCss, '.site-price-country-tabs')
+    || !str_contains($sitePricesCss, '.site-price-people')) {
+    fail('Website prices people / history / country tabs missing');
+} else {
+    ok('Website prices people + history + country tabs');
 }
 foreach ([
     'guide_campaign_search',

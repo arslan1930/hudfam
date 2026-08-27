@@ -5223,6 +5223,45 @@ textarea:focus-visible {
 .site-price-status-add {
   max-width: 28rem;
 }
+.site-price-people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 8.5rem;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+.site-price-people-line {
+  white-space: nowrap;
+}
+.site-price-people-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.1rem;
+}
+.site-price-history {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+}
+.site-price-history li + li {
+  margin-top: 0.2rem;
+}
+.site-price-history-row td {
+  background: #f6f8fb;
+  padding: 0.55rem 0.75rem;
+}
+.site-price-country-tabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 0.85rem;
+  padding: 0.5rem 0.65rem 0.65rem;
+  background: #fff;
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.06);
+}
 @media (max-width: 899px) {
   table.sheet-cards-mobile tr.site-price-lane {
     padding: 0.4rem 0.7rem;
@@ -5233,6 +5272,12 @@ textarea:focus-visible {
     justify-content: flex-start;
   }
   table.sheet-cards-mobile tr.site-price-lane td::before {
+    content: none;
+  }
+  table.sheet-cards-mobile tr.site-price-history-row td {
+    display: block;
+  }
+  table.sheet-cards-mobile tr.site-price-history-row td::before {
     content: none;
   }
 }
