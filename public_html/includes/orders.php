@@ -1523,6 +1523,57 @@ function order_pipeline_export_rows(array $items): array
     return $out;
 }
 
+/**
+ * Unique trimmed LIVE URLs, first-seen order.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<string>
+ */
+function order_live_urls_from_rows(array $rows): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        $url = trim((string) ($row['live_url'] ?? ''));
+        if ($url === '' || isset($out[$url])) {
+            continue;
+        }
+        $out[$url] = $url;
+    }
+    return array_values($out);
+}
+
+/**
+ * Unique trimmed site names, first-seen order.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<string>
+ */
+function order_site_names_from_rows(array $rows): array
+{
+    $out = [];
+    foreach ($rows as $row) {
+        $site = trim((string) ($row['site_name'] ?? ''));
+        if ($site === '' || isset($out[$site])) {
+            continue;
+        }
+        $out[$site] = $site;
+    }
+    return array_values($out);
+}
+
+function order_pipeline_download_txt(array $urls): void
+{
+    $filename = 'order-live-urls-' . date('Y-m-d') . '.txt';
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    echo implode("\n", $urls);
+    if ($urls) {
+        echo "\n";
+    }
+}
+
 function order_pipeline_download_csv(array $rows): void
 {
     $filename = 'order-sheet-' . date('Y-m-d') . '.csv';

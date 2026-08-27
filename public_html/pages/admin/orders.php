@@ -75,8 +75,12 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
         $bits[] = 'p=' . $p;
     }
     $download = strtolower(trim((string) ($params['download'] ?? '')));
-    if ($download === 'csv' || $download === 'xls' || $download === 'excel') {
+    if ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt') {
         $bits[] = 'download=' . rawurlencode($download);
+    }
+    $copy = strtolower(trim((string) ($params['copy'] ?? '')));
+    if ($copy === 'live_urls') {
+        $bits[] = 'copy=' . rawurlencode($copy);
     }
     return 'index.php?' . implode('&', $bits);
 };
@@ -92,13 +96,23 @@ $listOpts = [
 ];
 
 $download = strtolower((string) get('download'));
-if ($folder !== '' && ($download === 'csv' || $download === 'xls' || $download === 'excel')) {
-    $exportRows = order_pipeline_export_rows(list_order_pipeline_rows($listOpts));
-    if ($download === 'csv') {
-        order_pipeline_download_csv($exportRows);
+if ($folder !== '' && ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt')) {
+    $exportItems = list_order_pipeline_rows($listOpts);
+    if ($download === 'txt') {
+        order_pipeline_download_txt(order_live_urls_from_rows($exportItems));
+    } elseif ($download === 'csv') {
+        order_pipeline_download_csv(order_pipeline_export_rows($exportItems));
     } else {
-        order_pipeline_download_xls($exportRows);
+        order_pipeline_download_xls(order_pipeline_export_rows($exportItems));
     }
+    exit;
+}
+
+$copyMode = strtolower(trim((string) get('copy')));
+if ($folder !== '' && $copyMode === 'live_urls') {
+    header('Content-Type: application/json; charset=utf-8');
+    $urls = order_live_urls_from_rows(list_order_pipeline_rows($listOpts));
+    echo json_encode(['ok' => true, 'urls' => $urls, 'n' => count($urls)]);
     exit;
 }
 
@@ -503,22 +517,35 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </div>
     <div class="actions">
       <?php if ($isProcessing): ?>
+        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites</button>
+        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs</button>
+        <button class="btn secondary" type="button" data-copy-all-live
+                data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
         <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
       <?php else: ?>
+        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs</button>
+        <button class="btn secondary" type="button" data-copy-all-live
+                data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
+        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites</button>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
       <?php endif; ?>
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     </div>
   </div>
+  <p class="muted" id="order-copy-status" style="margin:0.35rem 0 0" hidden></p>
 
   <div class="order-sheet-scroll">
     <table class="order-sheet">
       <thead>
         <tr>
           <th class="col-check">
-            <label class="visually-hidden" for="order-select-all">Select all on this page</label>
-            <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL on this page' : 'Select all unpaid LIVE on this page' ?>">
+            <div class="order-check-heads">
+              <label class="visually-hidden" for="order-copy-all">Select all on this page for copy</label>
+              <input type="checkbox" id="order-copy-all" title="Select all on this page for copy" data-no-draft>
+              <label class="visually-hidden" for="order-select-all">Select all for complete or invoice</label>
+              <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
+            </div>
           </th>
           <th class="col-num">#</th>
           <th class="col-country"><?= label_with_info('Country', 'Country name for this order.') ?></th>
@@ -579,12 +606,16 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
             data-row id="row-<?= $id ?>">
           <td class="col-check">
-            <input type="checkbox" name="item_ids[]" value="<?= $id ?>"
-                   <?= ($isProcessing ? $canComplete : $canPush) ? '' : 'disabled' ?>
-                   title="<?= $isProcessing
-                       ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL before marking completed')
-                       : ($canPush ? 'Push this unpaid LIVE row to an invoice' : 'Only unpaid completed rows can be pushed') ?>"
-                   data-push-check>
+            <div class="order-check-pair">
+              <input type="checkbox" value="<?= $id ?>" data-copy-check data-no-draft
+                     title="Select for copy" aria-label="Select <?= h($row['site_name'] !== '' ? $row['site_name'] : 'row') ?> for copy">
+              <input type="checkbox" name="item_ids[]" value="<?= $id ?>"
+                     <?= ($isProcessing ? $canComplete : $canPush) ? '' : 'disabled' ?>
+                     title="<?= $isProcessing
+                         ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL before marking completed')
+                         : ($canPush ? 'Push this unpaid LIVE row to an invoice' : 'Only unpaid completed rows can be pushed') ?>"
+                     data-push-check>
+            </div>
           </td>
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
           <td class="col-country">
@@ -793,11 +824,12 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 <div class="card order-download-bar" id="sheet-download">
   <div>
     <strong>Download this sheet</strong>
-    <p class="muted" style="margin:0.25rem 0 0">Export matching rows (all pages of this filter) for Excel or spreadsheets.</p>
+    <p class="muted" style="margin:0.25rem 0 0">CSV and Excel are the full sheet (this folder and filter, all pages). .txt is live URLs only, one per line.</p>
   </div>
   <div class="actions">
     <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'csv'])) ?>">Download CSV</a>
     <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'xls'])) ?>">Download Excel</a>
+    <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'txt'])) ?>">Download .txt</a>
   </div>
 </div>
 
@@ -922,6 +954,128 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   var isDraftIgnored = function (el) {
     return !!(el && el.closest && el.closest('[data-no-draft]'));
   };
+
+  function setCopyStatus(msg, isError) {
+    var el = document.getElementById('order-copy-status');
+    if (!el) return;
+    el.hidden = !msg;
+    el.textContent = msg || '';
+    el.style.color = isError ? '#a32020' : '';
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }).catch(function () { return false; });
+    }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return Promise.resolve(!!ok);
+    } catch (err) {
+      return Promise.resolve(false);
+    }
+  }
+  function uniqueList(items) {
+    var seen = {};
+    var out = [];
+    items.forEach(function (v) {
+      v = String(v || '').trim();
+      if (!v || seen[v]) return;
+      seen[v] = true;
+      out.push(v);
+    });
+    return out;
+  }
+  function copySelected(kind) {
+    var values = [];
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var box = row.querySelector('[data-copy-check]');
+      if (!box || !box.checked) return;
+      if (kind === 'sites') {
+        var site = row.querySelector('[name^="site_name"]');
+        values.push(site ? site.value : '');
+      } else {
+        var live = row.querySelector('[data-live]');
+        values.push(live ? live.value : '');
+      }
+    });
+    values = uniqueList(values);
+    if (!values.length) {
+      setCopyStatus(
+        kind === 'sites'
+          ? 'Tick at least one row with a site name.'
+          : 'Tick at least one row that has a live URL.',
+        true
+      );
+      return;
+    }
+    copyText(values.join('\n')).then(function (ok) {
+      if (!ok) {
+        setCopyStatus('Could not copy.', true);
+        return;
+      }
+      var noun = kind === 'sites' ? 'site' : 'live URL';
+      setCopyStatus('Copied ' + values.length + ' ' + noun + (values.length === 1 ? '' : (kind === 'sites' ? 's' : 's')) + '.', false);
+    });
+  }
+  function copyAllLive(btn) {
+    var url = btn.getAttribute('data-copy-url') || '';
+    if (!url) {
+      setCopyStatus('Could not copy.', true);
+      return;
+    }
+    setCopyStatus('Copying…', false);
+    fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var urls = uniqueList((data && data.urls) || []);
+        if (!urls.length) {
+          setCopyStatus('No live URLs in this folder/filter.', true);
+          return;
+        }
+        return copyText(urls.join('\n')).then(function (ok) {
+          if (!ok) setCopyStatus('Could not copy.', true);
+          else setCopyStatus('Copied ' + urls.length + ' live URL' + (urls.length === 1 ? '' : 's') + '.', false);
+        });
+      })
+      .catch(function () {
+        setCopyStatus('Could not copy. Use Download .txt if the list is large.', true);
+      });
+  }
+
+  form.querySelectorAll('[data-copy-selected-sites]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      copySelected('sites');
+    });
+  });
+  form.querySelectorAll('[data-copy-selected-live]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      copySelected('live');
+    });
+  });
+  form.querySelectorAll('[data-copy-all-live]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      copyAllLive(btn);
+    });
+  });
+
+  var copyAll = document.getElementById('order-copy-all');
+  if (copyAll) {
+    copyAll.addEventListener('change', function () {
+      document.querySelectorAll('[data-copy-check]').forEach(function (cb) {
+        cb.checked = copyAll.checked;
+      });
+    });
+  }
 
   form.addEventListener('submit', function (e) {
     var actionEl = document.getElementById('sheet-action');

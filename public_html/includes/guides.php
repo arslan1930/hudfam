@@ -243,6 +243,7 @@ function guide_orders(): string
         'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices.',
         [
             'Processing: rows from Website prices Processing, or + Add order. Fill LIVE URL, then Mark completed — saving a live URL does not complete the row.',
+            'Copy selected sites or live URLs from ticked copy boxes. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet.',
             'Completed: unpaid until Paid. Tick rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.',
             'Team Website prices shows the Completed status only — never LIVE URL, owner/decided/profit, client email/name, or invoices.',
         ]

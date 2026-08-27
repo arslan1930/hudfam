@@ -510,10 +510,57 @@ foreach ($sheetNeedles as $n) {
 if ($r['status'] === 200 && !$sheetBad
     && !str_contains($r['body'], 'Fatal error')
     && !str_contains($r['body'], 'Warning:')
-    && !str_contains($r['body'], 'Copy all')) {
+    && !str_contains($r['body'], 'Copy all')
+    && !str_contains($r['body'], 'Copy selected live URLs')
+    && !str_contains($r['body'], 'download=txt')) {
     pass('admin_site_prices Germany sheet');
 } else {
     fail('admin_site_prices Germany status=' . $r['status'] . ' missing=' . implode(',', $sheetBad));
+}
+
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
+$omCopyNeedles = ['Copy selected sites', 'Copy selected live URLs', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order'];
+$omCopyBad = [];
+foreach ($omCopyNeedles as $n) {
+    if (!str_contains($r['body'], $n)) {
+        $omCopyBad[] = $n;
+    }
+}
+if ($r['status'] === 200 && !$omCopyBad && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin orders processing copy/download');
+} else {
+    fail('admin orders processing copy status=' . $r['status'] . ' missing=' . implode(',', $omCopyBad));
+}
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=completed');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Copy selected live URLs')
+    && str_contains($r['body'], 'Copy all live URLs')
+    && str_contains($r['body'], 'Copy selected sites')
+    && str_contains($r['body'], 'Push to invoice')
+    && str_contains($r['body'], 'Download .txt')) {
+    pass('admin orders completed copy/download');
+} else {
+    fail('admin orders completed copy status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&copy=live_urls');
+$copyJson = json_decode($r['body'], true);
+if ($r['status'] === 200
+    && str_contains($r['headers'], 'application/json')
+    && is_array($copyJson)
+    && !empty($copyJson['ok'])
+    && isset($copyJson['urls'])
+    && is_array($copyJson['urls'])) {
+    pass('admin orders copy=live_urls JSON');
+} else {
+    fail('admin orders copy=live_urls status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&download=txt');
+if ($r['status'] === 200
+    && str_contains($r['headers'], 'text/plain')
+    && str_contains($r['headers'], 'order-live-urls-')) {
+    pass('admin orders download=txt');
+} else {
+    fail('admin orders download=txt status=' . $r['status']);
 }
 
 // Bare admin_extracted should hop into the country-list folder
@@ -592,6 +639,20 @@ if ($r['status'] >= 300 && $r['status'] < 400
 } else {
     fail('unassigned teammate opened Filter status=' . $r['status'] . ' loc=' . $loc);
 }
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&copy=live_urls');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashboard')) {
+    pass('teammate blocked from OM copy live URLs');
+} else {
+    fail('teammate OM copy status=' . $r['status'] . ' loc=' . $loc);
+}
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&download=txt');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashboard')) {
+    pass('teammate blocked from OM live URL txt');
+} else {
+    fail('teammate OM txt status=' . $r['status'] . ' loc=' . $loc);
+}
 
 // Dept-scoped finder can open Filter; cannot open Extracting
 req('GET', $base . '/index.php?page=logout');
@@ -621,6 +682,8 @@ foreach ($teamNeedles as $n) {
 if ($r['status'] === 200 && !$teamBad
     && !str_contains($r['body'], 'Unlock')
     && !str_contains($r['body'], 'Copy all')
+    && !str_contains($r['body'], 'Copy selected live URLs')
+    && !str_contains($r['body'], 'download=txt')
     && !str_contains($r['body'], 'Fatal error')
     && !str_contains($r['body'], 'Warning:')) {
     pass('finder can open Website prices');

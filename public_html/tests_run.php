@@ -4118,6 +4118,60 @@ try {
         fail('Team OM/invoice ACL leak');
     }
 
+    $uniqUrls = order_live_urls_from_rows([
+        ['live_url' => ' https://a.example/1 '],
+        ['live_url' => ''],
+        ['live_url' => 'https://a.example/1'],
+        ['live_url' => 'https://b.example/2'],
+        ['site_name' => 'no-url.com'],
+    ]);
+    $uniqSites = order_site_names_from_rows([
+        ['site_name' => ' alpha.com '],
+        ['site_name' => ''],
+        ['site_name' => 'alpha.com'],
+        ['site_name' => 'beta.com'],
+    ]);
+    if ($uniqUrls === ['https://a.example/1', 'https://b.example/2']
+        && $uniqSites === ['alpha.com', 'beta.com']) {
+        pass('copy live URLs unique first-seen');
+    } else {
+        fail('copy helpers did not unique/skip blanks');
+    }
+
+    $copyProc = order_live_urls_from_rows(list_order_pipeline_rows(['folder' => 'processing', 'q' => $foldDomain]));
+    $copyComp = order_live_urls_from_rows(list_order_pipeline_rows(['folder' => 'completed', 'q' => $foldDomain]));
+    $copyMiss = order_live_urls_from_rows(list_order_pipeline_rows(['folder' => 'completed', 'q' => 'no-such-txfom-domain.example']));
+    if ($copyProc === []
+        && $copyComp === ['https://example.com/txfom-live']
+        && $copyMiss === []) {
+        pass('txt/copy uses folder + filter');
+    } else {
+        fail('txt/copy folder+filter mismatch: ' . json_encode([
+            'proc' => $copyProc,
+            'comp' => $copyComp,
+            'miss' => $copyMiss,
+        ]));
+    }
+
+    $sitePricesLibSrc = file_get_contents(__DIR__ . '/includes/site_prices.php') ?: '';
+    if (str_contains($ordersPhpSrc, 'data-copy-check')
+        && str_contains($ordersPhpSrc, 'data-push-check')
+        && str_contains($ordersPhpSrc, 'Copy selected sites')
+        && str_contains($ordersPhpSrc, 'Copy selected live URLs')
+        && str_contains($ordersPhpSrc, 'Copy all live URLs')
+        && str_contains($ordersPhpSrc, "download' => 'txt'")
+        && str_contains($ordersPhpSrc, "copy' => 'live_urls'")
+        && str_contains($ordersPhpSrc, 'order_pipeline_download_txt')
+        && str_contains($ordersPhpSrc, 'Could not copy. Use Download .txt')
+        && !str_contains($sitePricesLibSrc, 'Copy all live URLs')
+        && !str_contains($sitePricesLibSrc, 'Copy selected live URLs')
+        && !str_contains($teamWpSrc, 'Copy all live URLs')
+        && !str_contains($teamWpSrc, 'download=txt')) {
+        pass('OM copy UI on Processing and Completed');
+    } else {
+        fail('OM copy/download UI missing or leaked to Website prices');
+    }
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
     $draftAfterBlank = count_invoices_by_work_status('draft');
