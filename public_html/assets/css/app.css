@@ -3630,7 +3630,9 @@ a.card.stat:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 .order-sheet .col-num { width: 2.2rem; text-align: center; }
-.order-sheet .col-check { width: 2.2rem; text-align: center; }
+.order-sheet .col-check { width: 3.4rem; text-align: center; }
+.order-check-heads,
+.order-check-pair { display: flex; gap: 0.2rem; align-items: center; justify-content: center; }
 .order-sheet .col-month { min-width: 188px; width: 188px; }
 .order-sheet .col-country { min-width: 110px; width: 120px; }
 .order-sheet .col-date { min-width: 150px; width: 154px; }

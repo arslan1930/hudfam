@@ -1196,6 +1196,20 @@ if (!str_contains($ordersPage, 'Mark completed')
 } else {
     ok('orders Mark completed');
 }
+if (!str_contains($ordersPage, 'Copy selected sites')
+    || !str_contains($ordersPage, 'Copy selected live URLs')
+    || !str_contains($ordersPage, 'Copy all live URLs')
+    || !str_contains($ordersPage, 'Download .txt')
+    || !str_contains($ordersPage, 'data-copy-check')
+    || !str_contains($ordersPage, 'data-push-check')
+    || !str_contains($ordersPage, "copy' => 'live_urls'")
+    || !str_contains($ordersPage, "download' => 'txt'")
+    || !str_contains($ordersPage, 'data-copy-selected-sites')
+    || !str_contains($ordersPage, 'data-copy-all-live')) {
+    fail('orders missing copy/download live URLs');
+} else {
+    ok('orders copy selected/all live URLs + txt');
+}
 if (str_contains($ordersPage, 'if ($isProcessing):') && str_contains($ordersPage, 'Push to invoice')
     && str_contains($ordersPage, 'if ($isCompleted):')) {
     ok('orders Push to invoice only on Completed');
@@ -1254,7 +1268,7 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
@@ -1277,7 +1291,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
