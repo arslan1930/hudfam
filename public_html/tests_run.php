@@ -1038,16 +1038,31 @@ try {
         && str_contains($filterRow, 'data-status=')
         && str_contains($filterRow, 'data-added-by=')
         && str_contains($filterBody, 'data-site-price-filter-empty');
+    $filterCountry = render_site_price_filters($adminUser, [$claimed], 'admin_site_prices', $country);
+    $filterMatch = render_site_price_filters(
+        $adminUser,
+        [$claimed],
+        'admin_site_prices',
+        $country,
+        100,
+        ['tint' => 'yellow'],
+        ['matching' => 2, 'total_all' => 10]
+    );
+    $filterChipsOk = str_contains($filterCountry, 'data-site-price-filter="tint"')
+        && str_contains($filterCountry, 'Yellow')
+        && str_contains($filterMatch, '2 matching')
+        && str_contains($filterMatch, '10 in');
     $teamPageOk = str_contains($teamPageSrc, "site_price_run_page")
         && str_contains($teamPageSrc, 'team_site_prices')
         && !preg_match('/Copy all|Download \.txt|Download CSV/', $teamPageSrc)
         && !str_contains($filterTeam, 'Copy all');
-    if ($filterOk && $teamPageOk) {
+    if ($filterOk && $teamPageOk && $filterChipsOk) {
         pass('site_price team page + sheet filters');
     } else {
         fail('site_price team/filters: ' . json_encode([
             'filter' => $filterOk,
             'team_page' => $teamPageOk,
+            'chips' => $filterChipsOk,
         ]));
     }
 
@@ -1080,13 +1095,17 @@ try {
             $teamTintActorOk = false;
         }
     }
+    $addHtml = render_site_price_add_row();
     $tintOk = site_price_normalize_tint('YELLOW') === 'yellow'
         && site_price_normalize_tint('nope') === ''
         && (string) ($savedTint['row_tint'] ?? '') === 'yellow'
         && (string) ($savedTint['reply_email'] ?? '') === 'inbox@example.com'
         && (string) ($badTint['row_tint'] ?? 'x') === ''
         && (string) ($adminEmail['reply_email'] ?? '') === 'admin-box@example.com'
-        && str_contains($tintHtml, 'is-status-')
+        && str_contains($tintHtml, 'is-color-')
+        && !str_contains($tintHtml, 'is-status-')
+        && !str_contains($tintHtml, 'is-tint-yellow')
+        && str_contains($tintHtml, 'site-price-color-menu')
         && str_contains($tintHtml, 'data-site-price-email')
         && str_contains($tintHtml, 'data-site-price-tint')
         && str_contains($tintHtml, 'data-site-price-select')
@@ -1095,6 +1114,9 @@ try {
         && str_contains($histTintAdmin, 'Color')
         && str_contains($histTintTeam, 'Admin')
         && $teamTintActorOk
+        && str_contains($addHtml, 'site-price-add-commit')
+        && str_contains($addHtml, 'colspan="3"')
+        && str_contains($addHtml, 'data-site-price-tint')
         && site_price_sheet_colspan() === 12;
     if ($tintOk) {
         pass('site_price tint + reply email + history');

@@ -54,6 +54,7 @@
   }
 
   function collectAdd(tr) {
+    var tintEl = $('[data-site-price-tint-value]', tr);
     return {
       domain: ($('[data-add-domain]', tr) || {}).value || '',
       niche: nicheValue(tr),
@@ -63,6 +64,7 @@
       price_note: ($('[data-add-price]', tr) || {}).value || '',
       extra_note: ($('[data-add-note]', tr) || {}).value || '',
       reply_email: ($('[data-add-email]', tr) || {}).value || '',
+      row_tint: tintEl ? String(tintEl.value || '') : '',
       status_slug: ($('[data-site-price-status]', tr) || {}).value || 'new',
     };
   }
@@ -182,17 +184,20 @@
     var lane = '';
     var status = '';
     var added = '';
+    var tint = '';
     if (bar) {
       var qEl = bar.querySelector('[data-site-price-filter="q"]');
       var laneEl = bar.querySelector('[data-site-price-filter="lane"]');
       var statusEl = bar.querySelector('[data-site-price-filter="status"]');
       var addedEl = bar.querySelector('[data-site-price-filter="added"]');
+      var tintOn = bar.querySelector('[data-site-price-filter="tint"].is-on');
       q = String(qEl && qEl.value || '').trim().toLowerCase();
       lane = String(laneEl && laneEl.value || '');
       status = String(statusEl && statusEl.value || '');
       added = String(addedEl && addedEl.value || '');
+      tint = tintOn ? String(tintOn.getAttribute('data-tint') || '') : '';
     }
-    var active = !!(q || lane || status || added);
+    var active = !!(q || lane || status || added || tint);
     matchRows = [];
     clearSearchHits();
     var any = false;
@@ -202,6 +207,11 @@
       if (lane && row.getAttribute('data-lane') !== lane) hit = false;
       if (status && row.getAttribute('data-status') !== status) hit = false;
       if (added && row.getAttribute('data-added-by') !== added) hit = false;
+      if (tint === 'none') {
+        if (row.getAttribute('data-tint')) hit = false;
+      } else if (tint && row.getAttribute('data-tint') !== tint) {
+        hit = false;
+      }
       row.hidden = !hit;
       var hist = row.nextElementSibling;
       if (hist && hist.hasAttribute('data-site-price-history-row') && !hit) {
@@ -274,14 +284,17 @@
     var laneEl = bar ? bar.querySelector('[data-site-price-filter="lane"]') : null;
     var statusEl = bar ? bar.querySelector('[data-site-price-filter="status"]') : null;
     var addedEl = bar ? bar.querySelector('[data-site-price-filter="added"]') : null;
+    var tintOn = bar ? bar.querySelector('[data-site-price-filter="tint"].is-on') : null;
     var q = qEl ? String(qEl.value || '').trim() : '';
     var lane = laneEl ? String(laneEl.value || '') : '';
     var status = statusEl ? String(statusEl.value || '') : '';
     var added = addedEl ? String(addedEl.value || '') : '';
+    var tint = tintOn ? String(tintOn.getAttribute('data-tint') || '') : '';
     if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
     if (lane) url.searchParams.set('lane', lane); else url.searchParams.delete('lane');
     if (status) url.searchParams.set('status', status); else url.searchParams.delete('status');
     if (added) url.searchParams.set('added', added); else url.searchParams.delete('added');
+    if (tint) url.searchParams.set('tint', tint); else url.searchParams.delete('tint');
     url.searchParams.delete('p');
     url.searchParams.delete('row');
     window.location.href = url.toString();
@@ -484,15 +497,39 @@
     });
   }
 
-  function setTint(tr, tint) {
+  function paintStatusSelect(sel) {
+    if (!sel) return;
+    var opt = sel.options[sel.selectedIndex];
+    var color = opt ? String(opt.getAttribute('data-color') || 'grey') : 'grey';
+    ['green', 'blue', 'rose', 'grey', 'brown', 'teal'].forEach(function (c) {
+      sel.classList.remove('is-color-' + c);
+    });
+    sel.classList.add('is-color-' + color);
+  }
+
+  function applyTintUi(tr, tint) {
     var hidden = $('[data-site-price-tint-value]', tr);
     if (hidden) hidden.value = tint || '';
     tr.setAttribute('data-tint', tint || '');
-    tr.classList.remove('is-tint-yellow', 'is-tint-pink', 'is-tint-blue', 'is-tint-green');
-    if (tint) tr.classList.add('is-tint-' + tint);
     tr.querySelectorAll('[data-site-price-tint]').forEach(function (btn) {
       btn.classList.toggle('is-on', String(btn.getAttribute('data-site-price-tint') || '') === String(tint || ''));
     });
+    var summary = tr.querySelector('.site-price-color-summary');
+    if (summary) {
+      summary.classList.remove('is-yellow', 'is-pink', 'is-blue', 'is-green');
+      if (tint) {
+        summary.classList.add('is-' + tint);
+        summary.textContent = '';
+      } else {
+        summary.textContent = '⋯';
+      }
+    }
+  }
+
+  function setTint(tr, tint) {
+    applyTintUi(tr, tint);
+    var menu = tr.querySelector('details.site-price-color-menu');
+    if (menu) menu.open = false;
     scheduleSave(tr);
   }
 
@@ -675,8 +712,14 @@
       var tintBtn = t.closest('[data-site-price-tint]');
       if (tintBtn) {
         e.preventDefault();
+        var tintValue = String(tintBtn.getAttribute('data-site-price-tint') || '');
         var tintTr = tintBtn.closest('[data-site-price-row]');
-        if (tintTr) setTint(tintTr, String(tintBtn.getAttribute('data-site-price-tint') || ''));
+        if (tintTr) {
+          setTint(tintTr, tintValue);
+          return;
+        }
+        var addTr = tintBtn.closest('[data-site-price-add]');
+        if (addTr) applyTintUi(addTr, tintValue);
         return;
       }
       var un = t.closest('[data-site-price-unlock]');
@@ -716,6 +759,9 @@
       if (t.matches('[data-site-price-select]')) {
         syncSelectAll();
         return;
+      }
+      if (t.matches('[data-site-price-status]')) {
+        paintStatusSelect(t);
       }
       var row = t.closest('[data-site-price-row]');
       if (row) scheduleSave(row);

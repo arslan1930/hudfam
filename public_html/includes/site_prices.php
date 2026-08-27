@@ -1602,19 +1602,41 @@ function site_price_locked_text(string $value, bool $copyLock): string
     return '<span class="' . h($cls) . '">' . h($show) . '</span>';
 }
 
-function site_price_tint_controls(string $current): string
+function site_price_tint_buttons_html(string $current, bool $withLabels = false): string
 {
     $current = site_price_normalize_tint($current);
-    $html = '<div class="site-price-tints" role="group" aria-label="Row color">';
-    $opts = ['' => 'No color'] + array_combine(site_price_tint_slugs(), site_price_tint_slugs());
+    $opts = ['' => 'No color', 'yellow' => 'Yellow', 'pink' => 'Pink', 'blue' => 'Blue', 'green' => 'Green'];
+    $html = '';
     foreach ($opts as $slug => $label) {
         $on = $slug === $current ? ' is-on' : '';
         $cls = $slug === '' ? 'is-none' : 'is-' . $slug;
         $html .= '<button type="button" class="site-price-tint ' . h($cls) . $on . '" data-site-price-tint="'
-            . h($slug) . '" title="' . h((string) $label) . '" aria-label="' . h((string) $label) . '"></button>';
+            . h($slug) . '" title="' . h($label) . '" aria-label="' . h($label) . '">';
+        if ($withLabels) {
+            $html .= '<span>' . h($label) . '</span>';
+        }
+        $html .= '</button>';
     }
-    $html .= '</div>';
-    $html .= '<input type="hidden" data-site-price-tint-value value="' . h($current) . '" data-no-draft>';
+    return $html;
+}
+
+function site_price_tint_controls(string $current, array $opts = []): string
+{
+    $current = site_price_normalize_tint($current);
+    $variant = (string) ($opts['variant'] ?? 'inline');
+    $hidden = '<input type="hidden" data-site-price-tint-value value="' . h($current) . '" data-no-draft>';
+    if ($variant === 'menu') {
+        $swatch = $current !== '' ? ' is-' . $current : '';
+        $html = '<details class="sheet-row-more site-price-color-menu">';
+        $html .= '<summary class="btn secondary small sheet-row-more-btn site-price-color-summary' . h($swatch) . '"'
+            . ' title="Row color" aria-label="Row color">' . ($current !== '' ? '' : '⋯') . '</summary>';
+        $html .= '<div class="sheet-row-more-panel site-price-color-panel">' . site_price_tint_buttons_html($current, true) . '</div>';
+        $html .= $hidden . '</details>';
+        return $html;
+    }
+    $html = '<div class="site-price-tints" role="group" aria-label="Row color">';
+    $html .= site_price_tint_buttons_html($current, false);
+    $html .= '</div>' . $hidden;
     return $html;
 }
 
@@ -1631,14 +1653,9 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $copyLock = !$isAdmin && $locked;
     $domain = (string) ($view['domain'] ?? '');
     $tint = site_price_normalize_tint((string) ($view['row_tint'] ?? ''));
-    $statusColor = site_price_status_color((string) ($view['status_slug'] ?? 'new'));
     $hay = site_price_row_search_haystack($view, []);
     $lane = site_price_status_lane((string) ($view['status_slug'] ?? 'new'));
-    $cls = 'site-price-row is-status-' . $statusColor;
-    if ($tint !== '') {
-        $cls .= ' is-tint-' . $tint;
-    }
-    $html = '<tr class="' . h($cls) . '" id="sp-row-' . $id . '" data-site-price-row data-row-id="' . $id . '"'
+    $html = '<tr class="site-price-row" id="sp-row-' . $id . '" data-site-price-row data-row-id="' . $id . '"'
         . ' data-locked="' . ($locked ? '1' : '0') . '" data-lane="' . h($lane) . '"'
         . ' data-status="' . h((string) ($view['status_slug'] ?? '')) . '"'
         . ' data-tint="' . h($tint) . '"'
@@ -1697,7 +1714,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
         . ' data-no-draft aria-label="Reply email"></td>';
     $html .= '<td data-label="People" class="site-price-people-cell">' . site_price_people_cell($view, $isAdmin) . '</td>';
     $html .= '<td data-label="Actions" class="site-price-actions">';
-    $html .= site_price_tint_controls($tint);
+    $html .= site_price_tint_controls($tint, ['variant' => 'menu']);
     if ($isAdmin) {
         $html .= '<span class="site-price-drag" data-site-price-drag draggable="true"'
             . ' title="Drag to reorder in this lane" aria-label="Drag to reorder in this lane">⋮⋮</span>';
@@ -1732,11 +1749,15 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="DR"><input type="text" class="site-price-input" data-add-dr autocomplete="off" spellcheck="false" data-no-draft aria-label="DR"></td>';
     $html .= '<td data-label="Traffic"><input type="text" class="site-price-input" data-add-traffic autocomplete="off" spellcheck="false" data-no-draft aria-label="Traffic"></td>';
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="Price" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
-    $html .= '<td data-label="Status">' . site_price_status_select_html('new') . '</td>';
+    $html .= '<td data-label="Status" class="site-price-add-status">' . site_price_status_select_html('new')
+        . site_price_tint_controls('', ['variant' => 'inline']) . '</td>';
     $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-add-note autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
-    $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false" data-no-draft aria-label="Reply email"></td>';
-    $html .= '<td data-label="People" class="site-price-people-cell muted">—</td>';
-    $html .= '<td data-label="Actions"><button type="button" class="btn small" data-site-price-add-btn>Add site</button></td>';
+    $html .= '<td class="site-price-add-commit" colspan="3" data-label="Email">';
+    $html .= '<div class="site-price-add-commit-inner">';
+    $html .= '<input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false"'
+        . ' data-no-draft aria-label="Reply email">';
+    $html .= '<button type="button" class="btn small" data-site-price-add-btn>Add site</button>';
+    $html .= '</div></td>';
     $html .= '</tr>';
     return $html;
 }
@@ -1799,6 +1820,7 @@ function render_site_price_sheet_tbody(array $rows, array $viewer, ?array $laneC
  * @param array{id?:int,role?:string} $viewer
  * @param list<array<string,mixed>> $rows
  * @param array{q?:string,lane?:string,status?:string,tint?:string,added?:string} $filters
+ * @param array{matching?:int,total_all?:int} $counts
  */
 function render_site_price_filters(
     array $viewer,
@@ -1806,13 +1828,15 @@ function render_site_price_filters(
     string $pageKey = 'admin_site_prices',
     string $country = '',
     int $perPage = 100,
-    array $filters = []
+    array $filters = [],
+    array $counts = []
 ): string {
     $isAdmin = ($viewer['role'] ?? '') === 'admin';
     $filters = site_price_normalize_filter_opts($filters !== [] ? $filters : [
         'q' => (string) get('q'),
         'lane' => (string) get('lane'),
         'status' => (string) get('status'),
+        'tint' => (string) get('tint'),
         'added' => (string) get('added'),
     ]);
     if (!$isAdmin) {
@@ -1822,6 +1846,7 @@ function render_site_price_filters(
     $lane = $filters['lane'];
     $status = $filters['status'];
     $added = $filters['added'];
+    $tint = (string) ($filters['tint'] ?? '');
     $html = '<div class="invoice-list-toolbar swe-list-toolbar site-price-list-toolbar site-price-filters" data-site-price-filters>';
     $html .= '<div>';
     $html .= '<label class="sheet-search swe-row-search-wrap" for="site-price-filter-q" style="margin:0">';
@@ -1866,6 +1891,26 @@ function render_site_price_filters(
             $html .= '<option value="' . h($label) . '"' . $sel . '>' . h($label) . '</option>';
         }
         $html .= '</select></label>';
+    }
+    if ($country !== '') {
+        $html .= '<div class="site-price-tint-chips" role="group" aria-label="Color">';
+        $chipOpts = ['' => 'All', 'none' => 'None', 'yellow' => 'Yellow', 'pink' => 'Pink', 'blue' => 'Blue', 'green' => 'Green'];
+        foreach ($chipOpts as $slug => $label) {
+            $on = $tint === $slug ? ' is-on' : '';
+            $cls = $slug === '' ? 'is-all' : ($slug === 'none' ? 'is-none' : 'is-' . $slug);
+            $next = $filters;
+            $next['tint'] = $slug;
+            $href = site_price_sheet_url($country, $pageKey, site_price_filter_query_extra($next, $perPage));
+            $html .= '<a class="site-price-tint-chip ' . h($cls) . $on . '" data-site-price-filter="tint" data-tint="'
+                . h($slug) . '" href="' . h($href) . '">' . h($label) . '</a>';
+        }
+        $html .= '</div>';
+    }
+    $matching = (int) ($counts['matching'] ?? -1);
+    $totalAll = (int) ($counts['total_all'] ?? -1);
+    if ($country !== '' && $matching >= 0 && $totalAll >= 0 && site_price_filters_active($filters)) {
+        $html .= '<span class="muted site-price-match-count">'
+            . (int) $matching . ' matching · ' . (int) $totalAll . ' in ' . h($country) . '</span>';
     }
     $html .= '</div>';
     $html .= '<div class="actions">';
@@ -2123,6 +2168,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                     'price_note' => (string) post('price_note'),
                     'extra_note' => (string) post('extra_note'),
                     'reply_email' => (string) post('reply_email'),
+                    'row_tint' => (string) post('row_tint'),
                     'status_slug' => (string) post('status_slug'),
                 ], $viewer);
                 $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, (int) $row['id']);
@@ -2293,7 +2339,15 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
       </div>
     </div>
 
-    <?= render_site_price_filters($user, $pack['all'] ?? $rows, $pageKey, $countryName, $perPage, $filters) ?>
+    <?= render_site_price_filters(
+        $user,
+        $pack['all'] ?? $rows,
+        $pageKey,
+        $countryName,
+        $perPage,
+        $filters,
+        ['matching' => (int) $total, 'total_all' => (int) ($pack['total_all'] ?? $total)]
+    ) ?>
     <?= render_site_price_jump_bar((string) get('jump')) ?>
     <div class="site-price-switcher">
       <?= render_site_price_country_tabs($countryName, $pageKey, ['per_page' => $perPage]) ?>
@@ -2306,6 +2360,20 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                data-page="<?= (int) $pageNum ?>" data-pages="<?= (int) $pages ?>"
                data-per-page="<?= (int) $perPage ?>"
                <?php if ($jumpRowId > 0): ?>data-jump-row="<?= (int) $jumpRowId ?>"<?php endif; ?>>
+          <colgroup>
+            <col class="sp-col-check">
+            <col class="sp-col-site">
+            <col class="sp-col-niche">
+            <col class="sp-col-metric">
+            <col class="sp-col-metric">
+            <col class="sp-col-metric">
+            <col class="sp-col-price">
+            <col class="sp-col-status">
+            <col class="sp-col-note">
+            <col class="sp-col-email">
+            <col class="sp-col-people">
+            <col class="sp-col-actions">
+          </colgroup>
           <thead>
             <tr>
               <th class="site-price-check-th">
@@ -2321,7 +2389,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
               <th>Note</th>
               <th>Email</th>
               <th>People</th>
-              <th>Color / Actions</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody data-site-price-tbody>
