@@ -1072,7 +1072,8 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $domain = (string) ($view['domain'] ?? '');
     $hay = mb_strtolower(trim(
         $domain . ' ' . (string) ($view['niche'] ?? '') . ' ' . (string) ($view['price_note'] ?? '')
-        . ' ' . (string) ($view['status_slug'] ?? '')
+        . ' ' . (string) ($view['extra_note'] ?? '') . ' ' . (string) ($view['status_slug'] ?? '')
+        . ' ' . (string) ($view['added_by_label'] ?? '')
     ));
     $lane = site_price_status_lane((string) ($view['status_slug'] ?? 'new'));
     $html = '<tr class="site-price-row" data-site-price-row data-row-id="' . $id . '"'
@@ -1158,7 +1159,7 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="DA"><input type="text" class="site-price-input" data-add-da autocomplete="off" spellcheck="false" data-no-draft aria-label="DA"></td>';
     $html .= '<td data-label="DR"><input type="text" class="site-price-input" data-add-dr autocomplete="off" spellcheck="false" data-no-draft aria-label="DR"></td>';
     $html .= '<td data-label="Traffic"><input type="text" class="site-price-input" data-add-traffic autocomplete="off" spellcheck="false" data-no-draft aria-label="Traffic"></td>';
-    $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="60 euro article only" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
+    $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="Price" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
     $html .= '<td data-label="Status">' . site_price_status_select_html('new') . '</td>';
     $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-add-note autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
     $html .= '<td data-label="People" class="site-price-people-cell muted">—</td>';
@@ -1226,7 +1227,8 @@ function render_site_price_filters(array $viewer, array $rows): string
     $html .= '<label class="sheet-search" for="site-price-filter-q" style="margin:0">';
     $html .= '<span class="visually-hidden">Search sites</span>';
     $html .= '<input id="site-price-filter-q" type="search" data-site-price-filter="q" value="' . h($q) . '"'
-        . ' placeholder="Search website, niche, price…" autocomplete="off" spellcheck="false" data-no-draft>';
+        . ' placeholder="Search sites…" autocomplete="off" spellcheck="false" data-no-draft'
+        . ' title="Search website, niche, or price">';
     $html .= '</label>';
     $html .= '<label class="site-price-filter">Lane ';
     $html .= '<select data-site-price-filter="lane" data-no-draft aria-label="Lane">';

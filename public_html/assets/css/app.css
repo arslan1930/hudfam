@@ -5269,6 +5269,14 @@ textarea:focus-visible {
   align-items: end;
   margin: 0 0 0.75rem;
 }
+.site-price-filters .sheet-search input[type="search"] {
+  width: 16rem;
+  max-width: 100%;
+}
+.site-price-people-cell {
+  min-width: 9.25rem;
+  vertical-align: top;
+}
 .site-price-filter {
   display: flex;
   flex-direction: column;
