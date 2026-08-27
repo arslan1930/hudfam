@@ -305,23 +305,26 @@ function flag_users_with_weak_passwords(): int
 
 function logout_user(): void
 {
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION = [];
-        if (PHP_SAPI !== 'cli' && !headers_sent()) {
-            $params = session_get_cookie_params();
-            setcookie(session_name(), '', [
-                'expires' => time() - 42000,
-                'path' => $params['path'] ?? '/',
-                'domain' => $params['domain'] ?? '',
-                'secure' => (bool) ($params['secure'] ?? false),
-                'httponly' => (bool) ($params['httponly'] ?? true),
-                'samesite' => (string) ($params['samesite'] ?? 'Lax'),
-            ]);
-        }
-        session_destroy();
+    unset($_SESSION['user'], $_SESSION['must_change_password']);
+    $canRotate = PHP_SAPI !== 'cli'
+        && session_status() === PHP_SESSION_ACTIVE
+        && !headers_sent();
+    if (!$canRotate) {
+        return;
     }
+    $_SESSION = [];
+    $params = session_get_cookie_params();
+    setcookie(session_name(), '', [
+        'expires' => time() - 42000,
+        'path' => $params['path'] ?? '/',
+        'domain' => $params['domain'] ?? '',
+        'secure' => (bool) ($params['secure'] ?? false),
+        'httponly' => (bool) ($params['httponly'] ?? true),
+        'samesite' => (string) ($params['samesite'] ?? 'Lax'),
+    ]);
+    session_destroy();
     txf_secure_session_start();
-    if (session_status() === PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli' && !headers_sent()) {
+    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
         session_regenerate_id(true);
     }
 }
