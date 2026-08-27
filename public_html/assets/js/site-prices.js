@@ -93,7 +93,7 @@
   function fitNoteBox(el) {
     if (!el || String(el.tagName || '').toLowerCase() !== 'textarea') return;
     el.style.height = 'auto';
-    el.style.height = Math.max(58, el.scrollHeight + 4) + 'px';
+    el.style.height = Math.max(84, el.scrollHeight + 4) + 'px';
   }
 
   function fitAllNotes(root) {
@@ -1038,6 +1038,8 @@
       bind(table);
       bindDrag(table);
       fitAllNotes(table);
+      requestAnimationFrame(function () { fitAllNotes(table); });
+      window.setTimeout(function () { fitAllNotes(table); }, 80);
       var jumpId = table.getAttribute('data-jump-row');
       if (jumpId) {
         var row = table.querySelector('[data-site-price-row][data-row-id="' + jumpId + '"]');

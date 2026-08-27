@@ -1720,7 +1720,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $html .= '<td data-label="Status">' . site_price_status_select_html((string) ($view['status_slug'] ?? 'new')) . '</td>';
     $noteVal = (string) ($view['extra_note'] ?? '');
     $html .= '<td class="site-price-note-td" data-label="Note"><textarea class="site-price-input site-price-note" data-site-price-note'
-        . ' rows="2" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note">'
+        . ' rows="4" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note">'
         . h($noteVal) . '</textarea></td>';
     $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-site-price-email value="'
         . h((string) ($view['reply_email'] ?? '')) . '" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
@@ -1765,7 +1765,7 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="Status"><div class="site-price-add-status">' . site_price_status_select_html('new')
         . site_price_tint_controls('', ['variant' => 'inline']) . '</div></td>';
     $html .= '<td class="site-price-note-td" data-label="Note"><textarea class="site-price-input site-price-note" data-add-note'
-        . ' rows="2" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></textarea></td>';
+        . ' rows="4" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></textarea></td>';
     $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false"'
         . ' data-no-draft aria-label="Reply email"></td>';
     $html .= '<td class="site-price-add-commit" colspan="2" data-label="">';

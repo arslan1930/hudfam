@@ -5195,17 +5195,17 @@ textarea:focus-visible {
 .site-price-sheet textarea.site-price-note {
   display: block;
   box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: unset;
-  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: break-word;
   resize: vertical;
-  min-height: 3.6rem;
+  min-height: 5.25rem;
+  height: auto;
   max-height: none;
   padding: 0.45rem 0.55rem;
   line-height: 1.4;
-  field-sizing: content;
 }
 .site-price-sheet .site-price-status {
   min-width: 0;
