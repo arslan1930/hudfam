@@ -349,7 +349,11 @@ if (!str_contains($sitePricesLib, 'function site_price_claim_row')
     || !str_contains($sitePricesJs, "post('row_history'")
     || !str_contains($sitePricesJs, "post('claim_row'")
     || !str_contains($sitePricesCss, '.site-price-country-tabs')
-    || !str_contains($sitePricesCss, '.site-price-people')) {
+    || !str_contains($sitePricesCss, '.site-price-people')
+    || !str_contains($sitePricesCss, '.site-price-people-name')
+    || !str_contains($sitePricesCss, '.site-price-note-td')
+    || !str_contains($sitePricesLib, 'site-price-people-name')
+    || !str_contains($sitePricesLib, 'site-price-note-td')) {
     fail('Website prices people / history / country tabs missing');
 } else {
     ok('Website prices people + history + country tabs');

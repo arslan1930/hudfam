@@ -5150,7 +5150,7 @@ textarea:focus-visible {
 /* Website prices — add row + locked identity cells */
 .site-price-sheet {
   table-layout: fixed;
-  min-width: 72rem;
+  min-width: 82rem;
 }
 .site-price-sheet .sp-col-check { width: 2.2rem; }
 .site-price-sheet .sp-col-site { width: 11.5rem; }
@@ -5158,13 +5158,18 @@ textarea:focus-visible {
 .site-price-sheet .sp-col-metric { width: 4.4rem; }
 .site-price-sheet .sp-col-price { width: 6.5rem; }
 .site-price-sheet .sp-col-status { width: 9.2rem; }
-.site-price-sheet .sp-col-note { width: 7.5rem; }
+.site-price-sheet .sp-col-note { width: 10.5rem; }
 .site-price-sheet .sp-col-email { width: 9.5rem; }
-.site-price-sheet .sp-col-people { width: 7.2rem; }
-.site-price-sheet .sp-col-actions { width: 5.8rem; }
+.site-price-sheet .sp-col-people { width: 13rem; }
+.site-price-sheet .sp-col-actions { width: 7.2rem; }
 .site-price-sheet td {
   padding: 0.28rem 0.4rem;
   vertical-align: middle;
+  overflow: hidden;
+}
+.site-price-sheet td.site-price-actions-td,
+.site-price-sheet td.site-price-add-commit {
+  overflow: visible;
 }
 .site-price-sheet .site-price-input,
 .site-price-sheet .site-price-status {
@@ -5172,6 +5177,8 @@ textarea:focus-visible {
   min-width: 0;
   padding: 0.28rem 0.4rem;
   font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .site-price-sheet .site-price-status {
   min-width: 0;
@@ -5537,11 +5544,25 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  min-width: 8.5rem;
+  min-width: 0;
+  max-width: 100%;
   font-size: 0.82rem;
   line-height: 1.25;
 }
 .site-price-people-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+.site-price-people-line .muted {
+  flex: 0 0 auto;
+}
+.site-price-people-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .site-price-people-actions {
@@ -5609,9 +5630,13 @@ textarea:focus-visible {
   width: 16rem;
   max-width: 100%;
 }
-.site-price-people-cell {
+.site-price-people-cell,
+.site-price-note-td {
   min-width: 0;
   vertical-align: top;
+}
+.site-price-note-td .site-price-input {
+  display: block;
 }
 .site-price-filter {
   display: flex;
@@ -5650,5 +5675,25 @@ textarea:focus-visible {
   }
   table.sheet-cards-mobile .site-price-add-status {
     flex: 1;
+  }
+  table.sheet-cards-mobile td.site-price-people-cell,
+  table.sheet-cards-mobile td.site-price-note-td,
+  table.sheet-cards-mobile td[data-label="Email"],
+  table.sheet-cards-mobile td[data-label="Status"] {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  table.sheet-cards-mobile td.site-price-people-cell .site-price-people,
+  table.sheet-cards-mobile td.site-price-note-td .site-price-input,
+  table.sheet-cards-mobile td[data-label="Email"] .site-price-input,
+  table.sheet-cards-mobile td[data-label="Status"] .site-price-status {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+  table.sheet-cards-mobile td.site-price-people-cell .site-price-people-line,
+  table.sheet-cards-mobile td.site-price-people-cell .site-price-people-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
   }
 }

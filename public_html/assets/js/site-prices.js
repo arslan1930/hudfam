@@ -796,6 +796,7 @@
       var row = t.closest('[data-site-price-row]');
       if (row && (t.matches('[data-site-price-price], [data-site-price-note], [data-site-price-email], [data-site-price-domain], [data-site-price-da], [data-site-price-dr], [data-site-price-traffic]')
           || t.closest('[data-niche-chips]'))) {
+        if (t.matches('[data-site-price-note]')) t.setAttribute('title', t.value || '');
         scheduleSave(row);
       }
     });
