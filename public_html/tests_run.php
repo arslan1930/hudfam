@@ -618,6 +618,162 @@ try {
     } else {
         fail('site_price counts ger=' . $gerCount);
     }
+
+    $idLock = site_price_add_row_for_user([
+        'country' => $country,
+        'domain' => 'https://www.txfprice-lock.com/x',
+        'da' => '40',
+        'dr' => '50',
+        'traffic' => '10k',
+        'price_note' => '50 euro',
+    ], $teamUser);
+    $rowLock = get_site_price_row($idLock);
+    if ($rowLock
+        && (string) ($rowLock['domain'] ?? '') === 'txfprice-lock.com'
+        && (int) ($rowLock['identity_locked'] ?? 0) === 1) {
+        pass('site_price add_row locks identity');
+    } else {
+        fail('site_price add lock: ' . json_encode($rowLock));
+    }
+
+    $savedPrice = site_price_save_row($idLock, [
+        'price_note' => '60 euro article only',
+        'status_slug' => 'processing',
+        'extra_note' => 'wait',
+    ], $teamUser);
+    if ((string) ($savedPrice['price_note'] ?? '') === '60 euro article only'
+        && (string) ($savedPrice['status_slug'] ?? '') === 'processing'
+        && (string) ($savedPrice['da'] ?? '') === '40'
+        && (int) ($savedPrice['identity_locked'] ?? 0) === 1) {
+        pass('site_price save price/status while locked');
+    } else {
+        fail('site_price save while locked: ' . json_encode($savedPrice));
+    }
+
+    $adminLockReject = false;
+    try {
+        site_price_save_row($idLock, [
+            'domain' => 'txfprice-changed.com',
+            'da' => '99',
+            'dr' => '50',
+            'traffic' => '10k',
+        ], $adminUser);
+    } catch (RuntimeException $e) {
+        $adminLockReject = str_contains($e->getMessage(), 'locked');
+    }
+    $teamLockReject = false;
+    try {
+        site_price_save_row($idLock, [
+            'domain' => 'txfprice-changed.com',
+            'da' => '99',
+        ], $teamUser);
+    } catch (RuntimeException $e) {
+        $teamLockReject = str_contains($e->getMessage(), 'locked')
+            || str_contains($e->getMessage(), 'Only Admin');
+    }
+    if ($adminLockReject && $teamLockReject) {
+        pass('site_price locked identity rejected for admin and team');
+    } else {
+        fail('site_price locked identity: admin=' . (int) $adminLockReject . ' team=' . (int) $teamLockReject);
+    }
+
+    $teamUnlockReject = false;
+    try {
+        site_price_unlock_row($idLock, $teamUser);
+    } catch (RuntimeException $e) {
+        $teamUnlockReject = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $unlocked = site_price_unlock_row($idLock, $adminUser);
+    $teamUnlockedReject = false;
+    try {
+        site_price_save_row($idLock, [
+            'domain' => 'txfprice-team-steal.com',
+            'da' => '1',
+            'dr' => '1',
+            'traffic' => '1',
+        ], $teamUser);
+    } catch (RuntimeException $e) {
+        $teamUnlockedReject = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $relocked = site_price_save_row($idLock, [
+        'domain' => 'txfprice-relock.com',
+        'da' => '41',
+        'dr' => '51',
+        'traffic' => '11k',
+        'price_note' => '60 euro article only',
+    ], $adminUser);
+    if ($teamUnlockReject
+        && (int) ($unlocked['identity_locked'] ?? 1) === 0
+        && $teamUnlockedReject
+        && (string) ($relocked['domain'] ?? '') === 'txfprice-relock.com'
+        && (int) ($relocked['identity_locked'] ?? 0) === 1
+        && (string) ($relocked['da'] ?? '') === '41') {
+        pass('site_price unlock then identity save re-locks');
+    } else {
+        fail('site_price unlock/relock: ' . json_encode([
+            'team_unlock' => $teamUnlockReject,
+            'unlocked' => $unlocked['identity_locked'] ?? null,
+            'team_edit' => $teamUnlockedReject,
+            'relocked' => $relocked,
+        ]));
+    }
+
+    $dupAdd = false;
+    try {
+        site_price_add_row_for_user([
+            'country' => $country,
+            'domain' => 'txfprice-relock.com',
+        ], $adminUser);
+    } catch (RuntimeException $e) {
+        $dupAdd = str_contains($e->getMessage(), 'already');
+    }
+    if ($dupAdd) {
+        pass('site_price add_row duplicate rejected');
+    } else {
+        fail('site_price add_row duplicate allowed');
+    }
+
+    add_prospect_domains(
+        ['txfprice-niche-lookup.com'],
+        $adminUser,
+        $country,
+        'German',
+        'europe',
+        'Finance',
+        'price-book lookup'
+    );
+    $idNiche = site_price_add_row_for_user([
+        'country' => $country,
+        'domain' => 'txfprice-niche-lookup.com',
+    ], $teamUser);
+    $rowNiche = get_site_price_row($idNiche);
+    if ($rowNiche && str_contains((string) ($rowNiche['niche'] ?? ''), 'Finance')) {
+        pass('site_price add_row niche from Our database');
+    } else {
+        fail('site_price add_row niche: ' . json_encode($rowNiche));
+    }
+
+    $adminHtml = render_site_price_sheet_tbody([$relocked], $adminUser);
+    $teamHtml = render_site_price_sheet_tbody([$relocked], $teamUser);
+    $pageSrc = (string) file_get_contents(__DIR__ . '/pages/admin/site_prices.php');
+    $noExport = !preg_match('/Copy all|Download \.txt|Download CSV/', $pageSrc)
+        && !str_contains($adminHtml, 'Copy all')
+        && !str_contains($teamHtml, 'Copy all');
+    $adminUnlock = str_contains($adminHtml, 'Unlock') && str_contains($adminHtml, 'is-locked')
+        && !str_contains($adminHtml, 'is-copy-lock');
+    $teamNoUnlock = !str_contains($teamHtml, 'Unlock') && str_contains($teamHtml, 'is-copy-lock');
+    $hasAdd = str_contains($adminHtml, 'data-site-price-add') && str_contains($pageSrc, 'data-site-price-sheet');
+    if ($noExport && $adminUnlock && $teamNoUnlock && $hasAdd) {
+        pass('site_price sheet render lock + no Team export');
+    } else {
+        fail('site_price render: ' . json_encode([
+            'export' => $noExport,
+            'admin' => $adminUnlock,
+            'team' => $teamNoUnlock,
+            'add' => $hasAdd,
+        ]));
+    }
+
     db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
 } catch (Throwable $e) {
     fail('site_prices: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());

@@ -1,7 +1,6 @@
 <?php
 /**
  * Admin · Website prices — publisher rate book, one country sheet.
- * PR 1: hub + empty country shell. Grid save / lock ship next.
  */
 $user = require_admin();
 ensure_site_prices_schema();
@@ -25,6 +24,129 @@ if ($sheet !== '') {
     $countryName = $canon['name'];
 }
 
+$sheetActions = ['add_row', 'save_row', 'unlock_row', 'suggest_niche'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string) post('action'), $sheetActions, true)) {
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson, $hub): void {
+        if ($wantsJson) {
+            http_response_code($code);
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (!empty($payload['ok'])) {
+            flash('ok', (string) ($payload['message'] ?? 'Saved.'));
+        } else {
+            flash('error', (string) ($payload['error'] ?? 'Could not save.'));
+        }
+        $back = trim((string) ($payload['country'] ?? ''));
+        redirect($back !== '' ? site_price_sheet_url($back) : $hub);
+    };
+    $action = (string) post('action');
+    $workCountry = trim((string) post('country'));
+    if ($workCountry === '') {
+        $workCountry = $countryName;
+    }
+    $canonWork = $workCountry !== '' ? resolve_canonical_country($workCountry) : null;
+    if ($canonWork === null) {
+        $jsonOut(['ok' => false, 'error' => 'Open a country sheet first.'], 400);
+    }
+    $workCountry = $canonWork['name'];
+    $viewer = [
+        'id' => (int) ($user['id'] ?? 0),
+        'role' => (string) ($user['role'] ?? ''),
+    ];
+    try {
+        if ($action === 'suggest_niche') {
+            $domain = site_price_normalize_domain((string) post('domain'));
+            $niche = site_price_lookup_niche($domain, $workCountry);
+            $chips = '';
+            if ($niche !== '' && function_exists('prospect_parse_niches') && function_exists('prospect_niche_chip_html')) {
+                foreach (prospect_parse_niches($niche) as $label) {
+                    $chips .= prospect_niche_chip_html($label);
+                }
+            }
+            $jsonOut(['ok' => true, 'niche' => $niche, 'chips_html' => $chips, 'country' => $workCountry]);
+        }
+        if ($action === 'add_row') {
+            $row = site_price_add_row_for_user([
+                'country' => $workCountry,
+                'domain' => (string) post('domain'),
+                'niche' => (string) post('niche'),
+                'da' => (string) post('da'),
+                'dr' => (string) post('dr'),
+                'traffic' => (string) post('traffic'),
+                'price_note' => (string) post('price_note'),
+                'extra_note' => (string) post('extra_note'),
+                'status_slug' => (string) post('status_slug'),
+            ], $viewer);
+            $rows = list_site_price_rows($workCountry);
+            $jsonOut([
+                'ok' => true,
+                'id' => (int) $row['id'],
+                'domain' => (string) $row['domain'],
+                'country' => $workCountry,
+                'total' => count($rows),
+                'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                'message' => 'Added ' . (string) $row['domain'] . '.',
+            ]);
+        }
+        $siteId = (int) post('site_id');
+        if ($action === 'save_row') {
+            $fields = [
+                'niche' => (string) post('niche'),
+                'price_note' => (string) post('price_note'),
+                'extra_note' => (string) post('extra_note'),
+                'status_slug' => (string) post('status_slug'),
+            ];
+            if (array_key_exists('domain', $_POST)) {
+                $fields['domain'] = (string) post('domain');
+                $fields['da'] = (string) post('da');
+                $fields['dr'] = (string) post('dr');
+                $fields['traffic'] = (string) post('traffic');
+            }
+            $row = site_price_save_row($siteId, $fields, $viewer);
+            if ((string) ($row['country'] ?? '') !== $workCountry) {
+                throw new RuntimeException('Site not found.');
+            }
+            $rows = list_site_price_rows($workCountry);
+            $jsonOut([
+                'ok' => true,
+                'id' => (int) $row['id'],
+                'country' => $workCountry,
+                'total' => count($rows),
+                'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                'message' => 'Saved.',
+            ]);
+        }
+        if ($action === 'unlock_row') {
+            $row = site_price_unlock_row($siteId, $viewer);
+            if ((string) ($row['country'] ?? '') !== $workCountry) {
+                throw new RuntimeException('Site not found.');
+            }
+            $rows = list_site_price_rows($workCountry);
+            $jsonOut([
+                'ok' => true,
+                'id' => (int) $row['id'],
+                'country' => $workCountry,
+                'total' => count($rows),
+                'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                'message' => 'Unlocked.',
+            ]);
+        }
+        $jsonOut(['ok' => false, 'error' => 'Unknown action.'], 400);
+    } catch (InvalidArgumentException $e) {
+        $jsonOut(['ok' => false, 'error' => $e->getMessage(), 'country' => $workCountry], 400);
+    } catch (RuntimeException $e) {
+        $code = str_contains($e->getMessage(), 'locked') || str_contains($e->getMessage(), 'Only Admin')
+            ? 403
+            : 400;
+        $jsonOut(['ok' => false, 'error' => $e->getMessage(), 'country' => $workCountry], $code);
+    }
+}
+
 if ($inCountry) {
     $rows = list_site_price_rows($countryName);
     $total = count($rows);
@@ -42,10 +164,11 @@ if ($inCountry) {
             'Publisher prices and statuses for this country. Website, DA, DR, and traffic lock after save. Team edits price and status.'
         ) ?></h1>
         <p class="muted">
-          <?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?>
+          <span data-site-price-count><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?></span>
           · Processing stays first, then New, then the rest.
-          Adding rows, lock, and drag ship in the next updates.
+          Website, DA, DR, and traffic lock after add. Price, status, niche, and note stay editable.
         </p>
+        <p class="help site-price-status-msg" data-site-price-status-msg role="status" hidden></p>
       </div>
       <div class="actions">
         <a class="btn secondary" href="<?= h($hub) ?>">All countries</a>
@@ -54,7 +177,7 @@ if ($inCountry) {
 
     <div class="card">
       <div class="table-wrap">
-        <table class="sheet-cards-mobile">
+        <table class="sheet-cards-mobile site-price-sheet" data-site-price-sheet data-country="<?= h($countryName) ?>">
           <thead>
             <tr>
               <th>Website</th>
@@ -65,36 +188,19 @@ if ($inCountry) {
               <th>Price</th>
               <th>Status</th>
               <th>Note</th>
+              <th>Actions</th>
             </tr>
           </thead>
-          <tbody>
-          <?php if ($rows === []): ?>
-            <tr>
-              <td colspan="8" class="muted">No sites in this country yet. The add-row sheet ships next.</td>
-            </tr>
-          <?php else: ?>
-            <?php foreach ($rows as $r):
-                $view = site_price_row_for_viewer($r, $user);
-                $stMap = site_price_status_map();
-                $st = $stMap[strtolower((string) ($view['status_slug'] ?? 'new'))] ?? null;
-                $stLabel = $st ? (string) $st['label'] : (string) ($view['status_slug'] ?? 'New');
-                ?>
-              <tr>
-                <td data-label="Website"><?= h((string) $view['domain']) ?></td>
-                <td data-label="Niche"><?= h((string) $view['niche']) ?></td>
-                <td data-label="DA"><?= h((string) $view['da']) ?></td>
-                <td data-label="DR"><?= h((string) $view['dr']) ?></td>
-                <td data-label="Traffic"><?= h((string) $view['traffic']) ?></td>
-                <td data-label="Price"><?= h((string) ($view['price_note'] ?? '')) ?></td>
-                <td data-label="Status"><?= h($stLabel) ?></td>
-                <td data-label="Note"><?= h((string) ($view['extra_note'] ?? '')) ?></td>
-              </tr>
-            <?php endforeach; ?>
-          <?php endif; ?>
+          <tbody data-site-price-tbody>
+            <?= render_site_price_sheet_tbody($rows, $user) ?>
           </tbody>
         </table>
       </div>
     </div>
+    <?= prospect_niche_taxonomy_script() ?>
+    <?= niche_chips_script_tag() ?>
+    <?= open_site_script_tag() ?>
+    <?= site_prices_script_tag() ?>
     <?php
     render_footer('admin');
     return;
@@ -150,7 +256,7 @@ render_breadcrumbs([
 <div class="card" style="margin-top:1rem">
   <div class="empty-state">
     <p>No country sheets have sites yet.</p>
-    <p class="muted">Open a country above to start its sheet. Team can add prices once that update ships.</p>
+    <p class="muted">Open a country above to start its sheet. Add sites on the country sheet.</p>
   </div>
 </div>
 <?php else: ?>
