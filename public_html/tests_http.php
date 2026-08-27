@@ -530,6 +530,9 @@ $sheetNeedles = [
     'Copy selected',
     '>Email</th>',
     'data-site-price-copy-selected',
+    'Search this country',
+    'Find in other countries',
+    'Ctrl/Cmd+Enter',
 ];
 $sheetBad = [];
 foreach ($sheetNeedles as $n) {

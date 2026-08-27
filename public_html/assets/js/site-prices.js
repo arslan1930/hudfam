@@ -143,6 +143,37 @@
     }
   }
 
+  function clearSearchHits() {
+    document.querySelectorAll('[data-site-price-row].sheet-search-hit').forEach(function (el) {
+      el.classList.remove('sheet-search-hit');
+    });
+  }
+
+  var filterTimer = null;
+  var matchRows = [];
+  var matchIndex = -1;
+
+  function searchInputEl() {
+    return document.querySelector('[data-site-price-filter="q"]');
+  }
+
+  function searchMetaEl() {
+    return document.querySelector('[data-site-price-search-meta]');
+  }
+
+  function hideEmptyLanes() {
+    var table = tableEl();
+    if (!table) return;
+    table.querySelectorAll('[data-site-price-lane]').forEach(function (hdr) {
+      var lane = hdr.getAttribute('data-site-price-lane');
+      var any = false;
+      table.querySelectorAll('[data-site-price-row][data-lane="' + lane + '"]').forEach(function (row) {
+        if (!row.hidden) any = true;
+      });
+      hdr.hidden = !any;
+    });
+  }
+
   function applyFilters() {
     var table = tableEl();
     var bar = document.querySelector('[data-site-price-filters]');
@@ -162,6 +193,8 @@
       added = String(addedEl && addedEl.value || '');
     }
     var active = !!(q || lane || status || added);
+    matchRows = [];
+    clearSearchHits();
     var any = false;
     table.querySelectorAll('[data-site-price-row]').forEach(function (row) {
       var hit = true;
@@ -174,19 +207,119 @@
       if (hist && hist.hasAttribute('data-site-price-history-row') && !hit) {
         hist.hidden = true;
       }
-      if (hit) any = true;
+      if (hit) {
+        any = true;
+        if (q) matchRows.push(row);
+      }
     });
+    hideEmptyLanes();
     var empty = table.querySelector('[data-site-price-filter-empty]');
     if (empty) empty.hidden = !active || any;
+    var meta = searchMetaEl();
+    if (meta) {
+      if (!q) {
+        meta.hidden = true;
+        meta.textContent = '';
+        matchIndex = -1;
+      } else {
+        meta.hidden = false;
+        meta.textContent = !matchRows.length
+          ? '0 · Enter = next · Ctrl+Enter = all pages'
+          : (matchIndex >= 0
+            ? (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next'
+            : matchRows.length + ' · Enter = next · Ctrl+Enter = all pages');
+      }
+    }
     syncSelectAll();
+  }
+
+  function scheduleFilterRows() {
+    if (filterTimer) window.clearTimeout(filterTimer);
+    var qEl = searchInputEl();
+    var q = qEl ? String(qEl.value || '').trim() : '';
+    if (!q) {
+      filterTimer = null;
+      applyFilters();
+      return;
+    }
+    filterTimer = window.setTimeout(function () {
+      filterTimer = null;
+      applyFilters();
+    }, 160);
+  }
+
+  function jumpMatch(dir) {
+    var qEl = searchInputEl();
+    if (!qEl || !String(qEl.value || '').trim()) return;
+    applyFilters();
+    if (!matchRows.length) return;
+    matchIndex = matchIndex < 0
+      ? (dir > 0 ? 0 : matchRows.length - 1)
+      : (matchIndex + dir + matchRows.length) % matchRows.length;
+    var row = matchRows[matchIndex];
+    clearSearchHits();
+    row.classList.add('sheet-search-hit');
+    try { row.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (err) { row.scrollIntoView(true); }
+    var meta = searchMetaEl();
+    if (meta) {
+      meta.hidden = false;
+      meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+    }
+  }
+
+  function searchAllPages() {
+    var bar = document.querySelector('[data-site-price-filters]');
+    var url = new URL(window.location.href);
+    var qEl = bar ? bar.querySelector('[data-site-price-filter="q"]') : null;
+    var laneEl = bar ? bar.querySelector('[data-site-price-filter="lane"]') : null;
+    var statusEl = bar ? bar.querySelector('[data-site-price-filter="status"]') : null;
+    var addedEl = bar ? bar.querySelector('[data-site-price-filter="added"]') : null;
+    var q = qEl ? String(qEl.value || '').trim() : '';
+    var lane = laneEl ? String(laneEl.value || '') : '';
+    var status = statusEl ? String(statusEl.value || '') : '';
+    var added = addedEl ? String(addedEl.value || '') : '';
+    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+    if (lane) url.searchParams.set('lane', lane); else url.searchParams.delete('lane');
+    if (status) url.searchParams.set('status', status); else url.searchParams.delete('status');
+    if (added) url.searchParams.set('added', added); else url.searchParams.delete('added');
+    url.searchParams.delete('p');
+    url.searchParams.delete('row');
+    window.location.href = url.toString();
   }
 
   function bindFilters() {
     var bar = document.querySelector('[data-site-price-filters]');
     if (!bar || bar.getAttribute('data-wired') === '1') return;
     bar.setAttribute('data-wired', '1');
-    bar.addEventListener('input', applyFilters);
-    bar.addEventListener('change', applyFilters);
+    var qEl = bar.querySelector('[data-site-price-filter="q"]');
+    if (qEl) {
+      qEl.addEventListener('input', function () {
+        matchIndex = -1;
+        scheduleFilterRows();
+      });
+      qEl.addEventListener('search', function () {
+        matchIndex = -1;
+        scheduleFilterRows();
+      });
+      qEl.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (filterTimer) {
+          window.clearTimeout(filterTimer);
+          filterTimer = null;
+        }
+        if (e.ctrlKey || e.metaKey) {
+          searchAllPages();
+          return;
+        }
+        jumpMatch(e.shiftKey ? -1 : 1);
+      });
+    }
+    bar.querySelectorAll('[data-site-price-filter="lane"], [data-site-price-filter="status"], [data-site-price-filter="added"]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        searchAllPages();
+      });
+    });
     applyFilters();
   }
 
@@ -714,16 +847,13 @@
   }
 
   function bindToolbar() {
-    var bar = document.querySelector('[data-site-price-toolbar]');
-    if (!bar || bar.getAttribute('data-wired') === '1') return;
-    bar.setAttribute('data-wired', '1');
-    var copyBtn = bar.querySelector('[data-site-price-copy-selected]');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        copySelected();
-      });
-    }
+    var copyBtn = document.querySelector('[data-site-price-copy-selected]');
+    if (!copyBtn || copyBtn.getAttribute('data-wired') === '1') return;
+    copyBtn.setAttribute('data-wired', '1');
+    copyBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      copySelected();
+    });
   }
 
   document.addEventListener('copy', function (e) {

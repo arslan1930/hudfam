@@ -5238,8 +5238,8 @@ textarea:focus-visible {
 .site-price-row.is-tint-pink td { box-shadow: inset 4px 0 0 #eb6b9b; }
 .site-price-row.is-tint-blue td { box-shadow: inset 4px 0 0 #60a5fa; }
 .site-price-row.is-tint-green td { box-shadow: inset 4px 0 0 #4ade80; }
-.site-price-row.is-jump-target td {
-  outline: 2px solid #2563eb;
+.site-price-sheet tr.sheet-search-hit td {
+  outline: 2px solid #4b5563;
   outline-offset: -2px;
 }
 .site-price-check-th,
@@ -5269,12 +5269,19 @@ textarea:focus-visible {
 .site-price-tint.is-on {
   box-shadow: 0 0 0 2px #fff, 0 0 0 3px #2563eb;
 }
+.site-price-jump-wrap {
+  margin: 0 0 0.65rem;
+}
+.site-price-jump-wrap > summary {
+  cursor: pointer;
+  width: fit-content;
+}
 .site-price-jump {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem 0.65rem;
-  margin: 0 0 0.65rem;
+  margin: 0.45rem 0 0;
 }
 .site-price-jump .sheet-search input[type="search"] {
   width: 18rem;
@@ -5416,12 +5423,11 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 0.15rem;
 }
-.site-price-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem 0.75rem;
-  align-items: end;
-  margin: 0 0 0.75rem;
+.site-price-list-toolbar.site-price-filters {
+  align-items: flex-end;
+}
+.site-price-list-toolbar .site-price-filter {
+  margin: 0;
 }
 .site-price-filters .sheet-search input[type="search"] {
   width: 16rem;
