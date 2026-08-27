@@ -5101,6 +5101,9 @@ textarea:focus-visible {
 }
 
 /* Website prices — add row + locked identity cells */
+.site-price-sheet {
+  min-width: 74rem;
+}
 .site-price-sheet .site-price-input,
 .site-price-sheet .site-price-status {
   width: 100%;
