@@ -1,5 +1,5 @@
 /**
- * Website prices country sheet — add row, save, tint, copy selected, jump search.
+ * Website prices country sheet — add row, save, tint, copy one / copy selected, jump search.
  * CSRF is injected by csrf.js on same-origin POST.
  */
 (function (global) {
@@ -574,6 +574,11 @@
   }
 
   function copySelected() {
+    var table = tableEl();
+    if (table && table.getAttribute('data-admin') !== '1') {
+      setStatus('Copy selected is Admin only. Use Copy on one site.', true);
+      return;
+    }
     var rows = visibleDataRows();
     var domains = [];
     rows.forEach(function (row) {
@@ -588,6 +593,18 @@
     }
     copyText(domains.join('\n')).then(function (ok) {
       if (ok) setStatus('Copied ' + domains.length + ' website' + (domains.length === 1 ? '' : 's') + '.', false);
+      else setStatus('Could not copy.', true);
+    });
+  }
+
+  function copyOneSite(btn) {
+    var d = String((btn && btn.getAttribute('data-domain')) || '').trim();
+    if (!d) {
+      setStatus('Nothing to copy.', true);
+      return;
+    }
+    copyText(d).then(function (ok) {
+      if (ok) setStatus('Copied ' + d + '.', false);
       else setStatus('Could not copy.', true);
     });
   }
@@ -741,6 +758,12 @@
         e.preventDefault();
         var ctr = claim.closest('[data-site-price-row]');
         if (ctr) claimRow(ctr);
+        return;
+      }
+      var copyOne = t.closest('[data-site-price-copy-one]');
+      if (copyOne) {
+        e.preventDefault();
+        copyOneSite(copyOne);
       }
     });
 
@@ -811,12 +834,42 @@
     if (next) next.hidden = !show;
   }
 
+  function renderJumpResults(matches) {
+    var ul = document.querySelector('[data-site-price-jump-results]');
+    if (!ul) return;
+    ul.innerHTML = '';
+    if (!matches || !matches.length) {
+      ul.hidden = true;
+      return;
+    }
+    ul.hidden = false;
+    matches.forEach(function (m, i) {
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.href = m.url || '#';
+      a.setAttribute('data-jump-index', String(i));
+      var status = String(m.status || '').replace(/_/g, ' ');
+      a.textContent = (m.domain || '') + ' · ' + (m.country || '') + (status ? ' · ' + status : '');
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+  }
+
+  function markJumpResult(index) {
+    var ul = document.querySelector('[data-site-price-jump-results]');
+    if (!ul) return;
+    ul.querySelectorAll('a[data-jump-index]').forEach(function (a) {
+      a.classList.toggle('is-on', String(a.getAttribute('data-jump-index')) === String(index));
+    });
+  }
+
   function goToMatch(i) {
     if (!jumpMatches.length) return;
     jumpIndex = ((i % jumpMatches.length) + jumpMatches.length) % jumpMatches.length;
     var m = jumpMatches[jumpIndex];
     jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length);
     jumpButtons(true);
+    markJumpResult(jumpIndex);
     if (!m || !m.url) return;
     var table = tableEl();
     var sameCountry = table && table.getAttribute('data-country') === m.country;
@@ -846,6 +899,7 @@
       jumpIndex = -1;
       jumpStatus('');
       jumpButtons(false);
+      renderJumpResults([]);
       setStatus('Type something to search all countries.', true);
       return;
     }
@@ -853,9 +907,11 @@
     post('jump_search', { q: q }).then(function (json) {
       if (!json.ok) {
         setStatus(json.error || 'Could not search.', true);
+        renderJumpResults([]);
         return;
       }
       jumpMatches = json.matches || [];
+      renderJumpResults(jumpMatches);
       if (!jumpMatches.length) {
         jumpIndex = -1;
         jumpStatus('No sites match');
@@ -864,7 +920,14 @@
         return;
       }
       setStatus('', false);
-      goToMatch(0);
+      if (tableEl()) {
+        goToMatch(0);
+      } else {
+        jumpIndex = 0;
+        jumpStatus('1 of ' + jumpMatches.length);
+        jumpButtons(true);
+        markJumpResult(0);
+      }
     }).catch(function () {
       setStatus('Could not search.', true);
     });
@@ -881,6 +944,15 @@
     if (go) go.addEventListener('click', function (e) { e.preventDefault(); runJump(); });
     if (prev) prev.addEventListener('click', function (e) { e.preventDefault(); goToMatch(jumpIndex - 1); });
     if (next) next.addEventListener('click', function (e) { e.preventDefault(); goToMatch(jumpIndex + 1); });
+    var results = bar.querySelector('[data-site-price-jump-results]');
+    if (results) {
+      results.addEventListener('click', function (e) {
+        var a = e.target && e.target.closest ? e.target.closest('a[data-jump-index]') : null;
+        if (!a) return;
+        e.preventDefault();
+        goToMatch(parseInt(a.getAttribute('data-jump-index'), 10) || 0);
+      });
+    }
     if (input) {
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
@@ -904,13 +976,25 @@
 
   document.addEventListener('copy', function (e) {
     var el = e.target;
-    if (el && el.closest && el.closest('.is-copy-lock')) {
+    if (el && el.closest && el.closest('[data-site-price-copy-one]')) return;
+    if (el && el.closest && el.closest('[data-site-price-add]')) return;
+    if (el && el.closest && (el.closest('.is-copy-lock')
+        || el.closest('[data-site-price-sheet][data-admin="0"] [data-site-price-row]'))) {
       e.preventDefault();
     }
   });
   document.addEventListener('cut', function (e) {
     var el = e.target;
-    if (el && el.closest && el.closest('.is-copy-lock')) {
+    if (el && el.closest && el.closest('[data-site-price-add]')) return;
+    if (el && el.closest && (el.closest('.is-copy-lock')
+        || el.closest('[data-site-price-sheet][data-admin="0"] [data-site-price-row]'))) {
+      e.preventDefault();
+    }
+  });
+  document.addEventListener('contextmenu', function (e) {
+    var el = e.target;
+    if (el && el.closest && el.closest('[data-site-price-add]')) return;
+    if (el && el.closest && el.closest('[data-site-price-sheet][data-admin="0"] [data-site-price-row]')) {
       e.preventDefault();
     }
   });

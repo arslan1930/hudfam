@@ -812,10 +812,13 @@ try {
         && !str_contains($teamHtml, 'Copy all');
     $adminUnlock = str_contains($adminHtml, 'Unlock') && str_contains($adminHtml, 'is-locked')
         && !str_contains($adminHtml, 'is-copy-lock');
-    $teamNoUnlock = !str_contains($teamHtml, 'Unlock') && str_contains($teamHtml, 'is-copy-lock');
+    $teamNoUnlock = !str_contains($teamHtml, 'Unlock') && str_contains($teamHtml, 'is-copy-lock')
+        && str_contains($teamHtml, 'data-site-price-copy-one')
+        && !str_contains($teamHtml, 'data-site-price-select');
     $hasAdd = str_contains($adminHtml, 'data-site-price-add') && str_contains($pageSrc, 'data-site-price-sheet');
     $adminDrag = str_contains($adminHtml, 'data-site-price-drag') && str_contains($adminHtml, 'data-site-price-lane');
-    $teamNoDrag = !str_contains($teamHtml, 'data-site-price-drag');
+    $teamNoDrag = !str_contains($teamHtml, 'data-site-price-drag')
+        && !str_contains($adminHtml, 'data-site-price-copy-one');
     if ($noExport && $adminUnlock && $teamNoUnlock && $hasAdd && $adminDrag && $teamNoDrag) {
         pass('site_price sheet render lock + no Team export');
     } else {
@@ -1055,7 +1058,8 @@ try {
     $teamPageOk = str_contains($teamPageSrc, "site_price_run_page")
         && str_contains($teamPageSrc, 'team_site_prices')
         && !preg_match('/Copy all|Download \.txt|Download CSV/', $teamPageSrc)
-        && !str_contains($filterTeam, 'Copy all');
+        && !str_contains($filterTeam, 'Copy all')
+        && !str_contains($filterTeam, 'Copy selected');
     if ($filterOk && $teamPageOk && $filterChipsOk) {
         pass('site_price team page + sheet filters');
     } else {
@@ -1261,11 +1265,18 @@ try {
         && str_contains((string) ($jumpTeam[0]['url'] ?? ''), 'team_site_prices')
         && $orderOk
         && str_contains($tabsUsage, 'site-price-country-tabs');
-    $toolbar = render_site_price_toolbar();
+    $toolbar = render_site_price_toolbar(true);
+    $toolbarTeam = render_site_price_toolbar(false);
+    $jumpBar = render_site_price_jump_bar('', true);
+    $jumpTeamBar = render_site_price_jump_bar('', false);
     $copyOk = str_contains($toolbar, 'Copy selected')
         && !str_contains($toolbar, 'Copy all')
+        && $toolbarTeam === ''
         && !str_contains($tintHtml, 'Copy all')
-        && !str_contains($teamTintHtml, 'Remove');
+        && !str_contains($teamTintHtml, 'Remove')
+        && str_contains($jumpBar, 'Search all countries')
+        && str_contains($jumpBar, 'data-site-price-jump-results')
+        && $jumpTeamBar === '';
     if ($jumpOk && $copyOk) {
         pass('site_price jump search + usage tabs + copy selected');
     } else {

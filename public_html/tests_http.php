@@ -525,6 +525,9 @@ $r = req('GET', $base . '/index.php?page=admin_site_prices&hub=1');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Website prices')
     && str_contains($r['body'], 'Open a country')
+    && str_contains($r['body'], 'Search all countries')
+    && str_contains($r['body'], 'data-site-price-jump')
+    && str_contains($r['body'], 'data-site-price-jump-results')
     && !str_contains($r['body'], 'Fatal error')
     && !str_contains($r['body'], 'Warning:')) {
     pass('admin_site_prices hub=1');
@@ -539,7 +542,7 @@ $sheetNeedles = [
     '>Email</th>',
     'data-site-price-copy-selected',
     'Search this country',
-    'Find in other countries',
+    'Search all countries',
     'Ctrl/Cmd+Enter',
 ];
 $sheetBad = [];
@@ -821,7 +824,7 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')) {
     fail('comms blocked from Campaign drafts status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
-$teamNeedles = ['data-site-price-sheet', 'Copy selected', 'data-site-price-jump', '>Email</th>'];
+$teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];
 $teamBad = [];
 foreach ($teamNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
@@ -831,6 +834,9 @@ foreach ($teamNeedles as $n) {
 if ($r['status'] === 200 && !$teamBad
     && !str_contains($r['body'], 'Unlock')
     && !str_contains($r['body'], 'Copy all')
+    && !str_contains($r['body'], 'Copy selected')
+    && !str_contains($r['body'], 'data-site-price-copy-selected')
+    && !str_contains($r['body'], 'data-site-price-jump')
     && !str_contains($r['body'], 'Copy selected live URLs')
     && !str_contains($r['body'], 'download=txt')
     && !str_contains($r['body'], 'Fatal error')
