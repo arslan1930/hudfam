@@ -237,6 +237,11 @@ if ($attention):
     <h2>Order management</h2>
     <p><?= (int) $orderClientCount ?> active client<?= (int) $orderClientCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — sheets, prices, profit.</p>
   </a>
+  <a class="launch-card" href="index.php?page=admin_site_prices" data-dashboard-item
+     data-search="website prices publisher rates country sheet da dr traffic status office">
+    <h2>Website prices</h2>
+    <p>Publisher rate book — one country sheet of prices and statuses.</p>
+  </a>
   <a class="launch-card" href="index.php?page=admin_invoices" data-dashboard-item
      data-search="invoices generate printable blank draft done payment unpaid">
     <h2>Invoices</h2>

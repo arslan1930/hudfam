@@ -102,6 +102,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ensure_order_schema();
         $notes[] = 'order_clients / order_items (Order management) OK';
 
+        require_once __DIR__ . '/includes/site_prices.php';
+        ensure_site_prices_schema();
+        $notes[] = 'site_price_rows / site_price_statuses (Website prices) OK';
+
         require_once __DIR__ . '/includes/invoices.php';
         ensure_invoice_schema();
         $notes[] = 'invoices / invoice_items (Invoices panel) OK';

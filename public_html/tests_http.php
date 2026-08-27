@@ -450,6 +450,7 @@ foreach (
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order'],
+        'admin_site_prices' => ['Website prices', 'Open a country'],
         'admin_invoices' => ['Invoice'],
         'admin_users' => ['Users'],
         'account_password' => ['Change password', 'breadcrumbs'],
