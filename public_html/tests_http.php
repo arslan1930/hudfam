@@ -470,6 +470,32 @@ foreach (
     }
 }
 
+$r = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Email campaign')
+    && !str_contains($r['body'], 'Fatal error')
+    && !str_contains($r['body'], 'Warning:')) {
+    pass('admin emails campaign folder');
+} else {
+    fail('admin emails campaign folder status=' . $r['status']);
+}
+if (preg_match('/[?&]sheet=(\d+)/', $r['body'], $sheetM)) {
+    $sheetUrl = $base . '/index.php?page=admin_emails_data&folder=email_campaigns&sheet=' . (int) $sheetM[1];
+    $rSheet = req('GET', $sheetUrl);
+    if ($rSheet['status'] === 200
+        && str_contains($rSheet['body'], 'Fill gaps')
+        && str_contains($rSheet['body'], 'id="camp-fill-gaps"')
+        && str_contains($rSheet['body'], 'value="fill_gaps"')
+        && str_contains($rSheet['body'], 'Import')
+        && !str_contains($rSheet['body'], 'Fatal error')) {
+        pass('admin campaign country sheet Fill gaps');
+    } else {
+        fail('admin campaign sheet Fill gaps status=' . $rSheet['status']);
+    }
+} else {
+    pass('admin campaign folder has no country sheet yet (Fill gaps UI skipped)');
+}
+
 $r = req('GET', $base . '/index.php?page=admin_site_prices');
 $loc = location($r);
 $openedCountry = $r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'country=');
@@ -652,6 +678,14 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashbo
     pass('teammate blocked from OM live URL txt');
 } else {
     fail('teammate OM txt status=' . $r['status'] . ' loc=' . $loc);
+}
+$r = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400
+    && (str_contains($loc, 'login') || str_contains($loc, 'team_dashboard') || str_contains($loc, 'team_departments'))) {
+    pass('teammate blocked from Admin emails campaign');
+} else {
+    fail('teammate opened Admin emails campaign status=' . $r['status'] . ' loc=' . $loc);
 }
 
 // Dept-scoped finder can open Filter; cannot open Extracting

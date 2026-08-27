@@ -85,10 +85,10 @@ db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR do
 db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
 db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%'");
-db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%'");
-db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%'");
-db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%'");
+db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
+db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
+db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
+db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%' OR domain LIKE 'txfgap-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
 db()->exec("DELETE FROM semrush_sites WHERE domain LIKE 'txfsem-%'");
@@ -2948,6 +2948,192 @@ try {
     }
 } catch (Throwable $e) {
     fail('campaign: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Fill gaps from Admin + Final (campaign country sheet) ---
+try {
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfgap-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfgap-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfgap-%'");
+    db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfgap-%'");
+    db()->exec("DELETE FROM email_campaign_sheets WHERE project_name='TXF Gap Fill'");
+    db()->exec("DELETE FROM email_campaign_projects WHERE name='TXF Gap Fill'");
+
+    $gapSheet = create_email_campaign_sheet('Finland', (int) $adminUser['id'], 'TXF Gap Fill', false);
+    $seedFinal = db()->prepare(
+        "INSERT INTO sites_with_emails_admin_all
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?, 'Finland', 'Finnish', 'europe', ?, '', '', '')
+         ON DUPLICATE KEY UPDATE email1=VALUES(email1), email2='', email3='', email4=''"
+    );
+    foreach (
+        [
+            ['txfgap-a.com', 'a@final.txfgap-a.com'],
+            ['txfgap-b.com', 'b@txfgap-b.com'],
+            ['txfgap-empty.com', ''],
+            ['txfgap-excl.com', 'excl@txfgap-excl.com'],
+        ] as [$dom, $em]
+    ) {
+        $seedFinal->execute([$dom, $em]);
+    }
+    $seedAdmin = db()->prepare(
+        "INSERT INTO sites_with_emails_admin
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?, 'Finland', 'Finnish', 'europe', ?, '', '', '')
+         ON DUPLICATE KEY UPDATE email1=VALUES(email1), email2='', email3='', email4=''"
+    );
+    foreach (
+        [
+            ['txfgap-a.com', 'a@admin.txfgap-a.com'],
+            ['txfgap-c.com', 'c@txfgap-c.com'],
+            ['txfgap-d.com', 'd-new@txfgap-d.com'],
+        ] as [$dom, $em]
+    ) {
+        $seedAdmin->execute([$dom, $em]);
+    }
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team
+           (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfgap-team.com', 'Finland', 'Finnish', 'europe', 'team@txfgap-team.com', '', '', '')"
+    )->execute();
+
+    upsert_email_campaign_row($gapSheet, 'txfgap-b.com', ['b@txfgap-b.com']);
+    upsert_email_campaign_row($gapSheet, 'txfgap-d.com', ['d-old@txfgap-d.com']);
+    $idD = (int) db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-d.com' LIMIT 1"
+    )->fetchColumn();
+    set_email_campaign_row_email_sent($gapSheet, $idD, true);
+    exclude_email_campaign_domain($gapSheet, 'txfgap-excl.com');
+
+    $rowsBeforeDiff = count_email_campaign_rows($gapSheet);
+    $diff = diff_email_campaign_vs_archives($gapSheet, 'Finland', ['domains' => true]);
+    $rowsAfterDiff = count_email_campaign_rows($gapSheet);
+    $add = $diff['add'] ?? [];
+    $update = $diff['update'] ?? [];
+    $same = $diff['same'] ?? [];
+    $empty = $diff['empty'] ?? [];
+    $excluded = $diff['excluded'] ?? [];
+    $adminOnly = $diff['admin_only'] ?? [];
+    $finalOnly = $diff['final_only'] ?? [];
+    $counts = $diff['counts'] ?? [];
+    if ($rowsBeforeDiff === $rowsAfterDiff
+        && in_array('txfgap-a.com', $add, true)
+        && in_array('txfgap-c.com', $add, true)
+        && in_array('txfgap-d.com', $update, true)
+        && in_array('txfgap-b.com', $same, true)
+        && in_array('txfgap-empty.com', $empty, true)
+        && in_array('txfgap-excl.com', $excluded, true)
+        && in_array('txfgap-c.com', $adminOnly, true)
+        && in_array('txfgap-b.com', $finalOnly, true)
+        && (int) ($counts['fillable'] ?? 0) === ((int) ($counts['add'] ?? 0) + (int) ($counts['update'] ?? 0))
+        && (int) ($counts['add'] ?? 0) >= 2
+        && (int) ($counts['update'] ?? 0) >= 1) {
+        pass('fill-gaps diff is pure and buckets add/update/same/empty/excluded');
+    } else {
+        fail('fill-gaps diff: ' . json_encode($diff) . " rows=$rowsBeforeDiff/$rowsAfterDiff");
+    }
+
+    $adminBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+    $finalBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+    $teamBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+    $wpBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM site_price_rows WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+
+    $fill = fill_email_campaign_gaps_from_archives($gapSheet, 'Finland');
+    $rowA = db()->query(
+        "SELECT email1, email_sent FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-a.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $rowC = db()->query(
+        "SELECT email1, email_sent FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-c.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $rowD = db()->query(
+        "SELECT email1, email_sent FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-d.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $hasEmpty = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-empty.com'"
+    )->fetchColumn();
+    $hasExcl = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-excl.com'"
+    )->fetchColumn();
+    $hasTeamDom = (int) db()->query(
+        "SELECT COUNT(*) FROM email_campaign_rows WHERE sheet_id=" . (int) $gapSheet
+        . " AND domain='txfgap-team.com'"
+    )->fetchColumn();
+    $adminAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+    $finalAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+    $teamAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+    $wpAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM site_price_rows WHERE domain LIKE 'txfgap-%'"
+    )->fetchColumn();
+
+    if ((string) ($rowA['email1'] ?? '') === 'a@admin.txfgap-a.com'
+        && (int) ($rowA['email_sent'] ?? 1) === 0
+        && (string) ($rowC['email1'] ?? '') === 'c@txfgap-c.com'
+        && (int) ($rowC['email_sent'] ?? 1) === 0
+        && (string) ($rowD['email1'] ?? '') === 'd-new@txfgap-d.com'
+        && (int) ($rowD['email_sent'] ?? 0) === 1
+        && $hasEmpty === 0
+        && $hasExcl === 0
+        && $hasTeamDom === 0
+        && $adminAfter === $adminBefore
+        && $finalAfter === $finalBefore
+        && $teamAfter === $teamBefore
+        && $wpAfter === $wpBefore
+        && (int) ($fill['would_add'] ?? 0) >= 2
+        && (int) ($fill['would_update'] ?? 0) >= 1) {
+        pass('fill-gaps copies Admin-win union, keeps emailed, skips empty/excluded/Team');
+    } else {
+        fail('fill-gaps fill: ' . json_encode([
+            'fill' => $fill,
+            'a' => $rowA,
+            'c' => $rowC,
+            'd' => $rowD,
+            'empty' => $hasEmpty,
+            'excl' => $hasExcl,
+            'teamDom' => $hasTeamDom,
+            'admin' => [$adminBefore, $adminAfter],
+            'final' => [$finalBefore, $finalAfter],
+            'team' => [$teamBefore, $teamAfter],
+            'wp' => [$wpBefore, $wpAfter],
+        ]));
+    }
+
+    $fill2 = fill_email_campaign_gaps_from_archives($gapSheet, 'Finland');
+    if ((int) ($fill2['would_add'] ?? -1) === 0
+        && (int) ($fill2['would_update'] ?? -1) === 0
+        && (int) ($fill2['imported'] ?? -1) === 0
+        && (int) ($fill2['updated'] ?? -1) === 0) {
+        pass('second fill-gaps is a no-op');
+    } else {
+        fail('fill-gaps second: ' . json_encode($fill2));
+    }
+
+    delete_email_campaign_sheet($gapSheet);
+    db()->exec("DELETE FROM email_campaign_projects WHERE name='TXF Gap Fill'");
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfgap-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfgap-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfgap-%'");
+} catch (Throwable $e) {
+    fail('fill-gaps: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Admin emailed checkpoint (Final stays neutral) ---

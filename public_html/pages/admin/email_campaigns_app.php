@@ -374,6 +374,24 @@ if ($sheetId > 0) {
                 $lastPage = max(1, (int) ceil($totalAfter / $perPage));
                 redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
             }
+            if ($action === 'fill_gaps') {
+                $result = fill_email_campaign_gaps_from_archives($sheetId, $sheetCountry);
+                $n = (int) ($result['imported'] ?? 0);
+                $u = (int) ($result['updated'] ?? 0);
+                $msg = 'Filled gaps from Final + Admin into ' . $sheetCountry . ': '
+                    . $n . ' new, ' . $u . ' updated';
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_empty'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
+                }
+                $msg .= '. Admin and Final were not changed. Campaign emailed marks stayed on this sheet.';
+                flash('ok', $msg);
+                $totalAfter = count_email_campaign_rows($sheetId);
+                $lastPage = max(1, (int) ceil($totalAfter / $perPage));
+                redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
+            }
             if ($action === 'allow_excluded_domain') {
                 $domain = (string) post('domain');
                 $ok = clear_email_campaign_domain_exclusion($sheetId, $domain);
@@ -551,6 +569,12 @@ if ($sheetId > 0) {
     $projectHref = $sheetProjectId > 0
         ? ($campBase . '&project=' . $sheetProjectId)
         : $campBase;
+    $gapDiff = diff_email_campaign_vs_archives($sheetId, $sheetCountry, ['sample' => 20]);
+    $gapCounts = is_array($gapDiff['counts'] ?? null) ? $gapDiff['counts'] : [];
+    $gapSamples = is_array($gapDiff['samples'] ?? null) ? $gapDiff['samples'] : [];
+    $gapFillable = (int) ($gapCounts['fillable'] ?? 0);
+    $adminCountryUrl = $base . '&folder=sites_with_emails&country=' . rawurlencode($sheetCountry);
+    $finalCountryUrl = $base . '&folder=all_sites_with_emails&country=' . rawurlencode($sheetCountry);
 
     render_header($projectName . ' · ' . $sheetCountry, 'admin');
     render_breadcrumbs([
@@ -586,7 +610,7 @@ if ($sheetId > 0) {
     </div>
     <p class="help">
       Admin fills <strong><?= h($sheetCountry) ?></strong> data for project <strong><?= h($projectName) ?></strong>.
-      Use <strong>+ Add site</strong>, paste, file import, or import from Final.
+      Use <strong>+ Add site</strong>, paste, file import, Fill gaps from Admin + Final, or import from Team / Admin / Final.
     </p>
 
     <?php
@@ -928,9 +952,10 @@ if ($sheetId > 0) {
       <?php if ($rows === [] && $q === '' && $sentFilter === '' && $batchFilter < 1): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
-        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Team / Admin / Final</strong>.</p>
+        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, <strong>Fill gaps from Admin + Final</strong>, or <strong>Import from Team / Admin / Final</strong>.</p>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
           <button type="button" class="btn" data-camp-add-toggle>+ Add site</button>
+          <a class="btn secondary" href="#camp-fill-gaps">Fill gaps</a>
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
         </p>
       </div>
@@ -1026,6 +1051,52 @@ if ($sheetId > 0) {
         </p>
         <p class="actions" style="margin-top:0.75rem">
           <button class="btn" type="submit">Import file into sheet</button>
+        </p>
+      </form>
+    </div>
+
+    <div class="card" style="margin-top:1rem" id="camp-fill-gaps">
+      <h2><?= label_with_info('Fill gaps from Admin + Final', 'Copies missing and different-email sites from Final then Admin into this country campaign sheet only. Admin emails win when both have the domain. Previously removed sites stay blocked unless you Allow again. Campaign emailed marks stay; new rows start unmarked. Admin, Final, and Team are not edited.') ?></h2>
+      <p class="help">
+        Copies into this <strong><?= h($sheetCountry) ?></strong> campaign sheet only.
+        Admin, Final, and Team are not edited.
+        Previously removed domains stay blocked unless you Allow again.
+        Campaign emailed marks stay on this sheet; new rows start unmarked.
+      </p>
+      <p>
+        <strong><?= (int) ($gapCounts['add'] ?? 0) ?></strong> not on this sheet
+        · <strong><?= (int) ($gapCounts['update'] ?? 0) ?></strong> different emails
+        · <strong><?= (int) ($gapCounts['same'] ?? 0) ?></strong> already the same
+        · <strong><?= (int) ($gapCounts['empty'] ?? 0) ?></strong> no emails
+        · <strong><?= (int) ($gapCounts['excluded'] ?? 0) ?></strong> previously removed
+      </p>
+      <?php
+      $addSample = is_array($gapSamples['add'] ?? null) ? $gapSamples['add'] : [];
+      $updSample = is_array($gapSamples['update'] ?? null) ? $gapSamples['update'] : [];
+      ?>
+      <?php if ($addSample !== []): ?>
+      <p class="muted" style="margin:.4rem 0 0">Would add (sample): <?= h(implode(', ', $addSample)) ?></p>
+      <?php endif; ?>
+      <?php if ($updSample !== []): ?>
+      <p class="muted" style="margin:.4rem 0 0">Would update (sample): <?= h(implode(', ', $updSample)) ?></p>
+      <?php endif; ?>
+      <?php if ((int) ($gapCounts['empty'] ?? 0) > 0): ?>
+      <p class="muted" style="margin:.4rem 0 0">
+        Source rows with no emails cannot be imported.
+        Add emails on <a href="<?= h($adminCountryUrl) ?>">Admin <?= h($sheetCountry) ?></a> first
+        (Final: <a href="<?= h($finalCountryUrl) ?>"><?= h($sheetCountry) ?></a>).
+      </p>
+      <?php endif; ?>
+      <form method="post" action="<?= h($formAction) ?>" style="margin-top:.85rem"
+            data-show-processing="Filling gaps…"
+            onsubmit="return confirm(<?= h(json_encode(
+                'Fill gaps from Final then Admin into ' . $sheetCountry . "?\n\nCampaign emailed marks stay on this sheet.\nAdmin and Final are not changed.",
+                JSON_UNESCAPED_UNICODE
+            )) ?>);">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="fill_gaps">
+        <p class="actions" style="margin-top:0.75rem">
+          <button class="btn" type="submit"<?= $gapFillable === 0 ? ' disabled' : '' ?>>Fill gaps</button>
         </p>
       </form>
     </div>
