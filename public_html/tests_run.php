@@ -869,6 +869,7 @@ try {
         && ($after[1] ?? '') === 'txfprice-drag-a.at'
         && $teamDragFail
         && str_contains($laneHtml, 'data-site-price-lane="processing"')
+        && str_contains($laneHtml, 'data-site-price-lane="new"')
         && str_contains($laneHtml, 'data-site-price-lane="other"')
         && str_contains($laneHtml, 'Follow up TXF')) {
         pass('site_price lanes + Admin drag order');

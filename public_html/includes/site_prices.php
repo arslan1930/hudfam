@@ -1008,9 +1008,6 @@ function render_site_price_sheet_tbody(array $rows, array $viewer): string
         $groups[$lane][] = $row;
     }
     foreach ($groups as $lane => $items) {
-        if ($items === []) {
-            continue;
-        }
         $html .= render_site_price_lane_header($lane, count($items), ($viewer['role'] ?? '') === 'admin');
         foreach ($items as $row) {
             $html .= render_site_price_sheet_row($row, $viewer);
