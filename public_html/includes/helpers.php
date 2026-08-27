@@ -666,7 +666,8 @@ function render_sheet_shared_row_action_forms(string $actionUrl, string $prefix,
     $includeMark = !empty($state['mark']);
     $includePush = !empty($state['push']);
     $includeRemove = ($state['remove'] ?? true) !== false;
-    $nav = '<input type="hidden" name="q" value="' . h($q) . '" data-swe-q>'
+    $nav = (function_exists('csrf_field') ? csrf_field() : '')
+        . '<input type="hidden" name="q" value="' . h($q) . '" data-swe-q>'
         . '<input type="hidden" name="p" value="' . $p . '">';
     if ($sent !== '') {
         $nav .= '<input type="hidden" name="sent" value="' . h($sent) . '">';

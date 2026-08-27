@@ -136,6 +136,24 @@ if ($guardOk) {
     pass('web-root CLI guards on tests + reset_admin_once');
 }
 
+$draftJs = (string) file_get_contents(__DIR__ . '/assets/js/draft-autosave.js');
+$helpersSrc = (string) file_get_contents(__DIR__ . '/includes/helpers.php');
+$sweAppSrc = (string) file_get_contents(__DIR__ . '/pages/sites_with_emails_app.php');
+$indexSrc = (string) file_get_contents(__DIR__ . '/index.php');
+$presenceJs = (string) file_get_contents(__DIR__ . '/assets/js/task-presence.js');
+if (
+    str_contains($draftJs, "name === '_csrf'")
+    && str_contains($helpersSrc, 'csrf_field()')
+    && preg_match('/\$nav = \(function_exists\(\'csrf_field\'\) \? csrf_field\(\) : \'\'\)/', $helpersSrc)
+    && preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppSrc)
+    && str_contains($indexSrc, "\$page === 'presence_ping'")
+    && str_contains($presenceJs, "body.set('_csrf'")
+) {
+    pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
+} else {
+    fail('draft autosave / sheet / presence CSRF wiring');
+}
+
 // --- Login ---
 try {
     if (!attempt_login('admin', 'TestAdmin9x')) {

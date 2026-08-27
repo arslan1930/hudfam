@@ -195,6 +195,7 @@ if (
         || $page === 'login'
         || $page === 'forgot_password'
         || $page === 'reset_password'
+        || $page === 'presence_ping'
     )
 ) {
     require_csrf();
