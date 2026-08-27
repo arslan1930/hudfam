@@ -42,6 +42,7 @@ $requiredFiles = [
     'assets/js/stay-scroll.js',
     'includes/site_prices.php',
     'pages/admin/site_prices.php',
+    'assets/js/site-prices.js',
 ];
 foreach ($requiredFiles as $rel) {
     if (!is_file($root . '/' . $rel)) {
@@ -52,7 +53,7 @@ foreach ($requiredFiles as $rel) {
 }
 
 $asset = file_get_contents($root . '/asset.php') ?: '';
-foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js'] as $key) {
+foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js', 'js/site-prices.js'] as $key) {
     if (!str_contains($asset, $key)) {
         fail("asset.php missing allowlist {$key}");
     } else {
@@ -245,7 +246,7 @@ if (!str_contains($ordersHubGuide, 'guide_orders()')
     || !str_contains($accountHubGuide, 'guide_admin_account()')
     || !str_contains($sitePricesHubGuide, 'guide_site_prices()')
     || !str_contains($sitePricesHubGuide, 'Open a country sheet')
-    || !str_contains($sitePricesHubGuide, 'No sites in this country yet')
+    || !str_contains($sitePricesHubGuide, 'data-site-price-sheet')
     || !str_contains($sitePricesHubGuide, 'data-no-draft')) {
     fail('Office hubs missing page-purpose guide calls');
 } else {
@@ -261,6 +262,9 @@ if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
     || !str_contains($sitePricesLib, 'function site_price_insert_row')
     || !str_contains($sitePricesLib, 'function site_price_sort_rows')
     || !str_contains($sitePricesLib, 'function site_price_row_for_viewer')
+    || !str_contains($sitePricesLib, 'function site_price_save_row')
+    || !str_contains($sitePricesLib, 'function site_price_unlock_row')
+    || !str_contains($sitePricesLib, 'identity_locked')
     || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS site_price_rows')
     || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS site_price_statuses')
     || !str_contains($upgradePhp, 'ensure_site_prices_schema')
@@ -269,6 +273,25 @@ if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
     fail('Website prices missing schema / helpers / route');
 } else {
     ok('Website prices schema + helpers + Admin hub route');
+}
+$sitePricesJs = file_get_contents($root . '/assets/js/site-prices.js') ?: '';
+$sitePricesCss = file_get_contents($root . '/assets/css/app.css') ?: '';
+$assetPrices = file_get_contents($root . '/asset.php') ?: '';
+if (!str_contains($sitePricesHubGuide, "'save_row'")
+    || !str_contains($sitePricesHubGuide, "'unlock_row'")
+    || !str_contains($sitePricesHubGuide, 'site_prices_script_tag')
+    || str_contains($sitePricesHubGuide, 'Copy all')
+    || preg_match('/Download \.txt|Download CSV/', $sitePricesHubGuide)
+    || !str_contains($sitePricesLib, 'data-site-price-add')
+    || !str_contains($sitePricesLib, 'Unlock')
+    || !str_contains($sitePricesJs, "post('save_row'")
+    || !str_contains($sitePricesJs, "post('unlock_row'")
+    || !str_contains($sitePricesJs, 'is-copy-lock')
+    || !str_contains($sitePricesCss, '.site-price-id.is-locked')
+    || !str_contains($assetPrices, "'js/site-prices.js'")) {
+    fail('Website prices grid / save / identity lock missing');
+} else {
+    ok('Website prices add-row + per-row save + identity lock');
 }
 foreach ([
     'guide_campaign_search',

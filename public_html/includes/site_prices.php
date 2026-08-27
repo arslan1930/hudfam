@@ -2,7 +2,7 @@
 
 /**
  * Website prices — publisher rate book (Office).
- * One country sheet. Identity (domain / DA / DR / traffic) locks after save (later PR).
+ * One country sheet. Identity (domain / DA / DR / traffic) locks after save.
  * Does not write into Our database.
  */
 
@@ -287,10 +287,14 @@ function site_price_insert_row(array $fields): int
         $status = 'new';
     }
     try {
+        $locked = array_key_exists('identity_locked', $fields)
+            ? ((int) $fields['identity_locked'] ? 1 : 0)
+            : 1;
         db()->prepare(
             'INSERT INTO site_price_rows
-              (country, domain, niche, da, dr, traffic, price_note, extra_note, status_slug, created_by, managed_by)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+              (country, domain, niche, da, dr, traffic, price_note, extra_note, status_slug,
+               identity_locked, created_by, managed_by)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
         )->execute([
             $country,
             $domain,
@@ -301,6 +305,7 @@ function site_price_insert_row(array $fields): int
             trim((string) ($fields['price_note'] ?? '')),
             trim((string) ($fields['extra_note'] ?? '')),
             $status,
+            $locked,
             ((int) ($fields['created_by'] ?? 0) > 0) ? (int) $fields['created_by'] : null,
             ((int) ($fields['managed_by'] ?? 0) > 0) ? (int) $fields['managed_by'] : null,
         ]);
@@ -443,4 +448,339 @@ function site_price_sheet_url(string $country): string
         return site_price_hub_url();
     }
     return site_price_hub_url() . '&country=' . rawurlencode($country);
+}
+
+function site_price_normalize_status(string $slug): string
+{
+    $slug = strtolower(trim($slug));
+    if ($slug === '' || !isset(site_price_status_map()[$slug])) {
+        return 'new';
+    }
+    return $slug;
+}
+
+function get_site_price_row(int $id): ?array
+{
+    ensure_site_prices_schema();
+    $id = max(0, $id);
+    if ($id < 1) {
+        return null;
+    }
+    $stmt = db()->prepare(
+        'SELECT r.*,
+                cu.username AS added_by_username, cu.full_name AS added_by_full, cu.role AS added_by_role,
+                mu.username AS managed_by_username, mu.full_name AS managed_by_full
+         FROM site_price_rows r
+         LEFT JOIN users cu ON cu.id = r.created_by
+         LEFT JOIN users mu ON mu.id = r.managed_by
+         WHERE r.id=? LIMIT 1'
+    );
+    $stmt->execute([$id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function site_price_log_event(int $rowId, array $viewer, string $kind, string $old = '', string $new = ''): void
+{
+    $rowId = max(0, $rowId);
+    if ($rowId < 1 || $kind === '') {
+        return;
+    }
+    $actor = (int) ($viewer['id'] ?? 0);
+    db()->prepare(
+        'INSERT INTO site_price_events (row_id, actor_id, actor_role, kind, old_value, new_value)
+         VALUES (?,?,?,?,?,?)'
+    )->execute([
+        $rowId,
+        $actor > 0 ? $actor : null,
+        (string) ($viewer['role'] ?? ''),
+        $kind,
+        $old,
+        $new,
+    ]);
+}
+
+function site_price_format_niche(string $raw): string
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return '';
+    }
+    if (function_exists('prospect_format_niches') && function_exists('prospect_parse_niches')) {
+        return prospect_format_niches(prospect_parse_niches($raw));
+    }
+    return $raw;
+}
+
+/**
+ * @param array<string,mixed> $viewer
+ * @return array<string,mixed>
+ */
+function site_price_add_row_for_user(array $fields, array $viewer): array
+{
+    $fields['created_by'] = (int) ($viewer['id'] ?? 0);
+    $fields['identity_locked'] = 1;
+    $id = site_price_insert_row($fields);
+    site_price_log_event($id, $viewer, 'added', '', site_price_normalize_domain((string) ($fields['domain'] ?? '')));
+    $row = get_site_price_row($id);
+    if (!$row) {
+        throw new RuntimeException('Could not save that site.');
+    }
+    return $row;
+}
+
+/**
+ * Save one row. Locked identity cannot change unless Admin unlocked first.
+ *
+ * @param array<string,mixed> $fields
+ * @param array{id?:int,role?:string} $viewer
+ * @return array<string,mixed>
+ */
+function site_price_save_row(int $id, array $fields, array $viewer): array
+{
+    ensure_site_prices_schema();
+    $row = get_site_price_row($id);
+    if (!$row) {
+        throw new RuntimeException('Site not found.');
+    }
+    $isAdmin = ($viewer['role'] ?? '') === 'admin';
+    $locked = (int) ($row['identity_locked'] ?? 0) === 1;
+    $postedIdentity = array_key_exists('domain', $fields)
+        || array_key_exists('da', $fields)
+        || array_key_exists('dr', $fields)
+        || array_key_exists('traffic', $fields);
+
+    $domain = (string) ($row['domain'] ?? '');
+    $da = (string) ($row['da'] ?? '');
+    $dr = (string) ($row['dr'] ?? '');
+    $traffic = (string) ($row['traffic'] ?? '');
+
+    if ($postedIdentity) {
+        $nextDomain = array_key_exists('domain', $fields)
+            ? site_price_normalize_domain((string) $fields['domain'])
+            : $domain;
+        $nextDa = array_key_exists('da', $fields) ? trim((string) $fields['da']) : $da;
+        $nextDr = array_key_exists('dr', $fields) ? trim((string) $fields['dr']) : $dr;
+        $nextTraffic = array_key_exists('traffic', $fields) ? trim((string) $fields['traffic']) : $traffic;
+        $changed = $nextDomain !== $domain || $nextDa !== $da || $nextDr !== $dr || $nextTraffic !== $traffic;
+        if ($changed) {
+            if ($locked) {
+                throw new RuntimeException('Website, DA, DR, and traffic are locked. Admin can Unlock to edit them.');
+            }
+            if (!$isAdmin) {
+                throw new RuntimeException('Only Admin can change website, DA, DR, or traffic.');
+            }
+            if ($nextDomain === '') {
+                throw new InvalidArgumentException('Site name is required.');
+            }
+            $domain = $nextDomain;
+            $da = $nextDa;
+            $dr = $nextDr;
+            $traffic = $nextTraffic;
+        }
+    }
+
+    $niche = array_key_exists('niche', $fields)
+        ? site_price_format_niche((string) $fields['niche'])
+        : (string) ($row['niche'] ?? '');
+    $price = array_key_exists('price_note', $fields)
+        ? trim((string) $fields['price_note'])
+        : (string) ($row['price_note'] ?? '');
+    $note = array_key_exists('extra_note', $fields)
+        ? trim((string) $fields['extra_note'])
+        : (string) ($row['extra_note'] ?? '');
+    $status = array_key_exists('status_slug', $fields)
+        ? site_price_normalize_status((string) $fields['status_slug'])
+        : site_price_normalize_status((string) ($row['status_slug'] ?? 'new'));
+
+    $oldStatus = (string) ($row['status_slug'] ?? '');
+    $oldPrice = (string) ($row['price_note'] ?? '');
+
+    try {
+        db()->prepare(
+            'UPDATE site_price_rows
+             SET domain=?, niche=?, da=?, dr=?, traffic=?, price_note=?, extra_note=?, status_slug=?,
+                 identity_locked=1, updated_at=NOW()
+             WHERE id=?'
+        )->execute([$domain, $niche, $da, $dr, $traffic, $price, $note, $status, $id]);
+    } catch (PDOException $e) {
+        if ($e->getCode() === '23000') {
+            throw new RuntimeException('That site is already on this country’s price sheet.');
+        }
+        throw $e;
+    }
+
+    if ($oldStatus !== $status) {
+        site_price_log_event($id, $viewer, 'status', $oldStatus, $status);
+    }
+    if ($oldPrice !== $price) {
+        site_price_log_event($id, $viewer, 'price', $oldPrice, $price);
+    }
+
+    $saved = get_site_price_row($id);
+    if (!$saved) {
+        throw new RuntimeException('Site not found.');
+    }
+    return $saved;
+}
+
+/**
+ * @param array{id?:int,role?:string} $viewer
+ * @return array<string,mixed>
+ */
+function site_price_unlock_row(int $id, array $viewer): array
+{
+    if (($viewer['role'] ?? '') !== 'admin') {
+        throw new RuntimeException('Only Admin can unlock website, DA, DR, or traffic.');
+    }
+    $row = get_site_price_row($id);
+    if (!$row) {
+        throw new RuntimeException('Site not found.');
+    }
+    db()->prepare('UPDATE site_price_rows SET identity_locked=0, updated_at=NOW() WHERE id=?')->execute([$id]);
+    site_price_log_event($id, $viewer, 'unlock', '1', '0');
+    $saved = get_site_price_row($id);
+    if (!$saved) {
+        throw new RuntimeException('Site not found.');
+    }
+    return $saved;
+}
+
+function site_price_status_select_html(string $current, string $id = ''): string
+{
+    $current = site_price_normalize_status($current);
+    $html = '<select class="site-price-status" data-site-price-status data-no-draft'
+        . ($id !== '' ? ' id="' . h($id) . '"' : '')
+        . ' aria-label="Status">';
+    foreach (site_price_list_statuses() as $st) {
+        $slug = (string) $st['slug'];
+        $sel = $slug === $current ? ' selected' : '';
+        $html .= '<option value="' . h($slug) . '"' . $sel . '>' . h((string) $st['label']) . '</option>';
+    }
+    $html .= '</select>';
+    return $html;
+}
+
+function site_price_locked_text(string $value, bool $copyLock): string
+{
+    $show = $value !== '' ? $value : '—';
+    $cls = 'site-price-id is-locked' . ($copyLock ? ' is-copy-lock' : '');
+    return '<span class="' . h($cls) . '">' . h($show) . '</span>';
+}
+
+/**
+ * @param array<string,mixed> $row
+ * @param array{id?:int,role?:string} $viewer
+ */
+function render_site_price_sheet_row(array $row, array $viewer): string
+{
+    $view = site_price_row_for_viewer($row, $viewer);
+    $id = (int) ($view['id'] ?? 0);
+    $isAdmin = ($viewer['role'] ?? '') === 'admin';
+    $locked = (int) ($row['identity_locked'] ?? 0) === 1;
+    $copyLock = !$isAdmin && $locked;
+    $domain = (string) ($view['domain'] ?? '');
+    $hay = mb_strtolower(trim(
+        $domain . ' ' . (string) ($view['niche'] ?? '') . ' ' . (string) ($view['price_note'] ?? '')
+        . ' ' . (string) ($view['status_slug'] ?? '')
+    ));
+    $html = '<tr class="site-price-row" data-site-price-row data-row-id="' . $id . '"'
+        . ' data-locked="' . ($locked ? '1' : '0') . '" data-search="' . h($hay) . '">';
+
+    $html .= '<td data-label="Website">';
+    if ($locked) {
+        $html .= site_price_locked_text($domain, $copyLock);
+        if ($isAdmin && function_exists('render_open_site_anchor')) {
+            $html .= ' ' . render_open_site_anchor($domain, ['label' => 'Open', 'class' => 'small']);
+        }
+    } else {
+        $html .= '<input type="text" class="site-price-input" data-site-price-domain value="' . h($domain) . '"'
+            . ' autocomplete="off" spellcheck="false" data-no-draft aria-label="Website">';
+    }
+    $html .= '</td>';
+
+    $html .= '<td class="prospect-niche-td" data-label="Niche">';
+    if (function_exists('render_niche_chip_box')) {
+        $html .= render_niche_chip_box((string) ($view['niche'] ?? ''), [
+            'name' => '',
+            'id' => 'sp_niche_' . $id,
+            'compact' => true,
+            'placeholder' => 'Add…',
+        ]);
+    } else {
+        $html .= '<input type="text" class="site-price-input" data-site-price-niche value="'
+            . h((string) ($view['niche'] ?? '')) . '" autocomplete="off" data-no-draft aria-label="Niche">';
+    }
+    $html .= '</td>';
+
+    foreach (['da' => 'DA', 'dr' => 'DR', 'traffic' => 'Traffic'] as $key => $label) {
+        $val = (string) ($view[$key] ?? '');
+        $html .= '<td data-label="' . h($label) . '">';
+        if ($locked) {
+            $html .= site_price_locked_text($val, $copyLock);
+        } else {
+            $html .= '<input type="text" class="site-price-input" data-site-price-' . h($key)
+                . ' value="' . h($val) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="' . h($label) . '">';
+        }
+        $html .= '</td>';
+    }
+
+    $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-site-price-price value="'
+        . h((string) ($view['price_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
+    $html .= '<td data-label="Status">' . site_price_status_select_html((string) ($view['status_slug'] ?? 'new')) . '</td>';
+    $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-site-price-note value="'
+        . h((string) ($view['extra_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
+    $html .= '<td data-label="Actions" class="site-price-actions">';
+    if ($isAdmin && $locked) {
+        $html .= '<button type="button" class="btn secondary small" data-site-price-unlock>Unlock</button>';
+    }
+    $html .= '</td>';
+    $html .= '</tr>';
+    return $html;
+}
+
+function render_site_price_add_row(): string
+{
+    $html = '<tr class="site-price-add" data-site-price-add>';
+    $html .= '<td data-label="Website"><input type="text" class="site-price-input" data-add-domain'
+        . ' placeholder="example.com" autocomplete="off" spellcheck="false" data-no-draft aria-label="New website"></td>';
+    $html .= '<td class="prospect-niche-td" data-label="Niche">';
+    if (function_exists('render_niche_chip_box')) {
+        $html .= render_niche_chip_box('', [
+            'name' => '',
+            'id' => 'sp_niche_add',
+            'compact' => true,
+            'placeholder' => 'Add…',
+        ]);
+    } else {
+        $html .= '<input type="text" class="site-price-input" data-add-niche autocomplete="off" data-no-draft aria-label="Niche">';
+    }
+    $html .= '</td>';
+    $html .= '<td data-label="DA"><input type="text" class="site-price-input" data-add-da autocomplete="off" spellcheck="false" data-no-draft aria-label="DA"></td>';
+    $html .= '<td data-label="DR"><input type="text" class="site-price-input" data-add-dr autocomplete="off" spellcheck="false" data-no-draft aria-label="DR"></td>';
+    $html .= '<td data-label="Traffic"><input type="text" class="site-price-input" data-add-traffic autocomplete="off" spellcheck="false" data-no-draft aria-label="Traffic"></td>';
+    $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="60 euro article only" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
+    $html .= '<td data-label="Status">' . site_price_status_select_html('new') . '</td>';
+    $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-add-note autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
+    $html .= '<td data-label="Actions"><button type="button" class="btn small" data-site-price-add-btn>Add site</button></td>';
+    $html .= '</tr>';
+    return $html;
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @param array{id?:int,role?:string} $viewer
+ */
+function render_site_price_sheet_tbody(array $rows, array $viewer): string
+{
+    $html = render_site_price_add_row();
+    foreach ($rows as $row) {
+        $html .= render_site_price_sheet_row($row, $viewer);
+    }
+    return $html;
+}
+
+function site_prices_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/site-prices.js')) . '" defer></script>';
 }

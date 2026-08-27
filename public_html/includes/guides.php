@@ -228,7 +228,7 @@ function guide_site_prices(): string
         'Open a country. Processing stays at the top, then New, then the rest. This is not Order management and does not write into Our database.',
         [
             'Open a country from the list or the country search.',
-            'Add sites and prices on that sheet (next update).',
+            'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, and niche stay editable. Admin can Unlock identity.',
             'Admin sees who added a row and who manages it; Team does not see Admin names.',
         ]
     );

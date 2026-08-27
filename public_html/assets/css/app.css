@@ -5099,3 +5099,40 @@ textarea:focus-visible {
 [hidden] {
   display: none !important;
 }
+
+/* Website prices — add row + locked identity cells */
+.site-price-sheet .site-price-input,
+.site-price-sheet .site-price-status {
+  width: 100%;
+  min-width: 0;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.88rem;
+}
+.site-price-sheet .site-price-status {
+  min-width: 7.5rem;
+}
+.site-price-sheet .prospect-niche-td .niche-chip-box {
+  min-width: 8rem;
+}
+.site-price-id.is-locked {
+  display: inline-block;
+  padding: 0.22rem 0.4rem;
+  border-radius: 6px;
+  background: #eef1f4;
+  color: #4b5563;
+  font-weight: 650;
+}
+.is-copy-lock {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.site-price-add td {
+  background: #f8fafc;
+}
+.site-price-status-msg.is-error {
+  color: #b42318;
+  font-weight: 650;
+}
+.site-price-actions {
+  white-space: nowrap;
+}
