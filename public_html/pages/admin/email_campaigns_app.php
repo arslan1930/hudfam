@@ -376,8 +376,8 @@ if ($sheetId > 0) {
             }
             if ($action === 'fill_gaps') {
                 $result = fill_email_campaign_gaps_from_archives($sheetId, $sheetCountry);
-                $n = (int) ($result['imported'] ?? 0);
-                $u = (int) ($result['updated'] ?? 0);
+                $n = (int) ($result['would_add'] ?? $result['imported'] ?? 0);
+                $u = (int) ($result['would_update'] ?? $result['updated'] ?? 0);
                 $msg = 'Filled gaps from Final + Admin into ' . $sheetCountry . ': '
                     . $n . ' new, ' . $u . ' updated';
                 if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
