@@ -62,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'generate_temp')
     db()->prepare(
         'UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?'
     )->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+    bump_user_session_version($id, false);
     $_SESSION['revealed_temp_password'] = [
         'user_id' => $id,
         'username' => (string) $target['username'],
@@ -225,6 +226,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post('action') === 'save') {
                     )->execute([$username, $full, $email, $phone, $contact, $role, $active, $id]);
                 }
                 flash('ok', $appendDeactivateNote('User updated.'));
+            }
+            $roleChanged = (string) ($existing['role'] ?? '') !== $role;
+            if ($justDeactivated || $roleChanged || $password !== '') {
+                bump_user_session_version($id, $id === $myId);
             }
             unset($_SESSION['users_form_draft']);
             redirect('index.php?page=admin_users');
