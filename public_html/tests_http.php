@@ -737,23 +737,12 @@ if (!preg_match('/href="[^"]*team_extracting[^"]*"/', $r['body'])
     fail('finder Filter still links into Extracting');
 }
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
-$teamNeedles = ['data-site-price-sheet', 'Copy selected', 'data-site-price-jump', '>Email</th>'];
-$teamBad = [];
-foreach ($teamNeedles as $n) {
-    if (!str_contains($r['body'], $n)) {
-        $teamBad[] = $n;
-    }
-}
-if ($r['status'] === 200 && !$teamBad
-    && !str_contains($r['body'], 'Unlock')
-    && !str_contains($r['body'], 'Copy all')
-    && !str_contains($r['body'], 'Copy selected live URLs')
-    && !str_contains($r['body'], 'download=txt')
-    && !str_contains($r['body'], 'Fatal error')
-    && !str_contains($r['body'], 'Warning:')) {
-    pass('finder can open Website prices');
+$loc = location($r);
+if (($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_departments'))
+    || str_contains($r['body'], 'only shows work')) {
+    pass('finder blocked from Website prices');
 } else {
-    fail('finder Website prices status=' . $r['status'] . ' missing=' . implode(',', $teamBad));
+    fail('finder Website prices status=' . $r['status'] . ' loc=' . $loc);
 }
 $r = req('GET', $base . '/index.php?page=team_extracting');
 $loc = location($r);
@@ -830,6 +819,34 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')) {
     pass('comms can open Campaign drafts');
 } else {
     fail('comms blocked from Campaign drafts status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
+$teamNeedles = ['data-site-price-sheet', 'Copy selected', 'data-site-price-jump', '>Email</th>'];
+$teamBad = [];
+foreach ($teamNeedles as $n) {
+    if (!str_contains($r['body'], $n)) {
+        $teamBad[] = $n;
+    }
+}
+if ($r['status'] === 200 && !$teamBad
+    && !str_contains($r['body'], 'Unlock')
+    && !str_contains($r['body'], 'Copy all')
+    && !str_contains($r['body'], 'Copy selected live URLs')
+    && !str_contains($r['body'], 'download=txt')
+    && !str_contains($r['body'], 'Fatal error')
+    && !str_contains($r['body'], 'Warning:')) {
+    pass('comms can open Website prices');
+} else {
+    fail('comms Website prices status=' . $r['status'] . ' missing=' . implode(',', $teamBad));
+}
+$r = req('GET', $base . '/index.php?page=team_departments&folder=communication');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Assign a task')
+    && str_contains($r['body'], 'assign_task')
+    && str_contains($r['body'], 'team_site_prices')) {
+    pass('comms can assign department tasks');
+} else {
+    fail('comms department assign missing status=' . $r['status']);
 }
 
 echo "\n==== HTTP SUMMARY ====\n";
