@@ -58,6 +58,13 @@ function site_price_builtin_statuses(): array
             'lane' => 'other',
             'sort_order' => 70,
         ],
+        [
+            'slug' => 'completed',
+            'label' => 'Completed',
+            'color' => 'grey',
+            'lane' => 'other',
+            'sort_order' => 80,
+        ],
     ];
 }
 
@@ -135,6 +142,7 @@ function ensure_site_prices_schema(): void
     );
 
     site_price_seed_statuses();
+    site_price_flush_status_cache();
     site_price_ensure_row_columns();
 }
 
@@ -432,7 +440,15 @@ function site_price_insert_row(array $fields): int
         }
         throw $e;
     }
-    return (int) db()->lastInsertId();
+    $id = (int) db()->lastInsertId();
+    if (function_exists('order_sync_from_site_price_row')) {
+        try {
+            order_sync_from_site_price_row($id);
+        } catch (Throwable $e) {
+            // Order management sync is best-effort
+        }
+    }
+    return $id;
 }
 
 /**
@@ -920,6 +936,14 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
         site_price_log_event($id, $viewer, 'tint', $oldTint, $tint);
     }
     site_price_touch_managed($id, $viewer);
+
+    if (function_exists('order_sync_from_site_price_row')) {
+        try {
+            order_sync_from_site_price_row($id);
+        } catch (Throwable $e) {
+            // Order management sync is best-effort — never write LIVE/profit/client back here
+        }
+    }
 
     $saved = get_site_price_row($id);
     if (!$saved) {

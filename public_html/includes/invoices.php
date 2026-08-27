@@ -441,6 +441,7 @@ function list_invoiceable_order_items(int $clientId = 0): array
         $stmt = db()->prepare(
             "SELECT * FROM order_items
              WHERE client_id=? AND row_type='site'
+               AND COALESCE(order_stage, 'processing') = 'completed'
                AND TRIM(live_url) <> ''
                AND COALESCE(is_paid, 0) = 0
              ORDER BY sort_order ASC, id ASC"
@@ -451,6 +452,7 @@ function list_invoiceable_order_items(int $clientId = 0): array
     $stmt = db()->query(
         "SELECT * FROM order_items
          WHERE row_type='site'
+           AND COALESCE(order_stage, 'processing') = 'completed'
            AND TRIM(live_url) <> ''
            AND COALESCE(is_paid, 0) = 0
          ORDER BY COALESCE(order_date, DATE(created_at)) DESC, id DESC"

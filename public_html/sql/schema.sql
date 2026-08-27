@@ -390,6 +390,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   admin_user_id INT NULL,
   order_date DATE NULL,
   is_paid TINYINT(1) NOT NULL DEFAULT 0,
+  site_price_row_id INT NULL,
+  order_stage ENUM('processing','completed') NOT NULL DEFAULT 'processing',
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -398,6 +400,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   INDEX idx_oi_admin (admin_user_id),
   INDEX idx_oi_order_date (order_date),
   INDEX idx_oi_country (country),
+  UNIQUE KEY uniq_order_items_site_price_row (site_price_row_id),
+  INDEX idx_oi_order_stage (order_stage),
   CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
   CONSTRAINT fk_oi_admin FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

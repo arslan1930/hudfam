@@ -2,6 +2,17 @@
 $user = require_admin();
 ensure_order_schema();
 
+$folder = strtolower(trim((string) get('folder')));
+if ($folder === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $folder = strtolower(trim((string) ($_POST['folder'] ?? '')));
+}
+if (!in_array($folder, ['processing', 'completed'], true)) {
+    $folder = '';
+}
+$isProcessing = $folder === 'processing';
+$isCompleted = $folder === 'completed';
+$isHub = $folder === '';
+
 $filter = [
     'q' => trim((string) get('q')),
     'country' => trim((string) get('country')),
@@ -10,7 +21,11 @@ $filter = [
     'date_to' => (string) get('date_to'),
     'status' => (string) get('status'),
 ];
-if (!in_array($filter['status'], ['all', 'open', 'completed', 'unpaid', 'paid'], true)) {
+$allowedStatus = $isCompleted ? ['all', 'unpaid', 'paid'] : ['all', 'open', 'completed', 'unpaid', 'paid'];
+if (!in_array($filter['status'], $allowedStatus, true)) {
+    $filter['status'] = 'all';
+}
+if ($isProcessing) {
     $filter['status'] = 'all';
 }
 $perPage = (int) get('per', 100);
@@ -19,9 +34,10 @@ if (!in_array($perPage, [50, 100, 250], true)) {
 }
 $pageNum = max(1, (int) get('p', 1));
 
-$ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pageNum): string {
+$ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pageNum, $folder): string {
     $params = array_merge([
         'page' => 'admin_orders',
+        'folder' => $folder,
         'q' => $filter['q'],
         'country' => $filter['country'],
         'admin_id' => $filter['admin_id'],
@@ -32,6 +48,10 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
         'p' => $pageNum,
     ], $overrides);
     $bits = ['page=' . rawurlencode((string) $params['page'])];
+    $folderName = (string) ($params['folder'] ?? '');
+    if ($folderName === 'processing' || $folderName === 'completed') {
+        $bits[] = 'folder=' . rawurlencode($folderName);
+    }
     foreach (['q', 'country', 'date_from', 'date_to'] as $k) {
         $v = trim((string) ($params[$k] ?? ''));
         if ($v !== '') {
@@ -68,10 +88,11 @@ $listOpts = [
     'date_from' => $filter['date_from'],
     'date_to' => $filter['date_to'],
     'status' => $filter['status'],
+    'folder' => $folder,
 ];
 
 $download = strtolower((string) get('download'));
-if ($download === 'csv' || $download === 'xls' || $download === 'excel') {
+if ($folder !== '' && ($download === 'csv' || $download === 'xls' || $download === 'excel')) {
     $exportRows = order_pipeline_export_rows(list_order_pipeline_rows($listOpts));
     if ($download === 'csv') {
         order_pipeline_download_csv($exportRows);
@@ -110,6 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         };
 
         if ($action === 'add_row') {
+            if (!$isProcessing) {
+                throw new InvalidArgumentException('New orders are added in the Processing folder.');
+            }
             $saveCurrent();
             add_order_pipeline_row((int) ($user['id'] ?? 0), '', [
                 'country' => $filter['country'],
@@ -136,7 +160,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('ok', 'Row removed.');
             redirect($ordersQs());
         }
+        if ($action === 'mark_completed') {
+            if (!$isProcessing) {
+                throw new InvalidArgumentException('Mark completed is only on the Processing folder.');
+            }
+            try {
+                $saveCurrent();
+            } catch (Throwable $e) {
+                // Still complete ticked rows from posted live URLs if other rows fail validation.
+            }
+            $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
+            $oneId = (int) post('item_id');
+            if ($oneId > 0) {
+                $selectedIds[] = $oneId;
+            }
+            $selectedIds = array_values(array_unique(array_filter($selectedIds, static fn ($id) => $id > 0)));
+            if (!$selectedIds) {
+                throw new InvalidArgumentException('Tick at least one row (with a live URL) to mark completed.');
+            }
+            $result = order_mark_items_completed($selectedIds, $urls, (int) ($user['id'] ?? 0));
+            if ($result['ok'] < 1) {
+                throw new InvalidArgumentException(
+                    $result['errors'] ? implode(' ', $result['errors']) : 'Could not mark orders completed.'
+                );
+            }
+            $msg = 'Marked ' . (int) $result['ok'] . ' order' . ($result['ok'] === 1 ? '' : 's') . ' completed.';
+            if ($result['errors']) {
+                $msg .= ' ' . implode(' ', $result['errors']);
+            }
+            flash('ok', $msg);
+            redirect($ordersQs(['folder' => 'completed']));
+        }
         if ($action === 'mark_paid') {
+            if (!$isCompleted) {
+                throw new InvalidArgumentException('Paid is only on Completed orders.');
+            }
             $saveCurrent();
             $itemId = (int) post('item_id');
             set_order_item_paid($itemId, 0, true);
@@ -144,6 +202,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect($ordersQs() . '#row-' . $itemId);
         }
         if ($action === 'unmark_paid') {
+            if (!$isCompleted) {
+                throw new InvalidArgumentException('Paid is only on Completed orders.');
+            }
             $saveCurrent();
             $itemId = (int) post('item_id');
             set_order_item_paid($itemId, 0, false);
@@ -151,11 +212,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect($ordersQs() . '#row-' . $itemId);
         }
         if ($action === 'push_invoice') {
-            $saveCurrent();
+            if (!$isCompleted) {
+                throw new InvalidArgumentException('Push to invoice is only on Completed orders.');
+            }
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
             if (!$selectedIds) {
-                throw new InvalidArgumentException('Tick at least one unpaid LIVE row to push to an invoice.');
+                throw new InvalidArgumentException('Tick at least one unpaid completed row to push to an invoice.');
             }
             $picked = list_order_items_by_ids($selectedIds);
             $ready = [];
@@ -165,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if (!$ready) {
-                throw new InvalidArgumentException('None of the selected rows are unpaid with a LIVE URL.');
+                throw new InvalidArgumentException('None of the selected rows are unpaid completed orders with a LIVE URL.');
             }
             redirect('index.php?page=admin_invoice_generate&ids=' . implode(',', $ready));
         }
@@ -173,6 +236,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('error', $e->getMessage());
         redirect($ordersQs());
     }
+}
+
+if ($isHub) {
+    $processingCount = count_order_pipeline_rows(['folder' => 'processing']);
+    $completedCount = count_order_pipeline_rows(['folder' => 'completed']);
+    $unpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+    render_header('Order management', 'admin');
+    render_breadcrumbs([
+        ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
+        ['label' => 'Order management'],
+    ]);
+    ?>
+<div class="topbar">
+  <div>
+    <h1><?= label_with_info('Order management', 'Two folders. Processing is filled from Website prices Processing. Completed is after you add a live URL and mark the order done. Only Completed unpaid rows can be pushed to an invoice.') ?></h1>
+    <p class="muted">Processing · Completed. Website prices never shows LIVE URL, profit, client, or invoice fields. Team sees the Website prices status change only.</p>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="index.php?page=admin_invoices">Invoices</a>
+    <a class="btn secondary" href="index.php?page=admin_site_prices">Website prices</a>
+  </div>
+</div>
+<?= guide_orders() ?>
+<div class="launch-cards om-folder-cards" id="om-folders">
+  <a class="launch-card" href="index.php?page=admin_orders&amp;folder=processing" data-om-folder="processing">
+    <h2>Processing</h2>
+    <p><strong class="om-folder-count"><?= (int) $processingCount ?></strong> order<?= $processingCount === 1 ? '' : 's' ?> from Website prices Processing. Fill OM fields, then mark completed with a live URL.</p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_orders&amp;folder=completed" data-om-folder="completed">
+    <h2>Completed orders</h2>
+    <p><strong class="om-folder-count"><?= (int) $completedCount ?></strong> completed<?= $unpaidCompleted > 0 ? ' · ' . (int) $unpaidCompleted . ' unpaid' : '' ?>. Push unpaid rows to an invoice. Paid stays in this folder.</p>
+  </a>
+</div>
+    <?php
+    render_footer('admin');
+    return;
 }
 
 $totalRows = count_order_pipeline_rows($listOpts);
@@ -184,7 +283,7 @@ $items = list_order_pipeline_rows($listOpts + [
     'limit' => $perPage,
     'offset' => ($pageNum - 1) * $perPage,
 ]);
-$unpaidLiveCount = count_order_pipeline_rows(['status' => 'unpaid']);
+$unpaidLiveCount = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
 $filterCountries = list_order_pipeline_countries();
 $admins = order_admin_options();
 $adminById = [];
@@ -237,6 +336,7 @@ $totalDecided = 0.0;
 $totalProfit = 0.0;
 $completedCount = 0;
 $completedProfit = 0.0;
+$liveFilledCount = 0;
 $siteCount = 0;
 foreach ($items as $row) {
     $siteCount++;
@@ -244,6 +344,9 @@ foreach ($items as $row) {
     $totalOwner += parse_money($row['owner_price']);
     $totalDecided += parse_money($row['decided_price']);
     $totalProfit += $profit;
+    if (trim((string) ($row['live_url'] ?? '')) !== '') {
+        $liveFilledCount++;
+    }
     if (order_is_completed($row)) {
         $completedCount++;
         $completedProfit += $profit;
@@ -255,24 +358,38 @@ $placementOptions = order_placement_options();
 $filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] > 0
     || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '' || $filter['status'] !== 'all';
 
-render_header('Order management', 'admin');
+render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
-    ['label' => 'Order management'],
+    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders'],
+    ['label' => $isProcessing ? 'Processing' : 'Completed orders'],
 ]); ?>
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Order management', 'One sheet of orders. Fill country, date, who owns the row, and client email or name. Push unpaid LIVE rows to Invoices for payment.') ?></h1>
-    <p class="muted">One sheet — country, date, admin, client email or name, prices, LIVE URL. Completed = LIVE URL filled. Tick unpaid LIVE rows and push them to an invoice.</p>
+    <?php if ($isProcessing): ?>
+      <h1><?= label_with_info('Processing', 'Rows from Website prices Processing, plus any you add here. Fill LIVE URL, then Mark completed. That moves the order here to Completed and sets Website prices to Completed. Saving a live URL does not complete the row by itself.') ?></h1>
+      <p class="muted">Website prices Processing feeds this folder. Mark completed requires a live URL. Push to invoice is only on Completed orders.</p>
+    <?php else: ?>
+      <h1><?= label_with_info('Completed orders', 'After a live URL and Mark completed. Unpaid until Paid. Tick unpaid rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.') ?></h1>
+      <p class="muted">Unpaid until paid. Push to invoice from here. Team Website prices only shows the Completed status — never LIVE URL, profit, or client.</p>
+    <?php endif; ?>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_invoices">Invoices</a>
-    <?php if ($unpaidLiveCount > 0): ?>
-      <a class="btn" href="index.php?page=admin_invoice_generate">Push unpaid (<?= (int) $unpaidLiveCount ?>)</a>
+    <a class="btn secondary" href="index.php?page=admin_orders">Folders</a>
+    <?php if ($isProcessing): ?>
+      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed orders</a>
     <?php else: ?>
-      <a class="btn secondary" href="index.php?page=admin_invoice_generate">Generate invoice</a>
+      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=processing">Processing</a>
+    <?php endif; ?>
+    <a class="btn secondary" href="index.php?page=admin_invoices">Invoices</a>
+    <?php if ($isCompleted): ?>
+      <?php if ($unpaidLiveCount > 0): ?>
+        <a class="btn" href="index.php?page=admin_invoice_generate">Push unpaid (<?= (int) $unpaidLiveCount ?>)</a>
+      <?php else: ?>
+        <a class="btn secondary" href="index.php?page=admin_invoice_generate">Generate invoice</a>
+      <?php endif; ?>
     <?php endif; ?>
   </div>
 </div>
@@ -281,6 +398,7 @@ render_header('Order management', 'admin');
 
 <form method="get" action="index.php" class="card order-filter-bar" id="order-filter-bar" data-no-draft>
   <input type="hidden" name="page" value="admin_orders">
+  <input type="hidden" name="folder" value="<?= h($folder) ?>">
   <input type="hidden" name="per" value="<?= (int) $perPage ?>">
   <div class="order-filter-grid">
     <label class="sheet-search" for="order-sheet-search" style="margin:0">
@@ -320,20 +438,20 @@ render_header('Order management', 'admin');
       <span class="visually-hidden">To date</span>
       <input type="date" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" data-no-draft>
     </label>
+    <?php if ($isCompleted): ?>
     <label class="order-filter-field">
       <span class="visually-hidden">Status</span>
       <select name="status" aria-label="Filter by status" onchange="this.form.submit()">
         <option value="all" <?= $filter['status'] === 'all' ? 'selected' : '' ?>>All statuses</option>
-        <option value="open" <?= $filter['status'] === 'open' ? 'selected' : '' ?>>Open</option>
-        <option value="completed" <?= $filter['status'] === 'completed' ? 'selected' : '' ?>>Completed</option>
         <option value="unpaid" <?= $filter['status'] === 'unpaid' ? 'selected' : '' ?>>Unpaid LIVE</option>
         <option value="paid" <?= $filter['status'] === 'paid' ? 'selected' : '' ?>>Paid</option>
       </select>
     </label>
+    <?php endif; ?>
     <div class="order-filter-actions">
       <button class="btn secondary small" type="submit">Search</button>
       <?php if ($filtersOn): ?>
-        <a class="btn secondary small" href="index.php?page=admin_orders">Clear</a>
+        <a class="btn secondary small" href="index.php?page=admin_orders&amp;folder=<?= h($folder) ?>">Clear</a>
       <?php endif; ?>
     </div>
   </div>
@@ -349,13 +467,15 @@ render_header('Order management', 'admin');
     <span><?= label_with_info('This page', 'Rows on the current page.') ?></span>
   </div>
   <div class="orders-summary-item orders-summary-done">
-    <strong data-summary-completed><?= (int) $completedCount ?></strong>
-    <span><?= label_with_info('Completed on page', 'Rows on this page with a LIVE URL filled.') ?></span>
+    <strong data-summary-completed><?= (int) ($isProcessing ? $liveFilledCount : $completedCount) ?></strong>
+    <span><?= label_with_info($isCompleted ? 'Completed on page' : 'With live URL on page', $isCompleted ? 'Rows on this page already marked completed.' : 'Rows on this page that already have a live URL filled — still Processing until you mark completed.') ?></span>
   </div>
+  <?php if ($isCompleted): ?>
   <div class="orders-summary-item">
     <strong><?= (int) $unpaidLiveCount ?></strong>
     <span><?= label_with_info('Unpaid LIVE', 'Completed rows not yet paid — ready to push to an invoice.') ?></span>
   </div>
+  <?php endif; ?>
   <div class="orders-summary-item">
     <strong data-summary-decided><?= h(format_money($totalDecided)) ?></strong>
     <span><?= label_with_info('Decided on page', 'Sum of decided prices on this page.') ?></span>
@@ -367,17 +487,27 @@ render_header('Order management', 'admin');
 </div>
 
 <form method="post" id="order-sheet-form" class="card order-sheet-card"
-      action="<?= h($ordersQs()) ?>">
+      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>">
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
+  <input type="hidden" name="folder" value="<?= h($folder) ?>">
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <div class="order-sheet-toolbar">
     <div class="order-sheet-toolbar-left">
-      <h2 style="margin:0" class="with-info-heading"><?= label_with_info('Sheet', 'Fill country, date, admin, and client email or name. Tick unpaid LIVE rows, then Push to invoice.') ?></h2>
+      <h2 style="margin:0" class="with-info-heading"><?= label_with_info(
+          $isProcessing ? 'Processing sheet' : 'Completed sheet',
+          $isProcessing
+              ? 'Fill country, date, admin, client, prices, and LIVE URL. Tick rows with a live URL, then Mark completed. Saving a live URL does not complete the row.'
+              : 'Tick unpaid completed rows, then Push to invoice. Mark paid after payment. Website prices is not updated from this folder.'
+      ) ?></h2>
     </div>
     <div class="actions">
-      <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
-      <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
+      <?php if ($isProcessing): ?>
+        <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
+        <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
+      <?php else: ?>
+        <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
+      <?php endif; ?>
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     </div>
   </div>
@@ -388,7 +518,7 @@ render_header('Order management', 'admin');
         <tr>
           <th class="col-check">
             <label class="visually-hidden" for="order-select-all">Select all on this page</label>
-            <input type="checkbox" id="order-select-all" title="Select all unpaid LIVE on this page">
+            <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL on this page' : 'Select all unpaid LIVE on this page' ?>">
           </th>
           <th class="col-num">#</th>
           <th class="col-country"><?= label_with_info('Country', 'Country name for this order.') ?></th>
@@ -399,8 +529,10 @@ render_header('Order management', 'admin');
           <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?></th>
           <th class="col-price"><?= label_with_info('Owner price', 'What you pay the site owner / publisher.') ?></th>
           <th class="col-price"><?= label_with_info('Decided price', 'What the client pays you. Profit = Decided − Owner.') ?></th>
-          <th class="col-live"><?= label_with_info('LIVE URL', 'Fill when the placement is live (marks the order completed). When filled, Owner and Decided cannot be empty, and Decided must be greater than 0.') ?></th>
-          <th class="col-paid"><?= label_with_info('Paid', 'Paid after the invoice is marked paid, or click here. Paid rows cannot be pushed to a new invoice.') ?></th>
+          <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?></th>
+          <th class="col-paid"><?= $isProcessing
+              ? label_with_info('Complete', 'Mark this row completed after the live URL is filled. Moves it to Completed orders and sets Website prices to Completed.')
+              : label_with_info('Paid', 'Paid after the invoice is marked paid, or click here. Paid rows cannot be pushed to a new invoice.') ?></th>
           <th class="col-profit"><?= label_with_info('Profit', 'Auto-calculated: Decided price − Owner price.') ?></th>
           <th class="col-month"><?= label_with_info('Month', 'Article month, or for Banner/Textlink the start month plus end month.') ?></th>
           <th class="col-del"><?= label_with_info('Remove', 'Deletes this row after confirmation. Cannot be undone.') ?></th>
@@ -410,9 +542,9 @@ render_header('Order management', 'admin');
       <?php if (!$items): ?>
         <tr>
           <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
-            <?= $filtersOn ? 'No orders match this filter.' : 'No orders yet — click “Add order”.' ?>
+            <?= $filtersOn ? 'No orders match this filter.' : ($isProcessing ? 'No processing orders — Website prices Processing rows appear here, or click “Add order”.' : 'No completed orders yet — mark processing rows completed with a live URL.') ?>
             <?php if ($filtersOn): ?>
-              <a href="index.php?page=admin_orders">Clear filters</a>
+              <a href="index.php?page=admin_orders&amp;folder=<?= h($folder) ?>">Clear filters</a>
             <?php endif; ?>
           </td>
         </tr>
@@ -441,14 +573,17 @@ render_header('Order management', 'admin');
           if ($rowAdminId < 1) {
               $rowAdminId = (int) ($user['id'] ?? 0);
           }
-          $canPush = $done && !$paid;
+          $canPush = $isCompleted && $done && !$paid;
+          $canComplete = $isProcessing && trim((string) ($row['live_url'] ?? '')) !== '';
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
             data-row id="row-<?= $id ?>">
           <td class="col-check">
             <input type="checkbox" name="item_ids[]" value="<?= $id ?>"
-                   <?= $canPush ? '' : 'disabled' ?>
-                   title="<?= $canPush ? 'Push this unpaid LIVE row to an invoice' : 'Only unpaid LIVE rows can be pushed' ?>"
+                   <?= ($isProcessing ? $canComplete : $canPush) ? '' : 'disabled' ?>
+                   title="<?= $isProcessing
+                       ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL before marking completed')
+                       : ($canPush ? 'Push this unpaid LIVE row to an invoice' : 'Only unpaid completed rows can be pushed') ?>"
                    data-push-check>
           </td>
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
@@ -519,7 +654,15 @@ render_header('Order management', 'admin');
             </div>
           </td>
           <td class="col-paid">
-            <?php if ($paid): ?>
+            <?php if ($isProcessing): ?>
+              <button class="btn secondary small" type="submit"
+                      title="<?= $canComplete ? 'Mark this order completed' : 'Fill LIVE URL before marking completed' ?>"
+                      <?= $canComplete ? '' : 'disabled' ?>
+                      data-complete-btn
+                      onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_completed';">
+                Mark completed
+              </button>
+            <?php elseif ($paid): ?>
               <button class="btn-paid is-paid" type="submit"
                       title="Click to remove paid mark"
                       data-paid="paid"
@@ -529,8 +672,7 @@ render_header('Order management', 'admin');
             <?php else: ?>
               <button class="btn-paid" type="submit"
                       data-paid=""
-                      title="<?= $done ? 'Mark this completed row as paid' : 'Fill LIVE URL before marking paid' ?>"
-                      <?= $done ? '' : 'disabled' ?>
+                      title="Mark this completed row as paid"
                       onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_paid';">
                 Paid
               </button>
@@ -597,10 +739,15 @@ render_header('Order management', 'admin');
     </table>
   </div>
   <p class="help" style="margin:0.75rem 0 0" id="sheet-bottom">
-    Use the filter bar to search by site, client email or name, country, admin, date, or status.
-    <strong>Client email or name</strong> is free text — no client folder or extra details.
-    Tick unpaid LIVE rows and <strong>Push to invoice</strong> to bill them.
-    An order counts as <strong>completed</strong> only when LIVE URL is filled.
+    <?php if ($isProcessing): ?>
+      Rows come from <strong>Website prices Processing</strong>, or click <strong>+ Add order</strong> for a manual row.
+      Fill <strong>LIVE URL</strong>, then <strong>Mark completed</strong> — saving a live URL does not complete the order.
+      Completing moves the row to Completed orders and sets Website prices to Completed. Publisher reply email is not copied into client email/name.
+    <?php else: ?>
+      Use the filter bar to search by site, client email or name, country, admin, date, or unpaid/paid.
+      Tick unpaid completed rows and <strong>Push to invoice</strong> to bill them.
+      Paid stays in this folder. Website prices is not changed when you mark paid.
+    <?php endif; ?>
   </p>
   <?php if ($countryCatalog): ?>
   <datalist id="order-country-list">
@@ -611,8 +758,12 @@ render_header('Order management', 'admin');
   <?php endif; ?>
   <div class="actions-sticky">
     <button class="btn large" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
-    <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
-    <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
+    <?php if ($isProcessing): ?>
+      <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
+      <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
+    <?php else: ?>
+      <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
+    <?php endif; ?>
   </div>
 </form>
 
@@ -652,6 +803,7 @@ render_header('Order management', 'admin');
 
 <script>
 (function () {
+  var sheetFolder = <?= json_encode($folder) ?>;
   function num(v) {
     v = String(v || '').replace(/,/g, '').trim();
     var n = parseFloat(v);
@@ -684,13 +836,26 @@ render_header('Order management', 'admin');
     var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
     var paidBtn = row.querySelector('.btn-paid.is-paid');
     var check = row.querySelector('[data-push-check]');
+    var completeBtn = row.querySelector('[data-complete-btn]');
     if (!check) return;
-    var canPush = !!live && !paidBtn;
-    check.disabled = !canPush;
-    check.title = canPush
-      ? 'Push this unpaid LIVE row to an invoice'
-      : 'Only unpaid LIVE rows can be pushed';
-    if (!canPush) check.checked = false;
+    var folder = sheetFolder;
+    var can;
+    if (folder === 'processing') {
+      can = !!live;
+      check.disabled = !can;
+      check.title = can ? 'Mark this row completed' : 'Fill LIVE URL before marking completed';
+      if (completeBtn) {
+        completeBtn.disabled = !can;
+        completeBtn.title = can ? 'Mark this order completed' : 'Fill LIVE URL before marking completed';
+      }
+    } else {
+      can = !!live && !paidBtn;
+      check.disabled = !can;
+      check.title = can
+        ? 'Push this unpaid LIVE row to an invoice'
+        : 'Only unpaid completed rows can be pushed';
+    }
+    if (!can) check.checked = false;
   }
 
   function refresh() {
@@ -710,16 +875,18 @@ render_header('Order management', 'admin');
       if (live) {
         completed++;
         completedProfit += p;
-        row.classList.add('is-completed');
+        if (sheetFolder === 'completed') {
+          row.classList.add('is-completed');
+        } else {
+          row.classList.remove('is-completed');
+        }
       } else {
         row.classList.remove('is-completed');
       }
       var paidBtn = row.querySelector('.btn-paid:not(.is-paid)');
       if (paidBtn) {
-        paidBtn.disabled = !live;
-        paidBtn.title = live
-          ? 'Mark this completed row as paid'
-          : 'Fill LIVE URL before marking paid';
+        paidBtn.disabled = false;
+        paidBtn.title = 'Mark this completed row as paid';
       }
       var cell = row.querySelector('[data-profit]');
       if (cell) {
@@ -768,7 +935,23 @@ render_header('Order management', 'admin');
         e.preventDefault();
         e.stopPropagation();
         submitting = false;
-        alert('Tick at least one unpaid LIVE row to push to an invoice.');
+        alert('Tick at least one unpaid completed row to push to an invoice.');
+        return;
+      }
+    }
+    if (action === 'mark_completed') {
+      var itemId = String((document.getElementById('delete-item-id') || {}).value || '').trim();
+      var anyComplete = !!itemId;
+      if (!anyComplete) {
+        document.querySelectorAll('[data-push-check]').forEach(function (cb) {
+          if (cb.checked && !cb.disabled) anyComplete = true;
+        });
+      }
+      if (!anyComplete) {
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        alert('Tick at least one row with a live URL, or fill LIVE URL and click Mark completed on that row.');
         return;
       }
     }
