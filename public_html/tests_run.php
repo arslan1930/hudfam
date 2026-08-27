@@ -1115,7 +1115,8 @@ try {
         && str_contains($histTintTeam, 'Admin')
         && $teamTintActorOk
         && str_contains($addHtml, 'site-price-add-commit')
-        && str_contains($addHtml, 'colspan="3"')
+        && str_contains($addHtml, 'colspan="2"')
+        && !str_contains($addHtml, 'colspan="3"')
         && str_contains($addHtml, 'data-site-price-tint')
         && site_price_sheet_colspan() === 12;
     if ($tintOk) {

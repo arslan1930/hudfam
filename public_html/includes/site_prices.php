@@ -1713,7 +1713,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
         . h((string) ($view['reply_email'] ?? '')) . '" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
         . ' data-no-draft aria-label="Reply email"></td>';
     $html .= '<td data-label="People" class="site-price-people-cell">' . site_price_people_cell($view, $isAdmin) . '</td>';
-    $html .= '<td data-label="Actions" class="site-price-actions">';
+    $html .= '<td data-label="Actions"><div class="site-price-actions">';
     $html .= site_price_tint_controls($tint, ['variant' => 'menu']);
     if ($isAdmin) {
         $html .= '<span class="site-price-drag" data-site-price-drag draggable="true"'
@@ -1722,7 +1722,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     if ($isAdmin && $locked) {
         $html .= '<button type="button" class="btn secondary small" data-site-price-unlock>Unlock</button>';
     }
-    $html .= '</td>';
+    $html .= '</div></td>';
     $html .= '</tr>';
     return $html;
 }
@@ -1749,15 +1749,14 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="DR"><input type="text" class="site-price-input" data-add-dr autocomplete="off" spellcheck="false" data-no-draft aria-label="DR"></td>';
     $html .= '<td data-label="Traffic"><input type="text" class="site-price-input" data-add-traffic autocomplete="off" spellcheck="false" data-no-draft aria-label="Traffic"></td>';
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="Price" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
-    $html .= '<td data-label="Status" class="site-price-add-status">' . site_price_status_select_html('new')
-        . site_price_tint_controls('', ['variant' => 'inline']) . '</td>';
+    $html .= '<td data-label="Status"><div class="site-price-add-status">' . site_price_status_select_html('new')
+        . site_price_tint_controls('', ['variant' => 'inline']) . '</div></td>';
     $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-add-note autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
-    $html .= '<td class="site-price-add-commit" colspan="3" data-label="Email">';
-    $html .= '<div class="site-price-add-commit-inner">';
-    $html .= '<input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false"'
-        . ' data-no-draft aria-label="Reply email">';
+    $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false"'
+        . ' data-no-draft aria-label="Reply email"></td>';
+    $html .= '<td class="site-price-add-commit" colspan="2" data-label="">';
     $html .= '<button type="button" class="btn small" data-site-price-add-btn>Add site</button>';
-    $html .= '</div></td>';
+    $html .= '</td>';
     $html .= '</tr>';
     return $html;
 }

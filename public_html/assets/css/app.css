@@ -5290,27 +5290,17 @@ textarea:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
 }
 .site-price-add-status .site-price-status {
   flex: 1 1 7rem;
 }
 .site-price-add-commit {
   vertical-align: middle;
+  white-space: nowrap;
 }
-.site-price-add-commit-inner {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.45rem;
-  min-width: 0;
-}
-.site-price-sheet .site-price-add-commit-inner .site-price-input {
-  flex: 0 1 12rem;
-  width: 12rem;
-  max-width: 16rem;
-}
-.site-price-add-commit-inner .btn {
-  flex: 0 0 auto;
+.site-price-add-commit .btn {
   white-space: nowrap;
 }
 .site-price-color-summary.is-yellow,
@@ -5611,9 +5601,9 @@ textarea:focus-visible {
   table.sheet-cards-mobile tr.site-price-history-row td::before {
     content: none;
   }
-  table.sheet-cards-mobile .site-price-add-commit-inner {
-    flex: 1;
-    min-width: 0;
+  table.sheet-cards-mobile td.site-price-add-commit::before {
+    content: none;
+    flex: 0;
   }
   table.sheet-cards-mobile .site-price-add-status {
     flex: 1;
