@@ -5440,6 +5440,19 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.45rem 0.65rem;
 }
+.site-price-jump-copy {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.site-price-jump-heading {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 750;
+}
+.site-price-jump-hint {
+  margin: 0.1rem 0 0;
+  font-size: 0.8rem;
+}
 .site-price-jump-wrap > summary {
   cursor: pointer;
   width: fit-content;
@@ -5467,6 +5480,8 @@ textarea:focus-visible {
   padding: 0;
   display: grid;
   gap: 0.2rem;
+  max-height: 14rem;
+  overflow: auto;
 }
 .site-price-jump-results[hidden] {
   display: none;

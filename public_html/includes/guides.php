@@ -230,7 +230,7 @@ function guide_site_prices(): string
         [
             'Open a country from the switcher (most-used first) or All countries. On Team, only Communication Team can open these sheets.',
             'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, email, and row color stay editable. Admin can Unlock identity.',
-            'Processing / New / Other lanes stay in that order. Search this country (Enter = next match, Ctrl/Cmd+Enter = all pages). Admin uses Search all countries at the top (hub and each sheet). Team copies one website with Copy; Admin Copy selected is ticked rows only.',
+            'Processing / New / Other lanes stay in that order. Search this country filters the open sheet (Enter = next match, Ctrl/Cmd+Enter = all pages). Admin Search all countries jumps to a row in any country — it does not filter the sheet. Team copies one website with Copy; Admin Copy selected is ticked rows only.',
             'Admin sees who added a row and who manages it; Team does not see Admin names.',
         ]
     );
