@@ -229,6 +229,7 @@ function guide_site_prices(): string
         [
             'Open a country from the list or the country search.',
             'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, and niche stay editable. Admin can Unlock identity.',
+            'Processing / New / Other lanes stay in that order. Admin can drag inside a lane, and add extra status words (they land in Other).',
             'Admin sees who added a row and who manages it; Team does not see Admin names.',
         ]
     );

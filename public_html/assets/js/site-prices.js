@@ -220,6 +220,107 @@
     }).catch(function () { /* leave blank */ });
   }
 
+  function reorderLane(lane, ids) {
+    if (!lane || !ids || !ids.length) return;
+    setStatus('Saving order…', false);
+    post('reorder_lane', { lane: lane, ids: ids.join(',') }).then(function (json) {
+      if (!json.ok) {
+        setStatus(json.error || 'Could not save order.', true);
+        return;
+      }
+      setStatus('Order saved.', false);
+      if (json.tbody_html) applyTbody(json.tbody_html);
+      if (json.total != null) applyCount(json.total);
+    }).catch(function () {
+      setStatus('Could not save order.', true);
+    });
+  }
+
+  function bindDrag(root) {
+    if (!root || root.getAttribute('data-admin') !== '1') return;
+    var dragId = '';
+    var dragLane = '';
+
+    function clearMarks() {
+      root.querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after').forEach(function (el) {
+        el.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
+      });
+    }
+
+    function rowFrom(el) {
+      return el && el.closest ? el.closest('[data-site-price-row]') : null;
+    }
+
+    root.addEventListener('dragstart', function (e) {
+      var handle = e.target && e.target.closest ? e.target.closest('[data-site-price-drag]') : null;
+      if (!handle) {
+        e.preventDefault();
+        return;
+      }
+      var tr = handle.closest('[data-site-price-row]');
+      if (!tr) {
+        e.preventDefault();
+        return;
+      }
+      dragId = tr.getAttribute('data-row-id') || '';
+      dragLane = tr.getAttribute('data-lane') || '';
+      if (!dragId || !dragLane) {
+        e.preventDefault();
+        return;
+      }
+      tr.classList.add('is-dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', dragId);
+      }
+    });
+
+    root.addEventListener('dragend', function () {
+      clearMarks();
+      dragId = '';
+      dragLane = '';
+    });
+
+    root.addEventListener('dragover', function (e) {
+      if (!dragId) return;
+      var tr = rowFrom(e.target);
+      if (!tr || tr.getAttribute('data-row-id') === dragId) return;
+      if (tr.getAttribute('data-lane') !== dragLane) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      var rect = tr.getBoundingClientRect();
+      var before = (e.clientY - rect.top) < rect.height / 2;
+      root.querySelectorAll('.is-drop-before, .is-drop-after').forEach(function (el) {
+        el.classList.remove('is-drop-before', 'is-drop-after');
+      });
+      tr.classList.add(before ? 'is-drop-before' : 'is-drop-after');
+    });
+
+    root.addEventListener('drop', function (e) {
+      if (!dragId) return;
+      var tr = rowFrom(e.target);
+      if (!tr || tr.getAttribute('data-lane') !== dragLane) return;
+      e.preventDefault();
+      var src = root.querySelector('[data-site-price-row][data-row-id="' + dragId + '"]');
+      if (!src || src === tr) {
+        clearMarks();
+        return;
+      }
+      var rect = tr.getBoundingClientRect();
+      var before = (e.clientY - rect.top) < rect.height / 2;
+      if (before) tr.parentNode.insertBefore(src, tr);
+      else tr.parentNode.insertBefore(src, tr.nextSibling);
+      clearMarks();
+      var ids = [];
+      root.querySelectorAll('[data-site-price-row][data-lane="' + dragLane + '"]').forEach(function (row) {
+        ids.push(row.getAttribute('data-row-id'));
+      });
+      dragId = '';
+      dragLane = '';
+      reorderLane(tr.getAttribute('data-lane'), ids);
+    });
+  }
+
   function bind(root) {
     if (!root || root.getAttribute('data-site-price-wired') === '1') return;
     root.setAttribute('data-site-price-wired', '1');
@@ -293,7 +394,10 @@
 
   function boot() {
     var table = document.querySelector('[data-site-price-sheet]');
-    if (table) bind(table);
+    if (table) {
+      bind(table);
+      bindDrag(table);
+    }
   }
 
   if (document.readyState === 'loading') {
