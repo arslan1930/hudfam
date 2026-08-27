@@ -972,6 +972,34 @@ try {
         ]));
     }
 
+    $filterAdmin = render_site_price_filters($adminUser, [$claimed]);
+    $filterTeam = render_site_price_filters($teamUser, [$claimed]);
+    $filterRow = render_site_price_sheet_row($claimed, $adminUser);
+    $filterBody = render_site_price_sheet_tbody([$claimed], $adminUser);
+    $teamPageSrc = (string) file_get_contents(__DIR__ . '/pages/team/site_prices.php');
+    $filterOk = str_contains($filterAdmin, 'data-site-price-filters')
+        && str_contains($filterAdmin, 'data-site-price-filter="q"')
+        && str_contains($filterAdmin, 'data-site-price-filter="lane"')
+        && str_contains($filterAdmin, 'data-site-price-filter="status"')
+        && str_contains($filterAdmin, 'data-site-price-filter="added"')
+        && str_contains($filterTeam, 'data-site-price-filters')
+        && !str_contains($filterTeam, 'data-site-price-filter="added"')
+        && str_contains($filterRow, 'data-status=')
+        && str_contains($filterRow, 'data-added-by=')
+        && str_contains($filterBody, 'data-site-price-filter-empty');
+    $teamPageOk = str_contains($teamPageSrc, "site_price_run_page")
+        && str_contains($teamPageSrc, 'team_site_prices')
+        && !preg_match('/Copy all|Download \.txt|Download CSV/', $teamPageSrc)
+        && !str_contains($filterTeam, 'Copy all');
+    if ($filterOk && $teamPageOk) {
+        pass('site_price team page + sheet filters');
+    } else {
+        fail('site_price team/filters: ' . json_encode([
+            'filter' => $filterOk,
+            'team_page' => $teamPageOk,
+        ]));
+    }
+
     db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
     db()->exec("DELETE FROM site_price_statuses WHERE slug LIKE 'follow_up_txf' OR slug LIKE 'txfprice%'");
 } catch (Throwable $e) {
@@ -3486,6 +3514,7 @@ try {
                 'team_prospect_batch',
                 'team_semrush_research',
                 'team_semrush_sheet',
+                'team_site_prices',
             ],
             'site_extracting' => ['team_extracting', 'team_extract_batch'],
             'email_extracting' => ['team_sites_emails', 'team_admin_emails_search'],
@@ -4496,6 +4525,7 @@ try {
     $finder = ['id' => $finderUid, 'username' => 'finder', 'role' => 'team'];
     $extractor = ['id' => $extractorUid, 'username' => 'extractor', 'role' => 'team'];
     if ($finderUid > 0 && team_page_unlocked($finder, 'team_prospect_check')
+        && team_page_unlocked($finder, 'team_site_prices')
         && !team_page_unlocked($finder, 'team_extract_batch')
         && !team_page_unlocked($finder, 'team_sites_emails')) {
         pass('team_page_unlocked finder tools');
@@ -4506,6 +4536,7 @@ try {
         && team_page_unlocked($extractor, 'team_semrush_research')
         && team_page_unlocked($extractor, 'team_semrush_sheet')
         && !team_page_unlocked($extractor, 'team_prospect_check')
+        && !team_page_unlocked($extractor, 'team_site_prices')
         && !team_can_clear_semrush_country($extractor)) {
         pass('team_page_unlocked extractor tools');
     } else {

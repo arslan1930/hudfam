@@ -74,6 +74,7 @@ $routes = [
     'admin_orders' => 'pages/admin/orders.php',
     'admin_order_sheet' => 'pages/admin/order_sheet.php',
     'admin_site_prices' => 'pages/admin/site_prices.php',
+    'team_site_prices' => 'pages/team/site_prices.php',
     'admin_invoices' => 'pages/admin/invoices.php',
     'admin_invoice_generate' => 'pages/admin/invoice_generate.php',
     'admin_invoice_manual' => 'pages/admin/invoice_manual.php',

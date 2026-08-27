@@ -25,6 +25,7 @@ function nav_is_active(string $navPage, string $current): bool
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_semrush_research' => ['team_semrush_sheet'],
+        'team_site_prices' => [],
         'team_extracting' => ['team_extract_batch'],
         'team_departments' => [],
         'team_admin_emails_search' => ['team_admin_emails_delete'],
@@ -179,6 +180,12 @@ function render_header(string $title, string $panel = ''): void
                         'From Extracting Push · edit, comment, clear country',
                     ];
                 }
+                if (!empty($toolSet['team_site_prices'])) {
+                    $groups['Main']['team_site_prices'] = [
+                        'Website prices',
+                        'Country sheets · publisher rates',
+                    ];
+                }
                 if (!empty($toolSet['team_extracting'])) {
                     $groups['Main']['team_extracting'] = [
                         'Extracting sites',
@@ -225,6 +232,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_dashboard' => ['Dashboard', 'Overview'],
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
+                    'team_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Team', 'Add emails · Push to Admin'],
                     'team_admin_emails_search' => ['Admin search', 'Admin sheet · all countries'],
