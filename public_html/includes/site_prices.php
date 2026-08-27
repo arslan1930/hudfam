@@ -524,7 +524,7 @@ function list_site_price_rows(string $country): array
 }
 
 /**
- * @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int,lane_counts:array<string,int>}
+ * @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int,lane_counts:array<string,int>,all:list<array<string,mixed>>}
  */
 function list_site_price_rows_page(string $country, int $page, int $perPage): array
 {
@@ -553,6 +553,7 @@ function list_site_price_rows_page(string $country, int $page, int $perPage): ar
         'pages' => $pages,
         'per_page' => $perPage,
         'lane_counts' => $laneCounts,
+        'all' => $all,
     ];
 }
 
@@ -1749,7 +1750,6 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
     ensure_site_prices_schema();
     seed_countries_if_empty(db());
 
-    $hub = site_price_hub_url($pageKey);
     $hubList = site_price_hub_list_url($pageKey);
     $sheet = trim((string) get('country'));
     $wantHub = (string) get('hub') === '1';
@@ -2043,7 +2043,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
       <?= render_site_price_per_page_filter($pageKey, $countryName, $perPage) ?>
     </div>
     <?= render_site_price_toolbar() ?>
-    <?= render_site_price_filters($user, $rows) ?>
+    <?= render_site_price_filters($user, $pack['all'] ?? $rows) ?>
 
     <div class="card">
       <div class="table-wrap">
