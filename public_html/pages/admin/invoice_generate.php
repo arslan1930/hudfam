@@ -2,20 +2,24 @@
 $user = require_admin();
 ensure_invoice_schema();
 
-$clients = list_order_clients();
-$useClientTypeahead = count($clients) >= invoice_generate_client_typeahead_min();
+$rawIds = trim((string) (get('ids') ?: post('ids')));
+$selectedFromSheet = parse_order_item_ids($rawIds);
 $clientId = (int) (get('client_id') ?: post('client_id'));
-$client = $clientId > 0 ? get_order_client($clientId) : null;
-$profile = $client ? get_invoice_client_profile($clientId) : null;
-$invoiceable = $client ? list_invoiceable_order_items($clientId) : [];
+
+if ($selectedFromSheet) {
+    $invoiceable = list_invoiceable_order_items_by_ids($selectedFromSheet);
+} elseif ($clientId > 0) {
+    $invoiceable = list_invoiceable_order_items($clientId);
+} else {
+    $invoiceable = list_invoiceable_order_items(0);
+}
+
 $company = invoice_company_defaults();
 $nextNumber = next_invoice_number();
+$billAsDefault = invoice_bill_as_from_orders($invoiceable);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
-        if (!$client) {
-            throw new InvalidArgumentException('Select a client sheet first.');
-        }
         $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
         $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
         if (!$selectedIds) {
@@ -31,14 +35,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
                 $picked[] = $byId[$id];
             }
         }
+        if (!$picked) {
+            $picked = list_invoiceable_order_items_by_ids($selectedIds);
+        }
+        if (!$picked) {
+            throw new InvalidArgumentException('Tick at least one unpaid LIVE row.');
+        }
         $group = (string) post('group_same_amount') === '1';
         $lines = build_invoice_lines_from_orders($picked, $group);
+        $billAs = trim((string) post('bill_to_name'));
+        if ($billAs === '') {
+            $billAs = invoice_bill_as_from_orders($picked);
+        }
 
         $header = [
             'invoice_date' => (string) post('invoice_date'),
-            'client_id' => $clientId,
-            'client_name' => (string) $client['name'],
-            'bill_to_name' => (string) post('bill_to_name'),
+            'client_id' => 0,
+            'client_name' => $billAs,
+            'bill_to_name' => $billAs,
             'bill_to_address' => (string) post('bill_to_address'),
             'bill_to_hrb' => (string) post('bill_to_hrb'),
             'bill_to_vat' => (string) post('bill_to_vat'),
@@ -53,9 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
             'company_reg_no' => (string) post('company_reg_no'),
             'vat_note' => (string) post('vat_note'),
         ];
-        if (trim($header['bill_to_name']) === '') {
-            $header['bill_to_name'] = (string) $client['name'];
-        }
 
         $id = create_invoice($header, $lines, (int) ($user['id'] ?? 0));
         $created = get_invoice($id);
@@ -63,17 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
         redirect('index.php?page=admin_invoice_view&id=' . $id);
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
-        redirect('index.php?page=admin_invoice_generate&client_id=' . $clientId);
+        $back = 'index.php?page=admin_invoice_generate';
+        if ($selectedFromSheet) {
+            $back .= '&ids=' . rawurlencode(implode(',', $selectedFromSheet));
+        } elseif ($clientId > 0) {
+            $back .= '&client_id=' . $clientId;
+        }
+        redirect($back);
     }
 }
-
-$billName = (string) ($profile['bill_to_name'] ?? ($client['name'] ?? ''));
-$billAddress = (string) ($profile['bill_to_address'] ?? '');
-$billHrb = (string) ($profile['bill_to_hrb'] ?? '');
-$billVat = (string) ($profile['bill_to_vat'] ?? '');
-$supplier = (string) ($profile['supplier_number'] ?? 'NEW');
-$costCenter = (string) ($profile['cost_center'] ?? '');
-$orderer = (string) ($profile['orderer'] ?? '');
 
 render_header('Generate invoice', 'admin');
 ?>
@@ -85,55 +94,37 @@ render_header('Generate invoice', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Generate invoice', 'Pick unpaid LIVE rows from a client sheet, fill bill-to details, then create a printable Topurlz invoice.') ?></h1>
-    <p class="muted">Pick a client, tick unpaid completed articles (LIVE URL), fill bill-to details — layout matches your sample.</p>
+    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management and create a printable bill. No client folder or extra details required — bill-as is the email or name from the order.') ?></h1>
+    <p class="muted">Push unpaid LIVE orders here for payment. Bill-as can be the client email or name from the sheet. Address and company details are optional.</p>
   </div>
   <div class="actions">
+    <a class="btn secondary" href="index.php?page=admin_orders">Order management</a>
     <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
   </div>
 </div>
 
-<form method="get" class="card invoice-pick-client" action="index.php" data-no-draft>
-  <input type="hidden" name="page" value="admin_invoice_generate">
-  <label for="client_id">Client sheet</label>
-  <div class="invoice-pick-row">
-    <select id="client_id" name="client_id" required onchange="this.form.submit()"
-            <?= $useClientTypeahead ? 'data-searchable' : '' ?>>
-      <option value="">Select client…</option>
-      <?php foreach ($clients as $c): ?>
-        <option value="<?= (int) $c['id'] ?>" <?= $clientId === (int) $c['id'] ? 'selected' : '' ?>>
-          <?= h(invoice_generate_client_option_label($c)) ?>
-        </option>
-      <?php endforeach; ?>
-    </select>
-    <noscript><button class="btn secondary" type="submit">Load</button></noscript>
-  </div>
-  <?php if ($useClientTypeahead): ?>
-    <p class="help">Type to search — options show unpaid LIVE rows (ready to invoice) and completed count.</p>
-  <?php endif; ?>
-  <?php if (!$clients): ?>
-    <p class="help">No client sheets yet — create one under <a href="index.php?page=admin_orders">Order management</a> first.</p>
-  <?php endif; ?>
-</form>
-
-<?php if ($client): ?>
 <form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate">
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="generate">
-  <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
+  <?php if ($selectedFromSheet): ?>
+    <input type="hidden" name="ids" value="<?= h(implode(',', $selectedFromSheet)) ?>">
+  <?php endif; ?>
 
   <div class="orders-layout">
     <section class="card">
-      <h2><?= label_with_info('Articles to invoice', 'Only unpaid rows with a LIVE URL. Banner/Textlink rows show their yearly period text instead of Article Published.') ?></h2>
+      <h2><?= label_with_info('Orders to invoice', 'Only unpaid rows with a LIVE URL. Banner/Textlink rows show their yearly period text instead of Article Published.') ?></h2>
       <p class="muted" style="margin-top:0">
-        Only <strong>unpaid</strong> rows with a LIVE URL from <strong><?= h($client['name']) ?></strong>.
-        Paid rows are excluded.
+        <?php if ($selectedFromSheet): ?>
+          Rows you pushed from Order management. Untick any you do not want on this bill.
+        <?php else: ?>
+          All unpaid LIVE rows from Order management. Tick the ones to bill.
+        <?php endif; ?>
       </p>
       <?php if (!$invoiceable): ?>
         <div class="empty-state">
-          <p>No unpaid completed articles yet. Fill LIVE URL on the sheet, and leave those rows unpaid.</p>
-          <a class="btn secondary" href="index.php?page=admin_order_sheet&amp;id=<?= (int) $clientId ?>">Open sheet</a>
+          <p>No unpaid completed orders yet. Fill LIVE URL on Order management, leave those rows unpaid, then push them here.</p>
+          <a class="btn secondary" href="index.php?page=admin_orders">Open Order management</a>
         </div>
       <?php else: ?>
         <label class="invoice-check-all">
@@ -147,6 +138,14 @@ render_header('Generate invoice', 'admin');
                 <input type="checkbox" name="item_ids[]" value="<?= (int) $row['id'] ?>" checked>
                 <span class="invoice-pick-main">
                   <strong><?= h($row['site_name'] !== '' ? $row['site_name'] : 'Site') ?></strong>
+                  <?php
+                    $who = trim((string) ($row['client_label'] ?? ''));
+                    $country = trim((string) ($row['country'] ?? ''));
+                    $meta = trim($who . ($country !== '' ? ($who !== '' ? ' · ' : '') . $country : ''));
+                  ?>
+                  <?php if ($meta !== ''): ?>
+                    <span class="muted"><?= h($meta) ?></span>
+                  <?php endif; ?>
                   <?php if (order_is_placement($row)): ?>
                     <span class="muted"><?= h(order_invoice_description($row)) ?></span>
                   <?php else: ?>
@@ -160,20 +159,20 @@ render_header('Generate invoice', 'admin');
         </ul>
         <label class="invoice-group-opt">
           <input type="checkbox" name="group_same_amount" value="1" checked>
-          Group lines that share the same amount (qty &gt; 1), like the sample
+          Group lines that share the same amount (qty &gt; 1)
         </label>
       <?php endif; ?>
     </section>
 
     <section class="card">
-      <h2><?= label_with_info('Invoice details', 'Invoice number is assigned automatically and is always unique. Date and bill-to fields appear on the printable bill. Bank details default to Topurlz Ltd.') ?></h2>
+      <h2><?= label_with_info('Invoice details', 'Invoice number is assigned automatically. Date appears on the bill. Bill-as is optional free text from the order (email or name).') ?></h2>
       <div class="form-grid">
         <div>
           <label for="invoice_number"><?= label_with_info('Invoice No.', 'Generated automatically from the last invoice number. You cannot reuse or edit it.') ?></label>
           <input id="invoice_number" type="text" value="<?= h($nextNumber) ?>" readonly
                  class="invoice-number-auto" data-no-draft
                  title="Assigned automatically when you generate">
-          <p class="help" style="margin:0.35rem 0 0">Next number — locked &amp; unique. Add notes later under the invoice number on All invoices.</p>
+          <p class="help" style="margin:0.35rem 0 0">Next number — locked &amp; unique.</p>
         </div>
         <div>
           <label for="invoice_date">Date</label>
@@ -181,33 +180,39 @@ render_header('Generate invoice', 'admin');
         </div>
       </div>
 
-      <h3 class="invoice-subhead">Bill to</h3>
-      <label for="bill_to_name">Client / company name</label>
-      <input id="bill_to_name" name="bill_to_name" value="<?= h($billName) ?>" required placeholder="e.g. Autodoc SE">
+      <h3 class="invoice-subhead">Bill as</h3>
+      <label for="bill_to_name">Client email or name <span class="help">(optional)</span></label>
+      <input id="bill_to_name" name="bill_to_name" value="<?= h($billAsDefault) ?>"
+             placeholder="email or name from the order">
+      <p class="help">Copied from the order sheet. Leave blank if you do not need a name on the bill.</p>
 
-      <label for="bill_to_address">Address</label>
-      <textarea id="bill_to_address" name="bill_to_address" rows="2" placeholder="Street, postcode City"><?= h($billAddress) ?></textarea>
-
-      <div class="form-grid">
-        <div>
-          <label for="bill_to_hrb">Company reg / HRB</label>
-          <input id="bill_to_hrb" name="bill_to_hrb" value="<?= h($billHrb) ?>" placeholder="HRB 247677 B">
+      <details class="invoice-company-details">
+        <summary>Optional address / VAT (not required)</summary>
+        <div style="margin-top:0.75rem">
+          <label for="bill_to_address">Address</label>
+          <textarea id="bill_to_address" name="bill_to_address" rows="2" placeholder="Street, postcode City"></textarea>
+          <div class="form-grid">
+            <div>
+              <label for="bill_to_hrb">Company reg / HRB</label>
+              <input id="bill_to_hrb" name="bill_to_hrb" placeholder="HRB 247677 B">
+            </div>
+            <div>
+              <label for="bill_to_vat">VAT / Ust-IdNr</label>
+              <input id="bill_to_vat" name="bill_to_vat" placeholder="DE260634589">
+            </div>
+            <div>
+              <label for="supplier_number">Supplier number</label>
+              <input id="supplier_number" name="supplier_number" value="NEW">
+            </div>
+            <div>
+              <label for="cost_center">Cost center number</label>
+              <input id="cost_center" name="cost_center" placeholder="">
+            </div>
+          </div>
+          <label for="orderer">Orderer</label>
+          <input id="orderer" name="orderer" placeholder="">
         </div>
-        <div>
-          <label for="bill_to_vat">VAT / Ust-IdNr</label>
-          <input id="bill_to_vat" name="bill_to_vat" value="<?= h($billVat) ?>" placeholder="DE260634589">
-        </div>
-        <div>
-          <label for="supplier_number">Supplier number</label>
-          <input id="supplier_number" name="supplier_number" value="<?= h($supplier !== '' ? $supplier : 'NEW') ?>">
-        </div>
-        <div>
-          <label for="cost_center">Cost center number</label>
-          <input id="cost_center" name="cost_center" value="<?= h($costCenter) ?>" placeholder="1000600403-Linkbuilding">
-        </div>
-      </div>
-      <label for="orderer">Orderer</label>
-      <input id="orderer" name="orderer" value="<?= h($orderer) ?>" placeholder="m.walz@autodoc.eu">
+      </details>
 
       <details class="invoice-company-details">
         <summary>Bank / supplier details (Topurlz)</summary>
@@ -260,8 +265,4 @@ render_header('Generate invoice', 'admin');
   });
 })();
 </script>
-<?php endif; ?>
-<?php if ($useClientTypeahead): ?>
-<script src="<?= h(script_asset_url('js/searchable-select.js')) ?>" defer></script>
-<?php endif; ?>
 <?php render_footer('admin'); ?>

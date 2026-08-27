@@ -403,7 +403,7 @@ function render_glossary(string $panel, bool $showTitle = true): void
         echo '<div><dt>Our database</dt><dd>Country folders — browse and add sites (Admin only).</dd></div>';
         echo '<div><dt>Extracted Sites</dt><dd>From Team Extracting Results Push.</dd></div>';
         echo '<div><dt>Emails data</dt><dd>Admin/Final archives + Email campaign projects. Communication Team uses search and drafts, not the full Admin sheet.</dd></div>';
-        echo '<div><dt>Orders + Invoices</dt><dd>Client publication sheets, live URLs, printable invoices.</dd></div>';
+        echo '<div><dt>Orders + Invoices</dt><dd>One order sheet (country, date, admin, client email or name). Push unpaid LIVE rows to printable invoices.</dd></div>';
         echo '<div><dt>Filter &amp; add</dt><dd>Team pastes a list → remove domains already in the database → save only new ones.</dd></div>';
         echo '<div><dt>Site adding history</dt><dd>Who added which sites, saved by person and day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Manage Our database, departments, campaign projects, orders, and Team users.</dd></div>';

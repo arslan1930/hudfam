@@ -53,8 +53,8 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>5. Orders + Invoices</h3>'
-        . '<p><strong>What:</strong> Client publication sheets, live URLs, printable invoices.</p>'
-        . '<p><strong>How:</strong> Order management → client sheet. Invoices generate from unpaid live rows or a blank invoice. Website prices is a separate Office rate book (publisher prices by country).</p>'
+        . '<p><strong>What:</strong> One order sheet (country, date, admin, client email or name) and printable invoices.</p>'
+        . '<p><strong>How:</strong> Order management → fill the sheet → push unpaid LIVE rows to Invoices. Website prices is a separate Office rate book (publisher prices by country).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>6. Users</h3>'
@@ -238,13 +238,13 @@ function guide_site_prices(): string
 function guide_orders(): string
 {
     return render_page_purpose(
-        'Order management — one sheet per client',
-        'Each client has an editable sheet of sites, prices, LIVE URLs, and Banner/Textlink placements. Completed means the LIVE URL is filled. Unpaid LIVE rows are ready to invoice.',
-        'Open a client to edit rows, then Generate invoice from unpaid LIVE. Archive hides a client from the default list. Deleting a sheet keeps invoices and clears the client link.',
+        'Order management — one sheet',
+        'One editable sheet of orders: country, date, which admin owns the row, and a free-text client email or name. Completed means the LIVE URL is filled. Unpaid LIVE rows are ready to invoice.',
+        'Filter the sheet, add orders, then tick unpaid LIVE rows and Push to invoice. No client folders or extra client details.',
         [
-            'Create a client sheet, add sites, fill LIVE URL when the placement is live.',
-            'Use Invoice on unpaid LIVE rows to generate a printable bill.',
-            'Archive to hide from the default list; restore from the Archived filter.',
+            'Add an order, fill country, date, admin, and client email or name.',
+            'Fill LIVE URL when the placement is live, then tick the row and Push to invoice.',
+            'Use the filter bar to search by site, client, country, admin, date, or status.',
         ]
     );
 }
@@ -253,11 +253,11 @@ function guide_invoices(): string
 {
     return render_page_purpose(
         'Invoices — printable bills',
-        'Generate from unpaid LIVE rows on a client sheet, or start a blank invoice (Draft while incomplete, Done when sent). Mark Paid when payment arrives — that writes Paid back onto linked sheet rows.',
-        'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm.',
+        'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Done when sent). Mark Paid when payment arrives — that writes Paid back onto linked sheet rows.',
+        'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
         [
-            'Generate invoice: pick a client and unpaid LIVE rows.',
-            'Blank invoice: fill bill-to and line items, Save as draft or Save as done.',
+            'Generate invoice: tick unpaid LIVE rows pushed from Order management.',
+            'Blank invoice: fill bill-as and line items, Save as draft or Save as done.',
             'Mark Paid on the list or the open bill when payment is received.',
         ]
     );

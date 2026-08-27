@@ -359,7 +359,7 @@ CREATE TABLE IF NOT EXISTS department_tasks (
   CONSTRAINT fk_dt_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Order management: one sheet per client
+-- Order management: one pipeline sheet
 CREATE TABLE IF NOT EXISTS order_clients (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(200) NOT NULL,
@@ -374,7 +374,7 @@ CREATE TABLE IF NOT EXISTS order_clients (
 
 CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  client_id INT NOT NULL,
+  client_id INT NULL,
   row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
   site_name VARCHAR(255) NOT NULL DEFAULT '',
   site_note VARCHAR(255) NOT NULL DEFAULT '',
@@ -386,13 +386,20 @@ CREATE TABLE IF NOT EXISTS order_items (
   owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   live_url VARCHAR(500) NOT NULL DEFAULT '',
+  client_label VARCHAR(255) NOT NULL DEFAULT '',
+  admin_user_id INT NULL,
+  order_date DATE NULL,
   is_paid TINYINT(1) NOT NULL DEFAULT 0,
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX (client_id, sort_order),
   INDEX (client_id, order_year, order_month),
-  CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
+  INDEX idx_oi_admin (admin_user_id),
+  INDEX idx_oi_order_date (order_date),
+  INDEX idx_oi_country (country),
+  CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_oi_admin FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Invoices (generated from completed order-sheet articles)

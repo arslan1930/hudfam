@@ -166,6 +166,11 @@ if (!str_contains($invoicesAdminPage, "\$listOpts['client_id']")
 } else {
     ok('invoices.php client_id list scope');
 }
+if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
+    fail('invoices.php missing Bill as column');
+} else {
+    ok('invoices.php Bill as column');
+}
 $adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
 if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
     fail('Admin Our database still says Clean errors');
@@ -231,7 +236,7 @@ if (!str_contains($guidesLib, 'function guide_orders')
     || !str_contains($guidesLib, 'function guide_invoices')
     || !str_contains($guidesLib, 'function guide_admin_account')
     || !str_contains($guidesLib, 'function guide_site_prices')
-    || !str_contains($guidesLib, 'Deleting a sheet keeps invoices')
+    || !str_contains($guidesLib, 'Push to invoice')
     || !str_contains($guidesLib, 'printable letterhead is Topurlz')
     || !str_contains($guidesLib, 'Sidebar Change password updates the same password')) {
     fail('Office page-purpose guides missing');
@@ -1145,25 +1150,34 @@ if (!str_contains($newDataSmoke, "section !== 'emails_admin'")
 }
 
 $ordersPage = file_get_contents($root . '/pages/admin/orders.php') ?: '';
-if (!str_contains($ordersPage, 'order-client-search')) {
-    fail('orders missing client search');
+if (!str_contains($ordersPage, 'id="order-filter-bar"')
+    || !str_contains($ordersPage, 'id="order-sheet-search"')
+    || !str_contains($ordersPage, 'name="country"')
+    || !str_contains($ordersPage, 'name="admin_id"')
+    || !str_contains($ordersPage, 'name="date_from"')
+    || !str_contains($ordersPage, 'name="date_to"')
+    || !str_contains($ordersPage, 'name="status"')) {
+    fail('orders missing filter bar searches');
 } else {
-    ok('orders client search');
+    ok('orders filter bar searches');
 }
-if (!str_contains($ordersPage, 'admin_invoices&amp;client_id=')) {
-    fail('orders Invoices link missing client_id');
+if (!str_contains($ordersPage, 'client_label')
+    || !str_contains($ordersPage, 'email or name')
+    || !str_contains($ordersPage, 'admin_user_id')
+    || !str_contains($ordersPage, 'order_date')) {
+    fail('orders missing country/date/admin/client columns');
 } else {
-    ok('orders Invoices link scopes by client_id');
+    ok('orders country date admin client columns');
 }
-if (!str_contains($ordersPage, 'Has unpaid LIVE') || !str_contains($ordersPage, "value=\"archived\"")) {
-    fail('orders missing unpaid/archived filters');
+if (!str_contains($ordersPage, 'push_invoice') || !str_contains($ordersPage, 'Push to invoice')) {
+    fail('orders missing push to invoice');
 } else {
-    ok('orders unpaid + archived filters');
+    ok('orders push to invoice');
 }
-if (!str_contains($ordersPage, 'Archive') || !str_contains($ordersPage, 'restore')) {
-    fail('orders missing archive/restore actions');
+if (!str_contains($ordersPage, 'Unpaid LIVE') || !str_contains($ordersPage, "value=\"unpaid\"")) {
+    fail('orders missing unpaid LIVE filter');
 } else {
-    ok('orders archive/restore actions');
+    ok('orders unpaid LIVE filter');
 }
 if (!str_contains($ordersPage, "['p' => \$pageNum") && !str_contains($ordersPage, 'Page <?= (int) $pageNum ?>')) {
     fail('orders missing list pagination');
@@ -1171,7 +1185,7 @@ if (!str_contains($ordersPage, "['p' => \$pageNum") && !str_contains($ordersPage
     ok('orders list pagination');
 }
 
-$orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
+$orderSheet = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 if (!str_contains($orderSheet, 'yearNow') && !str_contains($orderSheet, 'date(\'Y\')')) {
     fail('order sheet year range not dynamic');
 } else {
@@ -1212,7 +1226,7 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
@@ -1235,7 +1249,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1248,14 +1262,13 @@ if (!str_contains($invoiceGenerate, 'csrf_field()')) {
 } else {
     ok('invoice_generate csrf_field');
 }
-if (!str_contains($invoiceGenerate, 'invoice_generate_client_option_label')
-    || !str_contains($invoiceGenerate, 'unpaid LIVE')
-    || !str_contains($invoiceGenerate, 'data-searchable')
-    || !str_contains($invoiceGenerate, 'js/searchable-select.js')
-    || !str_contains($invoiceGenerate, 'invoice_generate_client_typeahead_min')) {
-    fail('invoice_generate missing unpaid LIVE options or typeahead');
+if (!str_contains($invoiceGenerate, 'unpaid LIVE')
+    || !str_contains($invoiceGenerate, 'bill_to_name')
+    || !str_contains($invoiceGenerate, 'invoice_bill_as_from_orders')
+    || !str_contains($invoiceGenerate, 'Order management')) {
+    fail('invoice_generate missing unpaid LIVE pick / bill-as');
 } else {
-    ok('invoice_generate unpaid LIVE options + typeahead');
+    ok('invoice_generate unpaid LIVE pick + bill-as');
 }
 if (!is_file($root . '/assets/js/searchable-select.js')) {
     fail('missing assets/js/searchable-select.js');
@@ -1286,6 +1299,8 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
     || !str_contains($invoiceViewCsrf, "value=\"save_blank\"")
     || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")) {
     fail('Invoice list/view POST forms missing csrf_field');
+} elseif (str_contains($invoiceViewCsrf, 'admin_invoice_generate&amp;client_id=')) {
+    fail('Invoice view Generate another still scoped to a client folder');
 } else {
     ok('Invoice list/view csrf_field on POST forms');
 }
@@ -1888,7 +1903,7 @@ if (!str_contains($campApp, "render_sheet_tool_menu_open('Batches'")
     ok('campaign Batches menu + open filter');
 }
 $extractedPg = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
-$orderSheet = file_get_contents($root . '/pages/admin/order_sheet.php') ?: '';
+$orderSheet = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 if (!str_contains($campApp, 'render_open_site_anchor')
     || (!str_contains($extractedPg, 'render_open_site_anchor')
         && !str_contains(file_get_contents($root . '/includes/extracted.php') ?: '', 'render_open_site_anchor'))

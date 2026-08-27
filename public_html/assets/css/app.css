@@ -3198,6 +3198,33 @@ tr.swe-row-updated {
   gap: 0.65rem 0.9rem;
   min-width: 0;
 }
+.order-filter-bar {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+}
+.order-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.55rem;
+  align-items: center;
+}
+.order-filter-field {
+  margin: 0;
+}
+.order-filter-field select,
+.order-filter-field input[type="date"] {
+  margin: 0;
+  min-width: 9.5rem;
+}
+.order-filter-bar .sheet-search input[type="search"] {
+  width: 16rem;
+  max-width: 70vw;
+}
+.order-filter-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
 .sheet-search {
   display: inline-flex;
   align-items: center;
@@ -3584,7 +3611,7 @@ a.card.stat:focus-visible {
 }
 .order-sheet {
   width: 100%;
-  min-width: 1140px;
+  min-width: 1780px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -3602,9 +3629,13 @@ a.card.stat:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 .order-sheet .col-num { width: 2.2rem; text-align: center; }
-.order-sheet .col-month { min-width: 150px; width: 150px; }
+.order-sheet .col-check { width: 2.2rem; text-align: center; }
+.order-sheet .col-month { min-width: 188px; width: 188px; }
 .order-sheet .col-country { min-width: 110px; width: 120px; }
-.order-sheet .col-site { min-width: 160px; }
+.order-sheet .col-date { min-width: 150px; width: 154px; }
+.order-sheet .col-admin { min-width: 140px; width: 148px; }
+.order-sheet .col-client { min-width: 200px; }
+.order-sheet .col-site { min-width: 168px; }
 .order-sheet .col-placement { min-width: 108px; width: 118px; }
 .site-cell {
   display: grid;
@@ -3628,7 +3659,7 @@ a.card.stat:focus-visible {
 .order-sheet .col-price { width: 7.5rem; }
 .order-sheet .col-profit { width: 6.5rem; text-align: right; }
 .order-sheet .col-del { width: 4.8rem; text-align: center; }
-.order-sheet .col-live { min-width: 160px; }
+.order-sheet .col-live { min-width: 240px; }
 .order-sheet .col-paid { width: 4.6rem; text-align: center; }
 .btn-paid {
   display: inline-flex;
@@ -3680,7 +3711,9 @@ a.card.stat:focus-visible {
   background: #f3f4f6;
 }
 .cell-input {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 8px;
