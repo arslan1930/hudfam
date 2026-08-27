@@ -2,7 +2,14 @@
 /**
  * Local integration smoke test — run: php tests_run.php
  * Not for production. Safe to delete after testing.
+ * Web hits (Apache / LiteSpeed / php -S) must not run this file.
  */
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Not found.';
+    exit;
+}
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 require __DIR__ . '/includes/helpers.php';
@@ -103,6 +110,31 @@ db()->prepare('UPDATE users SET password_hash=?, must_change_password=0 WHERE us
     password_hash('TestTeam8z', PASSWORD_DEFAULT),
     'teammate',
 ]);
+
+$webRootGuards = [
+    'tests_run.php',
+    'tests_http.php',
+    'smoke_admin_mvp.php',
+    'reset_admin_once.php',
+];
+$guardNeedle = 'PHP_SAPI !== \'cli\'';
+$guardOk = true;
+foreach ($webRootGuards as $guardFile) {
+    $src = (string) file_get_contents(__DIR__ . '/' . $guardFile);
+    $beforeRequire = preg_split('/\brequire(?:_once)?\b/', $src, 2)[0] ?? $src;
+    if (!str_contains($beforeRequire, $guardNeedle)) {
+        $guardOk = false;
+        fail('web-root CLI guard missing before require in ' . $guardFile);
+    }
+}
+$resetSrc = (string) file_get_contents(__DIR__ . '/reset_admin_once.php');
+if (str_contains($resetSrc, '$_GET[\'confirm\']') || str_contains($resetSrc, '?confirm=RESET')) {
+    $guardOk = false;
+    fail('reset_admin_once.php still documents or reads a web confirm=RESET');
+}
+if ($guardOk) {
+    pass('web-root CLI guards on tests + reset_admin_once');
+}
 
 // --- Login ---
 try {

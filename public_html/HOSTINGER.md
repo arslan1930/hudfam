@@ -36,9 +36,11 @@ Do **not** delete current files such as `includes/email_campaigns.php`, `include
 Then:
 
 1. Upload **everything** from the repo’s `public_html/` folder.
-2. Sign in as **Admin**, then open `https://YOUR-DOMAIN/upgrade.php` once → **Run upgrade**.
-3. **Delete `upgrade.php` and `install.php`** (installer refuses to run again once `config.php` exists). `.htaccess` also blocks `upgrade.php` if you forget.
-4. Hard-refresh the browser (Ctrl+F5).
+2. Opening the app as Admin is usually enough: each page runs `ensure_*()` and adds missing tables/columns.
+3. If you still need the one-shot upgrader (legacy Catalog table drops): `.htaccess` **denies** `upgrade.php`. Temporarily comment `upgrade` out of the FilesMatch, sign in as Admin, open `/upgrade.php` → **Run upgrade**, then restore the deny line.
+4. **Delete `upgrade.php` and `install.php`** (installer refuses to run again once `config.php` exists).
+5. Do **not** rely on `.htaccess` alone for `tests_run.php`, `tests_http.php`, `smoke_admin_mvp.php`, or `reset_admin_once.php` — those files refuse web hits (`PHP_SAPI !== 'cli'`). Delete them from production if you uploaded the whole folder.
+6. Hard-refresh the browser (Ctrl+F5).
 
 ## Fresh install
 
@@ -65,7 +67,9 @@ public_html/
   asset.php
   .htaccess
   install.php          ← delete after install
-  upgrade.php          ← delete after upgrade
+  upgrade.php          ← delete after upgrade (also denied by .htaccess)
+  tests_*.php          ← CLI only; delete from production
+  reset_admin_once.php ← CLI only; do not leave on the server
   assets/
   includes/            ← keep email_campaigns.php, orders.php, invoices.php, departments.php
   pages/admin/
@@ -78,6 +82,8 @@ public_html/
 | Problem | Fix |
 |--------|-----|
 | 403 Forbidden | Re-upload `.htaccess`; folders 755, files 644 |
+| `/upgrade.php` is 403 | Expected: `.htaccess` denies it. Temporarily remove `upgrade` from FilesMatch, run it, restore the deny, delete the file. New columns also appear when you open app pages (`ensure_*`). |
+| `tests_run.php` / `reset_admin_once.php` 404 | Expected. Those scripts are CLI-only. Do not recover the admin password via a browser URL. |
 | No design | Upload `assets/` + `asset.php` |
 | Cannot connect to MySQL | Use `127.0.0.1` or the hPanel host, not `localhost` |
 | Forgot password does nothing | Set `mail_from` / SMTP; Admin email must be verified |

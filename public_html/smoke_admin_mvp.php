@@ -5,8 +5,17 @@
  *
  * Phase A: allowlist, password toggle, blank invoice POST, history ?user=, user guards.
  * Phase B (editable history sheet) asserts are included; they pass once PR2 lands.
+ *
+ * Web hits (Apache / LiteSpeed / php -S) must not run this file.
  */
 declare(strict_types=1);
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Not found.';
+    exit;
+}
 
 $root = __DIR__;
 $failures = 0;
@@ -1113,6 +1122,37 @@ if (str_contains($appCssSmoke, 'content-visibility: auto')
     fail('search hide / security headers / login CSRF+throttle missing');
 } else {
     ok('search [hidden] hide + login CSRF/throttle + security headers');
+}
+$cliGuardNeedle = "PHP_SAPI !== 'cli'";
+$cliGuardFiles = [
+    'tests_run.php',
+    'tests_http.php',
+    'smoke_admin_mvp.php',
+    'reset_admin_once.php',
+];
+$cliGuardOk = true;
+foreach ($cliGuardFiles as $guardFile) {
+    $src = file_get_contents($root . '/' . $guardFile) ?: '';
+    $beforeRequire = preg_split('/\brequire(?:_once)?\b/', $src, 2)[0] ?? $src;
+    if (!str_contains($beforeRequire, $cliGuardNeedle)) {
+        $cliGuardOk = false;
+        break;
+    }
+}
+$resetOnceSmoke = file_get_contents($root . '/reset_admin_once.php') ?: '';
+$hostingerSmoke = file_get_contents($root . '/HOSTINGER.md') ?: '';
+$readmeSmoke = file_get_contents(dirname($root) . '/README.md') ?: '';
+if (
+    !$cliGuardOk
+    || str_contains($resetOnceSmoke, "\$_GET['confirm']")
+    || str_contains($resetOnceSmoke, '?confirm=RESET')
+    || !str_contains($hostingerSmoke, 'PHP_SAPI')
+    || !str_contains($hostingerSmoke, 'Temporarily comment')
+    || str_contains($readmeSmoke, 'open `/upgrade.php` once (Admin-only), then delete it.')
+) {
+    fail('web-root CLI guards / HOSTINGER upgrade docs missing');
+} else {
+    ok('web-root CLI guards + HOSTINGER upgrade docs');
 }
 $campLibSmoke = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
