@@ -5150,7 +5150,7 @@ textarea:focus-visible {
 /* Website prices — add row + locked identity cells */
 .site-price-sheet {
   table-layout: fixed;
-  min-width: 86rem;
+  min-width: 92rem;
 }
 .site-price-sheet .sp-col-check { width: 2.2rem; }
 .site-price-sheet .sp-col-site { width: 11.5rem; }
@@ -5158,7 +5158,7 @@ textarea:focus-visible {
 .site-price-sheet .sp-col-metric { width: 4.4rem; }
 .site-price-sheet .sp-col-price { width: 6.5rem; }
 .site-price-sheet .sp-col-status { width: 9.2rem; }
-.site-price-sheet .sp-col-note { width: 10.5rem; }
+.site-price-sheet .sp-col-note { width: 16rem; }
 .site-price-sheet .sp-col-email { width: 9.5rem; }
 .site-price-sheet .sp-col-people { width: 13rem; }
 .site-price-sheet .sp-col-actions { width: 7.2rem; }
@@ -5169,7 +5169,8 @@ textarea:focus-visible {
 }
 .site-price-sheet td.site-price-actions-td,
 .site-price-sheet td.site-price-add-commit,
-.site-price-sheet td.prospect-niche-td {
+.site-price-sheet td.prospect-niche-td,
+.site-price-sheet td.site-price-note-td {
   overflow: visible;
 }
 .site-price-sheet td.prospect-niche-td {
@@ -5185,8 +5186,24 @@ textarea:focus-visible {
   min-width: 0;
   padding: 0.28rem 0.4rem;
   font-size: 0.88rem;
+}
+.site-price-sheet input.site-price-input,
+.site-price-sheet .site-price-status {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.site-price-sheet textarea.site-price-note {
+  display: block;
+  overflow: hidden;
+  text-overflow: unset;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  resize: vertical;
+  min-height: 2.4rem;
+  max-height: none;
+  line-height: 1.35;
+  field-sizing: content;
 }
 .site-price-sheet .site-price-status {
   min-width: 0;
@@ -5654,7 +5671,7 @@ textarea:focus-visible {
   min-width: 0;
   vertical-align: top;
 }
-.site-price-note-td .site-price-input {
+.site-price-note-td .site-price-note {
   display: block;
 }
 .site-price-filter {

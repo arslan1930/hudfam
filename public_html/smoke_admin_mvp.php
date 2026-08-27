@@ -352,9 +352,12 @@ if (!str_contains($sitePricesLib, 'function site_price_claim_row')
     || !str_contains($sitePricesCss, '.site-price-people')
     || !str_contains($sitePricesCss, '.site-price-people-name')
     || !str_contains($sitePricesCss, '.site-price-note-td')
+    || !str_contains($sitePricesCss, 'textarea.site-price-note')
     || !str_contains($sitePricesCss, '.site-price-sheet td.prospect-niche-td')
     || !str_contains($sitePricesLib, 'site-price-people-name')
-    || !str_contains($sitePricesLib, 'site-price-note-td')) {
+    || !str_contains($sitePricesLib, 'site-price-note-td')
+    || !str_contains($sitePricesLib, 'textarea class="site-price-input site-price-note"')
+    || !str_contains($sitePricesJs, 'fitAllNotes')) {
     fail('Website prices people / history / country tabs missing');
 } else {
     ok('Website prices people + history + country tabs');

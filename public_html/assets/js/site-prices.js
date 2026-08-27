@@ -90,6 +90,18 @@
     return data;
   }
 
+  function fitNoteBox(el) {
+    if (!el || String(el.tagName || '').toLowerCase() !== 'textarea') return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(38, el.scrollHeight) + 'px';
+  }
+
+  function fitAllNotes(root) {
+    var scope = root || document;
+    if (!scope.querySelectorAll) return;
+    scope.querySelectorAll('[data-site-price-note], [data-add-note]').forEach(fitNoteBox);
+  }
+
   function setStatus(msg, isError) {
     var el = document.querySelector('[data-site-price-status-msg]');
     if (!el) return;
@@ -110,6 +122,7 @@
     }
     applyFilters();
     syncSelectAll();
+    fitAllNotes(tbody);
   }
 
   function applyPager(json) {
@@ -793,10 +806,10 @@
     root.addEventListener('input', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      if (t.matches('[data-site-price-note], [data-add-note]')) fitNoteBox(t);
       var row = t.closest('[data-site-price-row]');
       if (row && (t.matches('[data-site-price-price], [data-site-price-note], [data-site-price-email], [data-site-price-domain], [data-site-price-da], [data-site-price-dr], [data-site-price-traffic]')
           || t.closest('[data-niche-chips]'))) {
-        if (t.matches('[data-site-price-note]')) t.setAttribute('title', t.value || '');
         scheduleSave(row);
       }
     });
@@ -1024,6 +1037,7 @@
     if (table) {
       bind(table);
       bindDrag(table);
+      fitAllNotes(table);
       var jumpId = table.getAttribute('data-jump-row');
       if (jumpId) {
         var row = table.querySelector('[data-site-price-row][data-row-id="' + jumpId + '"]');
