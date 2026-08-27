@@ -116,7 +116,7 @@ render_header('Invoices', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
+    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid Order management rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
     <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark Paid when payment arrives.</p>
   </div>
   <div class="actions">
@@ -179,7 +179,7 @@ render_header('Invoices', 'admin');
         } elseif ($invoiceQ !== '' || $invoiceFilter !== '' || $invoiceClientId > 0) {
             echo 'No invoices match this filter.';
         } else {
-            echo 'No invoices yet. Generate one from unpaid completed articles on a client sheet.';
+            echo 'No invoices yet. Generate one from unpaid LIVE rows on Order management.';
         }
       ?></p>
       <?php if ($invoiceQ === '' && $invoiceFilter === '' && $invoiceClientId < 1): ?>

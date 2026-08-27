@@ -3821,7 +3821,7 @@ try {
     set_order_client_archived((int) $clientId, false);
 
     $dash = order_management_dashboard_stats();
-    if (isset($dash['clients'], $dash['unpaid_live'])) {
+    if (isset($dash['clients'], $dash['unpaid_live'], $dash['orders'])) {
         pass('order dashboard stats ok');
     } else {
         fail('order dashboard stats missing keys');
@@ -3832,6 +3832,81 @@ try {
         pass('order clients SQL limit/offset');
     } else {
         fail("order clients paging total=$clientTotal page=" . count($clientPage));
+    }
+
+    $pipeId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
+    update_order_item((int) $pipeId, 0, [
+        'site_name' => 'pipeline-site.com',
+        'country' => 'Germany',
+        'client_label' => 'buyer@example.com',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => '2026-08-15',
+        'owner_price' => 12,
+        'decided_price' => 30,
+        'live_url' => 'https://example.com/pipeline-live',
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
+    $byQ = list_order_pipeline_rows(['q' => 'buyer@example.com']);
+    $byCountry = list_order_pipeline_rows(['country' => 'Germany', 'status' => 'unpaid']);
+    $byAdmin = list_order_pipeline_rows(['admin_id' => (int) $adminUser['id']]);
+    $byDate = list_order_pipeline_rows(['date_from' => '2026-08-15', 'date_to' => '2026-08-15']);
+    $foundPipe = static function (array $rows, int $id): bool {
+        foreach ($rows as $row) {
+            if ((int) ($row['id'] ?? 0) === $id) {
+                return true;
+            }
+        }
+        return false;
+    };
+    if ($pipeId > 0
+        && $foundPipe($byQ, (int) $pipeId)
+        && $foundPipe($byCountry, (int) $pipeId)
+        && $foundPipe($byAdmin, (int) $pipeId)
+        && $foundPipe($byDate, (int) $pipeId)
+        && count_order_pipeline_rows(['q' => 'buyer@example.com']) >= 1) {
+        pass('pipeline sheet filters');
+    } else {
+        fail('pipeline sheet filters missed row ' . $pipeId);
+    }
+
+    $pipeReady = list_invoiceable_order_items_by_ids([(int) $pipeId]);
+    if (count($pipeReady) !== 1) {
+        fail('pipeline invoiceable missing row');
+    } else {
+        $pipeLines = build_invoice_lines_from_orders($pipeReady, false);
+        $pipeInvId = create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_id' => 0,
+            'client_name' => 'buyer@example.com',
+            'bill_to_name' => 'buyer@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Topurlz',
+            'company_bic' => 'TESTBIC',
+            'company_iban' => 'TESTIBAN',
+            'company_phone' => '',
+            'company_address' => '',
+            'company_reg_no' => '',
+            'vat_note' => '',
+        ], $pipeLines, (int) $adminUser['id']);
+        $pipeInv = get_invoice($pipeInvId);
+        $linkedClient = (int) ($pipeInv['client_id'] ?? 0);
+        if ($pipeInv && $linkedClient === 0 && (string) ($pipeInv['bill_to_name'] ?? '') === 'buyer@example.com') {
+            mark_invoice_payment_received((int) $pipeInvId);
+            $paidPipe = get_order_item((int) $pipeId);
+            if ($paidPipe && (int) ($paidPipe['is_paid'] ?? 0) === 1) {
+                pass('pipeline invoice without client folder');
+            } else {
+                fail('pipeline invoice paid did not write back to order');
+            }
+        } else {
+            fail('pipeline invoice kept a client folder link');
+        }
     }
 
     $invId = create_blank_invoice((int) $adminUser['id']);

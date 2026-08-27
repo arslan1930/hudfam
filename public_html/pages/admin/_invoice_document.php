@@ -93,7 +93,7 @@ if ($editable && !$editRows) {
       <div class="invoice-party-label">Bill to</div>
       <?php if ($editable): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="bill_to_name"
-               value="<?= h($invoice['bill_to_name']) ?>" placeholder="Client / company name" required>
+               value="<?= h($invoice['bill_to_name']) ?>" placeholder="Email or name (optional)">
         <textarea class="invoice-edit-textarea" name="bill_to_address" rows="2"
                   placeholder="Address"><?= h((string) $invoice['bill_to_address']) ?></textarea>
         <div class="invoice-party-lines invoice-edit-party-lines">

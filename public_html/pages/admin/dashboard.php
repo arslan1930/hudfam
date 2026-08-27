@@ -53,6 +53,7 @@ try {
     $recent = [];
 }
 $orderClientCount = 0;
+$orderRowCount = 0;
 $orderUnpaidLive = 0;
 $omOk = true;
 $deptOpenTasks = 0;
@@ -61,11 +62,13 @@ $deptUnassignedTeam = 0;
 $deptOk = true;
 try {
     $omStats = order_management_dashboard_stats();
-    $orderClientCount = (int) ($omStats['clients'] ?? 0);
+    $orderRowCount = (int) ($omStats['orders'] ?? ($omStats['clients'] ?? 0));
+    $orderClientCount = $orderRowCount;
     $orderUnpaidLive = (int) ($omStats['unpaid_live'] ?? 0);
 } catch (Throwable $e) {
     $omOk = false;
     $orderClientCount = 0;
+    $orderRowCount = 0;
     $orderUnpaidLive = 0;
 }
 try {
@@ -114,7 +117,7 @@ render_workflow([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects', 'hint' => 'Country folders'],
     ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted', 'hint' => 'From Extracting Push'],
     ['label' => 'Emails data', 'href' => 'index.php?page=admin_emails_data', 'hint' => 'Admin · Final · Campaign'],
-    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders', 'hint' => 'Client sheets'],
+    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders', 'hint' => 'One sheet · push to invoice'],
     ['label' => 'Invoices', 'href' => 'index.php?page=admin_invoices', 'hint' => 'Printable bills'],
 ]);
 render_dashboard_help('admin');
@@ -233,9 +236,9 @@ if ($attention):
     <p>Site Finding copy from Extracting Push · optional seed.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
-     data-search="order management client sheets sites prices profit live url unpaid invoice">
+     data-search="order management sheet sites prices profit live url unpaid invoice client email admin country date">
     <h2>Order management</h2>
-    <p><?= (int) $orderClientCount ?> active client<?= (int) $orderClientCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — sheets, prices, profit.</p>
+    <p><?= (int) $orderRowCount ?> order<?= (int) $orderRowCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — one sheet, push to invoice.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_site_prices" data-dashboard-item
      data-search="website prices publisher rates country sheet da dr traffic status office">

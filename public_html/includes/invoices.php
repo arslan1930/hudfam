@@ -434,18 +434,57 @@ function save_invoice_client_profile(int $clientId, array $data): void
  *
  * @return list<array<string,mixed>>
  */
-function list_invoiceable_order_items(int $clientId): array
+function list_invoiceable_order_items(int $clientId = 0): array
 {
     ensure_order_schema();
-    $stmt = db()->prepare(
+    if ($clientId > 0) {
+        $stmt = db()->prepare(
+            "SELECT * FROM order_items
+             WHERE client_id=? AND row_type='site'
+               AND TRIM(live_url) <> ''
+               AND COALESCE(is_paid, 0) = 0
+             ORDER BY sort_order ASC, id ASC"
+        );
+        $stmt->execute([$clientId]);
+        return $stmt->fetchAll();
+    }
+    $stmt = db()->query(
         "SELECT * FROM order_items
-         WHERE client_id=? AND row_type='site'
+         WHERE row_type='site'
            AND TRIM(live_url) <> ''
            AND COALESCE(is_paid, 0) = 0
-         ORDER BY sort_order ASC, id ASC"
+         ORDER BY COALESCE(order_date, DATE(created_at)) DESC, id DESC"
     );
-    $stmt->execute([$clientId]);
     return $stmt->fetchAll();
+}
+
+/**
+ * @param list<int> $ids
+ * @return list<array<string,mixed>>
+ */
+function list_invoiceable_order_items_by_ids(array $ids): array
+{
+    $rows = list_order_items_by_ids($ids);
+    $out = [];
+    foreach ($rows as $row) {
+        if (order_is_completed($row) && !order_is_paid($row)) {
+            $out[] = $row;
+        }
+    }
+    return $out;
+}
+
+/** Free-text bill-as from order rows (email or name). */
+function invoice_bill_as_from_orders(array $rows): string
+{
+    $labels = [];
+    foreach ($rows as $row) {
+        $v = trim((string) ($row['client_label'] ?? ''));
+        if ($v !== '') {
+            $labels[$v] = $v;
+        }
+    }
+    return implode(', ', array_values($labels));
 }
 
 /**
@@ -818,14 +857,14 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
     }
 
     // Guard: never invoice already-paid order rows (sheet invoices only)
-    if (!$isManual && $clientId) {
+    if (!$isManual) {
         foreach ($normalized as $line) {
             foreach ($line['order_item_ids'] as $oid) {
                 $chk = db()->prepare(
                     "SELECT is_paid, live_url FROM order_items
-                     WHERE id=? AND client_id=? AND row_type='site' LIMIT 1"
+                     WHERE id=? AND row_type='site' LIMIT 1"
                 );
-                $chk->execute([$oid, $clientId]);
+                $chk->execute([$oid]);
                 $row = $chk->fetch();
                 if (!$row) {
                     throw new InvalidArgumentException('One of the selected sheet rows was not found.');
@@ -960,9 +999,7 @@ function mark_invoice_payment_received(int $invoiceId): void
         if (!$isManual) {
             foreach ($items as $item) {
                 foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
-                    if ($clientId > 0) {
-                        set_order_item_paid($oid, $clientId, true);
-                    }
+                    set_order_item_paid($oid, $clientId, true);
                 }
             }
         }

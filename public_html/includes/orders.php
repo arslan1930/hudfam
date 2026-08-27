@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin Order Management — client sheets with site / country / month / prices / profit / live URL.
+ * Admin Order Management — one pipeline sheet (country, date, admin, client email/name).
  */
 
 function ensure_order_schema(): void
@@ -31,7 +31,7 @@ function ensure_order_schema(): void
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS order_items (
           id INT AUTO_INCREMENT PRIMARY KEY,
-          client_id INT NOT NULL,
+          client_id INT NULL,
           row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
           site_name VARCHAR(255) NOT NULL DEFAULT '',
           site_note VARCHAR(255) NOT NULL DEFAULT '',
@@ -43,13 +43,20 @@ function ensure_order_schema(): void
           owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           live_url VARCHAR(500) NOT NULL DEFAULT '',
+          client_label VARCHAR(255) NOT NULL DEFAULT '',
+          admin_user_id INT NULL,
+          order_date DATE NULL,
           is_paid TINYINT(1) NOT NULL DEFAULT 0,
           sort_order INT NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX (client_id, sort_order),
           INDEX (client_id, order_year, order_month),
-          CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
+          INDEX idx_oi_admin (admin_user_id),
+          INDEX idx_oi_order_date (order_date),
+          INDEX idx_oi_country (country),
+          CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
+          CONSTRAINT fk_oi_admin FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
@@ -92,6 +99,66 @@ function ensure_order_schema(): void
         $pdo->exec(
             'UPDATE order_items SET order_month = MONTH(created_at)
              WHERE order_month IS NULL AND row_type = \'site\''
+        );
+        $cols = $pdo->query('SHOW COLUMNS FROM order_items')->fetchAll(PDO::FETCH_COLUMN);
+        $pipelineAlters = [];
+        if (!in_array('client_label', $cols, true)) {
+            $pipelineAlters[] = "ADD COLUMN client_label VARCHAR(255) NOT NULL DEFAULT '' AFTER live_url";
+        }
+        if (!in_array('admin_user_id', $cols, true)) {
+            $pipelineAlters[] = 'ADD COLUMN admin_user_id INT NULL AFTER client_label';
+        }
+        if (!in_array('order_date', $cols, true)) {
+            $pipelineAlters[] = 'ADD COLUMN order_date DATE NULL AFTER admin_user_id';
+        }
+        if ($pipelineAlters) {
+            $pdo->exec('ALTER TABLE order_items ' . implode(', ', $pipelineAlters));
+        }
+        $clientCol = $pdo->query("SHOW COLUMNS FROM order_items LIKE 'client_id'")->fetch(PDO::FETCH_ASSOC);
+        if ($clientCol && strtoupper((string) ($clientCol['Null'] ?? '')) === 'NO') {
+            $pdo->exec('ALTER TABLE order_items MODIFY client_id INT NULL');
+        }
+        $idxNames = [];
+        foreach ($pdo->query('SHOW INDEX FROM order_items')->fetchAll(PDO::FETCH_ASSOC) as $idx) {
+            $idxNames[(string) ($idx['Key_name'] ?? '')] = true;
+        }
+        if (empty($idxNames['idx_oi_admin'])) {
+            $pdo->exec('ALTER TABLE order_items ADD INDEX idx_oi_admin (admin_user_id)');
+        }
+        if (empty($idxNames['idx_oi_order_date'])) {
+            $pdo->exec('ALTER TABLE order_items ADD INDEX idx_oi_order_date (order_date)');
+        }
+        if (empty($idxNames['idx_oi_country'])) {
+            $pdo->exec('ALTER TABLE order_items ADD INDEX idx_oi_country (country)');
+        }
+        try {
+            $pdo->exec(
+                'ALTER TABLE order_items
+                 ADD CONSTRAINT fk_oi_admin FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL'
+            );
+        } catch (Throwable $e) {
+            // already exists
+        }
+        $pdo->exec(
+            "UPDATE order_items i
+             INNER JOIN order_clients c ON c.id = i.client_id
+             SET i.client_label = c.name
+             WHERE i.row_type = 'site' AND TRIM(i.client_label) = '' AND TRIM(c.name) <> ''"
+        );
+        $pdo->exec(
+            "UPDATE order_items i
+             INNER JOIN order_clients c ON c.id = i.client_id
+             SET i.admin_user_id = c.created_by
+             WHERE i.admin_user_id IS NULL AND c.created_by IS NOT NULL"
+        );
+        $pdo->exec(
+            "UPDATE order_items
+             SET order_date = CASE
+               WHEN order_year >= 2000 AND order_month BETWEEN 1 AND 12
+                 THEN STR_TO_DATE(CONCAT(order_year, '-', LPAD(order_month, 2, '0'), '-01'), '%Y-%m-%d')
+               ELSE DATE(created_at)
+             END
+             WHERE order_date IS NULL AND row_type = 'site'"
         );
     } catch (Throwable $e) {
         // ignore on fresh installs
@@ -209,6 +276,39 @@ function format_money($value): string
     return number_format(parse_money($value), 2, '.', '');
 }
 
+function normalize_order_date($value): ?string
+{
+    $v = trim((string) $value);
+    if ($v === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+        return null;
+    }
+    $ts = strtotime($v . ' UTC');
+    if ($ts === false) {
+        return null;
+    }
+    return date('Y-m-d', $ts);
+}
+
+function order_admin_display_name(array $row): string
+{
+    $name = trim((string) ($row['admin_full_name'] ?? ''));
+    if ($name !== '') {
+        return $name;
+    }
+    return trim((string) ($row['admin_username'] ?? ''));
+}
+
+/** @return list<array<string,mixed>> */
+function order_admin_options(): array
+{
+    if (function_exists('list_admin_users')) {
+        return list_admin_users(true);
+    }
+    return db()->query(
+        "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
+    )->fetchAll();
+}
+
 function order_profit($ownerPrice, $decidedPrice): float
 {
     return round(parse_money($decidedPrice) - parse_money($ownerPrice), 2);
@@ -237,12 +337,16 @@ function order_is_paid(array $row): bool
 function set_order_item_paid(int $itemId, int $clientId, bool $paid): void
 {
     ensure_order_schema();
+    $sql = "SELECT live_url FROM order_items WHERE id=? AND row_type='site'";
+    $params = [$itemId];
+    if ($clientId > 0) {
+        $sql .= ' AND client_id=?';
+        $params[] = $clientId;
+    }
+    $sql .= ' LIMIT 1';
     if ($paid) {
-        $stmt = db()->prepare(
-            "SELECT live_url FROM order_items
-             WHERE id=? AND client_id=? AND row_type='site' LIMIT 1"
-        );
-        $stmt->execute([$itemId, $clientId]);
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
             throw new InvalidArgumentException('Order row not found.');
@@ -253,11 +357,16 @@ function set_order_item_paid(int $itemId, int $clientId, bool $paid): void
             );
         }
     }
-    db()->prepare(
-        'UPDATE order_items SET is_paid=?, updated_at=NOW()
-         WHERE id=? AND client_id=? AND row_type=\'site\''
-    )->execute([$paid ? 1 : 0, $itemId, $clientId]);
-    db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    $upd = "UPDATE order_items SET is_paid=?, updated_at=NOW() WHERE id=? AND row_type='site'";
+    $updParams = [$paid ? 1 : 0, $itemId];
+    if ($clientId > 0) {
+        $upd .= ' AND client_id=?';
+        $updParams[] = $clientId;
+    }
+    db()->prepare($upd)->execute($updParams);
+    if ($clientId > 0) {
+        db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    }
 }
 
 /** True if another client already uses this name (case-sensitive DB unique). */
@@ -404,23 +513,22 @@ function count_order_client_unpaid_live(int $clientId): int
     return (int) $stmt->fetchColumn();
 }
 
-/** Dashboard/order list aggregates for active (non-archived) clients. */
+/** Dashboard/order list aggregates for the pipeline sheet. */
 function order_management_dashboard_stats(): array
 {
     ensure_order_schema();
-    $clients = (int) db()->query(
-        'SELECT COUNT(*) FROM order_clients WHERE COALESCE(is_archived, 0) = 0'
+    $orders = (int) db()->query(
+        "SELECT COUNT(*) FROM order_items WHERE row_type = 'site'"
     )->fetchColumn();
     $unpaidLive = (int) db()->query(
-        "SELECT COUNT(*) FROM order_items i
-         INNER JOIN order_clients c ON c.id = i.client_id
-         WHERE COALESCE(c.is_archived, 0) = 0
-           AND i.row_type = 'site'
-           AND TRIM(i.live_url) <> ''
-           AND COALESCE(i.is_paid, 0) = 0"
+        "SELECT COUNT(*) FROM order_items
+         WHERE row_type = 'site'
+           AND TRIM(live_url) <> ''
+           AND COALESCE(is_paid, 0) = 0"
     )->fetchColumn();
     return [
-        'clients' => $clients,
+        'orders' => $orders,
+        'clients' => $orders,
         'unpaid_live' => $unpaidLive,
     ];
 }
@@ -488,10 +596,14 @@ function order_client_is_archived(array $client): bool
     return (int) ($client['is_archived'] ?? 0) === 1;
 }
 
-function next_order_sort(int $clientId): int
+function next_order_sort(?int $clientId = null): int
 {
-    $max = db()->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM order_items WHERE client_id=?');
-    $max->execute([$clientId]);
+    if ($clientId !== null && $clientId > 0) {
+        $max = db()->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM order_items WHERE client_id=?');
+        $max->execute([$clientId]);
+        return (int) $max->fetchColumn() + 1;
+    }
+    $max = db()->query('SELECT COALESCE(MAX(sort_order), 0) FROM order_items');
     return (int) $max->fetchColumn() + 1;
 }
 
@@ -515,7 +627,7 @@ function list_order_items(int $clientId): array
     return $stmt->fetchAll();
 }
 
-function add_order_item(int $clientId, string $siteName = '', ?int $month = null, ?int $year = null): int
+function add_order_item(?int $clientId = null, string $siteName = '', ?int $month = null, ?int $year = null, array $extra = []): int
 {
     ensure_order_schema();
     $month = $month ?? (int) date('n');
@@ -526,14 +638,26 @@ function add_order_item(int $clientId, string $siteName = '', ?int $month = null
     if ($year < 2000 || $year > 2100) {
         $year = (int) date('Y');
     }
+    $clientId = ($clientId !== null && $clientId > 0) ? $clientId : null;
     $next = next_order_sort($clientId);
+    $label = trim((string) ($extra['client_label'] ?? ''));
+    if (mb_strlen($label) > 255) {
+        $label = mb_substr($label, 0, 255);
+    }
+    $adminId = (int) ($extra['admin_user_id'] ?? 0);
+    $adminId = $adminId > 0 ? $adminId : null;
+    $orderDate = normalize_order_date($extra['order_date'] ?? '') ?: date('Y-m-d');
+    $country = trim((string) ($extra['country'] ?? ''));
     db()->prepare(
         "INSERT INTO order_items
-          (client_id, row_type, site_name, country, order_month, order_year, owner_price, decided_price, live_url, sort_order)
-         VALUES (?, 'site', ?, '', ?, ?, 0, 0, '', ?)"
-    )->execute([$clientId, trim($siteName), $month, $year, $next]);
+          (client_id, row_type, site_name, country, order_month, order_year,
+           owner_price, decided_price, live_url, client_label, admin_user_id, order_date, sort_order)
+         VALUES (?, 'site', ?, ?, ?, ?, 0, 0, '', ?, ?, ?, ?)"
+    )->execute([$clientId, trim($siteName), $country, $month, $year, $label, $adminId, $orderDate, $next]);
     $id = (int) db()->lastInsertId();
-    db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    if ($clientId) {
+        db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    }
     return $id;
 }
 
@@ -611,15 +735,21 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         }
     }
 
-    // Paid only applies to completed (LIVE) rows — clearing LIVE also clears paid.
-    db()->prepare(
-        'UPDATE order_items
-         SET site_name=?, site_note=?, placement_type=?, country=?,
-             order_month=?, period_end_month=?, order_year=?,
-             owner_price=?, decided_price=?, live_url=?,
-             is_paid=IF(? = \'\', 0, is_paid), updated_at=NOW()
-         WHERE id=? AND client_id=? AND row_type=\'site\''
-    )->execute([
+    $sets = [
+        'site_name=?',
+        'site_note=?',
+        'placement_type=?',
+        'country=?',
+        'order_month=?',
+        'period_end_month=?',
+        'order_year=?',
+        'owner_price=?',
+        'decided_price=?',
+        'live_url=?',
+        "is_paid=IF(? = '', 0, is_paid)",
+        'updated_at=NOW()',
+    ];
+    $params = [
         $siteName,
         $note,
         $placement,
@@ -631,10 +761,36 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $decidedPrice,
         $liveUrl,
         $liveUrl,
-        $itemId,
-        $clientId,
-    ]);
-    db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    ];
+    if (array_key_exists('client_label', $data)) {
+        $label = trim((string) $data['client_label']);
+        if (mb_strlen($label) > 255) {
+            $label = mb_substr($label, 0, 255);
+        }
+        $sets[] = 'client_label=?';
+        $params[] = $label;
+    }
+    if (array_key_exists('admin_user_id', $data)) {
+        $adminId = (int) $data['admin_user_id'];
+        $sets[] = 'admin_user_id=?';
+        $params[] = $adminId > 0 ? $adminId : null;
+    }
+    if (array_key_exists('order_date', $data)) {
+        $sets[] = 'order_date=?';
+        $params[] = normalize_order_date($data['order_date']) ?: date('Y-m-d');
+    }
+
+    $sql = 'UPDATE order_items SET ' . implode(', ', $sets)
+        . ' WHERE id=? AND row_type=\'site\'';
+    $params[] = $itemId;
+    if ($clientId > 0) {
+        $sql .= ' AND client_id=?';
+        $params[] = $clientId;
+    }
+    db()->prepare($sql)->execute($params);
+    if ($clientId > 0) {
+        db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    }
 }
 
 /**
@@ -660,7 +816,10 @@ function save_order_sheet_rows(
     array $years,
     array $owner,
     array $decided,
-    array $urls
+    array $urls,
+    array $clientLabels = [],
+    array $adminIds = [],
+    array $dates = []
 ): int {
     ensure_order_schema();
     $saved = 0;
@@ -669,7 +828,7 @@ function save_order_sheet_rows(
         if ($itemId <= 0) {
             continue;
         }
-        update_order_item($itemId, $clientId, [
+        $data = [
             'site_name' => $siteName,
             'site_note' => $notes[$id] ?? '',
             'placement_type' => $placements[$id] ?? '',
@@ -680,17 +839,31 @@ function save_order_sheet_rows(
             'owner_price' => $owner[$id] ?? 0,
             'decided_price' => $decided[$id] ?? 0,
             'live_url' => $urls[$id] ?? '',
-        ]);
+        ];
+        if (array_key_exists($id, $clientLabels) || array_key_exists((string) $id, $clientLabels)) {
+            $data['client_label'] = $clientLabels[$id] ?? '';
+        }
+        if (array_key_exists($id, $adminIds) || array_key_exists((string) $id, $adminIds)) {
+            $data['admin_user_id'] = $adminIds[$id] ?? 0;
+        }
+        if (array_key_exists($id, $dates) || array_key_exists((string) $id, $dates)) {
+            $data['order_date'] = $dates[$id] ?? '';
+        }
+        update_order_item($itemId, $clientId, $data);
         $saved++;
     }
     return $saved;
 }
 
-function delete_order_item(int $itemId, int $clientId): void
+function delete_order_item(int $itemId, int $clientId = 0): void
 {
     ensure_order_schema();
-    db()->prepare('DELETE FROM order_items WHERE id=? AND client_id=?')->execute([$itemId, $clientId]);
-    db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+    if ($clientId > 0) {
+        db()->prepare('DELETE FROM order_items WHERE id=? AND client_id=?')->execute([$itemId, $clientId]);
+        db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
+        return;
+    }
+    db()->prepare('DELETE FROM order_items WHERE id=?')->execute([$itemId]);
 }
 
 /**
@@ -853,6 +1026,255 @@ function order_sheet_download_xls(array $client, array $rows): void
         $isYear = ($r['month'] === 'YEAR END');
         echo '<tr' . ($isYear ? ' style="background:#e8eaed;font-weight:bold"' : '') . '>';
         foreach (['site', 'note', 'placement', 'country', 'owner', 'decided', 'live_url', 'paid', 'profit', 'month', 'end_month', 'year', 'status'] as $key) {
+            echo '<td>' . h((string) ($r[$key] ?? '')) . '</td>';
+        }
+        echo '</tr>';
+    }
+    echo '</table></body></html>';
+}
+
+function get_order_item(int $id): ?array
+{
+    ensure_order_schema();
+    if ($id <= 0) {
+        return null;
+    }
+    $stmt = db()->prepare(
+        "SELECT i.*,
+                u.full_name AS admin_full_name,
+                u.username AS admin_username
+         FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id
+         WHERE i.id=? LIMIT 1"
+    );
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/**
+ * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string,status?:string} $opts
+ * @return array{0:string,1:list<mixed>}
+ */
+function order_pipeline_where_sql(array $opts = []): array
+{
+    $where = ["i.row_type = 'site'"];
+    $params = [];
+    $q = trim((string) ($opts['q'] ?? ''));
+    if ($q !== '') {
+        $like = '%' . $q . '%';
+        $where[] = '(i.site_name LIKE ? OR i.site_note LIKE ? OR i.country LIKE ?
+            OR i.client_label LIKE ? OR i.live_url LIKE ?
+            OR COALESCE(u.full_name, \'\') LIKE ? OR COALESCE(u.username, \'\') LIKE ?)';
+        array_push($params, $like, $like, $like, $like, $like, $like, $like);
+    }
+    $country = trim((string) ($opts['country'] ?? ''));
+    if ($country !== '') {
+        $where[] = 'i.country = ?';
+        $params[] = $country;
+    }
+    $adminId = (int) ($opts['admin_id'] ?? 0);
+    if ($adminId > 0) {
+        $where[] = 'i.admin_user_id = ?';
+        $params[] = $adminId;
+    }
+    $dateFrom = normalize_order_date($opts['date_from'] ?? '');
+    if ($dateFrom) {
+        $where[] = 'i.order_date >= ?';
+        $params[] = $dateFrom;
+    }
+    $dateTo = normalize_order_date($opts['date_to'] ?? '');
+    if ($dateTo) {
+        $where[] = 'i.order_date <= ?';
+        $params[] = $dateTo;
+    }
+    $status = (string) ($opts['status'] ?? 'all');
+    if ($status === 'unpaid') {
+        $where[] = "TRIM(i.live_url) <> '' AND COALESCE(i.is_paid, 0) = 0";
+    } elseif ($status === 'completed') {
+        $where[] = "TRIM(i.live_url) <> ''";
+    } elseif ($status === 'paid') {
+        $where[] = 'COALESCE(i.is_paid, 0) = 1';
+    } elseif ($status === 'open') {
+        $where[] = "TRIM(i.live_url) = ''";
+    }
+    return [' WHERE ' . implode(' AND ', $where), $params];
+}
+
+function count_order_pipeline_rows(array $opts = []): int
+{
+    ensure_order_schema();
+    [$whereSql, $params] = order_pipeline_where_sql($opts);
+    $stmt = db()->prepare(
+        'SELECT COUNT(*) FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id'
+        . $whereSql
+    );
+    $stmt->execute($params);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string,status?:string,limit?:int,offset?:int} $opts
+ * @return list<array<string,mixed>>
+ */
+function list_order_pipeline_rows(array $opts = []): array
+{
+    ensure_order_schema();
+    $limit = isset($opts['limit']) ? max(0, (int) $opts['limit']) : 0;
+    $offset = max(0, (int) ($opts['offset'] ?? 0));
+    [$whereSql, $params] = order_pipeline_where_sql($opts);
+    $sql = "SELECT i.*,
+                u.full_name AS admin_full_name,
+                u.username AS admin_username
+         FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id"
+        . $whereSql
+        . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+    if ($limit > 0) {
+        $sql .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+/** @return list<string> */
+function list_order_pipeline_countries(): array
+{
+    ensure_order_schema();
+    $rows = db()->query(
+        "SELECT DISTINCT country FROM order_items
+         WHERE row_type='site' AND TRIM(country) <> ''
+         ORDER BY country ASC"
+    )->fetchAll(PDO::FETCH_COLUMN);
+    $out = [];
+    foreach ($rows as $name) {
+        $name = trim((string) $name);
+        if ($name !== '') {
+            $out[] = $name;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param list<int> $ids
+ * @return list<array<string,mixed>>
+ */
+function list_order_items_by_ids(array $ids): array
+{
+    ensure_order_schema();
+    $ids = array_values(array_filter(array_map('intval', $ids), static fn ($id) => $id > 0));
+    if (!$ids) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare(
+        "SELECT i.*,
+                u.full_name AS admin_full_name,
+                u.username AS admin_username
+         FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id
+         WHERE i.id IN ($placeholders) AND i.row_type='site'
+         ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC"
+    );
+    $stmt->execute($ids);
+    return $stmt->fetchAll();
+}
+
+function add_order_pipeline_row(?int $adminUserId, string $clientLabel = ''): int
+{
+    return add_order_item(null, '', null, null, [
+        'admin_user_id' => $adminUserId,
+        'client_label' => $clientLabel,
+        'order_date' => date('Y-m-d'),
+    ]);
+}
+
+/**
+ * @param list<array<string,mixed>> $items
+ * @return list<array<string,string>>
+ */
+function order_pipeline_export_rows(array $items): array
+{
+    $out = [];
+    foreach ($items as $row) {
+        if (($row['row_type'] ?? 'site') !== 'site') {
+            continue;
+        }
+        $profit = order_profit($row['owner_price'], $row['decided_price']);
+        $out[] = [
+            'date' => (string) ($row['order_date'] ?? ''),
+            'country' => (string) ($row['country'] ?? ''),
+            'admin' => order_admin_display_name($row),
+            'client' => (string) ($row['client_label'] ?? ''),
+            'site' => (string) ($row['site_name'] ?? ''),
+            'note' => (string) ($row['site_note'] ?? ''),
+            'placement' => order_placement_label($row),
+            'owner' => format_money($row['owner_price']),
+            'decided' => format_money($row['decided_price']),
+            'profit' => format_money($profit),
+            'live_url' => (string) ($row['live_url'] ?? ''),
+            'paid' => order_is_paid($row) ? 'Paid' : '',
+            'month' => order_month_label((int) ($row['order_month'] ?? 0)),
+            'end_month' => order_month_label((int) ($row['period_end_month'] ?? 0)),
+            'year' => (string) ((int) ($row['order_year'] ?: 0) ?: ''),
+            'status' => order_is_completed($row) ? 'Completed' : 'Open',
+        ];
+    }
+    return $out;
+}
+
+function order_pipeline_download_csv(array $rows): void
+{
+    $filename = 'order-sheet-' . date('Y-m-d') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    $out = fopen('php://output', 'w');
+    if ($out === false) {
+        return;
+    }
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Exported', date('Y-m-d H:i')]);
+    fputcsv($out, []);
+    fputcsv($out, [
+        'Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink',
+        'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
+    ]);
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            $r['country'], $r['date'], $r['admin'], $r['client'], $r['site'], $r['note'] ?? '',
+            $r['placement'] ?? '', $r['owner'], $r['decided'], $r['live_url'], $r['paid'] ?? '',
+            $r['profit'], $r['month'], $r['end_month'] ?? '', $r['year'], $r['status'],
+        ]);
+    }
+    fclose($out);
+}
+
+function order_pipeline_download_xls(array $rows): void
+{
+    $filename = 'order-sheet-' . date('Y-m-d') . '.xls';
+    header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    $keys = ['country', 'date', 'admin', 'client', 'site', 'note', 'placement', 'owner', 'decided', 'live_url', 'paid', 'profit', 'month', 'end_month', 'year', 'status'];
+    $heads = ['Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status'];
+    echo '<html><head><meta charset="utf-8"></head><body>';
+    echo '<table border="1" cellpadding="4" cellspacing="0">';
+    echo '<tr><th colspan="' . count($heads) . '">Order management</th></tr>';
+    echo '<tr><td colspan="' . count($heads) . '">Exported ' . h(date('Y-m-d H:i')) . '</td></tr>';
+    echo '<tr>';
+    foreach ($heads as $h) {
+        echo '<th>' . h($h) . '</th>';
+    }
+    echo '</tr>';
+    foreach ($rows as $r) {
+        echo '<tr>';
+        foreach ($keys as $key) {
             echo '<td>' . h((string) ($r[$key] ?? '')) . '</td>';
         }
         echo '</tr>';
