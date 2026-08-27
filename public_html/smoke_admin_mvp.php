@@ -1183,7 +1183,9 @@ if (!str_contains($ordersPage, 'push_invoice') || !str_contains($ordersPage, 'Pu
 if (!str_contains($ordersPage, "folder=processing")
     || !str_contains($ordersPage, "folder=completed")
     || !str_contains($ordersPage, 'id="om-folders"')
-    || !str_contains($ordersPage, 'Completed orders')) {
+    || !str_contains($ordersPage, 'Completed orders')
+    || !str_contains($ordersPage, 'use ($filter, $perPage, $pageNum, $folder)')
+    || !str_contains($ordersPage, 'name="folder"')) {
     fail('orders missing Processing/Completed hub folders');
 } else {
     ok('orders Processing and Completed hub');

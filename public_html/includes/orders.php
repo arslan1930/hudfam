@@ -516,6 +516,9 @@ function order_mark_completed(int $id, string $liveUrl, int $userId): array
 
     $wpId = (int) ($item['site_price_row_id'] ?? 0);
     if ($wpId > 0 && function_exists('site_price_save_row') && function_exists('get_site_price_row')) {
+        if (function_exists('site_price_flush_status_cache')) {
+            site_price_flush_status_cache();
+        }
         $wp = get_site_price_row($wpId);
         if ($wp) {
             try {

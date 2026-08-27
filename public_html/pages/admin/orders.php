@@ -3,6 +3,9 @@ $user = require_admin();
 ensure_order_schema();
 
 $folder = strtolower(trim((string) get('folder')));
+if ($folder === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $folder = strtolower(trim((string) ($_POST['folder'] ?? '')));
+}
 if (!in_array($folder, ['processing', 'completed'], true)) {
     $folder = '';
 }
@@ -31,7 +34,7 @@ if (!in_array($perPage, [50, 100, 250], true)) {
 }
 $pageNum = max(1, (int) get('p', 1));
 
-$ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pageNum): string {
+$ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pageNum, $folder): string {
     $params = array_merge([
         'page' => 'admin_orders',
         'folder' => $folder,
@@ -161,7 +164,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isProcessing) {
                 throw new InvalidArgumentException('Mark completed is only on the Processing folder.');
             }
-            $saveCurrent();
+            try {
+                $saveCurrent();
+            } catch (Throwable $e) {
+                // Still complete ticked rows from posted live URLs if other rows fail validation.
+            }
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $oneId = (int) post('item_id');
             if ($oneId > 0) {
@@ -208,7 +215,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isCompleted) {
                 throw new InvalidArgumentException('Push to invoice is only on Completed orders.');
             }
-            $saveCurrent();
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
             if (!$selectedIds) {
@@ -484,6 +490,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>">
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
+  <input type="hidden" name="folder" value="<?= h($folder) ?>">
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <div class="order-sheet-toolbar">
     <div class="order-sheet-toolbar-left">
