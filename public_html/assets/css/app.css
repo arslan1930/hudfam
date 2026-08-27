@@ -5309,9 +5309,6 @@ textarea:focus-visible {
   width: 12rem;
   max-width: 16rem;
 }
-.site-price-add-commit-inner .site-price-input {
-  flex: 1 1 auto;
-}
 .site-price-add-commit-inner .btn {
   flex: 0 0 auto;
   white-space: nowrap;
