@@ -346,6 +346,25 @@ if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
 } else {
     ok('Website prices Team department + sheet filters');
 }
+if (!str_contains($sitePricesLib, 'function site_price_jump_search')
+    || !str_contains($sitePricesLib, 'function list_site_price_rows_page')
+    || !str_contains($sitePricesLib, 'reply_email')
+    || !str_contains($sitePricesLib, 'row_tint')
+    || !str_contains($sitePricesLib, 'Copy selected')
+    || str_contains($sitePricesLib, 'Copy all')
+    || !str_contains($sitePricesLib, 'data-site-price-jump')
+    || !str_contains($sitePricesLib, '>Email</th>')
+    || !str_contains($sitePricesJs, "post('jump_search'")
+    || !str_contains($sitePricesJs, 'copySelected')
+    || !str_contains($sitePricesJs, 'data-site-price-tint')
+    || !str_contains($sitePricesCss, '.site-price-row.is-status-green')
+    || !str_contains($sitePricesCss, '.site-price-row.is-tint-yellow')
+    || !str_contains($schemaSql, 'reply_email')
+    || !str_contains($schemaSql, 'row_tint')) {
+    fail('Website prices colors / email / jump / copy selected missing');
+} else {
+    ok('Website prices row colors, reply email, jump search, copy selected');
+}
 foreach ([
     'guide_campaign_search',
     'guide_campaign_drafts',

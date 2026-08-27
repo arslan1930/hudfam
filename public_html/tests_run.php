@@ -1000,6 +1000,134 @@ try {
         ]));
     }
 
+    $idTint = site_price_add_row_for_user([
+        'country' => $country,
+        'domain' => 'txfprice-tint.de',
+        'price_note' => '10 euro',
+    ], $teamUser);
+    $idTint = (int) ($idTint['id'] ?? 0);
+    $savedTint = site_price_save_row($idTint, [
+        'row_tint' => 'yellow',
+        'reply_email' => 'inbox@example.com',
+        'extra_note' => 'reply',
+    ], $teamUser);
+    $badTint = site_price_save_row($idTint, ['row_tint' => 'purple'], $adminUser);
+    $adminEmail = site_price_save_row($idTint, ['reply_email' => 'admin-box@example.com'], $adminUser);
+    $tintHtml = render_site_price_sheet_row($adminEmail, $adminUser);
+    $teamTintHtml = render_site_price_sheet_row($adminEmail, $teamUser);
+    $histTintAdmin = render_site_price_history_html($idTint, $adminUser);
+    $histTintTeam = render_site_price_history_html($idTint, $teamUser);
+    $eventsTintTeam = list_site_price_events($idTint, $teamUser);
+    $teamTintActorOk = true;
+    foreach ($eventsTintTeam as $ev) {
+        if ((string) ($ev['kind'] ?? '') === 'email' && (string) ($ev['actor_role'] ?? '') === 'admin') {
+            if ((string) ($ev['actor_label'] ?? '') !== 'Admin') {
+                $teamTintActorOk = false;
+            }
+        }
+        if (isset($ev['actor_username']) || isset($ev['actor_full'])) {
+            $teamTintActorOk = false;
+        }
+    }
+    $tintOk = site_price_normalize_tint('YELLOW') === 'yellow'
+        && site_price_normalize_tint('nope') === ''
+        && (string) ($savedTint['row_tint'] ?? '') === 'yellow'
+        && (string) ($savedTint['reply_email'] ?? '') === 'inbox@example.com'
+        && (string) ($badTint['row_tint'] ?? 'x') === ''
+        && (string) ($adminEmail['reply_email'] ?? '') === 'admin-box@example.com'
+        && str_contains($tintHtml, 'is-status-')
+        && str_contains($tintHtml, 'data-site-price-email')
+        && str_contains($tintHtml, 'data-site-price-tint')
+        && str_contains($tintHtml, 'data-site-price-select')
+        && str_contains($teamTintHtml, 'data-site-price-email')
+        && str_contains($histTintAdmin, 'Reply email')
+        && str_contains($histTintAdmin, 'Color')
+        && str_contains($histTintTeam, 'Admin')
+        && $teamTintActorOk
+        && site_price_sheet_colspan() === 12;
+    if ($tintOk) {
+        pass('site_price tint + reply email + history');
+    } else {
+        fail('site_price tint/email: ' . json_encode([
+            'saved' => $savedTint,
+            'bad' => $badTint['row_tint'] ?? null,
+            'html' => str_contains($tintHtml, 'data-site-price-email'),
+            'hist' => $histTintAdmin,
+            'actor' => $teamTintActorOk,
+        ]));
+    }
+
+    $pageCountry = 'Belgium';
+    db()->exec("DELETE FROM site_price_rows WHERE country='Belgium' AND domain LIKE 'txfprice-page-%'");
+    for ($i = 1; $i <= 12; $i++) {
+        site_price_insert_row([
+            'country' => $pageCountry,
+            'domain' => 'txfprice-page-' . $i . '.be',
+            'status_slug' => 'new',
+            'created_by' => (int) $teamUser['id'],
+        ]);
+    }
+    $page1 = list_site_price_rows_page($pageCountry, 1, 100);
+    $forced = list_site_price_rows_page($pageCountry, 1, 5);
+    $page2 = list_site_price_rows_page($pageCountry, 2, 5);
+    $pageOk = $page1['per_page'] === 100
+        && $page1['pages'] === 1
+        && count($forced['rows']) === 5
+        && $forced['total'] >= 12
+        && $forced['pages'] >= 3
+        && count($page2['rows']) === 5
+        && resolve_site_price_per_page() !== 1000
+        && in_array(500, site_price_per_page_options(), true)
+        && !in_array(1000, site_price_per_page_options(), true);
+    if ($pageOk) {
+        pass('site_price pagination 100/250/500');
+    } else {
+        fail('site_price page: ' . json_encode($page1 + ['forced' => $forced, 'p2' => count($page2['rows'])]));
+    }
+
+    $idFr = site_price_add_row_for_user([
+        'country' => 'France',
+        'domain' => 'txfprice-jump-fr.com',
+        'reply_email' => 'jump-unique-inbox@example.com',
+        'price_note' => '99 euro jumpmark',
+    ], $teamUser);
+    $jumps = site_price_jump_search('jump-unique-inbox@example.com', 'admin_site_prices', 100);
+    $jumpTeam = site_price_jump_search('txfprice-jump-fr.com', 'team_site_prices', 100);
+    $countsOrder = site_price_country_counts();
+    $totals = array_map(static fn ($c) => (int) ($c['total'] ?? 0), $countsOrder);
+    $orderOk = true;
+    for ($oi = 1; $oi < count($totals); $oi++) {
+        if ($totals[$oi] > $totals[$oi - 1]) {
+            $orderOk = false;
+            break;
+        }
+    }
+    $tabsUsage = render_site_price_country_tabs($country, 'admin_site_prices');
+    $jumpOk = $jumps !== []
+        && (int) ($jumps[0]['id'] ?? 0) === (int) ($idFr['id'] ?? 0)
+        && (string) ($jumps[0]['country'] ?? '') === 'France'
+        && str_contains((string) ($jumps[0]['url'] ?? ''), 'country=France')
+        && str_contains((string) ($jumps[0]['url'] ?? ''), 'row=')
+        && str_contains((string) ($jumps[0]['url'] ?? ''), 'jump=')
+        && $jumpTeam !== []
+        && str_contains((string) ($jumpTeam[0]['url'] ?? ''), 'team_site_prices')
+        && $orderOk
+        && str_contains($tabsUsage, 'site-price-country-tabs');
+    $toolbar = render_site_price_toolbar();
+    $copyOk = str_contains($toolbar, 'Copy selected')
+        && !str_contains($toolbar, 'Copy all')
+        && !str_contains($tintHtml, 'Copy all')
+        && !str_contains($teamTintHtml, 'Remove');
+    if ($jumpOk && $copyOk) {
+        pass('site_price jump search + usage tabs + copy selected');
+    } else {
+        fail('site_price jump/copy: ' . json_encode([
+            'jump' => $jumps,
+            'copy' => $copyOk,
+            'totals' => $totals,
+        ]));
+    }
+
     db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
     db()->exec("DELETE FROM site_price_statuses WHERE slug LIKE 'follow_up_txf' OR slug LIKE 'txfprice%'");
 } catch (Throwable $e) {

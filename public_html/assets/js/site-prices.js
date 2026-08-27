@@ -1,5 +1,5 @@
 /**
- * Website prices country sheet — add row, per-row save, identity lock / Admin unlock.
+ * Website prices country sheet — add row, save, tint, copy selected, jump search.
  * CSRF is injected by csrf.js on same-origin POST.
  */
 (function (global) {
@@ -7,6 +7,10 @@
 
   function $(sel, root) {
     return (root || document).querySelector(sel);
+  }
+
+  function tableEl() {
+    return document.querySelector('[data-site-price-sheet]');
   }
 
   function post(action, data) {
@@ -17,9 +21,13 @@
       if (data[k] == null) return;
       body.set(k, String(data[k]));
     });
-    var table = document.querySelector('[data-site-price-sheet]');
-    if (table && table.getAttribute('data-country') && !body.get('country')) {
-      body.set('country', table.getAttribute('data-country'));
+    var table = tableEl();
+    if (table) {
+      if (table.getAttribute('data-country') && !body.get('country')) {
+        body.set('country', table.getAttribute('data-country'));
+      }
+      if (!body.get('p')) body.set('p', table.getAttribute('data-page') || '1');
+      if (!body.get('per_page')) body.set('per_page', table.getAttribute('data-per-page') || '100');
     }
     return fetch(window.location.href, {
       method: 'POST',
@@ -54,16 +62,20 @@
       traffic: ($('[data-add-traffic]', tr) || {}).value || '',
       price_note: ($('[data-add-price]', tr) || {}).value || '',
       extra_note: ($('[data-add-note]', tr) || {}).value || '',
+      reply_email: ($('[data-add-email]', tr) || {}).value || '',
       status_slug: ($('[data-site-price-status]', tr) || {}).value || 'new',
     };
   }
 
   function collectRow(tr) {
+    var tintEl = $('[data-site-price-tint-value]', tr);
     var data = {
       site_id: tr.getAttribute('data-row-id') || '',
       niche: nicheValue(tr),
       price_note: ($('[data-site-price-price]', tr) || {}).value || '',
       extra_note: ($('[data-site-price-note]', tr) || {}).value || '',
+      reply_email: ($('[data-site-price-email]', tr) || {}).value || '',
+      row_tint: tintEl ? String(tintEl.value || '') : (tr.getAttribute('data-tint') || ''),
       status_slug: ($('[data-site-price-status]', tr) || {}).value || 'new',
     };
     var domain = $('[data-site-price-domain]', tr);
@@ -95,12 +107,22 @@
       global.OpenSite.refreshAll(tbody);
     }
     applyFilters();
+    syncSelectAll();
+  }
+
+  function applyPager(json) {
+    var table = tableEl();
+    if (!table || !json) return;
+    if (json.page != null) table.setAttribute('data-page', String(json.page));
+    if (json.pages != null) table.setAttribute('data-pages', String(json.pages));
+    if (json.per_page != null) table.setAttribute('data-per-page', String(json.per_page));
   }
 
   function focusHint(el, tr) {
     if (!el || !tr || !tr.contains(el)) return null;
     if (el.hasAttribute('data-site-price-price')) return '[data-site-price-price]';
     if (el.hasAttribute('data-site-price-note')) return '[data-site-price-note]';
+    if (el.hasAttribute('data-site-price-email')) return '[data-site-price-email]';
     if (el.hasAttribute('data-site-price-domain')) return '[data-site-price-domain]';
     if (el.hasAttribute('data-site-price-da')) return '[data-site-price-da]';
     if (el.hasAttribute('data-site-price-dr')) return '[data-site-price-dr]';
@@ -122,7 +144,7 @@
   }
 
   function applyFilters() {
-    var table = document.querySelector('[data-site-price-sheet]');
+    var table = tableEl();
     var bar = document.querySelector('[data-site-price-filters]');
     if (!table) return;
     var q = '';
@@ -156,6 +178,7 @@
     });
     var empty = table.querySelector('[data-site-price-filter-empty]');
     if (empty) empty.hidden = !active || any;
+    syncSelectAll();
   }
 
   function bindFilters() {
@@ -201,6 +224,7 @@
         return;
       }
       setStatus('Saved.', false);
+      applyPager(json);
       if (json.tbody_html) applyTbody(json.tbody_html);
       if (json.total != null) applyCount(json.total);
       restoreFocus(rowId, sel, start, end);
@@ -227,6 +251,7 @@
         return;
       }
       setStatus('Added ' + (json.domain || 'site') + '.', false);
+      applyPager(json);
       if (json.tbody_html) applyTbody(json.tbody_html);
       if (json.total != null) applyCount(json.total);
       var addDomain = document.querySelector('[data-add-domain]');
@@ -247,6 +272,7 @@
         return;
       }
       setStatus('Unlocked — edit website / DA / DR / traffic, then it locks again on save.', false);
+      applyPager(json);
       if (json.tbody_html) applyTbody(json.tbody_html);
     }).catch(function () {
       setStatus('Could not unlock.', true);
@@ -296,7 +322,7 @@
         row.className = 'site-price-history-row';
         row.setAttribute('data-site-price-history-row', id);
         var td = document.createElement('td');
-        td.colSpan = String(tr.children.length || 10);
+        td.colSpan = String(tr.children.length || 12);
         row.appendChild(td);
         tr.parentNode.insertBefore(row, tr.nextSibling);
       }
@@ -317,10 +343,82 @@
         return;
       }
       setStatus(json.message || 'You are managing this site.', false);
+      applyPager(json);
       if (json.tbody_html) applyTbody(json.tbody_html);
       if (json.total != null) applyCount(json.total);
     }).catch(function () {
       setStatus('Could not take this site.', true);
+    });
+  }
+
+  function setTint(tr, tint) {
+    var hidden = $('[data-site-price-tint-value]', tr);
+    if (hidden) hidden.value = tint || '';
+    tr.setAttribute('data-tint', tint || '');
+    tr.classList.remove('is-tint-yellow', 'is-tint-pink', 'is-tint-blue', 'is-tint-green');
+    if (tint) tr.classList.add('is-tint-' + tint);
+    tr.querySelectorAll('[data-site-price-tint]').forEach(function (btn) {
+      btn.classList.toggle('is-on', String(btn.getAttribute('data-site-price-tint') || '') === String(tint || ''));
+    });
+    scheduleSave(tr);
+  }
+
+  function visibleDataRows() {
+    var table = tableEl();
+    if (!table) return [];
+    return Array.prototype.slice.call(table.querySelectorAll('[data-site-price-row]')).filter(function (row) {
+      return !row.hidden;
+    });
+  }
+
+  function syncSelectAll() {
+    var all = document.querySelector('[data-site-price-select-all]');
+    if (!all) return;
+    var rows = visibleDataRows();
+    var checked = rows.filter(function (row) {
+      var box = row.querySelector('[data-site-price-select]');
+      return box && box.checked;
+    });
+    all.checked = rows.length > 0 && checked.length === rows.length;
+    all.indeterminate = checked.length > 0 && checked.length < rows.length;
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }).catch(function () { return false; });
+    }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return Promise.resolve(!!ok);
+    } catch (err) {
+      return Promise.resolve(false);
+    }
+  }
+
+  function copySelected() {
+    var rows = visibleDataRows();
+    var domains = [];
+    rows.forEach(function (row) {
+      var box = row.querySelector('[data-site-price-select]');
+      if (!box || !box.checked) return;
+      var d = String(box.getAttribute('data-domain') || '').trim();
+      if (d) domains.push(d);
+    });
+    if (!domains.length) {
+      setStatus('Select at least one row.', true);
+      return;
+    }
+    copyText(domains.join('\n')).then(function (ok) {
+      if (ok) setStatus('Copied ' + domains.length + ' website' + (domains.length === 1 ? '' : 's') + '.', false);
+      else setStatus('Could not copy.', true);
     });
   }
 
@@ -333,6 +431,7 @@
         return;
       }
       setStatus('Order saved.', false);
+      applyPager(json);
       if (json.tbody_html) applyTbody(json.tbody_html);
       if (json.total != null) applyCount(json.total);
     }).catch(function () {
@@ -440,6 +539,13 @@
         if (addTr) addRow(addTr);
         return;
       }
+      var tintBtn = t.closest('[data-site-price-tint]');
+      if (tintBtn) {
+        e.preventDefault();
+        var tintTr = tintBtn.closest('[data-site-price-row]');
+        if (tintTr) setTint(tintTr, String(tintBtn.getAttribute('data-site-price-tint') || ''));
+        return;
+      }
       var un = t.closest('[data-site-price-unlock]');
       if (un) {
         e.preventDefault();
@@ -465,6 +571,19 @@
     root.addEventListener('change', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      if (t.matches('[data-site-price-select-all]')) {
+        var on = !!t.checked;
+        visibleDataRows().forEach(function (row) {
+          var box = row.querySelector('[data-site-price-select]');
+          if (box) box.checked = on;
+        });
+        syncSelectAll();
+        return;
+      }
+      if (t.matches('[data-site-price-select]')) {
+        syncSelectAll();
+        return;
+      }
       var row = t.closest('[data-site-price-row]');
       if (row) scheduleSave(row);
     });
@@ -473,7 +592,7 @@
       var t = e.target;
       if (!t || !t.closest) return;
       var row = t.closest('[data-site-price-row]');
-      if (row && (t.matches('[data-site-price-price], [data-site-price-note], [data-site-price-domain], [data-site-price-da], [data-site-price-dr], [data-site-price-traffic]')
+      if (row && (t.matches('[data-site-price-price], [data-site-price-note], [data-site-price-email], [data-site-price-domain], [data-site-price-da], [data-site-price-dr], [data-site-price-traffic]')
           || t.closest('[data-niche-chips]'))) {
         scheduleSave(row);
       }
@@ -498,6 +617,115 @@
     });
   }
 
+  var jumpMatches = [];
+  var jumpIndex = -1;
+
+  function jumpStatus(text) {
+    var el = document.querySelector('[data-site-price-jump-status]');
+    if (el) el.textContent = text || '';
+  }
+
+  function jumpButtons(show) {
+    var prev = document.querySelector('[data-site-price-jump-prev]');
+    var next = document.querySelector('[data-site-price-jump-next]');
+    if (prev) prev.hidden = !show;
+    if (next) next.hidden = !show;
+  }
+
+  function goToMatch(i) {
+    if (!jumpMatches.length) return;
+    jumpIndex = ((i % jumpMatches.length) + jumpMatches.length) % jumpMatches.length;
+    var m = jumpMatches[jumpIndex];
+    jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length);
+    jumpButtons(true);
+    if (!m || !m.url) return;
+    var table = tableEl();
+    var sameCountry = table && table.getAttribute('data-country') === m.country;
+    var samePage = table && String(table.getAttribute('data-page') || '1') === String(m.page || 1);
+    var row = document.querySelector('[data-site-price-row][data-row-id="' + m.id + '"]');
+    if (sameCountry && samePage && row) {
+      highlightJump(row);
+      return;
+    }
+    window.location.href = m.url;
+  }
+
+  function highlightJump(row) {
+    if (!row) return;
+    document.querySelectorAll('.is-jump-target').forEach(function (el) {
+      el.classList.remove('is-jump-target');
+    });
+    row.classList.add('is-jump-target');
+    try { row.scrollIntoView({ block: 'center' }); } catch (err) { row.scrollIntoView(true); }
+  }
+
+  function runJump() {
+    var input = document.querySelector('[data-site-price-jump-q]');
+    var q = input ? String(input.value || '').trim() : '';
+    if (!q) {
+      jumpMatches = [];
+      jumpIndex = -1;
+      jumpStatus('');
+      jumpButtons(false);
+      setStatus('Type something to search all countries.', true);
+      return;
+    }
+    setStatus('Searching…', false);
+    post('jump_search', { q: q }).then(function (json) {
+      if (!json.ok) {
+        setStatus(json.error || 'Could not search.', true);
+        return;
+      }
+      jumpMatches = json.matches || [];
+      if (!jumpMatches.length) {
+        jumpIndex = -1;
+        jumpStatus('No sites match');
+        jumpButtons(false);
+        setStatus('No sites match that search.', true);
+        return;
+      }
+      setStatus('', false);
+      goToMatch(0);
+    }).catch(function () {
+      setStatus('Could not search.', true);
+    });
+  }
+
+  function bindJump() {
+    var bar = document.querySelector('[data-site-price-jump]');
+    if (!bar || bar.getAttribute('data-wired') === '1') return;
+    bar.setAttribute('data-wired', '1');
+    var go = bar.querySelector('[data-site-price-jump-go]');
+    var prev = bar.querySelector('[data-site-price-jump-prev]');
+    var next = bar.querySelector('[data-site-price-jump-next]');
+    var input = bar.querySelector('[data-site-price-jump-q]');
+    if (go) go.addEventListener('click', function (e) { e.preventDefault(); runJump(); });
+    if (prev) prev.addEventListener('click', function (e) { e.preventDefault(); goToMatch(jumpIndex - 1); });
+    if (next) next.addEventListener('click', function (e) { e.preventDefault(); goToMatch(jumpIndex + 1); });
+    if (input) {
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (jumpMatches.length && String(input.value || '').trim()) goToMatch(jumpIndex + 1);
+          else runJump();
+        }
+      });
+    }
+  }
+
+  function bindToolbar() {
+    var bar = document.querySelector('[data-site-price-toolbar]');
+    if (!bar || bar.getAttribute('data-wired') === '1') return;
+    bar.setAttribute('data-wired', '1');
+    var copyBtn = bar.querySelector('[data-site-price-copy-selected]');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        copySelected();
+      });
+    }
+  }
+
   document.addEventListener('copy', function (e) {
     var el = e.target;
     if (el && el.closest && el.closest('.is-copy-lock')) {
@@ -511,13 +739,40 @@
     }
   });
 
+  function restoreJump() {
+    var input = document.querySelector('[data-site-price-jump-q]');
+    var q = input ? String(input.value || '').trim() : '';
+    if (!q) return;
+    post('jump_search', { q: q }).then(function (json) {
+      if (!json.ok) return;
+      jumpMatches = json.matches || [];
+      if (!jumpMatches.length) return;
+      var table = tableEl();
+      var rowId = table ? table.getAttribute('data-jump-row') : '';
+      jumpIndex = 0;
+      jumpMatches.forEach(function (m, i) {
+        if (String(m.id) === String(rowId)) jumpIndex = i;
+      });
+      jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length);
+      jumpButtons(true);
+    }).catch(function () { /* keep bar usable */ });
+  }
+
   function boot() {
-    var table = document.querySelector('[data-site-price-sheet]');
+    var table = tableEl();
     if (table) {
       bind(table);
       bindDrag(table);
+      var jumpId = table.getAttribute('data-jump-row');
+      if (jumpId) {
+        var row = table.querySelector('[data-site-price-row][data-row-id="' + jumpId + '"]');
+        if (row) highlightJump(row);
+      }
     }
     bindFilters();
+    bindJump();
+    bindToolbar();
+    restoreJump();
   }
 
   if (document.readyState === 'loading') {
