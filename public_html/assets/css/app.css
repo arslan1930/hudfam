@@ -5201,11 +5201,11 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
   word-break: break-word;
   resize: vertical;
-  min-height: 5.25rem;
-  height: auto;
+  min-height: 8rem;
+  height: 8rem;
   max-height: none;
-  padding: 0.45rem 0.55rem;
-  line-height: 1.4;
+  padding: 0.5rem 0.6rem;
+  line-height: 1.45;
 }
 .site-price-sheet .site-price-status {
   min-width: 0;
@@ -5668,13 +5668,14 @@ textarea:focus-visible {
   width: 16rem;
   max-width: 100%;
 }
-.site-price-people-cell,
-.site-price-note-td {
+.site-price-people-cell {
   min-width: 0;
   vertical-align: top;
 }
-.site-price-note-td .site-price-note {
-  display: block;
+.site-price-sheet td.site-price-note-td {
+  overflow: visible !important;
+  height: auto;
+  vertical-align: top;
 }
 .site-price-filter {
   display: flex;

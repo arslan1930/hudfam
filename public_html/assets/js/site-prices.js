@@ -92,8 +92,9 @@
 
   function fitNoteBox(el) {
     if (!el || String(el.tagName || '').toLowerCase() !== 'textarea') return;
-    el.style.height = 'auto';
-    el.style.height = Math.max(84, el.scrollHeight + 4) + 'px';
+    el.style.height = '0px';
+    var need = el.scrollHeight + 16;
+    el.style.height = Math.max(need, 128) + 'px';
   }
 
   function fitAllNotes(root) {
