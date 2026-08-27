@@ -84,13 +84,80 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('ok', 'Status updated.');
         redirect($back);
     }
+
+    if ($action === 'assign_task') {
+        $taskId = (int) post('task_id');
+        $assigned = (int) post('assigned_to');
+        $wantsJson = (string) post('ajax') === '1'
+            || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+        $task = get_department_task($taskId);
+        if (!$task || (int) $task['department_id'] !== (int) $dept['id']) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(404);
+                echo json_encode(['ok' => false, 'error' => 'Task not found.']);
+                exit;
+            }
+            flash('error', 'Task not found.');
+            redirect($back);
+        }
+        $result = set_department_task_assignee($taskId, $assigned > 0 ? $assigned : null, $user);
+        if (empty($result['ok'])) {
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not assign.')]);
+                exit;
+            }
+            flash('error', (string) ($result['error'] ?? 'Could not assign.'));
+            redirect($back);
+        }
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok' => true,
+                'task_id' => $taskId,
+                'assigned_to' => $assigned > 0 ? $assigned : 0,
+                'message' => 'Assigned.',
+            ]);
+            exit;
+        }
+        flash('ok', 'Task assigned.');
+        redirect($back);
+    }
+
+    if ($action === 'save_task') {
+        if (!team_can_assign_department_tasks($user, (int) $dept['id'])) {
+            flash('error', 'You can only assign tasks in your department.');
+            redirect($back);
+        }
+        $assigned = (int) post('assigned_to');
+        $result = save_department_task(
+            (int) $dept['id'],
+            (string) post('title'),
+            (string) post('notes'),
+            (string) post('status', 'open'),
+            $assigned > 0 ? $assigned : null,
+            (string) post('due_date'),
+            $user,
+            null,
+            false
+        );
+        if (empty($result['ok'])) {
+            flash('error', (string) ($result['error'] ?? 'Could not save task.'));
+        } else {
+            flash('ok', 'Task assigned in ' . (string) $dept['name'] . '.');
+        }
+        redirect($back);
+    }
 }
 
 $canAdminEmailsSearch = team_page_unlocked($user, 'team_admin_emails_search');
 $canSitesEmails = team_page_unlocked($user, 'team_sites_emails');
 $canCampaigns = team_page_unlocked($user, 'team_email_campaigns');
 $canCampaignDrafts = team_page_unlocked($user, 'team_email_campaigns_drafts');
-$showEmailCommShortcuts = $canAdminEmailsSearch || $canSitesEmails || $canCampaigns || $canCampaignDrafts;
+$canSitePrices = team_page_unlocked($user, 'team_site_prices');
+$showEmailCommShortcuts = $canAdminEmailsSearch || $canSitesEmails || $canCampaigns || $canCampaignDrafts || $canSitePrices;
 
 if (!$dept) {
     render_header('My departments', 'team');
@@ -121,6 +188,9 @@ if (!$dept) {
           <?php endif; ?>
           <?php if ($canCampaignDrafts): ?>
             <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+          <?php endif; ?>
+          <?php if ($canSitePrices): ?>
+            <a class="btn secondary" href="index.php?page=team_site_prices">Website prices</a>
           <?php endif; ?>
         </div>
       <?php endif; ?>
@@ -174,6 +244,13 @@ if (!$dept) {
         <a class="folder" href="index.php?page=team_email_campaigns_drafts">
           <h3>Campaign drafts</h3>
           <p class="muted">Formatted outreach per project · copy for email</p>
+          <?php folder_open_cue(); ?>
+        </a>
+        <?php endif; ?>
+        <?php if ($canSitePrices): ?>
+        <a class="folder" href="index.php?page=team_site_prices">
+          <h3>Website prices</h3>
+          <p class="muted">Country sheets · publisher rates</p>
           <?php folder_open_cue(); ?>
         </a>
         <?php endif; ?>
@@ -231,6 +308,12 @@ $tasks = array_slice($tasksAll, ($pageNum - 1) * $perPage, $perPage);
 $stats = department_stats($deptId);
 $isCommunicationDept = (string) $dept['slug'] === 'communication';
 $isEmailExtractingDept = (string) $dept['slug'] === 'email_extracting';
+$canAssign = team_can_assign_department_tasks($user, $deptId);
+$deptMembersAll = list_department_members($deptId);
+$deptMembers = array_values(array_filter(
+    $deptMembersAll,
+    static fn ($m) => (int) ($m['is_active'] ?? 1) === 1
+));
 
 $deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $statusFilter, $assigneeFilter, $taskQ, $pageNum): string {
     $params = array_merge([
@@ -268,7 +351,7 @@ render_breadcrumbs([
     <h1><?= h((string) $dept['name']) ?></h1>
     <p class="muted">
       <?= (int) $stats['open_tasks'] ?> open · <?= (int) $stats['total_tasks'] ?> task<?= (int) $stats['total_tasks'] === 1 ? '' : 's' ?>
-      · update status as you work
+      · update status and assign tasks as you work
     </p>
   </div>
   <div class="actions">
@@ -288,6 +371,9 @@ render_breadcrumbs([
       <?php endif; ?>
       <?php if ($canCampaignDrafts): ?>
         <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
+      <?php endif; ?>
+      <?php if ($canSitePrices): ?>
+        <a class="btn secondary" href="index.php?page=team_site_prices">Website prices</a>
       <?php endif; ?>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($base) ?>">All my departments</a>
@@ -319,7 +405,7 @@ render_breadcrumbs([
 </div>
 <?php endif; ?>
 
-<?php if ($isCommunicationDept && ($canAdminEmailsSearch || $canCampaigns || $canCampaignDrafts)): ?>
+<?php if ($isCommunicationDept && ($canAdminEmailsSearch || $canCampaigns || $canCampaignDrafts || $canSitePrices)): ?>
 <div class="card" style="margin-bottom:1rem">
   <h2 style="margin-top:0">Communication tools</h2>
   <p class="help muted" style="margin-bottom:0.85rem">
@@ -344,6 +430,13 @@ render_breadcrumbs([
     <a class="folder" href="index.php?page=team_email_campaigns_drafts">
       <h3>Campaign drafts</h3>
       <p class="muted">Formatted outreach per project · copy for email</p>
+      <?php folder_open_cue(); ?>
+    </a>
+    <?php endif; ?>
+    <?php if ($canSitePrices): ?>
+    <a class="folder" href="index.php?page=team_site_prices">
+      <h3>Website prices</h3>
+      <p class="muted">Country sheets · publisher rates</p>
       <?php folder_open_cue(); ?>
     </a>
     <?php endif; ?>
@@ -401,6 +494,46 @@ render_breadcrumbs([
     <button class="btn secondary small" type="submit">Search</button>
   </form>
 
+  <?php if ($canAssign): ?>
+  <form method="post" action="<?= h($deptFolderUrl(['p' => 1])) ?>" class="dept-task-form" style="margin-bottom:1rem">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="save_task">
+    <div class="form-grid" style="grid-template-columns:1.4fr 1fr 1fr;gap:0.65rem">
+      <div class="full" style="grid-column:1/-1">
+        <label for="team_dept_task_title">Assign a task</label>
+        <input id="team_dept_task_title" name="title" required maxlength="255"
+               placeholder="What should someone in this department do?">
+      </div>
+      <div class="full" style="grid-column:1/-1">
+        <label for="team_dept_task_notes">Notes</label>
+        <textarea id="team_dept_task_notes" name="notes" rows="2" placeholder="Details, links, country, counts…"></textarea>
+      </div>
+      <div>
+        <label for="team_dept_task_assignee">Assign to</label>
+        <select id="team_dept_task_assignee" name="assigned_to">
+          <option value="0">Whole department</option>
+          <?php foreach ($deptMembers as $m):
+              $name = trim((string) ($m['full_name'] ?? ''));
+              if ($name === '') {
+                  $name = (string) ($m['username'] ?? 'teammate');
+              }
+              ?>
+            <option value="<?= (int) $m['id'] ?>"><?= h($name) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <p class="help">Only people already in this department. Admin adds members.</p>
+      </div>
+      <div>
+        <label for="team_dept_task_due">Due date</label>
+        <input id="team_dept_task_due" type="date" name="due_date">
+      </div>
+    </div>
+    <p class="actions" style="margin-top:0.85rem">
+      <button class="btn" type="submit">Assign task</button>
+    </p>
+  </form>
+  <?php endif; ?>
+
   <?php if (!$tasks): ?>
   <div class="empty-state">
     <p><?php
@@ -445,7 +578,29 @@ render_breadcrumbs([
               <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
             <?php endif; ?>
           </td>
-          <td><?= h($assignee !== '' ? $assignee : 'Whole department') ?></td>
+          <td>
+            <?php if ($canAssign): ?>
+            <form method="post" action="<?= h($deptFolderUrl()) ?>" class="inline-form" data-stay-ajax>
+              <?= csrf_field() ?>
+              <input type="hidden" name="action" value="assign_task">
+              <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
+              <select name="assigned_to" data-stay-ajax-change aria-label="Assign task">
+                <option value="0" <?= (int) ($t['assigned_to'] ?? 0) < 1 ? 'selected' : '' ?>>Whole department</option>
+                <?php foreach ($deptMembersAll as $m):
+                    $name = trim((string) ($m['full_name'] ?? ''));
+                    if ($name === '') {
+                        $name = (string) ($m['username'] ?? 'teammate');
+                    }
+                    $sel = (int) ($t['assigned_to'] ?? 0) === (int) $m['id'] ? ' selected' : '';
+                    ?>
+                  <option value="<?= (int) $m['id'] ?>"<?= $sel ?>><?= h($name) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </form>
+            <?php else: ?>
+              <?= h($assignee !== '' ? $assignee : 'Whole department') ?>
+            <?php endif; ?>
+          </td>
           <td>
             <?php if ($canSetStatus): ?>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"

@@ -380,6 +380,29 @@ if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
 } else {
     ok('Website prices Team department + sheet filters');
 }
+$teamDeptsPage = file_get_contents($root . '/pages/team/departments.php') ?: '';
+$siteFindingHasWp = (bool) preg_match(
+    "/if \(\\\$slug === 'site_finding'\) \{([^}]*)\}/s",
+    $deptLibEarly,
+    $sfm
+) && str_contains($sfm[1] ?? '', 'team_site_prices');
+$commsHasWp = (bool) preg_match(
+    "/elseif \(\\\$slug === 'communication'\) \{([^}]*)\}/s",
+    $deptLibEarly,
+    $cmm
+) && str_contains($cmm[1] ?? '', 'team_site_prices');
+if ($siteFindingHasWp
+    || !$commsHasWp
+    || !str_contains($deptLibEarly, 'function team_can_assign_department_tasks')
+    || !str_contains($deptLibEarly, 'function set_department_task_assignee')
+    || !str_contains($teamDeptsPage, 'Assign a task')
+    || !str_contains($teamDeptsPage, "value=\"assign_task\"")
+    || !str_contains($teamDeptsPage, "value=\"save_task\"")
+    || !str_contains($teamDeptsPage, 'Only people already in this department')) {
+    fail('Team Website prices is not Communication-only, or Team cannot assign department tasks');
+} else {
+    ok('Team Website prices is Communication-only + Team can assign department tasks');
+}
 if (!str_contains($sitePricesLib, 'function site_price_jump_search')
     || !str_contains($sitePricesLib, 'function list_site_price_rows_page')
     || !str_contains($sitePricesLib, 'function site_price_filter_rows')
@@ -1505,6 +1528,12 @@ if (!str_contains($teamDepts, 'csrf_field()')) {
     fail('team departments missing csrf_field');
 } else {
     ok('team departments csrf_field');
+}
+$stayScrollJs = file_get_contents($root . '/assets/js/stay-scroll.js') ?: '';
+if (!preg_match('/var req = postStayAjax\(form\);\s*sel\.disabled = true/s', $stayScrollJs)) {
+    fail('stay-ajax disables select before FormData');
+} else {
+    ok('stay-ajax collects FormData before disabling select');
 }
 if (!str_contains($teamDepts, 'team_can_set_department_task_status')
     || !str_contains($teamDepts, 'Only the assignee can update this task')) {

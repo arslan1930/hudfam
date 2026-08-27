@@ -3976,15 +3976,17 @@ try {
                 'team_prospect_batch',
                 'team_semrush_research',
                 'team_semrush_sheet',
-                'team_site_prices',
             ],
             'site_extracting' => ['team_extracting', 'team_extract_batch'],
             'email_extracting' => ['team_sites_emails', 'team_admin_emails_search'],
-            'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_search'],
+            'communication' => ['team_email_campaigns', 'team_email_campaigns_drafts', 'team_admin_emails_search', 'team_site_prices'],
         };
         $missing = array_diff($expect, $pages);
+        $hasWp = in_array('team_site_prices', $pages, true);
         if ($missing) {
             fail("$uname tools missing " . implode(',', $missing) . ' got=' . implode(',', $pages));
+        } elseif ($hasWp !== ($slug === 'communication')) {
+            fail("$uname Website prices ACL unexpected got=" . implode(',', $pages));
         } else {
             pass("$uname tools OK");
         }
@@ -4954,6 +4956,66 @@ try {
         remove_department_member((int) $dept['id'], $assigneeId);
     }
 
+    $commDept = get_department_by_slug('communication');
+    $commsId = (int) db()->query("SELECT id FROM users WHERE username='comms'")->fetchColumn();
+    $finderId = (int) db()->query("SELECT id FROM users WHERE username='finder'")->fetchColumn();
+    if ($commDept && $commsId > 0 && $finderId > 0) {
+        $commsActor = ['id' => $commsId, 'username' => 'comms', 'role' => 'team'];
+        $finderActor = ['id' => $finderId, 'username' => 'finder', 'role' => 'team'];
+        $made = save_department_task(
+            (int) $commDept['id'],
+            'txfdept-team-assign',
+            '',
+            'open',
+            $commsId,
+            null,
+            $commsActor,
+            null,
+            false
+        );
+        $sneakAdd = save_department_task(
+            (int) $commDept['id'],
+            'txfdept-team-no-autoadd',
+            '',
+            'open',
+            $finderId,
+            null,
+            $commsActor,
+            null,
+            false
+        );
+        $reassignFinder = set_department_task_assignee((int) ($made['id'] ?? 0), $finderId, $commsActor);
+        $reassignSelf = set_department_task_assignee((int) ($made['id'] ?? 0), $commsId, $commsActor);
+        $finderBlocked = set_department_task_assignee((int) ($made['id'] ?? 0), $commsId, $finderActor);
+        $teamAssignOk = !empty($made['ok'])
+            && team_can_assign_department_tasks($commsActor, (int) $commDept['id'])
+            && !team_can_assign_department_tasks($finderActor, (int) $commDept['id'])
+            && empty($sneakAdd['ok'])
+            && !user_in_department($finderId, (int) $commDept['id'])
+            && empty($reassignFinder['ok'])
+            && !empty($reassignSelf['ok'])
+            && empty($finderBlocked['ok']);
+        if ($teamAssignOk) {
+            pass('team department members can assign tasks to members only');
+        } else {
+            fail('team department assign: ' . json_encode([
+                'made' => $made,
+                'sneak' => $sneakAdd,
+                'finder' => $reassignFinder,
+                'self' => $reassignSelf,
+                'blocked' => $finderBlocked,
+            ]));
+        }
+        if (!empty($made['id'])) {
+            delete_department_task((int) $made['id']);
+        }
+        if (!empty($sneakAdd['id'])) {
+            delete_department_task((int) $sneakAdd['id']);
+        }
+    } else {
+        fail('team department assign: missing comms/finder users');
+    }
+
     // D-1: invalid status rejected
     $tmpTask = save_department_task(
         (int) $dept['id'],
@@ -4970,6 +5032,12 @@ try {
             pass('department invalid status rejected');
         } else {
             fail('department invalid status accepted');
+        }
+        if (update_department_task_status((int) $tmpTask['id'], 'open')
+            && update_department_task_status((int) $tmpTask['id'], 'in_progress')) {
+            pass('department status update including same value');
+        } else {
+            fail('department valid status update failed');
         }
         delete_department_task((int) $tmpTask['id']);
     } else {
@@ -5406,7 +5474,7 @@ try {
     $finder = ['id' => $finderUid, 'username' => 'finder', 'role' => 'team'];
     $extractor = ['id' => $extractorUid, 'username' => 'extractor', 'role' => 'team'];
     if ($finderUid > 0 && team_page_unlocked($finder, 'team_prospect_check')
-        && team_page_unlocked($finder, 'team_site_prices')
+        && !team_page_unlocked($finder, 'team_site_prices')
         && !team_page_unlocked($finder, 'team_extract_batch')
         && !team_page_unlocked($finder, 'team_sites_emails')) {
         pass('team_page_unlocked finder tools');
@@ -5431,6 +5499,15 @@ try {
         pass('team_page_unlocked admin emails search + delete alias');
     } else {
         fail('team_page_unlocked admin emails search unexpected');
+    }
+    $commsUid = (int) db()->query("SELECT id FROM users WHERE username='comms'")->fetchColumn();
+    $comms = ['id' => $commsUid, 'username' => 'comms', 'role' => 'team'];
+    if ($commsUid > 0 && team_page_unlocked($comms, 'team_site_prices')
+        && team_page_unlocked($comms, 'team_email_campaigns')
+        && !team_page_unlocked($finder, 'team_site_prices')) {
+        pass('team_page_unlocked comms Website prices');
+    } else {
+        fail('team_page_unlocked comms Website prices unexpected');
     }
     if ($finderUid > 0 && team_can_clear_semrush_country($finder)
         && !team_can_clear_semrush_country($extractor)) {

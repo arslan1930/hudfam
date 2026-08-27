@@ -205,7 +205,6 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_prospect_batch';
                 $pages[] = 'team_semrush_research';
                 $pages[] = 'team_semrush_sheet';
-                $pages[] = 'team_site_prices';
             } elseif ($slug === 'site_extracting') {
                 $pages[] = 'team_extracting';
                 $pages[] = 'team_extract_batch';
@@ -218,6 +217,7 @@ function department_tool_pages_for_user(array $user): array
                 $pages[] = 'team_email_campaigns';
                 $pages[] = 'team_email_campaigns_drafts';
                 $pages[] = 'team_admin_emails_search';
+                $pages[] = 'team_site_prices';
             }
         }
     } catch (Throwable $e) {
@@ -266,6 +266,52 @@ function team_can_clear_semrush_country(array $user): bool
     return team_page_unlocked($user, 'team_prospect_check');
 }
 
+/** Team members of a department (and Admin) may create/reassign tasks there. */
+function team_can_assign_department_tasks(array $user, int $departmentId): bool
+{
+    if ($departmentId < 1) {
+        return false;
+    }
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    if (($user['role'] ?? '') !== 'team') {
+        return false;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    return $uid > 0 && user_in_department($uid, $departmentId);
+}
+
+/**
+ * Assign an existing department task to a current member (or whole department).
+ * Does not add people to the department — Admin does that.
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function set_department_task_assignee(int $taskId, ?int $assignedTo, array $actor): array
+{
+    ensure_departments_schema();
+    $task = get_department_task($taskId);
+    if (!$task) {
+        return ['ok' => false, 'error' => 'Task not found.'];
+    }
+    $departmentId = (int) ($task['department_id'] ?? 0);
+    if (!team_can_assign_department_tasks($actor, $departmentId)) {
+        return ['ok' => false, 'error' => 'You can only assign tasks in your department.'];
+    }
+    if ($assignedTo !== null && $assignedTo > 0) {
+        if (!user_in_department($assignedTo, $departmentId)) {
+            return ['ok' => false, 'error' => 'Assign only to someone in this department.'];
+        }
+    } else {
+        $assignedTo = null;
+    }
+    db()->prepare(
+        'UPDATE department_tasks SET assigned_to=?, updated_at=NOW() WHERE id=?'
+    )->execute([$assignedTo, $taskId]);
+    return ['ok' => true];
+}
+
 /** Team may change status on own assigned tasks or unassigned (whole department) tasks. Admin always. */
 function team_can_set_department_task_status(array $user, array $task): bool
 {
@@ -284,10 +330,10 @@ function team_can_set_department_task_status(array $user, array $task): bool
 function department_tools_help(string $slug): string
 {
     return match ($slug) {
-        'site_finding' => 'Members also get Filter & add, Semrush Research, Site adding history, and Website prices (not only tasks).',
+        'site_finding' => 'Members also get Filter & add, Semrush Research, and Site adding history (not only tasks).',
         'site_extracting' => 'Members also get Extracting sites / Results + Push, and Semrush Research (not only tasks). Clear country stays with Site Finding and Admin.',
         'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
-        'communication' => 'Members also get Admin emails search, Campaign search, and Campaign drafts.',
+        'communication' => 'Members also get Website prices, Admin emails search, Campaign search, and Campaign drafts.',
         default => 'Members see this department’s tasks (and tools from any other departments you assign).',
     };
 }
@@ -600,7 +646,8 @@ function save_department_task(
     ?int $assignedTo,
     ?string $dueDate,
     array $actor,
-    ?int $taskId = null
+    ?int $taskId = null,
+    bool $autoAddMember = true
 ): array {
     ensure_departments_schema();
     $title = trim($title);
@@ -645,13 +692,17 @@ function save_department_task(
         if ((int) ($assigneeRow['is_active'] ?? 0) !== 1 && !$keepingSameAssignee) {
             return ['ok' => false, 'error' => 'Assignee user not found or inactive.'];
         }
-        // Auto-add assignee to the department so tools unlock for them.
-        if ((int) ($assigneeRow['is_active'] ?? 0) === 1
+        // Auto-add assignee to the department so tools unlock for them (Admin only).
+        if ($autoAddMember
+            && (int) ($assigneeRow['is_active'] ?? 0) === 1
             && !user_in_department($assignedTo, $departmentId)) {
             if (!add_department_member($departmentId, $assignedTo, $actor)) {
                 return ['ok' => false, 'error' => 'Could not add assignee to this department.'];
             }
             $addedMember = true;
+        } elseif (!$autoAddMember && !user_in_department($assignedTo, $departmentId)
+            && !$keepingSameAssignee) {
+            return ['ok' => false, 'error' => 'Assign only to someone in this department.'];
         }
     } else {
         $assignedTo = null;
@@ -706,7 +757,7 @@ function update_department_task_status(int $taskId, string $status): bool
         'UPDATE department_tasks SET status=?, updated_at=NOW() WHERE id=?'
     );
     $stmt->execute([$status, $taskId]);
-    return $stmt->rowCount() > 0;
+    return true;
 }
 
 /**

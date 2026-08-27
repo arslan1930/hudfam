@@ -98,9 +98,9 @@ function render_team_panel_guide(): string
         . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong>. Email Extracting only.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>4. Campaign search + drafts</h3>'
-        . '<p><strong>What:</strong> Find a site/email in Admin campaign projects; copy outreach text.</p>'
-        . '<p><strong>How:</strong> Search, delete a row or one email if needed, paste drafts into your email client. Communication only.</p>'
+        . '<h3>4. Campaign search + drafts + Website prices</h3>'
+        . '<p><strong>What:</strong> Find a site/email in Admin campaign projects; copy outreach text; keep publisher rate sheets.</p>'
+        . '<p><strong>How:</strong> Search, paste drafts into your email client, and manage Website prices. Communication only.</p>'
         . '</article>'
         . '</div>'
         . '<div class="panel-guide-flow">'
@@ -110,7 +110,7 @@ function render_team_panel_guide(): string
         . '<li>Site Finding: <strong>Filter &amp; add</strong> → unique sites join Our database (unseen) and Extracting Sites list.</li>'
         . '<li>Site Extracting: paste <strong>Extracting Results</strong> and <strong>Push</strong>.</li>'
         . '<li>Email Extracting: add emails, then <strong>Push to Admin</strong>.</li>'
-        . '<li>Communication: <strong>Campaign search</strong> and <strong>Campaign drafts</strong> (copy, do not send from this app).</li>'
+        . '<li>Communication: <strong>Campaign search</strong>, <strong>Campaign drafts</strong>, and <strong>Website prices</strong> (copy, do not send from this app).</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -228,7 +228,7 @@ function guide_site_prices(): string
         'One country sheet of website prices and statuses. Team adds rates; site name, DA, DR, and traffic lock after save. Niche fills from Our database when the site already exists in that country.',
         'Open a country. Processing stays at the top, then New, then the rest. This is not Order management and does not write into Our database.',
         [
-            'Open a country from the switcher (most-used first) or All countries.',
+            'Open a country from the switcher (most-used first) or All countries. On Team, only Communication Team can open these sheets.',
             'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, email, and row color stay editable. Admin can Unlock identity.',
             'Processing / New / Other lanes stay in that order. Search this country (Enter = next match, Ctrl/Cmd+Enter = all pages). Find in other countries jumps to another sheet. Copy selected websites — there is no Copy all.',
             'Admin sees who added a row and who manages it; Team does not see Admin names.',
@@ -336,12 +336,12 @@ function guide_team_departments(): string
     return render_page_purpose(
         'My departments — tasks for your team',
         'Departments Admin assigned you to, with open tasks and due dates. Tools stay locked until you are in a department.',
-        'Change status from Dashboard, or open a folder for filters. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task.',
+        'Change status from Dashboard, or open a folder to assign tasks and filter. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task. Anyone in the department can assign a task to a current member.',
         [
             'Dashboard can update Open / In progress / Done without opening the folder.',
-            'Open a department folder for Mine, overdue, and other filters.',
+            'Open a department folder to assign a task to a teammate already in that department, or to the whole department.',
             'Update status only on your named tasks, or on tasks with no named assignee.',
-            'Unlocked tools appear in the sidebar and on Dashboard after assignment.',
+            'Unlocked tools appear in the sidebar and on Dashboard after assignment. Website prices is Communication Team only.',
         ]
     );
 }
