@@ -999,6 +999,11 @@ try {
         && str_contains($adminHistHtml, 'Took as manager');
     $peopleOk = str_contains($peopleAdmin, 'Added by')
         && str_contains($peopleAdmin, 'Managed by')
+        && str_contains($peopleAdmin, 'site-price-people-name')
+        && str_contains($peopleAdmin, 'site-price-note-td')
+        && str_contains($peopleAdmin, 'textarea')
+        && str_contains($peopleAdmin, 'data-site-price-note')
+        && str_contains($peopleAdmin, 'site-price-actions-td')
         && str_contains($peopleAdmin, 'Take')
         && str_contains($peopleAdmin, 'History')
         && str_contains($peopleTeam, 'Added by')

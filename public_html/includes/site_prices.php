@@ -1394,11 +1394,15 @@ function site_price_people_cell(array $view, bool $isAdmin): string
         $added = '—';
     }
     $html = '<div class="site-price-people">';
-    $html .= '<div class="site-price-people-line"><span class="muted">Added by</span> ' . h($added) . '</div>';
+    $html .= '<div class="site-price-people-line"><span class="muted">Added by</span> '
+        . '<span class="site-price-people-name" title="' . h($added) . '">' . h($added) . '</span></div>';
     if ($isAdmin) {
         $mgr = trim((string) ($view['managed_by_label'] ?? ''));
+        $mgrShow = $mgr !== '' ? $mgr : '—';
         $html .= '<div class="site-price-people-line"><span class="muted">Managed by</span> '
-            . ($mgr !== '' ? h($mgr) : '<span class="muted">—</span>') . '</div>';
+            . '<span class="site-price-people-name" title="' . h($mgrShow) . '">'
+            . ($mgr !== '' ? h($mgr) : '<span class="muted">—</span>')
+            . '</span></div>';
     }
     $html .= '<div class="site-price-people-actions">';
     $html .= '<button type="button" class="btn-link js-site-price-history" data-site-price-history data-id="'
@@ -1714,13 +1718,15 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-site-price-price value="'
         . h((string) ($view['price_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
     $html .= '<td data-label="Status">' . site_price_status_select_html((string) ($view['status_slug'] ?? 'new')) . '</td>';
-    $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-site-price-note value="'
-        . h((string) ($view['extra_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
+    $noteVal = (string) ($view['extra_note'] ?? '');
+    $html .= '<td class="site-price-note-td" data-label="Note"><textarea class="site-price-input site-price-note" data-site-price-note'
+        . ' rows="4" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note">'
+        . h($noteVal) . '</textarea></td>';
     $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-site-price-email value="'
         . h((string) ($view['reply_email'] ?? '')) . '" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
         . ' data-no-draft aria-label="Reply email"></td>';
     $html .= '<td data-label="People" class="site-price-people-cell">' . site_price_people_cell($view, $isAdmin) . '</td>';
-    $html .= '<td data-label="Actions"><div class="site-price-actions">';
+    $html .= '<td class="site-price-actions-td" data-label="Actions"><div class="site-price-actions">';
     $html .= site_price_tint_controls($tint, ['variant' => 'menu']);
     if ($isAdmin) {
         $html .= '<span class="site-price-drag" data-site-price-drag draggable="true"'
@@ -1758,7 +1764,8 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="Price" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
     $html .= '<td data-label="Status"><div class="site-price-add-status">' . site_price_status_select_html('new')
         . site_price_tint_controls('', ['variant' => 'inline']) . '</div></td>';
-    $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-add-note autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
+    $html .= '<td class="site-price-note-td" data-label="Note"><textarea class="site-price-input site-price-note" data-add-note'
+        . ' rows="4" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></textarea></td>';
     $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false"'
         . ' data-no-draft aria-label="Reply email"></td>';
     $html .= '<td class="site-price-add-commit" colspan="2" data-label="">';
