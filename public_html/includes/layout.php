@@ -125,6 +125,7 @@ function render_header(string $title, string $panel = ''): void
             ],
             'Office' => [
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
+                'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
                 'admin_account' => ['Account', 'Email verify · password'],

@@ -20,6 +20,7 @@ require __DIR__ . '/includes/email_campaigns.php';
 require __DIR__ . '/includes/admin_new_data.php';
 require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
+require __DIR__ . '/includes/site_prices.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/semrush_research.php';
@@ -50,6 +51,7 @@ try {
     ensure_admin_new_data_schema();
     ensure_departments_schema();
     ensure_order_schema();
+    ensure_site_prices_schema();
     ensure_invoice_schema();
     ensure_task_presence_schema();
     ensure_semrush_research_schema();
@@ -463,6 +465,162 @@ try {
     }
 } catch (Throwable $e) {
     fail('prospects: ' . $e->getMessage());
+}
+
+// --- Website prices (Office rate book) ---
+try {
+    db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
+    $statuses = site_price_list_statuses();
+    $slugs = array_column($statuses, 'slug');
+    $need = ['new', 'processing', 'already_working', 'ok', 'very_high_price', 'not_interested', 'agreed'];
+    $missing = array_diff($need, $slugs);
+    if ($missing === [] && site_price_status_lane('processing') === 'processing'
+        && site_price_status_lane('new') === 'new'
+        && site_price_status_lane('agreed') === 'other') {
+        pass('site_price builtin statuses + lanes');
+    } else {
+        fail('site_price statuses: ' . json_encode(['missing' => $missing, 'slugs' => $slugs]));
+    }
+    if (site_price_normalize_domain('https://www.txfprice-a.com/blog') === 'txfprice-a.com') {
+        pass('site_price_normalize_domain strips url');
+    } else {
+        fail('site_price_normalize_domain: ' . site_price_normalize_domain('https://www.txfprice-a.com/blog'));
+    }
+
+    add_prospect_domains(
+        ['txfprice-health-de.com'],
+        $adminUser,
+        $country,
+        'German',
+        'europe',
+        'Health',
+        'price-book niche seed'
+    );
+    $idHealth = site_price_insert_row([
+        'country' => $country,
+        'domain' => 'https://www.txfprice-health-de.com/x',
+        'created_by' => (int) $teamUser['id'],
+    ]);
+    $stH = db()->prepare('SELECT domain, niche, country FROM site_price_rows WHERE id=?');
+    $stH->execute([$idHealth]);
+    $rowH = $stH->fetch(PDO::FETCH_ASSOC) ?: [];
+    if ((string) ($rowH['domain'] ?? '') === 'txfprice-health-de.com'
+        && str_contains((string) ($rowH['niche'] ?? ''), 'Health')
+        && (string) ($rowH['country'] ?? '') === $country) {
+        pass('site_price insert normalizes domain + niche from Our database');
+    } else {
+        fail('site_price insert niche: ' . json_encode($rowH));
+    }
+    $dupOk = false;
+    try {
+        site_price_insert_row([
+            'country' => $country,
+            'domain' => 'txfprice-health-de.com',
+            'created_by' => (int) $adminUser['id'],
+        ]);
+    } catch (RuntimeException $e) {
+        $dupOk = str_contains($e->getMessage(), 'already');
+    }
+    if ($dupOk) {
+        pass('site_price unique country+domain');
+    } else {
+        fail('site_price duplicate allowed');
+    }
+
+    $idProcOld = site_price_insert_row([
+        'country' => $country,
+        'domain' => 'txfprice-proc-old.de',
+        'status_slug' => 'processing',
+        'created_by' => (int) $adminUser['id'],
+        'managed_by' => (int) $adminUser['id'],
+    ]);
+    $idProcNew = site_price_insert_row([
+        'country' => $country,
+        'domain' => 'txfprice-proc-new.de',
+        'status_slug' => 'processing',
+        'created_by' => (int) $teamUser['id'],
+    ]);
+    $idNew = site_price_insert_row([
+        'country' => $country,
+        'domain' => 'txfprice-new.de',
+        'status_slug' => 'new',
+        'created_by' => (int) $teamUser['id'],
+    ]);
+    $idAgreed = site_price_insert_row([
+        'country' => $country,
+        'domain' => 'txfprice-agreed.de',
+        'status_slug' => 'agreed',
+        'created_by' => (int) $teamUser['id'],
+    ]);
+    db()->prepare('UPDATE site_price_rows SET created_at=? WHERE id=?')->execute(['2026-01-01 10:00:00', $idProcOld]);
+    db()->prepare('UPDATE site_price_rows SET created_at=? WHERE id=?')->execute(['2026-01-02 10:00:00', $idProcNew]);
+    db()->prepare('UPDATE site_price_rows SET created_at=? WHERE id=?')->execute(['2026-01-03 10:00:00', $idNew]);
+    db()->prepare('UPDATE site_price_rows SET created_at=? WHERE id=?')->execute(['2026-01-04 10:00:00', $idAgreed]);
+    $sorted = list_site_price_rows($country);
+    $sortedTest = array_values(array_filter($sorted, static function ($r) {
+        return str_starts_with((string) ($r['domain'] ?? ''), 'txfprice-');
+    }));
+    $order = array_column($sortedTest, 'domain');
+    $lanes = [];
+    foreach ($sortedTest as $r) {
+        $lanes[] = site_price_status_lane((string) $r['status_slug']) . ':' . $r['domain'];
+    }
+    $firstTwoProc = ($order[0] ?? '') === 'txfprice-proc-old.de' && ($order[1] ?? '') === 'txfprice-proc-new.de';
+    $newBeforeOther = false;
+    $sawNew = false;
+    $otherBeforeNew = false;
+    foreach ($sortedTest as $r) {
+        $lane = site_price_status_lane((string) $r['status_slug']);
+        if ($lane === 'new') {
+            $sawNew = true;
+        }
+        if ($lane === 'other' && !$sawNew) {
+            $otherBeforeNew = true;
+        }
+        if ($lane === 'other' && $sawNew) {
+            $newBeforeOther = true;
+        }
+    }
+    if ($firstTwoProc && $sawNew && $newBeforeOther && !$otherBeforeNew) {
+        pass('site_price sort Processing then New then Other');
+    } else {
+        fail('site_price sort: ' . json_encode($lanes));
+    }
+
+    $adminView = site_price_row_for_viewer($sortedTest[0], $adminUser);
+    $teamView = site_price_row_for_viewer($sortedTest[0], $teamUser);
+    $adminSeesMgr = ($adminView['managed_by_label'] ?? '') !== '' || !empty($adminView['managed_by']);
+    $teamHidesMgr = !isset($teamView['managed_by']) && !isset($teamView['managed_by_label']);
+    $teamHidesAdminName = ($teamView['added_by_label'] ?? '') === 'Admin';
+    if ($adminSeesMgr && $teamHidesMgr && $teamHidesAdminName) {
+        pass('site_price Team hides admin manager + admin added-by name');
+    } else {
+        fail('site_price viewer: ' . json_encode([
+            'admin' => [
+                'managed' => $adminView['managed_by_label'] ?? null,
+                'added' => $adminView['added_by_label'] ?? null,
+            ],
+            'team' => [
+                'has_managed' => isset($teamView['managed_by']),
+                'added' => $teamView['added_by_label'] ?? null,
+            ],
+        ]));
+    }
+    $counts = site_price_country_counts();
+    $gerCount = 0;
+    foreach ($counts as $c) {
+        if ((string) ($c['country'] ?? '') === $country) {
+            $gerCount = (int) $c['total'];
+        }
+    }
+    if ($gerCount >= 5 && count_site_price_rows($country) >= 5) {
+        pass('site_price country counts');
+    } else {
+        fail('site_price counts ger=' . $gerCount);
+    }
+    db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
+} catch (Throwable $e) {
+    fail('site_prices: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Filter uniqueness ---

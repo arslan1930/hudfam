@@ -15,6 +15,7 @@ require __DIR__ . '/includes/admin_new_data.php';
 require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/sites_form.php';
 require __DIR__ . '/includes/orders.php';
+require __DIR__ . '/includes/site_prices.php';
 require __DIR__ . '/includes/invoices.php';
 require __DIR__ . '/includes/guides.php';
 require __DIR__ . '/includes/presence.php';
@@ -72,6 +73,7 @@ $routes = [
     'admin_emails_data' => 'pages/admin/emails_data.php',
     'admin_orders' => 'pages/admin/orders.php',
     'admin_order_sheet' => 'pages/admin/order_sheet.php',
+    'admin_site_prices' => 'pages/admin/site_prices.php',
     'admin_invoices' => 'pages/admin/invoices.php',
     'admin_invoice_generate' => 'pages/admin/invoice_generate.php',
     'admin_invoice_manual' => 'pages/admin/invoice_manual.php',

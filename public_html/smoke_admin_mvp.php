@@ -40,6 +40,8 @@ $requiredFiles = [
     'assets/js/password-toggle.js',
     'assets/js/prospect-batch-sheet.js',
     'assets/js/stay-scroll.js',
+    'includes/site_prices.php',
+    'pages/admin/site_prices.php',
 ];
 foreach ($requiredFiles as $rel) {
     if (!is_file($root . '/' . $rel)) {
@@ -226,22 +228,47 @@ if (!str_contains($guidesLib, 'function guide_emails_data')
 if (!str_contains($guidesLib, 'function guide_orders')
     || !str_contains($guidesLib, 'function guide_invoices')
     || !str_contains($guidesLib, 'function guide_admin_account')
+    || !str_contains($guidesLib, 'function guide_site_prices')
     || !str_contains($guidesLib, 'Deleting a sheet keeps invoices')
     || !str_contains($guidesLib, 'printable letterhead is Topurlz')
     || !str_contains($guidesLib, 'Sidebar Change password updates the same password')) {
     fail('Office page-purpose guides missing');
 } else {
-    ok('Office Orders/Invoices/Account guides present');
+    ok('Office Orders/Invoices/Account/Website prices guides present');
 }
 $ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 $invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
 $accountHubGuide = file_get_contents($root . '/pages/admin/account.php') ?: '';
+$sitePricesHubGuide = file_get_contents($root . '/pages/admin/site_prices.php') ?: '';
 if (!str_contains($ordersHubGuide, 'guide_orders()')
     || !str_contains($invoicesHubGuide, 'guide_invoices()')
-    || !str_contains($accountHubGuide, 'guide_admin_account()')) {
+    || !str_contains($accountHubGuide, 'guide_admin_account()')
+    || !str_contains($sitePricesHubGuide, 'guide_site_prices()')
+    || !str_contains($sitePricesHubGuide, 'Open a country sheet')
+    || !str_contains($sitePricesHubGuide, 'No sites in this country yet')
+    || !str_contains($sitePricesHubGuide, 'data-no-draft')) {
     fail('Office hubs missing page-purpose guide calls');
 } else {
-    ok('Office hubs echo Orders/Invoices/Account guides');
+    ok('Office hubs echo Orders/Invoices/Account/Website prices guides');
+}
+$sitePricesLib = file_get_contents($root . '/includes/site_prices.php') ?: '';
+$schemaSql = file_get_contents($root . '/sql/schema.sql') ?: '';
+$upgradePhp = file_get_contents($root . '/upgrade.php') ?: '';
+$indexPhp = file_get_contents($root . '/index.php') ?: '';
+$dashPhp = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
+    || !str_contains($sitePricesLib, 'function site_price_lookup_niche')
+    || !str_contains($sitePricesLib, 'function site_price_insert_row')
+    || !str_contains($sitePricesLib, 'function site_price_sort_rows')
+    || !str_contains($sitePricesLib, 'function site_price_row_for_viewer')
+    || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS site_price_rows')
+    || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS site_price_statuses')
+    || !str_contains($upgradePhp, 'ensure_site_prices_schema')
+    || !str_contains($indexPhp, "'admin_site_prices'")
+    || !str_contains($dashPhp, 'index.php?page=admin_site_prices')) {
+    fail('Website prices missing schema / helpers / route');
+} else {
+    ok('Website prices schema + helpers + Admin hub route');
 }
 foreach ([
     'guide_campaign_search',
@@ -2079,7 +2106,8 @@ $campUi = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '
 $cssUi = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($layoutUiSmoke, "'Work' =>")
     || !str_contains($layoutUiSmoke, "'Office' =>")
-    || !str_contains($layoutUiSmoke, "'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign']")) {
+    || !str_contains($layoutUiSmoke, "'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign']")
+    || !str_contains($layoutUiSmoke, "'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates']")) {
     fail('Admin sidebar missing Work vs Office groups');
 } else {
     ok('Admin sidebar Work vs Office');

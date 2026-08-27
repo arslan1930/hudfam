@@ -54,7 +54,7 @@ function render_admin_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>5. Orders + Invoices</h3>'
         . '<p><strong>What:</strong> Client publication sheets, live URLs, printable invoices.</p>'
-        . '<p><strong>How:</strong> Order management → client sheet. Invoices generate from unpaid live rows or a blank invoice.</p>'
+        . '<p><strong>How:</strong> Order management → client sheet. Invoices generate from unpaid live rows or a blank invoice. Website prices is a separate Office rate book (publisher prices by country).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>6. Users</h3>'
@@ -216,6 +216,20 @@ function guide_emails_data(): string
             'Admin: working list from Team Push; mark emailed here.',
             'Final: archive copy of Admin; emailed/remove keeps a copy here. Repair copies Admin → Final. Adding a site here also creates the Admin working-list row.',
             'Campaign: create a project and country sheets. Communication Team searches the project. Emailed marks are per campaign, not Admin/Final. Mark up to here names a send batch so Admin can see who emailed which stretch.',
+        ]
+    );
+}
+
+function guide_site_prices(): string
+{
+    return render_page_purpose(
+        'Website prices — publisher rate book',
+        'One country sheet of website prices and statuses. Team adds rates; site name, DA, DR, and traffic lock after save. Niche fills from Our database when the site already exists in that country.',
+        'Open a country. Processing stays at the top, then New, then the rest. This is not Order management and does not write into Our database.',
+        [
+            'Open a country from the list or the country search.',
+            'Add sites and prices on that sheet (next update).',
+            'Admin sees who added a row and who manages it; Team does not see Admin names.',
         ]
     );
 }

@@ -496,3 +496,60 @@ CREATE TABLE IF NOT EXISTS semrush_sheet_meta (
   CONSTRAINT fk_semrush_meta_user
     FOREIGN KEY (last_writer_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Website prices (Office): publisher rate book, one country sheet
+CREATE TABLE IF NOT EXISTS site_price_statuses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(80) NOT NULL,
+  label VARCHAR(120) NOT NULL,
+  color VARCHAR(40) NOT NULL DEFAULT 'grey',
+  lane ENUM('processing','new','other') NOT NULL DEFAULT 'other',
+  is_builtin TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_site_price_status_slug (slug),
+  INDEX (lane),
+  INDEX (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS site_price_rows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  country VARCHAR(100) NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  niche VARCHAR(512) NOT NULL DEFAULT '',
+  da VARCHAR(40) NOT NULL DEFAULT '',
+  dr VARCHAR(40) NOT NULL DEFAULT '',
+  traffic VARCHAR(40) NOT NULL DEFAULT '',
+  price_note TEXT NULL,
+  extra_note VARCHAR(500) NOT NULL DEFAULT '',
+  status_slug VARCHAR(80) NOT NULL DEFAULT 'new',
+  sort_in_lane INT NOT NULL DEFAULT 0,
+  identity_locked TINYINT(1) NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  managed_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_site_price_country_domain (country, domain),
+  INDEX (country),
+  INDEX (status_slug),
+  INDEX (created_by),
+  INDEX (managed_by),
+  INDEX (country, status_slug, sort_in_lane),
+  CONSTRAINT fk_spr_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_spr_managed FOREIGN KEY (managed_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS site_price_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  row_id INT NOT NULL,
+  actor_id INT NULL,
+  actor_role VARCHAR(20) NOT NULL DEFAULT '',
+  kind VARCHAR(40) NOT NULL,
+  old_value TEXT NULL,
+  new_value TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX (row_id, created_at),
+  INDEX (actor_id),
+  CONSTRAINT fk_spe_row FOREIGN KEY (row_id) REFERENCES site_price_rows(id) ON DELETE CASCADE,
+  CONSTRAINT fk_spe_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
