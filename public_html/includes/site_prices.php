@@ -633,13 +633,20 @@ function site_price_filter_query_extra(array $filters, int $perPage = 0): array
 function site_price_row_search_haystack(array $row, array $viewer = []): string
 {
     $view = $viewer !== [] ? site_price_row_for_viewer($row, $viewer) : $row;
+    $statusSlug = (string) ($view['status_slug'] ?? '');
+    $statusLabel = '';
+    if ($statusSlug !== '') {
+        $st = site_price_status_map()[$statusSlug] ?? null;
+        $statusLabel = $st ? (string) ($st['label'] ?? '') : '';
+    }
     return mb_strtolower(trim(
         (string) ($view['domain'] ?? '') . ' '
         . (string) ($view['niche'] ?? '') . ' '
         . (string) ($view['price_note'] ?? '') . ' '
         . (string) ($view['extra_note'] ?? '') . ' '
         . (string) ($view['reply_email'] ?? '') . ' '
-        . (string) ($view['status_slug'] ?? '') . ' '
+        . $statusSlug . ' '
+        . $statusLabel . ' '
         . (string) ($view['added_by_label'] ?? '')
     ));
 }
@@ -1003,6 +1010,57 @@ function site_price_normalize_status(string $slug): string
     return $slug;
 }
 
+/** Processing and Completed are Admin-only (Processing syncs into Order management). */
+function site_price_admin_only_status_slugs(): array
+{
+    return ['processing', 'completed'];
+}
+
+function site_price_is_admin_only_status(string $slug): bool
+{
+    return in_array(strtolower(trim($slug)), site_price_admin_only_status_slugs(), true);
+}
+
+/**
+ * Team may keep Processing/Completed if Admin already set them. Team cannot switch to those.
+ *
+ * @param array{role?:string} $viewer
+ */
+function site_price_assert_can_set_status(string $oldSlug, string $newSlug, array $viewer): void
+{
+    $oldSlug = site_price_normalize_status($oldSlug);
+    $newSlug = site_price_normalize_status($newSlug);
+    if (($viewer['role'] ?? '') === 'admin') {
+        return;
+    }
+    if (site_price_is_admin_only_status($newSlug) && $newSlug !== $oldSlug) {
+        throw new RuntimeException('Only Admin can set Processing or Completed.');
+    }
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function site_price_list_manager_options(): array
+{
+    static $list = null;
+    if ($list !== null) {
+        return $list;
+    }
+    if (function_exists('list_admin_users')) {
+        $list = list_admin_users(true);
+        return $list;
+    }
+    try {
+        $list = db()->query(
+            "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        $list = [];
+    }
+    return $list;
+}
+
 function get_site_price_row(int $id): ?array
 {
     ensure_site_prices_schema();
@@ -1062,6 +1120,8 @@ function site_price_format_niche(string $raw): string
  */
 function site_price_add_row_for_user(array $fields, array $viewer): array
 {
+    $wanted = strtolower(trim((string) ($fields['status_slug'] ?? 'new')));
+    site_price_assert_can_set_status('', $wanted, $viewer);
     $fields['created_by'] = (int) ($viewer['id'] ?? 0);
     $fields['identity_locked'] = 1;
     $id = site_price_insert_row($fields);
@@ -1133,9 +1193,11 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
     $note = array_key_exists('extra_note', $fields)
         ? trim((string) $fields['extra_note'])
         : (string) ($row['extra_note'] ?? '');
+    $oldStatus = site_price_normalize_status((string) ($row['status_slug'] ?? 'new'));
     $status = array_key_exists('status_slug', $fields)
         ? site_price_normalize_status((string) $fields['status_slug'])
-        : site_price_normalize_status((string) ($row['status_slug'] ?? 'new'));
+        : $oldStatus;
+    site_price_assert_can_set_status($oldStatus, $status, $viewer);
 
     $email = array_key_exists('reply_email', $fields)
         ? site_price_clip_email((string) $fields['reply_email'])
@@ -1144,7 +1206,6 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
         ? site_price_normalize_tint((string) $fields['row_tint'])
         : site_price_normalize_tint((string) ($row['row_tint'] ?? ''));
 
-    $oldStatus = (string) ($row['status_slug'] ?? '');
     $oldPrice = (string) ($row['price_note'] ?? '');
     $oldEmail = site_price_clip_email((string) ($row['reply_email'] ?? ''));
     $oldTint = site_price_normalize_tint((string) ($row['row_tint'] ?? ''));
@@ -1179,7 +1240,6 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
     if ($oldTint !== $tint) {
         site_price_log_event($id, $viewer, 'tint', $oldTint, $tint);
     }
-    site_price_touch_managed($id, $viewer);
 
     if (function_exists('order_sync_from_site_price_row')) {
         try {
@@ -1267,6 +1327,72 @@ function site_price_claim_row(int $id, array $viewer): array
     return $saved;
 }
 
+/**
+ * Admin sets or clears managed-by. 0 clears.
+ *
+ * @param array{id?:int,role?:string} $viewer
+ * @return array<string,mixed>
+ */
+function site_price_assign_row(int $id, int $managerId, array $viewer): array
+{
+    if (($viewer['role'] ?? '') !== 'admin') {
+        throw new RuntimeException('Only Admin can assign a manager.');
+    }
+    $row = get_site_price_row($id);
+    if (!$row) {
+        throw new RuntimeException('Site not found.');
+    }
+    $managerId = max(0, $managerId);
+    if ($managerId > 0) {
+        $ok = false;
+        foreach (site_price_list_manager_options() as $admin) {
+            if ((int) ($admin['id'] ?? 0) === $managerId) {
+                $ok = true;
+                break;
+            }
+        }
+        if (!$ok) {
+            throw new InvalidArgumentException('Pick an Admin to manage this site.');
+        }
+    }
+    $old = (int) ($row['managed_by'] ?? 0);
+    $next = $managerId > 0 ? $managerId : null;
+    db()->prepare('UPDATE site_price_rows SET managed_by=?, updated_at=NOW() WHERE id=?')->execute([$next, $id]);
+    if ($old !== $managerId) {
+        site_price_log_event($id, $viewer, 'manage', (string) $old, (string) $managerId);
+    }
+    $saved = get_site_price_row($id);
+    if (!$saved) {
+        throw new RuntimeException('Site not found.');
+    }
+    return $saved;
+}
+
+/**
+ * Admin removes a site from this country sheet. Linked Order management rows stay
+ * (site_price_row_id is SET NULL). History for this site is deleted with the row.
+ *
+ * @param array{id?:int,role?:string} $viewer
+ * @return array{id:int,domain:string,country:string}
+ */
+function site_price_delete_row(int $id, array $viewer): array
+{
+    if (($viewer['role'] ?? '') !== 'admin') {
+        throw new RuntimeException('Only Admin can remove a site from Website prices.');
+    }
+    $row = get_site_price_row($id);
+    if (!$row) {
+        throw new RuntimeException('Site not found.');
+    }
+    $out = [
+        'id' => (int) $row['id'],
+        'domain' => (string) ($row['domain'] ?? ''),
+        'country' => (string) ($row['country'] ?? ''),
+    ];
+    db()->prepare('DELETE FROM site_price_rows WHERE id=?')->execute([$id]);
+    return $out;
+}
+
 function site_price_event_actor_label(array $event, array $viewer): string
 {
     $isAdmin = ($viewer['role'] ?? '') === 'admin';
@@ -1294,7 +1420,9 @@ function site_price_event_summary(array $event): string
         'status' => 'Status ' . ($oldLabel !== '' ? $oldLabel . ' → ' : '') . ($newLabel !== '' ? $newLabel : $new),
         'price' => 'Price' . ($old !== '' || $new !== '' ? ' ' . $old . ' → ' . $new : ''),
         'unlock' => 'Unlocked identity',
-        'manage' => 'Took as manager',
+        'manage' => ($new === '' || $new === '0')
+            ? 'Cleared manager'
+            : (($old === '' || $old === '0') ? 'Took as manager' : 'Assigned manager'),
         'email' => 'Reply email' . ($old !== '' || $new !== '' ? ' ' . $old . ' → ' . $new : ''),
         'tint' => 'Color ' . site_price_tint_label($old) . ' → ' . site_price_tint_label($new),
         default => $kind !== '' ? $kind : 'Updated',
@@ -1462,12 +1590,21 @@ function site_price_people_cell(array $view, bool $isAdmin): string
     $html .= '<div class="site-price-people-line"><span class="muted">Added by</span> '
         . '<span class="site-price-people-name" title="' . h($added) . '">' . h($added) . '</span></div>';
     if ($isAdmin) {
-        $mgr = trim((string) ($view['managed_by_label'] ?? ''));
-        $mgrShow = $mgr !== '' ? $mgr : '—';
-        $html .= '<div class="site-price-people-line"><span class="muted">Managed by</span> '
-            . '<span class="site-price-people-name" title="' . h($mgrShow) . '">'
-            . ($mgr !== '' ? h($mgr) : '<span class="muted">—</span>')
-            . '</span></div>';
+        $mgrId = (int) ($view['managed_by'] ?? 0);
+        $html .= '<div class="site-price-people-line site-price-people-assign">';
+        $html .= '<span class="muted">Managed by</span> ';
+        $html .= '<select class="site-price-assign" data-site-price-assign data-no-draft aria-label="Managed by">';
+        $html .= '<option value="0"' . ($mgrId < 1 ? ' selected' : '') . '>—</option>';
+        foreach (site_price_list_manager_options() as $admin) {
+            $aid = (int) ($admin['id'] ?? 0);
+            if ($aid < 1) {
+                continue;
+            }
+            $label = trim((string) (($admin['full_name'] ?? '') ?: ($admin['username'] ?? 'Admin')));
+            $sel = $aid === $mgrId ? ' selected' : '';
+            $html .= '<option value="' . $aid . '"' . $sel . '>' . h($label !== '' ? $label : 'Admin') . '</option>';
+        }
+        $html .= '</select></div>';
     }
     $html .= '<div class="site-price-people-actions">';
     $html .= '<button type="button" class="btn-link js-site-price-history" data-site-price-history data-id="'
@@ -1605,16 +1742,20 @@ function site_price_reorder_lane(string $country, string $lane, array $ids, arra
     }
 }
 
-function site_price_status_select_html(string $current, string $id = ''): string
+function site_price_status_select_html(string $current, string $id = '', ?array $viewer = null): string
 {
     $current = site_price_normalize_status($current);
     $cur = site_price_status_map()[$current] ?? null;
     $color = $cur ? (string) ($cur['color'] ?? 'grey') : 'grey';
+    $isAdmin = $viewer === null || ($viewer['role'] ?? '') === 'admin';
     $html = '<select class="site-price-status is-color-' . h($color) . '" data-site-price-status data-no-draft'
         . ($id !== '' ? ' id="' . h($id) . '"' : '')
         . ' aria-label="Status">';
     foreach (site_price_list_statuses() as $st) {
         $slug = (string) $st['slug'];
+        if (!$isAdmin && site_price_is_admin_only_status($slug) && $slug !== $current) {
+            continue;
+        }
         $sel = $slug === $current ? ' selected' : '';
         $html .= '<option value="' . h($slug) . '" data-color="' . h((string) ($st['color'] ?? 'grey')) . '"'
             . ' data-lane="' . h((string) ($st['lane'] ?? 'other')) . '"'
@@ -1627,13 +1768,17 @@ function site_price_status_select_html(string $current, string $id = ''): string
 /**
  * @param array{role?:string} $viewer
  */
-function render_site_price_status_words_card(array $viewer, string $page = 'admin_site_prices'): string
+function render_site_price_status_words_card(array $viewer, string $page = 'admin_site_prices', string $country = ''): string
 {
     $isAdmin = ($viewer['role'] ?? '') === 'admin';
-    $action = site_price_hub_url($page);
+    $action = $country !== '' ? site_price_sheet_url($country, $page) : site_price_hub_url($page);
     $html = '<div class="card" id="status-words" style="margin-top:1rem">';
     $html .= '<h2 style="margin:0 0 0.35rem">Status words</h2>';
-    $html .= '<p class="help" style="margin-top:0">The seven closed statuses stay. Extra words land in Other on every country sheet.</p>';
+    $html .= '<p class="help" style="margin-top:0">'
+        . ($country !== ''
+            ? 'Applies to every country sheet. Extra words land in Other.'
+            : 'The seven closed statuses stay. Extra words land in Other on every country sheet.')
+        . '</p>';
     $html .= '<ul class="site-price-status-list">';
     foreach (site_price_list_statuses() as $st) {
         $builtin = (int) ($st['is_builtin'] ?? 0) === 1;
@@ -1782,14 +1927,14 @@ function render_site_price_sheet_row(array $row, array $viewer): string
 
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-site-price-price value="'
         . h((string) ($view['price_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
-    $html .= '<td data-label="Status">' . site_price_status_select_html((string) ($view['status_slug'] ?? 'new')) . '</td>';
+    $html .= '<td data-label="Status">' . site_price_status_select_html((string) ($view['status_slug'] ?? 'new'), '', $viewer) . '</td>';
     $noteVal = (string) ($view['extra_note'] ?? '');
     $html .= '<td class="site-price-note-td" data-label="Note"><textarea class="site-price-input site-price-note" data-site-price-note'
         . ' rows="4" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note">'
         . h($noteVal) . '</textarea></td>';
-    $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-site-price-email value="'
-        . h((string) ($view['reply_email'] ?? '')) . '" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
-        . ' data-no-draft aria-label="Reply email"></td>';
+    $html .= '<td class="site-price-email-td" data-label="Email"><textarea class="site-price-input site-price-email" data-site-price-email'
+        . ' rows="2" maxlength="190" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
+        . ' data-no-draft aria-label="Reply email">' . h((string) ($view['reply_email'] ?? '')) . '</textarea></td>';
     $html .= '<td data-label="People" class="site-price-people-cell">' . site_price_people_cell($view, $isAdmin) . '</td>';
     $html .= '<td class="site-price-actions-td" data-label="Actions"><div class="site-price-actions">';
     $html .= site_price_tint_controls($tint, ['variant' => 'menu']);
@@ -1800,12 +1945,16 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     if ($isAdmin && $locked) {
         $html .= '<button type="button" class="btn secondary small" data-site-price-unlock>Unlock</button>';
     }
+    if ($isAdmin) {
+        $html .= '<button type="button" class="btn secondary small" data-site-price-remove data-domain="'
+            . h($domain) . '" title="Remove this site from the country sheet">Remove</button>';
+    }
     $html .= '</div></td>';
     $html .= '</tr>';
     return $html;
 }
 
-function render_site_price_add_row(): string
+function render_site_price_add_row(?array $viewer = null): string
 {
     $html = '<tr class="site-price-add" data-site-price-add>';
     $html .= '<td class="site-price-check-td" data-label=""></td>';
@@ -1827,12 +1976,13 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="DR"><input type="text" class="site-price-input" data-add-dr autocomplete="off" spellcheck="false" data-no-draft aria-label="DR"></td>';
     $html .= '<td data-label="Traffic"><input type="text" class="site-price-input" data-add-traffic autocomplete="off" spellcheck="false" data-no-draft aria-label="Traffic"></td>';
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="Price" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
-    $html .= '<td data-label="Status"><div class="site-price-add-status">' . site_price_status_select_html('new')
+    $html .= '<td data-label="Status"><div class="site-price-add-status">' . site_price_status_select_html('new', '', $viewer)
         . site_price_tint_controls('', ['variant' => 'inline']) . '</div></td>';
     $html .= '<td class="site-price-note-td" data-label="Note"><textarea class="site-price-input site-price-note" data-add-note'
         . ' rows="4" maxlength="500" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></textarea></td>';
-    $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false"'
-        . ' data-no-draft aria-label="Reply email"></td>';
+    $html .= '<td class="site-price-email-td" data-label="Email"><textarea class="site-price-input site-price-email" data-add-email'
+        . ' rows="2" maxlength="190" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
+        . ' data-no-draft aria-label="Reply email"></textarea></td>';
     $html .= '<td class="site-price-add-commit" colspan="2" data-label="">';
     $html .= '<button type="button" class="btn small" data-site-price-add-btn>Add site</button>';
     $html .= '</td>';
@@ -1865,7 +2015,7 @@ function render_site_price_lane_header(string $lane, int $count, bool $isAdmin =
  */
 function render_site_price_sheet_tbody(array $rows, array $viewer, ?array $laneCounts = null): string
 {
-    $html = render_site_price_add_row();
+    $html = render_site_price_add_row($viewer);
     $groups = ['processing' => [], 'new' => [], 'other' => []];
     foreach ($rows as $row) {
         $lane = site_price_status_lane((string) ($row['status_slug'] ?? 'new'));
@@ -2058,7 +2208,7 @@ function render_site_price_toolbar(bool $isAdmin = true): string
         return '';
     }
     $html = '<button type="button" class="btn secondary small" data-site-price-copy-selected'
-        . ' title="Copies ticked websites on this page (not every site).">Copy selected</button>';
+        . ' title="Copies ticked websites on this page (not every site).">Copy selected (this page)</button>';
     return $html;
 }
 
@@ -2180,7 +2330,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
 
     $sheetActions = [
         'add_row', 'save_row', 'unlock_row', 'suggest_niche', 'reorder_lane',
-        'claim_row', 'row_history', 'jump_search',
+        'claim_row', 'assign_row', 'delete_row', 'row_history', 'jump_search',
     ];
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string) post('action'), $sheetActions, true)) {
         $wantsJson = (string) post('ajax') === '1'
@@ -2341,6 +2491,42 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                     'message' => 'You are managing this site.',
                 ]);
             }
+            if ($action === 'assign_row') {
+                $row = site_price_assign_row($siteId, (int) post('managed_by'), $viewer);
+                if ((string) ($row['country'] ?? '') !== $workCountry) {
+                    throw new RuntimeException('Site not found.');
+                }
+                $mgr = trim((string) ($row['managed_by_full'] ?? '') ?: (string) ($row['managed_by_username'] ?? ''));
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, null, $sheetFilters);
+                $jsonOut([
+                    'ok' => true,
+                    'id' => (int) $row['id'],
+                    'country' => $workCountry,
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'tbody_html' => $pack['tbody_html'],
+                    'message' => $mgr !== '' ? ('Managed by ' . $mgr . '.') : 'Cleared manager.',
+                ]);
+            }
+            if ($action === 'delete_row') {
+                $gone = site_price_delete_row($siteId, $viewer);
+                if ((string) ($gone['country'] ?? '') !== $workCountry) {
+                    throw new RuntimeException('Site not found.');
+                }
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, null, $sheetFilters);
+                $domainGone = (string) ($gone['domain'] ?? 'site');
+                $jsonOut([
+                    'ok' => true,
+                    'id' => (int) $gone['id'],
+                    'country' => $workCountry,
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'tbody_html' => $pack['tbody_html'],
+                    'message' => 'Removed ' . $domainGone . '.',
+                ]);
+            }
             if ($action === 'row_history') {
                 $row = get_site_price_row($siteId);
                 if (!$row || (string) ($row['country'] ?? '') !== $workCountry) {
@@ -2416,13 +2602,13 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         <p class="muted">
           <span data-site-price-count><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?></span>
           · Processing stays first, then New, then Other.
-          Website, DA, DR, and traffic lock after add.<?= $isAdmin ? ' Admin can drag inside a lane on this page.' : '' ?>
+          Website, DA, DR, and traffic lock after add.<?= $isAdmin ? ' Admin can drag inside a lane on this page. Processing and Completed are Admin-only.' : ' Processing and Completed can only be set by Admin.' ?>
         </p>
         <p class="help site-price-status-msg" data-site-price-status-msg role="status" hidden></p>
       </div>
       <div class="actions">
         <?php if ($isAdmin): ?>
-        <a class="btn secondary" href="<?= h($hubList) ?>#status-words">Status words</a>
+        <a class="btn secondary" href="#status-words">Status words</a>
         <?php endif; ?>
         <a class="btn secondary" href="<?= h($hubList) ?>">All countries</a>
       </div>
@@ -2490,6 +2676,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
       </div>
     </div>
     <?= render_site_price_pager($pageKey, $countryName, $pageNum, $pages, $perPage, $filters) ?>
+    <?= $isAdmin ? render_site_price_status_words_card($user, $pageKey, $countryName) : '' ?>
     <?= prospect_niche_taxonomy_script() ?>
     <?= niche_chips_script_tag() ?>
     <?= open_site_script_tag() ?>

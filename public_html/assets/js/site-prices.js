@@ -90,17 +90,26 @@
     return data;
   }
 
-  function fitNoteBox(el) {
+  function fitGrowBox(el, minPx) {
     if (!el || String(el.tagName || '').toLowerCase() !== 'textarea') return;
     el.style.height = '0px';
     var need = el.scrollHeight + 16;
-    el.style.height = Math.max(need, 128) + 'px';
+    el.style.height = Math.max(need, minPx) + 'px';
+  }
+
+  function fitNoteBox(el) {
+    fitGrowBox(el, 128);
+  }
+
+  function fitEmailBox(el) {
+    fitGrowBox(el, 48);
   }
 
   function fitAllNotes(root) {
     var scope = root || document;
     if (!scope.querySelectorAll) return;
     scope.querySelectorAll('[data-site-price-note], [data-add-note]').forEach(fitNoteBox);
+    scope.querySelectorAll('[data-site-price-email], [data-add-email]').forEach(fitEmailBox);
   }
 
   function setStatus(msg, isError) {
@@ -401,6 +410,11 @@
       if (inp) inp.focus();
       return;
     }
+    if (String(data.status_slug || '') === 'processing') {
+      if (!window.confirm('Add as Processing? This adds the site to Order management Processing.')) {
+        return;
+      }
+    }
     var btn = $('[data-site-price-add-btn]', tr);
     if (btn) btn.disabled = true;
     setStatus('Adding…', false);
@@ -511,6 +525,53 @@
     });
   }
 
+  function assignRow(tr, managedBy) {
+    var id = tr.getAttribute('data-row-id');
+    if (!id) return;
+    setStatus('Saving manager…', false);
+    post('assign_row', { site_id: id, managed_by: managedBy }).then(function (json) {
+      if (!json.ok) {
+        setStatus(json.error || 'Could not assign manager.', true);
+        return;
+      }
+      setStatus(json.message || 'Saved manager.', false);
+      applyPager(json);
+      if (json.tbody_html) applyTbody(json.tbody_html);
+      if (json.total != null) applyCount(json.total);
+    }).catch(function () {
+      setStatus('Could not assign manager.', true);
+    });
+  }
+
+  function removeRow(tr) {
+    var id = tr.getAttribute('data-row-id');
+    if (!id) return;
+    var domain = '';
+    var btn = tr.querySelector('[data-site-price-remove]');
+    if (btn) domain = String(btn.getAttribute('data-domain') || '').trim();
+    if (!domain) {
+      var box = tr.querySelector('[data-site-price-select]');
+      if (box) domain = String(box.getAttribute('data-domain') || '').trim();
+    }
+    var label = domain || 'this site';
+    if (!window.confirm('Remove ' + label + ' from this country sheet? Order management rows stay; they will no longer point at this site.')) {
+      return;
+    }
+    setStatus('Removing…', false);
+    post('delete_row', { site_id: id }).then(function (json) {
+      if (!json.ok) {
+        setStatus(json.error || 'Could not remove that site.', true);
+        return;
+      }
+      setStatus(json.message || 'Removed.', false);
+      applyPager(json);
+      if (json.tbody_html) applyTbody(json.tbody_html);
+      if (json.total != null) applyCount(json.total);
+    }).catch(function () {
+      setStatus('Could not remove that site.', true);
+    });
+  }
+
   function paintStatusSelect(sel) {
     if (!sel) return;
     var opt = sel.options[sel.selectedIndex];
@@ -606,7 +667,7 @@
       return;
     }
     copyText(domains.join('\n')).then(function (ok) {
-      if (ok) setStatus('Copied ' + domains.length + ' website' + (domains.length === 1 ? '' : 's') + '.', false);
+      if (ok) setStatus('Copied ' + domains.length + ' website' + (domains.length === 1 ? '' : 's') + ' on this page.', false);
       else setStatus('Could not copy.', true);
     });
   }
@@ -774,6 +835,13 @@
         if (ctr) claimRow(ctr);
         return;
       }
+      var removeBtn = t.closest('[data-site-price-remove]');
+      if (removeBtn) {
+        e.preventDefault();
+        var rtr = removeBtn.closest('[data-site-price-row]');
+        if (rtr) removeRow(rtr);
+        return;
+      }
       var copyOne = t.closest('[data-site-price-copy-one]');
       if (copyOne) {
         e.preventDefault();
@@ -797,7 +865,23 @@
         syncSelectAll();
         return;
       }
+      if (t.matches('[data-site-price-assign]')) {
+        var arow = t.closest('[data-site-price-row]');
+        if (arow) assignRow(arow, t.value);
+        return;
+      }
       if (t.matches('[data-site-price-status]')) {
+        var srow = t.closest('[data-site-price-row]');
+        if (srow) {
+          var prev = String(srow.getAttribute('data-status') || 'new');
+          if (String(t.value || '') === 'processing' && prev !== 'processing') {
+            if (!window.confirm('Set to Processing? This adds the site to Order management Processing.')) {
+              t.value = prev;
+              paintStatusSelect(t);
+              return;
+            }
+          }
+        }
         paintStatusSelect(t);
       }
       var row = t.closest('[data-site-price-row]');
@@ -808,6 +892,7 @@
       var t = e.target;
       if (!t || !t.closest) return;
       if (t.matches('[data-site-price-note], [data-add-note]')) fitNoteBox(t);
+      if (t.matches('[data-site-price-email], [data-add-email]')) fitEmailBox(t);
       var row = t.closest('[data-site-price-row]');
       if (row && (t.matches('[data-site-price-price], [data-site-price-note], [data-site-price-email], [data-site-price-domain], [data-site-price-da], [data-site-price-dr], [data-site-price-traffic]')
           || t.closest('[data-niche-chips]'))) {

@@ -689,16 +689,67 @@ try {
 
     $savedPrice = site_price_save_row($idLock, [
         'price_note' => '60 euro article only',
-        'status_slug' => 'processing',
+        'status_slug' => 'agreed',
         'extra_note' => 'wait',
     ], $teamUser);
     if ((string) ($savedPrice['price_note'] ?? '') === '60 euro article only'
-        && (string) ($savedPrice['status_slug'] ?? '') === 'processing'
+        && (string) ($savedPrice['status_slug'] ?? '') === 'agreed'
         && (string) ($savedPrice['da'] ?? '') === '40'
         && (int) ($savedPrice['identity_locked'] ?? 0) === 1) {
         pass('site_price save price/status while locked');
     } else {
         fail('site_price save while locked: ' . json_encode($savedPrice));
+    }
+
+    $teamProcReject = false;
+    try {
+        site_price_save_row($idLock, ['status_slug' => 'processing'], $teamUser);
+    } catch (RuntimeException $e) {
+        $teamProcReject = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $teamCompReject = false;
+    try {
+        site_price_save_row($idLock, ['status_slug' => 'completed'], $teamUser);
+    } catch (RuntimeException $e) {
+        $teamCompReject = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $teamAddProc = false;
+    try {
+        site_price_add_row_for_user([
+            'country' => $country,
+            'domain' => 'txfprice-team-proc.com',
+            'status_slug' => 'processing',
+        ], $teamUser);
+    } catch (RuntimeException $e) {
+        $teamAddProc = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $adminProc = site_price_save_row($idLock, ['status_slug' => 'processing'], $adminUser);
+    $teamKeepProc = site_price_save_row($idLock, [
+        'status_slug' => 'processing',
+        'extra_note' => 'still processing',
+    ], $teamUser);
+    $teamSelectNew = site_price_status_select_html('new', '', $teamUser);
+    $teamSelectProc = site_price_status_select_html('processing', '', $teamUser);
+    $adminSelectNew = site_price_status_select_html('new', '', $adminUser);
+    if ($teamProcReject && $teamCompReject && $teamAddProc
+        && (string) ($adminProc['status_slug'] ?? '') === 'processing'
+        && (string) ($teamKeepProc['status_slug'] ?? '') === 'processing'
+        && (string) ($teamKeepProc['extra_note'] ?? '') === 'still processing'
+        && !str_contains($teamSelectNew, 'value="processing"')
+        && !str_contains($teamSelectNew, 'value="completed"')
+        && str_contains($teamSelectProc, 'value="processing"')
+        && !str_contains($teamSelectProc, 'value="completed"')
+        && str_contains($adminSelectNew, 'value="processing"')
+        && str_contains($adminSelectNew, 'value="completed"')) {
+        pass('site_price Processing/Completed Admin-only');
+    } else {
+        fail('site_price admin-only status: ' . json_encode([
+            'team_proc' => $teamProcReject,
+            'team_comp' => $teamCompReject,
+            'team_add' => $teamAddProc,
+            'admin' => $adminProc['status_slug'] ?? null,
+            'keep' => $teamKeepProc['status_slug'] ?? null,
+        ]));
     }
 
     $adminLockReject = false;
@@ -1005,11 +1056,16 @@ try {
         && str_contains($peopleAdmin, 'data-site-price-note')
         && str_contains($peopleAdmin, 'site-price-actions-td')
         && str_contains($peopleAdmin, 'Take')
+        && str_contains($peopleAdmin, 'data-site-price-assign')
+        && str_contains($peopleAdmin, 'data-site-price-remove')
+        && str_contains($peopleAdmin, 'site-price-email-td')
         && str_contains($peopleAdmin, 'History')
         && str_contains($peopleTeam, 'Added by')
         && str_contains($peopleTeam, 'History')
         && !str_contains($peopleTeam, 'Managed by')
         && !str_contains($peopleTeam, 'Take')
+        && !str_contains($peopleTeam, 'data-site-price-assign')
+        && !str_contains($peopleTeam, 'data-site-price-remove')
         && ($adminName === '' || !str_contains($peopleTeam, $adminName));
     $tabsOk = str_contains($tabs, 'site-price-country-tabs')
         && str_contains($tabs, $country)
@@ -1028,6 +1084,61 @@ try {
             'fresh_mgr' => $fresh['managed_by'] ?? null,
             'team_actor' => $teamActorAdmin,
             'leak' => $teamLeakedActor,
+        ]));
+    }
+
+    $clearedMgr = site_price_assign_row($idPeople, 0, $adminUser);
+    $reassigned = site_price_assign_row($idPeople, (int) $adminUser['id'], $adminUser);
+    $teamAssignFail = false;
+    try {
+        site_price_assign_row($idPeople, (int) $adminUser['id'], $teamUser);
+    } catch (RuntimeException $e) {
+        $teamAssignFail = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $delRow = site_price_add_row_for_user([
+        'country' => $country,
+        'domain' => 'txfprice-remove.de',
+        'status_slug' => 'processing',
+        'price_note' => '12 euro',
+    ], $adminUser);
+    $delId = (int) ($delRow['id'] ?? 0);
+    if (function_exists('order_sync_from_site_price_row')) {
+        order_sync_from_site_price_row($delId);
+    }
+    $omBeforeDel = function_exists('get_order_item_by_site_price_row')
+        ? get_order_item_by_site_price_row($delId)
+        : null;
+    $teamDelFail = false;
+    try {
+        site_price_delete_row($delId, $teamUser);
+    } catch (RuntimeException $e) {
+        $teamDelFail = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $deleted = site_price_delete_row($delId, $adminUser);
+    $goneRow = get_site_price_row($delId);
+    $omAfterDel = ($omBeforeDel && function_exists('get_order_item'))
+        ? get_order_item((int) $omBeforeDel['id'])
+        : null;
+    $omLinkCleared = !$omBeforeDel || ($omAfterDel && (int) ($omAfterDel['site_price_row_id'] ?? 0) === 0);
+    $clearHist = render_site_price_history_html($idPeople, $adminUser);
+    if ($teamAssignFail
+        && (int) ($clearedMgr['managed_by'] ?? 0) === 0
+        && (int) ($reassigned['managed_by'] ?? 0) === (int) $adminUser['id']
+        && str_contains($clearHist, 'Cleared manager')
+        && $teamDelFail
+        && (string) ($deleted['domain'] ?? '') === 'txfprice-remove.de'
+        && $goneRow === null
+        && $omLinkCleared) {
+        pass('site_price assign/clear manager + Admin remove keeps OM row');
+    } else {
+        fail('site_price assign/remove: ' . json_encode([
+            'cleared' => $clearedMgr['managed_by'] ?? null,
+            'reassigned' => $reassigned['managed_by'] ?? null,
+            'team_assign' => $teamAssignFail,
+            'team_del' => $teamDelFail,
+            'gone' => $goneRow,
+            'om_before' => $omBeforeDel['id'] ?? null,
+            'om_link' => $omAfterDel['site_price_row_id'] ?? null,
         ]));
     }
 
@@ -1105,6 +1216,8 @@ try {
         }
     }
     $addHtml = render_site_price_add_row();
+    $addTeamHtml = render_site_price_add_row($teamUser);
+    $wordsOnSheet = render_site_price_status_words_card($adminUser, 'admin_site_prices', 'Germany');
     $tintOk = site_price_normalize_tint('YELLOW') === 'yellow'
         && site_price_normalize_tint('nope') === ''
         && (string) ($savedTint['row_tint'] ?? '') === 'yellow'
@@ -1116,6 +1229,13 @@ try {
         && !str_contains($tintHtml, 'is-tint-yellow')
         && str_contains($tintHtml, 'site-price-color-menu')
         && str_contains($tintHtml, 'data-site-price-email')
+        && str_contains($tintHtml, 'site-price-email-td')
+        && str_contains($tintHtml, 'site-price-email')
+        && str_contains($addHtml, 'data-add-email')
+        && str_contains($addTeamHtml, 'data-add-email')
+        && !str_contains($addTeamHtml, 'value="processing"')
+        && str_contains($wordsOnSheet, 'id="status-words"')
+        && str_contains($wordsOnSheet, 'country=Germany')
         && str_contains($tintHtml, 'data-site-price-tint')
         && str_contains($tintHtml, 'data-site-price-select')
         && str_contains($teamTintHtml, 'data-site-price-email')
@@ -1176,12 +1296,13 @@ try {
         'price_note' => 'alpha rate',
     ], $adminUser);
     site_price_save_row((int) ($filtAdmin['id'] ?? 0), ['row_tint' => 'yellow'], $adminUser);
-    site_price_add_row_for_user([
+    site_price_insert_row([
         'country' => 'Portugal',
         'domain' => 'txfprice-filt-b.com',
         'status_slug' => 'processing',
         'price_note' => 'bravo rate',
-    ], $teamUser);
+        'created_by' => (int) $teamUser['id'],
+    ]);
     site_price_add_row_for_user([
         'country' => 'Portugal',
         'domain' => 'txfprice-filt-c.com',
@@ -1228,18 +1349,34 @@ try {
         && count($filtTeamHidesAdminName) === 1
         && site_price_filters_active(['q' => 'x'])
         && !site_price_filters_active([]);
-    if ($pureOk) {
-        pass('site_price filter rows + filtered paging');
+    $niHay = site_price_row_search_haystack([
+        'status_slug' => 'not_interested',
+        'domain' => 'txfprice-hay.com',
+        'niche' => '',
+        'price_note' => '',
+        'extra_note' => '',
+        'reply_email' => '',
+        'added_by_label' => '',
+    ]);
+    $niRows = [[
+        'status_slug' => 'not_interested',
+        'domain' => 'txfprice-hay.com',
+        'niche' => '',
+        'price_note' => '',
+        'extra_note' => '',
+        'reply_email' => '',
+        'added_by_label' => '',
+        'row_tint' => '',
+    ]];
+    $niHit = site_price_filter_rows($niRows, ['q' => 'not interested']);
+    $niMiss = site_price_filter_rows($niRows, ['q' => 'zzzz-no-hit']);
+    if (str_contains($niHay, 'not interested')
+        && str_contains($niHay, 'not_interested')
+        && count($niHit) === 1
+        && count($niMiss) === 0) {
+        pass('site_price search matches status labels');
     } else {
-        fail('site_price filter: ' . json_encode([
-            'proc' => count($filtProc),
-            'yellow' => count($filtYellow),
-            'none' => count($filtNone),
-            'q' => count($filtQ),
-            'page' => $filtPage,
-            'addedAdmin' => count($filtAddedAdmin),
-            'teamAdmin' => count($filtTeamHidesAdminName),
-        ]));
+        fail('site_price status label search: ' . $niHay);
     }
 
     $idFr = site_price_add_row_for_user([
@@ -1287,7 +1424,8 @@ try {
     $toolbarTeam = render_site_price_toolbar(false);
     $jumpBar = render_site_price_jump_bar('', true);
     $jumpTeamBar = render_site_price_jump_bar('', false);
-    $copyOk = str_contains($toolbar, 'Copy selected')
+    $copyOk = str_contains($toolbar, 'Copy selected (this page)')
+        && str_contains($toolbar, 'Copy selected')
         && !str_contains($toolbar, 'Copy all')
         && $toolbarTeam === ''
         && !str_contains($tintHtml, 'Copy all')
