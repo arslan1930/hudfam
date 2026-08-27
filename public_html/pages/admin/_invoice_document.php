@@ -11,6 +11,13 @@ if (!isset($invoice) || !is_array($invoice)) {
 }
 $items = $items ?? [];
 $editable = !empty($editable);
+$editableBill = $editable || !empty($editableBill);
+$billAs = function_exists('invoice_display_bill_as')
+    ? invoice_display_bill_as($invoice)
+    : trim((string) ($invoice['bill_to_name'] ?? $invoice['client_name'] ?? ''));
+$showExtraBill = function_exists('invoice_has_extra_bill_details')
+    ? invoice_has_extra_bill_details($invoice)
+    : true;
 $logo = topurlz_logo_url();
 $logoFile = asset_url('assets/img/topurlz-logo.png');
 $logoSvg = asset_url('assets/img/topurlz-logo.svg');
@@ -40,7 +47,7 @@ if ($editable && !$editRows) {
     <div>
       <span class="invoice-k">Invoice No.</span>
       <strong><?= h($invoice['invoice_number']) ?></strong>
-      <?php if ($editable): ?>
+      <?php if ($editableBill): ?>
         <label class="visually-hidden" for="admin_note">Note</label>
         <div class="invoice-note-box invoice-doc-note-box has-note" data-invoice-note-box data-note-always-open>
           <textarea id="admin_note" class="invoice-edit-note" name="admin_note" maxlength="255"
@@ -53,7 +60,7 @@ if ($editable && !$editRows) {
     </div>
     <div>
       <span class="invoice-k">Date</span>
-      <?php if ($editable): ?>
+      <?php if ($editableBill): ?>
         <input class="invoice-edit-date" name="invoice_date" type="date"
                value="<?= h((string) $invoice['invoice_date']) ?>" required>
       <?php else: ?>
@@ -91,11 +98,11 @@ if ($editable && !$editRows) {
     </div>
     <div class="invoice-party invoice-party-to">
       <div class="invoice-party-label">Bill to</div>
-      <?php if ($editable): ?>
+      <?php if ($editableBill): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="bill_to_name"
-               value="<?= h($invoice['bill_to_name']) ?>" placeholder="Email or name (optional)">
+               value="<?= h($billAs) ?>" placeholder="Email or name (optional)">
         <textarea class="invoice-edit-textarea" name="bill_to_address" rows="2"
-                  placeholder="Address"><?= h((string) $invoice['bill_to_address']) ?></textarea>
+                  placeholder="Address (optional)"><?= h((string) $invoice['bill_to_address']) ?></textarea>
         <div class="invoice-party-lines invoice-edit-party-lines">
           <div><span>Company reg / HRB</span> <input name="bill_to_hrb" value="<?= h($invoice['bill_to_hrb']) ?>" placeholder="—"></div>
           <div><span>Ust-IdNr</span> <input name="bill_to_vat" value="<?= h($invoice['bill_to_vat']) ?>" placeholder="—"></div>
@@ -104,7 +111,9 @@ if ($editable && !$editRows) {
           <div><span>Orderer</span> <input name="orderer" value="<?= h($invoice['orderer']) ?>" placeholder="—"></div>
         </div>
       <?php else: ?>
-        <div class="invoice-doc-strong"><?= h($invoice['bill_to_name']) ?></div>
+        <?php if ($billAs !== ''): ?>
+          <div class="invoice-doc-strong"><?= h($billAs) ?></div>
+        <?php endif; ?>
         <div class="invoice-party-lines">
           <?php if (trim((string) $invoice['bill_to_address']) !== ''): ?>
             <div class="invoice-doc-address"><?= nl2br(h((string) $invoice['bill_to_address'])) ?></div>
@@ -115,7 +124,9 @@ if ($editable && !$editRows) {
           <?php if (trim((string) $invoice['bill_to_vat']) !== ''): ?>
             <div><span>Ust-IdNr</span> <?= h($invoice['bill_to_vat']) ?></div>
           <?php endif; ?>
-          <div><span>Supplier number</span> <?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?></div>
+          <?php if ($showExtraBill): ?>
+            <div><span>Supplier number</span> <?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?></div>
+          <?php endif; ?>
           <?php if (trim((string) $invoice['cost_center']) !== ''): ?>
             <div><span>Cost center</span> <?= h($invoice['cost_center']) ?></div>
           <?php endif; ?>

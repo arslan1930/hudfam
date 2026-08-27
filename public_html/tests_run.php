@@ -3915,9 +3915,48 @@ try {
         $pipeInv = get_invoice($pipeInvId);
         $linkedClient = (int) ($pipeInv['client_id'] ?? 0);
         if ($pipeInv && $linkedClient === 0 && (string) ($pipeInv['bill_to_name'] ?? '') === 'buyer@example.com') {
+            if (invoice_display_bill_as($pipeInv) === 'buyer@example.com'
+                && invoice_has_extra_bill_details($pipeInv) === false) {
+                pass('invoice display bill as');
+            } else {
+                fail('invoice display bill as helper');
+            }
+            $foundByBillAs = false;
+            foreach (list_invoices(['q' => 'buyer@example.com']) as $hit) {
+                if ((int) ($hit['id'] ?? 0) === (int) $pipeInvId) {
+                    $foundByBillAs = true;
+                    break;
+                }
+            }
+            update_invoice_bill_header((int) $pipeInvId, [
+                'invoice_date' => (string) $pipeInv['invoice_date'],
+                'admin_note' => 'email-only note',
+                'bill_to_name' => 'buyer+fixed@example.com',
+                'bill_to_address' => '',
+                'bill_to_hrb' => '',
+                'bill_to_vat' => '',
+                'supplier_number' => 'NEW',
+                'cost_center' => '',
+                'orderer' => '',
+            ]);
+            $pipeInv = get_invoice($pipeInvId);
+            if ($foundByBillAs
+                && (string) ($pipeInv['bill_to_name'] ?? '') === 'buyer+fixed@example.com'
+                && (string) ($pipeInv['client_name'] ?? '') === 'buyer+fixed@example.com'
+                && invoice_admin_note($pipeInv) === 'email-only note') {
+                pass('invoice save bill as header');
+            } else {
+                fail('invoice save bill as header');
+            }
             mark_invoice_payment_received((int) $pipeInvId);
+            $paidBlocked = false;
+            try {
+                update_invoice_bill_header((int) $pipeInvId, ['bill_to_name' => 'nope']);
+            } catch (InvalidArgumentException $e) {
+                $paidBlocked = str_contains($e->getMessage(), 'Paid');
+            }
             $paidPipe = get_order_item((int) $pipeId);
-            if ($paidPipe && (int) ($paidPipe['is_paid'] ?? 0) === 1) {
+            if ($paidPipe && (int) ($paidPipe['is_paid'] ?? 0) === 1 && $paidBlocked) {
                 pass('pipeline invoice without client folder');
             } else {
                 fail('pipeline invoice paid did not write back to order');

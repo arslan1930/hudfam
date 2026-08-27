@@ -23,6 +23,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'Payment marked received — linked sheet rows set to Paid.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
+        if ($action === 'save_bill') {
+            if ($isManual) {
+                throw new InvalidArgumentException('Use Save as draft / Save as done on a blank invoice.');
+            }
+            update_invoice_bill_header($id, [
+                'invoice_date' => (string) post('invoice_date'),
+                'admin_note' => (string) post('admin_note'),
+                'bill_to_name' => (string) post('bill_to_name'),
+                'bill_to_address' => (string) post('bill_to_address'),
+                'bill_to_hrb' => (string) post('bill_to_hrb'),
+                'bill_to_vat' => (string) post('bill_to_vat'),
+                'supplier_number' => (string) post('supplier_number'),
+                'cost_center' => (string) post('cost_center'),
+                'orderer' => (string) post('orderer'),
+            ]);
+            flash('ok', 'Bill as saved.');
+            redirect('index.php?page=admin_invoice_view&id=' . $id);
+        }
         if ($action === 'save_blank') {
             if (!$isManual) {
                 throw new InvalidArgumentException('Only blank invoices can be edited.');
@@ -75,6 +93,7 @@ $isPaid = invoice_is_paid($invoice);
 $isManual = invoice_is_manual($invoice);
 $isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
+$editableBill = !$isManual && !$isPaid && !$print;
 
 if ($print) {
     $editable = false;
@@ -139,6 +158,8 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php endif; ?>
       <?php if ($editable): ?>
         · <strong>Draft</strong> = still needs data · <strong>Done</strong> = sent, waiting for payment
+      <?php elseif ($editableBill): ?>
+        · Bill as is the email or name — optional address stays hidden on the print unless filled
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
@@ -150,6 +171,9 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <?php else: ?>
       <a class="btn secondary" href="index.php?page=admin_invoice_generate">Generate another</a>
+    <?php endif; ?>
+    <?php if ($editableBill): ?>
+      <button class="btn" type="submit" form="generated-invoice-form">Save bill as</button>
     <?php endif; ?>
     <?php if ($editable): ?>
       <button class="btn secondary" type="submit" form="blank-invoice-form" name="work_status" value="draft"
@@ -333,6 +357,15 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   }
 })();
 </script>
+<?php elseif ($editableBill): ?>
+<form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
+      action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
+  <?= csrf_field() ?>
+  <input type="hidden" name="action" value="save_bill">
+  <div class="invoice-preview-wrap">
+    <?php include __DIR__ . '/_invoice_document.php'; ?>
+  </div>
+</form>
 <?php else: ?>
 <div class="invoice-preview-wrap">
   <?php include __DIR__ . '/_invoice_document.php'; ?>

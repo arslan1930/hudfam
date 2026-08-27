@@ -252,7 +252,7 @@ if ($attention):
         <?= number_format($invoiceUnpaidCount) ?> unpaid
         · <?= number_format($invoiceDraftCount) ?> draft.
       <?php else: ?>
-        Generate printable invoices from completed articles.
+        Generate printable invoices from unpaid LIVE orders.
       <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_users" data-dashboard-item

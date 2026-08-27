@@ -120,6 +120,7 @@ render_header('Invoices', 'admin');
     <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark Paid when payment arrives.</p>
   </div>
   <div class="actions">
+    <a class="btn secondary" href="index.php?page=admin_orders">Order management</a>
     <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
@@ -132,8 +133,8 @@ render_header('Invoices', 'admin');
     <h2 style="margin:0" class="with-info-heading"><?php
       if ($invoiceClientId > 0) {
           echo label_with_info(
-              'Invoices for ' . $clientScopeLabel,
-              'Only invoices linked to this client sheet. Blank invoices have no client and stay on All invoices.'
+              'Invoices billed as ' . $clientScopeLabel,
+              'Older invoices that were linked to a client profile. New bills use Bill as (email or name) and show on All invoices.'
           );
       } else {
           echo label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.');
@@ -168,14 +169,14 @@ render_header('Invoices', 'admin');
   </div>
   <?php if ($invoiceClientId > 0): ?>
     <p class="muted" style="margin:0 0 0.65rem">
-      Linked to this client sheet. Blank invoices have no client and are not listed here.
+      Linked to an older client profile. New bills are listed on All invoices by Bill as.
     </p>
   <?php endif; ?>
   <?php if (!$invoices && $totalInvoices < 1): ?>
     <div class="empty-state">
       <p><?php
         if ($invoiceClientId > 0 && $invoiceQ === '' && $invoiceFilter === '') {
-            echo 'No invoices linked to this client.';
+            echo 'No invoices linked to this older client profile.';
         } elseif ($invoiceQ !== '' || $invoiceFilter !== '' || $invoiceClientId > 0) {
             echo 'No invoices match this filter.';
         } else {
@@ -226,10 +227,7 @@ render_header('Invoices', 'admin');
             $paid = invoice_is_paid($inv);
             $manual = invoice_is_manual($inv);
             $draft = invoice_is_draft($inv);
-            $clientLabel = trim((string) ($inv['bill_to_name'] ?? ''));
-            if ($clientLabel === '') {
-                $clientLabel = trim((string) ($inv['client_name'] ?? ''));
-            }
+            $clientLabel = invoice_display_bill_as($inv);
             if ($clientLabel === '') {
                 $clientLabel = '—';
             }

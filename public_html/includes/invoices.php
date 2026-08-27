@@ -477,6 +477,17 @@ function list_invoiceable_order_items_by_ids(array $ids): array
 /** Free-text bill-as from order rows (email or name). */
 function invoice_bill_as_from_orders(array $rows): string
 {
+    return implode(', ', invoice_bill_as_labels($rows));
+}
+
+/**
+ * Unique client email/name values from order rows, first-seen order.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @return list<string>
+ */
+function invoice_bill_as_labels(array $rows): array
+{
     $labels = [];
     foreach ($rows as $row) {
         $v = trim((string) ($row['client_label'] ?? ''));
@@ -484,7 +495,28 @@ function invoice_bill_as_from_orders(array $rows): string
             $labels[$v] = $v;
         }
     }
-    return implode(', ', array_values($labels));
+    return array_values($labels);
+}
+
+/** Bill-as shown on the list and printable bill (email/name; no client folder). */
+function invoice_display_bill_as(array $invoice): string
+{
+    $name = trim((string) ($invoice['bill_to_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($invoice['client_name'] ?? ''));
+    }
+    return $name;
+}
+
+function invoice_has_extra_bill_details(array $invoice): bool
+{
+    foreach (['bill_to_address', 'bill_to_hrb', 'bill_to_vat', 'cost_center', 'orderer'] as $key) {
+        if (trim((string) ($invoice[$key] ?? '')) !== '') {
+            return true;
+        }
+    }
+    $supplier = trim((string) ($invoice['supplier_number'] ?? ''));
+    return $supplier !== '' && strtoupper($supplier) !== 'NEW';
 }
 
 /**
@@ -645,6 +677,56 @@ function update_invoice_admin_note(int $invoiceId, string $note): void
         $note = mb_substr($note, 0, 255);
     }
     db()->prepare('UPDATE invoices SET admin_note=?, updated_at=NOW() WHERE id=?')->execute([$note, $invoiceId]);
+}
+
+/**
+ * Fix bill-as / optional address / date / note on an unpaid invoice.
+ * Line items stay as generated — use a blank invoice to rewrite amounts.
+ *
+ * @param array<string,mixed> $header
+ */
+function update_invoice_bill_header(int $invoiceId, array $header): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    if (invoice_is_paid($invoice)) {
+        throw new InvalidArgumentException('Paid invoices cannot be edited.');
+    }
+
+    $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
+    if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
+        $invoiceDate = (string) $invoice['invoice_date'];
+    }
+    $adminNote = trim((string) ($header['admin_note'] ?? ''));
+    if (mb_strlen($adminNote) > 255) {
+        $adminNote = mb_substr($adminNote, 0, 255);
+    }
+    $billName = trim((string) ($header['bill_to_name'] ?? ''));
+    $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
+
+    db()->prepare(
+        'UPDATE invoices SET
+            invoice_date=?, admin_note=?,
+            client_name=?, bill_to_name=?, bill_to_address=?, bill_to_hrb=?, bill_to_vat=?,
+            supplier_number=?, cost_center=?, orderer=?,
+            updated_at=NOW()
+         WHERE id=?'
+    )->execute([
+        $invoiceDate,
+        $adminNote,
+        $billName,
+        $billName,
+        trim((string) ($header['bill_to_address'] ?? '')),
+        trim((string) ($header['bill_to_hrb'] ?? '')),
+        trim((string) ($header['bill_to_vat'] ?? '')),
+        $supplier,
+        trim((string) ($header['cost_center'] ?? '')),
+        trim((string) ($header['orderer'] ?? '')),
+        $invoiceId,
+    ]);
 }
 
 /**

@@ -3896,6 +3896,13 @@ a.card.stat:focus-visible {
   margin: 0.5rem 0 0.75rem;
   font-size: 0.95rem;
 }
+.invoice-pick-search {
+  width: 100%;
+}
+.invoice-pick-search input[type="search"] {
+  width: 100%;
+  max-width: 100%;
+}
 .invoice-item-pick {
   list-style: none;
   padding: 0;
@@ -3904,6 +3911,10 @@ a.card.stat:focus-visible {
   border-radius: 12px;
   max-height: 22rem;
   overflow: auto;
+}
+.invoice-item-pick li[hidden],
+.invoice-item-pick li[style*="display: none"] {
+  display: none;
 }
 .invoice-item-pick li { border-bottom: 1px solid var(--line, #e5e7eb); }
 .invoice-item-pick li:last-child { border-bottom: none; }

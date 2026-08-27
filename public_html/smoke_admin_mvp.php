@@ -160,7 +160,7 @@ if (!str_contains($invoicesAdminPage, 'name="filter"')
     ok('invoices.php status filter');
 }
 if (!str_contains($invoicesAdminPage, "\$listOpts['client_id']")
-    || !str_contains($invoicesAdminPage, 'Linked to this client sheet')
+    || !str_contains($invoicesAdminPage, 'older client profile')
     || !str_contains($invoicesAdminPage, 'name="client_id"')) {
     fail('invoices.php missing client_id scope');
 } else {
@@ -1249,7 +1249,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1265,7 +1265,10 @@ if (!str_contains($invoiceGenerate, 'csrf_field()')) {
 if (!str_contains($invoiceGenerate, 'unpaid LIVE')
     || !str_contains($invoiceGenerate, 'bill_to_name')
     || !str_contains($invoiceGenerate, 'invoice_bill_as_from_orders')
-    || !str_contains($invoiceGenerate, 'Order management')) {
+    || !str_contains($invoiceGenerate, 'Order management')
+    || !str_contains($invoiceGenerate, 'invoice-pick-search')
+    || !str_contains($invoiceGenerate, '$precheck')
+    || !str_contains($invoiceGenerate, 'data-invoice-pick-item')) {
     fail('invoice_generate missing unpaid LIVE pick / bill-as');
 } else {
     ok('invoice_generate unpaid LIVE pick + bill-as');
@@ -1297,6 +1300,7 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
     || !str_contains($invoicesListCsrf, "value=\"delete\"")
     || !str_contains($invoiceViewCsrf, 'csrf_field()')
     || !str_contains($invoiceViewCsrf, "value=\"save_blank\"")
+    || !str_contains($invoiceViewCsrf, "value=\"save_bill\"")
     || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")) {
     fail('Invoice list/view POST forms missing csrf_field');
 } elseif (str_contains($invoiceViewCsrf, 'admin_invoice_generate&amp;client_id=')) {
