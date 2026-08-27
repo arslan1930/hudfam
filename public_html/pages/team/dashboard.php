@@ -168,6 +168,9 @@ if ($deptScoped) {
     if (!empty($toolSet['team_semrush_research'])) {
         $toolCards[] = ['team_semrush_research', 'Semrush Research', 'From Extracting Push · edit, comment'];
     }
+    if (!empty($toolSet['team_site_prices'])) {
+        $toolCards[] = ['team_site_prices', 'Website prices', 'Country sheets · publisher rates'];
+    }
     if (!empty($toolSet['team_extracting'])) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
     }

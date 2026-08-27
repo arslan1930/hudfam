@@ -1206,6 +1206,65 @@ function render_site_price_sheet_tbody(array $rows, array $viewer): string
             $html .= render_site_price_sheet_row($row, $viewer);
         }
     }
+    $html .= '<tr class="site-price-filter-empty" data-site-price-filter-empty hidden>'
+        . '<td colspan="' . site_price_sheet_colspan() . '" class="muted">No rows match these filters.</td></tr>';
+    return $html;
+}
+
+/**
+ * @param array{role?:string} $viewer
+ * @param list<array<string,mixed>> $rows
+ */
+function render_site_price_filters(array $viewer, array $rows): string
+{
+    $isAdmin = ($viewer['role'] ?? '') === 'admin';
+    $q = trim((string) get('q'));
+    $lane = trim((string) get('lane'));
+    $status = trim((string) get('status'));
+    $added = trim((string) get('added'));
+    $html = '<div class="site-price-filters" data-site-price-filters>';
+    $html .= '<label class="sheet-search" for="site-price-filter-q" style="margin:0">';
+    $html .= '<span class="visually-hidden">Search sites</span>';
+    $html .= '<input id="site-price-filter-q" type="search" data-site-price-filter="q" value="' . h($q) . '"'
+        . ' placeholder="Search website, niche, price…" autocomplete="off" spellcheck="false" data-no-draft>';
+    $html .= '</label>';
+    $html .= '<label class="site-price-filter">Lane ';
+    $html .= '<select data-site-price-filter="lane" data-no-draft aria-label="Lane">';
+    $html .= '<option value="">All lanes</option>';
+    foreach (site_price_lane_labels() as $slug => $label) {
+        $sel = $lane === $slug ? ' selected' : '';
+        $html .= '<option value="' . h($slug) . '"' . $sel . '>' . h($label) . '</option>';
+    }
+    $html .= '</select></label>';
+    $html .= '<label class="site-price-filter">Status ';
+    $html .= '<select data-site-price-filter="status" data-no-draft aria-label="Status">';
+    $html .= '<option value="">All statuses</option>';
+    foreach (site_price_list_statuses() as $st) {
+        $slug = (string) ($st['slug'] ?? '');
+        $sel = $status === $slug ? ' selected' : '';
+        $html .= '<option value="' . h($slug) . '"' . $sel . '>' . h((string) ($st['label'] ?? $slug)) . '</option>';
+    }
+    $html .= '</select></label>';
+    if ($isAdmin) {
+        $addedOpts = [];
+        foreach ($rows as $row) {
+            $view = site_price_row_for_viewer($row, $viewer);
+            $label = trim((string) ($view['added_by_label'] ?? ''));
+            if ($label !== '') {
+                $addedOpts[$label] = $label;
+            }
+        }
+        ksort($addedOpts, SORT_NATURAL | SORT_FLAG_CASE);
+        $html .= '<label class="site-price-filter">Added by ';
+        $html .= '<select data-site-price-filter="added" data-no-draft aria-label="Added by">';
+        $html .= '<option value="">Anyone</option>';
+        foreach ($addedOpts as $label) {
+            $sel = $added === $label ? ' selected' : '';
+            $html .= '<option value="' . h($label) . '"' . $sel . '>' . h($label) . '</option>';
+        }
+        $html .= '</select></label>';
+    }
+    $html .= '</div>';
     return $html;
 }
 
@@ -1463,6 +1522,8 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         <a class="btn secondary" href="<?= h($hub) ?>">All countries</a>
       </div>
     </div>
+
+    <?= render_site_price_filters($user, $rows) ?>
 
     <div class="card">
       <div class="table-wrap">

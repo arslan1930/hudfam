@@ -94,6 +94,7 @@
     if (global.OpenSite && typeof global.OpenSite.refreshAll === 'function') {
       global.OpenSite.refreshAll(tbody);
     }
+    applyFilters();
   }
 
   function focusHint(el, tr) {
@@ -118,6 +119,52 @@
     if (typeof el.setSelectionRange === 'function' && start != null && end != null) {
       try { el.setSelectionRange(start, end); } catch (err) { /* ignore */ }
     }
+  }
+
+  function applyFilters() {
+    var table = document.querySelector('[data-site-price-sheet]');
+    var bar = document.querySelector('[data-site-price-filters]');
+    if (!table) return;
+    var q = '';
+    var lane = '';
+    var status = '';
+    var added = '';
+    if (bar) {
+      var qEl = bar.querySelector('[data-site-price-filter="q"]');
+      var laneEl = bar.querySelector('[data-site-price-filter="lane"]');
+      var statusEl = bar.querySelector('[data-site-price-filter="status"]');
+      var addedEl = bar.querySelector('[data-site-price-filter="added"]');
+      q = String(qEl && qEl.value || '').trim().toLowerCase();
+      lane = String(laneEl && laneEl.value || '');
+      status = String(statusEl && statusEl.value || '');
+      added = String(addedEl && addedEl.value || '');
+    }
+    var active = !!(q || lane || status || added);
+    var any = false;
+    table.querySelectorAll('[data-site-price-row]').forEach(function (row) {
+      var hit = true;
+      if (q && String(row.getAttribute('data-search') || '').indexOf(q) === -1) hit = false;
+      if (lane && row.getAttribute('data-lane') !== lane) hit = false;
+      if (status && row.getAttribute('data-status') !== status) hit = false;
+      if (added && row.getAttribute('data-added-by') !== added) hit = false;
+      row.hidden = !hit;
+      var hist = row.nextElementSibling;
+      if (hist && hist.hasAttribute('data-site-price-history-row') && !hit) {
+        hist.hidden = true;
+      }
+      if (hit) any = true;
+    });
+    var empty = table.querySelector('[data-site-price-filter-empty]');
+    if (empty) empty.hidden = !active || any;
+  }
+
+  function bindFilters() {
+    var bar = document.querySelector('[data-site-price-filters]');
+    if (!bar || bar.getAttribute('data-wired') === '1') return;
+    bar.setAttribute('data-wired', '1');
+    bar.addEventListener('input', applyFilters);
+    bar.addEventListener('change', applyFilters);
+    applyFilters();
   }
 
   function applyCount(n) {
@@ -470,6 +517,7 @@
       bind(table);
       bindDrag(table);
     }
+    bindFilters();
   }
 
   if (document.readyState === 'loading') {

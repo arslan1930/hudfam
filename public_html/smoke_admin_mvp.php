@@ -42,6 +42,7 @@ $requiredFiles = [
     'assets/js/stay-scroll.js',
     'includes/site_prices.php',
     'pages/admin/site_prices.php',
+    'pages/team/site_prices.php',
     'assets/js/site-prices.js',
 ];
 foreach ($requiredFiles as $rel) {
@@ -270,6 +271,7 @@ if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
     || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS site_price_statuses')
     || !str_contains($upgradePhp, 'ensure_site_prices_schema')
     || !str_contains($indexPhp, "'admin_site_prices'")
+    || !str_contains($indexPhp, "'team_site_prices'")
     || !str_contains($dashPhp, 'index.php?page=admin_site_prices')) {
     fail('Website prices missing schema / helpers / route');
 } else {
@@ -324,6 +326,25 @@ if (!str_contains($sitePricesLib, 'function site_price_claim_row')
     fail('Website prices people / history / country tabs missing');
 } else {
     ok('Website prices people + history + country tabs');
+}
+$teamSitePricesPage = file_get_contents($root . '/pages/team/site_prices.php') ?: '';
+$layoutPhp = file_get_contents($root . '/includes/layout.php') ?: '';
+$deptLibEarly = file_get_contents($root . '/includes/departments.php') ?: '';
+$teamDash = file_get_contents($root . '/pages/team/dashboard.php') ?: '';
+if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
+    || !str_contains($teamSitePricesPage, 'team_site_prices')
+    || str_contains($teamSitePricesPage, 'Copy all')
+    || !str_contains($deptLibEarly, "'team_site_prices'")
+    || !str_contains($deptLibEarly, 'Website prices')
+    || !str_contains($layoutPhp, "'team_site_prices'")
+    || !str_contains($teamDash, 'team_site_prices')
+    || !str_contains($sitePricesLib, 'function render_site_price_filters')
+    || !str_contains($sitePricesLib, 'data-site-price-filters')
+    || !str_contains($sitePricesJs, 'applyFilters')
+    || !str_contains($sitePricesCss, '.site-price-filters')) {
+    fail('Website prices Team department / filters missing');
+} else {
+    ok('Website prices Team department + sheet filters');
 }
 foreach ([
     'guide_campaign_search',
