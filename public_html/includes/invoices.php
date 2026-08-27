@@ -312,8 +312,8 @@ function invoices_where_sql(array $opts = []): array
     $q = trim((string) ($opts['q'] ?? ''));
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $clauses[] = '(i.invoice_number LIKE ? OR i.client_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)';
-        array_push($params, $like, $like, $like, $like, $like);
+        $clauses[] = '(i.invoice_number LIKE ? OR i.client_name LIKE ? OR i.bill_to_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)';
+        array_push($params, $like, $like, $like, $like, $like, $like);
     }
     $filter = normalize_invoice_list_filter((string) ($opts['filter'] ?? ''));
     if ($filter === 'draft') {

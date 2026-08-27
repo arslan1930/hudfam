@@ -154,7 +154,7 @@ render_header('Invoices', 'admin');
       <label class="visually-hidden" for="invoice-search">Search invoices</label>
       <input id="invoice-search" type="search" name="q" value="<?= h($invoiceQ) ?>"
              placeholder="Search…" autocomplete="off" spellcheck="false" data-no-draft
-             title="Search invoice number, client, or note">
+             title="Search invoice number, bill as, or note">
       <button class="btn secondary small" type="submit">Search</button>
       <?php if ($invoiceQ !== '' || $invoiceFilter !== ''): ?>
         <a class="btn secondary small" href="<?= h($invoiceClientId > 0
@@ -213,7 +213,7 @@ render_header('Invoices', 'admin');
           <tr>
             <th>Invoice No.</th>
             <th>Date</th>
-            <th>Client</th>
+            <th>Bill as</th>
             <th>Items</th>
             <th class="num">Total</th>
             <th>Payment</th>
@@ -226,7 +226,13 @@ render_header('Invoices', 'admin');
             $paid = invoice_is_paid($inv);
             $manual = invoice_is_manual($inv);
             $draft = invoice_is_draft($inv);
-            $clientLabel = $inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name'];
+            $clientLabel = trim((string) ($inv['bill_to_name'] ?? ''));
+            if ($clientLabel === '') {
+                $clientLabel = trim((string) ($inv['client_name'] ?? ''));
+            }
+            if ($clientLabel === '') {
+                $clientLabel = '—';
+            }
             $note = invoice_admin_note($inv);
             $statusBits = $paid ? 'paid payment received' : ($draft ? 'draft needs data' : 'done unpaid waiting');
           ?>

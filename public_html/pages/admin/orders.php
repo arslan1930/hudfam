@@ -111,9 +111,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'add_row') {
             $saveCurrent();
-            add_order_pipeline_row((int) ($user['id'] ?? 0));
+            add_order_pipeline_row((int) ($user['id'] ?? 0), '', [
+                'country' => $filter['country'],
+                'admin_user_id' => $filter['admin_id'] > 0 ? $filter['admin_id'] : (int) ($user['id'] ?? 0),
+            ]);
             flash('ok', 'New order row added.');
-            redirect($ordersQs(['p' => 1]) . '#sheet-bottom');
+            // Drop search/status/date filters so the blank row is not hidden.
+            redirect($ordersQs([
+                'p' => 1,
+                'q' => '',
+                'status' => 'all',
+                'date_from' => '',
+                'date_to' => '',
+            ]) . '#sheet-bottom');
         }
         if ($action === 'save_sheet') {
             $n = $saveCurrent();
@@ -180,6 +190,11 @@ $admins = order_admin_options();
 $adminById = [];
 foreach ($admins as $aRow) {
     $adminById[(int) $aRow['id']] = $aRow;
+}
+$viewerId = (int) ($user['id'] ?? 0);
+if ($viewerId > 0 && !isset($adminById[$viewerId])) {
+    $adminById[$viewerId] = $user;
+    $admins[] = $user;
 }
 foreach ($items as $row) {
     $aid = (int) ($row['admin_user_id'] ?? 0);

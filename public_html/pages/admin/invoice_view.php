@@ -149,7 +149,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php if ($isManual): ?>
       <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <?php else: ?>
-      <a class="btn secondary" href="index.php?page=admin_invoice_generate&amp;client_id=<?= (int) ($invoice['client_id'] ?? 0) ?>">Generate another</a>
+      <a class="btn secondary" href="index.php?page=admin_invoice_generate">Generate another</a>
     <?php endif; ?>
     <?php if ($editable): ?>
       <button class="btn secondary" type="submit" form="blank-invoice-form" name="work_status" value="draft"

@@ -3870,6 +3870,24 @@ try {
         fail('pipeline sheet filters missed row ' . $pipeId);
     }
 
+    if (normalize_order_date('2026-08-27') === '2026-08-27'
+        && normalize_order_date('2026-02-31') === null
+        && normalize_order_date('') === null) {
+        pass('normalize_order_date keeps calendar day');
+    } else {
+        fail('normalize_order_date shifted or accepted a bad date');
+    }
+    $addedWithCountry = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'country' => 'Netherlands',
+        'admin_user_id' => (int) $adminUser['id'],
+    ]);
+    $addedRow = get_order_item((int) $addedWithCountry);
+    if ($addedRow && (string) ($addedRow['country'] ?? '') === 'Netherlands') {
+        pass('add order keeps filter country');
+    } else {
+        fail('add order did not copy filter country');
+    }
+
     $pipeReady = list_invoiceable_order_items_by_ids([(int) $pipeId]);
     if (count($pipeReady) !== 1) {
         fail('pipeline invoiceable missing row');

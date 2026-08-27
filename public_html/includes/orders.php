@@ -279,14 +279,16 @@ function format_money($value): string
 function normalize_order_date($value): ?string
 {
     $v = trim((string) $value);
-    if ($v === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) {
+    if ($v === '' || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m)) {
         return null;
     }
-    $ts = strtotime($v . ' UTC');
-    if ($ts === false) {
+    $year = (int) $m[1];
+    $month = (int) $m[2];
+    $day = (int) $m[3];
+    if (!checkdate($month, $day, $year)) {
         return null;
     }
-    return date('Y-m-d', $ts);
+    return sprintf('%04d-%02d-%02d', $year, $month, $day);
 }
 
 function order_admin_display_name(array $row): string
@@ -1183,12 +1185,17 @@ function list_order_items_by_ids(array $ids): array
     return $stmt->fetchAll();
 }
 
-function add_order_pipeline_row(?int $adminUserId, string $clientLabel = ''): int
+function add_order_pipeline_row(?int $adminUserId, string $clientLabel = '', array $extra = []): int
 {
+    $adminId = (int) ($extra['admin_user_id'] ?? 0);
+    if ($adminId < 1) {
+        $adminId = (int) $adminUserId;
+    }
     return add_order_item(null, '', null, null, [
-        'admin_user_id' => $adminUserId,
+        'admin_user_id' => $adminId,
         'client_label' => $clientLabel,
         'order_date' => date('Y-m-d'),
+        'country' => (string) ($extra['country'] ?? ''),
     ]);
 }
 

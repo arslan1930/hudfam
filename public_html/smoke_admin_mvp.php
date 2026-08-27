@@ -166,6 +166,11 @@ if (!str_contains($invoicesAdminPage, "\$listOpts['client_id']")
 } else {
     ok('invoices.php client_id list scope');
 }
+if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
+    fail('invoices.php missing Bill as column');
+} else {
+    ok('invoices.php Bill as column');
+}
 $adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
 if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
     fail('Admin Our database still says Clean errors');
@@ -1244,7 +1249,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1294,6 +1299,8 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
     || !str_contains($invoiceViewCsrf, "value=\"save_blank\"")
     || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")) {
     fail('Invoice list/view POST forms missing csrf_field');
+} elseif (str_contains($invoiceViewCsrf, 'admin_invoice_generate&amp;client_id=')) {
+    fail('Invoice view Generate another still scoped to a client folder');
 } else {
     ok('Invoice list/view csrf_field on POST forms');
 }
