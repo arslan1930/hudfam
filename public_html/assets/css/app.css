@@ -5300,8 +5300,14 @@ textarea:focus-visible {
 .site-price-add-commit-inner {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.45rem;
   min-width: 0;
+}
+.site-price-sheet .site-price-add-commit-inner .site-price-input {
+  flex: 0 1 12rem;
+  width: 12rem;
+  max-width: 16rem;
 }
 .site-price-add-commit-inner .site-price-input {
   flex: 1 1 auto;
