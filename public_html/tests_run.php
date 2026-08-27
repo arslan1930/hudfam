@@ -619,7 +619,7 @@ try {
         fail('site_price counts ger=' . $gerCount);
     }
 
-    $idLock = site_price_add_row_for_user([
+    $rowLock = site_price_add_row_for_user([
         'country' => $country,
         'domain' => 'https://www.txfprice-lock.com/x',
         'da' => '40',
@@ -627,7 +627,7 @@ try {
         'traffic' => '10k',
         'price_note' => '50 euro',
     ], $teamUser);
-    $rowLock = get_site_price_row($idLock);
+    $idLock = (int) ($rowLock['id'] ?? 0);
     if ($rowLock
         && (string) ($rowLock['domain'] ?? '') === 'txfprice-lock.com'
         && (int) ($rowLock['identity_locked'] ?? 0) === 1) {
@@ -742,11 +742,10 @@ try {
         'Finance',
         'price-book lookup'
     );
-    $idNiche = site_price_add_row_for_user([
+    $rowNiche = site_price_add_row_for_user([
         'country' => $country,
         'domain' => 'txfprice-niche-lookup.com',
     ], $teamUser);
-    $rowNiche = get_site_price_row($idNiche);
     if ($rowNiche && str_contains((string) ($rowNiche['niche'] ?? ''), 'Finance')) {
         pass('site_price add_row niche from Our database');
     } else {

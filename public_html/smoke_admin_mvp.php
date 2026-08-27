@@ -279,10 +279,10 @@ $sitePricesCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 $assetPrices = file_get_contents($root . '/asset.php') ?: '';
 if (!str_contains($sitePricesHubGuide, "'save_row'")
     || !str_contains($sitePricesHubGuide, "'unlock_row'")
-    || !str_contains($sitePricesHubGuide, 'data-site-price-add')
     || !str_contains($sitePricesHubGuide, 'site_prices_script_tag')
     || str_contains($sitePricesHubGuide, 'Copy all')
     || preg_match('/Download \.txt|Download CSV/', $sitePricesHubGuide)
+    || !str_contains($sitePricesLib, 'data-site-price-add')
     || !str_contains($sitePricesLib, 'Unlock')
     || !str_contains($sitePricesJs, "post('save_row'")
     || !str_contains($sitePricesJs, "post('unlock_row'")
