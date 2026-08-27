@@ -450,7 +450,6 @@ foreach (
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order'],
-        'admin_site_prices' => ['Website prices', 'Open a country'],
         'admin_invoices' => ['Invoice'],
         'admin_users' => ['Users'],
         'account_password' => ['Change password', 'breadcrumbs'],
@@ -469,6 +468,52 @@ foreach (
     } else {
         fail("page $label status={$r['status']} missing=" . implode(',', $bad) . ' fatal=' . (str_contains($r['body'], 'Fatal error') ? 'yes' : 'no'));
     }
+}
+
+$r = req('GET', $base . '/index.php?page=admin_site_prices');
+$loc = location($r);
+$openedCountry = $r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'country=');
+$emptyHub = $r['status'] === 200
+    && str_contains($r['body'], 'Website prices')
+    && str_contains($r['body'], 'Open a country')
+    && !str_contains($r['body'], 'Fatal error')
+    && !str_contains($r['body'], 'Warning:');
+if ($openedCountry || $emptyHub) {
+    pass('admin_site_prices opens busiest country or hub');
+} else {
+    fail('admin_site_prices status=' . $r['status'] . ' loc=' . $loc);
+}
+$r = req('GET', $base . '/index.php?page=admin_site_prices&hub=1');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Website prices')
+    && str_contains($r['body'], 'Open a country')
+    && !str_contains($r['body'], 'Fatal error')
+    && !str_contains($r['body'], 'Warning:')) {
+    pass('admin_site_prices hub=1');
+} else {
+    fail('admin_site_prices hub=1 status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_site_prices&country=Germany');
+$sheetNeedles = [
+    'data-site-price-sheet',
+    'data-site-price-jump',
+    'Copy selected',
+    '>Email</th>',
+    'data-site-price-copy-selected',
+];
+$sheetBad = [];
+foreach ($sheetNeedles as $n) {
+    if (!str_contains($r['body'], $n)) {
+        $sheetBad[] = $n;
+    }
+}
+if ($r['status'] === 200 && !$sheetBad
+    && !str_contains($r['body'], 'Fatal error')
+    && !str_contains($r['body'], 'Warning:')
+    && !str_contains($r['body'], 'Copy all')) {
+    pass('admin_site_prices Germany sheet');
+} else {
+    fail('admin_site_prices Germany status=' . $r['status'] . ' missing=' . implode(',', $sheetBad));
 }
 
 // Bare admin_extracted should hop into the country-list folder
@@ -564,6 +609,23 @@ if (!preg_match('/href="[^"]*team_extracting[^"]*"/', $r['body'])
     pass('finder Filter page hides Extracting CTA');
 } else {
     fail('finder Filter still links into Extracting');
+}
+$r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
+$teamNeedles = ['data-site-price-sheet', 'Copy selected', 'data-site-price-jump', '>Email</th>'];
+$teamBad = [];
+foreach ($teamNeedles as $n) {
+    if (!str_contains($r['body'], $n)) {
+        $teamBad[] = $n;
+    }
+}
+if ($r['status'] === 200 && !$teamBad
+    && !str_contains($r['body'], 'Unlock')
+    && !str_contains($r['body'], 'Copy all')
+    && !str_contains($r['body'], 'Fatal error')
+    && !str_contains($r['body'], 'Warning:')) {
+    pass('finder can open Website prices');
+} else {
+    fail('finder Website prices status=' . $r['status'] . ' missing=' . implode(',', $teamBad));
 }
 $r = req('GET', $base . '/index.php?page=team_extracting');
 $loc = location($r);

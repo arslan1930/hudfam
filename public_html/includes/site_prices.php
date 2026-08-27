@@ -97,6 +97,8 @@ function ensure_site_prices_schema(): void
           traffic VARCHAR(40) NOT NULL DEFAULT '',
           price_note TEXT NULL,
           extra_note VARCHAR(500) NOT NULL DEFAULT '',
+          reply_email VARCHAR(190) NOT NULL DEFAULT '',
+          row_tint VARCHAR(20) NOT NULL DEFAULT '',
           status_slug VARCHAR(80) NOT NULL DEFAULT 'new',
           sort_in_lane INT NOT NULL DEFAULT 0,
           identity_locked TINYINT(1) NOT NULL DEFAULT 0,
@@ -133,6 +135,100 @@ function ensure_site_prices_schema(): void
     );
 
     site_price_seed_statuses();
+    site_price_ensure_row_columns();
+}
+
+function site_price_ensure_row_columns(): void
+{
+    $pdo = db();
+    $have = [];
+    try {
+        foreach ($pdo->query('SHOW COLUMNS FROM site_price_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $col) {
+            $name = strtolower((string) ($col['Field'] ?? ''));
+            if ($name !== '') {
+                $have[$name] = true;
+            }
+        }
+    } catch (Throwable $e) {
+        return;
+    }
+    if (empty($have['reply_email'])) {
+        try {
+            $pdo->exec(
+                "ALTER TABLE site_price_rows
+                 ADD COLUMN reply_email VARCHAR(190) NOT NULL DEFAULT '' AFTER extra_note"
+            );
+        } catch (Throwable $e) {
+            // already present
+        }
+    }
+    if (empty($have['row_tint'])) {
+        try {
+            $pdo->exec(
+                "ALTER TABLE site_price_rows
+                 ADD COLUMN row_tint VARCHAR(20) NOT NULL DEFAULT '' AFTER reply_email"
+            );
+        } catch (Throwable $e) {
+            // already present
+        }
+    }
+}
+
+/** @return list<string> */
+function site_price_tint_slugs(): array
+{
+    return ['yellow', 'pink', 'blue', 'green'];
+}
+
+function site_price_normalize_tint(string $value): string
+{
+    $value = strtolower(trim($value));
+    return in_array($value, site_price_tint_slugs(), true) ? $value : '';
+}
+
+function site_price_tint_label(string $tint): string
+{
+    $tint = site_price_normalize_tint($tint);
+    return match ($tint) {
+        'yellow' => 'yellow',
+        'pink' => 'pink',
+        'blue' => 'blue',
+        'green' => 'green',
+        default => 'none',
+    };
+}
+
+function site_price_status_color(string $slug): string
+{
+    $slug = site_price_normalize_status($slug);
+    $st = site_price_status_map()[$slug] ?? null;
+    $color = strtolower(trim((string) ($st['color'] ?? 'grey')));
+    $ok = ['green', 'blue', 'rose', 'grey', 'brown', 'teal'];
+    return in_array($color, $ok, true) ? $color : 'grey';
+}
+
+function site_price_clip_email(string $value): string
+{
+    $value = trim($value);
+    if (mb_strlen($value) > 190) {
+        $value = mb_substr($value, 0, 190);
+    }
+    return $value;
+}
+
+/** @return list<int> */
+function site_price_per_page_options(): array
+{
+    return [100, 250, 500];
+}
+
+function resolve_site_price_per_page(): int
+{
+    $n = function_exists('resolve_sheet_per_page') ? resolve_sheet_per_page() : 100;
+    if ($n === 1000) {
+        return 500;
+    }
+    return in_array($n, site_price_per_page_options(), true) ? $n : 100;
 }
 
 function site_price_seed_statuses(): void
@@ -279,7 +375,8 @@ function site_price_lookup_niche(string $domain, string $country): string
  *
  * @param array{
  *   country:string,domain:string,niche?:string,da?:string,dr?:string,traffic?:string,
- *   price_note?:string,extra_note?:string,status_slug?:string,created_by?:int,managed_by?:int
+ *   price_note?:string,extra_note?:string,reply_email?:string,row_tint?:string,
+ *   status_slug?:string,created_by?:int,managed_by?:int
  * } $fields
  */
 function site_price_insert_row(array $fields): int
@@ -310,9 +407,9 @@ function site_price_insert_row(array $fields): int
             : 1;
         db()->prepare(
             'INSERT INTO site_price_rows
-              (country, domain, niche, da, dr, traffic, price_note, extra_note, status_slug,
-               identity_locked, created_by, managed_by)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+              (country, domain, niche, da, dr, traffic, price_note, extra_note, reply_email, row_tint,
+               status_slug, identity_locked, created_by, managed_by)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         )->execute([
             $country,
             $domain,
@@ -322,6 +419,8 @@ function site_price_insert_row(array $fields): int
             trim((string) ($fields['traffic'] ?? '')),
             trim((string) ($fields['price_note'] ?? '')),
             trim((string) ($fields['extra_note'] ?? '')),
+            site_price_clip_email((string) ($fields['reply_email'] ?? '')),
+            site_price_normalize_tint((string) ($fields['row_tint'] ?? '')),
             $status,
             $locked,
             ((int) ($fields['created_by'] ?? 0) > 0) ? (int) $fields['created_by'] : null,
@@ -346,7 +445,7 @@ function site_price_country_counts(): array
         'SELECT country, COUNT(*) AS total, MAX(updated_at) AS updated_at
          FROM site_price_rows
          GROUP BY country
-         ORDER BY country ASC'
+         ORDER BY total DESC, updated_at DESC, country ASC'
     )->fetchAll(PDO::FETCH_ASSOC) ?: [];
     return $rows;
 }
@@ -425,6 +524,148 @@ function list_site_price_rows(string $country): array
 }
 
 /**
+ * @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int,lane_counts:array<string,int>,all:list<array<string,mixed>>}
+ */
+function list_site_price_rows_page(string $country, int $page, int $perPage): array
+{
+    $perPage = $perPage < 1 ? 100 : $perPage;
+    $all = list_site_price_rows($country);
+    $total = count($all);
+    $pages = max(1, (int) ceil(($total > 0 ? $total : 1) / $perPage));
+    if ($total === 0) {
+        $pages = 1;
+    }
+    $page = max(1, min($page, $pages));
+    $laneCounts = ['processing' => 0, 'new' => 0, 'other' => 0];
+    foreach ($all as $row) {
+        $lane = site_price_status_lane((string) ($row['status_slug'] ?? 'new'));
+        if (!isset($laneCounts[$lane])) {
+            $lane = 'other';
+        }
+        $laneCounts[$lane]++;
+    }
+    $offset = ($page - 1) * $perPage;
+    $slice = $total > 0 ? array_slice($all, $offset, $perPage) : [];
+    return [
+        'rows' => $slice,
+        'total' => $total,
+        'page' => $page,
+        'pages' => $pages,
+        'per_page' => $perPage,
+        'lane_counts' => $laneCounts,
+        'all' => $all,
+    ];
+}
+
+function site_price_page_for_row_id(string $country, int $rowId, int $perPage): int
+{
+    $perPage = in_array($perPage, site_price_per_page_options(), true) ? $perPage : 100;
+    $rowId = max(0, $rowId);
+    if ($rowId < 1) {
+        return 1;
+    }
+    $i = 0;
+    foreach (list_site_price_rows($country) as $row) {
+        if ((int) ($row['id'] ?? 0) === $rowId) {
+            return (int) floor($i / $perPage) + 1;
+        }
+        $i++;
+    }
+    return 1;
+}
+
+function site_price_like_needle(string $q): string
+{
+    $q = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q);
+    return '%' . $q . '%';
+}
+
+/**
+ * Search every country. Returns jump targets with the page that row lives on.
+ *
+ * @return list<array{id:int,country:string,domain:string,status:string,page:int,url:string}>
+ */
+function site_price_jump_search(string $q, string $pageKey, int $perPage, int $limit = 80): array
+{
+    ensure_site_prices_schema();
+    $q = trim($q);
+    if ($q === '') {
+        return [];
+    }
+    $perPage = in_array($perPage, site_price_per_page_options(), true) ? $perPage : 100;
+    $limit = max(1, min(100, $limit));
+    $needle = site_price_like_needle($q);
+    $stmt = db()->prepare(
+        'SELECT id, country, domain, status_slug, niche, price_note, extra_note, reply_email
+         FROM site_price_rows
+         WHERE domain LIKE ? ESCAPE \'!\'
+            OR niche LIKE ? ESCAPE \'!\'
+            OR IFNULL(price_note, \'\') LIKE ? ESCAPE \'!\'
+            OR extra_note LIKE ? ESCAPE \'!\'
+            OR reply_email LIKE ? ESCAPE \'!\'
+            OR country LIKE ? ESCAPE \'!\'
+         ORDER BY country ASC, domain ASC
+         LIMIT ' . (int) $limit
+    );
+    $stmt->execute([$needle, $needle, $needle, $needle, $needle, $needle]);
+    $found = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    if ($found === []) {
+        return [];
+    }
+    $rank = [];
+    $i = 0;
+    foreach (site_price_country_counts() as $f) {
+        $c = (string) ($f['country'] ?? '');
+        if ($c !== '') {
+            $rank[$c] = $i;
+            $i++;
+        }
+    }
+    usort($found, static function (array $a, array $b) use ($rank): int {
+        $ca = (string) ($a['country'] ?? '');
+        $cb = (string) ($b['country'] ?? '');
+        $ra = $rank[$ca] ?? 9999;
+        $rb = $rank[$cb] ?? 9999;
+        if ($ra !== $rb) {
+            return $ra <=> $rb;
+        }
+        return strcasecmp((string) ($a['domain'] ?? ''), (string) ($b['domain'] ?? ''));
+    });
+    $pageCache = [];
+    $out = [];
+    foreach ($found as $row) {
+        $id = (int) ($row['id'] ?? 0);
+        $country = (string) ($row['country'] ?? '');
+        if ($id < 1 || $country === '') {
+            continue;
+        }
+        if (!isset($pageCache[$country])) {
+            $ids = [];
+            foreach (list_site_price_rows($country) as $r) {
+                $ids[] = (int) ($r['id'] ?? 0);
+            }
+            $pageCache[$country] = $ids;
+        }
+        $idx = array_search($id, $pageCache[$country], true);
+        $pageNum = $idx === false ? 1 : ((int) floor(((int) $idx) / $perPage) + 1);
+        $out[] = [
+            'id' => $id,
+            'country' => $country,
+            'domain' => (string) ($row['domain'] ?? ''),
+            'status' => (string) ($row['status_slug'] ?? ''),
+            'page' => $pageNum,
+            'url' => site_price_sheet_url($country, $pageKey, [
+                'per_page' => $perPage,
+                'p' => $pageNum,
+                'row' => $id,
+                'jump' => $q,
+            ]),
+        ];
+    }
+    return $out;
+}
+
+/**
  * Strip admin-only fields for a Team viewer.
  *
  * @param array<string,mixed> $row
@@ -460,13 +701,32 @@ function site_price_hub_url(string $page = 'admin_site_prices'): string
     return 'index.php?page=' . $page;
 }
 
-function site_price_sheet_url(string $country, string $page = 'admin_site_prices'): string
+/**
+ * @param array<string, scalar|null> $extra
+ */
+function site_price_sheet_url(string $country, string $page = 'admin_site_prices', array $extra = []): string
 {
     $country = trim($country);
     if ($country === '') {
         return site_price_hub_url($page);
     }
-    return site_price_hub_url($page) . '&country=' . rawurlencode($country);
+    $url = site_price_hub_url($page) . '&country=' . rawurlencode($country);
+    foreach ($extra as $key => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $k = (string) $key;
+        if ($k === 'page' || $k === 'country') {
+            continue;
+        }
+        $url .= '&' . rawurlencode($k) . '=' . rawurlencode((string) $value);
+    }
+    return $url;
+}
+
+function site_price_hub_list_url(string $page = 'admin_site_prices'): string
+{
+    return site_price_hub_url($page) . '&hub=1';
 }
 
 function site_price_page_for_viewer(array $viewer): string
@@ -617,8 +877,17 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
         ? site_price_normalize_status((string) $fields['status_slug'])
         : site_price_normalize_status((string) ($row['status_slug'] ?? 'new'));
 
+    $email = array_key_exists('reply_email', $fields)
+        ? site_price_clip_email((string) $fields['reply_email'])
+        : site_price_clip_email((string) ($row['reply_email'] ?? ''));
+    $tint = array_key_exists('row_tint', $fields)
+        ? site_price_normalize_tint((string) $fields['row_tint'])
+        : site_price_normalize_tint((string) ($row['row_tint'] ?? ''));
+
     $oldStatus = (string) ($row['status_slug'] ?? '');
     $oldPrice = (string) ($row['price_note'] ?? '');
+    $oldEmail = site_price_clip_email((string) ($row['reply_email'] ?? ''));
+    $oldTint = site_price_normalize_tint((string) ($row['row_tint'] ?? ''));
     $sortInLane = (int) ($row['sort_in_lane'] ?? 0);
     if (site_price_status_lane($oldStatus) !== site_price_status_lane($status)) {
         $sortInLane = 0;
@@ -627,10 +896,10 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
     try {
         db()->prepare(
             'UPDATE site_price_rows
-             SET domain=?, niche=?, da=?, dr=?, traffic=?, price_note=?, extra_note=?, status_slug=?,
-                 sort_in_lane=?, identity_locked=1, updated_at=NOW()
+             SET domain=?, niche=?, da=?, dr=?, traffic=?, price_note=?, extra_note=?, reply_email=?,
+                 row_tint=?, status_slug=?, sort_in_lane=?, identity_locked=1, updated_at=NOW()
              WHERE id=?'
-        )->execute([$domain, $niche, $da, $dr, $traffic, $price, $note, $status, $sortInLane, $id]);
+        )->execute([$domain, $niche, $da, $dr, $traffic, $price, $note, $email, $tint, $status, $sortInLane, $id]);
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
             throw new RuntimeException('That site is already on this country’s price sheet.');
@@ -643,6 +912,12 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
     }
     if ($oldPrice !== $price) {
         site_price_log_event($id, $viewer, 'price', $oldPrice, $price);
+    }
+    if ($oldEmail !== $email) {
+        site_price_log_event($id, $viewer, 'email', $oldEmail, $email);
+    }
+    if ($oldTint !== $tint) {
+        site_price_log_event($id, $viewer, 'tint', $oldTint, $tint);
     }
     site_price_touch_managed($id, $viewer);
 
@@ -752,6 +1027,8 @@ function site_price_event_summary(array $event): string
         'price' => 'Price' . ($old !== '' || $new !== '' ? ' ' . $old . ' → ' . $new : ''),
         'unlock' => 'Unlocked identity',
         'manage' => 'Took as manager',
+        'email' => 'Reply email' . ($old !== '' || $new !== '' ? ' ' . $old . ' → ' . $new : ''),
+        'tint' => 'Color ' . site_price_tint_label($old) . ' → ' . site_price_tint_label($new),
         default => $kind !== '' ? $kind : 'Updated',
     };
 }
@@ -807,24 +1084,88 @@ function render_site_price_history_html(int $rowId, array $viewer): string
 
 function site_price_sheet_colspan(): int
 {
-    return 10;
+    return 12;
 }
 
-function render_site_price_country_tabs(string $current, string $page = 'admin_site_prices'): string
+function site_price_country_short(string $name): string
+{
+    static $codes = null;
+    $name = trim($name);
+    if ($name === '') {
+        return '';
+    }
+    if ($codes === null) {
+        $codes = [];
+        try {
+            foreach (db()->query('SELECT name, code FROM countries')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+                $n = trim((string) ($row['name'] ?? ''));
+                $c = strtoupper(trim((string) ($row['code'] ?? '')));
+                if ($n !== '' && $c !== '') {
+                    $codes[mb_strtolower($n)] = $c;
+                }
+            }
+        } catch (Throwable $e) {
+            $codes = [];
+        }
+    }
+    return $codes[mb_strtolower($name)] ?? $name;
+}
+
+/**
+ * @param array<string, scalar|null> $query
+ */
+function render_site_price_country_tabs(string $current, string $page = 'admin_site_prices', array $query = []): string
 {
     $folders = site_price_country_counts();
     if ($folders === []) {
         return '';
     }
-    $html = '<nav class="sheet-tabs site-price-country-tabs" aria-label="Country sheets">';
+    $pin = 10;
+    $shown = [];
+    $shownNames = [];
+    $i = 0;
     foreach ($folders as $f) {
         $c = (string) ($f['country'] ?? '');
         if ($c === '') {
             continue;
         }
+        if ($i < $pin || $c === $current) {
+            $shown[] = $f;
+            $shownNames[$c] = true;
+        }
+        $i++;
+    }
+    $more = [];
+    foreach ($folders as $f) {
+        $c = (string) ($f['country'] ?? '');
+        if ($c !== '' && empty($shownNames[$c])) {
+            $more[] = $f;
+        }
+    }
+    $perPage = isset($query['per_page']) ? (int) $query['per_page'] : 0;
+    $extra = [];
+    if (in_array($perPage, site_price_per_page_options(), true)) {
+        $extra['per_page'] = $perPage;
+    }
+    $html = '<nav class="sheet-tabs site-price-country-tabs" aria-label="Country sheets">';
+    foreach ($shown as $f) {
+        $c = (string) ($f['country'] ?? '');
+        $short = site_price_country_short($c);
         $cls = $c === $current ? ' class="active"' : '';
-        $html .= '<a' . $cls . ' href="' . h(site_price_sheet_url($c, $page)) . '">'
-            . h($c) . '<span class="sheet-count">' . (int) ($f['total'] ?? 0) . '</span></a>';
+        $html .= '<a' . $cls . ' href="' . h(site_price_sheet_url($c, $page, $extra)) . '"'
+            . ' title="' . h($c) . '">'
+            . h($short) . '<span class="sheet-count">' . (int) ($f['total'] ?? 0) . '</span></a>';
+    }
+    if ($more !== []) {
+        $html .= '<details class="site-price-country-more"><summary>More</summary><div class="site-price-country-more-list">';
+        foreach ($more as $f) {
+            $c = (string) ($f['country'] ?? '');
+            $short = site_price_country_short($c);
+            $html .= '<a href="' . h(site_price_sheet_url($c, $page, $extra)) . '" title="' . h($c) . '">'
+                . h($short !== $c ? $short . ' · ' . $c : $c)
+                . '<span class="sheet-count">' . (int) ($f['total'] ?? 0) . '</span></a>';
+        }
+        $html .= '</div></details>';
     }
     $html .= '</nav>';
     return $html;
@@ -1058,6 +1399,22 @@ function site_price_locked_text(string $value, bool $copyLock): string
     return '<span class="' . h($cls) . '">' . h($show) . '</span>';
 }
 
+function site_price_tint_controls(string $current): string
+{
+    $current = site_price_normalize_tint($current);
+    $html = '<div class="site-price-tints" role="group" aria-label="Row color">';
+    $opts = ['' => 'No color'] + array_combine(site_price_tint_slugs(), site_price_tint_slugs());
+    foreach ($opts as $slug => $label) {
+        $on = $slug === $current ? ' is-on' : '';
+        $cls = $slug === '' ? 'is-none' : 'is-' . $slug;
+        $html .= '<button type="button" class="site-price-tint ' . h($cls) . $on . '" data-site-price-tint="'
+            . h($slug) . '" title="' . h((string) $label) . '" aria-label="' . h((string) $label) . '"></button>';
+    }
+    $html .= '</div>';
+    $html .= '<input type="hidden" data-site-price-tint-value value="' . h($current) . '" data-no-draft>';
+    return $html;
+}
+
 /**
  * @param array<string,mixed> $row
  * @param array{id?:int,role?:string} $viewer
@@ -1070,17 +1427,29 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $locked = (int) ($row['identity_locked'] ?? 0) === 1;
     $copyLock = !$isAdmin && $locked;
     $domain = (string) ($view['domain'] ?? '');
+    $tint = site_price_normalize_tint((string) ($view['row_tint'] ?? ''));
+    $statusColor = site_price_status_color((string) ($view['status_slug'] ?? 'new'));
     $hay = mb_strtolower(trim(
         $domain . ' ' . (string) ($view['niche'] ?? '') . ' ' . (string) ($view['price_note'] ?? '')
-        . ' ' . (string) ($view['extra_note'] ?? '') . ' ' . (string) ($view['status_slug'] ?? '')
+        . ' ' . (string) ($view['extra_note'] ?? '') . ' ' . (string) ($view['reply_email'] ?? '')
+        . ' ' . (string) ($view['status_slug'] ?? '')
         . ' ' . (string) ($view['added_by_label'] ?? '')
     ));
     $lane = site_price_status_lane((string) ($view['status_slug'] ?? 'new'));
-    $html = '<tr class="site-price-row" data-site-price-row data-row-id="' . $id . '"'
+    $cls = 'site-price-row is-status-' . $statusColor;
+    if ($tint !== '') {
+        $cls .= ' is-tint-' . $tint;
+    }
+    $html = '<tr class="' . h($cls) . '" id="sp-row-' . $id . '" data-site-price-row data-row-id="' . $id . '"'
         . ' data-locked="' . ($locked ? '1' : '0') . '" data-lane="' . h($lane) . '"'
         . ' data-status="' . h((string) ($view['status_slug'] ?? '')) . '"'
+        . ' data-tint="' . h($tint) . '"'
         . ' data-added-by="' . h((string) ($view['added_by_label'] ?? '')) . '"'
         . ' data-search="' . h($hay) . '">';
+
+    $html .= '<td class="site-price-check-td" data-label="">'
+        . '<input type="checkbox" class="site-price-check" data-site-price-select data-no-draft'
+        . ' data-domain="' . h($domain) . '" aria-label="Select ' . h($domain) . '"></td>';
 
     $html .= '<td data-label="Website">';
     if ($locked) {
@@ -1125,8 +1494,12 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $html .= '<td data-label="Status">' . site_price_status_select_html((string) ($view['status_slug'] ?? 'new')) . '</td>';
     $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-site-price-note value="'
         . h((string) ($view['extra_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
+    $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-site-price-email value="'
+        . h((string) ($view['reply_email'] ?? '')) . '" placeholder="inbox@…" autocomplete="off" spellcheck="false"'
+        . ' data-no-draft aria-label="Reply email"></td>';
     $html .= '<td data-label="People" class="site-price-people-cell">' . site_price_people_cell($view, $isAdmin) . '</td>';
     $html .= '<td data-label="Actions" class="site-price-actions">';
+    $html .= site_price_tint_controls($tint);
     if ($isAdmin) {
         $html .= '<span class="site-price-drag" data-site-price-drag draggable="true"'
             . ' title="Drag to reorder in this lane" aria-label="Drag to reorder in this lane">⋮⋮</span>';
@@ -1142,6 +1515,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
 function render_site_price_add_row(): string
 {
     $html = '<tr class="site-price-add" data-site-price-add>';
+    $html .= '<td class="site-price-check-td" data-label=""></td>';
     $html .= '<td data-label="Website"><input type="text" class="site-price-input" data-add-domain'
         . ' placeholder="example.com" autocomplete="off" spellcheck="false" data-no-draft aria-label="New website"></td>';
     $html .= '<td class="prospect-niche-td" data-label="Niche">';
@@ -1162,6 +1536,7 @@ function render_site_price_add_row(): string
     $html .= '<td data-label="Price"><input type="text" class="site-price-input" data-add-price placeholder="Price" autocomplete="off" spellcheck="false" data-no-draft aria-label="Price"></td>';
     $html .= '<td data-label="Status">' . site_price_status_select_html('new') . '</td>';
     $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-add-note autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
+    $html .= '<td data-label="Email"><input type="text" class="site-price-input" data-add-email placeholder="inbox@…" autocomplete="off" spellcheck="false" data-no-draft aria-label="Reply email"></td>';
     $html .= '<td data-label="People" class="site-price-people-cell muted">—</td>';
     $html .= '<td data-label="Actions"><button type="button" class="btn small" data-site-price-add-btn>Add site</button></td>';
     $html .= '</tr>';
@@ -1189,8 +1564,9 @@ function render_site_price_lane_header(string $lane, int $count, bool $isAdmin =
 /**
  * @param list<array<string,mixed>> $rows
  * @param array{id?:int,role?:string} $viewer
+ * @param array<string,int>|null $laneCounts
  */
-function render_site_price_sheet_tbody(array $rows, array $viewer): string
+function render_site_price_sheet_tbody(array $rows, array $viewer, ?array $laneCounts = null): string
 {
     $html = render_site_price_add_row();
     $groups = ['processing' => [], 'new' => [], 'other' => []];
@@ -1201,8 +1577,16 @@ function render_site_price_sheet_tbody(array $rows, array $viewer): string
         }
         $groups[$lane][] = $row;
     }
+    $isAdmin = ($viewer['role'] ?? '') === 'admin';
     foreach ($groups as $lane => $items) {
-        $html .= render_site_price_lane_header($lane, count($items), ($viewer['role'] ?? '') === 'admin');
+        $count = $laneCounts[$lane] ?? count($items);
+        if ($items === []) {
+            if ($laneCounts === null) {
+                $html .= render_site_price_lane_header($lane, 0, $isAdmin);
+            }
+            continue;
+        }
+        $html .= render_site_price_lane_header($lane, (int) $count, $isAdmin);
         foreach ($items as $row) {
             $html .= render_site_price_sheet_row($row, $viewer);
         }
@@ -1276,6 +1660,83 @@ function site_prices_script_tag(): string
 }
 
 /**
+ * @param array{id?:int,role?:string} $viewer
+ * @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int,lane_counts:array<string,int>,tbody_html:string}
+ */
+function site_price_sheet_pack(string $country, array $viewer, int $page, int $perPage, ?int $focusId = null): array
+{
+    if ($focusId && $focusId > 0) {
+        $page = site_price_page_for_row_id($country, $focusId, $perPage);
+    }
+    $pack = list_site_price_rows_page($country, $page, $perPage);
+    $pack['tbody_html'] = render_site_price_sheet_tbody($pack['rows'], $viewer, $pack['lane_counts']);
+    return $pack;
+}
+
+function render_site_price_jump_bar(string $preset = ''): string
+{
+    $html = '<div class="site-price-jump" data-site-price-jump>';
+    $html .= '<label class="sheet-search" for="site-price-jump-q" style="margin:0">';
+    $html .= '<span class="visually-hidden">Search all countries</span>';
+    $html .= '<input id="site-price-jump-q" type="search" data-site-price-jump-q value="' . h($preset) . '"'
+        . ' placeholder="Search all countries…" autocomplete="off" spellcheck="false" data-no-draft'
+        . ' title="Search every country, then jump to the matching row">';
+    $html .= '</label>';
+    $html .= '<button type="button" class="btn secondary small" data-site-price-jump-go>Jump</button>';
+    $html .= '<span class="muted site-price-jump-status" data-site-price-jump-status></span>';
+    $html .= '<button type="button" class="btn-link" data-site-price-jump-prev hidden>Prev</button>';
+    $html .= '<button type="button" class="btn-link" data-site-price-jump-next hidden>Next</button>';
+    $html .= '</div>';
+    return $html;
+}
+
+function render_site_price_toolbar(): string
+{
+    $html = '<div class="site-price-toolbar" data-site-price-toolbar>';
+    $html .= '<button type="button" class="btn secondary small" data-site-price-copy-selected>Copy selected</button>';
+    $html .= '<span class="help" style="margin:0">Row wash follows status. Color dots mark a group — they are not a status.</span>';
+    $html .= '</div>';
+    return $html;
+}
+
+function render_site_price_per_page_filter(string $pageKey, string $country, int $current): string
+{
+    $current = in_array($current, site_price_per_page_options(), true) ? $current : 100;
+    $html = '<form class="sheet-per-page-filter" method="get" action="index.php">';
+    $html .= '<input type="hidden" name="page" value="' . h($pageKey) . '">';
+    $html .= '<input type="hidden" name="country" value="' . h($country) . '">';
+    $html .= '<label for="site_price_per_page">Per page</label>';
+    $html .= '<select id="site_price_per_page" name="per_page" onchange="this.form.submit()" data-no-draft'
+        . ' title="Rows per page on this country sheet">';
+    foreach (site_price_per_page_options() as $n) {
+        $sel = $n === $current ? ' selected' : '';
+        $html .= '<option value="' . (int) $n . '"' . $sel . '>' . (int) $n . '</option>';
+    }
+    $html .= '</select></form>';
+    return $html;
+}
+
+function render_site_price_pager(string $pageKey, string $country, int $pageNum, int $pages, int $perPage): string
+{
+    $html = '<div class="site-price-pager" data-site-price-pager>';
+    if ($pageNum > 1) {
+        $html .= '<a href="' . h(site_price_sheet_url($country, $pageKey, [
+            'per_page' => $perPage,
+            'p' => $pageNum - 1,
+        ])) . '">Prev</a>';
+    }
+    $html .= '<span class="muted">Page ' . (int) $pageNum . ' / ' . (int) $pages . '</span>';
+    if ($pageNum < $pages) {
+        $html .= '<a href="' . h(site_price_sheet_url($country, $pageKey, [
+            'per_page' => $perPage,
+            'p' => $pageNum + 1,
+        ])) . '">Next</a>';
+    }
+    $html .= '</div>';
+    return $html;
+}
+
+/**
  * Shared Admin / Team Website prices hub + country sheet.
  *
  * @param array<string,mixed> $user
@@ -1289,8 +1750,9 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
     ensure_site_prices_schema();
     seed_countries_if_empty(db());
 
-    $hub = site_price_hub_url($pageKey);
+    $hubList = site_price_hub_list_url($pageKey);
     $sheet = trim((string) get('country'));
+    $wantHub = (string) get('hub') === '1';
     $inCountry = false;
     $countryName = '';
 
@@ -1298,13 +1760,25 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         $canon = resolve_canonical_country($sheet);
         if ($canon === null) {
             flash('error', 'That country is not in the country list.');
-            redirect($hub);
+            redirect($hubList);
         }
         if ($canon['name'] !== $sheet) {
-            redirect(site_price_sheet_url($canon['name'], $pageKey));
+            redirect(site_price_sheet_url($canon['name'], $pageKey, [
+                'per_page' => resolve_site_price_per_page() !== 100 ? resolve_site_price_per_page() : '',
+                'p' => get('p'),
+                'row' => get('row'),
+            ]));
         }
         $inCountry = true;
         $countryName = $canon['name'];
+    } elseif (!$wantHub && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        $top = site_price_country_counts();
+        if ($top !== []) {
+            $first = (string) ($top[0]['country'] ?? '');
+            if ($first !== '') {
+                redirect(site_price_sheet_url($first, $pageKey));
+            }
+        }
     }
 
     $hubActions = ['add_status', 'delete_status'];
@@ -1313,7 +1787,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
             'id' => (int) ($user['id'] ?? 0),
             'role' => (string) ($user['role'] ?? ''),
         ];
-        $back = $inCountry ? site_price_sheet_url($countryName, $pageKey) : $hub;
+        $back = $inCountry ? site_price_sheet_url($countryName, $pageKey) : $hubList;
         try {
             if ((string) post('action') === 'add_status') {
                 $st = site_price_add_custom_status((string) post('label'), $viewer);
@@ -1330,11 +1804,14 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         redirect($back . '#status-words');
     }
 
-    $sheetActions = ['add_row', 'save_row', 'unlock_row', 'suggest_niche', 'reorder_lane', 'claim_row', 'row_history'];
+    $sheetActions = [
+        'add_row', 'save_row', 'unlock_row', 'suggest_niche', 'reorder_lane',
+        'claim_row', 'row_history', 'jump_search',
+    ];
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string) post('action'), $sheetActions, true)) {
         $wantsJson = (string) post('ajax') === '1'
             || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
-        $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson, $hub, $pageKey): void {
+        $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson, $hubList, $pageKey): void {
             if ($wantsJson) {
                 http_response_code($code);
                 header('Content-Type: application/json; charset=utf-8');
@@ -1348,9 +1825,27 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 flash('error', (string) ($payload['error'] ?? 'Could not save.'));
             }
             $back = trim((string) ($payload['country'] ?? ''));
-            redirect($back !== '' ? site_price_sheet_url($back, $pageKey) : $hub);
+            redirect($back !== '' ? site_price_sheet_url($back, $pageKey) : $hubList);
         };
         $action = (string) post('action');
+        $viewer = [
+            'id' => (int) ($user['id'] ?? 0),
+            'role' => (string) ($user['role'] ?? ''),
+        ];
+        $perPagePost = resolve_site_price_per_page();
+        $pagePost = max(1, (int) post('p', get('p', 1)));
+        if ($action === 'jump_search') {
+            try {
+                $matches = site_price_jump_search((string) post('q'), $pageKey, $perPagePost);
+                $jsonOut([
+                    'ok' => true,
+                    'matches' => $matches,
+                    'total' => count($matches),
+                ]);
+            } catch (Throwable $e) {
+                $jsonOut(['ok' => false, 'error' => 'Could not search.'], 400);
+            }
+        }
         $workCountry = trim((string) post('country'));
         if ($workCountry === '') {
             $workCountry = $countryName;
@@ -1360,10 +1855,6 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
             $jsonOut(['ok' => false, 'error' => 'Open a country sheet first.'], 400);
         }
         $workCountry = $canonWork['name'];
-        $viewer = [
-            'id' => (int) ($user['id'] ?? 0),
-            'role' => (string) ($user['role'] ?? ''),
-        ];
         try {
             if ($action === 'suggest_niche') {
                 $domain = site_price_normalize_domain((string) post('domain'));
@@ -1386,16 +1877,20 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                     'traffic' => (string) post('traffic'),
                     'price_note' => (string) post('price_note'),
                     'extra_note' => (string) post('extra_note'),
+                    'reply_email' => (string) post('reply_email'),
                     'status_slug' => (string) post('status_slug'),
                 ], $viewer);
-                $rows = list_site_price_rows($workCountry);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, (int) $row['id']);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
                     'domain' => (string) $row['domain'],
                     'country' => $workCountry,
-                    'total' => count($rows),
-                    'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'per_page' => $pack['per_page'],
+                    'tbody_html' => $pack['tbody_html'],
                     'message' => 'Added ' . (string) $row['domain'] . '.',
                 ]);
             }
@@ -1405,6 +1900,8 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                     'niche' => (string) post('niche'),
                     'price_note' => (string) post('price_note'),
                     'extra_note' => (string) post('extra_note'),
+                    'reply_email' => (string) post('reply_email'),
+                    'row_tint' => (string) post('row_tint'),
                     'status_slug' => (string) post('status_slug'),
                 ];
                 if (array_key_exists('domain', $_POST)) {
@@ -1417,13 +1914,16 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 if ((string) ($row['country'] ?? '') !== $workCountry) {
                     throw new RuntimeException('Site not found.');
                 }
-                $rows = list_site_price_rows($workCountry);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
                     'country' => $workCountry,
-                    'total' => count($rows),
-                    'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'per_page' => $pack['per_page'],
+                    'tbody_html' => $pack['tbody_html'],
                     'message' => 'Saved.',
                 ]);
             }
@@ -1432,13 +1932,15 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 if ((string) ($row['country'] ?? '') !== $workCountry) {
                     throw new RuntimeException('Site not found.');
                 }
-                $rows = list_site_price_rows($workCountry);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
                     'country' => $workCountry,
-                    'total' => count($rows),
-                    'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'tbody_html' => $pack['tbody_html'],
                     'message' => 'Unlocked.',
                 ]);
             }
@@ -1447,13 +1949,15 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 if ((string) ($row['country'] ?? '') !== $workCountry) {
                     throw new RuntimeException('Site not found.');
                 }
-                $rows = list_site_price_rows($workCountry);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
                     'country' => $workCountry,
-                    'total' => count($rows),
-                    'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'tbody_html' => $pack['tbody_html'],
                     'message' => 'You are managing this site.',
                 ]);
             }
@@ -1472,12 +1976,14 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
             if ($action === 'reorder_lane') {
                 $ids = preg_split('/[,\s]+/', trim((string) post('ids'))) ?: [];
                 site_price_reorder_lane($workCountry, (string) post('lane'), $ids, $viewer);
-                $rows = list_site_price_rows($workCountry);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
                 $jsonOut([
                     'ok' => true,
                     'country' => $workCountry,
-                    'total' => count($rows),
-                    'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                    'total' => $pack['total'],
+                    'page' => $pack['page'],
+                    'pages' => $pack['pages'],
+                    'tbody_html' => $pack['tbody_html'],
                     'message' => 'Order saved.',
                 ]);
             }
@@ -1495,12 +2001,18 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
     $dashHref = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
 
     if ($inCountry) {
-        $rows = list_site_price_rows($countryName);
-        $total = count($rows);
+        $perPage = resolve_site_price_per_page();
+        $pageNum = max(1, (int) get('p', 1));
+        $jumpRowId = max(0, (int) get('row'));
+        $pack = site_price_sheet_pack($countryName, $user, $pageNum, $perPage, $jumpRowId > 0 ? $jumpRowId : null);
+        $rows = $pack['rows'];
+        $total = $pack['total'];
+        $pageNum = $pack['page'];
+        $pages = $pack['pages'];
         render_header('Website prices · ' . $countryName, $panel);
         render_breadcrumbs([
             ['label' => 'Dashboard', 'href' => $dashHref],
-            ['label' => 'Website prices', 'href' => $hub],
+            ['label' => 'Website prices', 'href' => $hubList],
             ['label' => $countryName],
         ]);
         ?>
@@ -1513,26 +2025,38 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         <p class="muted">
           <span data-site-price-count><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?></span>
           · Processing stays first, then New, then Other.
-          Website, DA, DR, and traffic lock after add.<?= $isAdmin ? ' Admin can drag inside a lane.' : '' ?>
+          Website, DA, DR, and traffic lock after add.<?= $isAdmin ? ' Admin can drag inside a lane on this page.' : '' ?>
         </p>
         <p class="help site-price-status-msg" data-site-price-status-msg role="status" hidden></p>
       </div>
       <div class="actions">
         <?php if ($isAdmin): ?>
-        <a class="btn secondary" href="<?= h($hub) ?>#status-words">Status words</a>
+        <a class="btn secondary" href="<?= h($hubList) ?>#status-words">Status words</a>
         <?php endif; ?>
-        <a class="btn secondary" href="<?= h($hub) ?>">All countries</a>
+        <a class="btn secondary" href="<?= h($hubList) ?>">All countries</a>
       </div>
     </div>
 
-    <?= render_site_price_filters($user, $rows) ?>
+    <?= render_site_price_jump_bar((string) get('jump')) ?>
+    <div class="site-price-switcher">
+      <?= render_site_price_country_tabs($countryName, $pageKey, ['per_page' => $perPage]) ?>
+      <?= render_site_price_per_page_filter($pageKey, $countryName, $perPage) ?>
+    </div>
+    <?= render_site_price_toolbar() ?>
+    <?= render_site_price_filters($user, $pack['all'] ?? $rows) ?>
 
     <div class="card">
       <div class="table-wrap">
         <table class="sheet-cards-mobile site-price-sheet" data-site-price-sheet data-country="<?= h($countryName) ?>"
-               data-admin="<?= $isAdmin ? '1' : '0' ?>">
+               data-admin="<?= $isAdmin ? '1' : '0' ?>"
+               data-page="<?= (int) $pageNum ?>" data-pages="<?= (int) $pages ?>"
+               data-per-page="<?= (int) $perPage ?>"
+               <?php if ($jumpRowId > 0): ?>data-jump-row="<?= (int) $jumpRowId ?>"<?php endif; ?>>
           <thead>
             <tr>
+              <th class="site-price-check-th">
+                <input type="checkbox" data-site-price-select-all data-no-draft aria-label="Select visible rows">
+              </th>
               <th>Website</th>
               <th>Niche</th>
               <th>DA</th>
@@ -1541,17 +2065,18 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
               <th>Price</th>
               <th>Status</th>
               <th>Note</th>
+              <th>Email</th>
               <th>People</th>
-              <th>Actions</th>
+              <th>Color / Actions</th>
             </tr>
           </thead>
           <tbody data-site-price-tbody>
-            <?= render_site_price_sheet_tbody($rows, $user) ?>
+            <?= $pack['tbody_html'] ?>
           </tbody>
         </table>
       </div>
     </div>
-    <?= render_site_price_country_tabs($countryName, $pageKey) ?>
+    <?= render_site_price_pager($pageKey, $countryName, $pageNum, $pages, $perPage) ?>
     <?= prospect_niche_taxonomy_script() ?>
     <?= niche_chips_script_tag() ?>
     <?= open_site_script_tag() ?>

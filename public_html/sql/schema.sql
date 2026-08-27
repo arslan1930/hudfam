@@ -522,6 +522,8 @@ CREATE TABLE IF NOT EXISTS site_price_rows (
   traffic VARCHAR(40) NOT NULL DEFAULT '',
   price_note TEXT NULL,
   extra_note VARCHAR(500) NOT NULL DEFAULT '',
+  reply_email VARCHAR(190) NOT NULL DEFAULT '',
+  row_tint VARCHAR(20) NOT NULL DEFAULT '',
   status_slug VARCHAR(80) NOT NULL DEFAULT 'new',
   sort_in_lane INT NOT NULL DEFAULT 0,
   identity_locked TINYINT(1) NOT NULL DEFAULT 0,
