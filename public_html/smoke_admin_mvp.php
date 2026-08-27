@@ -352,6 +352,7 @@ if (!str_contains($sitePricesLib, 'function site_price_claim_row')
     || !str_contains($sitePricesCss, '.site-price-people')
     || !str_contains($sitePricesCss, '.site-price-people-name')
     || !str_contains($sitePricesCss, '.site-price-note-td')
+    || !str_contains($sitePricesCss, '.site-price-sheet td.prospect-niche-td')
     || !str_contains($sitePricesLib, 'site-price-people-name')
     || !str_contains($sitePricesLib, 'site-price-note-td')) {
     fail('Website prices people / history / country tabs missing');

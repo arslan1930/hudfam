@@ -5150,11 +5150,11 @@ textarea:focus-visible {
 /* Website prices — add row + locked identity cells */
 .site-price-sheet {
   table-layout: fixed;
-  min-width: 82rem;
+  min-width: 86rem;
 }
 .site-price-sheet .sp-col-check { width: 2.2rem; }
 .site-price-sheet .sp-col-site { width: 11.5rem; }
-.site-price-sheet .sp-col-niche { width: 8.5rem; }
+.site-price-sheet .sp-col-niche { width: 12.5rem; }
 .site-price-sheet .sp-col-metric { width: 4.4rem; }
 .site-price-sheet .sp-col-price { width: 6.5rem; }
 .site-price-sheet .sp-col-status { width: 9.2rem; }
@@ -5168,8 +5168,16 @@ textarea:focus-visible {
   overflow: hidden;
 }
 .site-price-sheet td.site-price-actions-td,
-.site-price-sheet td.site-price-add-commit {
+.site-price-sheet td.site-price-add-commit,
+.site-price-sheet td.prospect-niche-td {
   overflow: visible;
+}
+.site-price-sheet td.prospect-niche-td {
+  position: relative;
+  z-index: 1;
+}
+.site-price-sheet tr:focus-within td.prospect-niche-td {
+  z-index: 8;
 }
 .site-price-sheet .site-price-input,
 .site-price-sheet .site-price-status {
@@ -5193,7 +5201,18 @@ textarea:focus-visible {
   padding-right: 1.35rem;
 }
 .site-price-sheet .prospect-niche-td .niche-chip-box {
-  min-width: 8rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+.site-price-sheet .prospect-niche-td .niche-chip-input {
+  flex: 1 1 3.2rem;
+  min-width: 2.8rem;
+}
+.site-price-sheet .prospect-niche-td .niche-chip-suggest {
+  min-width: 100%;
+  max-width: 16rem;
+  z-index: 70;
 }
 .site-price-id.is-locked {
   display: inline-block;
@@ -5678,6 +5697,7 @@ textarea:focus-visible {
   }
   table.sheet-cards-mobile td.site-price-people-cell,
   table.sheet-cards-mobile td.site-price-note-td,
+  table.sheet-cards-mobile td.prospect-niche-td,
   table.sheet-cards-mobile td[data-label="Email"],
   table.sheet-cards-mobile td[data-label="Status"] {
     flex-wrap: wrap;
@@ -5685,6 +5705,7 @@ textarea:focus-visible {
   }
   table.sheet-cards-mobile td.site-price-people-cell .site-price-people,
   table.sheet-cards-mobile td.site-price-note-td .site-price-input,
+  table.sheet-cards-mobile td.prospect-niche-td .niche-chip-box,
   table.sheet-cards-mobile td[data-label="Email"] .site-price-input,
   table.sheet-cards-mobile td[data-label="Status"] .site-price-status {
     flex: 1 1 12rem;
