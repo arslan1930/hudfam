@@ -1248,8 +1248,16 @@ try {
         'reply_email' => 'jump-unique-inbox@example.com',
         'price_note' => '99 euro jumpmark',
     ], $teamUser);
+    site_price_add_row_for_user([
+        'country' => 'France',
+        'domain' => 'txfprice-aaa-contains-jump.com',
+        'extra_note' => 'mentions txfprice-jump-fr.com in a note',
+    ], $teamUser);
     $jumps = site_price_jump_search('jump-unique-inbox@example.com', 'admin_site_prices', 100);
+    $jumpExact = site_price_jump_search('txfprice-jump-fr.com', 'admin_site_prices', 100);
+    $jumpPack = site_price_jump_search_pack('txfprice-jump-fr.com', 'admin_site_prices', 100);
     $jumpTeam = site_price_jump_search('txfprice-jump-fr.com', 'team_site_prices', 100);
+    $jumpByStatus = site_price_jump_search('New', 'admin_site_prices', 100);
     $countsOrder = site_price_country_counts();
     $totals = array_map(static fn ($c) => (int) ($c['total'] ?? 0), $countsOrder);
     $orderOk = true;
@@ -1263,9 +1271,14 @@ try {
     $jumpOk = $jumps !== []
         && (int) ($jumps[0]['id'] ?? 0) === (int) ($idFr['id'] ?? 0)
         && (string) ($jumps[0]['country'] ?? '') === 'France'
+        && (string) ($jumps[0]['status'] ?? '') === 'New'
         && str_contains((string) ($jumps[0]['url'] ?? ''), 'country=France')
         && str_contains((string) ($jumps[0]['url'] ?? ''), 'row=')
         && str_contains((string) ($jumps[0]['url'] ?? ''), 'jump=')
+        && $jumpExact !== []
+        && (string) ($jumpExact[0]['domain'] ?? '') === 'txfprice-jump-fr.com'
+        && (int) ($jumpPack['total'] ?? 0) >= count($jumpPack['matches'] ?? [])
+        && $jumpByStatus !== []
         && $jumpTeam !== []
         && str_contains((string) ($jumpTeam[0]['url'] ?? ''), 'team_site_prices')
         && $orderOk
@@ -1280,6 +1293,7 @@ try {
         && !str_contains($tintHtml, 'Copy all')
         && !str_contains($teamTintHtml, 'Remove')
         && str_contains($jumpBar, 'Search all countries')
+        && str_contains($jumpBar, 'Does not filter this sheet')
         && str_contains($jumpBar, 'data-site-price-jump-results')
         && $jumpTeamBar === '';
     if ($jumpOk && $copyOk) {

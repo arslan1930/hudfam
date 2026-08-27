@@ -775,37 +775,83 @@ function site_price_like_needle(string $q): string
     return '%' . $q . '%';
 }
 
+function site_price_like_prefix(string $q): string
+{
+    $q = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q);
+    return $q . '%';
+}
+
+function site_price_jump_match_rank(string $domain, string $q): int
+{
+    $domain = strtolower(trim($domain));
+    $q = strtolower(trim($q));
+    if ($q === '') {
+        return 9;
+    }
+    if ($domain === $q) {
+        return 0;
+    }
+    if (str_starts_with($domain, $q)) {
+        return 1;
+    }
+    if (str_contains($domain, $q)) {
+        return 2;
+    }
+    return 3;
+}
+
 /**
- * Search every country. Returns jump targets with the page that row lives on.
+ * Search every country. Returns jump targets plus how many rows matched.
  *
- * @return list<array{id:int,country:string,domain:string,status:string,page:int,url:string}>
+ * @return array{matches:list<array{id:int,country:string,domain:string,status:string,page:int,url:string}>,total:int}
  */
-function site_price_jump_search(string $q, string $pageKey, int $perPage, int $limit = 80): array
+function site_price_jump_search_pack(string $q, string $pageKey, int $perPage, int $limit = 80): array
 {
     ensure_site_prices_schema();
     $q = trim($q);
     if ($q === '') {
-        return [];
+        return ['matches' => [], 'total' => 0];
     }
     $perPage = in_array($perPage, site_price_per_page_options(), true) ? $perPage : 100;
     $limit = max(1, min(100, $limit));
     $needle = site_price_like_needle($q);
+    $prefix = site_price_like_prefix($q);
+    $where = 'r.domain LIKE ? ESCAPE \'!\'
+            OR r.niche LIKE ? ESCAPE \'!\'
+            OR IFNULL(r.price_note, \'\') LIKE ? ESCAPE \'!\'
+            OR r.extra_note LIKE ? ESCAPE \'!\'
+            OR r.reply_email LIKE ? ESCAPE \'!\'
+            OR r.country LIKE ? ESCAPE \'!\'
+            OR r.status_slug LIKE ? ESCAPE \'!\'
+            OR IFNULL(st.label, \'\') LIKE ? ESCAPE \'!\'';
+    $like = [$needle, $needle, $needle, $needle, $needle, $needle, $needle, $needle];
+    $countStmt = db()->prepare(
+        'SELECT COUNT(*) FROM site_price_rows r
+         LEFT JOIN site_price_statuses st ON st.slug = r.status_slug
+         WHERE ' . $where
+    );
+    $countStmt->execute($like);
+    $total = (int) $countStmt->fetchColumn();
     $stmt = db()->prepare(
-        'SELECT id, country, domain, status_slug, niche, price_note, extra_note, reply_email
-         FROM site_price_rows
-         WHERE domain LIKE ? ESCAPE \'!\'
-            OR niche LIKE ? ESCAPE \'!\'
-            OR IFNULL(price_note, \'\') LIKE ? ESCAPE \'!\'
-            OR extra_note LIKE ? ESCAPE \'!\'
-            OR reply_email LIKE ? ESCAPE \'!\'
-            OR country LIKE ? ESCAPE \'!\'
-         ORDER BY country ASC, domain ASC
+        'SELECT r.id, r.country, r.domain, r.status_slug, IFNULL(st.label, r.status_slug) AS status_label
+         FROM site_price_rows r
+         LEFT JOIN site_price_statuses st ON st.slug = r.status_slug
+         WHERE ' . $where . '
+         ORDER BY
+            CASE
+                WHEN LOWER(r.domain) = LOWER(?) THEN 0
+                WHEN LOWER(r.domain) LIKE LOWER(?) ESCAPE \'!\' THEN 1
+                WHEN LOWER(r.domain) LIKE LOWER(?) ESCAPE \'!\' THEN 2
+                ELSE 3
+            END,
+            r.country ASC,
+            r.domain ASC
          LIMIT ' . (int) $limit
     );
-    $stmt->execute([$needle, $needle, $needle, $needle, $needle, $needle]);
+    $stmt->execute([...$like, $q, $prefix, $needle]);
     $found = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     if ($found === []) {
-        return [];
+        return ['matches' => [], 'total' => $total];
     }
     $rank = [];
     $i = 0;
@@ -816,7 +862,12 @@ function site_price_jump_search(string $q, string $pageKey, int $perPage, int $l
             $i++;
         }
     }
-    usort($found, static function (array $a, array $b) use ($rank): int {
+    usort($found, static function (array $a, array $b) use ($rank, $q): int {
+        $ma = site_price_jump_match_rank((string) ($a['domain'] ?? ''), $q);
+        $mb = site_price_jump_match_rank((string) ($b['domain'] ?? ''), $q);
+        if ($ma !== $mb) {
+            return $ma <=> $mb;
+        }
         $ca = (string) ($a['country'] ?? '');
         $cb = (string) ($b['country'] ?? '');
         $ra = $rank[$ca] ?? 9999;
@@ -843,11 +894,15 @@ function site_price_jump_search(string $q, string $pageKey, int $perPage, int $l
         }
         $idx = array_search($id, $pageCache[$country], true);
         $pageNum = $idx === false ? 1 : ((int) floor(((int) $idx) / $perPage) + 1);
+        $status = trim((string) ($row['status_label'] ?? ''));
+        if ($status === '') {
+            $status = (string) ($row['status_slug'] ?? '');
+        }
         $out[] = [
             'id' => $id,
             'country' => $country,
             'domain' => (string) ($row['domain'] ?? ''),
-            'status' => (string) ($row['status_slug'] ?? ''),
+            'status' => $status,
             'page' => $pageNum,
             'url' => site_price_sheet_url($country, $pageKey, [
                 'per_page' => $perPage,
@@ -857,7 +912,17 @@ function site_price_jump_search(string $q, string $pageKey, int $perPage, int $l
             ]),
         ];
     }
-    return $out;
+    return ['matches' => $out, 'total' => $total];
+}
+
+/**
+ * Search every country. Returns jump targets with the page that row lives on.
+ *
+ * @return list<array{id:int,country:string,domain:string,status:string,page:int,url:string}>
+ */
+function site_price_jump_search(string $q, string $pageKey, int $perPage, int $limit = 80): array
+{
+    return site_price_jump_search_pack($q, $pageKey, $perPage, $limit)['matches'];
 }
 
 /**
@@ -1866,7 +1931,7 @@ function render_site_price_filters(
     $html .= '<span class="visually-hidden">Search this country</span>';
     $html .= '<input id="site-price-filter-q" type="search" data-site-price-filter="q" value="' . h($q) . '"'
         . ' placeholder="Search this country…" autocomplete="off" spellcheck="false" data-no-draft'
-        . ' title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">';
+        . ' title="Filters this country sheet only. Enter = next match on this page · Ctrl/Cmd+Enter = all pages of this country">';
     $html .= '<span class="sheet-search-meta muted" data-site-price-search-meta hidden></span>';
     $html .= '</label>';
     $html .= '<label class="site-price-filter">Lane ';
@@ -1968,11 +2033,15 @@ function render_site_price_jump_bar(string $preset = '', bool $isAdmin = true): 
         return '';
     }
     $html = '<div class="site-price-jump-wrap site-price-jump-top" data-site-price-jump>';
+    $html .= '<div class="site-price-jump-copy">';
+    $html .= '<p class="site-price-jump-heading">Search all countries</p>';
+    $html .= '<p class="muted site-price-jump-hint">Jump to a matching row in any country. Does not filter this sheet.</p>';
+    $html .= '</div>';
     $html .= '<label class="sheet-search" for="site-price-jump-q" style="margin:0">';
     $html .= '<span class="visually-hidden">Search all countries</span>';
     $html .= '<input id="site-price-jump-q" type="search" data-site-price-jump-q value="' . h($preset) . '"'
-        . ' placeholder="Search all countries…" autocomplete="off" spellcheck="false" data-no-draft'
-        . ' title="Search every country sheet, then open the matching row">';
+        . ' placeholder="Website, email, note, status, country…" autocomplete="off" spellcheck="false" data-no-draft'
+        . ' title="Search every country sheet. Click a result or press Enter again to open it.">';
     $html .= '</label>';
     $html .= '<button type="button" class="btn" data-site-price-jump-go>Search</button>';
     $html .= '<span class="muted site-price-jump-status" data-site-price-jump-status></span>';
@@ -2144,11 +2213,12 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 $jsonOut(['ok' => false, 'error' => 'Only Admin can search all countries.'], 403);
             }
             try {
-                $matches = site_price_jump_search((string) post('q'), $pageKey, $perPagePost);
+                $pack = site_price_jump_search_pack((string) post('q'), $pageKey, $perPagePost);
                 $jsonOut([
                     'ok' => true,
-                    'matches' => $matches,
-                    'total' => count($matches),
+                    'matches' => $pack['matches'],
+                    'total' => (int) $pack['total'],
+                    'shown' => count($pack['matches']),
                 ]);
             } catch (Throwable $e) {
                 $jsonOut(['ok' => false, 'error' => 'Could not search.'], 400);

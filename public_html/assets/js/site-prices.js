@@ -836,10 +836,19 @@
 
   var jumpMatches = [];
   var jumpIndex = -1;
+  var lastJumpQuery = '';
+  var jumpTotal = 0;
 
   function jumpStatus(text) {
     var el = document.querySelector('[data-site-price-jump-status]');
     if (el) el.textContent = text || '';
+  }
+
+  function jumpCountLabel() {
+    var n = jumpMatches.length;
+    if (!n) return '';
+    if (jumpTotal > n) return 'Showing ' + n + ' of ' + jumpTotal;
+    return n + ' match' + (n === 1 ? '' : 'es');
   }
 
   function jumpButtons(show) {
@@ -882,7 +891,8 @@
     if (!jumpMatches.length) return;
     jumpIndex = ((i % jumpMatches.length) + jumpMatches.length) % jumpMatches.length;
     var m = jumpMatches[jumpIndex];
-    jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length);
+    var count = jumpCountLabel();
+    jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length + (jumpTotal > jumpMatches.length ? ' · ' + count : ''));
     jumpButtons(true);
     markJumpResult(jumpIndex);
     if (!m || !m.url) return;
@@ -912,6 +922,8 @@
     if (!q) {
       jumpMatches = [];
       jumpIndex = -1;
+      jumpTotal = 0;
+      lastJumpQuery = '';
       jumpStatus('');
       jumpButtons(false);
       renderJumpResults([]);
@@ -921,11 +933,14 @@
     setStatus('Searching…', false);
     post('jump_search', { q: q }).then(function (json) {
       if (!json.ok) {
+        lastJumpQuery = '';
         setStatus(json.error || 'Could not search.', true);
         renderJumpResults([]);
         return;
       }
       jumpMatches = json.matches || [];
+      jumpTotal = parseInt(json.total, 10) || jumpMatches.length;
+      lastJumpQuery = q;
       renderJumpResults(jumpMatches);
       if (!jumpMatches.length) {
         jumpIndex = -1;
@@ -934,16 +949,21 @@
         setStatus('No sites match that search.', true);
         return;
       }
+      jumpIndex = -1;
+      jumpStatus(jumpCountLabel() + ' · click a row or press Enter to open');
+      jumpButtons(true);
+      markJumpResult(-1);
       setStatus('', false);
-      if (tableEl()) {
-        goToMatch(0);
-      } else {
-        jumpIndex = 0;
-        jumpStatus('1 of ' + jumpMatches.length);
-        jumpButtons(true);
-        markJumpResult(0);
+      var first = jumpMatches[0];
+      if (first && tableEl()) {
+        var table = tableEl();
+        var sameCountry = table.getAttribute('data-country') === first.country;
+        var samePage = String(table.getAttribute('data-page') || '1') === String(first.page || 1);
+        var row = document.querySelector('[data-site-price-row][data-row-id="' + first.id + '"]');
+        if (sameCountry && samePage && row) highlightJump(row);
       }
     }).catch(function () {
+      lastJumpQuery = '';
       setStatus('Could not search.', true);
     });
   }
@@ -972,7 +992,8 @@
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (jumpMatches.length && String(input.value || '').trim()) goToMatch(jumpIndex + 1);
+          var qNow = String(input.value || '').trim();
+          if (jumpMatches.length && qNow && qNow === lastJumpQuery) goToMatch(jumpIndex + 1);
           else runJump();
         }
       });
@@ -1021,6 +1042,8 @@
     post('jump_search', { q: q }).then(function (json) {
       if (!json.ok) return;
       jumpMatches = json.matches || [];
+      jumpTotal = parseInt(json.total, 10) || jumpMatches.length;
+      lastJumpQuery = q;
       if (!jumpMatches.length) return;
       var table = tableEl();
       var rowId = table ? table.getAttribute('data-jump-row') : '';
@@ -1028,7 +1051,10 @@
       jumpMatches.forEach(function (m, i) {
         if (String(m.id) === String(rowId)) jumpIndex = i;
       });
-      jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length);
+      renderJumpResults(jumpMatches);
+      markJumpResult(jumpIndex);
+      var count = jumpCountLabel();
+      jumpStatus((jumpIndex + 1) + ' of ' + jumpMatches.length + (jumpTotal > jumpMatches.length ? ' · ' + count : ''));
       jumpButtons(true);
     }).catch(function () { /* keep bar usable */ });
   }
