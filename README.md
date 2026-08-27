@@ -39,8 +39,11 @@ Full steps: **[public_html/HOSTINGER.md](public_html/HOSTINGER.md)**
 Use host **`127.0.0.1`** (or the host shown in hPanel), not `localhost`, if PHP and MySQL use different sockets.
 
 ### Already installed an older copy?
-Upload the new files, sign in as Admin, open `/upgrade.php` once (Admin-only), then delete it.  
+Upload the new files and sign in as Admin. Page loads run `ensure_*()` and add missing tables/columns.  
+`.htaccess` **denies** `/upgrade.php`. If you still need that one-shot (legacy Catalog table drops), temporarily comment `upgrade` out of the FilesMatch, open it as Admin, restore the deny, then **delete** `upgrade.php`.  
 If anyone still uses old demo passwords (`admin123` / `team123`), upgrade flags them to change on next login.
+
+Do **not** leave `tests_run.php`, `tests_http.php`, `smoke_admin_mvp.php`, or `reset_admin_once.php` on the live server. They refuse web hits, but they still belong off production.
 
 ## Local preview (optional)
 

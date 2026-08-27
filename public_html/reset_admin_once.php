@@ -2,42 +2,33 @@
 /**
  * ONE-TIME Admin password reset → admin / admin123
  *
- * 1. Upload this file to your Hostinger public_html (same folder as index.php).
- * 2. Open: https://YOUR-DOMAIN/reset_admin_once.php?confirm=RESET
- * 3. Sign in with admin / admin123
- * 4. Delete this file if it is still on the server (it tries to delete itself).
+ * CLI only. Do not upload this file to Hostinger. If it is already there,
+ * a web hit returns 404 (this script also refuses anything except `cli`).
  *
- * Do NOT leave this file on the server.
+ * Recovery (on the server shell, in the same folder as config.php):
+ *   php reset_admin_once.php RESET
+ * Then sign in as admin / admin123, change the password, and delete this file.
  */
-require_once __DIR__ . '/includes/helpers.php';
-txf_secure_session_start();
-txf_send_security_headers();
-header('Content-Type: text/html; charset=utf-8');
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Not found.';
+    exit;
+}
 
-require_once __DIR__ . '/includes/db.php';
-
-$confirm = (string) ($_GET['confirm'] ?? '');
+$confirm = strtoupper(trim((string) ($argv[1] ?? '')));
 $defaultUser = 'admin';
 $defaultPass = 'admin123';
 
-function h_reset(string $s): string
-{
-    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-}
-
-echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Reset admin password</title>';
-echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
-echo '<style>body{font-family:system-ui,sans-serif;max-width:36rem;margin:2rem auto;padding:0 1rem;line-height:1.45}';
-echo 'code{background:#f3f4f6;padding:0.1rem 0.35rem;border-radius:4px}.ok{color:#065f46}.err{color:#991b1b}</style></head><body>';
-echo '<h1>Reset admin password</h1>';
-
 if ($confirm !== 'RESET') {
-    echo '<p>This will set username <code>' . h_reset($defaultUser) . '</code> password to <code>' . h_reset($defaultPass) . '</code>.</p>';
-    echo '<p><a href="?confirm=RESET"><strong>Confirm reset</strong></a></p>';
-    echo '<p>After success, delete <code>reset_admin_once.php</code> from the server.</p>';
-    echo '</body></html>';
-    exit;
+    fwrite(STDERR, "Usage: php reset_admin_once.php RESET\n");
+    fwrite(STDERR, "Sets username {$defaultUser} password to {$defaultPass}, then deletes this file.\n");
+    exit(1);
 }
+
+require_once __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+require_once __DIR__ . '/includes/db.php';
 
 try {
     if (!file_exists(__DIR__ . '/config.php')) {
@@ -58,7 +49,6 @@ try {
     $row = $st->fetch(PDO::FETCH_ASSOC);
 
     if (!$row) {
-        // Create admin if missing
         if (in_array('must_change_password', $cols, true)) {
             $pdo->prepare(
                 'INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
@@ -70,7 +60,7 @@ try {
                  VALUES (?,?,?,?,\'admin\',1)'
             )->execute([$defaultUser, $hash, 'Administrator', '']);
         }
-        echo '<p class="ok">Created user <code>admin</code> with password <code>admin123</code>.</p>';
+        echo "Created user admin with password admin123.\n";
     } else {
         if (in_array('must_change_password', $cols, true)) {
             $pdo->prepare(
@@ -81,22 +71,20 @@ try {
                 'UPDATE users SET password_hash=?, is_active=1, role=\'admin\' WHERE id=?'
             )->execute([$hash, (int) $row['id']]);
         }
-        echo '<p class="ok">Password for <code>admin</code> is now <code>admin123</code>.</p>';
+        echo "Password for admin is now admin123.\n";
     }
 
-    echo '<p>Sign in at <a href="index.php?page=login">login</a> with:</p>';
-    echo '<ul><li>Username: <code>admin</code></li><li>Password: <code>admin123</code></li></ul>';
-    echo '<p><strong>Change the password after login</strong>, then delete this file.</p>';
+    echo "Sign in at index.php?page=login with admin / admin123.\n";
+    echo "Change the password after login, then delete this file.\n";
 
     $self = __FILE__;
     if (@unlink($self)) {
-        echo '<p class="ok">This reset script deleted itself.</p>';
+        echo "This reset script deleted itself.\n";
     } else {
-        echo '<p class="err">Could not auto-delete. Remove <code>reset_admin_once.php</code> from Hostinger File Manager now.</p>';
+        echo "Could not auto-delete. Remove reset_admin_once.php from the server now.\n";
     }
 } catch (Throwable $e) {
-    echo '<p class="err">Reset failed: ' . h_reset($e->getMessage()) . '</p>';
-    echo '<p>Check that <code>config.php</code> has the correct MySQL details.</p>';
+    fwrite(STDERR, 'Reset failed: ' . $e->getMessage() . "\n");
+    fwrite(STDERR, "Check that config.php has the correct MySQL details.\n");
+    exit(1);
 }
-
-echo '</body></html>';

@@ -8,7 +8,15 @@
  *
  * Expects seeded users from tests_run.php (admin/teammate + finder/extractor/emailer).
  * Unassigned teammate sees the waiting dashboard; dept users unlock their tools.
+ *
+ * Web hits (Apache / LiteSpeed / php -S) must not run this file.
  */
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Not found.';
+    exit;
+}
 $base = rtrim(getenv('TXF_BASE') ?: 'http://127.0.0.1:8080', '/');
 $cookie = sys_get_temp_dir() . '/txf_http_cookie.txt';
 @unlink($cookie);
@@ -636,6 +644,22 @@ if ($r['status'] === 403 || str_contains($r['body'], 'Install locked')) {
     pass('install.php locked');
 } else {
     fail('install.php not locked status=' . $r['status']);
+}
+
+foreach (['tests_run.php', 'tests_http.php', 'smoke_admin_mvp.php', 'reset_admin_once.php'] as $blocked) {
+    $r = req('GET', $base . '/' . $blocked);
+    $resetQs = $blocked === 'reset_admin_once.php'
+        ? req('GET', $base . '/reset_admin_once.php?confirm=RESET')
+        : null;
+    if (
+        $r['status'] === 404
+        && str_contains($r['body'], 'Not found.')
+        && ($resetQs === null || ($resetQs['status'] === 404 && str_contains($resetQs['body'], 'Not found.')))
+    ) {
+        pass($blocked . ' web 404');
+    } else {
+        fail($blocked . ' web not blocked status=' . $r['status']);
+    }
 }
 
 // upgrade.php requires admin (we are logged in as admin — should show form or complete UI, not 403 login wall)
