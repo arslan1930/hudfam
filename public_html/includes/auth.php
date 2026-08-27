@@ -16,6 +16,14 @@ function ensure_users_auth_schema(): void
                  ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0
                  AFTER is_active"
             );
+            $cols[] = 'must_change_password';
+        }
+        if (!in_array('session_version', $cols, true)) {
+            $pdo->exec(
+                "ALTER TABLE users
+                 ADD COLUMN session_version INT NOT NULL DEFAULT 1
+                 AFTER must_change_password"
+            );
         }
     } catch (Throwable $e) {
         // Table may not exist during very early install.
@@ -49,7 +57,73 @@ function generate_temp_password(int $length = 14): string
 
 function current_user(): ?array
 {
+    if (!isset($_SESSION['user']) || !is_array($_SESSION['user'])) {
+        return null;
+    }
+    txf_sync_session_user();
     return $_SESSION['user'] ?? null;
+}
+
+/**
+ * Reload is_active, role, and session_version from the DB. Logs out when the
+ * account is gone, deactivated, or the session was invalidated (password/role).
+ */
+function txf_sync_session_user(): void
+{
+    $id = (int) ($_SESSION['user']['id'] ?? 0);
+    if ($id < 1) {
+        logout_user();
+        return;
+    }
+    try {
+        ensure_users_auth_schema();
+        $stmt = db()->prepare(
+            'SELECT id, username, full_name, role, is_active, must_change_password, session_version
+             FROM users WHERE id=? LIMIT 1'
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+        return;
+    }
+    if (!$row || (int) ($row['is_active'] ?? 0) !== 1) {
+        logout_user();
+        flash('error', 'Please sign in again.');
+        return;
+    }
+    $sessVer = (int) ($_SESSION['user']['session_version'] ?? 1);
+    $dbVer = (int) ($row['session_version'] ?? 1);
+    if ($sessVer !== $dbVer) {
+        logout_user();
+        flash('error', 'Please sign in again.');
+        return;
+    }
+    $_SESSION['user']['id'] = (int) $row['id'];
+    $_SESSION['user']['username'] = (string) $row['username'];
+    $_SESSION['user']['full_name'] = (string) $row['full_name'];
+    $_SESSION['user']['role'] = (string) $row['role'];
+    $_SESSION['user']['must_change_password'] = (int) ($row['must_change_password'] ?? 0);
+    $_SESSION['user']['session_version'] = $dbVer;
+    $_SESSION['must_change_password'] = (int) ($row['must_change_password'] ?? 0) === 1;
+}
+
+/** Invalidate other browsers. Pass true to keep this request’s session. */
+function bump_user_session_version(int $userId, bool $keepCurrentSession = false): void
+{
+    if ($userId < 1) {
+        return;
+    }
+    try {
+        ensure_users_auth_schema();
+        db()->prepare('UPDATE users SET session_version = session_version + 1 WHERE id=?')->execute([$userId]);
+        if ($keepCurrentSession && isset($_SESSION['user']) && (int) ($_SESSION['user']['id'] ?? 0) === $userId) {
+            $st = db()->prepare('SELECT session_version FROM users WHERE id=? LIMIT 1');
+            $st->execute([$userId]);
+            $_SESSION['user']['session_version'] = (int) $st->fetchColumn();
+        }
+    } catch (Throwable $e) {
+        // Column may still be adding.
+    }
 }
 
 function require_login(): array
@@ -164,6 +238,7 @@ function attempt_login(string $username, string $password): bool
         'full_name' => $user['full_name'],
         'role' => $user['role'],
         'must_change_password' => $mustChange ? 1 : 0,
+        'session_version' => (int) ($user['session_version'] ?? 1),
     ];
     $_SESSION['must_change_password'] = $mustChange;
     return true;
@@ -200,6 +275,7 @@ function change_user_password(int $userId, string $currentPassword, string $newP
     }
     db()->prepare('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?')
         ->execute([password_hash($newPassword, PASSWORD_DEFAULT), $userId]);
+    bump_user_session_version($userId, true);
     clear_must_change_password_flag($userId);
     return '';
 }
@@ -229,7 +305,25 @@ function flag_users_with_weak_passwords(): int
 
 function logout_user(): void
 {
-    unset($_SESSION['user'], $_SESSION['must_change_password']);
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        if (PHP_SAPI !== 'cli' && !headers_sent()) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $params['path'] ?? '/',
+                'domain' => $params['domain'] ?? '',
+                'secure' => (bool) ($params['secure'] ?? false),
+                'httponly' => (bool) ($params['httponly'] ?? true),
+                'samesite' => (string) ($params['samesite'] ?? 'Lax'),
+            ]);
+        }
+        session_destroy();
+    }
+    txf_secure_session_start();
+    if (session_status() === PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli' && !headers_sent()) {
+        session_regenerate_id(true);
+    }
 }
 
 const LOGIN_THROTTLE_MAX = 12;

@@ -224,6 +224,10 @@ function set_user_password(int $userId, string $password): void
 {
     db()->prepare('UPDATE users SET password_hash=? WHERE id=?')
         ->execute([password_hash($password, PASSWORD_DEFAULT), $userId]);
+    $keep = isset($_SESSION['user']) && (int) ($_SESSION['user']['id'] ?? 0) === $userId;
+    if (function_exists('bump_user_session_version')) {
+        bump_user_session_version($userId, $keep);
+    }
 }
 
 /* -------------------- Tasks -------------------- */

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   role ENUM('admin','team') NOT NULL DEFAULT 'team',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+  session_version INT NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX (role),
   INDEX (full_name)

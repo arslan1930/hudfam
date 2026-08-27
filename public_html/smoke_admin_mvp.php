@@ -116,6 +116,17 @@ foreach (['ensure_users_auth_schema', 'change_user_password', 'user_must_change_
 }
 
 $usersPage = file_get_contents($root . '/pages/admin/users.php') ?: '';
+$schemaSqlAuth = file_get_contents($root . '/sql/schema.sql') ?: '';
+if (!str_contains($auth, 'function txf_sync_session_user')
+    || !str_contains($auth, 'function bump_user_session_version')
+    || !str_contains($auth, 'session_destroy()')
+    || !str_contains($auth, 'session_version')
+    || !str_contains($schemaSqlAuth, 'session_version INT NOT NULL DEFAULT 1')
+    || !str_contains($usersPage, 'bump_user_session_version($id')) {
+    fail('session revalidate / logout destroy / users bump missing');
+} else {
+    ok('session revalidate + logout destroy + users bump');
+}
 if (!str_contains($usersPage, 'at least 8 characters')) {
     fail('users.php missing min password length');
 } else {

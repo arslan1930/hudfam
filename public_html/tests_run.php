@@ -4770,6 +4770,88 @@ try {
     fail('password: ' . $e->getMessage());
 }
 
+try {
+    ensure_users_auth_schema();
+    $kickName = 'txfkick' . bin2hex(random_bytes(3));
+    $kickHash = password_hash('KickPass99x', PASSWORD_DEFAULT);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$kickName, $kickHash, 'Kick User', '']);
+    $kickId = (int) db()->lastInsertId();
+    if ($kickId < 1) {
+        $kickId = (int) db()->query("SELECT id FROM users WHERE username=" . db()->quote($kickName))->fetchColumn();
+    }
+    logout_user();
+    if (!attempt_login($kickName, 'KickPass99x')) {
+        fail('session kick login');
+    } else {
+        db()->prepare('UPDATE users SET is_active=0 WHERE id=?')->execute([$kickId]);
+        if (current_user() === null) {
+            pass('deactivate logs out existing session');
+        } else {
+            fail('deactivate left session user=' . json_encode(current_user()));
+        }
+    }
+    db()->prepare('UPDATE users SET is_active=1 WHERE id=?')->execute([$kickId]);
+    logout_user();
+    if (!attempt_login($kickName, 'KickPass99x')) {
+        fail('session version kick login');
+    } else {
+        bump_user_session_version($kickId, false);
+        if (current_user() === null) {
+            pass('password/session_version bump logs out other session');
+        } else {
+            fail('session_version bump left session');
+        }
+    }
+    logout_user();
+    if (!attempt_login($kickName, 'KickPass99x')) {
+        fail('demote kick login');
+    } else {
+        db()->prepare("UPDATE users SET role='admin' WHERE id=?")->execute([$kickId]);
+        bump_user_session_version($kickId, false);
+        if (current_user() === null) {
+            pass('role change logs out existing session');
+        } else {
+            fail('role change left session role=' . (current_user()['role'] ?? ''));
+        }
+    }
+    logout_user();
+    if (!attempt_login($kickName, 'KickPass99x')) {
+        fail('keep-session login');
+    } else {
+        $before = (int) (current_user()['session_version'] ?? 0);
+        bump_user_session_version($kickId, true);
+        $afterUser = current_user();
+        if (is_array($afterUser) && (int) ($afterUser['session_version'] ?? 0) === $before + 1) {
+            pass('keepCurrentSession stays signed in with new version');
+        } else {
+            fail('keepCurrentSession: ' . json_encode($afterUser));
+        }
+    }
+    logout_user();
+    if (current_user() !== null) {
+        fail('logout_user left session user');
+    } else {
+        pass('logout_user clears session user');
+    }
+    db()->prepare('DELETE FROM users WHERE id=?')->execute([$kickId]);
+    logout_user();
+    attempt_login('admin', 'TestAdmin9x');
+} catch (Throwable $e) {
+    fail('session kick: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+    try {
+        if (!empty($kickId)) {
+            db()->prepare('DELETE FROM users WHERE id=?')->execute([(int) $kickId]);
+        }
+    } catch (Throwable $e2) {
+        // ignore
+    }
+    logout_user();
+    attempt_login('admin', 'TestAdmin9x');
+}
+
 // --- Language must not list country names (German ≠ Germany) ---
 try {
     $langs = list_language_options();
