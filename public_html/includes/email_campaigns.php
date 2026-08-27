@@ -3385,6 +3385,293 @@ function import_email_campaign_sheet_from_swe(
     ];
 }
 
+/**
+ * True when any of the four email slots is non-empty.
+ *
+ * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $slots
+ */
+function email_campaign_slots_have_email(array $slots): bool
+{
+    for ($i = 0; $i < 4; $i++) {
+        if (trim((string) ($slots[$i] ?? '')) !== '') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Domain → 4 email slots for one Sites-with-emails scope and country.
+ *
+ * @return array<string, array{0:string,1:string,2:string,3:string}>
+ */
+function email_campaign_source_slot_map(string $scope, string $country): array
+{
+    ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
+    if (!in_array($scope, ['admin', 'admin_all', 'team'], true)) {
+        $scope = 'admin_all';
+    }
+    $canon = function_exists('resolve_canonical_country')
+        ? resolve_canonical_country(trim($country))
+        : null;
+    $countryName = $canon ? (string) $canon['name'] : trim($country);
+    if ($countryName === '') {
+        return [];
+    }
+    $table = swe_table($scope);
+    $sel = db()->prepare(
+        "SELECT domain, email1, email2, email3, email4 FROM {$table} WHERE country=? ORDER BY id ASC"
+    );
+    $sel->execute([$countryName]);
+    $out = [];
+    foreach ($sel as $row) {
+        $domain = normalize_email_campaign_domain((string) ($row['domain'] ?? ''));
+        if ($domain === '' || str_starts_with($domain, '__blank_')) {
+            continue;
+        }
+        $out[$domain] = email_slots_from_row($row);
+    }
+    return $out;
+}
+
+/**
+ * Domain → 4 email slots currently on this campaign sheet.
+ *
+ * @return array<string, array{0:string,1:string,2:string,3:string}>
+ */
+function email_campaign_sheet_slot_map(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    if ($sheetId < 1) {
+        return [];
+    }
+    $sel = db()->prepare(
+        'SELECT domain, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? ORDER BY id ASC'
+    );
+    $sel->execute([$sheetId]);
+    $out = [];
+    foreach ($sel as $row) {
+        $domain = normalize_email_campaign_domain((string) ($row['domain'] ?? ''));
+        if ($domain === '' || str_starts_with($domain, '__blank_')) {
+            continue;
+        }
+        $out[$domain] = email_slots_from_row($row);
+    }
+    return $out;
+}
+
+/**
+ * Compare this campaign country sheet to Admin + Final for the same country.
+ * Union: Final first, Admin emails win when both have the domain.
+ * Pure: does not write rows.
+ *
+ * @param array{domains?:bool,sample?:int} $opts
+ * @return array{
+ *   country:string,
+ *   add:list<string>,
+ *   update:list<string>,
+ *   same:list<string>,
+ *   empty:list<string>,
+ *   excluded:list<string>,
+ *   admin_only:list<string>,
+ *   final_only:list<string>,
+ *   counts:array<string,int>,
+ *   samples:array<string,list<string>>
+ * }
+ */
+function diff_email_campaign_vs_archives(int $sheetId, ?string $country = null, array $opts = []): array
+{
+    ensure_email_campaign_schema();
+    ensure_sites_with_emails_schema();
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
+        throw new InvalidArgumentException('Sheet not found.');
+    }
+    $countryName = trim((string) ($country ?? ''));
+    if ($countryName === '') {
+        $countryName = email_campaign_sheet_country($sheet);
+    }
+    $canon = function_exists('resolve_canonical_country')
+        ? resolve_canonical_country($countryName)
+        : null;
+    if ($canon) {
+        $countryName = (string) $canon['name'];
+    }
+
+    $keepAll = !empty($opts['domains']);
+    $sampleLimit = max(0, (int) ($opts['sample'] ?? 20));
+
+    $finalMap = email_campaign_source_slot_map('admin_all', $countryName);
+    $adminMap = email_campaign_source_slot_map('admin', $countryName);
+    $campMap = email_campaign_sheet_slot_map($sheetId);
+    $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
+    $excludedDomains = $exclusionSets['domains'];
+    $excludedEmails = $exclusionSets['emails'];
+
+    $union = $finalMap;
+    foreach ($adminMap as $domain => $slots) {
+        $union[$domain] = $slots;
+    }
+
+    $buckets = [
+        'add' => [],
+        'update' => [],
+        'same' => [],
+        'empty' => [],
+        'excluded' => [],
+        'admin_only' => [],
+        'final_only' => [],
+    ];
+    $counts = [
+        'add' => 0,
+        'update' => 0,
+        'same' => 0,
+        'empty' => 0,
+        'excluded' => 0,
+        'admin_only' => 0,
+        'final_only' => 0,
+        'fillable' => 0,
+    ];
+
+    $push = static function (string $bucket, string $domain) use (&$buckets, &$counts, $keepAll, $sampleLimit): void {
+        $counts[$bucket]++;
+        if ($keepAll || count($buckets[$bucket]) < $sampleLimit) {
+            $buckets[$bucket][] = $domain;
+        }
+    };
+
+    foreach ($adminMap as $domain => $_) {
+        if (!isset($finalMap[$domain])) {
+            $push('admin_only', $domain);
+        }
+    }
+    foreach ($finalMap as $domain => $_) {
+        if (!isset($adminMap[$domain])) {
+            $push('final_only', $domain);
+        }
+    }
+
+    foreach ($union as $domain => $slots) {
+        if (isset($excludedDomains[$domain])) {
+            $push('excluded', $domain);
+            continue;
+        }
+        $filtered = filter_email_campaign_slots_against_exclusions(
+            $sheetId,
+            $domain,
+            $slots,
+            $excludedEmails
+        );
+        $slots = $filtered['slots'];
+        if (!email_campaign_slots_have_email($slots)) {
+            if ($filtered['stripped'] !== []) {
+                $push('excluded', $domain);
+            } else {
+                $push('empty', $domain);
+            }
+            continue;
+        }
+        if (!isset($campMap[$domain])) {
+            $push('add', $domain);
+            continue;
+        }
+        if (email_campaign_slots_equal($campMap[$domain], $slots)) {
+            $push('same', $domain);
+        } else {
+            $push('update', $domain);
+        }
+    }
+    $counts['fillable'] = $counts['add'] + $counts['update'];
+
+    $samples = [];
+    foreach ($buckets as $key => $list) {
+        $samples[$key] = $keepAll ? array_slice($list, 0, $sampleLimit) : $list;
+    }
+
+    return [
+        'country' => $countryName,
+        'add' => $buckets['add'],
+        'update' => $buckets['update'],
+        'same' => $buckets['same'],
+        'empty' => $buckets['empty'],
+        'excluded' => $buckets['excluded'],
+        'admin_only' => $buckets['admin_only'],
+        'final_only' => $buckets['final_only'],
+        'counts' => $counts,
+        'samples' => $samples,
+    ];
+}
+
+/**
+ * Copy missing/different Admin+Final rows into this campaign sheet.
+ * Writes via existing import: Final first, then Admin (Admin emails win).
+ * Does not edit Admin or Final. Does not copy emailed marks.
+ *
+ * @return array{
+ *   country:string,
+ *   would_add:int,
+ *   would_update:int,
+ *   imported:int,
+ *   updated:int,
+ *   skipped_duplicate:int,
+ *   skipped_excluded:int,
+ *   skipped_empty:int,
+ *   skipped_emails:int,
+ *   final:array<string,mixed>,
+ *   admin:array<string,mixed>
+ * }
+ */
+function fill_email_campaign_gaps_from_archives(int $sheetId, ?string $country = null): array
+{
+    $diff = diff_email_campaign_vs_archives($sheetId, $country, ['sample' => 0]);
+    $countryName = (string) ($diff['country'] ?? '');
+    $wouldAdd = (int) ($diff['counts']['add'] ?? 0);
+    $wouldUpdate = (int) ($diff['counts']['update'] ?? 0);
+    $blankImport = [
+        'imported' => 0,
+        'updated' => 0,
+        'skipped_duplicate' => 0,
+        'skipped_excluded' => 0,
+        'skipped_empty' => 0,
+        'skipped_emails' => 0,
+    ];
+    if ($wouldAdd + $wouldUpdate < 1) {
+        return [
+            'country' => $countryName,
+            'would_add' => $wouldAdd,
+            'would_update' => $wouldUpdate,
+            'imported' => 0,
+            'updated' => 0,
+            'skipped_duplicate' => 0,
+            'skipped_excluded' => 0,
+            'skipped_empty' => 0,
+            'skipped_emails' => 0,
+            'final' => $blankImport,
+            'admin' => $blankImport,
+        ];
+    }
+    $fromFinal = import_email_campaign_sheet_from_swe($sheetId, 'admin_all', $countryName, 'replace');
+    $fromAdmin = import_email_campaign_sheet_from_swe($sheetId, 'admin', $countryName, 'replace');
+    $sum = static function (string $key) use ($fromFinal, $fromAdmin): int {
+        return (int) ($fromFinal[$key] ?? 0) + (int) ($fromAdmin[$key] ?? 0);
+    };
+    return [
+        'country' => $countryName,
+        'would_add' => $wouldAdd,
+        'would_update' => $wouldUpdate,
+        'imported' => $sum('imported'),
+        'updated' => $sum('updated'),
+        'skipped_duplicate' => $sum('skipped_duplicate'),
+        'skipped_excluded' => $sum('skipped_excluded'),
+        'skipped_empty' => $sum('skipped_empty'),
+        'skipped_emails' => $sum('skipped_emails'),
+        'final' => $fromFinal,
+        'admin' => $fromAdmin,
+    ];
+}
+
 function get_email_campaign_row(int $rowId, ?int $sheetId = null): ?array
 {
     ensure_email_campaign_schema();

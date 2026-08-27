@@ -1120,6 +1120,18 @@ if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
 } else {
     ok('campaigns duplicate skip + replace different emails');
 }
+if (!str_contains($campLibSmoke, 'function diff_email_campaign_vs_archives')
+    || !str_contains($campLibSmoke, 'function fill_email_campaign_gaps_from_archives')
+    || !str_contains($campLibSmoke, "import_email_campaign_sheet_from_swe(\$sheetId, 'admin_all'")
+    || !str_contains($campLibSmoke, "import_email_campaign_sheet_from_swe(\$sheetId, 'admin'")
+    || !str_contains($campAppSmoke, 'Fill gaps')
+    || !str_contains($campAppSmoke, "action === 'fill_gaps'")
+    || !str_contains($campAppSmoke, "value=\"fill_gaps\"")
+    || !str_contains($campAppSmoke, 'id="camp-fill-gaps"')) {
+    fail('campaigns missing fill-gaps from Admin + Final');
+} else {
+    ok('campaign fill-gaps from Admin + Final');
+}
 if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
     || !str_contains($campLibSmoke, 'function record_email_campaign_source_fetch')
     || !str_contains($campLibSmoke, 'email_campaign_source_fetches')

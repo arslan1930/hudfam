@@ -216,6 +216,7 @@ function guide_emails_data(): string
             'Admin: working list from Team Push; mark emailed here.',
             'Final: archive copy of Admin; emailed/remove keeps a copy here. Repair copies Admin → Final. Adding a site here also creates the Admin working-list row.',
             'Campaign: create a project and country sheets. Communication Team searches the project. Emailed marks are per campaign, not Admin/Final. Mark up to here names a send batch so Admin can see who emailed which stretch.',
+            'Fill gaps from Admin + Final copies into that country campaign sheet only. Admin emails win when both have the domain. Previously removed sites stay blocked. Campaign emailed marks stay. Admin and Final are not edited.',
         ]
     );
 }
