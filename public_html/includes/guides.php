@@ -229,8 +229,8 @@ function guide_site_prices(): string
         'Open a country. Processing stays at the top, then New, then the rest. This is not Order management and does not write into Our database.',
         [
             'Open a country from the switcher (most-used first) or All countries. On Team, only Communication Team can open these sheets.',
-            'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, email, and row color stay editable. Admin can Unlock identity.',
-            'Processing / New / Other lanes stay in that order. Search this country filters the open sheet (Enter = next match, Ctrl/Cmd+Enter = all pages). Admin Search all countries jumps to a row in any country — it does not filter the sheet. Team copies one website with Copy; Admin Copy selected is ticked rows only.',
+        'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, email, and row color stay editable. Admin can Unlock identity. Processing and Completed are Admin-only because Processing fills Order management.',
+        'Processing / New / Other lanes stay in that order. Search this country filters the open sheet (Enter = next match, Ctrl/Cmd+Enter = all pages). Admin Search all countries jumps to a row in any country — it does not filter the sheet. Team copies one website with Copy; Admin Copy selected copies ticked rows on this page only. Admin can Remove a site (orders stay). Take or pick a manager; clear with —.',
             'Admin sees who added a row and who manages it; Team does not see Admin names.',
         ]
     );

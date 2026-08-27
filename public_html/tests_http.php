@@ -538,12 +538,14 @@ $r = req('GET', $base . '/index.php?page=admin_site_prices&country=Germany');
 $sheetNeedles = [
     'data-site-price-sheet',
     'data-site-price-jump',
-    'Copy selected',
+    'Copy selected (this page)',
     '>Email</th>',
     'data-site-price-copy-selected',
     'Search this country',
     'Search all countries',
     'Ctrl/Cmd+Enter',
+    'id="status-words"',
+    'site-price-email',
 ];
 $sheetBad = [];
 foreach ($sheetNeedles as $n) {
@@ -837,6 +839,8 @@ if ($r['status'] === 200 && !$teamBad
     && !str_contains($r['body'], 'Copy selected')
     && !str_contains($r['body'], 'data-site-price-copy-selected')
     && !str_contains($r['body'], 'data-site-price-jump')
+    && !str_contains($r['body'], 'data-site-price-remove')
+    && !str_contains($r['body'], 'data-site-price-assign')
     && !str_contains($r['body'], 'Copy selected live URLs')
     && !str_contains($r['body'], 'download=txt')
     && !str_contains($r['body'], 'Fatal error')
