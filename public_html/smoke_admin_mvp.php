@@ -270,6 +270,8 @@ if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
     || !str_contains($sitePricesLib, 'function site_price_sort_rows')
     || !str_contains($sitePricesLib, 'function site_price_row_for_viewer')
     || !str_contains($sitePricesLib, 'function site_price_save_row')
+    || !str_contains($sitePricesLib, "'slug' => 'completed'")
+    || !str_contains($sitePricesLib, "'label' => 'Completed'")
     || !str_contains($sitePricesLib, 'function site_price_unlock_row')
     || !str_contains($sitePricesLib, 'identity_locked')
     || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS site_price_rows')
@@ -343,6 +345,10 @@ if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
     || !str_contains($deptLibEarly, 'Website prices')
     || !str_contains($layoutPhp, "'team_site_prices'")
     || !str_contains($teamDash, 'team_site_prices')
+    || str_contains($teamDash, 'admin_orders')
+    || str_contains($teamDash, 'admin_invoices')
+    || str_contains($teamSitePricesPage, 'admin_orders')
+    || str_contains($teamSitePricesPage, 'admin_invoices')
     || !str_contains($sitePricesLib, 'function render_site_price_filters')
     || !str_contains($sitePricesLib, 'data-site-price-filters')
     || !str_contains($sitePricesJs, 'applyFilters')
@@ -1174,6 +1180,26 @@ if (!str_contains($ordersPage, 'push_invoice') || !str_contains($ordersPage, 'Pu
 } else {
     ok('orders push to invoice');
 }
+if (!str_contains($ordersPage, "folder=processing")
+    || !str_contains($ordersPage, "folder=completed")
+    || !str_contains($ordersPage, 'id="om-folders"')
+    || !str_contains($ordersPage, 'Completed orders')) {
+    fail('orders missing Processing/Completed hub folders');
+} else {
+    ok('orders Processing and Completed hub');
+}
+if (!str_contains($ordersPage, 'Mark completed')
+    || !str_contains($ordersPage, "action === 'mark_completed'")) {
+    fail('orders missing Mark completed');
+} else {
+    ok('orders Mark completed');
+}
+if (str_contains($ordersPage, 'if ($isProcessing):') && str_contains($ordersPage, 'Push to invoice')
+    && str_contains($ordersPage, 'if ($isCompleted):')) {
+    ok('orders Push to invoice only on Completed');
+} else {
+    fail('orders Push to invoice not gated to Completed');
+}
 if (!str_contains($ordersPage, 'Unpaid LIVE') || !str_contains($ordersPage, "value=\"unpaid\"")) {
     fail('orders missing unpaid LIVE filter');
 } else {
@@ -1226,7 +1252,7 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
@@ -1249,7 +1275,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

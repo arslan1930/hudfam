@@ -238,13 +238,13 @@ function guide_site_prices(): string
 function guide_orders(): string
 {
     return render_page_purpose(
-        'Order management — one sheet',
-        'One editable sheet of orders: country, date, which admin owns the row, and a free-text client email or name. Completed means the LIVE URL is filled. Unpaid LIVE rows are ready to invoice.',
-        'Filter the sheet, add orders, then tick unpaid LIVE rows and Push to invoice. No client folders or extra client details.',
+        'Order management — Processing and Completed',
+        'Processing is filled from Website prices Processing. Completed is after a live URL and Mark completed. Only Completed unpaid rows push to an invoice. Website prices never stores LIVE URL, profit, client, or invoice fields.',
+        'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices.',
         [
-            'Add an order, fill country, date, admin, and client email or name.',
-            'Fill LIVE URL when the placement is live, then tick the row and Push to invoice.',
-            'Use the filter bar to search by site, client, country, admin, date, or status.',
+            'Processing: rows from Website prices Processing, or + Add order. Fill LIVE URL, then Mark completed — saving a live URL does not complete the row.',
+            'Completed: unpaid until Paid. Tick rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.',
+            'Team Website prices shows the Completed status only — never LIVE URL, owner/decided/profit, client email/name, or invoices.',
         ]
     );
 }

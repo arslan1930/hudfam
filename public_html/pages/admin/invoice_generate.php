@@ -100,7 +100,7 @@ render_header('Generate invoice', 'admin');
     <p class="muted">Push unpaid LIVE orders here for payment. Bill-as can be the client email or name from the sheet. Address and company details are optional.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_orders">Order management</a>
+    <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Order management</a>
     <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
   </div>
@@ -125,8 +125,8 @@ render_header('Generate invoice', 'admin');
       </p>
       <?php if (!$invoiceable): ?>
         <div class="empty-state">
-          <p>No unpaid completed orders yet. Fill LIVE URL on Order management, leave those rows unpaid, then push them here.</p>
-          <a class="btn secondary" href="index.php?page=admin_orders">Open Order management</a>
+          <p>No unpaid completed orders yet. Mark processing rows completed with a live URL, leave them unpaid, then push them here.</p>
+          <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Open Completed orders</a>
         </div>
       <?php else: ?>
         <label class="sheet-search invoice-pick-search" for="invoice-pick-search" style="margin:0 0 0.65rem;display:flex">

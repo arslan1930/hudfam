@@ -472,11 +472,12 @@ try {
     db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
     $statuses = site_price_list_statuses();
     $slugs = array_column($statuses, 'slug');
-    $need = ['new', 'processing', 'already_working', 'ok', 'very_high_price', 'not_interested', 'agreed'];
+    $need = ['new', 'processing', 'already_working', 'ok', 'very_high_price', 'not_interested', 'agreed', 'completed'];
     $missing = array_diff($need, $slugs);
     if ($missing === [] && site_price_status_lane('processing') === 'processing'
         && site_price_status_lane('new') === 'new'
-        && site_price_status_lane('agreed') === 'other') {
+        && site_price_status_lane('agreed') === 'other'
+        && site_price_status_lane('completed') === 'other') {
         pass('site_price builtin statuses + lanes');
     } else {
         fail('site_price statuses: ' . json_encode(['missing' => $missing, 'slugs' => $slugs]));
@@ -3714,8 +3715,8 @@ try {
             fail('mark paid without LIVE message=' . $e->getMessage());
         }
     }
-    db()->prepare('UPDATE order_items SET live_url=?, decided_price=? WHERE id=?')
-        ->execute(['https://example.com/txforder-site', 10.00, $itemId]);
+    db()->prepare('UPDATE order_items SET live_url=?, decided_price=?, order_stage=? WHERE id=?')
+        ->execute(['https://example.com/txforder-site', 10.00, 'completed', $itemId]);
     set_order_item_paid((int) $itemId, (int) $clientId, true);
     $paidRow = db()->prepare('SELECT is_paid FROM order_items WHERE id=?');
     $paidRow->execute([$itemId]);
@@ -3751,6 +3752,7 @@ try {
         'order_month' => 8,
         'order_year' => 2026,
     ]);
+    order_mark_completed((int) $itemId, 'https://example.com/live-om', (int) $adminUser['id']);
     set_order_item_paid((int) $itemId, (int) $clientId, false);
 
     // OM-2: unpaid LIVE metrics
@@ -3847,6 +3849,18 @@ try {
         'order_month' => 8,
         'order_year' => 2026,
     ]);
+    $liveOnly = get_order_item((int) $pipeId);
+    $notAuto = $liveOnly && order_stage($liveOnly) === 'processing'
+        && list_invoiceable_order_items_by_ids([(int) $pipeId]) === [];
+    if ($notAuto) {
+        pass('filling LIVE URL does not auto-complete');
+    } else {
+        fail('LIVE URL save auto-completed or became invoiceable');
+    }
+    $marked = order_mark_completed((int) $pipeId, 'https://example.com/pipeline-live', (int) $adminUser['id']);
+    if (empty($marked['ok'])) {
+        fail('pipeline mark completed failed: ' . (string) ($marked['error'] ?? ''));
+    }
     $byQ = list_order_pipeline_rows(['q' => 'buyer@example.com']);
     $byCountry = list_order_pipeline_rows(['country' => 'Germany', 'status' => 'unpaid']);
     $byAdmin = list_order_pipeline_rows(['admin_id' => (int) $adminUser['id']]);
@@ -3966,6 +3980,144 @@ try {
         }
     }
 
+    // OM folders: Website prices Processing → Processing; complete requires LIVE URL.
+    $foldDomain = 'txfom-fold-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
+    $wpFoldId = site_price_insert_row([
+        'country' => 'Germany',
+        'domain' => $foldDomain,
+        'status_slug' => 'processing',
+        'price_note' => '42 euro',
+        'reply_email' => 'publisher-inbox@example.com',
+        'created_by' => (int) $adminUser['id'],
+    ]);
+    order_reconcile_processing_from_website_prices();
+    $omFromWp = get_order_item_by_site_price_row((int) $wpFoldId);
+    $inProc = list_order_pipeline_rows(['folder' => 'processing', 'q' => $foldDomain]);
+    $inCompEarly = list_order_pipeline_rows(['folder' => 'completed', 'q' => $foldDomain]);
+    $foundProc = false;
+    foreach ($inProc as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omFromWp['id'] ?? 0)) {
+            $foundProc = true;
+            break;
+        }
+    }
+    $foundCompEarly = false;
+    foreach ($inCompEarly as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omFromWp['id'] ?? 0)) {
+            $foundCompEarly = true;
+            break;
+        }
+    }
+    $copiedPublisherInbox = $omFromWp && str_contains((string) ($omFromWp['client_label'] ?? ''), 'publisher-inbox');
+    if ($omFromWp && $foundProc && !$foundCompEarly && !$copiedPublisherInbox
+        && parse_money($omFromWp['owner_price'] ?? 0) === 42.0) {
+        pass('WP Processing syncs to OM Processing');
+    } else {
+        fail('WP Processing did not create a Processing OM row');
+    }
+    $wpRowHtmlTeam = render_site_price_sheet_row(get_site_price_row((int) $wpFoldId) ?: [], $teamUser);
+    $wpCols = db()->query('SHOW COLUMNS FROM site_price_rows')->fetchAll(PDO::FETCH_COLUMN);
+    $forbiddenWp = array_intersect(['live_url', 'client_label', 'decided_price', 'profit', 'invoice_id', 'is_paid'], $wpCols);
+    if ($forbiddenWp === []
+        && !str_contains($wpRowHtmlTeam, 'live_url')
+        && !str_contains($wpRowHtmlTeam, 'client_label')
+        && !str_contains($wpRowHtmlTeam, 'Push to invoice')
+        && !str_contains($wpRowHtmlTeam, 'decided_price')) {
+        pass('Team Website prices has no LIVE/profit/client/invoice fields');
+    } else {
+        fail('Website prices leaked OM fields: ' . json_encode(['cols' => $forbiddenWp]));
+    }
+    $noUrl = order_mark_completed((int) ($omFromWp['id'] ?? 0), '', (int) $adminUser['id']);
+    if (empty($noUrl['ok']) && str_contains((string) ($noUrl['error'] ?? ''), 'live URL')) {
+        pass('complete without live URL rejected');
+    } else {
+        fail('complete without live URL allowed');
+    }
+    $didComplete = order_mark_completed(
+        (int) ($omFromWp['id'] ?? 0),
+        'https://example.com/txfom-live',
+        (int) $adminUser['id']
+    );
+    $afterComplete = get_order_item((int) ($omFromWp['id'] ?? 0));
+    $wpAfter = get_site_price_row((int) $wpFoldId);
+    $inProcAfter = false;
+    foreach (list_order_pipeline_rows(['folder' => 'processing', 'q' => $foldDomain]) as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omFromWp['id'] ?? 0)) {
+            $inProcAfter = true;
+        }
+    }
+    $inCompAfter = false;
+    foreach (list_order_pipeline_rows(['folder' => 'completed', 'q' => $foldDomain]) as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omFromWp['id'] ?? 0)) {
+            $inCompAfter = true;
+        }
+    }
+    $invReady = list_invoiceable_order_items_by_ids([(int) ($omFromWp['id'] ?? 0)]);
+    if (!empty($didComplete['ok']) && $afterComplete && order_is_completed($afterComplete)
+        && (string) ($wpAfter['status_slug'] ?? '') === 'completed'
+        && !$inProcAfter && $inCompAfter && count($invReady) === 1) {
+        pass('complete with live URL moves to Completed and WP Completed');
+    } else {
+        fail('complete with live URL did not move folders/status');
+    }
+    set_order_item_paid((int) ($omFromWp['id'] ?? 0), 0, true);
+    $paidStay = get_order_item((int) ($omFromWp['id'] ?? 0));
+    $wpPaid = get_site_price_row((int) $wpFoldId);
+    $stillComp = false;
+    foreach (list_order_pipeline_rows(['folder' => 'completed', 'q' => $foldDomain]) as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omFromWp['id'] ?? 0)) {
+            $stillComp = true;
+        }
+    }
+    if ($paidStay && order_is_paid($paidStay) && $stillComp
+        && (string) ($wpPaid['status_slug'] ?? '') === 'completed') {
+        pass('paid stays in Completed without changing WP status');
+    } else {
+        fail('paid left Completed or changed Website prices');
+    }
+
+    $leaveDomain = 'txfom-leave-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
+    $wpLeaveId = site_price_insert_row([
+        'country' => 'Germany',
+        'domain' => $leaveDomain,
+        'status_slug' => 'processing',
+        'created_by' => (int) $adminUser['id'],
+    ]);
+    $omLeave = get_order_item_by_site_price_row((int) $wpLeaveId);
+    site_price_save_row((int) $wpLeaveId, ['status_slug' => 'not_interested'], $adminUser);
+    $leaveProc = false;
+    $leaveComp = false;
+    foreach (list_order_pipeline_rows(['folder' => 'processing', 'q' => $leaveDomain]) as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omLeave['id'] ?? 0)) {
+            $leaveProc = true;
+        }
+    }
+    foreach (list_order_pipeline_rows(['folder' => 'completed', 'q' => $leaveDomain]) as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omLeave['id'] ?? 0)) {
+            $leaveComp = true;
+        }
+    }
+    if ($omLeave && !$leaveProc && !$leaveComp && !order_is_completed($omLeave)) {
+        pass('WP leaving Processing hides OM row without completing');
+    } else {
+        fail('WP not_interested still in Processing or auto-completed');
+    }
+
+    $ordersPhpSrc = file_get_contents(__DIR__ . '/pages/admin/orders.php') ?: '';
+    $invoicesPhpSrc = file_get_contents(__DIR__ . '/pages/admin/invoices.php') ?: '';
+    $teamDashSrc = file_get_contents(__DIR__ . '/pages/team/dashboard.php') ?: '';
+    $teamWpSrc = file_get_contents(__DIR__ . '/pages/team/site_prices.php') ?: '';
+    if (str_contains($ordersPhpSrc, 'require_admin()')
+        && str_contains($invoicesPhpSrc, 'require_admin()')
+        && !str_contains($teamDashSrc, 'admin_orders')
+        && !str_contains($teamDashSrc, 'admin_invoices')
+        && !str_contains($teamWpSrc, 'admin_orders')
+        && !str_contains($teamWpSrc, 'admin_invoices')) {
+        pass('Team cannot use OM or invoices');
+    } else {
+        fail('Team OM/invoice ACL leak');
+    }
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
     $draftAfterBlank = count_invoices_by_work_status('draft');
@@ -4000,8 +4152,8 @@ try {
     $genClientId = create_order_client('Test Client Invoice Gen', 'invoice gen test', (int) $adminUser['id']);
     $genItemId = add_order_item((int) $genClientId, 'txforder-live.com', 4, 2026);
     db()->prepare(
-        'UPDATE order_items SET decided_price=?, live_url=?, is_paid=0 WHERE id=?'
-    )->execute([40.00, 'https://example.com/txforder-live', $genItemId]);
+        'UPDATE order_items SET decided_price=?, live_url=?, is_paid=0, order_stage=? WHERE id=?'
+    )->execute([40.00, 'https://example.com/txforder-live', 'completed', $genItemId]);
     $invoiceable = list_invoiceable_order_items((int) $genClientId);
     if (count($invoiceable) < 1) {
         fail('invoiceable rows missing for generate test');

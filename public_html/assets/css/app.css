@@ -1039,6 +1039,7 @@ button.btn.secondary:disabled {
 .launch-card:hover { border-color: var(--brand-2); text-decoration: none; }
 .launch-card h2 { font-size: 1.25rem; margin-bottom: 0.35rem; }
 .launch-card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.om-folder-cards .om-folder-count { font-size: 1.45rem; color: var(--text); font-weight: 700; }
 .workflow-strip {
   display: flex;
   flex-wrap: wrap;

@@ -47,6 +47,8 @@ function ensure_order_schema(): void
           admin_user_id INT NULL,
           order_date DATE NULL,
           is_paid TINYINT(1) NOT NULL DEFAULT 0,
+          site_price_row_id INT NULL,
+          order_stage ENUM('processing','completed') NOT NULL DEFAULT 'processing',
           sort_order INT NOT NULL DEFAULT 0,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -55,6 +57,8 @@ function ensure_order_schema(): void
           INDEX idx_oi_admin (admin_user_id),
           INDEX idx_oi_order_date (order_date),
           INDEX idx_oi_country (country),
+          UNIQUE KEY uniq_order_items_site_price_row (site_price_row_id),
+          INDEX idx_oi_order_stage (order_stage),
           CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
           CONSTRAINT fk_oi_admin FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
@@ -160,6 +164,57 @@ function ensure_order_schema(): void
              END
              WHERE order_date IS NULL AND row_type = 'site'"
         );
+        $cols = $pdo->query('SHOW COLUMNS FROM order_items')->fetchAll(PDO::FETCH_COLUMN);
+        $folderAlters = [];
+        $stageWasMissing = !in_array('order_stage', $cols, true);
+        if (!in_array('site_price_row_id', $cols, true)) {
+            $folderAlters[] = 'ADD COLUMN site_price_row_id INT NULL AFTER is_paid';
+        }
+        if ($stageWasMissing) {
+            $folderAlters[] = "ADD COLUMN order_stage ENUM('processing','completed') NOT NULL DEFAULT 'processing' AFTER site_price_row_id";
+        }
+        if ($folderAlters) {
+            $pdo->exec('ALTER TABLE order_items ' . implode(', ', $folderAlters));
+        }
+        $idxNames = [];
+        foreach ($pdo->query('SHOW INDEX FROM order_items')->fetchAll(PDO::FETCH_ASSOC) as $idx) {
+            $idxNames[(string) ($idx['Key_name'] ?? '')] = true;
+        }
+        if (empty($idxNames['uniq_order_items_site_price_row'])) {
+            try {
+                $pdo->exec('ALTER TABLE order_items ADD UNIQUE INDEX uniq_order_items_site_price_row (site_price_row_id)');
+            } catch (Throwable $e) {
+                // duplicate values on old rows — skip unique
+            }
+        }
+        if (empty($idxNames['idx_oi_order_stage'])) {
+            try {
+                $pdo->exec('ALTER TABLE order_items ADD INDEX idx_oi_order_stage (order_stage)');
+            } catch (Throwable $e) {
+                // already exists
+            }
+        }
+        $wpExists = (int) $pdo->query(
+            "SELECT COUNT(*) FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'site_price_rows'"
+        )->fetchColumn();
+        if ($wpExists > 0) {
+            try {
+                $pdo->exec(
+                    'ALTER TABLE order_items
+                     ADD CONSTRAINT fk_order_items_site_price_row
+                     FOREIGN KEY (site_price_row_id) REFERENCES site_price_rows(id) ON DELETE SET NULL'
+                );
+            } catch (Throwable $e) {
+                // already exists, or Website prices table missing on older installs
+            }
+        }
+        if ($stageWasMissing) {
+            $pdo->exec(
+                "UPDATE order_items SET order_stage = 'completed'
+                 WHERE row_type = 'site' AND TRIM(COALESCE(live_url, '')) <> ''"
+            );
+        }
     } catch (Throwable $e) {
         // ignore on fresh installs
     }
@@ -316,12 +371,190 @@ function order_profit($ownerPrice, $decidedPrice): float
     return round(parse_money($decidedPrice) - parse_money($ownerPrice), 2);
 }
 
+function order_stage(array $row): string
+{
+    $stage = strtolower(trim((string) ($row['order_stage'] ?? 'processing')));
+    return $stage === 'completed' ? 'completed' : 'processing';
+}
+
 function order_is_completed(array $row): bool
 {
     if (($row['row_type'] ?? 'site') === 'year_end') {
         return false;
     }
-    return trim((string) ($row['live_url'] ?? '')) !== '';
+    return order_stage($row) === 'completed' && trim((string) ($row['live_url'] ?? '')) !== '';
+}
+
+function get_order_item_by_site_price_row(int $sitePriceRowId): ?array
+{
+    ensure_order_schema();
+    if ($sitePriceRowId < 1) {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT * FROM order_items WHERE site_price_row_id = ? LIMIT 1');
+    $stmt->execute([$sitePriceRowId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/** Optional: first number in a Website prices note becomes OM owner price. */
+function order_owner_price_from_price_note(string $note): ?float
+{
+    $note = trim($note);
+    if ($note === '') {
+        return null;
+    }
+    if (!preg_match('/(\d+(?:[.,]\d{1,2})?)/', $note, $m)) {
+        return null;
+    }
+    $n = (float) str_replace(',', '.', $m[1]);
+    return $n > 0 ? round($n, 2) : null;
+}
+
+/**
+ * Website prices Processing → Admin OM Processing.
+ * Never copies reply email, LIVE URL, profit, or invoice fields onto Website prices.
+ * Never pulls a completed OM row back into Processing.
+ */
+function order_sync_from_site_price_row(int $sitePriceRowId): void
+{
+    if ($sitePriceRowId < 1 || !function_exists('get_site_price_row')) {
+        return;
+    }
+    $wp = get_site_price_row($sitePriceRowId);
+    if (!$wp) {
+        return;
+    }
+    $wpStatus = strtolower(trim((string) ($wp['status_slug'] ?? '')));
+    $siteName = trim((string) ($wp['domain'] ?? ''));
+    $country = trim((string) ($wp['country'] ?? ''));
+    $existing = get_order_item_by_site_price_row($sitePriceRowId);
+
+    if ($wpStatus !== 'processing') {
+        return;
+    }
+    if ($existing && order_stage($existing) === 'completed') {
+        return;
+    }
+    if ($existing) {
+        $fields = [
+            'site_name' => $siteName !== '' ? $siteName : (string) ($existing['site_name'] ?? ''),
+            'country' => $country !== '' ? $country : (string) ($existing['country'] ?? ''),
+        ];
+        $owner = order_owner_price_from_price_note((string) ($wp['price_note'] ?? ''));
+        if ($owner !== null && parse_money($existing['owner_price'] ?? 0) <= 0) {
+            $fields['owner_price'] = $owner;
+        }
+        $sets = [];
+        $params = [];
+        foreach ($fields as $col => $val) {
+            $sets[] = $col . '=?';
+            $params[] = $val;
+        }
+        $params[] = (int) $existing['id'];
+        db()->prepare(
+            'UPDATE order_items SET ' . implode(', ', $sets) . ', updated_at=NOW()
+             WHERE id=? AND COALESCE(order_stage, \'processing\') = \'processing\''
+        )->execute($params);
+        return;
+    }
+    if ($siteName === '') {
+        return;
+    }
+    add_order_item(null, $siteName, null, null, [
+        'country' => $country,
+        'site_price_row_id' => $sitePriceRowId,
+        'owner_price' => order_owner_price_from_price_note((string) ($wp['price_note'] ?? '')),
+        'order_stage' => 'processing',
+    ]);
+}
+
+function order_reconcile_processing_from_website_prices(): void
+{
+    if (!function_exists('ensure_site_prices_schema')) {
+        return;
+    }
+    try {
+        ensure_site_prices_schema();
+        $ids = db()->query(
+            "SELECT id FROM site_price_rows WHERE status_slug = 'processing'"
+        )->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    } catch (Throwable $e) {
+        return;
+    }
+    foreach ($ids as $id) {
+        try {
+            order_sync_from_site_price_row((int) $id);
+        } catch (Throwable $e) {
+            // best-effort — a bad Website prices row must not block the folder
+        }
+    }
+}
+
+/**
+ * @return array{ok:bool,error?:string,item?:?array}
+ */
+function order_mark_completed(int $id, string $liveUrl, int $userId): array
+{
+    ensure_order_schema();
+    $item = get_order_item($id);
+    if (!$item || ($item['row_type'] ?? 'site') === 'year_end') {
+        return ['ok' => false, 'error' => 'Order not found.'];
+    }
+    $liveUrl = trim($liveUrl);
+    if ($liveUrl === '') {
+        $liveUrl = trim((string) ($item['live_url'] ?? ''));
+    }
+    if ($liveUrl === '') {
+        return ['ok' => false, 'error' => 'A live URL is required to mark an order completed.'];
+    }
+    db()->prepare(
+        "UPDATE order_items
+         SET live_url=?, order_stage='completed', is_paid=0, updated_at=NOW()
+         WHERE id=? AND row_type='site'"
+    )->execute([$liveUrl, $id]);
+
+    $wpId = (int) ($item['site_price_row_id'] ?? 0);
+    if ($wpId > 0 && function_exists('site_price_save_row') && function_exists('get_site_price_row')) {
+        $wp = get_site_price_row($wpId);
+        if ($wp) {
+            try {
+                site_price_save_row($wpId, ['status_slug' => 'completed'], [
+                    'id' => $userId,
+                    'role' => 'admin',
+                ]);
+            } catch (Throwable $e) {
+                // OM row is already completed; Website prices status is best-effort
+            }
+        }
+    }
+
+    return ['ok' => true, 'item' => get_order_item($id)];
+}
+
+/**
+ * @param list<int> $ids
+ * @param array<int|string,string> $liveUrlsById
+ * @return array{ok:int,errors:list<string>}
+ */
+function order_mark_items_completed(array $ids, array $liveUrlsById, int $userId): array
+{
+    $ok = 0;
+    $errors = [];
+    foreach ($ids as $id) {
+        $id = (int) $id;
+        if ($id < 1) {
+            continue;
+        }
+        $url = trim((string) ($liveUrlsById[$id] ?? $liveUrlsById[(string) $id] ?? ''));
+        $res = order_mark_completed($id, $url, $userId);
+        if (!empty($res['ok'])) {
+            $ok++;
+        } else {
+            $errors[] = 'Order #' . $id . ': ' . (string) ($res['error'] ?? 'Could not complete.');
+        }
+    }
+    return ['ok' => $ok, 'errors' => $errors];
 }
 
 function order_is_paid(array $row): bool
@@ -339,7 +572,7 @@ function order_is_paid(array $row): bool
 function set_order_item_paid(int $itemId, int $clientId, bool $paid): void
 {
     ensure_order_schema();
-    $sql = "SELECT live_url FROM order_items WHERE id=? AND row_type='site'";
+    $sql = "SELECT live_url, order_stage FROM order_items WHERE id=? AND row_type='site'";
     $params = [$itemId];
     if ($clientId > 0) {
         $sql .= ' AND client_id=?';
@@ -353,9 +586,9 @@ function set_order_item_paid(int $itemId, int $clientId, bool $paid): void
         if (!$row) {
             throw new InvalidArgumentException('Order row not found.');
         }
-        if (trim((string) ($row['live_url'] ?? '')) === '') {
+        if (!order_is_completed($row)) {
             throw new InvalidArgumentException(
-                'Fill LIVE URL before marking a row as paid (completed orders only).'
+                'Fill LIVE URL and mark the order completed before marking a row as paid (completed orders only).'
             );
         }
     }
@@ -509,6 +742,7 @@ function count_order_client_unpaid_live(int $clientId): int
     $stmt = db()->prepare(
         "SELECT COUNT(*) FROM order_items
          WHERE client_id=? AND row_type='site'
+           AND COALESCE(order_stage, 'processing') = 'completed'
            AND TRIM(live_url) <> '' AND COALESCE(is_paid, 0) = 0"
     );
     $stmt->execute([$clientId]);
@@ -522,15 +756,14 @@ function order_management_dashboard_stats(): array
     $orders = (int) db()->query(
         "SELECT COUNT(*) FROM order_items WHERE row_type = 'site'"
     )->fetchColumn();
-    $unpaidLive = (int) db()->query(
-        "SELECT COUNT(*) FROM order_items
-         WHERE row_type = 'site'
-           AND TRIM(live_url) <> ''
-           AND COALESCE(is_paid, 0) = 0"
-    )->fetchColumn();
+    $processing = count_order_pipeline_rows(['folder' => 'processing']);
+    $completed = count_order_pipeline_rows(['folder' => 'completed']);
+    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
     return [
         'orders' => $orders,
         'clients' => $orders,
+        'processing' => $processing,
+        'completed' => $completed,
         'unpaid_live' => $unpaidLive,
     ];
 }
@@ -650,12 +883,45 @@ function add_order_item(?int $clientId = null, string $siteName = '', ?int $mont
     $adminId = $adminId > 0 ? $adminId : null;
     $orderDate = normalize_order_date($extra['order_date'] ?? '') ?: date('Y-m-d');
     $country = trim((string) ($extra['country'] ?? ''));
-    db()->prepare(
-        "INSERT INTO order_items
-          (client_id, row_type, site_name, country, order_month, order_year,
-           owner_price, decided_price, live_url, client_label, admin_user_id, order_date, sort_order)
-         VALUES (?, 'site', ?, ?, ?, ?, 0, 0, '', ?, ?, ?, ?)"
-    )->execute([$clientId, trim($siteName), $country, $month, $year, $label, $adminId, $orderDate, $next]);
+    $wpId = (int) ($extra['site_price_row_id'] ?? 0);
+    $stage = strtolower(trim((string) ($extra['order_stage'] ?? 'processing')));
+    if ($stage !== 'completed') {
+        $stage = 'processing';
+    }
+    $ownerPrice = 0.0;
+    if (array_key_exists('owner_price', $extra) && $extra['owner_price'] !== null && $extra['owner_price'] !== '') {
+        $ownerPrice = parse_money($extra['owner_price']);
+    }
+    try {
+        db()->prepare(
+            "INSERT INTO order_items
+              (client_id, row_type, site_name, country, order_month, order_year,
+               owner_price, decided_price, live_url, client_label, admin_user_id, order_date, sort_order,
+               site_price_row_id, order_stage)
+             VALUES (?, 'site', ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?)"
+        )->execute([
+            $clientId,
+            trim($siteName),
+            $country,
+            $month,
+            $year,
+            $ownerPrice,
+            $label,
+            $adminId,
+            $orderDate,
+            $next,
+            $wpId > 0 ? $wpId : null,
+            $stage,
+        ]);
+    } catch (PDOException $e) {
+        if ($wpId > 0 && $e->getCode() === '23000') {
+            $existing = get_order_item_by_site_price_row($wpId);
+            if ($existing) {
+                return (int) $existing['id'];
+            }
+        }
+        throw $e;
+    }
     $id = (int) db()->lastInsertId();
     if ($clientId) {
         db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
@@ -749,6 +1015,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         'decided_price=?',
         'live_url=?',
         "is_paid=IF(? = '', 0, is_paid)",
+        "order_stage=IF(? = '', 'processing', order_stage)",
         'updated_at=NOW()',
     ];
     $params = [
@@ -761,6 +1028,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $year,
         $ownerPrice,
         $decidedPrice,
+        $liveUrl,
         $liveUrl,
         $liveUrl,
     ];
@@ -953,7 +1221,7 @@ function order_sheet_export_rows(int $clientId): array
             'profit' => format_money($profit),
             'live_url' => (string) ($row['live_url'] ?? ''),
             'paid' => order_is_paid($row) ? 'Paid' : '',
-            'status' => order_is_completed($row) ? 'Completed' : 'Open',
+            'status' => order_is_completed($row) ? 'Completed' : 'Processing',
         ];
     }
     return $out;
@@ -1062,6 +1330,17 @@ function order_pipeline_where_sql(array $opts = []): array
 {
     $where = ["i.row_type = 'site'"];
     $params = [];
+    $folder = strtolower(trim((string) ($opts['folder'] ?? '')));
+    if ($folder === 'processing') {
+        $where[] = "COALESCE(i.order_stage, 'processing') = 'processing'";
+        $where[] = "(i.site_price_row_id IS NULL OR EXISTS (
+            SELECT 1 FROM site_price_rows spr
+            WHERE spr.id = i.site_price_row_id AND spr.status_slug = 'processing'
+        ))";
+    } elseif ($folder === 'completed') {
+        $where[] = "COALESCE(i.order_stage, 'processing') = 'completed'";
+        $where[] = "TRIM(i.live_url) <> ''";
+    }
     $q = trim((string) ($opts['q'] ?? ''));
     if ($q !== '') {
         $like = '%' . $q . '%';
@@ -1091,14 +1370,16 @@ function order_pipeline_where_sql(array $opts = []): array
         $params[] = $dateTo;
     }
     $status = (string) ($opts['status'] ?? 'all');
-    if ($status === 'unpaid') {
-        $where[] = "TRIM(i.live_url) <> '' AND COALESCE(i.is_paid, 0) = 0";
-    } elseif ($status === 'completed') {
-        $where[] = "TRIM(i.live_url) <> ''";
-    } elseif ($status === 'paid') {
-        $where[] = 'COALESCE(i.is_paid, 0) = 1';
-    } elseif ($status === 'open') {
-        $where[] = "TRIM(i.live_url) = ''";
+    if ($folder === 'completed' || $folder === '') {
+        if ($status === 'unpaid') {
+            $where[] = "COALESCE(i.order_stage, 'processing') = 'completed' AND TRIM(i.live_url) <> '' AND COALESCE(i.is_paid, 0) = 0";
+        } elseif ($status === 'completed' && $folder === '') {
+            $where[] = "COALESCE(i.order_stage, 'processing') = 'completed' AND TRIM(i.live_url) <> ''";
+        } elseif ($status === 'paid') {
+            $where[] = 'COALESCE(i.is_paid, 0) = 1';
+        } elseif ($status === 'open' || $status === 'processing') {
+            $where[] = "COALESCE(i.order_stage, 'processing') = 'processing'";
+        }
     }
     return [' WHERE ' . implode(' AND ', $where), $params];
 }
@@ -1106,6 +1387,9 @@ function order_pipeline_where_sql(array $opts = []): array
 function count_order_pipeline_rows(array $opts = []): int
 {
     ensure_order_schema();
+    if (($opts['folder'] ?? '') === 'processing') {
+        order_reconcile_processing_from_website_prices();
+    }
     [$whereSql, $params] = order_pipeline_where_sql($opts);
     $stmt = db()->prepare(
         'SELECT COUNT(*) FROM order_items i
@@ -1123,6 +1407,9 @@ function count_order_pipeline_rows(array $opts = []): int
 function list_order_pipeline_rows(array $opts = []): array
 {
     ensure_order_schema();
+    if (($opts['folder'] ?? '') === 'processing') {
+        order_reconcile_processing_from_website_prices();
+    }
     $limit = isset($opts['limit']) ? max(0, (int) $opts['limit']) : 0;
     $offset = max(0, (int) ($opts['offset'] ?? 0));
     [$whereSql, $params] = order_pipeline_where_sql($opts);
@@ -1227,7 +1514,7 @@ function order_pipeline_export_rows(array $items): array
             'month' => order_month_label((int) ($row['order_month'] ?? 0)),
             'end_month' => order_month_label((int) ($row['period_end_month'] ?? 0)),
             'year' => (string) ((int) ($row['order_year'] ?: 0) ?: ''),
-            'status' => order_is_completed($row) ? 'Completed' : 'Open',
+            'status' => order_is_completed($row) ? 'Completed' : 'Processing',
         ];
     }
     return $out;

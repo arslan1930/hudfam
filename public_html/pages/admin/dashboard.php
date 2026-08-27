@@ -117,7 +117,7 @@ render_workflow([
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects', 'hint' => 'Country folders'],
     ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted', 'hint' => 'From Extracting Push'],
     ['label' => 'Emails data', 'href' => 'index.php?page=admin_emails_data', 'hint' => 'Admin · Final · Campaign'],
-    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders', 'hint' => 'One sheet · push to invoice'],
+    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders', 'hint' => 'Processing · Completed'],
     ['label' => 'Invoices', 'href' => 'index.php?page=admin_invoices', 'hint' => 'Printable bills'],
 ]);
 render_dashboard_help('admin');
@@ -152,7 +152,7 @@ render_dashboard_help('admin');
   render_admin_dashboard_stat(
       'Unpaid LIVE',
       ['ok' => $omOk, 'n' => $orderUnpaidLive],
-      'index.php?page=admin_orders',
+      'index.php?page=admin_orders&folder=completed&status=unpaid',
       'Live placements not marked paid'
   );
   render_admin_dashboard_stat(
@@ -187,7 +187,7 @@ if ($adminEmailsNew) {
 }
 if ($omOk && $orderUnpaidLive > 0) {
     $attention[] = [
-        'href' => 'index.php?page=admin_orders',
+        'href' => 'index.php?page=admin_orders&folder=completed&status=unpaid',
         'label' => (int) $orderUnpaidLive . ' unpaid LIVE',
     ];
 }
@@ -238,7 +238,7 @@ if ($attention):
   <a class="launch-card" href="index.php?page=admin_orders" data-dashboard-item
      data-search="order management sheet sites prices profit live url unpaid invoice client email admin country date">
     <h2>Order management</h2>
-    <p><?= (int) $orderRowCount ?> order<?= (int) $orderRowCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — one sheet, push to invoice.</p>
+    <p><?= (int) $orderRowCount ?> order<?= (int) $orderRowCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — Processing · Completed.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_site_prices" data-dashboard-item
      data-search="website prices publisher rates country sheet da dr traffic status office">
