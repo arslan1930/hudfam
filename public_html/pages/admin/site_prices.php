@@ -131,7 +131,7 @@ render_breadcrumbs([
 <div class="card" id="open-country">
   <h2 style="margin:0 0 0.45rem">Open a country sheet</h2>
   <p class="help" style="margin-top:0">Country is chosen here. New rows on that sheet will use this country automatically.</p>
-  <form method="get" action="index.php" class="form-grid" autocomplete="off">
+  <form method="get" action="index.php" class="form-grid" autocomplete="off" data-no-draft>
     <input type="hidden" name="page" value="admin_site_prices">
     <?= render_country_typeahead('', [
         'id' => 'site_price_country',
@@ -198,17 +198,35 @@ render_breadcrumbs([
 (function () {
   var input = document.getElementById('site-price-country-search');
   if (!input) return;
+  var matchIndex = -1;
   function norm(s) { return String(s || '').trim().toLowerCase(); }
+  function visibleRows() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-site-price-country-row]')).filter(function (row) {
+      return !row.hidden;
+    });
+  }
   input.addEventListener('input', function () {
     var q = norm(input.value);
     var any = false;
+    matchIndex = -1;
     document.querySelectorAll('[data-site-price-country-row]').forEach(function (row) {
       var hit = !q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1;
       row.hidden = !hit;
+      row.classList.remove('sheet-search-hit');
       if (hit) any = true;
     });
     var empty = document.querySelector('[data-site-price-country-empty]');
     if (empty) empty.hidden = !q || any;
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var rows = visibleRows();
+    if (!rows.length) return;
+    matchIndex = (matchIndex + 1) % rows.length;
+    rows.forEach(function (r) { r.classList.remove('sheet-search-hit'); });
+    rows[matchIndex].classList.add('sheet-search-hit');
+    try { rows[matchIndex].scrollIntoView({ block: 'nearest' }); } catch (err) { rows[matchIndex].scrollIntoView(true); }
   });
 })();
 </script>

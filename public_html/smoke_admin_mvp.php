@@ -245,7 +245,8 @@ if (!str_contains($ordersHubGuide, 'guide_orders()')
     || !str_contains($accountHubGuide, 'guide_admin_account()')
     || !str_contains($sitePricesHubGuide, 'guide_site_prices()')
     || !str_contains($sitePricesHubGuide, 'Open a country sheet')
-    || !str_contains($sitePricesHubGuide, 'No sites in this country yet')) {
+    || !str_contains($sitePricesHubGuide, 'No sites in this country yet')
+    || !str_contains($sitePricesHubGuide, 'data-no-draft')) {
     fail('Office hubs missing page-purpose guide calls');
 } else {
     ok('Office hubs echo Orders/Invoices/Account/Website prices guides');

@@ -301,8 +301,8 @@ function site_price_insert_row(array $fields): int
             trim((string) ($fields['price_note'] ?? '')),
             trim((string) ($fields['extra_note'] ?? '')),
             $status,
-            isset($fields['created_by']) ? (int) $fields['created_by'] : null,
-            isset($fields['managed_by']) ? (int) $fields['managed_by'] : null,
+            ((int) ($fields['created_by'] ?? 0) > 0) ? (int) $fields['created_by'] : null,
+            ((int) ($fields['managed_by'] ?? 0) > 0) ? (int) $fields['managed_by'] : null,
         ]);
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
