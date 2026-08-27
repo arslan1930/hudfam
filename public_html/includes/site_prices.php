@@ -179,9 +179,12 @@ function site_price_list_statuses(): array
     return $rows;
 }
 
-function site_price_status_map(): array
+function site_price_status_map(bool $refresh = false): array
 {
     static $map = null;
+    if ($refresh) {
+        $map = null;
+    }
     if ($map !== null) {
         return $map;
     }
@@ -190,6 +193,21 @@ function site_price_status_map(): array
         $map[strtolower((string) $st['slug'])] = $st;
     }
     return $map;
+}
+
+function site_price_flush_status_cache(): void
+{
+    site_price_status_map(true);
+}
+
+/** @return array<string,string> */
+function site_price_lane_labels(): array
+{
+    return [
+        'processing' => 'Processing',
+        'new' => 'New',
+        'other' => 'Other',
+    ];
 }
 
 function site_price_status_lane(string $slug): string
@@ -595,14 +613,18 @@ function site_price_save_row(int $id, array $fields, array $viewer): array
 
     $oldStatus = (string) ($row['status_slug'] ?? '');
     $oldPrice = (string) ($row['price_note'] ?? '');
+    $sortInLane = (int) ($row['sort_in_lane'] ?? 0);
+    if (site_price_status_lane($oldStatus) !== site_price_status_lane($status)) {
+        $sortInLane = 0;
+    }
 
     try {
         db()->prepare(
             'UPDATE site_price_rows
              SET domain=?, niche=?, da=?, dr=?, traffic=?, price_note=?, extra_note=?, status_slug=?,
-                 identity_locked=1, updated_at=NOW()
+                 sort_in_lane=?, identity_locked=1, updated_at=NOW()
              WHERE id=?'
-        )->execute([$domain, $niche, $da, $dr, $traffic, $price, $note, $status, $id]);
+        )->execute([$domain, $niche, $da, $dr, $traffic, $price, $note, $status, $sortInLane, $id]);
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
             throw new RuntimeException('That site is already on this country’s price sheet.');
@@ -646,18 +668,198 @@ function site_price_unlock_row(int $id, array $viewer): array
     return $saved;
 }
 
+function site_price_slug_from_label(string $label): string
+{
+    $slug = strtolower(trim($label));
+    $slug = preg_replace('/[^a-z0-9]+/', '_', $slug) ?? '';
+    $slug = trim($slug, '_');
+    if (strlen($slug) > 80) {
+        $slug = substr($slug, 0, 80);
+        $slug = rtrim($slug, '_');
+    }
+    return $slug;
+}
+
+/**
+ * Admin adds an extra status word. Lands in the Other lane. Builtins stay closed.
+ *
+ * @param array{id?:int,role?:string} $viewer
+ * @return array<string,mixed>
+ */
+function site_price_add_custom_status(string $label, array $viewer): array
+{
+    if (($viewer['role'] ?? '') !== 'admin') {
+        throw new RuntimeException('Only Admin can add status words.');
+    }
+    $label = trim($label);
+    if ($label === '' || mb_strlen($label) > 80) {
+        throw new InvalidArgumentException('Type a short status word.');
+    }
+    $slug = site_price_slug_from_label($label);
+    if ($slug === '') {
+        throw new InvalidArgumentException('Type a status word with letters or numbers.');
+    }
+    ensure_site_prices_schema();
+    $map = site_price_status_map(true);
+    if (isset($map[$slug])) {
+        throw new RuntimeException('That status word is already on the list.');
+    }
+    foreach ($map as $st) {
+        if (mb_strtolower(trim((string) ($st['label'] ?? ''))) === mb_strtolower($label)) {
+            throw new RuntimeException('That status word is already on the list.');
+        }
+    }
+    $max = (int) db()->query('SELECT COALESCE(MAX(sort_order), 90) FROM site_price_statuses')->fetchColumn();
+    db()->prepare(
+        'INSERT INTO site_price_statuses (slug, label, color, lane, is_builtin, sort_order)
+         VALUES (?,?,?,?,0,?)'
+    )->execute([$slug, $label, 'grey', 'other', $max + 10]);
+    site_price_flush_status_cache();
+    $saved = site_price_status_map()[$slug] ?? null;
+    if (!$saved) {
+        throw new RuntimeException('Could not save that status word.');
+    }
+    return $saved;
+}
+
+/**
+ * @param array{id?:int,role?:string} $viewer
+ */
+function site_price_delete_custom_status(string $slug, array $viewer): void
+{
+    if (($viewer['role'] ?? '') !== 'admin') {
+        throw new RuntimeException('Only Admin can remove status words.');
+    }
+    $slug = strtolower(trim($slug));
+    if ($slug === '') {
+        throw new InvalidArgumentException('Status word is required.');
+    }
+    ensure_site_prices_schema();
+    $st = site_price_status_map(true)[$slug] ?? null;
+    if (!$st) {
+        throw new RuntimeException('Status word not found.');
+    }
+    if ((int) ($st['is_builtin'] ?? 0) === 1) {
+        throw new RuntimeException('The seven closed statuses cannot be removed.');
+    }
+    $used = db()->prepare('SELECT COUNT(*) FROM site_price_rows WHERE status_slug=?');
+    $used->execute([$slug]);
+    $n = (int) $used->fetchColumn();
+    if ($n > 0) {
+        throw new RuntimeException(
+            $n === 1
+                ? '1 site still uses this status. Change it first.'
+                : $n . ' sites still use this status. Change them first.'
+        );
+    }
+    db()->prepare('DELETE FROM site_price_statuses WHERE slug=? AND is_builtin=0')->execute([$slug]);
+    site_price_flush_status_cache();
+}
+
+/**
+ * Admin drag: persist order of row ids inside one lane of one country.
+ *
+ * @param list<int|string> $ids
+ * @param array{id?:int,role?:string} $viewer
+ */
+function site_price_reorder_lane(string $country, string $lane, array $ids, array $viewer): void
+{
+    if (($viewer['role'] ?? '') !== 'admin') {
+        throw new RuntimeException('Only Admin can drag rows.');
+    }
+    $country = trim($country);
+    $lane = strtolower(trim($lane));
+    if ($country === '' || !isset(site_price_lane_labels()[$lane])) {
+        throw new InvalidArgumentException('Country and lane are required.');
+    }
+    $canon = function_exists('resolve_canonical_country') ? resolve_canonical_country($country) : null;
+    if ($canon !== null) {
+        $country = (string) $canon['name'];
+    }
+    $want = [];
+    foreach ($ids as $id) {
+        $n = (int) $id;
+        if ($n > 0 && !isset($want[$n])) {
+            $want[$n] = $n;
+        }
+    }
+    $want = array_values($want);
+    $rows = list_site_price_rows($country);
+    $inLane = [];
+    foreach ($rows as $row) {
+        if (site_price_status_lane((string) ($row['status_slug'] ?? 'new')) === $lane) {
+            $inLane[(int) $row['id']] = true;
+        }
+    }
+    if (count($want) !== count($inLane)) {
+        throw new RuntimeException('Reload the sheet and drag again.');
+    }
+    foreach ($want as $id) {
+        if (!isset($inLane[$id])) {
+            throw new RuntimeException('That site is not in this lane.');
+        }
+    }
+    $upd = db()->prepare('UPDATE site_price_rows SET sort_in_lane=?, updated_at=NOW() WHERE id=? AND country=?');
+    foreach ($want as $i => $id) {
+        $upd->execute([$i + 1, $id, $country]);
+    }
+}
+
 function site_price_status_select_html(string $current, string $id = ''): string
 {
     $current = site_price_normalize_status($current);
-    $html = '<select class="site-price-status" data-site-price-status data-no-draft'
+    $cur = site_price_status_map()[$current] ?? null;
+    $color = $cur ? (string) ($cur['color'] ?? 'grey') : 'grey';
+    $html = '<select class="site-price-status is-color-' . h($color) . '" data-site-price-status data-no-draft'
         . ($id !== '' ? ' id="' . h($id) . '"' : '')
         . ' aria-label="Status">';
     foreach (site_price_list_statuses() as $st) {
         $slug = (string) $st['slug'];
         $sel = $slug === $current ? ' selected' : '';
-        $html .= '<option value="' . h($slug) . '"' . $sel . '>' . h((string) $st['label']) . '</option>';
+        $html .= '<option value="' . h($slug) . '" data-color="' . h((string) ($st['color'] ?? 'grey')) . '"'
+            . ' data-lane="' . h((string) ($st['lane'] ?? 'other')) . '"'
+            . $sel . '>' . h((string) $st['label']) . '</option>';
     }
     $html .= '</select>';
+    return $html;
+}
+
+/**
+ * @param array{role?:string} $viewer
+ */
+function render_site_price_status_words_card(array $viewer): string
+{
+    $isAdmin = ($viewer['role'] ?? '') === 'admin';
+    $html = '<div class="card" id="status-words" style="margin-top:1rem">';
+    $html .= '<h2 style="margin:0 0 0.35rem">Status words</h2>';
+    $html .= '<p class="help" style="margin-top:0">The seven closed statuses stay. Extra words land in Other on every country sheet.</p>';
+    $html .= '<ul class="site-price-status-list">';
+    foreach (site_price_list_statuses() as $st) {
+        $builtin = (int) ($st['is_builtin'] ?? 0) === 1;
+        $html .= '<li class="site-price-status-chip is-color-' . h((string) ($st['color'] ?? 'grey')) . '">';
+        $html .= '<span>' . h((string) $st['label']) . '</span>';
+        if (!$builtin && $isAdmin) {
+            $html .= '<form method="post" action="index.php?page=admin_site_prices" class="site-price-status-del" data-no-draft>';
+            $html .= function_exists('csrf_field') ? csrf_field() : '';
+            $html .= '<input type="hidden" name="action" value="delete_status">';
+            $html .= '<input type="hidden" name="slug" value="' . h((string) $st['slug']) . '">';
+            $html .= '<button type="submit" class="site-price-status-x" aria-label="Remove ' . h((string) $st['label']) . '">×</button>';
+            $html .= '</form>';
+        }
+        $html .= '</li>';
+    }
+    $html .= '</ul>';
+    if ($isAdmin) {
+        $html .= '<form method="post" action="index.php?page=admin_site_prices" class="form-grid site-price-status-add" autocomplete="off" data-no-draft>';
+        $html .= function_exists('csrf_field') ? csrf_field() : '';
+        $html .= '<input type="hidden" name="action" value="add_status">';
+        $html .= '<label for="site_price_status_label">Add a word';
+        $html .= '<input id="site_price_status_label" type="text" name="label" maxlength="80" required data-no-draft';
+        $html .= ' placeholder="Follow up" autocomplete="off"></label>';
+        $html .= '<p class="actions" style="margin-top:0;align-self:end"><button class="btn secondary" type="submit">Add word</button></p>';
+        $html .= '</form>';
+    }
+    $html .= '</div>';
     return $html;
 }
 
@@ -684,8 +886,9 @@ function render_site_price_sheet_row(array $row, array $viewer): string
         $domain . ' ' . (string) ($view['niche'] ?? '') . ' ' . (string) ($view['price_note'] ?? '')
         . ' ' . (string) ($view['status_slug'] ?? '')
     ));
+    $lane = site_price_status_lane((string) ($view['status_slug'] ?? 'new'));
     $html = '<tr class="site-price-row" data-site-price-row data-row-id="' . $id . '"'
-        . ' data-locked="' . ($locked ? '1' : '0') . '" data-search="' . h($hay) . '">';
+        . ' data-locked="' . ($locked ? '1' : '0') . '" data-lane="' . h($lane) . '" data-search="' . h($hay) . '">';
 
     $html .= '<td data-label="Website">';
     if ($locked) {
@@ -731,6 +934,10 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $html .= '<td data-label="Note"><input type="text" class="site-price-input" data-site-price-note value="'
         . h((string) ($view['extra_note'] ?? '')) . '" autocomplete="off" spellcheck="false" data-no-draft aria-label="Note"></td>';
     $html .= '<td data-label="Actions" class="site-price-actions">';
+    if ($isAdmin) {
+        $html .= '<span class="site-price-drag" data-site-price-drag draggable="true"'
+            . ' title="Drag to reorder in this lane" aria-label="Drag to reorder in this lane">⋮⋮</span>';
+    }
     if ($isAdmin && $locked) {
         $html .= '<button type="button" class="btn secondary small" data-site-price-unlock>Unlock</button>';
     }
@@ -767,6 +974,24 @@ function render_site_price_add_row(): string
     return $html;
 }
 
+function render_site_price_lane_header(string $lane, int $count, bool $isAdmin = false): string
+{
+    $labels = site_price_lane_labels();
+    $label = $labels[$lane] ?? 'Other';
+    $hint = '';
+    if ($lane === 'processing') {
+        $hint = $isAdmin ? 'Oldest first. Drag to reorder.' : 'Oldest first.';
+    } elseif ($lane === 'new') {
+        $hint = $isAdmin ? 'Newest first. Drag to reorder.' : 'Newest first.';
+    } else {
+        $hint = $isAdmin ? 'Extra status words live here. Drag to reorder.' : 'Extra status words live here.';
+    }
+    return '<tr class="site-price-lane" data-site-price-lane="' . h($lane) . '">'
+        . '<td colspan="9"><span class="site-price-lane-title">' . h($label)
+        . ' · ' . (int) $count . '</span>'
+        . '<span class="muted site-price-lane-hint"> ' . h($hint) . '</span></td></tr>';
+}
+
 /**
  * @param list<array<string,mixed>> $rows
  * @param array{id?:int,role?:string} $viewer
@@ -774,8 +999,22 @@ function render_site_price_add_row(): string
 function render_site_price_sheet_tbody(array $rows, array $viewer): string
 {
     $html = render_site_price_add_row();
+    $groups = ['processing' => [], 'new' => [], 'other' => []];
     foreach ($rows as $row) {
-        $html .= render_site_price_sheet_row($row, $viewer);
+        $lane = site_price_status_lane((string) ($row['status_slug'] ?? 'new'));
+        if (!isset($groups[$lane])) {
+            $lane = 'other';
+        }
+        $groups[$lane][] = $row;
+    }
+    foreach ($groups as $lane => $items) {
+        if ($items === []) {
+            continue;
+        }
+        $html .= render_site_price_lane_header($lane, count($items), ($viewer['role'] ?? '') === 'admin');
+        foreach ($items as $row) {
+            $html .= render_site_price_sheet_row($row, $viewer);
+        }
     }
     return $html;
 }

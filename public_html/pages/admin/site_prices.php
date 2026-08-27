@@ -24,7 +24,30 @@ if ($sheet !== '') {
     $countryName = $canon['name'];
 }
 
-$sheetActions = ['add_row', 'save_row', 'unlock_row', 'suggest_niche'];
+$hubActions = ['add_status', 'delete_status'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string) post('action'), $hubActions, true)) {
+    $viewer = [
+        'id' => (int) ($user['id'] ?? 0),
+        'role' => (string) ($user['role'] ?? ''),
+    ];
+    $back = $inCountry ? site_price_sheet_url($countryName) : $hub;
+    try {
+        if ((string) post('action') === 'add_status') {
+            $st = site_price_add_custom_status((string) post('label'), $viewer);
+            flash('ok', 'Added status word “' . (string) ($st['label'] ?? '') . '”.');
+        } else {
+            site_price_delete_custom_status((string) post('slug'), $viewer);
+            flash('ok', 'Removed that status word.');
+        }
+    } catch (InvalidArgumentException $e) {
+        flash('error', $e->getMessage());
+    } catch (RuntimeException $e) {
+        flash('error', $e->getMessage());
+    }
+    redirect($back . '#status-words');
+}
+
+$sheetActions = ['add_row', 'save_row', 'unlock_row', 'suggest_niche', 'reorder_lane'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string) post('action'), $sheetActions, true)) {
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
@@ -136,6 +159,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string) post('action'), $
                 'message' => 'Unlocked.',
             ]);
         }
+        if ($action === 'reorder_lane') {
+            $ids = preg_split('/[,\s]+/', trim((string) post('ids'))) ?: [];
+            site_price_reorder_lane($workCountry, (string) post('lane'), $ids, $viewer);
+            $rows = list_site_price_rows($workCountry);
+            $jsonOut([
+                'ok' => true,
+                'country' => $workCountry,
+                'total' => count($rows),
+                'tbody_html' => render_site_price_sheet_tbody($rows, $viewer),
+                'message' => 'Order saved.',
+            ]);
+        }
         $jsonOut(['ok' => false, 'error' => 'Unknown action.'], 400);
     } catch (InvalidArgumentException $e) {
         $jsonOut(['ok' => false, 'error' => $e->getMessage(), 'country' => $workCountry], 400);
@@ -165,19 +200,21 @@ if ($inCountry) {
         ) ?></h1>
         <p class="muted">
           <span data-site-price-count><?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?></span>
-          · Processing stays first, then New, then the rest.
-          Website, DA, DR, and traffic lock after add. Price, status, niche, and note stay editable.
+          · Processing stays first, then New, then Other.
+          Website, DA, DR, and traffic lock after add. Admin can drag inside a lane.
         </p>
         <p class="help site-price-status-msg" data-site-price-status-msg role="status" hidden></p>
       </div>
       <div class="actions">
+        <a class="btn secondary" href="<?= h($hub) ?>#status-words">Status words</a>
         <a class="btn secondary" href="<?= h($hub) ?>">All countries</a>
       </div>
     </div>
 
     <div class="card">
       <div class="table-wrap">
-        <table class="sheet-cards-mobile site-price-sheet" data-site-price-sheet data-country="<?= h($countryName) ?>">
+        <table class="sheet-cards-mobile site-price-sheet" data-site-price-sheet data-country="<?= h($countryName) ?>"
+               data-admin="<?= ($user['role'] ?? '') === 'admin' ? '1' : '0' ?>">
           <thead>
             <tr>
               <th>Website</th>
@@ -233,6 +270,8 @@ render_breadcrumbs([
 </div>
 
 <?= guide_site_prices() ?>
+
+<?= render_site_price_status_words_card($user) ?>
 
 <div class="card" id="open-country">
   <h2 style="margin:0 0 0.45rem">Open a country sheet</h2>

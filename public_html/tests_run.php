@@ -762,7 +762,9 @@ try {
         && !str_contains($adminHtml, 'is-copy-lock');
     $teamNoUnlock = !str_contains($teamHtml, 'Unlock') && str_contains($teamHtml, 'is-copy-lock');
     $hasAdd = str_contains($adminHtml, 'data-site-price-add') && str_contains($pageSrc, 'data-site-price-sheet');
-    if ($noExport && $adminUnlock && $teamNoUnlock && $hasAdd) {
+    $adminDrag = str_contains($adminHtml, 'data-site-price-drag') && str_contains($adminHtml, 'data-site-price-lane');
+    $teamNoDrag = !str_contains($teamHtml, 'data-site-price-drag');
+    if ($noExport && $adminUnlock && $teamNoUnlock && $hasAdd && $adminDrag && $teamNoDrag) {
         pass('site_price sheet render lock + no Team export');
     } else {
         fail('site_price render: ' . json_encode([
@@ -770,10 +772,125 @@ try {
             'admin' => $adminUnlock,
             'team' => $teamNoUnlock,
             'add' => $hasAdd,
+            'drag' => $adminDrag,
+            'team_drag' => $teamNoDrag,
         ]));
     }
 
+    $custom = site_price_add_custom_status('Follow up TXF', $adminUser);
+    $teamAdd = false;
+    try {
+        site_price_add_custom_status('Team word', $teamUser);
+    } catch (RuntimeException $e) {
+        $teamAdd = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $dupBuiltin = false;
+    try {
+        site_price_add_custom_status('New', $adminUser);
+    } catch (RuntimeException $e) {
+        $dupBuiltin = str_contains($e->getMessage(), 'already');
+    }
+    $delBuiltin = false;
+    try {
+        site_price_delete_custom_status('agreed', $adminUser);
+    } catch (RuntimeException $e) {
+        $delBuiltin = str_contains($e->getMessage(), 'closed');
+    }
+    $selectHtml = site_price_status_select_html('new');
+    if (($custom['slug'] ?? '') === 'follow_up_txf'
+        && ($custom['lane'] ?? '') === 'other'
+        && (int) ($custom['is_builtin'] ?? 1) === 0
+        && $teamAdd && $dupBuiltin && $delBuiltin
+        && str_contains($selectHtml, 'follow_up_txf')
+        && str_contains($selectHtml, 'Follow up TXF')) {
+        pass('site_price custom status add + builtin closed');
+    } else {
+        fail('site_price custom status: ' . json_encode([
+            'custom' => $custom,
+            'team' => $teamAdd,
+            'dup' => $dupBuiltin,
+            'del' => $delBuiltin,
+        ]));
+    }
+
+    $dragCountry = 'Austria';
+    db()->exec("DELETE FROM site_price_rows WHERE country='Austria' AND domain LIKE 'txfprice-%'");
+    $rowUse = site_price_add_row_for_user([
+        'country' => $dragCountry,
+        'domain' => 'txfprice-custom-at.com',
+        'status_slug' => 'follow_up_txf',
+    ], $teamUser);
+    $inUse = false;
+    try {
+        site_price_delete_custom_status('follow_up_txf', $adminUser);
+    } catch (RuntimeException $e) {
+        $inUse = str_contains($e->getMessage(), 'still use');
+    }
+    $rowA = site_price_add_row_for_user([
+        'country' => $dragCountry,
+        'domain' => 'txfprice-drag-a.at',
+        'status_slug' => 'processing',
+    ], $adminUser);
+    $rowB = site_price_add_row_for_user([
+        'country' => $dragCountry,
+        'domain' => 'txfprice-drag-b.at',
+        'status_slug' => 'processing',
+    ], $adminUser);
+    $idA = (int) ($rowA['id'] ?? 0);
+    $idB = (int) ($rowB['id'] ?? 0);
+    $procIds = [];
+    foreach (list_site_price_rows($dragCountry) as $r) {
+        if (site_price_status_lane((string) ($r['status_slug'] ?? '')) === 'processing') {
+            $procIds[] = (int) $r['id'];
+        }
+    }
+    $reordered = [$idB, $idA];
+    foreach ($procIds as $pid) {
+        if ($pid !== $idA && $pid !== $idB) {
+            $reordered[] = $pid;
+        }
+    }
+    site_price_reorder_lane($dragCountry, 'processing', $reordered, $adminUser);
+    $after = [];
+    foreach (list_site_price_rows($dragCountry) as $r) {
+        if (site_price_status_lane((string) ($r['status_slug'] ?? '')) === 'processing') {
+            $after[] = (string) $r['domain'];
+        }
+    }
+    $teamDragFail = false;
+    try {
+        site_price_reorder_lane($dragCountry, 'processing', $reordered, $teamUser);
+    } catch (RuntimeException $e) {
+        $teamDragFail = str_contains($e->getMessage(), 'Only Admin');
+    }
+    $laneHtml = render_site_price_sheet_tbody(list_site_price_rows($dragCountry), $adminUser);
+    if ($inUse
+        && ($after[0] ?? '') === 'txfprice-drag-b.at'
+        && ($after[1] ?? '') === 'txfprice-drag-a.at'
+        && $teamDragFail
+        && str_contains($laneHtml, 'data-site-price-lane="processing"')
+        && str_contains($laneHtml, 'data-site-price-lane="other"')
+        && str_contains($laneHtml, 'Follow up TXF')) {
+        pass('site_price lanes + Admin drag order');
+    } else {
+        fail('site_price lanes/drag: ' . json_encode([
+            'in_use' => $inUse,
+            'after' => $after,
+            'team' => $teamDragFail,
+        ]));
+    }
+
+    site_price_save_row((int) ($rowUse['id'] ?? 0), ['status_slug' => 'ok'], $adminUser);
+    site_price_delete_custom_status('follow_up_txf', $adminUser);
+    $gone = !isset(site_price_status_map(true)['follow_up_txf']);
+    if ($gone) {
+        pass('site_price custom status delete when unused');
+    } else {
+        fail('site_price custom status lingered');
+    }
+
     db()->exec("DELETE FROM site_price_rows WHERE domain LIKE 'txfprice-%'");
+    db()->exec("DELETE FROM site_price_statuses WHERE slug LIKE 'follow_up_txf' OR slug LIKE 'txfprice%'");
 } catch (Throwable $e) {
     fail('site_prices: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }

@@ -293,6 +293,20 @@ if (!str_contains($sitePricesHubGuide, "'save_row'")
 } else {
     ok('Website prices add-row + per-row save + identity lock');
 }
+if (!str_contains($sitePricesHubGuide, "'reorder_lane'")
+    || !str_contains($sitePricesHubGuide, "'add_status'")
+    || !str_contains($sitePricesHubGuide, 'status-words')
+    || !str_contains($sitePricesLib, 'function site_price_add_custom_status')
+    || !str_contains($sitePricesLib, 'function site_price_reorder_lane')
+    || !str_contains($sitePricesLib, 'data-site-price-lane')
+    || !str_contains($sitePricesLib, 'data-site-price-drag')
+    || !str_contains($sitePricesJs, "post('reorder_lane'")
+    || !str_contains($sitePricesJs, 'bindDrag')
+    || !str_contains($sitePricesCss, '.site-price-lane')) {
+    fail('Website prices lanes / custom statuses / Admin drag missing');
+} else {
+    ok('Website prices lanes + custom statuses + Admin drag');
+}
 foreach ([
     'guide_campaign_search',
     'guide_campaign_drafts',
