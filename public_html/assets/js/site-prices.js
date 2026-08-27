@@ -220,6 +220,63 @@
     }).catch(function () { /* leave blank */ });
   }
 
+  function historyRowFor(tr) {
+    if (!tr) return null;
+    var id = tr.getAttribute('data-row-id') || '';
+    var next = tr.nextElementSibling;
+    if (next && next.getAttribute('data-site-price-history-row') === id) return next;
+    return null;
+  }
+
+  function toggleHistory(tr) {
+    var id = tr.getAttribute('data-row-id');
+    if (!id) return;
+    var existing = historyRowFor(tr);
+    if (existing && !existing.hidden) {
+      existing.hidden = true;
+      return;
+    }
+    setStatus('Loading history…', false);
+    post('row_history', { site_id: id }).then(function (json) {
+      if (!json.ok) {
+        setStatus(json.error || 'Could not load history.', true);
+        return;
+      }
+      setStatus('', false);
+      var row = historyRowFor(tr);
+      if (!row) {
+        row = document.createElement('tr');
+        row.className = 'site-price-history-row';
+        row.setAttribute('data-site-price-history-row', id);
+        var td = document.createElement('td');
+        td.colSpan = String(tr.children.length || 10);
+        row.appendChild(td);
+        tr.parentNode.insertBefore(row, tr.nextSibling);
+      }
+      row.querySelector('td').innerHTML = json.html || '<p class="muted">No history yet.</p>';
+      row.hidden = false;
+    }).catch(function () {
+      setStatus('Could not load history.', true);
+    });
+  }
+
+  function claimRow(tr) {
+    var id = tr.getAttribute('data-row-id');
+    if (!id) return;
+    setStatus('Taking…', false);
+    post('claim_row', { site_id: id }).then(function (json) {
+      if (!json.ok) {
+        setStatus(json.error || 'Could not take this site.', true);
+        return;
+      }
+      setStatus(json.message || 'You are managing this site.', false);
+      if (json.tbody_html) applyTbody(json.tbody_html);
+      if (json.total != null) applyCount(json.total);
+    }).catch(function () {
+      setStatus('Could not take this site.', true);
+    });
+  }
+
   function reorderLane(lane, ids) {
     if (!lane || !ids || !ids.length) return;
     setStatus('Saving order…', false);
@@ -252,6 +309,7 @@
     }
 
     root.addEventListener('dragstart', function (e) {
+      root.querySelectorAll('[data-site-price-history-row]').forEach(function (el) { el.remove(); });
       var handle = e.target && e.target.closest ? e.target.closest('[data-site-price-drag]') : null;
       if (!handle) {
         e.preventDefault();
@@ -340,6 +398,20 @@
         e.preventDefault();
         var tr = un.closest('[data-site-price-row]');
         if (tr) unlockRow(tr);
+        return;
+      }
+      var hist = t.closest('[data-site-price-history]');
+      if (hist) {
+        e.preventDefault();
+        var htr = hist.closest('[data-site-price-row]');
+        if (htr) toggleHistory(htr);
+        return;
+      }
+      var claim = t.closest('[data-site-price-claim]');
+      if (claim) {
+        e.preventDefault();
+        var ctr = claim.closest('[data-site-price-row]');
+        if (ctr) claimRow(ctr);
       }
     });
 
