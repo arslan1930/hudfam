@@ -351,7 +351,10 @@ if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
     || str_contains($teamSitePricesPage, 'admin_invoices')
     || !str_contains($sitePricesLib, 'function render_site_price_filters')
     || !str_contains($sitePricesLib, 'data-site-price-filters')
+    || !str_contains($sitePricesLib, 'Search this country')
     || !str_contains($sitePricesJs, 'applyFilters')
+    || !str_contains($sitePricesJs, 'searchAllPages')
+    || !str_contains($sitePricesJs, 'Ctrl+Enter')
     || !str_contains($sitePricesCss, '.site-price-filters')) {
     fail('Website prices Team department / filters missing');
 } else {
@@ -359,6 +362,8 @@ if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
 }
 if (!str_contains($sitePricesLib, 'function site_price_jump_search')
     || !str_contains($sitePricesLib, 'function list_site_price_rows_page')
+    || !str_contains($sitePricesLib, 'function site_price_filter_rows')
+    || !str_contains($sitePricesLib, 'Find in other countries')
     || !str_contains($sitePricesLib, 'reply_email')
     || !str_contains($sitePricesLib, 'row_tint')
     || !str_contains($sitePricesLib, 'Copy selected')

@@ -1086,6 +1086,80 @@ try {
         fail('site_price page: ' . json_encode($page1 + ['forced' => $forced, 'p2' => count($page2['rows'])]));
     }
 
+    db()->exec("DELETE FROM site_price_rows WHERE country='Portugal' AND domain LIKE 'txfprice-filt-%'");
+    $filtAdmin = site_price_add_row_for_user([
+        'country' => 'Portugal',
+        'domain' => 'txfprice-filt-a.com',
+        'status_slug' => 'new',
+        'price_note' => 'alpha rate',
+    ], $adminUser);
+    site_price_save_row((int) ($filtAdmin['id'] ?? 0), ['row_tint' => 'yellow'], $adminUser);
+    site_price_add_row_for_user([
+        'country' => 'Portugal',
+        'domain' => 'txfprice-filt-b.com',
+        'status_slug' => 'processing',
+        'price_note' => 'bravo rate',
+    ], $teamUser);
+    site_price_add_row_for_user([
+        'country' => 'Portugal',
+        'domain' => 'txfprice-filt-c.com',
+        'status_slug' => 'agreed',
+        'price_note' => 'charlie rate',
+    ], $teamUser);
+    for ($i = 1; $i <= 8; $i++) {
+        site_price_add_row_for_user([
+            'country' => 'Portugal',
+            'domain' => 'txfprice-filt-p' . $i . '.com',
+            'status_slug' => 'new',
+        ], $teamUser);
+    }
+    $filtAll = list_site_price_rows('Portugal');
+    $filtMine = array_values(array_filter(
+        $filtAll,
+        static fn ($r) => str_starts_with((string) ($r['domain'] ?? ''), 'txfprice-filt-')
+    ));
+    $filtProc = site_price_filter_rows($filtMine, ['lane' => 'processing']);
+    $filtYellow = site_price_filter_rows($filtMine, ['tint' => 'yellow']);
+    $filtNone = site_price_filter_rows($filtMine, ['tint' => 'none']);
+    $filtQ = site_price_filter_rows($filtMine, ['q' => 'txfprice-filt-a']);
+    $filtPage = list_site_price_rows_page('Portugal', 2, 5, ['q' => 'txfprice-filt'], $adminUser);
+    $adminLabel = '';
+    $idFiltA = (int) ($filtAdmin['id'] ?? 0);
+    if ($idFiltA > 0) {
+        $adminLabel = (string) (site_price_row_for_viewer(get_site_price_row($idFiltA) ?: [], $adminUser)['added_by_label'] ?? '');
+    }
+    $filtAddedAdmin = $adminLabel !== ''
+        ? site_price_filter_rows($filtMine, ['added' => $adminLabel], $adminUser)
+        : [];
+    $filtTeamHidesAdminName = site_price_filter_rows($filtMine, ['added' => 'Admin'], $teamUser);
+    $pureOk = count($filtProc) === 1
+        && (string) ($filtProc[0]['domain'] ?? '') === 'txfprice-filt-b.com'
+        && count($filtYellow) === 1
+        && (string) ($filtYellow[0]['domain'] ?? '') === 'txfprice-filt-a.com'
+        && count($filtNone) >= 10
+        && count($filtQ) === 1
+        && (int) ($filtPage['total'] ?? 0) === count($filtMine)
+        && (int) ($filtPage['pages'] ?? 0) >= 3
+        && count($filtPage['rows']) === 5
+        && $adminLabel !== ''
+        && count($filtAddedAdmin) === 1
+        && count($filtTeamHidesAdminName) === 1
+        && site_price_filters_active(['q' => 'x'])
+        && !site_price_filters_active([]);
+    if ($pureOk) {
+        pass('site_price filter rows + filtered paging');
+    } else {
+        fail('site_price filter: ' . json_encode([
+            'proc' => count($filtProc),
+            'yellow' => count($filtYellow),
+            'none' => count($filtNone),
+            'q' => count($filtQ),
+            'page' => $filtPage,
+            'addedAdmin' => count($filtAddedAdmin),
+            'teamAdmin' => count($filtTeamHidesAdminName),
+        ]));
+    }
+
     $idFr = site_price_add_row_for_user([
         'country' => 'France',
         'domain' => 'txfprice-jump-fr.com',

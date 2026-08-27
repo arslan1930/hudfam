@@ -540,20 +540,197 @@ function list_site_price_rows(string $country): array
 }
 
 /**
- * @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int,lane_counts:array<string,int>,all:list<array<string,mixed>>}
+ * Normalize in-country sheet filters. Empty string means “all” except tint=none (no color).
+ *
+ * @param array<string,mixed> $opts
+ * @return array{q:string,lane:string,status:string,tint:string,added:string}
  */
-function list_site_price_rows_page(string $country, int $page, int $perPage): array
+function site_price_normalize_filter_opts(array $opts): array
 {
+    $q = trim((string) ($opts['q'] ?? ''));
+    $lane = strtolower(trim((string) ($opts['lane'] ?? '')));
+    if (!isset(site_price_lane_labels()[$lane])) {
+        $lane = '';
+    }
+    $status = strtolower(trim((string) ($opts['status'] ?? '')));
+    if ($status !== '' && !isset(site_price_status_map()[$status])) {
+        $status = '';
+    }
+    $tint = strtolower(trim((string) ($opts['tint'] ?? '')));
+    if ($tint === 'none') {
+        $tint = 'none';
+    } elseif ($tint !== '' && !in_array($tint, site_price_tint_slugs(), true)) {
+        $tint = '';
+    }
+    $added = trim((string) ($opts['added'] ?? ''));
+    return [
+        'q' => $q,
+        'lane' => $lane,
+        'status' => $status,
+        'tint' => $tint,
+        'added' => $added,
+    ];
+}
+
+function site_price_filters_active(array $filters): bool
+{
+    $filters = site_price_normalize_filter_opts($filters);
+    return $filters['q'] !== ''
+        || $filters['lane'] !== ''
+        || $filters['status'] !== ''
+        || $filters['tint'] !== ''
+        || $filters['added'] !== '';
+}
+
+/**
+ * Filters from the current request. Team cannot filter by Admin names.
+ *
+ * @param array{role?:string}|null $viewer
+ * @return array{q:string,lane:string,status:string,tint:string,added:string}
+ */
+function site_price_filters_from_request(?array $viewer = null): array
+{
+    $opts = site_price_normalize_filter_opts([
+        'q' => (string) get('q'),
+        'lane' => (string) get('lane'),
+        'status' => (string) get('status'),
+        'tint' => (string) get('tint'),
+        'added' => (string) get('added'),
+    ]);
+    if (($viewer['role'] ?? '') !== 'admin') {
+        $opts['added'] = '';
+    }
+    return $opts;
+}
+
+/**
+ * Query extras to keep on pager / per-page / Ctrl+Enter URLs.
+ *
+ * @param array{q?:string,lane?:string,status?:string,tint?:string,added?:string} $filters
+ * @return array<string, scalar>
+ */
+function site_price_filter_query_extra(array $filters, int $perPage = 0): array
+{
+    $filters = site_price_normalize_filter_opts($filters);
+    $extra = [];
+    foreach (['q', 'lane', 'status', 'tint', 'added'] as $key) {
+        if ($filters[$key] !== '') {
+            $extra[$key] = $filters[$key];
+        }
+    }
+    if (in_array($perPage, site_price_per_page_options(), true)) {
+        $extra['per_page'] = $perPage;
+    }
+    return $extra;
+}
+
+/**
+ * Search haystack for one rate-book row (matches data-search on the sheet).
+ *
+ * @param array<string,mixed> $row
+ * @param array{id?:int,role?:string} $viewer
+ */
+function site_price_row_search_haystack(array $row, array $viewer = []): string
+{
+    $view = $viewer !== [] ? site_price_row_for_viewer($row, $viewer) : $row;
+    return mb_strtolower(trim(
+        (string) ($view['domain'] ?? '') . ' '
+        . (string) ($view['niche'] ?? '') . ' '
+        . (string) ($view['price_note'] ?? '') . ' '
+        . (string) ($view['extra_note'] ?? '') . ' '
+        . (string) ($view['reply_email'] ?? '') . ' '
+        . (string) ($view['status_slug'] ?? '') . ' '
+        . (string) ($view['added_by_label'] ?? '')
+    ));
+}
+
+/**
+ * Pure: filter already-loaded country rows. Does not write.
+ *
+ * @param list<array<string,mixed>> $rows
+ * @param array<string,mixed> $opts
+ * @param array{id?:int,role?:string}|null $viewer
+ * @return list<array<string,mixed>>
+ */
+function site_price_filter_rows(array $rows, array $opts = [], ?array $viewer = null): array
+{
+    $filters = site_price_normalize_filter_opts($opts);
+    if (!site_price_filters_active($filters)) {
+        return array_values($rows);
+    }
+    $viewer = $viewer ?? [];
+    $q = mb_strtolower($filters['q']);
+    $out = [];
+    foreach ($rows as $row) {
+        $view = $viewer !== [] ? site_price_row_for_viewer($row, $viewer) : $row;
+        if ($filters['lane'] !== '') {
+            $lane = site_price_status_lane((string) ($view['status_slug'] ?? 'new'));
+            if ($lane !== $filters['lane']) {
+                continue;
+            }
+        }
+        if ($filters['status'] !== '' && (string) ($view['status_slug'] ?? '') !== $filters['status']) {
+            continue;
+        }
+        if ($filters['tint'] !== '') {
+            $tint = site_price_normalize_tint((string) ($view['row_tint'] ?? ''));
+            if ($filters['tint'] === 'none') {
+                if ($tint !== '') {
+                    continue;
+                }
+            } elseif ($tint !== $filters['tint']) {
+                continue;
+            }
+        }
+        if ($filters['added'] !== '') {
+            $label = trim((string) ($view['added_by_label'] ?? ''));
+            if ($label !== $filters['added']) {
+                continue;
+            }
+        }
+        if ($q !== '' && !str_contains(site_price_row_search_haystack($view, []), $q)) {
+            continue;
+        }
+        $out[] = $row;
+    }
+    return $out;
+}
+
+/**
+ * @param array<string,mixed> $opts
+ * @param array{id?:int,role?:string}|null $viewer
+ * @return array{
+ *   rows:list<array<string,mixed>>,
+ *   total:int,
+ *   total_all:int,
+ *   page:int,
+ *   pages:int,
+ *   per_page:int,
+ *   lane_counts:array<string,int>,
+ *   all:list<array<string,mixed>>,
+ *   filters:array{q:string,lane:string,status:string,tint:string,added:string}
+ * }
+ */
+function list_site_price_rows_page(
+    string $country,
+    int $page,
+    int $perPage,
+    array $opts = [],
+    ?array $viewer = null
+): array {
     $perPage = $perPage < 1 ? 100 : $perPage;
+    $filters = site_price_normalize_filter_opts($opts);
     $all = list_site_price_rows($country);
-    $total = count($all);
+    $matched = site_price_filter_rows($all, $filters, $viewer);
+    $total = count($matched);
+    $totalAll = count($all);
     $pages = max(1, (int) ceil(($total > 0 ? $total : 1) / $perPage));
     if ($total === 0) {
         $pages = 1;
     }
     $page = max(1, min($page, $pages));
     $laneCounts = ['processing' => 0, 'new' => 0, 'other' => 0];
-    foreach ($all as $row) {
+    foreach ($matched as $row) {
         $lane = site_price_status_lane((string) ($row['status_slug'] ?? 'new'));
         if (!isset($laneCounts[$lane])) {
             $lane = 'other';
@@ -561,15 +738,17 @@ function list_site_price_rows_page(string $country, int $page, int $perPage): ar
         $laneCounts[$lane]++;
     }
     $offset = ($page - 1) * $perPage;
-    $slice = $total > 0 ? array_slice($all, $offset, $perPage) : [];
+    $slice = $total > 0 ? array_slice($matched, $offset, $perPage) : [];
     return [
         'rows' => $slice,
         'total' => $total,
+        'total_all' => $totalAll,
         'page' => $page,
         'pages' => $pages,
         'per_page' => $perPage,
         'lane_counts' => $laneCounts,
         'all' => $all,
+        'filters' => $filters,
     ];
 }
 
@@ -1453,12 +1632,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
     $domain = (string) ($view['domain'] ?? '');
     $tint = site_price_normalize_tint((string) ($view['row_tint'] ?? ''));
     $statusColor = site_price_status_color((string) ($view['status_slug'] ?? 'new'));
-    $hay = mb_strtolower(trim(
-        $domain . ' ' . (string) ($view['niche'] ?? '') . ' ' . (string) ($view['price_note'] ?? '')
-        . ' ' . (string) ($view['extra_note'] ?? '') . ' ' . (string) ($view['reply_email'] ?? '')
-        . ' ' . (string) ($view['status_slug'] ?? '')
-        . ' ' . (string) ($view['added_by_label'] ?? '')
-    ));
+    $hay = site_price_row_search_haystack($view, []);
     $lane = site_price_status_lane((string) ($view['status_slug'] ?? 'new'));
     $cls = 'site-price-row is-status-' . $statusColor;
     if ($tint !== '') {
@@ -1616,27 +1790,46 @@ function render_site_price_sheet_tbody(array $rows, array $viewer, ?array $laneC
         }
     }
     $html .= '<tr class="site-price-filter-empty" data-site-price-filter-empty hidden>'
-        . '<td colspan="' . site_price_sheet_colspan() . '" class="muted">No rows match these filters.</td></tr>';
+        . '<td colspan="' . site_price_sheet_colspan() . '" class="muted">'
+        . 'No search matches on this page. Try Ctrl/Cmd+Enter to search all pages.</td></tr>';
     return $html;
 }
 
 /**
- * @param array{role?:string} $viewer
+ * @param array{id?:int,role?:string} $viewer
  * @param list<array<string,mixed>> $rows
+ * @param array{q?:string,lane?:string,status?:string,tint?:string,added?:string} $filters
  */
-function render_site_price_filters(array $viewer, array $rows): string
-{
+function render_site_price_filters(
+    array $viewer,
+    array $rows,
+    string $pageKey = 'admin_site_prices',
+    string $country = '',
+    int $perPage = 100,
+    array $filters = []
+): string {
     $isAdmin = ($viewer['role'] ?? '') === 'admin';
-    $q = trim((string) get('q'));
-    $lane = trim((string) get('lane'));
-    $status = trim((string) get('status'));
-    $added = trim((string) get('added'));
-    $html = '<div class="site-price-filters" data-site-price-filters>';
-    $html .= '<label class="sheet-search" for="site-price-filter-q" style="margin:0">';
-    $html .= '<span class="visually-hidden">Search sites</span>';
+    $filters = site_price_normalize_filter_opts($filters !== [] ? $filters : [
+        'q' => (string) get('q'),
+        'lane' => (string) get('lane'),
+        'status' => (string) get('status'),
+        'added' => (string) get('added'),
+    ]);
+    if (!$isAdmin) {
+        $filters['added'] = '';
+    }
+    $q = $filters['q'];
+    $lane = $filters['lane'];
+    $status = $filters['status'];
+    $added = $filters['added'];
+    $html = '<div class="invoice-list-toolbar swe-list-toolbar site-price-list-toolbar site-price-filters" data-site-price-filters>';
+    $html .= '<div>';
+    $html .= '<label class="sheet-search swe-row-search-wrap" for="site-price-filter-q" style="margin:0">';
+    $html .= '<span class="visually-hidden">Search this country</span>';
     $html .= '<input id="site-price-filter-q" type="search" data-site-price-filter="q" value="' . h($q) . '"'
-        . ' placeholder="Search sites…" autocomplete="off" spellcheck="false" data-no-draft'
-        . ' title="Search website, niche, or price">';
+        . ' placeholder="Search this country…" autocomplete="off" spellcheck="false" data-no-draft'
+        . ' title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">';
+    $html .= '<span class="sheet-search-meta muted" data-site-price-search-meta hidden></span>';
     $html .= '</label>';
     $html .= '<label class="site-price-filter">Lane ';
     $html .= '<select data-site-price-filter="lane" data-no-draft aria-label="Lane">';
@@ -1675,6 +1868,13 @@ function render_site_price_filters(array $viewer, array $rows): string
         $html .= '</select></label>';
     }
     $html .= '</div>';
+    $html .= '<div class="actions">';
+    $html .= render_site_price_toolbar();
+    if ($country !== '') {
+        $html .= render_site_price_per_page_filter($pageKey, $country, $perPage, $filters);
+    }
+    $html .= '</div>';
+    $html .= '</div>';
     return $html;
 }
 
@@ -1687,19 +1887,29 @@ function site_prices_script_tag(): string
  * @param array{id?:int,role?:string} $viewer
  * @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,per_page:int,lane_counts:array<string,int>,tbody_html:string}
  */
-function site_price_sheet_pack(string $country, array $viewer, int $page, int $perPage, ?int $focusId = null): array
-{
-    if ($focusId && $focusId > 0) {
+function site_price_sheet_pack(
+    string $country,
+    array $viewer,
+    int $page,
+    int $perPage,
+    ?int $focusId = null,
+    array $filters = []
+): array {
+    $filters = site_price_normalize_filter_opts($filters);
+    if ($focusId && $focusId > 0 && !site_price_filters_active($filters)) {
         $page = site_price_page_for_row_id($country, $focusId, $perPage);
     }
-    $pack = list_site_price_rows_page($country, $page, $perPage);
+    $pack = list_site_price_rows_page($country, $page, $perPage, $filters, $viewer);
     $pack['tbody_html'] = render_site_price_sheet_tbody($pack['rows'], $viewer, $pack['lane_counts']);
     return $pack;
 }
 
 function render_site_price_jump_bar(string $preset = ''): string
 {
-    $html = '<div class="site-price-jump" data-site-price-jump>';
+    $open = trim($preset) !== '' ? ' open' : '';
+    $html = '<details class="site-price-jump-wrap"' . $open . '>';
+    $html .= '<summary class="btn-link">Find in other countries</summary>';
+    $html .= '<div class="site-price-jump" data-site-price-jump>';
     $html .= '<label class="sheet-search" for="site-price-jump-q" style="margin:0">';
     $html .= '<span class="visually-hidden">Search all countries</span>';
     $html .= '<input id="site-price-jump-q" type="search" data-site-price-jump-q value="' . h($preset) . '"'
@@ -1711,24 +1921,33 @@ function render_site_price_jump_bar(string $preset = ''): string
     $html .= '<button type="button" class="btn-link" data-site-price-jump-prev hidden>Prev</button>';
     $html .= '<button type="button" class="btn-link" data-site-price-jump-next hidden>Next</button>';
     $html .= '</div>';
+    $html .= '</details>';
     return $html;
 }
 
 function render_site_price_toolbar(): string
 {
-    $html = '<div class="site-price-toolbar" data-site-price-toolbar>';
-    $html .= '<button type="button" class="btn secondary small" data-site-price-copy-selected>Copy selected</button>';
-    $html .= '<span class="help" style="margin:0">Row wash follows status. Color dots mark a group — they are not a status.</span>';
-    $html .= '</div>';
+    $html = '<button type="button" class="btn secondary small" data-site-price-copy-selected'
+        . ' title="Copies ticked websites on this page.">Copy selected</button>';
     return $html;
 }
 
-function render_site_price_per_page_filter(string $pageKey, string $country, int $current): string
-{
+function render_site_price_per_page_filter(
+    string $pageKey,
+    string $country,
+    int $current,
+    array $filters = []
+): string {
     $current = in_array($current, site_price_per_page_options(), true) ? $current : 100;
+    $filters = site_price_normalize_filter_opts($filters);
     $html = '<form class="sheet-per-page-filter" method="get" action="index.php">';
     $html .= '<input type="hidden" name="page" value="' . h($pageKey) . '">';
     $html .= '<input type="hidden" name="country" value="' . h($country) . '">';
+    foreach (['q', 'lane', 'status', 'tint', 'added'] as $key) {
+        if ($filters[$key] !== '') {
+            $html .= '<input type="hidden" name="' . h($key) . '" value="' . h($filters[$key]) . '">';
+        }
+    }
     $html .= '<label for="site_price_per_page">Per page</label>';
     $html .= '<select id="site_price_per_page" name="per_page" onchange="this.form.submit()" data-no-draft'
         . ' title="Rows per page on this country sheet">';
@@ -1740,21 +1959,22 @@ function render_site_price_per_page_filter(string $pageKey, string $country, int
     return $html;
 }
 
-function render_site_price_pager(string $pageKey, string $country, int $pageNum, int $pages, int $perPage): string
-{
+function render_site_price_pager(
+    string $pageKey,
+    string $country,
+    int $pageNum,
+    int $pages,
+    int $perPage,
+    array $filters = []
+): string {
+    $extra = site_price_filter_query_extra($filters, $perPage);
     $html = '<div class="site-price-pager" data-site-price-pager>';
     if ($pageNum > 1) {
-        $html .= '<a href="' . h(site_price_sheet_url($country, $pageKey, [
-            'per_page' => $perPage,
-            'p' => $pageNum - 1,
-        ])) . '">Prev</a>';
+        $html .= '<a href="' . h(site_price_sheet_url($country, $pageKey, $extra + ['p' => $pageNum - 1])) . '">Prev</a>';
     }
     $html .= '<span class="muted">Page ' . (int) $pageNum . ' / ' . (int) $pages . '</span>';
     if ($pageNum < $pages) {
-        $html .= '<a href="' . h(site_price_sheet_url($country, $pageKey, [
-            'per_page' => $perPage,
-            'p' => $pageNum + 1,
-        ])) . '">Next</a>';
+        $html .= '<a href="' . h(site_price_sheet_url($country, $pageKey, $extra + ['p' => $pageNum + 1])) . '">Next</a>';
     }
     $html .= '</div>';
     return $html;
@@ -1879,6 +2099,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
             $jsonOut(['ok' => false, 'error' => 'Open a country sheet first.'], 400);
         }
         $workCountry = $canonWork['name'];
+        $sheetFilters = site_price_filters_from_request($viewer);
         try {
             if ($action === 'suggest_niche') {
                 $domain = site_price_normalize_domain((string) post('domain'));
@@ -1938,7 +2159,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 if ((string) ($row['country'] ?? '') !== $workCountry) {
                     throw new RuntimeException('Site not found.');
                 }
-                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, null, $sheetFilters);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
@@ -1956,7 +2177,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 if ((string) ($row['country'] ?? '') !== $workCountry) {
                     throw new RuntimeException('Site not found.');
                 }
-                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, null, $sheetFilters);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
@@ -1973,7 +2194,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
                 if ((string) ($row['country'] ?? '') !== $workCountry) {
                     throw new RuntimeException('Site not found.');
                 }
-                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, null, $sheetFilters);
                 $jsonOut([
                     'ok' => true,
                     'id' => (int) $row['id'],
@@ -2000,7 +2221,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
             if ($action === 'reorder_lane') {
                 $ids = preg_split('/[,\s]+/', trim((string) post('ids'))) ?: [];
                 site_price_reorder_lane($workCountry, (string) post('lane'), $ids, $viewer);
-                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost);
+                $pack = site_price_sheet_pack($workCountry, $viewer, $pagePost, $perPagePost, null, $sheetFilters);
                 $jsonOut([
                     'ok' => true,
                     'country' => $workCountry,
@@ -2028,7 +2249,18 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         $perPage = resolve_site_price_per_page();
         $pageNum = max(1, (int) get('p', 1));
         $jumpRowId = max(0, (int) get('row'));
-        $pack = site_price_sheet_pack($countryName, $user, $pageNum, $perPage, $jumpRowId > 0 ? $jumpRowId : null);
+        $filters = site_price_filters_from_request($user);
+        $pack = site_price_sheet_pack(
+            $countryName,
+            $user,
+            $pageNum,
+            $perPage,
+            $jumpRowId > 0 ? $jumpRowId : null,
+            $jumpRowId > 0 ? [] : $filters
+        );
+        if ($jumpRowId > 0) {
+            $filters = site_price_normalize_filter_opts([]);
+        }
         $rows = $pack['rows'];
         $total = $pack['total'];
         $pageNum = $pack['page'];
@@ -2061,13 +2293,11 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
       </div>
     </div>
 
+    <?= render_site_price_filters($user, $pack['all'] ?? $rows, $pageKey, $countryName, $perPage, $filters) ?>
     <?= render_site_price_jump_bar((string) get('jump')) ?>
     <div class="site-price-switcher">
       <?= render_site_price_country_tabs($countryName, $pageKey, ['per_page' => $perPage]) ?>
-      <?= render_site_price_per_page_filter($pageKey, $countryName, $perPage) ?>
     </div>
-    <?= render_site_price_toolbar() ?>
-    <?= render_site_price_filters($user, $pack['all'] ?? $rows) ?>
 
     <div class="card">
       <div class="table-wrap">
@@ -2100,7 +2330,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         </table>
       </div>
     </div>
-    <?= render_site_price_pager($pageKey, $countryName, $pageNum, $pages, $perPage) ?>
+    <?= render_site_price_pager($pageKey, $countryName, $pageNum, $pages, $perPage, $filters) ?>
     <?= prospect_niche_taxonomy_script() ?>
     <?= niche_chips_script_tag() ?>
     <?= open_site_script_tag() ?>

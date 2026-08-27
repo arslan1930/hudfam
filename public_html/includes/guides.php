@@ -230,7 +230,7 @@ function guide_site_prices(): string
         [
             'Open a country from the switcher (most-used first) or All countries.',
             'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, email, and row color stay editable. Admin can Unlock identity.',
-            'Processing / New / Other lanes stay in that order. Jump search finds a site in any country. Copy selected websites — there is no Copy all.',
+            'Processing / New / Other lanes stay in that order. Search this country (Enter = next match, Ctrl/Cmd+Enter = all pages). Find in other countries jumps to another sheet. Copy selected websites — there is no Copy all.',
             'Admin sees who added a row and who manages it; Team does not see Admin names.',
         ]
     );
