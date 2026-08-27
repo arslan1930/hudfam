@@ -718,6 +718,20 @@ if (!str_contains($accountPw, 'csrf_field()')) {
 } else {
     ok('account_password csrf_field');
 }
+$draftJsSmoke = file_get_contents($root . '/assets/js/draft-autosave.js') ?: '';
+$sweAppCsrfSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+$presenceJsCsrfSmoke = file_get_contents($root . '/assets/js/task-presence.js') ?: '';
+if (!str_contains($indexFull, "\$page === 'presence_ping'")
+    || !str_contains($helpers, 'csrf_field()')
+    || !str_contains($helpers, "function render_sheet_shared_row_action_forms")
+    || !preg_match('/\$nav = \(function_exists\(\'csrf_field\'\) \? csrf_field\(\) : \'\'\)/', $helpers)
+    || !str_contains($draftJsSmoke, "name === '_csrf'")
+    || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
+    || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
+    fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
+} else {
+    ok('draft autosave skips _csrf + sheet forms + presence CSRF');
+}
 if (!str_contains($indexFull, "'team_admin_emails_search'")
     || !str_contains($indexFull, "'team_admin_emails_delete'")) {
     fail('index.php missing Admin search route or delete alias');

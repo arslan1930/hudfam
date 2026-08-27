@@ -50,7 +50,7 @@
     }
     if (el.getAttribute('data-no-draft') !== null) return true;
     var name = el.name;
-    if (name === 'action' || name === 'item_id' || name === 'csrf' || name === 'password') {
+    if (name === 'action' || name === 'item_id' || name === 'csrf' || name === '_csrf' || name === 'password') {
       return true;
     }
     if (el.classList && el.classList.contains('btn-paid')) return true;

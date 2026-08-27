@@ -1147,6 +1147,7 @@ render_sheet_checkpoint_compact(
           <?php endif; ?>
           <td class="swe-td-site" data-label="Site">
             <form id="<?= h($formId) ?>" method="post" action="<?= h($listBase) ?>" class="swe-row-form" data-swe-save>
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="save_row">
               <input type="hidden" name="site_id" value="<?= $sid ?>">
               <input type="hidden" name="q" value="<?= h($q) ?>">
