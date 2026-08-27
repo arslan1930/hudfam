@@ -842,7 +842,8 @@ if ($r['status'] === 200 && !$teamBad
 $r = req('GET', $base . '/index.php?page=team_departments&folder=communication');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Assign a task')
-    && str_contains($r['body'], 'assign_task')
+    && str_contains($r['body'], 'save_task')
+    && str_contains($r['body'], 'name="assigned_to"')
     && str_contains($r['body'], 'team_site_prices')) {
     pass('comms can assign department tasks');
 } else {
