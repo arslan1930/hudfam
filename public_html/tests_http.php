@@ -479,21 +479,25 @@ if ($r['status'] === 200
 } else {
     fail('admin emails campaign folder status=' . $r['status']);
 }
-if (preg_match('/[?&]sheet=(\d+)/', $r['body'], $sheetM)) {
-    $sheetUrl = $base . '/index.php?page=admin_emails_data&folder=email_campaigns&sheet=' . (int) $sheetM[1];
-    $rSheet = req('GET', $sheetUrl);
-    if ($rSheet['status'] === 200
-        && str_contains($rSheet['body'], 'Fill gaps')
-        && str_contains($rSheet['body'], 'id="camp-fill-gaps"')
-        && str_contains($rSheet['body'], 'value="fill_gaps"')
-        && str_contains($rSheet['body'], 'Import')
-        && !str_contains($rSheet['body'], 'Fatal error')) {
-        pass('admin campaign country sheet Fill gaps');
+if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
+    $rProj = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&project=' . (int) $projM[1]);
+    if (preg_match('/sheet=(\d+)/', $rProj['body'], $sheetM)) {
+        $rSheet = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&sheet=' . (int) $sheetM[1]);
+        if ($rSheet['status'] === 200
+            && str_contains($rSheet['body'], 'Fill gaps')
+            && str_contains($rSheet['body'], 'id="camp-fill-gaps"')
+            && str_contains($rSheet['body'], 'value="fill_gaps"')
+            && str_contains($rSheet['body'], 'Import')
+            && !str_contains($rSheet['body'], 'Fatal error')) {
+            pass('admin campaign country sheet Fill gaps');
+        } else {
+            fail('admin campaign sheet Fill gaps status=' . $rSheet['status']);
+        }
     } else {
-        fail('admin campaign sheet Fill gaps status=' . $rSheet['status']);
+        pass('admin campaign project has no country sheet yet (Fill gaps UI skipped)');
     }
 } else {
-    pass('admin campaign folder has no country sheet yet (Fill gaps UI skipped)');
+    pass('admin campaign folder has no project yet (Fill gaps UI skipped)');
 }
 
 $r = req('GET', $base . '/index.php?page=admin_site_prices');
