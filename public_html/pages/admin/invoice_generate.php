@@ -5,6 +5,7 @@ ensure_invoice_schema();
 $rawIds = trim((string) (get('ids') ?: post('ids')));
 $selectedFromSheet = parse_order_item_ids($rawIds);
 $clientId = (int) (get('client_id') ?: post('client_id'));
+$precheck = $selectedFromSheet !== [];
 
 if ($selectedFromSheet) {
     $invoiceable = list_invoiceable_order_items_by_ids($selectedFromSheet);
@@ -16,7 +17,8 @@ if ($selectedFromSheet) {
 
 $company = invoice_company_defaults();
 $nextNumber = next_invoice_number();
-$billAsDefault = invoice_bill_as_from_orders($invoiceable);
+$billAsDefault = $precheck ? invoice_bill_as_from_orders($invoiceable) : '';
+$billAsLabels = invoice_bill_as_labels($invoiceable);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
@@ -116,9 +118,9 @@ render_header('Generate invoice', 'admin');
       <h2><?= label_with_info('Orders to invoice', 'Only unpaid rows with a LIVE URL. Banner/Textlink rows show their yearly period text instead of Article Published.') ?></h2>
       <p class="muted" style="margin-top:0">
         <?php if ($selectedFromSheet): ?>
-          Rows you pushed from Order management. Untick any you do not want on this bill.
+          Rows you pushed from Order management — already ticked. Untick any you do not want on this bill.
         <?php else: ?>
-          All unpaid LIVE rows from Order management. Tick the ones to bill.
+          All unpaid LIVE rows from Order management. Tick the ones to bill — nothing is selected until you choose.
         <?php endif; ?>
       </p>
       <?php if (!$invoiceable): ?>
@@ -127,22 +129,35 @@ render_header('Generate invoice', 'admin');
           <a class="btn secondary" href="index.php?page=admin_orders">Open Order management</a>
         </div>
       <?php else: ?>
-        <label class="invoice-check-all">
-          <input type="checkbox" id="toggle-all-items" checked>
-          Select all (<?= count($invoiceable) ?>)
+        <label class="sheet-search invoice-pick-search" for="invoice-pick-search" style="margin:0 0 0.65rem;display:flex">
+          <span class="visually-hidden">Filter unpaid LIVE rows</span>
+          <input id="invoice-pick-search" type="search" placeholder="Filter by site, email, country…"
+                 autocomplete="off" spellcheck="false" data-no-draft>
         </label>
-        <ul class="invoice-item-pick">
+        <label class="invoice-check-all">
+          <input type="checkbox" id="toggle-all-items" <?= $precheck ? 'checked' : '' ?>>
+          Select all visible (<span data-invoice-pick-visible><?= count($invoiceable) ?></span>)
+        </label>
+        <p class="help" id="invoice-pick-mixed"<?= count($billAsLabels) > 1 && $precheck ? '' : ' hidden' ?>>
+          Ticked rows have different emails/names. They will share one bill-as line, or untick until they match.
+        </p>
+        <ul class="invoice-item-pick" id="invoice-item-pick">
           <?php foreach ($invoiceable as $row): ?>
-            <li>
+            <?php
+              $who = trim((string) ($row['client_label'] ?? ''));
+              $country = trim((string) ($row['country'] ?? ''));
+              $meta = trim($who . ($country !== '' ? ($who !== '' ? ' · ' : '') . $country : ''));
+              $pickSearch = mb_strtolower(trim(
+                  (string) ($row['site_name'] ?? '') . ' ' . $who . ' ' . $country . ' '
+                  . (string) ($row['live_url'] ?? '')
+              ));
+            ?>
+            <li data-invoice-pick-row data-search="<?= h($pickSearch) ?>" data-bill-as="<?= h($who) ?>">
               <label>
-                <input type="checkbox" name="item_ids[]" value="<?= (int) $row['id'] ?>" checked>
+                <input type="checkbox" name="item_ids[]" value="<?= (int) $row['id'] ?>"
+                       <?= $precheck ? 'checked' : '' ?> data-invoice-pick-item>
                 <span class="invoice-pick-main">
                   <strong><?= h($row['site_name'] !== '' ? $row['site_name'] : 'Site') ?></strong>
-                  <?php
-                    $who = trim((string) ($row['client_label'] ?? ''));
-                    $country = trim((string) ($row['country'] ?? ''));
-                    $meta = trim($who . ($country !== '' ? ($who !== '' ? ' · ' : '') . $country : ''));
-                  ?>
                   <?php if ($meta !== ''): ?>
                     <span class="muted"><?= h($meta) ?></span>
                   <?php endif; ?>
@@ -157,6 +172,8 @@ render_header('Generate invoice', 'admin');
             </li>
           <?php endforeach; ?>
         </ul>
+        <p class="help" data-invoice-pick-empty hidden>No unpaid LIVE rows match that filter.</p>
+        <p class="help"><span data-invoice-pick-count>0</span> selected</p>
         <label class="invoice-group-opt">
           <input type="checkbox" name="group_same_amount" value="1" checked>
           Group lines that share the same amount (qty &gt; 1)
@@ -249,7 +266,7 @@ render_header('Generate invoice', 'admin');
       </details>
 
       <p class="actions" style="margin-top:1.1rem">
-        <button class="btn large" type="submit" <?= !$invoiceable ? 'disabled' : '' ?>>Generate invoice</button>
+        <button class="btn large" type="submit" id="invoice-generate-submit" <?= (!$invoiceable || !$precheck) ? 'disabled' : '' ?>>Generate invoice</button>
       </p>
     </section>
   </div>
@@ -257,12 +274,79 @@ render_header('Generate invoice', 'admin');
 <script>
 (function () {
   var all = document.getElementById('toggle-all-items');
-  if (!all) return;
-  all.addEventListener('change', function () {
-    document.querySelectorAll('input[name="item_ids[]"]').forEach(function (cb) {
-      cb.checked = all.checked;
+  var search = document.getElementById('invoice-pick-search');
+  var submit = document.getElementById('invoice-generate-submit');
+  var bill = document.getElementById('bill_to_name');
+  var mixed = document.getElementById('invoice-pick-mixed');
+  var countEl = document.querySelector('[data-invoice-pick-count]');
+  var visibleEl = document.querySelector('[data-invoice-pick-visible]');
+  var emptyEl = document.querySelector('[data-invoice-pick-empty]');
+  var rows = Array.prototype.slice.call(document.querySelectorAll('[data-invoice-pick-row]'));
+  if (!rows.length) return;
+
+  function visibleRows() {
+    return rows.filter(function (row) { return row.style.display !== 'none'; });
+  }
+  function boxesIn(list) {
+    return list.map(function (row) {
+      return row.querySelector('[data-invoice-pick-item]');
+    }).filter(Boolean);
+  }
+  function uniqueBillAs(checked) {
+    var seen = {};
+    var out = [];
+    checked.forEach(function (cb) {
+      var row = cb.closest('[data-invoice-pick-row]');
+      var v = row ? String(row.getAttribute('data-bill-as') || '').trim() : '';
+      if (v && !seen[v]) {
+        seen[v] = true;
+        out.push(v);
+      }
     });
+    return out;
+  }
+  function sync() {
+    var vis = visibleRows();
+    var visBoxes = boxesIn(vis);
+    var checked = boxesIn(rows).filter(function (cb) { return cb.checked; });
+    if (visibleEl) visibleEl.textContent = String(vis.length);
+    if (countEl) countEl.textContent = String(checked.length);
+    if (emptyEl) emptyEl.hidden = vis.length > 0;
+    if (all) {
+      all.checked = visBoxes.length > 0 && visBoxes.every(function (cb) { return cb.checked; });
+      all.indeterminate = visBoxes.some(function (cb) { return cb.checked; }) && !all.checked;
+    }
+    if (submit) {
+      submit.disabled = checked.length < 1;
+    }
+    var labels = uniqueBillAs(checked);
+    if (mixed) mixed.hidden = labels.length < 2;
+    if (bill && document.activeElement !== bill) {
+      bill.value = labels.join(', ');
+    }
+  }
+  function applySearch() {
+    var q = search ? String(search.value || '').trim().toLowerCase() : '';
+    rows.forEach(function (row) {
+      var hay = String(row.getAttribute('data-search') || '');
+      row.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+    });
+    sync();
+  }
+
+  if (all) {
+    all.addEventListener('change', function () {
+      boxesIn(visibleRows()).forEach(function (cb) { cb.checked = all.checked; });
+      sync();
+    });
+  }
+  document.querySelectorAll('[data-invoice-pick-item]').forEach(function (cb) {
+    cb.addEventListener('change', sync);
   });
+  if (search) {
+    search.addEventListener('input', applySearch);
+  }
+  sync();
 })();
 </script>
 <?php render_footer('admin'); ?>
