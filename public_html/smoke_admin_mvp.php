@@ -1529,6 +1529,12 @@ if (!str_contains($teamDepts, 'csrf_field()')) {
 } else {
     ok('team departments csrf_field');
 }
+$stayScrollJs = file_get_contents($root . '/assets/js/stay-scroll.js') ?: '';
+if (!preg_match('/var req = postStayAjax\(form\);\s*sel\.disabled = true/s', $stayScrollJs)) {
+    fail('stay-ajax disables select before FormData');
+} else {
+    ok('stay-ajax collects FormData before disabling select');
+}
 if (!str_contains($teamDepts, 'team_can_set_department_task_status')
     || !str_contains($teamDepts, 'Only the assignee can update this task')) {
     fail('team departments missing assignee status ACL');

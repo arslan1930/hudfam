@@ -5033,6 +5033,12 @@ try {
         } else {
             fail('department invalid status accepted');
         }
+        if (update_department_task_status((int) $tmpTask['id'], 'open')
+            && update_department_task_status((int) $tmpTask['id'], 'in_progress')) {
+            pass('department status update including same value');
+        } else {
+            fail('department valid status update failed');
+        }
         delete_department_task((int) $tmpTask['id']);
     } else {
         fail('department temp task for status check failed');

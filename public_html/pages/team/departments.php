@@ -498,7 +498,6 @@ render_breadcrumbs([
   <form method="post" action="<?= h($deptFolderUrl(['p' => 1])) ?>" class="dept-task-form" style="margin-bottom:1rem">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="save_task">
-    <input type="hidden" name="status" value="open">
     <div class="form-grid" style="grid-template-columns:1.4fr 1fr 1fr;gap:0.65rem">
       <div class="full" style="grid-column:1/-1">
         <label for="team_dept_task_title">Assign a task</label>

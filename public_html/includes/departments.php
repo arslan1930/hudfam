@@ -757,7 +757,7 @@ function update_department_task_status(int $taskId, string $status): bool
         'UPDATE department_tasks SET status=?, updated_at=NOW() WHERE id=?'
     );
     $stmt->execute([$status, $taskId]);
-    return $stmt->rowCount() > 0;
+    return true;
 }
 
 /**
