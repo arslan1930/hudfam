@@ -1337,9 +1337,10 @@ if (!str_contains($ordersPage, 'Mark completed')
 } else {
     ok('orders Mark completed');
 }
-if (!str_contains($ordersPage, 'Copy selected sites')
-    || !str_contains($ordersPage, 'Copy selected live URLs')
+if (!str_contains($ordersPage, 'Copy selected sites (this page)')
+    || !str_contains($ordersPage, 'Copy selected live URLs (this page)')
     || !str_contains($ordersPage, 'Copy all live URLs')
+    || str_contains($ordersPage, 'Copy all live URLs (this page)')
     || !str_contains($ordersPage, 'Download .txt')
     || !str_contains($ordersPage, 'data-copy-check')
     || !str_contains($ordersPage, 'data-push-check')
@@ -1350,6 +1351,20 @@ if (!str_contains($ordersPage, 'Copy selected sites')
     fail('orders missing copy/download live URLs');
 } else {
     ok('orders copy selected/all live URLs + txt');
+}
+if (!str_contains($ordersPage, '<span>Copy</span>')
+    || !str_contains($ordersPage, "\$isProcessing ? 'Complete' : 'Bill'")
+    || !str_contains($ordersPage, 'Left tick')
+    || !str_contains($ordersPage, 'order-client-list')
+    || !str_contains($ordersPage, 'Open in Website prices')
+    || !str_contains($ordersPage, 'omConfirmRemove')
+    || !str_contains($ordersPage, 'restore_wp')
+    || !str_contains($ordersPage, '$stayProcessing')
+    || !str_contains($ordersPage, 'Mark this order completed?')
+    || !str_contains($ordersPage, 'order_invoice_generate_push_cta')) {
+    fail('orders missing Copy/Complete labels, WP link, or confirm');
+} else {
+    ok('orders Copy vs Complete labels, WP link, confirm stay');
 }
 if (str_contains($ordersPage, 'if ($isProcessing):') && str_contains($ordersPage, 'Push to invoice')
     && str_contains($ordersPage, 'if ($isCompleted):')) {
@@ -1409,7 +1424,7 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt', 'list_order_pipeline_ids', 'list_order_pipeline_client_labels', 'order_invoice_generate_push_cta', 'order_wp_sheet_url'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
@@ -1432,7 +1447,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

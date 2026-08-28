@@ -1335,11 +1335,8 @@ function order_pipeline_where_sql(array $opts = []): array
     $params = [];
     $folder = strtolower(trim((string) ($opts['folder'] ?? '')));
     if ($folder === 'processing') {
+        // Stay visible while order_stage is processing, even if Website prices left Processing.
         $where[] = "COALESCE(i.order_stage, 'processing') = 'processing'";
-        $where[] = "(i.site_price_row_id IS NULL OR EXISTS (
-            SELECT 1 FROM site_price_rows spr
-            WHERE spr.id = i.site_price_row_id AND spr.status_slug = 'processing'
-        ))";
     } elseif ($folder === 'completed') {
         $where[] = "COALESCE(i.order_stage, 'processing') = 'completed'";
         $where[] = "TRIM(i.live_url) <> ''";
@@ -1418,9 +1415,13 @@ function list_order_pipeline_rows(array $opts = []): array
     [$whereSql, $params] = order_pipeline_where_sql($opts);
     $sql = "SELECT i.*,
                 u.full_name AS admin_full_name,
-                u.username AS admin_username
+                u.username AS admin_username,
+                spr.status_slug AS wp_status_slug,
+                spr.country AS wp_country,
+                spr.domain AS wp_domain
          FROM order_items i
-         LEFT JOIN users u ON u.id = i.admin_user_id"
+         LEFT JOIN users u ON u.id = i.admin_user_id
+         LEFT JOIN site_price_rows spr ON spr.id = i.site_price_row_id"
         . $whereSql
         . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
     if ($limit > 0) {
@@ -1465,14 +1466,126 @@ function list_order_items_by_ids(array $ids): array
     $stmt = db()->prepare(
         "SELECT i.*,
                 u.full_name AS admin_full_name,
-                u.username AS admin_username
+                u.username AS admin_username,
+                spr.status_slug AS wp_status_slug,
+                spr.country AS wp_country,
+                spr.domain AS wp_domain
          FROM order_items i
          LEFT JOIN users u ON u.id = i.admin_user_id
+         LEFT JOIN site_price_rows spr ON spr.id = i.site_price_row_id
          WHERE i.id IN ($placeholders) AND i.row_type='site'
          ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC"
     );
     $stmt->execute($ids);
     return $stmt->fetchAll();
+}
+
+/** @return list<int> */
+function list_order_pipeline_ids(array $opts = [], int $limit = 0): array
+{
+    ensure_order_schema();
+    if (($opts['folder'] ?? '') === 'processing') {
+        order_reconcile_processing_from_website_prices();
+    }
+    $limit = max(0, $limit);
+    [$whereSql, $params] = order_pipeline_where_sql($opts);
+    $sql = 'SELECT i.id FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id'
+        . $whereSql
+        . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+    if ($limit > 0) {
+        $sql .= ' LIMIT ' . $limit;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $ids = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) ?: [] as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    return $ids;
+}
+
+/** Distinct client email/name values for the sheet typeahead. @return list<string> */
+function list_order_pipeline_client_labels(): array
+{
+    ensure_order_schema();
+    $rows = db()->query(
+        "SELECT DISTINCT client_label FROM order_items
+         WHERE row_type='site' AND TRIM(client_label) <> ''
+         ORDER BY client_label ASC
+         LIMIT 400"
+    )->fetchAll(PDO::FETCH_COLUMN);
+    $out = [];
+    foreach ($rows as $name) {
+        $name = trim((string) $name);
+        if ($name !== '') {
+            $out[] = $name;
+        }
+    }
+    return $out;
+}
+
+function order_invoice_push_id_cap(): int
+{
+    return 80;
+}
+
+/**
+ * Header CTA for Completed: tick current-filter unpaid rows, or an honest label when the URL would be too long.
+ *
+ * @param list<int> $unpaidIds
+ * @return array{href:string,label:string,class:string}
+ */
+function order_invoice_generate_push_cta(int $unpaidCount, array $unpaidIds): array
+{
+    $unpaidCount = max(0, $unpaidCount);
+    if ($unpaidCount < 1) {
+        return [
+            'href' => 'index.php?page=admin_invoice_generate',
+            'label' => 'Generate invoice',
+            'class' => 'btn secondary',
+        ];
+    }
+    $ids = [];
+    foreach ($unpaidIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    $ids = array_values(array_unique($ids));
+    $cap = order_invoice_push_id_cap();
+    if ($unpaidCount <= $cap && count($ids) === $unpaidCount) {
+        return [
+            'href' => 'index.php?page=admin_invoice_generate&ids=' . implode(',', $ids),
+            'label' => 'Push unpaid (' . $unpaidCount . ')',
+            'class' => 'btn',
+        ];
+    }
+    return [
+        'href' => 'index.php?page=admin_invoice_generate',
+        'label' => 'Open generate (' . $unpaidCount . ' unpaid, none ticked)',
+        'class' => 'btn',
+    ];
+}
+
+function order_wp_sheet_url(array $row): string
+{
+    $wpId = (int) ($row['site_price_row_id'] ?? 0);
+    if ($wpId < 1 || !function_exists('site_price_sheet_url')) {
+        return '';
+    }
+    $country = trim((string) ($row['wp_country'] ?? ''));
+    if ($country === '') {
+        $country = trim((string) ($row['country'] ?? ''));
+    }
+    if ($country === '') {
+        return site_price_hub_url('admin_site_prices') . '&row=' . $wpId;
+    }
+    return site_price_sheet_url($country, 'admin_site_prices', ['row' => $wpId]);
 }
 
 function add_order_pipeline_row(?int $adminUserId, string $clientLabel = '', array $extra = []): int
