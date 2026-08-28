@@ -1200,6 +1200,7 @@ try {
     $badTint = site_price_save_row($idTint, ['row_tint' => 'purple'], $adminUser);
     $adminEmail = site_price_save_row($idTint, ['reply_email' => 'admin-box@example.com'], $adminUser);
     $tintHtml = render_site_price_sheet_row($adminEmail, $adminUser);
+    $yellowHtml = render_site_price_sheet_row($savedTint, $adminUser);
     $teamTintHtml = render_site_price_sheet_row($adminEmail, $teamUser);
     $histTintAdmin = render_site_price_history_html($idTint, $adminUser);
     $histTintTeam = render_site_price_history_html($idTint, $teamUser);
@@ -1224,13 +1225,13 @@ try {
         && (string) ($savedTint['reply_email'] ?? '') === 'inbox@example.com'
         && (string) ($badTint['row_tint'] ?? 'x') === ''
         && (string) ($adminEmail['reply_email'] ?? '') === 'admin-box@example.com'
-        && str_contains($tintHtml, 'data-tint="yellow"')
+        && str_contains($yellowHtml, 'data-tint="yellow"')
         && str_contains($tintHtml, 'is-color-')
         && !str_contains($tintHtml, 'is-status-')
         && !str_contains($tintHtml, 'is-tint-yellow')
         && str_contains($tintHtml, 'site-price-color-menu')
-        && str_contains($tintHtml, '>⋯</summary>')
-        && !str_contains($tintHtml, 'site-price-color-summary is-')
+        && str_contains($yellowHtml, '>⋯</summary>')
+        && !str_contains($yellowHtml, 'site-price-color-summary is-')
         && str_contains($tintHtml, 'data-site-price-email')
         && str_contains($tintHtml, 'site-price-email-td')
         && str_contains($tintHtml, 'site-price-email')
