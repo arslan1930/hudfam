@@ -2521,6 +2521,19 @@ if (!str_contains($sweUi, 'data-swe-add-toggle')
     ok('SWE Team/Final inline + Add site');
 }
 
+if (!str_contains($sweLibSmoke, 'function paste_sites_with_emails_rows')
+    || !str_contains($sweLibSmoke, 'function import_sites_with_emails_rows_from_upload')
+    || !str_contains($sweUi, 'id="swe-bulk-add"')
+    || !str_contains($sweUi, 'name="paste_text"')
+    || !str_contains($sweUi, 'name="import_file"')
+    || !str_contains($sweUi, 'id="swe-open-country"')
+    || !str_contains($sweUi, '$isAdminAll && ($action === \'paste\'')
+    || !str_contains($guidesLib, 'Paste or import CSV / Excel / TXT like Campaign')) {
+    fail('Final missing Campaign-style paste/CSV import');
+} else {
+    ok('Final Campaign-style paste/CSV import');
+}
+
 $invoicesChrome = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
 $filterAddChrome = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 if (!str_contains($layoutUiSmoke, 'class="app-bar"')

@@ -1916,6 +1916,141 @@ try {
     fail('swe inline add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+// --- Final bulk paste / CSV (Campaign-style, Admin working list also written) ---
+try {
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txffinal-bulk%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txffinal-bulk%' OR domain LIKE 'txffinal-csv%' OR domain LIKE 'txffinal-dup%' OR domain LIKE 'txffinal-scale%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txffinal-bulk%' OR domain LIKE 'txffinal-csv%' OR domain LIKE 'txffinal-dup%' OR domain LIKE 'txffinal-scale%'");
+
+    $teamBlocked = paste_sites_with_emails_rows(
+        'Germany',
+        "txffinal-bulk-team.de, team@txffinal-bulk.de\n",
+        $teamUser,
+        'team'
+    );
+    if (empty($teamBlocked['ok'])) {
+        pass('Final bulk paste rejected on Team scope');
+    } else {
+        fail('Team bulk paste unexpectedly ok: ' . json_encode($teamBlocked));
+    }
+
+    $finalPaste = paste_sites_with_emails_rows('Germany', implode("\n", [
+        'Site name, Email 1, Email 2, Email 3, Email 4',
+        'txffinal-bulk1.de, a1@txffinal-bulk1.de, a2@txffinal-bulk1.de',
+        'txffinal-bulk2.de; b1@txffinal-bulk2.de; b2@txffinal-bulk2.de',
+        "txffinal-bulk3.de\tc1@txffinal-bulk3.de",
+        'txffinal-bulk4.de d1@txffinal-bulk4.de d2@txffinal-bulk4.de',
+        '# comment ignored',
+        'txffinal-bulk-empty.de',
+        'not-a-domain, missing-at-sign',
+    ]), $adminUser, 'admin_all');
+    $bulkAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain LIKE 'txffinal-bulk%'"
+    )->fetchColumn();
+    $bulkFinal = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txffinal-bulk%'"
+    )->fetchColumn();
+    $emptySkipped = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txffinal-bulk-empty.de'"
+    )->fetchColumn();
+    if (!empty($finalPaste['ok'])
+        && (int) $finalPaste['added'] === 4
+        && $bulkAdmin === 4
+        && $bulkFinal === 4
+        && $emptySkipped === 0
+        && (int) ($finalPaste['skipped_empty'] ?? 0) >= 1
+        && (int) $finalPaste['skipped'] >= 2) {
+        pass('Final paste adds 4 formats, writes Admin+Final, skips no-email');
+    } else {
+        fail('Final paste: ' . json_encode($finalPaste) . " admin=$bulkAdmin final=$bulkFinal empty=$emptySkipped");
+    }
+
+    $csvPath = sys_get_temp_dir() . '/txffinal-import-' . getmypid() . '.csv';
+    file_put_contents(
+        $csvPath,
+        "Site name,Email 1,Email 2,Email 3,Email 4\n"
+        . "txffinal-csv1.de,c1@txffinal-csv1.de,,, \n"
+        . "txffinal-csv2.de,c2a@txffinal-csv2.de,c2b@txffinal-csv2.de,,\n"
+    );
+    $fromCsv = email_campaign_rows_text_from_file_path($csvPath, 'sites.csv');
+    $csvPaste = paste_sites_with_emails_rows('Germany', $fromCsv, $adminUser, 'admin_all');
+    @unlink($csvPath);
+    $csvAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain LIKE 'txffinal-csv%'"
+    )->fetchColumn();
+    $csvFinal = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txffinal-csv%'"
+    )->fetchColumn();
+    if ((int) $csvPaste['added'] === 2 && $csvAdmin === 2 && $csvFinal === 2 && !str_contains($fromCsv, 'Site name')) {
+        pass('Final CSV file import (header skipped) writes Admin+Final');
+    } else {
+        fail('Final CSV: ' . json_encode(['text' => $fromCsv, 'paste' => $csvPaste, 'admin' => $csvAdmin, 'final' => $csvFinal]));
+    }
+
+    $dupFirst = paste_sites_with_emails_rows(
+        'Germany',
+        "txffinal-dup.de,old@txffinal-dup.de\n",
+        $adminUser,
+        'admin_all'
+    );
+    $dupSame = paste_sites_with_emails_rows(
+        'Germany',
+        "txffinal-dup.de,old@txffinal-dup.de\n",
+        $adminUser,
+        'admin_all'
+    );
+    $dupReplace = paste_sites_with_emails_rows(
+        'Germany',
+        "txffinal-dup.de,new@txffinal-dup.de,second@txffinal-dup.de\n",
+        $adminUser,
+        'admin_all'
+    );
+    $dupRow = db()->query(
+        "SELECT email1, email2 FROM sites_with_emails_admin_all WHERE domain='txffinal-dup.de' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $dupAdmin = db()->query(
+        "SELECT email1, email2 FROM sites_with_emails_admin WHERE domain='txffinal-dup.de' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($dupFirst['ok']) && (int) $dupFirst['added'] === 1
+        && (int) ($dupSame['skipped_duplicate'] ?? 0) >= 1
+        && (int) $dupReplace['updated'] === 1
+        && ($dupRow['email1'] ?? '') === 'new@txffinal-dup.de'
+        && ($dupRow['email2'] ?? '') === 'second@txffinal-dup.de'
+        && ($dupAdmin['email1'] ?? '') === 'new@txffinal-dup.de') {
+        pass('Final paste skips identical dupes and replaces different emails on Admin+Final');
+    } else {
+        fail('Final dupe/replace: ' . json_encode([
+            'first' => $dupFirst,
+            'same' => $dupSame,
+            'replace' => $dupReplace,
+            'final' => $dupRow,
+            'admin' => $dupAdmin,
+        ]));
+    }
+
+    $scaleLines = ['Site name,Email 1'];
+    for ($i = 1; $i <= 200; $i++) {
+        $scaleLines[] = 'txffinal-scale' . $i . '.de,s' . $i . '@txffinal-scale.de';
+    }
+    $scale = paste_sites_with_emails_rows('Germany', implode("\n", $scaleLines), $adminUser, 'admin_all');
+    $scaleFinal = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain LIKE 'txffinal-scale%'"
+    )->fetchColumn();
+    $scaleAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain LIKE 'txffinal-scale%'"
+    )->fetchColumn();
+    if ((int) $scale['added'] === 200 && $scaleFinal === 200 && $scaleAdmin === 200) {
+        pass('Final paste 200 rows writes Admin+Final');
+    } else {
+        fail('Final scale: ' . json_encode($scale) . " final=$scaleFinal admin=$scaleAdmin");
+    }
+
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txffinal-bulk%' OR domain LIKE 'txffinal-csv%' OR domain LIKE 'txffinal-dup%' OR domain LIKE 'txffinal-scale%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txffinal-bulk%' OR domain LIKE 'txffinal-csv%' OR domain LIKE 'txffinal-dup%' OR domain LIKE 'txffinal-scale%'");
+} catch (Throwable $e) {
+    fail('Final bulk import: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Email campaign ---
 try {
     $sid = create_email_campaign_sheet('Germany', (int) $adminUser['id']);

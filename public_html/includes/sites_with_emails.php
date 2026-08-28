@@ -1788,6 +1788,261 @@ function save_site_with_emails_row(
     }
 }
 
+/**
+ * Human summary for Final paste / file import (Campaign-style).
+ *
+ * @param array{
+ *   added?:int,updated?:int,skipped?:int,skipped_duplicate?:int,skipped_empty?:int,
+ *   lines?:int,errors?:list<string>
+ * } $result
+ */
+function sites_with_emails_bulk_result_message(string $prefix, array $result): string
+{
+    $msg = $prefix . ': '
+        . (int) ($result['added'] ?? 0) . ' new, ' . (int) ($result['updated'] ?? 0) . ' updated';
+    if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
+    }
+    if ((int) ($result['skipped_empty'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
+    }
+    $accounted = (int) ($result['skipped_duplicate'] ?? 0) + (int) ($result['skipped_empty'] ?? 0);
+    $otherSkip = (int) ($result['skipped'] ?? 0) - $accounted;
+    if ($otherSkip > 0) {
+        $msg .= ', ' . $otherSkip . ' other skipped';
+    }
+    $msg .= '.';
+    if (isset($result['lines'])) {
+        $msg .= ' · ' . (int) $result['lines'] . ' data line(s).';
+    }
+    $errors = $result['errors'] ?? [];
+    if (is_array($errors) && $errors !== []) {
+        $msg .= ' Issues: ' . implode('; ', array_slice($errors, 0, 8));
+    }
+
+    return $msg;
+}
+
+/**
+ * Paste / import lines into All sites with emails - Final (same formats as Campaign).
+ * Each site needs at least one email. Writes Admin working list then syncs Final.
+ * Identical emails → skip; different emails → replace. No Campaign exclusion set.
+ *
+ * @return array{
+ *   ok:bool,error?:string,added:int,updated:int,skipped:int,
+ *   skipped_duplicate:int,skipped_empty:int,errors:list<string>
+ * }
+ */
+function paste_sites_with_emails_rows(
+    string $country,
+    string $raw,
+    array $user,
+    string $scope = 'admin_all'
+): array {
+    $empty = [
+        'ok' => false,
+        'added' => 0,
+        'updated' => 0,
+        'skipped' => 0,
+        'skipped_duplicate' => 0,
+        'skipped_empty' => 0,
+        'errors' => [],
+    ];
+    $scope = swe_normalize_scope($scope);
+    if ($scope !== 'admin_all') {
+        $empty['error'] = 'Bulk paste is only for Final.';
+
+        return $empty;
+    }
+    $canon = require_canonical_country($country);
+    $country = $canon['name'];
+    if (!function_exists('parse_email_campaign_bulk_line')) {
+        require_once __DIR__ . '/email_campaigns.php';
+    }
+    ensure_sites_with_emails_schema();
+    @set_time_limit(0);
+
+    $raw = str_replace(["\r\n", "\r"], "\n", (string) $raw);
+    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+        $raw = substr($raw, 3);
+    }
+    $lines = preg_split('/\n+/', $raw) ?: [];
+    $added = 0;
+    $updated = 0;
+    $skipped = 0;
+    $skippedDuplicate = 0;
+    $skippedEmpty = 0;
+    /** @var list<string> $errors */
+    $errors = [];
+    /** @var array<string, array{0:string,1:string,2:string,3:string}> $seenDomains */
+    $seenDomains = [];
+
+    $pdo = db();
+    $ownTx = !$pdo->inTransaction();
+    if ($ownTx) {
+        $pdo->beginTransaction();
+    }
+    try {
+        foreach ($lines as $line) {
+            $parsed = parse_email_campaign_bulk_line((string) $line);
+            if ($parsed === null) {
+                continue;
+            }
+            $domainRaw = $parsed['domain'];
+            $host = extract_host_candidate($domainRaw);
+            $domain = to_root_domain($host);
+            if ($domain === '' || (function_exists('is_root_domain') && !is_root_domain($domain))) {
+                if ($domain === '' || !str_contains($domain, '.')) {
+                    if (count($errors) < 25) {
+                        $errors[] = $domainRaw . ': Enter a valid site name (root domain).';
+                    }
+                    $skipped++;
+                    continue;
+                }
+            }
+
+            $norm = normalize_email_slots($parsed['emails']);
+            if (!$norm['ok']) {
+                if (count($errors) < 25) {
+                    $errors[] = $domainRaw . ': ' . (string) ($norm['error'] ?? 'Invalid email.');
+                }
+                $skipped++;
+                continue;
+            }
+            /** @var array{0:string,1:string,2:string,3:string} $slots */
+            $slots = $norm['slots'] ?? ['', '', '', ''];
+            $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+            if (!$hasEmail) {
+                $skippedEmpty++;
+                $skipped++;
+                if (count($errors) < 25) {
+                    $errors[] = $domainRaw . ': Add at least one email — each Admin site must have email data.';
+                }
+                continue;
+            }
+
+            if (isset($seenDomains[$domain]) && email_campaign_slots_equal($seenDomains[$domain], $slots)) {
+                $skippedDuplicate++;
+                $skipped++;
+                continue;
+            }
+
+            $adminId = find_site_with_emails_id($country, $domain, 'admin');
+            $finalId = find_site_with_emails_id($country, $domain, 'admin_all');
+            $existingId = 0;
+            $existingScope = 'admin';
+            $existing = null;
+            if ($adminId > 0) {
+                $existingId = $adminId;
+                $existingScope = 'admin';
+                $existing = get_site_with_emails($adminId, 'admin');
+            } elseif ($finalId > 0) {
+                $existingId = $finalId;
+                $existingScope = 'admin_all';
+                $existing = get_site_with_emails($finalId, 'admin_all');
+            }
+
+            if ($existingId > 0 && is_array($existing)) {
+                $existingSlots = [
+                    (string) ($existing['email1'] ?? ''),
+                    (string) ($existing['email2'] ?? ''),
+                    (string) ($existing['email3'] ?? ''),
+                    (string) ($existing['email4'] ?? ''),
+                ];
+                if (email_campaign_slots_equal($existingSlots, $slots)) {
+                    $skippedDuplicate++;
+                    $skipped++;
+                    $seenDomains[$domain] = $slots;
+                    continue;
+                }
+                $save = save_site_with_emails_row(
+                    $country,
+                    $domain,
+                    $slots,
+                    $user,
+                    $existingId,
+                    $existingScope
+                );
+                if (!empty($save['ok'])) {
+                    $updated++;
+                    $seenDomains[$domain] = $slots;
+                } else {
+                    $skipped++;
+                    if (count($errors) < 25) {
+                        $errors[] = $domain . ': ' . (string) ($save['error'] ?? 'Could not update.');
+                    }
+                }
+                continue;
+            }
+
+            $save = save_site_with_emails_row(
+                $country,
+                $domain,
+                $slots,
+                $user,
+                null,
+                'admin_all'
+            );
+            if (!empty($save['ok'])) {
+                $added++;
+                $seenDomains[$domain] = $slots;
+            } else {
+                $skipped++;
+                if (count($errors) < 25) {
+                    $errors[] = $domain . ': ' . (string) ($save['error'] ?? 'Could not add.');
+                }
+            }
+        }
+        if ($ownTx && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+    } catch (Throwable $e) {
+        if ($ownTx && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'ok' => true,
+        'added' => $added,
+        'updated' => $updated,
+        'skipped' => $skipped,
+        'skipped_duplicate' => $skippedDuplicate,
+        'skipped_empty' => $skippedEmpty,
+        'errors' => $errors,
+    ];
+}
+
+/**
+ * Import CSV / Excel (.xlsx) / TXT into Final (wraps Campaign file reader).
+ *
+ * @param array<string,mixed>|null $file $_FILES['import_file']
+ * @return array{
+ *   ok:bool,error?:string,added:int,updated:int,skipped:int,
+ *   skipped_duplicate:int,skipped_empty:int,lines:int,errors:list<string>
+ * }
+ */
+function import_sites_with_emails_rows_from_upload(
+    string $country,
+    ?array $file,
+    array $user,
+    string $scope = 'admin_all'
+): array {
+    if (!function_exists('read_email_campaign_rows_upload')) {
+        require_once __DIR__ . '/email_campaigns.php';
+    }
+    $text = read_email_campaign_rows_upload($file);
+    if (trim($text) === '') {
+        throw new InvalidArgumentException('Choose a CSV, Excel (.xlsx), or TXT file with site + emails.');
+    }
+    $lines = preg_split('/\n+/', trim($text)) ?: [];
+    $result = paste_sites_with_emails_rows($country, $text, $user, $scope);
+    $result['lines'] = count(array_filter($lines, static fn ($l) => trim((string) $l) !== ''));
+
+    return $result;
+}
+
 function delete_site_with_emails(int $id, string $scope = 'team'): bool
 {
     ensure_sites_with_emails_schema();
