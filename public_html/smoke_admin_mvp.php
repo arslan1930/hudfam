@@ -252,6 +252,7 @@ if (!str_contains($usersPage, 'users-office')
     || !str_contains($usersPage, 'Deactivate this user')
     || !str_contains($usersPage, 'username_taken_by_other')
     || !str_contains($usersPage, 'users_filter_hiddens')
+    || !str_contains($usersPage, 'name="f_')
     || str_contains($usersPage, 'Admin directory')) {
     fail('users.php office gaps (filters / stay / verify / paging) missing');
 } else {

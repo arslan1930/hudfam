@@ -34,12 +34,15 @@ function users_take_form_draft(int $id): ?array
 }
 
 /**
- * List-filter value from POST (save/generate) or GET (browse).
+ * List-filter value from POST (save/generate, f_* hiddens) or GET (browse).
  */
 function users_req(string $key): string
 {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && array_key_exists($key, $_POST)) {
-        return trim((string) $_POST[$key]);
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $postKey = 'f_' . $key;
+        if (array_key_exists($postKey, $_POST)) {
+            return trim((string) $_POST[$postKey]);
+        }
     }
     return trim((string) get($key));
 }
@@ -51,10 +54,10 @@ function users_filter_hiddens(array $state): string
 {
     $html = '';
     foreach (['q', 'role', 'active', 'awaiting', 'must_change'] as $k) {
-        $html .= '<input type="hidden" name="' . h($k) . '" value="' . h((string) ($state[$k] ?? '')) . '">';
+        $html .= '<input type="hidden" name="f_' . h($k) . '" value="' . h((string) ($state[$k] ?? '')) . '">';
     }
     $p = max(1, (int) ($state['p'] ?? 1));
-    $html .= '<input type="hidden" name="p" value="' . $p . '">';
+    $html .= '<input type="hidden" name="f_p" value="' . $p . '">';
     return $html;
 }
 
