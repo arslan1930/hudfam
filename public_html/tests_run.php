@@ -1224,10 +1224,13 @@ try {
         && (string) ($savedTint['reply_email'] ?? '') === 'inbox@example.com'
         && (string) ($badTint['row_tint'] ?? 'x') === ''
         && (string) ($adminEmail['reply_email'] ?? '') === 'admin-box@example.com'
+        && str_contains($tintHtml, 'data-tint="yellow"')
         && str_contains($tintHtml, 'is-color-')
         && !str_contains($tintHtml, 'is-status-')
         && !str_contains($tintHtml, 'is-tint-yellow')
         && str_contains($tintHtml, 'site-price-color-menu')
+        && str_contains($tintHtml, '>⋯</summary>')
+        && !str_contains($tintHtml, 'site-price-color-summary is-')
         && str_contains($tintHtml, 'data-site-price-email')
         && str_contains($tintHtml, 'site-price-email-td')
         && str_contains($tintHtml, 'site-price-email')
@@ -1247,6 +1250,7 @@ try {
         && str_contains($addHtml, 'colspan="2"')
         && !str_contains($addHtml, 'colspan="3"')
         && str_contains($addHtml, 'data-site-price-tint')
+        && str_contains($addHtml, 'data-tint=""')
         && site_price_sheet_colspan() === 12;
     if ($tintOk) {
         pass('site_price tint + reply email + history');

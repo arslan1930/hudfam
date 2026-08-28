@@ -592,12 +592,7 @@
     var summary = tr.querySelector('.site-price-color-summary');
     if (summary) {
       summary.classList.remove('is-yellow', 'is-pink', 'is-blue', 'is-green');
-      if (tint) {
-        summary.classList.add('is-' + tint);
-        summary.textContent = '';
-      } else {
-        summary.textContent = '⋯';
-      }
+      summary.textContent = '⋯';
     }
   }
 

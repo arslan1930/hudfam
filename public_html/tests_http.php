@@ -546,6 +546,8 @@ $sheetNeedles = [
     'Ctrl/Cmd+Enter',
     'id="status-words"',
     'site-price-email',
+    'site-price-color-summary',
+    'highlights the whole row',
 ];
 $sheetBad = [];
 foreach ($sheetNeedles as $n) {
