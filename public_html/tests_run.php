@@ -6067,6 +6067,50 @@ try {
     fail('users U-1: ' . $e->getMessage());
 }
 
+try {
+    $uTaken = 'u_taken_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    $uOther = 'u_other_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'team', 1, 0)"
+    )->execute([$uTaken, password_hash('TestTeam8z', PASSWORD_DEFAULT), 'Taken User', '']);
+    $takenId = (int) db()->lastInsertId();
+    $fmtOk = username_format_error('good_name') === ''
+        && username_format_error('has space') !== ''
+        && username_format_error('') !== '';
+    $dupName = username_taken_by_other($uTaken, 0)
+        && username_taken_by_other(strtoupper($uTaken), 0)
+        && !username_taken_by_other($uTaken, $takenId)
+        && !username_taken_by_other($uOther, 0);
+    $url = admin_users_url(['q' => 'ali', 'awaiting' => '1', 'p' => '2'], ['edit' => '9']);
+    $urlOk = str_contains($url, 'page=admin_users')
+        && str_contains($url, 'q=ali')
+        && str_contains($url, 'awaiting=1')
+        && str_contains($url, 'edit=9')
+        && str_contains($url, 'p=2')
+        && !str_contains(admin_users_url(['q' => '']), 'q=');
+    if ($fmtOk && $dupName && $urlOk) {
+        pass('username rules + admin_users_url filters');
+    } else {
+        fail('username rules / URL: ' . json_encode([$fmtOk, $dupName, $url]));
+    }
+    $inactUser = 'u_inact_' . substr(bin2hex(random_bytes(3)), 0, 6);
+    $inactEmail = $inactUser . '@example.test';
+    db()->prepare(
+        "INSERT INTO users (username, password_hash, full_name, email, role, is_active, must_change_password)
+         VALUES (?,?,?,?, 'admin', 0, 0)"
+    )->execute([$inactUser, password_hash('TestAdmin8z', PASSWORD_DEFAULT), 'Inactive Admin', $inactEmail]);
+    $inactId = (int) db()->lastInsertId();
+    if (admin_email_taken_by_other($inactEmail, 0) && !admin_email_taken_by_other($inactEmail, $inactId)) {
+        pass('admin_email_taken_by_other includes inactive admins');
+    } else {
+        fail('inactive admin email not treated as taken');
+    }
+    db()->prepare('DELETE FROM users WHERE id IN (?,?)')->execute([$takenId, $inactId]);
+} catch (Throwable $e) {
+    fail('users identity rules: ' . $e->getMessage());
+}
+
 // --- Admin Users U-2: temp password generator ---
 try {
     $pwd = generate_temp_password();

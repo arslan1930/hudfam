@@ -4912,6 +4912,21 @@ textarea:focus-visible {
   background: #f5f7fa;
 }
 
+.users-office {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 1fr);
+  align-items: start;
+}
+.users-table tr.is-editing td {
+  background: #fff8e1;
+}
+@media (max-width: 899px) {
+  .users-office {
+    grid-template-columns: 1fr;
+  }
+}
+
 .actions.is-spread {
   justify-content: space-between;
   margin-top: 0.85rem;

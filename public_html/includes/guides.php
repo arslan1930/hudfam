@@ -201,7 +201,7 @@ function guide_admin_users(): string
     return render_page_purpose(
         'Users — who can log in',
         'Create Admin and Team accounts. Temporary passwords are shown once; teammates must change them on first login.',
-        'Assign Team users under Departments so they unlock tools. Admin email login needs a unique address (verify under Account). You cannot deactivate or demote yourself, or remove the last active admin.',
+        'Assign Team users under Departments so they unlock tools. Filter Awaiting assignment for Team not in a department. Admin email login needs a unique address — Send verification on the user, or verify under Account for yourself. You cannot deactivate or demote yourself, or remove the last active admin.',
         []
     );
 }

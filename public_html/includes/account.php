@@ -132,7 +132,7 @@ function send_admin_email_verification(array $user): array
     }
     $email = trim((string) ($user['email'] ?? ''));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return ['ok' => false, 'error' => 'Add a valid email on your account first.'];
+        return ['ok' => false, 'error' => 'Add a valid email first.'];
     }
     $token = create_auth_token((int) $user['id'], 'email_verify', 48);
     $link = public_page_url('verify_email', ['token' => $token]);
@@ -198,7 +198,7 @@ function mark_admin_email_verified(int $userId): void
 }
 
 /**
- * Another active admin already uses this email (case-insensitive).
+ * Another admin already uses this email (case-insensitive, including inactive).
  * Used by Admin → Users so email login / password reset stay unambiguous.
  */
 function admin_email_taken_by_other(string $email, int $excludeId = 0): bool
@@ -210,7 +210,7 @@ function admin_email_taken_by_other(string $email, int $excludeId = 0): bool
     }
     $stmt = db()->prepare(
         "SELECT id FROM users
-         WHERE role='admin' AND is_active=1
+         WHERE role='admin'
            AND email <> ''
            AND LOWER(TRIM(email)) = LOWER(?)
            AND id <> ?
