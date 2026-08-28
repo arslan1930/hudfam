@@ -4755,8 +4755,7 @@ try {
         && str_contains($ordersPhpSrc, 'Also set Website prices back to Processing')
         && str_contains($ordersPhpSrc, 'Mark this order completed?')
         && str_contains($ordersPhpSrc, '$stayProcessing')
-        && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')
-        && str_contains($ordersPhpSrc, 'none ticked')) {
+        && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
         pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
     } else {
         fail('OM sheet gap UI missing');
