@@ -1851,10 +1851,9 @@ function site_price_tint_controls(string $current, array $opts = []): string
     $variant = (string) ($opts['variant'] ?? 'inline');
     $hidden = '<input type="hidden" data-site-price-tint-value value="' . h($current) . '" data-no-draft>';
     if ($variant === 'menu') {
-        $swatch = $current !== '' ? ' is-' . $current : '';
         $html = '<details class="sheet-row-more site-price-color-menu">';
-        $html .= '<summary class="btn secondary small sheet-row-more-btn site-price-color-summary' . h($swatch) . '"'
-            . ' title="Row color" aria-label="Row color">' . ($current !== '' ? '' : '⋯') . '</summary>';
+        $html .= '<summary class="btn secondary small sheet-row-more-btn site-price-color-summary"'
+            . ' title="Row color — highlights the whole row" aria-label="Row color">⋯</summary>';
         $html .= '<div class="sheet-row-more-panel site-price-color-panel">' . site_price_tint_buttons_html($current, true) . '</div>';
         $html .= $hidden . '</details>';
         return $html;
@@ -1967,7 +1966,7 @@ function render_site_price_sheet_row(array $row, array $viewer): string
 
 function render_site_price_add_row(?array $viewer = null): string
 {
-    $html = '<tr class="site-price-add" data-site-price-add>';
+    $html = '<tr class="site-price-add" data-site-price-add data-tint="">';
     $html .= '<td class="site-price-check-td" data-label=""></td>';
     $html .= '<td data-label="Website"><input type="text" class="site-price-input" data-add-domain'
         . ' placeholder="example.com" autocomplete="off" spellcheck="false" data-no-draft aria-label="New website"></td>';
