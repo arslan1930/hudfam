@@ -223,6 +223,57 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($back);
     }
 
+    // Final only: Campaign-style paste + CSV/xlsx/txt import (also writes Admin).
+    if ($isAdminAll && ($action === 'paste' || $action === 'import_file')) {
+        $finishBulk = static function (array $result, string $prefix) use (
+            $countryName,
+            $sweScope,
+            $sweBase,
+            $returnPerPage,
+            $back
+        ): void {
+            $msg = sites_with_emails_bulk_result_message($prefix, $result);
+            $hasErrors = ($result['errors'] ?? []) !== [];
+            flash($hasErrors ? 'error' : 'ok', $msg);
+            if ((int) ($result['added'] ?? 0) < 1 && (int) ($result['updated'] ?? 0) < 1) {
+                redirect($back . '#swe-bulk-add');
+            }
+            $totalAfter = count_sites_with_emails_for_country($countryName, $sweScope);
+            $lastPage = max(1, (int) ceil($totalAfter / max(1, $returnPerPage)));
+            $jump = $sweBase . '&country=' . rawurlencode($countryName);
+            $jump = append_sheet_per_page_query($jump, $returnPerPage);
+            if ($lastPage > 1) {
+                $jump .= '&p=' . $lastPage;
+            }
+            redirect($jump);
+        };
+        try {
+            if ($action === 'paste') {
+                $pasteText = (string) post('paste_text');
+                if (trim($pasteText) === '') {
+                    flash('error', 'Paste at least one site + email line.');
+                    redirect($back . '#swe-bulk-add');
+                }
+                $finishBulk(
+                    paste_sites_with_emails_rows($countryName, $pasteText, $sweUser, 'admin_all'),
+                    'Added to Final'
+                );
+            }
+            $finishBulk(
+                import_sites_with_emails_rows_from_upload(
+                    $countryName,
+                    $_FILES['import_file'] ?? null,
+                    $sweUser,
+                    'admin_all'
+                ),
+                'Imported file into Final'
+            );
+        } catch (Throwable $e) {
+            flash('error', $e->getMessage());
+            redirect($back . '#swe-bulk-add');
+        }
+    }
+
     // Campaign progress — Admin only (Final stays a neutral duplicate archive).
     if ($action === 'mark_email_sent' && $sweScope === 'admin') {
         $siteId = (int) post('site_id');
@@ -475,7 +526,8 @@ if (!$inCountry) {
             Site names arrive from Extracting Results → Push.
             Add emails, then Push again to Sites with emails - Admin ·
           <?php elseif ($isAdminAll): ?>
-            Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove) ·
+            Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove).
+            Paste or import CSV like Campaign on a country sheet ·
           <?php else: ?>
             Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
@@ -507,6 +559,32 @@ if (!$inCountry) {
         <?php endif; ?>
       </div>
     </div>
+
+    <?php if ($isAdminAll && function_exists('list_countries')): ?>
+    <div class="card" style="margin-bottom:1rem" id="swe-open-country">
+      <h2><?= label_with_info('Open a country to paste or import', 'Opens that Final country sheet even when it has no sites yet. Paste lines or import CSV / Excel / TXT the same way as Campaign. Each site needs at least one email and also creates the Admin working-list row.') ?></h2>
+      <p class="help">
+        Choose a country, then paste or import a sheet of <strong>site + emails</strong>.
+        Same formats as Campaign. Each site needs at least one email.
+      </p>
+      <form method="get" action="index.php" class="camp-hub-create-form" autocomplete="off" style="margin-top:0.65rem">
+        <input type="hidden" name="page" value="admin_emails_data">
+        <input type="hidden" name="folder" value="all_sites_with_emails">
+        <div class="camp-hub-field">
+          <label for="swe_open_country">Country</label>
+          <select id="swe_open_country" name="country" required>
+            <option value="">Select country…</option>
+            <?php foreach (list_countries() as $c): ?>
+              <option value="<?= h((string) ($c['name'] ?? '')) ?>"><?= h((string) ($c['name'] ?? '')) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <p class="actions" style="margin-top:0.75rem">
+          <button class="btn" type="submit">Open country</button>
+        </p>
+      </form>
+    </div>
+    <?php endif; ?>
 
     <?php if ($isTeam && team_page_unlocked($sweUser, 'team_admin_emails_search')): ?>
     <div class="card" style="margin-bottom:1rem">
@@ -608,7 +686,7 @@ if (!$inCountry) {
           <p class="muted">They appear here when you click Push in Extracting Results.</p>
         <?php elseif ($isAdminAll): ?>
           <p>No mirrored sites yet.</p>
-          <p class="muted">They sync here whenever Sites with emails - Admin receives data.</p>
+          <p class="muted">They sync from Admin, or open a country above and paste / import CSV like Campaign.</p>
         <?php else: ?>
           <p>No sites yet.</p>
           <p class="muted">They appear when Team pushes from Sites with emails - Team (after adding emails).</p>
@@ -816,6 +894,9 @@ render_breadcrumbs($crumbs);
                 ? 'Add one site + at least one email · also creates the Admin working-list row'
                 : 'Add one site + up to 4 emails (emails optional)' ?>">+ Add site</button>
     <?php endif; ?>
+    <?php if ($isAdminAll): ?>
+    <a class="btn secondary" href="#swe-bulk-add">Paste / import</a>
+    <?php endif; ?>
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
           data-show-processing="Pushing sites to Admin…"
@@ -913,6 +994,8 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Neutral duplicate archive (mirror of Admin). No campaign “emailed” marks here.
   Search finds a <strong>site + its emails</strong> together.
+  Use <strong>+ Add site</strong>, or paste / import CSV / Excel / TXT below — same as Campaign.
+  Each site needs at least one email and also creates the Admin working-list row.
 </p>
 <?php endif; ?>
 
@@ -1278,9 +1361,10 @@ render_sheet_checkpoint_compact(
       </p>
     <?php elseif ($isAdminAll): ?>
       <p>No mirrored sites in this country yet.</p>
-      <p class="muted">They sync here from Admin, or add a site (also creates the Admin working-list row). Each site needs at least one email.</p>
+      <p class="muted">They sync here from Admin, or add a site / paste / import a CSV like Campaign. Each site needs at least one email (also creates the Admin working-list row).</p>
       <p class="actions" style="justify-content:center;margin-top:0.75rem">
         <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
+        <a class="btn secondary" href="#swe-bulk-add">Paste / import file</a>
       </p>
     <?php else: ?>
       <p>No sites in this country yet.</p>
@@ -1340,6 +1424,54 @@ render_sheet_checkpoint_compact(
     <?php endif; ?>
   </div>
 </div>
+
+<?php if ($isAdminAll): ?>
+<div class="card" style="margin-top:1rem" id="swe-bulk-add">
+  <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry on Final. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email and also creates the Admin working-list row. Identical emails are skipped; different emails replace the existing row.') ?></h2>
+  <p class="help">
+    Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
+    (comma, tab, or semicolon). Header row is optional and skipped.
+    Built for large lists — paste or upload thousands of rows at once.
+    Same formats as Campaign. Lines with no email are skipped.
+  </p>
+
+  <form method="post" action="<?= h($listBase) ?>" style="margin-top:0.85rem"
+        data-show-processing="Adding pasted sites…">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="paste">
+    <input type="hidden" name="q" value="<?= h($q) ?>">
+    <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+    <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
+    <label for="swe_paste_text">Paste sites + emails</label>
+    <textarea id="swe_paste_text" name="paste_text" class="inventory-box camp-bulk-paste" rows="14"
+              placeholder="Site name, Email 1, Email 2, Email 3, Email 4&#10;example.com, hello@example.com, sales@example.com&#10;other.org, contact@other.org&#10;shop.de info@shop.de support@shop.de"></textarea>
+    <p class="actions" style="margin-top:0.75rem">
+      <button class="btn" type="submit">Add pasted rows</button>
+    </p>
+  </form>
+
+  <hr class="camp-bulk-divider">
+
+  <form method="post" action="<?= h($listBase) ?>" enctype="multipart/form-data"
+        data-show-processing="Importing file…">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="import_file">
+    <input type="hidden" name="q" value="<?= h($q) ?>">
+    <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+    <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
+    <label for="swe_import_file">Import from CSV, Excel, or TXT</label>
+    <input id="swe_import_file" type="file" name="import_file" required
+           accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+    <p class="help" style="margin-top:0.35rem">
+      Accepts <strong>.csv</strong>, <strong>.xlsx</strong> (Excel), and <strong>.txt</strong> / <strong>.tsv</strong>.
+      First columns = site + up to 4 emails. Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
+    </p>
+    <p class="actions" style="margin-top:0.75rem">
+      <button class="btn" type="submit">Import file into sheet</button>
+    </p>
+  </form>
+</div>
+<?php endif; ?>
 
 <?php if ($countryTotal > 0): ?>
 <div class="card" id="remove-by-list" style="margin-top:1rem">

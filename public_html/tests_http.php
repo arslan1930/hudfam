@@ -519,6 +519,36 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
     pass('admin campaign folder has no project yet (Fill gaps UI skipped)');
 }
 
+$r = req('GET', $base . '/index.php?page=admin_emails_data&folder=all_sites_with_emails');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'swe-open-country')
+    && str_contains($r['body'], 'Open a country to paste or import')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin Final folder country opener');
+} else {
+    fail('admin Final folder opener status=' . ($r['status'] ?? '?'));
+}
+$r = req('GET', $base . '/index.php?page=admin_emails_data&folder=all_sites_with_emails&country=Germany');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'id="swe-bulk-add"')
+    && str_contains($r['body'], 'name="paste_text"')
+    && str_contains($r['body'], 'name="import_file"')
+    && str_contains($r['body'], 'value="paste"')
+    && str_contains($r['body'], 'value="import_file"')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin Final Germany sheet paste/import');
+} else {
+    fail('admin Final Germany paste/import status=' . ($r['status'] ?? '?'));
+}
+$r = req('GET', $base . '/index.php?page=admin_emails_data&folder=sites_with_emails&country=Germany');
+if ($r['status'] === 200
+    && !str_contains($r['body'], 'id="swe-bulk-add"')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin working list has no Final bulk import');
+} else {
+    fail('admin working list bulk import leak status=' . ($r['status'] ?? '?'));
+}
+
 $r = req('GET', $base . '/index.php?page=admin_site_prices');
 $loc = location($r);
 $openedCountry = $r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'country=');
@@ -800,6 +830,15 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Sites with emails')) {
     pass('emailer can open Sites with emails');
 } else {
     fail('emailer blocked from Sites with emails status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_sites_emails&country=Germany');
+if ($r['status'] === 200
+    && !str_contains($r['body'], 'id="swe-bulk-add"')
+    && !str_contains($r['body'], 'name="import_file"')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('Team Sites with emails has no Campaign-style bulk import');
+} else {
+    fail('Team SWE bulk import leak status=' . ($r['status'] ?? '?'));
 }
 $r = req('GET', $base . '/index.php?page=team_admin_emails_search');
 if ($r['status'] === 200

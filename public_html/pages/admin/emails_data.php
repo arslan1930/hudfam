@@ -249,7 +249,7 @@ if ($folder === '') {
             </p>
             <?php folder_open_cue(); ?>
           </a>
-          <?= info_icon('Admin-only archive of Sites with emails - Admin. Mark emailed / remove from Admin keeps a copy here. Repair copies Admin → Final and never deletes archive rows. Not linked to Team.', 'About All sites with emails - Final') ?>
+          <?= info_icon('Admin-only archive of Sites with emails - Admin. Mark emailed / remove from Admin keeps a copy here. Repair copies Admin → Final and never deletes archive rows. Open a country to paste or import CSV / Excel / TXT like Campaign (also creates the Admin working-list row). Not linked to Team.', 'About All sites with emails - Final') ?>
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
