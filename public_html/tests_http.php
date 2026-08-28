@@ -459,7 +459,7 @@ foreach (
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order'],
         'admin_invoices' => ['Invoice'],
-        'admin_users' => ['Users'],
+        'admin_users' => ['Users', 'Awaiting assignment', 'Must change password', 'users-office'],
         'account_password' => ['Change password', 'breadcrumbs'],
     ] as $page => $needles
 ) {
@@ -476,6 +476,17 @@ foreach (
     } else {
         fail("page $label status={$r['status']} missing=" . implode(',', $bad) . ' fatal=' . (str_contains($r['body'], 'Fatal error') ? 'yes' : 'no'));
     }
+}
+
+$r = req('GET', $base . '/index.php?page=admin_users&awaiting=1');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Awaiting assignment')
+    && str_contains($r['body'], 'name="awaiting"')
+    && (str_contains($r['body'], 'No team users awaiting assignment.') || str_contains($r['body'], '<table'))
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin_users awaiting=1');
+} else {
+    fail('admin_users awaiting=1 status=' . ($r['status'] ?? '?'));
 }
 
 $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns');

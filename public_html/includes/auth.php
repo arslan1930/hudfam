@@ -55,6 +55,74 @@ function generate_temp_password(int $length = 14): string
     return $out;
 }
 
+/**
+ * Admin → Users list URL. Empty filters are omitted so links stay short.
+ *
+ * @param array<string,mixed> $state
+ * @param array<string,mixed> $overrides
+ */
+function admin_users_url(array $state, array $overrides = []): string
+{
+    $params = array_merge([
+        'q' => '',
+        'role' => '',
+        'active' => '',
+        'awaiting' => '',
+        'must_change' => '',
+        'edit' => '',
+        'p' => '1',
+    ], $state, $overrides);
+    $bits = ['page=admin_users'];
+    $q = trim((string) ($params['q'] ?? ''));
+    if ($q !== '') {
+        $bits[] = 'q=' . rawurlencode($q);
+    }
+    foreach (['role', 'active', 'awaiting', 'must_change'] as $k) {
+        $v = trim((string) ($params[$k] ?? ''));
+        if ($v === '') {
+            continue;
+        }
+        $bits[] = rawurlencode($k) . '=' . rawurlencode($v);
+    }
+    $edit = (int) ($params['edit'] ?? 0);
+    if ($edit > 0) {
+        $bits[] = 'edit=' . $edit;
+    }
+    $p = max(1, (int) ($params['p'] ?? 1));
+    if ($p > 1) {
+        $bits[] = 'p=' . $p;
+    }
+    return 'index.php?' . implode('&', $bits);
+}
+
+function username_format_error(string $username): string
+{
+    $username = trim($username);
+    if ($username === '') {
+        return 'Username required.';
+    }
+    if (preg_match('/\s/', $username)) {
+        return 'Username cannot contain spaces.';
+    }
+    if (strlen($username) > 100) {
+        return 'Username is too long.';
+    }
+    return '';
+}
+
+function username_taken_by_other(string $username, int $excludeId = 0): bool
+{
+    $username = trim($username);
+    if ($username === '') {
+        return false;
+    }
+    $stmt = db()->prepare(
+        'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id <> ? LIMIT 1'
+    );
+    $stmt->execute([$username, $excludeId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function current_user(): ?array
 {
     if (!isset($_SESSION['user']) || !is_array($_SESSION['user'])) {
