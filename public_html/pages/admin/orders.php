@@ -170,8 +170,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'delete_row') {
             $saveCurrent();
-            delete_order_item((int) post('item_id'));
-            flash('ok', 'Row removed.');
+            $itemId = (int) post('item_id');
+            $restoreWp = (string) post('restore_wp') === '1';
+            $item = get_order_item($itemId);
+            $wpId = (int) ($item['site_price_row_id'] ?? 0);
+            $wpStatus = '';
+            if ($wpId > 0 && function_exists('get_site_price_row')) {
+                $wp = get_site_price_row($wpId);
+                $wpStatus = strtolower(trim((string) ($wp['status_slug'] ?? '')));
+            }
+            delete_order_item($itemId);
+            $didRestore = false;
+            if ($restoreWp && $wpId > 0 && function_exists('site_price_save_row')) {
+                try {
+                    site_price_save_row($wpId, ['status_slug' => 'processing'], [
+                        'id' => (int) ($user['id'] ?? 0),
+                        'role' => 'admin',
+                    ]);
+                    $didRestore = true;
+                } catch (Throwable $e) {
+                    // OM row is already gone; Website prices restore is best-effort
+                }
+            }
+            if ($didRestore) {
+                flash('ok', 'Row removed. Website prices set back to Processing — it will show in Processing.');
+            } elseif ($wpStatus === 'processing') {
+                flash('ok', 'Row removed. Website prices is still Processing, so this order will reappear when Processing loads.');
+            } else {
+                flash('ok', 'Row removed.');
+            }
             redirect($ordersQs());
         }
         if ($action === 'mark_completed') {
@@ -192,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$selectedIds) {
                 throw new InvalidArgumentException('Tick at least one row (with a live URL) to mark completed.');
             }
+            $stayProcessing = $oneId > 0 && count($selectedIds) === 1;
             $result = order_mark_items_completed($selectedIds, $urls, (int) ($user['id'] ?? 0));
             if ($result['ok'] < 1) {
                 throw new InvalidArgumentException(
@@ -203,6 +231,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $msg .= ' ' . implode(' ', $result['errors']);
             }
             flash('ok', $msg);
+            if ($stayProcessing) {
+                redirect($ordersQs());
+            }
             redirect($ordersQs(['folder' => 'completed']));
         }
         if ($action === 'mark_paid') {
@@ -297,8 +328,23 @@ $items = list_order_pipeline_rows($listOpts + [
     'limit' => $perPage,
     'offset' => ($pageNum - 1) * $perPage,
 ]);
-$unpaidLiveCount = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+$unpaidFilterOpts = [
+    'q' => $filter['q'],
+    'country' => $filter['country'],
+    'admin_id' => $filter['admin_id'],
+    'date_from' => $filter['date_from'],
+    'date_to' => $filter['date_to'],
+    'status' => 'unpaid',
+    'folder' => 'completed',
+];
+$unpaidLiveCount = count_order_pipeline_rows($unpaidFilterOpts);
+$unpaidPushIds = [];
+if ($isCompleted && $unpaidLiveCount > 0 && $unpaidLiveCount <= order_invoice_push_id_cap()) {
+    $unpaidPushIds = list_order_pipeline_ids($unpaidFilterOpts);
+}
+$unpaidPush = order_invoice_generate_push_cta($unpaidLiveCount, $unpaidPushIds);
 $filterCountries = list_order_pipeline_countries();
+$clientCatalog = list_order_pipeline_client_labels();
 $admins = order_admin_options();
 $adminById = [];
 foreach ($admins as $aRow) {
@@ -399,11 +445,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoices">Invoices</a>
     <?php if ($isCompleted): ?>
-      <?php if ($unpaidLiveCount > 0): ?>
-        <a class="btn" href="index.php?page=admin_invoice_generate">Push unpaid (<?= (int) $unpaidLiveCount ?>)</a>
-      <?php else: ?>
-        <a class="btn secondary" href="index.php?page=admin_invoice_generate">Generate invoice</a>
-      <?php endif; ?>
+      <a class="<?= h($unpaidPush['class']) ?>" href="<?= h($unpaidPush['href']) ?>"><?= h($unpaidPush['label']) ?></a>
     <?php endif; ?>
   </div>
 </div>
@@ -487,7 +529,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <?php if ($isCompleted): ?>
   <div class="orders-summary-item">
     <strong><?= (int) $unpaidLiveCount ?></strong>
-    <span><?= label_with_info('Unpaid LIVE', 'Completed rows not yet paid — ready to push to an invoice.') ?></span>
+    <span><?= label_with_info('Unpaid LIVE', 'Completed unpaid rows matching this search, country, admin, and dates — ready to push to an invoice.') ?></span>
   </div>
   <?php endif; ?>
   <div class="orders-summary-item">
@@ -506,6 +548,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
   <input type="hidden" name="item_id" id="delete-item-id" value="">
+  <input type="hidden" name="restore_wp" id="restore-wp" value="">
   <div class="order-sheet-toolbar">
     <div class="order-sheet-toolbar-left">
       <h2 style="margin:0" class="with-info-heading"><?= label_with_info(
@@ -517,22 +560,25 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </div>
     <div class="actions">
       <?php if ($isProcessing): ?>
-        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites</button>
-        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs</button>
+        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites (this page)</button>
+        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs (this page)</button>
         <button class="btn secondary" type="button" data-copy-all-live
                 data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
         <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
       <?php else: ?>
-        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs</button>
+        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs (this page)</button>
         <button class="btn secondary" type="button" data-copy-all-live
                 data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
-        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites</button>
+        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites (this page)</button>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
       <?php endif; ?>
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     </div>
   </div>
+  <p class="muted order-check-hint" style="margin:0.35rem 0 0">
+    Left tick = <strong>Copy</strong> (this page). Right tick = <strong><?= $isProcessing ? 'Mark completed' : 'Push to invoice' ?></strong>.
+  </p>
   <p class="muted" id="order-copy-status" style="margin:0.35rem 0 0" hidden></p>
 
   <div class="order-sheet-scroll">
@@ -541,10 +587,14 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         <tr>
           <th class="col-check">
             <div class="order-check-heads">
-              <label class="visually-hidden" for="order-copy-all">Select all on this page for copy</label>
-              <input type="checkbox" id="order-copy-all" title="Select all on this page for copy" data-no-draft>
-              <label class="visually-hidden" for="order-select-all">Select all for complete or invoice</label>
-              <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
+              <label class="order-check-head" for="order-copy-all">
+                <span>Copy</span>
+                <input type="checkbox" id="order-copy-all" title="Select all on this page for copy" data-no-draft>
+              </label>
+              <label class="order-check-head" for="order-select-all">
+                <span><?= $isProcessing ? 'Complete' : 'Bill' ?></span>
+                <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
+              </label>
             </div>
           </th>
           <th class="col-num">#</th>
@@ -643,6 +693,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <td class="col-client">
             <input class="cell-input" type="text" name="client_label[<?= $id ?>]"
                    value="<?= h((string) ($row['client_label'] ?? '')) ?>"
+                   list="order-client-list"
                    placeholder="email or name" autocomplete="off">
           </td>
           <td class="col-site">
@@ -655,6 +706,21 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
                      value="<?= h((string) ($row['site_note'] ?? '')) ?>"
                      placeholder="note…" maxlength="255" autocomplete="off"
                      aria-label="Note for <?= h($row['site_name'] !== '' ? $row['site_name'] : 'site') ?>">
+              <?php
+                $wpHref = order_wp_sheet_url($row);
+                $wpStatusSlug = strtolower(trim((string) ($row['wp_status_slug'] ?? '')));
+                $omStage = $isProcessing ? 'processing' : 'completed';
+                $wpMismatch = $wpHref !== '' && $wpStatusSlug !== '' && $wpStatusSlug !== $omStage;
+                $wpStatusLabel = ($wpMismatch && function_exists('site_price_status_label'))
+                    ? site_price_status_label($wpStatusSlug)
+                    : '';
+              ?>
+              <?php if ($wpHref !== ''): ?>
+                <a class="order-wp-open" href="<?= h($wpHref) ?>">Open in Website prices</a>
+                <?php if ($wpMismatch && $wpStatusLabel !== ''): ?>
+                  <span class="order-wp-mismatch">Website prices: <?= h($wpStatusLabel) ?></span>
+                <?php endif; ?>
+              <?php endif; ?>
             </div>
           </td>
           <td class="col-placement">
@@ -739,12 +805,13 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <td class="col-del">
             <?php
               $siteLabel = trim((string) $row['site_name']);
-              $confirmMsg = $siteLabel !== ''
-                  ? 'Delete this row for “' . $siteLabel . '”? This cannot be undone.'
-                  : 'Delete this empty row? This cannot be undone.';
+              $wpStatusForDel = strtolower(trim((string) ($row['wp_status_slug'] ?? '')));
             ?>
             <button class="btn-link danger" type="submit"
-                    onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='delete_row'; return confirm(<?= h(json_encode($confirmMsg, JSON_UNESCAPED_UNICODE)) ?>);">
+                    data-item-id="<?= $id ?>"
+                    data-site="<?= h($siteLabel) ?>"
+                    data-wp-status="<?= h($wpStatusForDel) ?>"
+                    onclick="return omConfirmRemove(this);">
               Remove
             </button>
           </td>
@@ -774,6 +841,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       Rows come from <strong>Website prices Processing</strong>, or click <strong>+ Add order</strong> for a manual row.
       Fill <strong>LIVE URL</strong>, then <strong>Mark completed</strong> — saving a live URL does not complete the order.
       Completing moves the row to Completed orders and sets Website prices to Completed. Publisher reply email is not copied into client email/name.
+      Open in Website prices jumps to the linked site. If that site’s status no longer matches this folder, the mismatch is shown on the row.
     <?php else: ?>
       Use the filter bar to search by site, client email or name, country, admin, date, or unpaid/paid.
       Tick unpaid completed rows and <strong>Push to invoice</strong> to bill them.
@@ -787,6 +855,11 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <?php endforeach; ?>
   </datalist>
   <?php endif; ?>
+  <datalist id="order-client-list">
+    <?php foreach ($clientCatalog as $clabel): ?>
+      <option value="<?= h($clabel) ?>"></option>
+    <?php endforeach; ?>
+  </datalist>
   <div class="actions-sticky">
     <button class="btn large" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     <?php if ($isProcessing): ?>
@@ -1009,8 +1082,8 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     if (!values.length) {
       setCopyStatus(
         kind === 'sites'
-          ? 'Tick at least one row with a site name.'
-          : 'Tick at least one row that has a live URL.',
+          ? 'Tick at least one row with a site name (this page).'
+          : 'Tick at least one row that has a live URL (this page).',
         true
       );
       return;
@@ -1020,8 +1093,10 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         setCopyStatus('Could not copy.', true);
         return;
       }
-      var noun = kind === 'sites' ? 'site' : 'live URL';
-      setCopyStatus('Copied ' + values.length + ' ' + noun + (values.length === 1 ? '' : (kind === 'sites' ? 's' : 's')) + '.', false);
+      var noun = kind === 'sites'
+        ? (values.length === 1 ? 'site' : 'sites')
+        : (values.length === 1 ? 'live URL' : 'live URLs');
+      setCopyStatus('Copied ' + values.length + ' ' + noun + ' (this page).', false);
     });
   }
   function copyAllLive(btn) {
@@ -1080,6 +1155,10 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   form.addEventListener('submit', function (e) {
     var actionEl = document.getElementById('sheet-action');
     var action = actionEl ? String(actionEl.value || '') : '';
+    if (action !== 'delete_row') {
+      var restoreEl = document.getElementById('restore-wp');
+      if (restoreEl) restoreEl.value = '';
+    }
     if (action === 'push_invoice') {
       var any = false;
       document.querySelectorAll('[data-push-check]').forEach(function (cb) {
@@ -1134,6 +1213,18 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       submitting = false;
       return;
     }
+    if (action === 'mark_completed') {
+      var oneRow = String((document.getElementById('delete-item-id') || {}).value || '').trim();
+      var confirmMsg = oneRow
+        ? 'Mark this order completed? It moves to Completed orders and sets Website prices to Completed.'
+        : 'Mark selected orders completed? They move to Completed orders and Website prices is set to Completed.';
+      if (!confirm(confirmMsg)) {
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        return;
+      }
+    }
     submitting = true;
   });
   form.addEventListener('input', refresh);
@@ -1163,6 +1254,32 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   });
   refresh();
 })();
+function omConfirmRemove(btn) {
+  if (!btn) return false;
+  var id = String(btn.getAttribute('data-item-id') || '').trim();
+  var site = String(btn.getAttribute('data-site') || '').trim();
+  var wp = String(btn.getAttribute('data-wp-status') || '').toLowerCase();
+  var msg = site
+    ? 'Delete this row for “' + site + '”?'
+    : 'Delete this empty row?';
+  if (wp === 'processing') {
+    msg += ' Website prices is still Processing, so this order will reappear the next time Processing loads.';
+  }
+  msg += ' This cannot be undone.';
+  if (!confirm(msg)) return false;
+  var restore = document.getElementById('restore-wp');
+  if (restore) restore.value = '';
+  if (wp === 'completed') {
+    if (confirm('Also set Website prices back to Processing for this site? That creates a new Processing order.')) {
+      if (restore) restore.value = '1';
+    }
+  }
+  var itemEl = document.getElementById('delete-item-id');
+  var actionEl = document.getElementById('sheet-action');
+  if (itemEl) itemEl.value = id;
+  if (actionEl) actionEl.value = 'delete_row';
+  return true;
+}
 </script>
 <?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>

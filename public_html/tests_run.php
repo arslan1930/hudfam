@@ -4600,10 +4600,76 @@ try {
             $leaveComp = true;
         }
     }
-    if ($omLeave && !$leaveProc && !$leaveComp && !order_is_completed($omLeave)) {
-        pass('WP leaving Processing hides OM row without completing');
+    $leaveWpSlug = '';
+    foreach (list_order_pipeline_rows(['folder' => 'processing', 'q' => $leaveDomain]) as $row) {
+        if ((int) ($row['id'] ?? 0) === (int) ($omLeave['id'] ?? 0)) {
+            $leaveWpSlug = (string) ($row['wp_status_slug'] ?? '');
+        }
+    }
+    if ($omLeave && $leaveProc && !$leaveComp && !order_is_completed($omLeave)
+        && $leaveWpSlug === 'not_interested') {
+        pass('WP leaving Processing keeps OM row in Processing');
     } else {
-        fail('WP not_interested still in Processing or auto-completed');
+        fail('WP not_interested hid OM row, auto-completed, or missing WP status');
+    }
+
+    $restoreDomain = 'txfom-restore-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
+    $wpRestoreId = site_price_insert_row([
+        'country' => 'Germany',
+        'domain' => $restoreDomain,
+        'status_slug' => 'processing',
+        'created_by' => (int) $adminUser['id'],
+    ]);
+    $omRestore = get_order_item_by_site_price_row((int) $wpRestoreId);
+    $didRestoreComplete = order_mark_completed(
+        (int) ($omRestore['id'] ?? 0),
+        'https://example.com/txfom-restore-live',
+        (int) $adminUser['id']
+    );
+    $omRestoreId = (int) ($omRestore['id'] ?? 0);
+    delete_order_item($omRestoreId);
+    $goneAfterDel = get_order_item($omRestoreId);
+    site_price_save_row((int) $wpRestoreId, ['status_slug' => 'processing'], $adminUser);
+    order_reconcile_processing_from_website_prices();
+    $recreated = get_order_item_by_site_price_row((int) $wpRestoreId);
+    if (!empty($didRestoreComplete['ok']) && !$goneAfterDel && $recreated
+        && (int) ($recreated['id'] ?? 0) !== $omRestoreId
+        && !order_is_completed($recreated)
+        && (string) ($recreated['site_name'] ?? '') === $restoreDomain) {
+        pass('restoring WP Processing recreates OM row');
+    } else {
+        fail('delete + restore WP Processing did not recreate OM row');
+    }
+
+    $ctaTick = order_invoice_generate_push_cta(2, [10, 11]);
+    $ctaNone = order_invoice_generate_push_cta(0, []);
+    $ctaOver = order_invoice_generate_push_cta(81, range(1, 81));
+    $ctaMismatch = order_invoice_generate_push_cta(2, [10]);
+    if (($ctaTick['href'] ?? '') === 'index.php?page=admin_invoice_generate&ids=10,11'
+        && str_contains((string) ($ctaTick['label'] ?? ''), 'Push unpaid (2)')
+        && ($ctaNone['label'] ?? '') === 'Generate invoice'
+        && !str_contains((string) ($ctaNone['href'] ?? ''), 'ids=')
+        && str_contains((string) ($ctaOver['label'] ?? ''), 'none ticked')
+        && !str_contains((string) ($ctaOver['href'] ?? ''), 'ids=')
+        && str_contains((string) ($ctaMismatch['label'] ?? ''), 'none ticked')) {
+        pass('Push unpaid CTA ticks current-filter ids or honest label');
+    } else {
+        fail('Push unpaid CTA helper mismatch');
+    }
+
+    $wpHref = order_wp_sheet_url([
+        'site_price_row_id' => 99,
+        'wp_country' => 'Germany',
+        'country' => 'France',
+    ]);
+    if (str_contains($wpHref, 'admin_site_prices')
+        && str_contains($wpHref, 'country=Germany')
+        && str_contains($wpHref, 'row=99')
+        && function_exists('site_price_status_label')
+        && site_price_status_label('not_interested') !== '') {
+        pass('OM Open in Website prices URL + status label');
+    } else {
+        fail('OM Website prices link helper missing');
     }
 
     $ordersPhpSrc = file_get_contents(__DIR__ . '/pages/admin/orders.php') ?: '';
@@ -4659,9 +4725,11 @@ try {
     $sitePricesLibSrc = file_get_contents(__DIR__ . '/includes/site_prices.php') ?: '';
     if (str_contains($ordersPhpSrc, 'data-copy-check')
         && str_contains($ordersPhpSrc, 'data-push-check')
-        && str_contains($ordersPhpSrc, 'Copy selected sites')
-        && str_contains($ordersPhpSrc, 'Copy selected live URLs')
+        && str_contains($ordersPhpSrc, 'Copy selected sites (this page)')
+        && str_contains($ordersPhpSrc, 'Copy selected live URLs (this page)')
         && str_contains($ordersPhpSrc, 'Copy all live URLs')
+        && !str_contains($ordersPhpSrc, 'Copy all live URLs (this page)')
+        && str_contains($ordersPhpSrc, '(this page).')
         && str_contains($ordersPhpSrc, "download' => 'txt'")
         && str_contains($ordersPhpSrc, "copy' => 'live_urls'")
         && str_contains($ordersPhpSrc, 'order_pipeline_download_txt')
@@ -4673,6 +4741,24 @@ try {
         pass('OM copy UI on Processing and Completed');
     } else {
         fail('OM copy/download UI missing or leaked to Website prices');
+    }
+
+    if (str_contains($ordersPhpSrc, '<span>Copy</span>')
+        && str_contains($ordersPhpSrc, "\$isProcessing ? 'Complete' : 'Bill'")
+        && str_contains($ordersPhpSrc, 'Left tick')
+        && str_contains($ordersPhpSrc, 'order-client-list')
+        && str_contains($ordersPhpSrc, 'Open in Website prices')
+        && str_contains($ordersPhpSrc, 'order-wp-mismatch')
+        && str_contains($ordersPhpSrc, 'restore_wp')
+        && str_contains($ordersPhpSrc, 'omConfirmRemove')
+        && str_contains($ordersPhpSrc, 'will reappear the next time Processing loads')
+        && str_contains($ordersPhpSrc, 'Also set Website prices back to Processing')
+        && str_contains($ordersPhpSrc, 'Mark this order completed?')
+        && str_contains($ordersPhpSrc, '$stayProcessing')
+        && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
+        pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
+    } else {
+        fail('OM sheet gap UI missing');
     }
 
     $invId = create_blank_invoice((int) $adminUser['id']);

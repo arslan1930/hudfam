@@ -304,6 +304,17 @@ function site_price_flush_status_cache(): void
     site_price_status_map(true);
 }
 
+function site_price_status_label(string $slug): string
+{
+    $slug = strtolower(trim($slug));
+    if ($slug === '') {
+        return '';
+    }
+    $st = site_price_status_map()[$slug] ?? null;
+    $label = $st ? trim((string) ($st['label'] ?? '')) : '';
+    return $label !== '' ? $label : $slug;
+}
+
 /** @return array<string,string> */
 function site_price_lane_labels(): array
 {

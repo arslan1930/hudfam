@@ -3612,7 +3612,7 @@ a.card.stat:focus-visible {
 }
 .order-sheet {
   width: 100%;
-  min-width: 1780px;
+  min-width: 1860px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -3630,15 +3630,38 @@ a.card.stat:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 .order-sheet .col-num { width: 2.2rem; text-align: center; }
-.order-sheet .col-check { width: 3.4rem; text-align: center; }
+.order-sheet .col-check { width: 5.2rem; text-align: center; }
 .order-check-heads,
-.order-check-pair { display: flex; gap: 0.2rem; align-items: center; justify-content: center; }
+.order-check-pair { display: flex; gap: 0.45rem; align-items: flex-end; justify-content: center; }
+.order-check-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+  color: #4b5563;
+  line-height: 1.1;
+}
+.order-check-hint { font-size: 0.82rem; }
+.order-wp-open {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+.order-wp-mismatch {
+  display: block;
+  font-size: 0.72rem;
+  color: #92400e;
+  line-height: 1.25;
+}
 .order-sheet .col-month { min-width: 188px; width: 188px; }
 .order-sheet .col-country { min-width: 110px; width: 120px; }
 .order-sheet .col-date { min-width: 150px; width: 154px; }
 .order-sheet .col-admin { min-width: 140px; width: 148px; }
 .order-sheet .col-client { min-width: 200px; }
-.order-sheet .col-site { min-width: 168px; }
+.order-sheet .col-site { min-width: 188px; }
 .order-sheet .col-placement { min-width: 108px; width: 118px; }
 .site-cell {
   display: grid;
