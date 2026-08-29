@@ -783,6 +783,14 @@ if ($rUnpaidOm['status'] === 200
     && str_contains($rUnpaidOm['body'], 'Unpaid to bill')
     && str_contains($rUnpaidOm['body'], 'om-status-tabs')
     && str_contains($rUnpaidOm['body'], 'status=unpaid')
+    && str_contains($rUnpaidOm['body'], 'All folders')
+    && str_contains($rUnpaidOm['body'], 'Site, client, country, admin')
+    && str_contains($rUnpaidOm['body'], 'Bill</strong>, then use')
+    && str_contains($rUnpaidOm['body'], 'Push to invoice')
+    && str_contains($rUnpaidOm['body'], 'Mark paid')
+    && str_contains($rUnpaidOm['body'], 'orders-summary-3')
+    && str_contains($rUnpaidOm['body'], '>Owner</span>')
+    && str_contains($rUnpaidOm['body'], '>Decided</span>')
     && !str_contains($rUnpaidOm['body'], 'Fatal error')) {
     pass('admin orders completed unpaid working view');
 } else {
