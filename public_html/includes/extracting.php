@@ -14,6 +14,9 @@ function ensure_extract_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS extract_batches (
@@ -72,6 +75,9 @@ function ensure_extract_schema(): void
         } catch (Throwable $e) {
             // ignore
         }
+    }
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
     }
 }
 

@@ -21,6 +21,51 @@ function prospect_folder_display_label(string $countryName, string $region = '',
     return $countryName !== '' ? $countryName : 'No country';
 }
 
+function ensure_countries_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
+    try {
+        $pdo = db();
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS countries (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              region VARCHAR(40) NOT NULL DEFAULT 'other',
+              code VARCHAR(10) NOT NULL DEFAULT '',
+              name VARCHAR(100) NOT NULL,
+              default_language VARCHAR(50) NOT NULL DEFAULT '',
+              is_active TINYINT(1) NOT NULL DEFAULT 1,
+              UNIQUE KEY uniq_country_name (name),
+              INDEX (region),
+              INDEX (code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        $cols = $pdo->query('SHOW COLUMNS FROM countries')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $need = [
+            'region' => "VARCHAR(40) NOT NULL DEFAULT 'other'",
+            'code' => "VARCHAR(10) NOT NULL DEFAULT ''",
+            'default_language' => "VARCHAR(50) NOT NULL DEFAULT ''",
+            'is_active' => "TINYINT(1) NOT NULL DEFAULT 1",
+        ];
+        foreach ($need as $col => $ddl) {
+            if (!in_array($col, $cols, true)) {
+                $pdo->exec('ALTER TABLE countries ADD COLUMN `' . str_replace('`', '', $col) . '` ' . $ddl);
+            }
+        }
+        if (function_exists('txf_schema_mark_current')) {
+            txf_schema_mark_current(__FUNCTION__);
+        }
+    } catch (Throwable $e) {
+        // Table may be missing during install; Filter must not white-screen.
+    }
+}
+
 function seed_countries_if_empty(PDO $pdo): void
 {
     static $done = false;
@@ -28,7 +73,14 @@ function seed_countries_if_empty(PDO $pdo): void
         return;
     }
     $done = true;
-    $has = $pdo->query('SELECT 1 FROM countries LIMIT 1')->fetchColumn();
+    if (function_exists('ensure_countries_schema')) {
+        ensure_countries_schema();
+    }
+    try {
+        $has = $pdo->query('SELECT 1 FROM countries LIMIT 1')->fetchColumn();
+    } catch (Throwable $e) {
+        return;
+    }
     if ($has) {
         return;
     }
@@ -72,6 +124,23 @@ function seed_countries_if_empty(PDO $pdo): void
 
 function list_countries(?string $region = null, bool $activeOnly = true): array
 {
+    static $cache = [];
+    $cacheKey = ($region ?? '') . '|' . ($activeOnly ? '1' : '0');
+    if (isset($cache[$cacheKey])) {
+        return $cache[$cacheKey];
+    }
+
+    if (function_exists('ensure_countries_schema')) {
+        ensure_countries_schema();
+    }
+    if (function_exists('seed_countries_if_empty')) {
+        try {
+            seed_countries_if_empty(db());
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
     // One-time repair: merge German → Germany (and similar demonym folders), drop fake catalog rows.
     if (function_exists('repair_country_alias_folders')) {
         try {
@@ -81,7 +150,7 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         }
     }
 
-    $sql = 'SELECT * FROM countries WHERE 1=1';
+    $sql = 'SELECT id, region, code, name, default_language, is_active FROM countries WHERE 1=1';
     $params = [];
     if ($activeOnly) {
         $sql .= ' AND is_active = 1';
@@ -91,9 +160,29 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         $params[] = $region;
     }
     $sql .= ' ORDER BY name, id';
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        try {
+            $sql = 'SELECT * FROM countries WHERE 1=1';
+            $params = [];
+            if ($activeOnly) {
+                $sql .= ' AND is_active = 1';
+            }
+            if ($region) {
+                $sql .= ' AND region = ?';
+                $params[] = $region;
+            }
+            $sql .= ' ORDER BY name, id';
+            $stmt = db()->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e2) {
+            return $cache[$cacheKey] = [];
+        }
+    }
     // Never show duplicate country names (case/whitespace variants).
     // Never show demonyms (German, Spanish, …) even if still in DB mid-repair.
     $out = [];
@@ -114,7 +203,7 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         $row['name'] = $name;
         $out[] = $row;
     }
-    return $out;
+    return $cache[$cacheKey] = $out;
 }
 
 /**
@@ -256,6 +345,30 @@ function is_country_name_alias(string $name): bool
 }
 
 /**
+ * SHOW TABLES / SHOW COLUMNS once per table per request (country-alias repair).
+ *
+ * @return list<string>|null column names, or null when the table is missing
+ */
+function country_repair_table_columns(PDO $pdo, string $table): ?array
+{
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    try {
+        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
+        if (!$exists) {
+            return $cache[$table] = null;
+        }
+        $safe = str_replace('`', '``', $table);
+        $cols = $pdo->query('SHOW COLUMNS FROM `' . $safe . '`')->fetchAll(PDO::FETCH_COLUMN);
+        return $cache[$table] = ($cols ?: []);
+    } catch (Throwable $e) {
+        return $cache[$table] = null;
+    }
+}
+
+/**
  * Merge rows from one country label into another across a table that has country (+ optional domain).
  *
  * @return int rows changed (updated or deleted)
@@ -267,16 +380,8 @@ function merge_country_label_rows(PDO $pdo, string $table, string $from, string 
     if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
         return 0;
     }
-    try {
-        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
-        if (!$exists) {
-            return 0;
-        }
-        $cols = $pdo->query('SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('country', $cols, true)) {
-            return 0;
-        }
-    } catch (Throwable $e) {
+    $cols = country_repair_table_columns($pdo, $table);
+    if ($cols === null || !in_array('country', $cols, true)) {
         return 0;
     }
 
@@ -319,11 +424,7 @@ function merge_extract_batch_country_label(PDO $pdo, string $from, string $to): 
     if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
         return 0;
     }
-    try {
-        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('extract_batches'))->fetchColumn()) {
-            return 0;
-        }
-    } catch (Throwable $e) {
+    if (country_repair_table_columns($pdo, 'extract_batches') === null) {
         return 0;
     }
 
@@ -381,11 +482,7 @@ function merge_email_sheet_country_label(PDO $pdo, string $from, string $to): in
     if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
         return 0;
     }
-    try {
-        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('email_campaign_sheets'))->fetchColumn()) {
-            return 0;
-        }
-    } catch (Throwable $e) {
+    if (country_repair_table_columns($pdo, 'email_campaign_sheets') === null) {
         return 0;
     }
 
@@ -434,7 +531,7 @@ function merge_email_sheet_country_label(PDO $pdo, string $from, string $to): in
 
 /**
  * Merge demonym folders (German → Germany) in data + delete fake countries rows.
- * Safe to call often (runs once per request unless $force).
+ * Safe to call often (once per request; later web requests skip via stamp unless $force).
  *
  * @return array{merged:int,removed_catalog:int}
  */
@@ -442,6 +539,14 @@ function repair_country_alias_folders(bool $force = false): array
 {
     static $done = false;
     if ($done && !$force) {
+        return ['merged' => 0, 'removed_catalog' => 0];
+    }
+    if (
+        !$force
+        && function_exists('txf_schema_is_current')
+        && txf_schema_is_current('repair_country_alias_folders', __FILE__)
+    ) {
+        $done = true;
         return ['merged' => 0, 'removed_catalog' => 0];
     }
     $done = true;
@@ -526,6 +631,9 @@ function repair_country_alias_folders(bool $force = false): array
         }
     }
 
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current('repair_country_alias_folders');
+    }
     return ['merged' => $merged, 'removed_catalog' => $removedCatalog];
 }
 

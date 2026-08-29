@@ -1354,6 +1354,25 @@ if (str_contains($appCssSmoke, 'content-visibility: auto')
 } else {
     ok('search [hidden] hide + login CSRF/throttle + security headers');
 }
+$assetPhpPerfSmoke = file_get_contents($root . '/asset.php') ?: '';
+$upgradePerfSmoke = file_get_contents($root . '/upgrade.php') ?: '';
+if (!str_contains($helpersSmoke, 'function txf_schema_is_current')
+    || !str_contains($helpersSmoke, 'function txf_schema_clear_stamps')
+    || !str_contains($helpersSmoke, 'function txf_start_output_compression')
+    || !str_contains($geoSmoke, "txf_schema_mark_current('repair_country_alias_folders')")
+    || !str_contains($geoSmoke, 'function country_repair_table_columns')
+    || !str_contains($geoSmoke, 'function ensure_countries_schema')
+    || !str_contains($assetPhpPerfSmoke, 'max-age=31536000')
+    || !str_contains($assetPhpPerfSmoke, 'immutable')
+    || !str_contains($upgradePerfSmoke, 'txf_schema_clear_stamps')
+    || !str_contains($htaccessSmoke, 'AddOutputFilterByType DEFLATE')
+    || !str_contains($indexSmoke, '$txfLightPages')
+    || str_contains($assetPhpPerfSmoke, 'gzencode')
+    || str_contains($layoutFull, "js/csrf.js')) . '\" defer")) {
+    fail('perf: schema stamps / asset immutable / light login missing, or PHP gzip/csrf-defer still on');
+} else {
+    ok('perf: schema stamps, versioned asset cache, light login, no PHP gzip');
+}
 $cliGuardNeedle = "PHP_SAPI !== 'cli'";
 $cliGuardFiles = [
     'tests_run.php',

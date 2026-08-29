@@ -65,8 +65,15 @@ if (!is_file($path)) {
 $mtime = filemtime($path) ?: time();
 $etag = '"' . md5($path . $mtime . filesize($path)) . '"';
 header('Content-Type: ' . $allowed[$f]);
-// Always revalidate — max-age=86400 kept teammates on broken JS after deploys.
-header('Cache-Control: no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
+// stylesheet_url() / script_asset_url() append v=filemtime. That URL is immutable.
+// Without v=, keep no-cache so a stale /asset.php?f=css/app.css cannot pin broken JS.
+$versioned = isset($_GET['v']) && (string) $_GET['v'] !== '';
+if ($versioned) {
+    header('Cache-Control: public, max-age=31536000, immutable');
+} else {
+    header('Cache-Control: no-cache, must-revalidate');
+}
 header('ETag: ' . $etag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 
@@ -82,4 +89,6 @@ if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
     }
 }
 
+// Do not gzip here. LiteSpeed/Apache gzip PHP output; a second gzip (or a
+// Content-Length that no longer matches) breaks CSS/JS on Team Filter & add.
 readfile($path);

@@ -10,6 +10,9 @@ function ensure_extracted_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     db()->exec(
         "CREATE TABLE IF NOT EXISTS extracted_sites (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -30,6 +33,9 @@ function ensure_extracted_schema(): void
           CONSTRAINT fk_extracted_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 /**

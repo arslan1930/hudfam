@@ -860,6 +860,33 @@ foreach ([
     }
 }
 
+$cssMtime = (string) (@filemtime(__DIR__ . '/assets/css/app.css') ?: time());
+$r = req('GET', $base . '/asset.php?f=css/app.css&v=' . rawurlencode($cssMtime));
+if (
+    $r['status'] === 200
+    && stripos($r['headers'], 'immutable') !== false
+    && stripos($r['headers'], 'max-age=31536000') !== false
+) {
+    pass('versioned asset immutable cache');
+} else {
+    fail('versioned asset cache headers status=' . $r['status']);
+}
+
+$jsMtime = (string) (@filemtime(__DIR__ . '/assets/js/sites-form.js') ?: time());
+$r = req('GET', $base . '/asset.php?f=js/sites-form.js&v=' . rawurlencode($jsMtime), [
+    'headers' => ['Accept-Encoding: gzip, deflate'],
+]);
+if (
+    $r['status'] === 200
+    && !str_starts_with($r['body'], "\x1f\x8b")
+    && str_contains($r['body'], 'VALID_TLDS')
+    && stripos($r['headers'], 'Content-Encoding: gzip') === false
+) {
+    pass('Filter JS served uncompressed (host gzip only)');
+} else {
+    fail('sites-form.js must not be gzipped by asset.php');
+}
+
 // install.php locked
 $r = req('GET', $base . '/install.php');
 if ($r['status'] === 403 || str_contains($r['body'], 'Install locked')) {
@@ -952,6 +979,14 @@ if ($r['status'] === 200
     pass('finder can open Filter & add');
 } else {
     fail('finder blocked from Filter & add status=' . $r['status']);
+}
+if ($r['status'] === 200
+    && str_contains($r['body'], 'sites-form.js')
+    && str_contains($r['body'], 'data-typeahead-items')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('finder Filter country typeahead + sites-form.js');
+} else {
+    fail('finder Filter missing typeahead/sites-form.js');
 }
 if (!preg_match('/href="[^"]*team_extracting[^"]*"/', $r['body'])
     && !preg_match('/href="[^"]*team_extract_batch[^"]*"/', $r['body'])) {

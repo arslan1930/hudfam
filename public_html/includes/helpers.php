@@ -70,6 +70,73 @@ function txf_send_security_headers(): void
 }
 
 /**
+ * Do not gzip in PHP. Hostinger LiteSpeed already compresses HTML/CSS/JS.
+ * PHP gzip + the proxy gzip = ERR_CONTENT_DECODING_FAILED (Filter & add
+ * looks crashed because sites-form.js never parses). .htaccess mod_deflate
+ * is the safe path.
+ */
+function txf_start_output_compression(): void
+{
+}
+
+/**
+ * Hostinger schema probes (SHOW COLUMNS / SHOW INDEX) are a Hostinger safety net.
+ * After a successful run, skip them until this PHP file is redeployed (mtime).
+ * CLI tests always re-run so schema stays explicit. upgrade.php clears stamps.
+ */
+function txf_schema_stamp_path(string $key): string
+{
+    $safe = preg_replace('/[^a-zA-Z0-9._-]/', '', $key) ?: 'schema';
+    return rtrim(sys_get_temp_dir(), '/') . '/txf_schema_' . $safe . '.stamp';
+}
+
+function txf_schema_stamps_enabled(): bool
+{
+    return PHP_SAPI !== 'cli';
+}
+
+function txf_schema_is_current(string $key, string $sourceFile = ''): bool
+{
+    static $mem = [];
+    if (!empty($mem[$key])) {
+        return true;
+    }
+    if (!txf_schema_stamps_enabled()) {
+        return false;
+    }
+    $path = txf_schema_stamp_path($key);
+    if (!is_file($path)) {
+        return false;
+    }
+    $stampMtime = (int) @filemtime($path);
+    if ($stampMtime < 1) {
+        return false;
+    }
+    $src = $sourceFile !== '' ? (int) @filemtime($sourceFile) : 0;
+    if ($src > 0 && $stampMtime < $src) {
+        return false;
+    }
+    $mem[$key] = true;
+    return true;
+}
+
+function txf_schema_mark_current(string $key): void
+{
+    if (!txf_schema_stamps_enabled()) {
+        return;
+    }
+    @file_put_contents(txf_schema_stamp_path($key), (string) time());
+}
+
+function txf_schema_clear_stamps(): void
+{
+    $dir = rtrim(sys_get_temp_dir(), '/');
+    foreach (glob($dir . '/txf_schema_*.stamp') ?: [] as $file) {
+        @unlink($file);
+    }
+}
+
+/**
  * Hidden multi-line POST field (domain lists, notes, etc.).
  * Never put multi-line values in <input type="hidden"> — browsers turn
  * newlines in attribute values into spaces, which breaks domain parsing.

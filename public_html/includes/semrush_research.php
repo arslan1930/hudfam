@@ -11,6 +11,9 @@ function ensure_semrush_research_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS semrush_sites (
@@ -51,6 +54,9 @@ function ensure_semrush_research_schema(): void
             FOREIGN KEY (last_writer_id) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 /**

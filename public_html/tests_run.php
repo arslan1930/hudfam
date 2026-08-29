@@ -68,6 +68,27 @@ try {
     exit(1);
 }
 
+try {
+    $stampKey = 'txf_cli_stamp_probe';
+    $stampPath = txf_schema_stamp_path($stampKey);
+    @file_put_contents($stampPath, (string) time());
+    if (txf_schema_stamps_enabled() || txf_schema_is_current($stampKey, __FILE__)) {
+        fail('CLI schema stamps should stay off so ensure_* still runs');
+    } else {
+        pass('CLI schema stamps disabled');
+    }
+    @unlink($stampPath);
+    $countriesA = list_countries(null, true);
+    $countriesB = list_countries(null, true);
+    if (is_array($countriesA) && $countriesA === $countriesB) {
+        pass('list_countries request cache');
+    } else {
+        fail('list_countries request cache');
+    }
+} catch (Throwable $e) {
+    fail('perf helpers: ' . $e->getMessage());
+}
+
 $admin = db()->query("SELECT * FROM users WHERE username='admin'")->fetch(PDO::FETCH_ASSOC);
 $team = db()->query("SELECT * FROM users WHERE username='teammate'")->fetch(PDO::FETCH_ASSOC);
 if (!$admin || !$team) {
