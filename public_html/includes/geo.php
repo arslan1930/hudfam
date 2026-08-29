@@ -72,6 +72,12 @@ function seed_countries_if_empty(PDO $pdo): void
 
 function list_countries(?string $region = null, bool $activeOnly = true): array
 {
+    static $cache = [];
+    $cacheKey = ($region ?? '') . '|' . ($activeOnly ? '1' : '0');
+    if (isset($cache[$cacheKey])) {
+        return $cache[$cacheKey];
+    }
+
     // One-time repair: merge German → Germany (and similar demonym folders), drop fake catalog rows.
     if (function_exists('repair_country_alias_folders')) {
         try {
@@ -81,7 +87,7 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         }
     }
 
-    $sql = 'SELECT * FROM countries WHERE 1=1';
+    $sql = 'SELECT id, region, code, name, default_language, is_active FROM countries WHERE 1=1';
     $params = [];
     if ($activeOnly) {
         $sql .= ' AND is_active = 1';
@@ -114,7 +120,7 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         $row['name'] = $name;
         $out[] = $row;
     }
-    return $out;
+    return $cache[$cacheKey] = $out;
 }
 
 /**
@@ -256,6 +262,30 @@ function is_country_name_alias(string $name): bool
 }
 
 /**
+ * SHOW TABLES / SHOW COLUMNS once per table per request (country-alias repair).
+ *
+ * @return list<string>|null column names, or null when the table is missing
+ */
+function country_repair_table_columns(PDO $pdo, string $table): ?array
+{
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    try {
+        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
+        if (!$exists) {
+            return $cache[$table] = null;
+        }
+        $safe = str_replace('`', '``', $table);
+        $cols = $pdo->query('SHOW COLUMNS FROM `' . $safe . '`')->fetchAll(PDO::FETCH_COLUMN);
+        return $cache[$table] = ($cols ?: []);
+    } catch (Throwable $e) {
+        return $cache[$table] = null;
+    }
+}
+
+/**
  * Merge rows from one country label into another across a table that has country (+ optional domain).
  *
  * @return int rows changed (updated or deleted)
@@ -267,16 +297,8 @@ function merge_country_label_rows(PDO $pdo, string $table, string $from, string 
     if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
         return 0;
     }
-    try {
-        $exists = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->fetchColumn();
-        if (!$exists) {
-            return 0;
-        }
-        $cols = $pdo->query('SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('country', $cols, true)) {
-            return 0;
-        }
-    } catch (Throwable $e) {
+    $cols = country_repair_table_columns($pdo, $table);
+    if ($cols === null || !in_array('country', $cols, true)) {
         return 0;
     }
 
@@ -319,11 +341,7 @@ function merge_extract_batch_country_label(PDO $pdo, string $from, string $to): 
     if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
         return 0;
     }
-    try {
-        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('extract_batches'))->fetchColumn()) {
-            return 0;
-        }
-    } catch (Throwable $e) {
+    if (country_repair_table_columns($pdo, 'extract_batches') === null) {
         return 0;
     }
 
@@ -381,11 +399,7 @@ function merge_email_sheet_country_label(PDO $pdo, string $from, string $to): in
     if ($from === '' || $to === '' || strcasecmp($from, $to) === 0) {
         return 0;
     }
-    try {
-        if (!$pdo->query('SHOW TABLES LIKE ' . $pdo->quote('email_campaign_sheets'))->fetchColumn()) {
-            return 0;
-        }
-    } catch (Throwable $e) {
+    if (country_repair_table_columns($pdo, 'email_campaign_sheets') === null) {
         return 0;
     }
 
@@ -434,7 +448,7 @@ function merge_email_sheet_country_label(PDO $pdo, string $from, string $to): in
 
 /**
  * Merge demonym folders (German → Germany) in data + delete fake countries rows.
- * Safe to call often (runs once per request unless $force).
+ * Safe to call often (once per request; later web requests skip via stamp unless $force).
  *
  * @return array{merged:int,removed_catalog:int}
  */
@@ -442,6 +456,14 @@ function repair_country_alias_folders(bool $force = false): array
 {
     static $done = false;
     if ($done && !$force) {
+        return ['merged' => 0, 'removed_catalog' => 0];
+    }
+    if (
+        !$force
+        && function_exists('txf_schema_is_current')
+        && txf_schema_is_current('repair_country_alias_folders', __FILE__)
+    ) {
+        $done = true;
         return ['merged' => 0, 'removed_catalog' => 0];
     }
     $done = true;
@@ -526,6 +548,9 @@ function repair_country_alias_folders(bool $force = false): array
         }
     }
 
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current('repair_country_alias_folders');
+    }
     return ['merged' => $merged, 'removed_catalog' => $removedCatalog];
 }
 

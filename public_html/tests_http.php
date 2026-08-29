@@ -860,6 +860,18 @@ foreach ([
     }
 }
 
+$cssMtime = (string) (@filemtime(__DIR__ . '/assets/css/app.css') ?: time());
+$r = req('GET', $base . '/asset.php?f=css/app.css&v=' . rawurlencode($cssMtime));
+if (
+    $r['status'] === 200
+    && stripos($r['headers'], 'immutable') !== false
+    && stripos($r['headers'], 'max-age=31536000') !== false
+) {
+    pass('versioned asset immutable cache');
+} else {
+    fail('versioned asset cache headers status=' . $r['status']);
+}
+
 // install.php locked
 $r = req('GET', $base . '/install.php');
 if ($r['status'] === 403 || str_contains($r['body'], 'Install locked')) {

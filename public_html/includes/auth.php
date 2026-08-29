@@ -7,6 +7,9 @@ function ensure_users_auth_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     try {
         $pdo = db();
         $cols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
@@ -24,6 +27,9 @@ function ensure_users_auth_schema(): void
                  ADD COLUMN session_version INT NOT NULL DEFAULT 1
                  AFTER must_change_password"
             );
+        }
+        if (function_exists('txf_schema_mark_current')) {
+            txf_schema_mark_current(__FUNCTION__);
         }
     } catch (Throwable $e) {
         // Table may not exist during very early install.

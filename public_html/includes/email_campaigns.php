@@ -16,6 +16,9 @@ function ensure_email_campaign_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
 
     $pdo->exec(
@@ -304,6 +307,9 @@ function ensure_email_campaign_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
     email_campaign_ensure_source_fetch_cascade();
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 /**
@@ -316,6 +322,9 @@ function email_campaign_ensure_source_fetch_cascade(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     try {
         $pdo = db();
         $dbName = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
@@ -333,6 +342,9 @@ function email_campaign_ensure_source_fetch_cascade(): void
         $stmt->execute([$dbName]);
         $fk = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         if ($fk && strtoupper((string) ($fk['DELETE_RULE'] ?? '')) === 'CASCADE') {
+            if (function_exists('txf_schema_mark_current')) {
+                txf_schema_mark_current(__FUNCTION__);
+            }
             return;
         }
         if ($fk) {
@@ -345,6 +357,9 @@ function email_campaign_ensure_source_fetch_cascade(): void
         );
     } catch (Throwable $e) {
         // ignore: table missing, no permission, or constraint already correct
+    }
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
     }
 }
 

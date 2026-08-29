@@ -2,25 +2,12 @@
 require __DIR__ . '/includes/helpers.php';
 txf_secure_session_start();
 txf_send_security_headers();
+txf_start_output_compression();
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/account.php';
-require __DIR__ . '/includes/geo.php';
-require __DIR__ . '/includes/prospects.php';
-require __DIR__ . '/includes/extracting.php';
-require __DIR__ . '/includes/extracted.php';
-require __DIR__ . '/includes/sites_with_emails.php';
-require __DIR__ . '/includes/email_campaigns.php';
-require __DIR__ . '/includes/admin_new_data.php';
+require __DIR__ . '/includes/mail.php';
 require __DIR__ . '/includes/departments.php';
-require __DIR__ . '/includes/sites_form.php';
-require __DIR__ . '/includes/orders.php';
-require __DIR__ . '/includes/site_prices.php';
-require __DIR__ . '/includes/invoices.php';
-require __DIR__ . '/includes/guides.php';
-require __DIR__ . '/includes/presence.php';
-require __DIR__ . '/includes/semrush_research.php';
-require __DIR__ . '/includes/sheet_history.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -199,6 +186,36 @@ if (
     )
 ) {
     require_csrf();
+}
+
+// Login / logout / password mail / presence heartbeat skip the 20k-line inventory
+// libraries. Every other page still loads the same includes as before.
+$txfLightPages = [
+    'login',
+    'logout',
+    'forgot_password',
+    'reset_password',
+    'verify_email',
+    'presence_ping',
+];
+if (!in_array($page, $txfLightPages, true)) {
+    require __DIR__ . '/includes/geo.php';
+    require __DIR__ . '/includes/prospects.php';
+    require __DIR__ . '/includes/extracting.php';
+    require __DIR__ . '/includes/extracted.php';
+    require __DIR__ . '/includes/sites_with_emails.php';
+    require __DIR__ . '/includes/email_campaigns.php';
+    require __DIR__ . '/includes/admin_new_data.php';
+    require __DIR__ . '/includes/sites_form.php';
+    require __DIR__ . '/includes/orders.php';
+    require __DIR__ . '/includes/site_prices.php';
+    require __DIR__ . '/includes/invoices.php';
+    require __DIR__ . '/includes/guides.php';
+    require __DIR__ . '/includes/presence.php';
+    require __DIR__ . '/includes/semrush_research.php';
+    require __DIR__ . '/includes/sheet_history.php';
+} elseif ($page === 'presence_ping') {
+    require __DIR__ . '/includes/presence.php';
 }
 
 require __DIR__ . '/' . $routes[$page];

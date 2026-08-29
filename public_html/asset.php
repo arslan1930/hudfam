@@ -65,8 +65,15 @@ if (!is_file($path)) {
 $mtime = filemtime($path) ?: time();
 $etag = '"' . md5($path . $mtime . filesize($path)) . '"';
 header('Content-Type: ' . $allowed[$f]);
-// Always revalidate — max-age=86400 kept teammates on broken JS after deploys.
-header('Cache-Control: no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
+// stylesheet_url() / script_asset_url() append v=filemtime. That URL is immutable.
+// Without v=, keep no-cache so a stale /asset.php?f=css/app.css cannot pin broken JS.
+$versioned = isset($_GET['v']) && (string) $_GET['v'] !== '';
+if ($versioned) {
+    header('Cache-Control: public, max-age=31536000, immutable');
+} else {
+    header('Cache-Control: no-cache, must-revalidate');
+}
 header('ETag: ' . $etag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 
@@ -82,4 +89,22 @@ if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
     }
 }
 
-readfile($path);
+$raw = (string) file_get_contents($path);
+$payload = $raw;
+$ctype = $allowed[$f];
+$compressible = str_starts_with($ctype, 'text/')
+    || str_contains($ctype, 'javascript')
+    || str_contains($ctype, 'svg+xml');
+if ($compressible && function_exists('gzencode')) {
+    $enc = strtolower((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''));
+    if (str_contains($enc, 'gzip')) {
+        $gz = gzencode($raw, 6);
+        if ($gz !== false && strlen($gz) < strlen($raw)) {
+            header('Content-Encoding: gzip');
+            header('Vary: Accept-Encoding');
+            $payload = $gz;
+        }
+    }
+}
+header('Content-Length: ' . (string) strlen($payload));
+echo $payload;

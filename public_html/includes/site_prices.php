@@ -75,6 +75,9 @@ function ensure_site_prices_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
 
     $pdo->exec(
@@ -144,6 +147,9 @@ function ensure_site_prices_schema(): void
     site_price_seed_statuses();
     site_price_flush_status_cache();
     site_price_ensure_row_columns();
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 function site_price_ensure_row_columns(): void

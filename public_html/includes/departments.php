@@ -21,6 +21,9 @@ function ensure_departments_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
 
     $pdo->exec(
@@ -96,6 +99,9 @@ function ensure_departments_schema(): void
     }
 
     seed_departments_if_empty();
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 function seed_departments_if_empty(): void

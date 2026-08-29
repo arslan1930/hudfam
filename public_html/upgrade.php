@@ -37,6 +37,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require __DIR__ . '/includes/admin_new_data.php';
         require __DIR__ . '/includes/departments.php';
 
+        if (function_exists('txf_schema_clear_stamps')) {
+            txf_schema_clear_stamps();
+        }
+
         $pdo = db();
 
         $pdo->exec(

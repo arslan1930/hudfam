@@ -72,6 +72,9 @@ function ensure_sites_with_emails_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
     $pdo->exec(swe_create_table_sql('sites_with_emails_team'));
     $pdo->exec(swe_create_table_sql('sites_with_emails_admin'));
@@ -155,6 +158,9 @@ function ensure_sites_with_emails_schema(): void
         } catch (Throwable $e) {
             // ignore
         }
+    }
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
     }
 }
 

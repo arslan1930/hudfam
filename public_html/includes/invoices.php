@@ -10,6 +10,9 @@ function ensure_invoice_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     ensure_order_schema();
     $pdo = db();
 
@@ -141,6 +144,9 @@ function ensure_invoice_schema(): void
         }
     } catch (Throwable $e) {
         // ignore
+    }
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
     }
 }
 
