@@ -994,6 +994,66 @@ if (!preg_match('/href="[^"]*team_extracting[^"]*"/', $r['body'])
 } else {
     fail('finder Filter still links into Extracting');
 }
+
+$csrfTok = '';
+if (preg_match('/name="csrf-token"\s+content="([^"]+)"/', $r['body'], $m)
+    || preg_match('/name="_csrf"\s+value="([^"]+)"/', $r['body'], $m)) {
+    $csrfTok = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+}
+$stamp = 'txfstay' . substr(bin2hex(random_bytes(4)), 0, 8);
+$stayDe = $stamp . '-one.de';
+$stayAt = $stamp . '-two.at';
+$rFilt = req('POST', $base . '/index.php?page=team_prospect_check', [
+    'body' => http_build_query([
+        '_csrf' => $csrfTok,
+        'action' => 'filter',
+        'country' => 'Germany',
+        'language' => 'German',
+        'region' => 'europe',
+        'niche' => '',
+        'notes' => '',
+        'domains' => $stayDe . "\n" . $stayAt,
+    ]),
+]);
+if ($rFilt['status'] === 200
+    && str_contains($rFilt['body'], $stayDe)
+    && str_contains($rFilt['body'], $stayAt)
+    && str_contains($rFilt['body'], 'Send this ending')) {
+    pass('finder Filter unique keeps mixed TLDs');
+} else {
+    fail('finder Filter unique status=' . $rFilt['status']);
+}
+if (preg_match('/name="_csrf"\s+value="([^"]+)"/', $rFilt['body'], $m)) {
+    $csrfTok = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+}
+$rSend = req('POST', $base . '/index.php?page=team_prospect_check', [
+    'body' => http_build_query([
+        '_csrf' => $csrfTok,
+        'action' => 'send_tld_column',
+        'country' => 'Germany',
+        'language' => 'German',
+        'region' => 'europe',
+        'niche' => '',
+        'notes' => '',
+        'domains' => $stayDe,
+    ]),
+]);
+$sendLoc = location($rSend);
+if ($rSend['status'] >= 300 && $rSend['status'] < 400
+    && str_contains($sendLoc, 'team_prospect_check')
+    && !str_contains($sendLoc, 'team_prospect_batch')) {
+    pass('finder Send this ending stays on Filter');
+} else {
+    fail('finder Send redirect status=' . $rSend['status'] . ' loc=' . $sendLoc);
+}
+$rStay = req('GET', $base . '/index.php?page=team_prospect_check&country=Germany');
+if ($rStay['status'] === 200
+    && str_contains($rStay['body'], $stayAt)
+    && !str_contains($rStay['body'], $stayDe)) {
+    pass('finder Send leftover unique still on Filter');
+} else {
+    fail('finder Send leftover unique missing status=' . $rStay['status']);
+}
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $loc = location($r);
 if (($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_departments'))

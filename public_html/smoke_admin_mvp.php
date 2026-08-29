@@ -2538,6 +2538,12 @@ if (!str_contains($httpSmoke, 'forgot_password page')
 } else {
     ok('tests_http.php Account/forgot route asserts');
 }
+if (!str_contains($httpSmoke, 'finder Send this ending stays on Filter')
+    || !str_contains($httpSmoke, 'finder Send leftover unique still on Filter')) {
+    fail('tests_http.php missing finder Send stay-on-Filter assert');
+} else {
+    ok('tests_http.php finder Send stays on Filter');
+}
 
 $prospectCheckSf = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 if (!str_contains($prospectCheckSf, 'Separate all')
