@@ -1362,11 +1362,14 @@ if (!str_contains($ordersPage, "folder=processing")
 } else {
     ok('orders Processing and Completed hub');
 }
-if (!str_contains($ordersPage, 'Mark completed')
-    || !str_contains($ordersPage, "action === 'mark_completed'")) {
-    fail('orders missing Mark completed');
+if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
+    || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
+    || !str_contains($ordersPage, 'data-orig-live')
+    || !str_contains($ordersPage, 'Clearing the live URL also clears Paid')
+    || !str_contains($ordersPage, 'Every ticked row needs a live URL, country, and client email or name')) {
+    fail('orders missing complete/push country-client checks or LIVE clear confirm');
 } else {
-    ok('orders Mark completed');
+    ok('orders complete/push require country+client + LIVE clear confirm');
 }
 if (!str_contains($ordersPage, 'Copy selected sites (this page)')
     || !str_contains($ordersPage, 'Copy selected live URLs (this page)')
@@ -1498,9 +1501,18 @@ if (!str_contains($invoicesLib, 'function count_invoices')
 } else {
     ok('invoices SQL paging helpers');
 }
+if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
+    || !str_contains($invoicesLib, 'AND TRIM(client_label) <> \'\'')
+    || !str_contains($invoicesLib, 'SELECT is_paid, live_url, country, client_label')
+    || !str_contains($invoicesLib, 'Country is required before pushing a row to an invoice')
+    || !str_contains($invoicesLib, 'Client email or name is required before pushing a row to an invoice')) {
+    fail('invoices.php missing country/client invoiceable guards');
+} else {
+    ok('invoices country+client required to generate');
+}
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

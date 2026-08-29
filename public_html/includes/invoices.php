@@ -443,6 +443,8 @@ function list_invoiceable_order_items(int $clientId = 0): array
              WHERE client_id=? AND row_type='site'
                AND COALESCE(order_stage, 'processing') = 'completed'
                AND TRIM(live_url) <> ''
+               AND TRIM(country) <> ''
+               AND TRIM(client_label) <> ''
                AND COALESCE(is_paid, 0) = 0
              ORDER BY sort_order ASC, id ASC"
         );
@@ -454,6 +456,8 @@ function list_invoiceable_order_items(int $clientId = 0): array
          WHERE row_type='site'
            AND COALESCE(order_stage, 'processing') = 'completed'
            AND TRIM(live_url) <> ''
+           AND TRIM(country) <> ''
+           AND TRIM(client_label) <> ''
            AND COALESCE(is_paid, 0) = 0
          ORDER BY COALESCE(order_date, DATE(created_at)) DESC, id DESC"
     );
@@ -469,7 +473,10 @@ function list_invoiceable_order_items_by_ids(array $ids): array
     $rows = list_order_items_by_ids($ids);
     $out = [];
     foreach ($rows as $row) {
-        if (order_is_completed($row) && !order_is_paid($row)) {
+        if (order_is_completed($row) && !order_is_paid($row)
+            && trim((string) ($row['live_url'] ?? '')) !== ''
+            && trim((string) ($row['country'] ?? '')) !== ''
+            && trim((string) ($row['client_label'] ?? '')) !== '') {
             $out[] = $row;
         }
     }
@@ -1022,7 +1029,7 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
         foreach ($normalized as $line) {
             foreach ($line['order_item_ids'] as $oid) {
                 $chk = db()->prepare(
-                    "SELECT is_paid, live_url FROM order_items
+                    "SELECT is_paid, live_url, country, client_label FROM order_items
                      WHERE id=? AND row_type='site' LIMIT 1"
                 );
                 $chk->execute([$oid]);
@@ -1035,6 +1042,12 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 }
                 if (trim((string) ($row['live_url'] ?? '')) === '') {
                     throw new InvalidArgumentException('Only rows with a LIVE URL can be invoiced.');
+                }
+                if (trim((string) ($row['country'] ?? '')) === '') {
+                    throw new InvalidArgumentException('Country is required before pushing a row to an invoice.');
+                }
+                if (trim((string) ($row['client_label'] ?? '')) === '') {
+                    throw new InvalidArgumentException('Client email or name is required before pushing a row to an invoice.');
                 }
             }
         }
