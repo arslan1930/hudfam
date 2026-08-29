@@ -1565,7 +1565,8 @@ if (!str_contains($invoiceGenerate, 'invoice_assert_single_bill_as')
     || !str_contains($invoiceGenerate, 'invoice_generate_empty_stats')
     || !str_contains($invoiceGenerate, 'invoice_generate_pick_cap')
     || !str_contains($invoiceGenerate, 'Push from Completed')
-    || str_contains($invoiceGenerate, 'group_same_amount" value="1" checked')) {
+    || str_contains($invoiceGenerate, 'group_same_amount" value="1" checked')
+    || !str_contains($invoiceGenerate, 'data-no-draft')) {
     fail('invoice_generate missing mixed bill-as / empty reasons / grouping off');
 } else {
     ok('invoice_generate mixed bill-as blocked, empty reasons, grouping off');

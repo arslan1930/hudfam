@@ -115,7 +115,7 @@ render_header('Generate invoice', 'admin');
   </div>
 </div>
 
-<form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate">
+<form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate" data-no-draft autocomplete="off">
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="generate">
   <?php if ($selectedFromSheet): ?>
@@ -216,7 +216,7 @@ render_header('Generate invoice', 'admin');
         <p class="help" data-invoice-pick-empty hidden>No unpaid LIVE rows match that filter.</p>
         <p class="help"><span data-invoice-pick-count>0</span> selected</p>
         <label class="invoice-group-opt">
-          <input type="checkbox" name="group_same_amount" value="1">
+          <input type="checkbox" name="group_same_amount" value="1" data-no-draft autocomplete="off">
           Group lines that share the same amount (qty &gt; 1)
         </label>
       <?php endif; ?>
@@ -323,6 +323,8 @@ render_header('Generate invoice', 'admin');
   var visibleEl = document.querySelector('[data-invoice-pick-visible]');
   var emptyEl = document.querySelector('[data-invoice-pick-empty]');
   var rows = Array.prototype.slice.call(document.querySelectorAll('[data-invoice-pick-row]'));
+  var group = document.querySelector('input[name="group_same_amount"]');
+  if (group) group.checked = false;
   if (!rows.length) return;
 
   function visibleRows() {
