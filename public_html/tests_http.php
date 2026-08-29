@@ -980,6 +980,14 @@ if ($r['status'] === 200
 } else {
     fail('finder blocked from Filter & add status=' . $r['status']);
 }
+if ($r['status'] === 200
+    && str_contains($r['body'], 'sites-form.js')
+    && str_contains($r['body'], 'data-typeahead-items')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('finder Filter country typeahead + sites-form.js');
+} else {
+    fail('finder Filter missing typeahead/sites-form.js');
+}
 if (!preg_match('/href="[^"]*team_extracting[^"]*"/', $r['body'])
     && !preg_match('/href="[^"]*team_extract_batch[^"]*"/', $r['body'])) {
     pass('finder Filter page hides Extracting CTA');

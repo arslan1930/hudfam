@@ -21,6 +21,51 @@ function prospect_folder_display_label(string $countryName, string $region = '',
     return $countryName !== '' ? $countryName : 'No country';
 }
 
+function ensure_countries_schema(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
+    try {
+        $pdo = db();
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS countries (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              region VARCHAR(40) NOT NULL DEFAULT 'other',
+              code VARCHAR(10) NOT NULL DEFAULT '',
+              name VARCHAR(100) NOT NULL,
+              default_language VARCHAR(50) NOT NULL DEFAULT '',
+              is_active TINYINT(1) NOT NULL DEFAULT 1,
+              UNIQUE KEY uniq_country_name (name),
+              INDEX (region),
+              INDEX (code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        $cols = $pdo->query('SHOW COLUMNS FROM countries')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $need = [
+            'region' => "VARCHAR(40) NOT NULL DEFAULT 'other'",
+            'code' => "VARCHAR(10) NOT NULL DEFAULT ''",
+            'default_language' => "VARCHAR(50) NOT NULL DEFAULT ''",
+            'is_active' => "TINYINT(1) NOT NULL DEFAULT 1",
+        ];
+        foreach ($need as $col => $ddl) {
+            if (!in_array($col, $cols, true)) {
+                $pdo->exec('ALTER TABLE countries ADD COLUMN `' . str_replace('`', '', $col) . '` ' . $ddl);
+            }
+        }
+        if (function_exists('txf_schema_mark_current')) {
+            txf_schema_mark_current(__FUNCTION__);
+        }
+    } catch (Throwable $e) {
+        // Table may be missing during install; Filter must not white-screen.
+    }
+}
+
 function seed_countries_if_empty(PDO $pdo): void
 {
     static $done = false;
@@ -28,7 +73,14 @@ function seed_countries_if_empty(PDO $pdo): void
         return;
     }
     $done = true;
-    $has = $pdo->query('SELECT 1 FROM countries LIMIT 1')->fetchColumn();
+    if (function_exists('ensure_countries_schema')) {
+        ensure_countries_schema();
+    }
+    try {
+        $has = $pdo->query('SELECT 1 FROM countries LIMIT 1')->fetchColumn();
+    } catch (Throwable $e) {
+        return;
+    }
     if ($has) {
         return;
     }
@@ -78,6 +130,17 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         return $cache[$cacheKey];
     }
 
+    if (function_exists('ensure_countries_schema')) {
+        ensure_countries_schema();
+    }
+    if (function_exists('seed_countries_if_empty')) {
+        try {
+            seed_countries_if_empty(db());
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
     // One-time repair: merge German → Germany (and similar demonym folders), drop fake catalog rows.
     if (function_exists('repair_country_alias_folders')) {
         try {
@@ -97,9 +160,29 @@ function list_countries(?string $region = null, bool $activeOnly = true): array
         $params[] = $region;
     }
     $sql .= ' ORDER BY name, id';
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        try {
+            $sql = 'SELECT * FROM countries WHERE 1=1';
+            $params = [];
+            if ($activeOnly) {
+                $sql .= ' AND is_active = 1';
+            }
+            if ($region) {
+                $sql .= ' AND region = ?';
+                $params[] = $region;
+            }
+            $sql .= ' ORDER BY name, id';
+            $stmt = db()->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable $e2) {
+            return $cache[$cacheKey] = [];
+        }
+    }
     // Never show duplicate country names (case/whitespace variants).
     // Never show demonyms (German, Spanish, …) even if still in DB mid-repair.
     $out = [];

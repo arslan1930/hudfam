@@ -1,9 +1,13 @@
 <?php
 $user = require_team();
-ensure_prospect_schema();
-seed_countries_if_empty(db());
-
-$countryOptions = list_countries(null, true);
+$countryOptions = [];
+try {
+    ensure_prospect_schema();
+    seed_countries_if_empty(db());
+    $countryOptions = list_countries(null, true);
+} catch (Throwable $e) {
+    flash('error', 'Country list could not load. Open upgrade.php once if Filter stays empty, then retry.');
+}
 $raw = '';
 $country = trim((string) (post('country') ?: get('country')));
 $language = trim((string) (post('language') ?: get('language')));

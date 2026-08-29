@@ -355,11 +355,11 @@ function email_campaign_ensure_source_fetch_cascade(): void
              ADD CONSTRAINT fk_camp_source_fetch_sheet
              FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE'
         );
+        if (function_exists('txf_schema_mark_current')) {
+            txf_schema_mark_current(__FUNCTION__);
+        }
     } catch (Throwable $e) {
-        // ignore: table missing, no permission, or constraint already correct
-    }
-    if (function_exists('txf_schema_mark_current')) {
-        txf_schema_mark_current(__FUNCTION__);
+        // ignore: table missing, no permission, or constraint already correct — do not stamp
     }
 }
 

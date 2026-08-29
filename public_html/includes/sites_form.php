@@ -53,10 +53,14 @@ function render_typeahead_field(
     if ($help !== '') {
         $html .= '<p class="help typeahead-help">' . h($help) . '</p>';
     }
-    $html .= '<script type="application/json" data-typeahead-items>' . json_encode(
+    $json = json_encode(
         $jsonItems,
-        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS
-    ) . '</script>';
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+    if (!is_string($json) || $json === '') {
+        $json = '[]';
+    }
+    $html .= '<script type="application/json" data-typeahead-items>' . $json . '</script>';
     $html .= '</div>';
     return $html;
 }
