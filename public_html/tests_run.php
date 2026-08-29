@@ -2232,7 +2232,7 @@ try {
     } else {
         fail("campaign language expected German, got=$campLang");
     }
-    $beSheet = create_email_campaign_sheet('Belgium', (int) $adminUser['id']);
+    $beSheet = create_email_campaign_sheet('Belgium', (int) $adminUser['id'], 'txf-lang-be');
     db()->prepare(
         "INSERT INTO email_campaign_rows (sheet_id, domain, country, language, email1)
          VALUES (?,?,?,?,?)"
