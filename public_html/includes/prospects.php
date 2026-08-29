@@ -1216,6 +1216,72 @@ function filter_domains_routed_against_prospects(array $domains, string $selecte
 }
 
 /**
+ * Destination-country phrase from Filter / Add buckets (not the selected folder alone).
+ *
+ * @param array<string, array<string, mixed>> $byCountry
+ * @param 'new'|'existing'|'inserted' $kind
+ */
+function prospect_destinations_phrase(array $byCountry, string $kind = 'new'): string
+{
+    $bits = [];
+    foreach ($byCountry as $dest => $bucket) {
+        $name = trim((string) $dest);
+        if ($name === '' || !is_array($bucket)) {
+            continue;
+        }
+        if ($kind === 'inserted') {
+            $n = (int) ($bucket['inserted'] ?? 0);
+        } elseif ($kind === 'existing') {
+            $n = isset($bucket['existing']) && is_array($bucket['existing'])
+                ? count($bucket['existing'])
+                : (int) ($bucket['skipped'] ?? 0);
+        } else {
+            $n = isset($bucket['new']) && is_array($bucket['new'])
+                ? count($bucket['new'])
+                : (int) ($bucket['inserted'] ?? 0);
+        }
+        if ($n < 1) {
+            continue;
+        }
+        $bits[] = $name . ' ' . $n;
+    }
+    return implode(', ', $bits);
+}
+
+/**
+ * Destination country names only (Spain / Austria), for landing flash.
+ *
+ * @param array<string, array<string, mixed>> $byCountry
+ * @param 'new'|'existing'|'inserted' $kind
+ */
+function prospect_destination_names(array $byCountry, string $kind = 'inserted'): string
+{
+    $names = [];
+    foreach ($byCountry as $dest => $bucket) {
+        $name = trim((string) $dest);
+        if ($name === '' || !is_array($bucket)) {
+            continue;
+        }
+        if ($kind === 'inserted') {
+            $n = (int) ($bucket['inserted'] ?? 0);
+        } elseif ($kind === 'existing') {
+            $n = isset($bucket['existing']) && is_array($bucket['existing'])
+                ? count($bucket['existing'])
+                : (int) ($bucket['skipped'] ?? 0);
+        } else {
+            $n = isset($bucket['new']) && is_array($bucket['new'])
+                ? count($bucket['new'])
+                : (int) ($bucket['inserted'] ?? 0);
+        }
+        if ($n < 1) {
+            continue;
+        }
+        $names[] = $name;
+    }
+    return implode(' / ', $names);
+}
+
+/**
  * After Filter unique sites: remember which domains passed for this country.
  * Add / Separate Send may only save domains from this set (workflow gate).
  *

@@ -88,8 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($pushed['inserted'] < 1 && $pushed['skipped'] < 1) {
             flash(
                 'error',
-                $pushed['invalid'] > 0
-                    ? 'Could not push — fix invalid lines first (root domains only).'
+                ((int) $pushed['invalid'] > 0)
+                    ? 'Clean first — Push only sends Ready.'
                     : 'Paste at least one site into Extracting Results before Push.'
             );
             redirect('index.php?page=team_extract_batch&id=' . $id);
@@ -131,7 +131,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . (string) $pushed['country'];
         }
         if ($semrushInserted > 0) {
-            $msg .= ' · ' . $semrushInserted . ' also copied to Semrush Research';
+            $msg .= ' · ' . $semrushInserted
+                . ' also copied to Semrush Research (Site Finding copy; Clear stays with Site Finding / Admin)';
         }
         if ((int) $pushed['skipped'] > 0) {
             $msg .= ' · ' . (int) $pushed['skipped'] . ' already there';
@@ -162,7 +163,27 @@ render_header('Extracting · ' . $country, 'team');
 ]); ?>
 <div class="topbar">
   <div>
-    <h1><?= h($country) ?> · Extracting</h1>
+    <?php
+      $extractNav = list_extract_batch_country_nav($id);
+      $extractJumpOpts = [];
+      foreach ($extractNav as $navRow) {
+          $navId = (int) ($navRow['id'] ?? 0);
+          $navName = (string) ($navRow['country'] ?? '');
+          if ($navId < 1 || $navName === '') {
+              continue;
+          }
+          $extractJumpOpts[] = ['value' => (string) $navId, 'label' => $navName];
+      }
+      render_sheet_country_jump(
+          'id',
+          (string) $id,
+          $extractJumpOpts,
+          ['page' => 'team_extract_batch'],
+          'Sites list and Extracting Results for this country. Pick another country from this list — you do not need to go back to All countries.',
+          'extract-country-jump',
+          'Extracting country'
+      );
+    ?>
     <p class="muted">
       <span id="sites_count_label"><?= count($domains) ?></span> site<?= count($domains) === 1 ? '' : 's' ?> in Sites list
     </p>
