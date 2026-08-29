@@ -2337,6 +2337,39 @@ function add_blank_email_campaign_rows(int $sheetId, int $count = 1): int
 }
 
 /**
+ * Country default language for campaign rows (Belgium → Dutch, …).
+ */
+function email_campaign_default_language(string $country): string
+{
+    $country = trim($country);
+    if ($country === '') {
+        return '';
+    }
+    $canon = function_exists('resolve_canonical_country') ? resolve_canonical_country($country) : null;
+    $lang = $canon ? trim((string) ($canon['language'] ?? '')) : '';
+    if ($lang !== '' && function_exists('normalize_site_language')) {
+        $lang = normalize_site_language($lang, $country);
+    }
+    return $lang;
+}
+
+/**
+ * Fill campaign rows that were saved with a blank language from the country default.
+ */
+function email_campaign_fill_blank_row_languages(int $sheetId, string $country): int
+{
+    $lang = email_campaign_default_language($country);
+    if ($sheetId < 1 || $lang === '') {
+        return 0;
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows SET language=? WHERE sheet_id=? AND TRIM(IFNULL(language,''))=''"
+    );
+    $st->execute([$lang, $sheetId]);
+    return $st->rowCount();
+}
+
+/**
  * Save one site + up to 4 emails row (Sites with emails workflow).
  * Clearing the last email deletes the whole row.
  *
@@ -2453,11 +2486,25 @@ function save_email_campaign_row(
         return ['ok' => false, 'error' => $domain . ' already exists in this sheet.'];
     }
 
+    $rowLang = trim((string) ($existing['language'] ?? ''));
+    if ($rowLang === '') {
+        $rowLang = email_campaign_default_language($sheetCountry);
+    }
     db()->prepare(
         'UPDATE email_campaign_rows
-         SET domain=?, country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         SET domain=?, country=?, language=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
-    )->execute([$domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
+    )->execute([
+        $domain,
+        $sheetCountry,
+        $rowLang,
+        $slots[0],
+        $slots[1],
+        $slots[2],
+        $slots[3],
+        $rowId,
+        $sheetId,
+    ]);
     touch_email_campaign_sheet($sheetId);
     $eventDomain = $oldDomain !== '' ? $oldDomain : $domain;
     foreach ($oldEmails as $oldEm) {
@@ -2489,6 +2536,7 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
         return ['ok' => false, 'error' => 'Sheet not found.'];
     }
     $sheetCountry = email_campaign_sheet_country($sheet);
+    $sheetLang = email_campaign_default_language($sheetCountry);
     $host = extract_host_candidate($domainRaw);
     $domain = to_root_domain($host);
     if ($domain === '' || (function_exists('is_root_domain') && !is_root_domain($domain))) {
@@ -2553,9 +2601,9 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
         }
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+             SET country=?, language=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
              WHERE id=? AND sheet_id=?'
-        )->execute([$sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
+        )->execute([$sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
         touch_email_campaign_sheet($sheetId);
         return [
             'ok' => true,
@@ -2567,9 +2615,9 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
 
     db()->prepare(
         'INSERT INTO email_campaign_rows
-           (sheet_id, domain, country, email1, email2, email3, email4)
-         VALUES (?,?,?,?,?,?,?)'
-    )->execute([$sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3]]);
+           (sheet_id, domain, country, language, email1, email2, email3, email4)
+         VALUES (?,?,?,?,?,?,?,?)'
+    )->execute([$sheetId, $domain, $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3]]);
     $id = (int) db()->lastInsertId();
     touch_email_campaign_sheet($sheetId);
     return [
@@ -2692,6 +2740,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
         throw new InvalidArgumentException('Sheet not found.');
     }
     $sheetCountry = email_campaign_sheet_country($sheet);
+    $sheetLang = email_campaign_default_language($sheetCountry);
     $raw = str_replace(["\r\n", "\r"], "\n", (string) $raw);
     if (str_starts_with($raw, "\xEF\xBB\xBF")) {
         $raw = substr($raw, 3);
@@ -2719,13 +2768,13 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     );
     $upd = $pdo->prepare(
         'UPDATE email_campaign_rows
-         SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         SET country=?, language=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
     );
     $ins = $pdo->prepare(
         'INSERT INTO email_campaign_rows
-           (sheet_id, domain, country, email1, email2, email3, email4)
-         VALUES (?,?,?,?,?,?,?)'
+           (sheet_id, domain, country, language, email1, email2, email3, email4)
+         VALUES (?,?,?,?,?,?,?,?)'
     );
 
     $pdo->beginTransaction();
@@ -2812,7 +2861,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
                     continue;
                 }
                 $upd->execute([
-                    $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId,
+                    $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId,
                 ]);
                 $updated++;
                 $seenDomains[$domain] = $slots;
@@ -2823,14 +2872,14 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
                 $againId = $again ? (int) ($again['id'] ?? 0) : 0;
                 if ($againId > 0) {
                     $upd->execute([
-                        $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $againId, $sheetId,
+                        $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3], $againId, $sheetId,
                     ]);
                     $updated++;
                 }
                 $seenDomains[$domain] = $slots;
             } else {
                 $ins->execute([
-                    $sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3],
+                    $sheetId, $domain, $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3],
                 ]);
                 $added++;
                 $seenDomains[$domain] = $slots;
@@ -3309,7 +3358,9 @@ function import_email_campaign_sheet_from_swe(
             $sheetId,
             $domain,
             (string) ($row['country'] ?? ''),
-            (string) ($row['language'] ?? ''),
+            trim((string) ($row['language'] ?? '')) !== ''
+                ? (string) ($row['language'] ?? '')
+                : email_campaign_default_language((string) ($row['country'] ?? '')),
             (string) ($row['region'] ?? ''),
             $slots[0],
             $slots[1],
@@ -3345,7 +3396,9 @@ function import_email_campaign_sheet_from_swe(
                 }
                 $upd->execute([
                     (string) ($row['country'] ?? ''),
-                    (string) ($row['language'] ?? ''),
+                    trim((string) ($row['language'] ?? '')) !== ''
+                        ? (string) ($row['language'] ?? '')
+                        : email_campaign_default_language((string) ($row['country'] ?? '')),
                     (string) ($row['region'] ?? ''),
                     $slots[0],
                     $slots[1],

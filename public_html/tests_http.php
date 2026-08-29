@@ -638,6 +638,10 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
         if ($rSheet['status'] === 200
             && str_contains($rSheet['body'], 'Fill gaps')
             && str_contains($rSheet['body'], 'id="camp-fill-gaps"')
+            && str_contains($rSheet['body'], 'href="#camp-fill-gaps"')
+            && str_contains($rSheet['body'], 'Mark emailed')
+            && str_contains($rSheet['body'], 'Not emailed (')
+            && str_contains($rSheet['body'], 'Search site or email (this page)')
             && str_contains($rSheet['body'], 'value="fill_gaps"')
             && str_contains($rSheet['body'], 'Import')
             && !str_contains($rSheet['body'], 'Fatal error')) {
