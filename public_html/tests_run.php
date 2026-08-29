@@ -4392,6 +4392,8 @@ try {
         'owner_price' => 50,
         'decided_price' => 80,
         'live_url' => 'https://example.com/live-om',
+        'country' => 'Germany',
+        'client_label' => 'txf-buyer@example.com',
         'order_month' => 8,
         'order_year' => 2026,
     ]);
@@ -4758,6 +4760,81 @@ try {
     } else {
         fail('complete without live URL allowed');
     }
+    $noClient = order_mark_completed(
+        (int) ($omFromWp['id'] ?? 0),
+        'https://example.com/txfom-live',
+        (int) $adminUser['id']
+    );
+    if (empty($noClient['ok']) && str_contains((string) ($noClient['error'] ?? ''), 'Client email or name')) {
+        pass('complete without client rejected');
+    } else {
+        fail('complete without client allowed: ' . (string) ($noClient['error'] ?? 'ok'));
+    }
+    $missCountryId = add_order_pipeline_row((int) $adminUser['id'], 'nocountry@example.com');
+    update_order_item((int) $missCountryId, 0, [
+        'site_name' => 'txfom-nocountry.example',
+        'country' => '',
+        'client_label' => 'nocountry@example.com',
+        'live_url' => 'https://example.com/txfom-nocountry',
+        'owner_price' => 5,
+        'decided_price' => 10,
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
+    $noCountry = order_mark_completed(
+        (int) $missCountryId,
+        'https://example.com/txfom-nocountry',
+        (int) $adminUser['id']
+    );
+    if (empty($noCountry['ok']) && str_contains((string) ($noCountry['error'] ?? ''), 'Country')) {
+        pass('complete without country rejected');
+    } else {
+        fail('complete without country allowed: ' . (string) ($noCountry['error'] ?? 'ok'));
+    }
+    db()->prepare(
+        "UPDATE order_items SET order_stage='completed' WHERE id=?"
+    )->execute([(int) $missCountryId]);
+    $notInvoiceable = list_invoiceable_order_items_by_ids([(int) $missCountryId]);
+    $countryBillBlocked = false;
+    try {
+        create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_id' => 0,
+            'client_name' => 'nocountry@example.com',
+            'bill_to_name' => 'nocountry@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Topurlz',
+            'company_bic' => 'TESTBIC',
+            'company_iban' => 'TESTIBAN',
+            'company_phone' => '',
+            'company_address' => '',
+            'company_reg_no' => '',
+            'vat_note' => '',
+        ], build_invoice_lines_from_orders([get_order_item((int) $missCountryId) ?: []], false), (int) $adminUser['id']);
+    } catch (InvalidArgumentException $e) {
+        $countryBillBlocked = str_contains($e->getMessage(), 'Country');
+    }
+    if ($notInvoiceable === [] && $countryBillBlocked) {
+        pass('invoice without country rejected');
+    } else {
+        fail('invoice without country was allowed');
+    }
+    db()->prepare(
+        "UPDATE order_items SET order_stage='processing' WHERE id=?"
+    )->execute([(int) $missCountryId]);
+    update_order_item((int) ($omFromWp['id'] ?? 0), 0, [
+        'site_name' => $foldDomain,
+        'country' => 'Germany',
+        'client_label' => 'buyer-fold@example.com',
+        'live_url' => 'https://example.com/txfom-live',
+        'owner_price' => 42,
+        'decided_price' => 50,
+    ]);
     $didComplete = order_mark_completed(
         (int) ($omFromWp['id'] ?? 0),
         'https://example.com/txfom-live',
@@ -4843,6 +4920,14 @@ try {
         'created_by' => (int) $adminUser['id'],
     ]);
     $omRestore = get_order_item_by_site_price_row((int) $wpRestoreId);
+    update_order_item((int) ($omRestore['id'] ?? 0), 0, [
+        'site_name' => $restoreDomain,
+        'country' => 'Germany',
+        'client_label' => 'restore-buyer@example.com',
+        'live_url' => 'https://example.com/txfom-restore-live',
+        'owner_price' => 5,
+        'decided_price' => 10,
+    ]);
     $didRestoreComplete = order_mark_completed(
         (int) ($omRestore['id'] ?? 0),
         'https://example.com/txfom-restore-live',
@@ -4979,6 +5064,11 @@ try {
         && str_contains($ordersPhpSrc, 'Also set Website prices back to Processing')
         && str_contains($ordersPhpSrc, 'Mark this order completed?')
         && str_contains($ordersPhpSrc, '$stayProcessing')
+        && str_contains($ordersPhpSrc, 'Need a country on every ticked row before completing')
+        && str_contains($ordersPhpSrc, 'Need a client email or name on every ticked row before completing')
+        && str_contains($ordersPhpSrc, 'data-orig-live')
+        && str_contains($ordersPhpSrc, 'Clearing the live URL also clears Paid')
+        && str_contains($ordersPhpSrc, 'Every ticked row needs a live URL, country, and client email or name')
         && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
         pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
     } else {
@@ -5019,8 +5109,8 @@ try {
     $genClientId = create_order_client('Test Client Invoice Gen', 'invoice gen test', (int) $adminUser['id']);
     $genItemId = add_order_item((int) $genClientId, 'txforder-live.com', 4, 2026);
     db()->prepare(
-        'UPDATE order_items SET decided_price=?, live_url=?, is_paid=0, order_stage=? WHERE id=?'
-    )->execute([40.00, 'https://example.com/txforder-live', 'completed', $genItemId]);
+        'UPDATE order_items SET decided_price=?, live_url=?, is_paid=0, order_stage=?, country=?, client_label=? WHERE id=?'
+    )->execute([40.00, 'https://example.com/txforder-live', 'completed', 'Germany', 'gen-buyer@example.com', $genItemId]);
     $invoiceable = list_invoiceable_order_items((int) $genClientId);
     if (count($invoiceable) < 1) {
         fail('invoiceable rows missing for generate test');

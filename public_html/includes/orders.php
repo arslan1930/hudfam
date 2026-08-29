@@ -508,6 +508,14 @@ function order_mark_completed(int $id, string $liveUrl, int $userId): array
     if ($liveUrl === '') {
         return ['ok' => false, 'error' => 'A live URL is required to mark an order completed.'];
     }
+    $country = trim((string) ($item['country'] ?? ''));
+    if ($country === '') {
+        return ['ok' => false, 'error' => 'Country is required to mark an order completed.'];
+    }
+    $client = trim((string) ($item['client_label'] ?? ''));
+    if ($client === '') {
+        return ['ok' => false, 'error' => 'Client email or name is required to mark an order completed.'];
+    }
     db()->prepare(
         "UPDATE order_items
          SET live_url=?, order_stage='completed', is_paid=0, updated_at=NOW()

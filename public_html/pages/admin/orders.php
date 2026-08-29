@@ -272,6 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : [];
             $ready = [];
             $blockedNums = [];
+            $incomplete = [];
             foreach ($picked as $row) {
                 $oid = (int) $row['id'];
                 if (isset($onOpen[$oid])) {
@@ -282,8 +283,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     continue;
                 }
                 if (order_is_completed($row) && !order_is_paid($row)) {
+                    if (trim((string) ($row['live_url'] ?? '')) === ''
+                        || trim((string) ($row['country'] ?? '')) === ''
+                        || trim((string) ($row['client_label'] ?? '')) === '') {
+                        $incomplete[] = $oid;
+                        continue;
+                    }
                     $ready[] = $oid;
                 }
+            }
+            if ($incomplete) {
+                throw new InvalidArgumentException(
+                    'Every ticked row needs a live URL, country, and client email or name before generating an invoice.'
+                );
             }
             if (!$ready) {
                 throw new InvalidArgumentException(
@@ -791,7 +803,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
               <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
                      value="<?= h($row['live_url']) ?>"
                      placeholder="<?= $isPlacement ? 'site.com (required)' : '(empty until live)' ?>"
-                     data-live data-open-site-host autocomplete="off">
+                     data-live data-open-site-host autocomplete="off"<?= $isCompleted ? ' data-orig-live="' . h($row['live_url']) . '"' : '' ?>>
               <?= render_open_site_anchor((string) $row['live_url'], ['class' => 'order-open-site', 'label' => 'Open']) ?>
             </div>
           </td>
@@ -1211,8 +1223,15 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     }
     if (action === 'push_invoice') {
       var any = false;
+      var pushNotReady = false;
       document.querySelectorAll('[data-push-check]').forEach(function (cb) {
-        if (cb.checked && !cb.disabled) any = true;
+        if (!cb.checked || cb.disabled) return;
+        any = true;
+        var row = cb.closest('[data-row]');
+        var live = String((row && row.querySelector('[data-live]') || {}).value || '').trim();
+        var country = String((row && row.querySelector('[name^="country"]') || {}).value || '').trim();
+        var client = String((row && row.querySelector('[name^="client_label"]') || {}).value || '').trim();
+        if (!live || !country || !client) pushNotReady = true;
       });
       if (!any) {
         e.preventDefault();
@@ -1221,21 +1240,80 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         alert('Tick at least one unpaid completed row to push to an invoice.');
         return;
       }
+      if (pushNotReady) {
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        alert('Every ticked row needs a live URL, country, and client email or name before generating an invoice.');
+        return;
+      }
     }
     if (action === 'mark_completed') {
       var itemId = String((document.getElementById('delete-item-id') || {}).value || '').trim();
-      var anyComplete = !!itemId;
-      if (!anyComplete) {
+      var completeRows = [];
+      if (itemId) {
+        var one = document.getElementById('row-' + itemId);
+        if (one) completeRows.push(one);
+      } else {
         document.querySelectorAll('[data-push-check]').forEach(function (cb) {
-          if (cb.checked && !cb.disabled) anyComplete = true;
+          if (cb.checked && !cb.disabled) {
+            var row = cb.closest('[data-row]');
+            if (row) completeRows.push(row);
+          }
         });
       }
-      if (!anyComplete) {
+      if (!completeRows.length) {
         e.preventDefault();
         e.stopPropagation();
         submitting = false;
         alert('Tick at least one row with a live URL, or fill LIVE URL and click Mark completed on that row.');
         return;
+      }
+      var missingLive = false;
+      var missingCountry = false;
+      var missingClient = false;
+      completeRows.forEach(function (row) {
+        if (!String((row.querySelector('[data-live]') || {}).value || '').trim()) missingLive = true;
+        if (!String((row.querySelector('[name^="country"]') || {}).value || '').trim()) missingCountry = true;
+        if (!String((row.querySelector('[name^="client_label"]') || {}).value || '').trim()) missingClient = true;
+      });
+      if (missingLive) {
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        alert('Need a live URL on every ticked row before completing.');
+        return;
+      }
+      if (missingCountry) {
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        alert('Need a country on every ticked row before completing. Save first if you just typed it.');
+        return;
+      }
+      if (missingClient) {
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        alert('Need a client email or name on every ticked row before completing. Save first if you just typed it.');
+        return;
+      }
+    }
+    if (action === 'save_sheet' && sheetFolder === 'completed') {
+      var clearingLive = false;
+      document.querySelectorAll('[data-row]').forEach(function (row) {
+        var liveEl = row.querySelector('[data-live]');
+        if (!liveEl) return;
+        var orig = String(liveEl.getAttribute('data-orig-live') || '').trim();
+        if (orig !== '' && !String(liveEl.value || '').trim()) clearingLive = true;
+      });
+      if (clearingLive) {
+        if (!confirm('Clearing the live URL also clears Paid. Continue?')) {
+          e.preventDefault();
+          e.stopPropagation();
+          submitting = false;
+          return;
+        }
       }
     }
     var bad = null;
