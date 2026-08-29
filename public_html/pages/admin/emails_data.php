@@ -242,13 +242,13 @@ if ($folder === '') {
           <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
             <h3>Final</h3>
             <p class="muted">
-              Keeps a copy after emailed or remove on Admin ·
+              Keeps a copy after Mark emailed or Remove on Admin ·
               <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
             </p>
             <?php folder_open_cue(); ?>
           </a>
-          <?= info_icon('Final keeps a copy after you mark emailed or remove on Admin. Repair copies Admin → Final and never deletes archive rows. Open a country to paste or import CSV / Excel / TXT like Campaign (also creates the Admin working-list row). Not linked to Team.', 'About All sites with emails - Final') ?>
+          <?= info_icon('Final keeps a copy after Mark emailed or Remove on Admin. Repair copies Admin → Final and never deletes archive rows. Open a country folder to paste or import CSV / Excel / TXT like Campaign (also creates the Admin working-list row). Not linked to Team.', 'About All sites with emails - Final') ?>
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">

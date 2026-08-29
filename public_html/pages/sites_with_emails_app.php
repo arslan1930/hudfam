@@ -543,7 +543,7 @@ if (!$inCountry) {
             $isTeam
                 ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
-                    ? 'Final keeps a copy after you mark emailed or remove on Admin. Not linked to Team. Open a country to paste or import (that also creates the Admin working-list row).'
+                    ? 'Final keeps a copy after Mark emailed or Remove on Admin. Not linked to Team. Open a folder in the list; paste and import are on that country sheet (and also create the Admin working-list row).'
                     : 'Working list from Team Push. Mark emailed removes the site from this list after Final has a copy. Communication Team can super-search this data.')
         ) ?></h1>
         <p class="muted">
@@ -551,8 +551,8 @@ if (!$inCountry) {
             Site names arrive from Extracting Results → Push.
             Add emails, then Push again to Sites with emails - Admin ·
           <?php elseif ($isAdminAll): ?>
-            Final keeps a copy after you mark emailed or remove on Admin.
-            Open a country to paste or import — that also creates the Admin working-list row.
+            Final keeps a copy after Mark emailed or Remove on Admin.
+            Open a folder in the list — paste and import are on that sheet.
           <?php else: ?>
             Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
@@ -592,16 +592,20 @@ if (!$inCountry) {
       </div>
     </div>
 
-    <?php if ($isAdminAll && function_exists('list_countries')): ?>
+    <?php
+    $finalOpenerHtml = '';
+    if ($isAdminAll && function_exists('list_countries')) {
+        ob_start();
+        ?>
     <div class="card" style="margin-bottom:1rem" id="swe-open-country">
       <h2><?= label_with_info(
           'Open an empty country',
-          'Countries already in the list open from the table. Use this only to start a country that has no Final folder yet. Paste or import CSV / Excel / TXT like Campaign. Each site needs at least one email and also creates the Admin working-list row.'
+          'Countries already in the list open from the table. Use this only to start a country that has no Final folder yet. After it opens, paste or import CSV / Excel / TXT like Campaign. Each site needs at least one email and also creates the Admin working-list row.'
       ) ?></h2>
       <?php if ($emptyCatalogCountries === []): ?>
         <p class="help">
           Every country in the catalog already has a Final folder.
-          Open one in the list below to paste or import.
+          Open one in the list<?= $countryRows ? ' above' : '' ?> to paste or import on that sheet.
         </p>
       <?php else: ?>
       <p class="help">
@@ -626,7 +630,13 @@ if (!$inCountry) {
       </form>
       <?php endif; ?>
     </div>
-    <?php endif; ?>
+        <?php
+        $finalOpenerHtml = (string) ob_get_clean();
+    }
+    if ($finalOpenerHtml !== '' && $countryRows === []) {
+        echo $finalOpenerHtml;
+    }
+    ?>
 
     <?php if ($isTeam && team_page_unlocked($sweUser, 'team_admin_emails_search')): ?>
     <div class="card" style="margin-bottom:1rem">
@@ -660,7 +670,7 @@ if (!$inCountry) {
         </label>
       </div>
       <?php if ($isAdminAll): ?>
-      <p class="help" style="margin:0 0 0.65rem">Open a folder below. Adding a site on that sheet also creates the Admin working-list row.</p>
+      <p class="help" style="margin:0 0 0.65rem">Open a folder. Adding a site on that sheet also creates the Admin working-list row.</p>
       <?php endif; ?>
       <div class="table-wrap">
       <table class="extracted-country-table" id="swe-country-table">
@@ -674,7 +684,7 @@ if (!$inCountry) {
             <?php if ($isTeam): ?>
             <th>Last Push</th>
             <?php endif; ?>
-            <th></th>
+            <th><span class="visually-hidden">Open</span></th>
           </tr>
         </thead>
         <tbody>
@@ -750,6 +760,11 @@ if (!$inCountry) {
       </div>
       <?php endif; ?>
     </div>
+    <?php
+    if ($finalOpenerHtml !== '' && $countryRows !== []) {
+        echo $finalOpenerHtml;
+    }
+    ?>
     <script>
     (function () {
       document.querySelectorAll('[data-swe-country-row]').forEach(function (row) {

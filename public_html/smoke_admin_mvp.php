@@ -1122,7 +1122,7 @@ if (str_contains($emailsHub, 'Final list from Team Push')
 }
 if (!str_contains($emailsHub, 'Working list from Team Push')
     || !str_contains($emailsHub, 'emailed checkpoint here')
-    || !str_contains($emailsHub, 'Keeps a copy after emailed or remove on Admin')
+    || !str_contains($emailsHub, 'Keeps a copy after Mark emailed or Remove on Admin')
     || str_contains($emailsHub, 'keeps copies after emailed/remove')) {
     fail('emails hub missing Admin working-list copy');
 } else {
@@ -1199,7 +1199,9 @@ if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
     || !str_contains($sweAppSmoke, 'Open an empty country')
     || !str_contains($sweAppSmoke, 'data-no-draft')
     || !str_contains($sweAppSmoke, 'emptyCatalogCountries')
-    || str_contains($sweAppSmoke, 'keeps copies after emailed/remove')) {
+    || !str_contains($sweAppSmoke, '$finalOpenerHtml')
+    || str_contains($sweAppSmoke, 'keeps copies after emailed/remove')
+    || str_contains($sweAppSmoke, 'Open a folder below')) {
     fail('SWE country list missing table-wrap or Final add-site copy');
 } else {
     ok('SWE country list table-wrap + Final add-site copy');
