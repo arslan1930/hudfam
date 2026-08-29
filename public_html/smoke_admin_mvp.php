@@ -913,6 +913,8 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, 'just_added')
     || !str_contains($draftJsSmoke, 'prospect-add-sites-form')
     || !str_contains($draftJsSmoke, 'Restore already wrote localStorage')
+    || !str_contains($draftJsSmoke, 'restoreBannerVisible')
+    || !str_contains($draftJsSmoke, 'saveForm(form, index, true)')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
