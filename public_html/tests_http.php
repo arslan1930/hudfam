@@ -504,12 +504,22 @@ if ($r['status'] === 200
     && str_contains($sheetBody, 'Open website')
     && str_contains($sheetBody, 'What is this?')
     && str_contains($sheetBody, 'whole country folder')
+    && str_contains($sheetBody, 'Save uses the Ready list only.')
+    && !str_contains($sheetBody, 'Push uses Ready only')
     && !str_contains($sheetBody, '<th>URL</th>')
     && !str_contains($sheetBody, 'Go to site')
     && !str_contains($sheetBody, 'Fatal error')) {
     pass('admin Our database country Sites first');
 } else {
     fail('admin Our database country layout status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_prospects&country=Germany&just_added=30');
+if ($r['status'] === 200
+    && str_contains($r['body'] ?? '', '30 just added')
+    && !str_contains($r['body'] ?? '', 'Fatal error')) {
+    pass('admin Our database just-added cue');
+} else {
+    fail('admin Our database just-added cue status=' . $r['status']);
 }
 
 $r = req('GET', $base . '/index.php?page=admin_invoices');

@@ -600,6 +600,20 @@ function prospect_duplicates_deleted_message(int $n): string
 }
 
 /**
+ * Success flash after Admin Save to a country folder.
+ */
+function prospect_saved_sites_message(int $n, string $country): string
+{
+    $n = max(0, $n);
+    $country = trim($country);
+    $where = $country !== '' ? ' to ' . $country : '';
+    if ($n === 1) {
+        return 'Saved 1 new site' . $where . '. It is at the top of the list.';
+    }
+    return 'Saved ' . $n . ' new sites' . $where . '. They are at the top of the list.';
+}
+
+/**
  * Copy-all button label: say which subset will actually copy.
  */
 function prospect_copy_all_label(int $createdBy, string $nicheFilter): string
@@ -627,7 +641,7 @@ function prospect_copy_all_label(int $createdBy, string $nicheFilter): string
 /**
  * Country-folder URL that keeps search / niche / person / paging.
  *
- * @param array{q?:string,niche?:string,created_by?:int|string,per_page?:int|string,p?:int|string,hash?:string} $keep
+ * @param array{q?:string,niche?:string,created_by?:int|string,per_page?:int|string,p?:int|string,just_added?:int|string,hash?:string} $keep
  */
 function prospect_country_sheet_url(string $country, array $keep = []): string
 {
@@ -661,6 +675,10 @@ function prospect_country_sheet_url(string $country, array $keep = []): string
     if ($p > 1) {
         $qs['p'] = (string) $p;
     }
+    $justAdded = (int) ($keep['just_added'] ?? 0);
+    if ($justAdded > 0) {
+        $qs['just_added'] = (string) $justAdded;
+    }
     $url = 'index.php?' . http_build_query($qs);
     $hash = trim((string) ($keep['hash'] ?? ''));
     if ($hash !== '') {
@@ -680,8 +698,9 @@ function prospect_open_in_folder_label(string $country): string
  *
  * @param list<array<string,mixed>> $rows
  */
-function prospect_site_rows_html(array $rows): string
+function prospect_site_rows_html(array $rows, string $highlightYmd = ''): string
 {
+    $highlightYmd = substr(trim($highlightYmd), 0, 10);
     ob_start();
     foreach ($rows as $s) {
         $domain = (string) ($s['domain'] ?? '');
@@ -691,7 +710,9 @@ function prospect_site_rows_html(array $rows): string
         $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
         $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
         $hay = mb_strtolower(trim($domain . ' ' . $url . ' ' . $niche . ' ' . $lang . ' ' . $added));
+        $just = ($highlightYmd !== '' && $when === $highlightYmd);
         echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '"'
+            . ($just ? ' class="is-just-added"' : '')
             . ' data-search="' . h($hay) . '">';
         echo '<td class="sheet-td-check" data-label="Select">';
         echo '<label class="sheet-check">';

@@ -7,23 +7,34 @@
   window.__TXF_DRAFT_LOADED__ = true;
   if (!window.localStorage) return;
 
-  var cfg = window.TXF_DRAFT || {};
-  var panel = String(cfg.panel || '');
-  if (panel !== 'admin' && panel !== 'team') return;
-
   var PREFIX = 'txf-draft:v1:';
-  var userId = String(cfg.userId || '0');
   var debounceMs = 350;
   var timers = {};
   var restoring = false;
+
+  function liveCfg() {
+    return window.TXF_DRAFT || {};
+  }
+
+  function panelName() {
+    var cfg = liveCfg();
+    var panel = String(cfg.panel || '');
+    if (panel === 'admin' || panel === 'team') return panel;
+    var main = document.querySelector('main.main');
+    return main ? String(main.getAttribute('data-draft-panel') || '') : '';
+  }
+
+  function userId() {
+    return String(liveCfg().userId || '0');
+  }
 
   function pageScope() {
     var params = new URLSearchParams(window.location.search);
     return (
       PREFIX +
-      panel +
+      panelName() +
       ':' +
-      userId +
+      userId() +
       ':' +
       (params.get('page') || '') +
       ':' +
@@ -247,8 +258,19 @@
     });
   }
 
+  function shouldClearDraft() {
+    var live = window.TXF_DRAFT || {};
+    if (live.clearDraft) return true;
+    var main = document.querySelector('main.main');
+    if (main && main.getAttribute('data-draft-clear') === '1') return true;
+    if (document.querySelector('.alert-box.alert-ok')) return true;
+    return false;
+  }
+
   function init() {
-    if (cfg.clearDraft) {
+    var panel = panelName();
+    if (panel !== 'admin' && panel !== 'team') return;
+    if (shouldClearDraft()) {
       clearPageDrafts();
     }
 
@@ -279,7 +301,7 @@
     });
     restoring = false;
 
-    if (restoredAny && !cfg.clearDraft) {
+    if (restoredAny && !shouldClearDraft()) {
       showBanner();
     }
   }

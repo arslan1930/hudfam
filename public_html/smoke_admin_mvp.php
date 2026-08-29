@@ -775,6 +775,16 @@ if ($sitesPos === false || $addToPos === false || $sitesPos > $addToPos) {
 } else {
     ok('Our database country Sites table above Add sites');
 }
+if (str_contains($adminProspects, 'site(s) to')
+    || !str_contains($adminProspects, 'prospect_saved_sites_message')
+    || !str_contains($adminProspects, 'just_added')
+    || !str_contains($adminProspects, 'Save uses the Ready list only.')
+    || str_contains($adminProspects, 'Push uses Ready only')
+    || !str_contains($adminProspects, 'prospect-add-sites-form')) {
+    fail('Our database save still uses site(s) / Push copy / missing just-added');
+} else {
+    ok('Our database save grammar + Ready copy + just-added');
+}
 if (!str_contains($prospectsLib, 'function prospect_copy_all_label')
     || !str_contains($prospectsLib, 'function prospect_country_sheet_url')
     || !str_contains($prospectsLib, 'p.niche LIKE')
@@ -888,6 +898,8 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($helpers, "function render_sheet_shared_row_action_forms")
     || !preg_match('/\$nav = \(function_exists\(\'csrf_field\'\) \? csrf_field\(\) : \'\'\)/', $helpers)
     || !str_contains($draftJsSmoke, "name === '_csrf'")
+    || !str_contains($draftJsSmoke, 'shouldClearDraft')
+    || !str_contains($draftJsSmoke, 'alert-box.alert-ok')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
