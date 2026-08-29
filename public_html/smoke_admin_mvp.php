@@ -203,7 +203,9 @@ if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
     || !str_contains($invoicesAdminPage, 'invoice-list-delete')
     || !str_contains($invoicesAdminPage, 'is-incomplete')
     || !str_contains($invoicesAdminPage, 'Add note')
-    || !str_contains($invoicesAdminPage, 'class="num"')) {
+    || !str_contains($invoicesAdminPage, 'class="num"')
+    || !str_contains($invoicesAdminPage, 'if ($invoiceQ !== \'\'):')
+    || str_contains($invoicesAdminPage, '$invoiceQ !== \'\' || $invoiceFilter !== \'\'')) {
     fail('invoices.php missing list chips / search / paid-delete copy');
 } else {
     ok('invoices.php list chips, full search, paid-delete confirm');
@@ -304,6 +306,13 @@ if (!str_contains($guidesLib, 'function guide_orders')
     fail('Office page-purpose guides missing');
 } else {
     ok('Office Orders/Invoices/Account/Website prices guides present');
+}
+if (!str_contains($guidesLib, '<details class="help-details page-purpose">')
+    || !str_contains($guidesLib, '<summary>What is this? · ')
+    || !str_contains($guidesLib, 'help-details-body')) {
+    fail('page-purpose guide is not collapsed by default');
+} else {
+    ok('page-purpose guide is a collapsed details');
 }
 $ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 $invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';

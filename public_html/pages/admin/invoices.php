@@ -189,10 +189,12 @@ render_header('Invoices', 'admin');
              placeholder="Invoice no., bill as, or note" autocomplete="off" spellcheck="false" data-no-draft
              title="Search invoice number, bill as, or note">
       <button class="btn secondary small" type="submit">Search</button>
-      <?php if ($invoiceQ !== '' || $invoiceFilter !== ''): ?>
-        <a class="btn secondary small" href="<?= h($invoiceClientId > 0
-            ? invoice_list_query(['client_id' => $invoiceClientId])
-            : 'index.php?page=admin_invoices') ?>">Clear</a>
+      <?php if ($invoiceQ !== ''): ?>
+        <a class="btn secondary small" href="<?= h(invoice_list_query([
+            'filter' => $invoiceFilter,
+            'client_id' => $invoiceClientId,
+            'p' => 1,
+        ])) ?>">Clear</a>
       <?php endif; ?>
       <?php if ($invoiceClientId > 0): ?>
         <a class="btn secondary small" href="index.php?page=admin_invoices">All invoices</a>
