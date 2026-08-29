@@ -245,7 +245,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
             );
             redirect(prospect_country_sheet_url($result['country'], $sheetKeep(['hash' => 'remove-by-list'])));
         }
-        $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from Our database · ' . $result['country'];
+        $msg = 'Removed ' . (int) $result['removed'] . ' site'
+            . ((int) $result['removed'] === 1 ? '' : 's')
+            . ' from Our database · ' . $result['country'];
         if ((int) $result['not_found'] > 0) {
             $msg .= ' · ' . (int) $result['not_found'] . ' not found';
         }
@@ -301,13 +303,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
         }
         if ($insN > 0) {
             flash('ok', prospect_saved_sites_message($insN, (string) $result['country']));
+            prospect_store_just_added_ids(is_array($result['ids'] ?? null) ? $result['ids'] : []);
+        } else {
+            unset($_SESSION['prospect_just_added_ids']);
         }
         if ($dup > 0) {
             flash('fade', prospect_duplicates_deleted_message($dup) . '.');
         }
         unset($_SESSION['admin_prospects_add_draft']);
         redirect(prospect_country_sheet_url($result['country'], [
-            'created_by' => $filterCreatedBy,
             'just_added' => $insN,
             'hash' => 'prospect-sites-card',
         ]));
@@ -931,7 +935,10 @@ $qs = http_build_query(array_filter([
 ], static fn ($v) => $v !== '' && $v !== null));
 
 $justAdded = max(0, (int) get('just_added'));
-$highlightYmd = $justAdded > 0 ? date('Y-m-d') : '';
+$highlightJustAdded = prospect_just_added_highlight($justAdded);
+if ($justAdded < 1) {
+    unset($_SESSION['prospect_just_added_ids']);
+}
 
 if (!$emptyCountry && $addCountry === '') {
     $addCountry = $countryName;
@@ -956,7 +963,7 @@ if ($wantsAjax && !$emptyCountry) {
         'page' => $pageNum,
         'pages' => $pages,
         'per_page' => $perPage,
-        'rows_html' => prospect_site_rows_html($rows, $highlightYmd),
+        'rows_html' => prospect_site_rows_html($rows, $highlightJustAdded),
         'has_rows' => $rows !== [],
         'export_matches_url' => $exportMatchesUrlAjax,
         'download_matches_txt' => $downloadMatchesTxtAjax,
@@ -1115,7 +1122,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
       <th>Niche</th><th>Domain</th><th>Language</th><th>Added by</th><th>When</th>
     </tr></thead>
     <tbody id="prospect-site-tbody">
-    <?= prospect_site_rows_html($rows, $highlightYmd) ?>
+    <?= prospect_site_rows_html($rows, $highlightJustAdded) ?>
     </tbody>
   </table>
   </div>

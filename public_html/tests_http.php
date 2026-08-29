@@ -514,9 +514,12 @@ if ($r['status'] === 200
     fail('admin Our database country layout status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=admin_prospects&country=Germany&just_added=30');
+$justBody = $r['body'] ?? '';
+$hasSheetRows = str_contains($justBody, 'data-prospect-site-row');
 if ($r['status'] === 200
-    && str_contains($r['body'] ?? '', '30 just added')
-    && !str_contains($r['body'] ?? '', 'Fatal error')) {
+    && str_contains($justBody, '30 just added')
+    && (!$hasSheetRows || str_contains($justBody, 'is-just-added'))
+    && !str_contains($justBody, 'Fatal error')) {
     pass('admin Our database just-added cue');
 } else {
     fail('admin Our database just-added cue status=' . $r['status']);

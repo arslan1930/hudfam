@@ -2613,6 +2613,9 @@ tr.swe-row-updated {
 #prospect-site-table tr.is-just-added td {
   background: #ecfdf3;
 }
+#prospect-site-table tr.is-just-added td:first-child {
+  box-shadow: inset 3px 0 0 #059669;
+}
 .folder.sheet-search-hit {
   outline: 2px solid #4b5563;
   outline-offset: 2px;

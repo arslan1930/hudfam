@@ -780,7 +780,10 @@ if (str_contains($adminProspects, 'site(s) to')
     || !str_contains($adminProspects, 'just_added')
     || !str_contains($adminProspects, 'Save uses the Ready list only.')
     || str_contains($adminProspects, 'Push uses Ready only')
-    || !str_contains($adminProspects, 'prospect-add-sites-form')) {
+    || !str_contains($adminProspects, 'prospect-add-sites-form')
+    || !str_contains($adminProspects, 'prospect_just_added_highlight')
+    || !str_contains($adminProspects, 'prospect_store_just_added_ids')
+    || str_contains($adminProspects, 'highlightYmd')) {
     fail('Our database save still uses site(s) / Push copy / missing just-added');
 } else {
     ok('Our database save grammar + Ready copy + just-added');
@@ -789,7 +792,9 @@ if (!str_contains($prospectsLib, 'function prospect_copy_all_label')
     || !str_contains($prospectsLib, 'function prospect_country_sheet_url')
     || !str_contains($prospectsLib, 'p.niche LIKE')
     || !str_contains($prospectsLib, 'Open website')
-    || !str_contains($prospectsLib, 'duplicate found and removed')) {
+    || !str_contains($prospectsLib, 'duplicate found and removed')
+    || !str_contains($prospectsLib, 'function prospect_just_added_highlight')
+    || !str_contains($prospectsLib, 'function prospect_store_just_added_ids')) {
     fail('Our database helpers missing copy labels / niche super-search / Open website');
 } else {
     ok('Our database helpers copy labels + niche super-search + Open website');
@@ -900,6 +905,8 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, "name === '_csrf'")
     || !str_contains($draftJsSmoke, 'shouldClearDraft')
     || !str_contains($draftJsSmoke, 'alert-box.alert-ok')
+    || !str_contains($draftJsSmoke, 'just_added')
+    || !str_contains($draftJsSmoke, 'prospect-add-sites-form')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
