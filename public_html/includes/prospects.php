@@ -694,13 +694,73 @@ function prospect_open_in_folder_label(string $country): string
 }
 
 /**
+ * Which country-sheet rows to tint after Save.
+ * Prefers the IDs from this save (session); otherwise the first $justAdded rows
+ * of a newest-first list — never “every row dated today”.
+ *
+ * @param list<int>|null $sessionIds
+ * @return list<int>|int
+ */
+function prospect_just_added_highlight(int $justAdded, ?array $sessionIds = null): int|array
+{
+    $justAdded = max(0, $justAdded);
+    if ($justAdded < 1) {
+        return 0;
+    }
+    $raw = $sessionIds;
+    if ($raw === null && isset($_SESSION['prospect_just_added_ids']) && is_array($_SESSION['prospect_just_added_ids'])) {
+        $raw = $_SESSION['prospect_just_added_ids'];
+    }
+    $ids = [];
+    if (is_array($raw)) {
+        foreach ($raw as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+    }
+    return $ids !== [] ? array_values($ids) : $justAdded;
+}
+
+/** Remember IDs inserted by this Save so the next sheet render can tint only those rows. */
+function prospect_store_just_added_ids(array $ids): void
+{
+    $out = [];
+    foreach ($ids as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $out[] = $id;
+        }
+    }
+    if ($out === []) {
+        unset($_SESSION['prospect_just_added_ids']);
+        return;
+    }
+    $_SESSION['prospect_just_added_ids'] = $out;
+}
+
+/**
  * HTML for Our database country site table rows (AJAX search + initial render).
  *
  * @param list<array<string,mixed>> $rows
+ * @param list<int>|int $highlight IDs to tint, or a count of leading rows (newest first)
  */
-function prospect_site_rows_html(array $rows, string $highlightYmd = ''): string
+function prospect_site_rows_html(array $rows, int|array $highlight = 0): string
 {
-    $highlightYmd = substr(trim($highlightYmd), 0, 10);
+    $idSet = [];
+    $leadCount = 0;
+    if (is_array($highlight)) {
+        foreach ($highlight as $id) {
+            $id = (int) $id;
+            if ($id > 0) {
+                $idSet[$id] = true;
+            }
+        }
+    } else {
+        $leadCount = max(0, $highlight);
+    }
+    $i = 0;
     ob_start();
     foreach ($rows as $s) {
         $domain = (string) ($s['domain'] ?? '');
@@ -710,8 +770,15 @@ function prospect_site_rows_html(array $rows, string $highlightYmd = ''): string
         $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
         $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
         $hay = mb_strtolower(trim($domain . ' ' . $url . ' ' . $niche . ' ' . $lang . ' ' . $added));
-        $just = ($highlightYmd !== '' && $when === $highlightYmd);
-        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '"'
+        $rowId = (int) ($s['id'] ?? 0);
+        $just = false;
+        if ($idSet !== []) {
+            $just = isset($idSet[$rowId]);
+        } elseif ($leadCount > 0 && $i < $leadCount) {
+            $just = true;
+        }
+        $i++;
+        echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . $rowId . '"'
             . ($just ? ' class="is-just-added"' : '')
             . ' data-search="' . h($hay) . '">';
         echo '<td class="sheet-td-check" data-label="Select">';
@@ -1697,7 +1764,7 @@ function add_prospect_domains(
  * Admin: paste URLs into one country’s database (no uniqueness preview).
  * Duplicates in the paste and domains already in that country are dropped (not updated).
  *
- * @return array{inserted:int,updated:int,duplicated:int,purged:int,total:int,batch_id:int|null,country:string}
+ * @return array{inserted:int,updated:int,duplicated:int,purged:int,total:int,batch_id:int|null,country:string,ids:list<int>}
  */
 function admin_add_urls_to_database(string $raw, array $user, string $country, string $language = ''): array
 {
@@ -1739,6 +1806,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
             'total' => 0,
             'batch_id' => null,
             'country' => $country,
+            'ids' => [],
         ];
     }
 
@@ -1763,6 +1831,8 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     );
 
     $inserted = 0;
+    /** @var list<int> $insertedIds */
+    $insertedIds = [];
     $alreadyInDb = 0;
     db()->beginTransaction();
     try {
@@ -1792,6 +1862,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
             }
             if ($siteId > 0) {
                 $inserted++;
+                $insertedIds[] = $siteId;
                 $insItem->execute([$batchId, $domain, $siteId]);
             } else {
                 $alreadyInDb++;
@@ -1839,6 +1910,7 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         'total' => count($domains),
         'batch_id' => $batchId,
         'country' => $country,
+        'ids' => $insertedIds,
     ];
 }
 

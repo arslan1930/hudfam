@@ -150,6 +150,8 @@ if (
     && str_contains($presenceJs, "body.set('_csrf'")
     && str_contains($draftJs, 'shouldClearDraft')
     && str_contains($draftJs, 'alert-box.alert-ok')
+    && str_contains($draftJs, 'just_added')
+    && str_contains($draftJs, 'prospect-add-sites-form')
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
@@ -343,7 +345,8 @@ try {
         fail('parse_domain_list_strict unexpected: ' . json_encode($parsed));
     }
     $adminAdd = admin_add_urls_to_database(implode("\n", $parsed['valid']), $adminUser, $country, 'German');
-    if ((int) $adminAdd['total'] >= 2 && (int) $adminAdd['inserted'] >= 2) {
+    if ((int) $adminAdd['total'] >= 2 && (int) $adminAdd['inserted'] >= 2
+        && isset($adminAdd['ids']) && count($adminAdd['ids']) === (int) $adminAdd['inserted']) {
         pass('admin_add_urls_to_database inserted=' . (int) $adminAdd['inserted']);
     } else {
         fail('admin_add_urls_to_database: ' . json_encode($adminAdd));
@@ -448,11 +451,48 @@ try {
             'added_by_full' => 'Admin',
             'created_at' => date('Y-m-d') . ' 12:00:00',
         ],
-    ], date('Y-m-d'));
-    if (str_contains($justHtml, 'is-just-added') && str_contains($justHtml, 'txf-just-added.example')) {
-        pass('prospect_site_rows_html highlights just-added day');
+        [
+            'id' => 3,
+            'domain' => 'txf-old-today.example',
+            'url' => '',
+            'language' => 'English',
+            'added_by_full' => 'Admin',
+            'created_at' => date('Y-m-d') . ' 11:00:00',
+        ],
+    ], [2]);
+    $leadHtml = prospect_site_rows_html([
+        [
+            'id' => 4,
+            'domain' => 'txf-lead-new.example',
+            'url' => '',
+            'language' => 'English',
+            'added_by_full' => 'Admin',
+            'created_at' => date('Y-m-d') . ' 12:00:00',
+        ],
+        [
+            'id' => 5,
+            'domain' => 'txf-lead-old.example',
+            'url' => '',
+            'language' => 'English',
+            'added_by_full' => 'Admin',
+            'created_at' => date('Y-m-d') . ' 11:00:00',
+        ],
+    ], 1);
+    $newTrTinted = (bool) preg_match('/<tr[^>]*data-domain="txf-just-added\.example"[^>]*class="is-just-added"/', $justHtml);
+    $oldTrTinted = (bool) preg_match('/<tr[^>]*data-domain="txf-old-today\.example"[^>]*class="is-just-added"/', $justHtml);
+    $leadNewTinted = (bool) preg_match('/<tr[^>]*data-domain="txf-lead-new\.example"[^>]*class="is-just-added"/', $leadHtml);
+    $leadOldTinted = (bool) preg_match('/<tr[^>]*data-domain="txf-lead-old\.example"[^>]*class="is-just-added"/', $leadHtml);
+    if ($newTrTinted && !$oldTrTinted
+        && $leadNewTinted && !$leadOldTinted
+        && prospect_just_added_highlight(30, [10, 11]) === [10, 11]
+        && prospect_just_added_highlight(30, []) === 30
+        && prospect_just_added_highlight(0, [1]) === 0) {
+        pass('prospect_site_rows_html highlights only just-added ids / first N');
     } else {
-        fail('prospect_site_rows_html just-added: ' . $justHtml);
+        fail('prospect_site_rows_html just-added: new=' . (int) $newTrTinted
+            . ' old=' . (int) $oldTrTinted
+            . ' leadNew=' . (int) $leadNewTinted
+            . ' leadOld=' . (int) $leadOldTinted);
     }
 
     $parsedNiches = prospect_parse_niches('Health, fitness, Health, salud, Guest posts');

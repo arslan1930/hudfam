@@ -144,10 +144,23 @@
 
   function clearPageDrafts() {
     var scope = pageScope();
+    var params = new URLSearchParams(window.location.search);
+    var page = String(params.get('page') || '');
+    var addSitesSuffix = ':f:prospect-add-sites-form';
     var toRemove = [];
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k && k.indexOf(scope) === 0) toRemove.push(k);
+      if (!k) continue;
+      if (k.indexOf(scope) === 0) {
+        toRemove.push(k);
+        continue;
+      }
+      // Hub Add sites (no country in the URL) uses a different key than the
+      // country folder. A successful save must wipe both so the paste stays empty.
+      var userProspects = PREFIX + panelName() + ':' + userId() + ':admin_prospects:';
+      if (page === 'admin_prospects' && k.indexOf(userProspects) === 0 && k.indexOf(addSitesSuffix) !== -1) {
+        toRemove.push(k);
+      }
     }
     toRemove.forEach(function (k) {
       localStorage.removeItem(k);
@@ -264,13 +277,16 @@
     var main = document.querySelector('main.main');
     if (main && main.getAttribute('data-draft-clear') === '1') return true;
     if (document.querySelector('.alert-box.alert-ok')) return true;
+    var params = new URLSearchParams(window.location.search);
+    if (parseInt(params.get('just_added') || '0', 10) > 0) return true;
     return false;
   }
 
   function init() {
     var panel = panelName();
     if (panel !== 'admin' && panel !== 'team') return;
-    if (shouldClearDraft()) {
+    var clearNow = shouldClearDraft();
+    if (clearNow) {
       clearPageDrafts();
     }
 
@@ -282,6 +298,7 @@
     forms.forEach(function (form, index) {
       if (!shouldBindForm(form)) return;
       bindForm(form, index);
+      if (clearNow) return;
       try {
         var raw = localStorage.getItem(formStorageKey(form, index));
         if (!raw) return;
