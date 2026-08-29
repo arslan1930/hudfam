@@ -2623,7 +2623,8 @@ tr.swe-row-updated {
   background: #f3f4f6;
 }
 .prospect-market-body .folder-open {
-  opacity: 0;
+  opacity: 0.45;
+  font-weight: 650;
   transition: opacity 0.12s ease;
 }
 .prospect-market-body .folder:hover .folder-open,
@@ -3293,13 +3294,18 @@ tr.swe-row-updated {
   min-width: 0;
 }
 .sheet-search input[type="search"] {
+  width: 11.5rem;
+  max-width: 42vw;
+  margin: 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+.prospect-markets-toolbar .sheet-search input[type="search"] {
   width: 16rem;
   max-width: min(42vw, 22rem);
   min-width: 12rem;
-  margin: 0;
   padding: 0.42rem 0.85rem;
-  border-radius: 999px;
-  font-size: 0.9rem;
   line-height: 1.25;
 }
 .sheet-search-meta {

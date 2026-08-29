@@ -145,6 +145,10 @@
       if (hidden.value && vis.value !== hidden.value) {
         vis.value = hidden.value;
         changed++;
+      } else if (!String(hidden.value || '').trim() && String(vis.value || '').trim()) {
+        // Typed country (no Enter) lived only in the visible box.
+        hidden.value = vis.value.trim();
+        changed++;
       }
     });
     return changed;
