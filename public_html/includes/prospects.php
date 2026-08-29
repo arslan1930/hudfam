@@ -7,6 +7,7 @@
  */
 
 require_once __DIR__ . '/prospect_niches.php';
+require_once __DIR__ . '/iana_ascii_tlds.php';
 
 /** Strip protocol/path → bare host for storage/lookup (does not validate apex-only). */
 function normalize_domain(string $value): string
@@ -93,7 +94,8 @@ function known_country_sld_labels(): array
 }
 
 /**
- * Valid DNS TLDs (ccTLDs + common gTLDs). Rejects fakes like .comz.
+ * Valid DNS TLDs from the IANA root zone (ccTLDs + gTLDs).
+ * Accepts real geoTLDs such as .gal / .madrid / .eus. Rejects fakes like .comz.
  *
  * @return array<string,true>
  */
@@ -103,47 +105,9 @@ function known_valid_tlds_map(): array
     if ($map !== null) {
         return $map;
     }
-    $cc = 'ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj'
-        . ' bl bm bn bo bq br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr'
-        . ' cu cv cw cx cy cz de dj dk dm do dz ec ee eg eh er es et eu fi fj fk fm fo'
-        . ' fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht'
-        . ' hu id ie il im in io iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky'
-        . ' kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg mh mk ml mm mn mo mp mq'
-        . ' mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf'
-        . ' pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si'
-        . ' sj sk sl sm sn so sr ss st su sv sx sy sz tc td tf tg th tj tk tl tm tn to'
-        . ' tr tt tv tw tz ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw';
-    $gtld = 'com net org info biz name pro edu gov mil int aero asia cat coop jobs'
-        . ' mobi museum post tel travel xxx app dev page site online store shop blog'
-        . ' cloud digital email agency studio media news world club live life today'
-        . ' space tech website company solutions services systems network global'
-        . ' international group ltd limited llc inc corp center centre design art'
-        . ' photography video game games software support help care health clinic'
-        . ' dental legal law accountant finance bank money insurance realestate'
-        . ' properties homes house hotel travel vacations vacations tours cricket'
-        . ' football soccer tennis golf sports fitness gym yoga music band film'
-        . ' movie tv radio podcast books education school university college kids'
-        . ' family baby wedding dating singles church faith bible charity ngo'
-        . ' foundation org community social link click download host hosting'
-        . ' server domain domains email mail web webs website websites xyz top'
-        . ' win bid loan work works expert review reviews report reports press'
-        . ' news blog spot zip mov new old cool fun wow one two red blue green'
-        . ' black white gold vip rich luxury boutique fashion watch jewelry diamonds'
-        . ' cafe bar pub beer wine vodka restaurant menu kitchen food pizza sushi'
-        . ' burger chicken vegan organic farm garden flowers plants pet dog cat'
-        . ' auto cars car motor motors bike boats yachts build builder construction'
-        . ' engineer engineering energy solar power green earth eco bio science'
-        . ' academy institute training coaching consulting management marketing'
-        . ' advertising agency digital seo brand brands sale sales deal deals'
-        . ' discount coupon market marketplace auction trade trading exchange'
-        . ' crypto bitcoin nft token wallet cash pay payment credit card'
-        . ' ai io co tv me cc ws info';
     $map = [];
-    foreach (preg_split('/\s+/', trim($cc . ' ' . $gtld)) ?: [] as $t) {
-        $t = strtolower(trim((string) $t));
-        if ($t !== '') {
-            $map[$t] = true;
-        }
+    foreach (iana_ascii_tld_labels() as $t) {
+        $map[$t] = true;
     }
     return $map;
 }

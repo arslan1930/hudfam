@@ -2649,6 +2649,22 @@ if (!str_contains($prospectsPhp, 'known_platform_public_suffixes')
 } else {
     ok('prospects.php platform public suffixes');
 }
+$ianaTldsPhp = (string) @file_get_contents(__DIR__ . '/includes/iana_ascii_tlds.php');
+$geoPhpSmoke = (string) @file_get_contents(__DIR__ . '/includes/geo.php');
+if (!str_contains($ianaTldsPhp, ' gal ')
+    || !str_contains($ianaTldsPhp, ' madrid ')
+    || !str_contains($ianaTldsPhp, ' eus ')
+    || !str_contains($ianaTldsPhp, ' run ')
+    || !str_contains($sitesFormJs, ' gal ')
+    || !str_contains($sitesFormJs, ' madrid ')
+    || !str_contains($sitesFormJs, ' run ')
+    || !str_contains($prospectsPhp, 'iana_ascii_tld_labels')
+    || !str_contains($geoPhpSmoke, "'gal' => 'Spain'")
+    || !str_contains($geoPhpSmoke, "'madrid' => 'Spain'")) {
+    fail('Clean still missing real geoTLDs .gal / .madrid');
+} else {
+    ok('Clean IANA TLDs include .gal .madrid .eus .run');
+}
 
 $sheetHistSmoke = file_get_contents($root . '/includes/sheet_history.php') ?: '';
 $campAppSmokeUi = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
