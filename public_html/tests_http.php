@@ -696,7 +696,7 @@ if ($r['status'] === 200 && !$omCopyBad && !str_contains($r['body'], 'Fatal erro
 } else {
     fail('admin orders processing copy status=' . $r['status'] . ' missing=' . implode(',', $omCopyBad));
 }
-$r = req('GET', $base . '/index.php?page=admin_orders&folder=completed');
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=completed&status=all');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Copy selected live URLs (this page)')
     && str_contains($r['body'], 'Copy all live URLs')
@@ -711,6 +711,16 @@ if ($r['status'] === 200
     pass('admin orders completed copy/download');
 } else {
     fail('admin orders completed copy status=' . $r['status']);
+}
+$rUnpaidOm = req('GET', $base . '/index.php?page=admin_orders&folder=completed');
+if ($rUnpaidOm['status'] === 200
+    && str_contains($rUnpaidOm['body'], 'Unpaid to bill')
+    && str_contains($rUnpaidOm['body'], 'om-status-tabs')
+    && str_contains($rUnpaidOm['body'], 'status=unpaid')
+    && !str_contains($rUnpaidOm['body'], 'Fatal error')) {
+    pass('admin orders completed unpaid working view');
+} else {
+    fail('admin orders completed unpaid working view status=' . ($rUnpaidOm['status'] ?? '?'));
 }
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&copy=live_urls');
 $copyJson = json_decode($r['body'], true);
