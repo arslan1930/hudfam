@@ -497,6 +497,28 @@ if (!$inCountry) {
     foreach ($adminNewByCountry as $n) {
         $adminNewCountryTotal += (int) $n;
     }
+    $existingCountryKeys = [];
+    foreach ($countryRows as $r) {
+        $existingCountryKeys[mb_strtolower((string) ($r['country'] ?? ''))] = true;
+    }
+    $emptyCatalogCountries = [];
+    if ($isAdminAll && function_exists('list_countries')) {
+        foreach (list_countries() as $c) {
+            $name = trim((string) ($c['name'] ?? ''));
+            if ($name === '' || isset($existingCountryKeys[mb_strtolower($name)])) {
+                continue;
+            }
+            $emptyCatalogCountries[] = $name;
+        }
+    }
+    $showWithEmailsCol = !$isAdminAll;
+    $countryTableCols = 3; // Country · Sites · Open
+    if ($showWithEmailsCol) {
+        $countryTableCols++;
+    }
+    if ($isTeam) {
+        $countryTableCols++;
+    }
 
     render_header($sweLabel, $swePanel);
     $crumbs = $isAdmin
@@ -510,6 +532,9 @@ if (!$inCountry) {
             ['label' => $sweLabel],
         ];
     render_breadcrumbs($crumbs);
+    if ($isAdminAll && function_exists('guide_emails_data')) {
+        echo guide_emails_data();
+    }
     ?>
     <div class="topbar">
       <div>
@@ -518,7 +543,7 @@ if (!$inCountry) {
             $isTeam
                 ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
-                    ? 'Admin-only archive of Sites with emails - Admin. Keeps copies after emailed/remove. Not linked to Team.'
+                    ? 'Final keeps a copy after you mark emailed or remove on Admin. Not linked to Team. Open a country to paste or import (that also creates the Admin working-list row).'
                     : 'Working list from Team Push. Mark emailed removes the site from this list after Final has a copy. Communication Team can super-search this data.')
         ) ?></h1>
         <p class="muted">
@@ -526,14 +551,21 @@ if (!$inCountry) {
             Site names arrive from Extracting Results → Push.
             Add emails, then Push again to Sites with emails - Admin ·
           <?php elseif ($isAdminAll): ?>
-            Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove).
-            Paste or import CSV like Campaign on a country sheet ·
+            Final keeps a copy after you mark emailed or remove on Admin.
+            Open a country to paste or import — that also creates the Admin working-list row.
           <?php else: ?>
             Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
-          <?= count($countryRows) ?> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?> ·
-          <?= (int) $grandTotal ?> site<?= (int) $grandTotal === 1 ? '' : 's' ?> ·
-          <?= (int) $emailSites ?> with email<?= (int) $emailSites === 1 ? '' : 's' ?>
+        </p>
+        <p class="muted">
+          <strong><?= count($countryRows) ?></strong>
+          countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?>
+          · <strong><?= (int) $grandTotal ?></strong>
+          site<?= (int) $grandTotal === 1 ? '' : 's' ?>
+          <?php if (!$isAdminAll || (int) $emailSites !== (int) $grandTotal): ?>
+            · <strong><?= (int) $emailSites ?></strong>
+            with email<?= (int) $emailSites === 1 ? '' : 's' ?>
+          <?php endif; ?>
           <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
             · <span class="swe-country-new">+<?= (int) $adminNewCountryTotal ?> new</span>
           <?php endif; ?>
@@ -562,20 +594,29 @@ if (!$inCountry) {
 
     <?php if ($isAdminAll && function_exists('list_countries')): ?>
     <div class="card" style="margin-bottom:1rem" id="swe-open-country">
-      <h2><?= label_with_info('Open a country to paste or import', 'Opens that Final country sheet even when it has no sites yet. Paste lines or import CSV / Excel / TXT the same way as Campaign. Each site needs at least one email and also creates the Admin working-list row.') ?></h2>
+      <h2><?= label_with_info(
+          'Open an empty country',
+          'Countries already in the list open from the table. Use this only to start a country that has no Final folder yet. Paste or import CSV / Excel / TXT like Campaign. Each site needs at least one email and also creates the Admin working-list row.'
+      ) ?></h2>
+      <?php if ($emptyCatalogCountries === []): ?>
+        <p class="help">
+          Every country in the catalog already has a Final folder.
+          Open one in the list below to paste or import.
+        </p>
+      <?php else: ?>
       <p class="help">
-        Choose a country, then paste or import a sheet of <strong>site + emails</strong>.
-        Same formats as Campaign. Each site needs at least one email.
+        For a country that is not in the list yet. After it opens, paste or import
+        <strong>site + emails</strong> (same formats as Campaign). Each site needs at least one email.
       </p>
-      <form method="get" action="index.php" class="camp-hub-create-form" autocomplete="off" style="margin-top:0.65rem">
+      <form method="get" action="index.php" class="camp-hub-create-form" autocomplete="off" data-no-draft style="margin-top:0.65rem">
         <input type="hidden" name="page" value="admin_emails_data">
         <input type="hidden" name="folder" value="all_sites_with_emails">
         <div class="camp-hub-field">
           <label for="swe_open_country">Country</label>
           <select id="swe_open_country" name="country" required>
             <option value="">Select country…</option>
-            <?php foreach (list_countries() as $c): ?>
-              <option value="<?= h((string) ($c['name'] ?? '')) ?>"><?= h((string) ($c['name'] ?? '')) ?></option>
+            <?php foreach ($emptyCatalogCountries as $emptyName): ?>
+              <option value="<?= h($emptyName) ?>"><?= h($emptyName) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -583,6 +624,7 @@ if (!$inCountry) {
           <button class="btn" type="submit">Open country</button>
         </p>
       </form>
+      <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -603,8 +645,13 @@ if (!$inCountry) {
     <div class="card">
       <?php if ($countryRows): ?>
       <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
-        <h2 style="margin:0"><?= label_with_info('By country', 'Open a country to see its sites and emails. Counts show how many sites have at least one email.') ?></h2>
-        <label class="sheet-search" for="swe-country-search">
+        <h2 style="margin:0"><?= label_with_info(
+            'By country',
+            $isAdminAll
+                ? 'Open a folder to see its archive and paste or import. Each country name or Open goes to that sheet.'
+                : 'Open a country to see its sites and emails. Counts show how many sites have at least one email.'
+        ) ?></h2>
+        <label class="sheet-search swe-country-search" for="swe-country-search">
           <span class="visually-hidden">Search countries</span>
           <input id="swe-country-search" type="search" placeholder="Search country name…"
                  autocomplete="off" spellcheck="false" data-no-draft
@@ -613,7 +660,7 @@ if (!$inCountry) {
         </label>
       </div>
       <?php if ($isAdminAll): ?>
-      <p class="help" style="margin:0 0 0.65rem">Archive of Admin. Adding a site on a country sheet also creates the Admin working-list row.</p>
+      <p class="help" style="margin:0 0 0.65rem">Open a folder below. Adding a site on that sheet also creates the Admin working-list row.</p>
       <?php endif; ?>
       <div class="table-wrap">
       <table class="extracted-country-table" id="swe-country-table">
@@ -621,21 +668,25 @@ if (!$inCountry) {
           <tr>
             <th>Country</th>
             <th class="num">Sites</th>
+            <?php if ($showWithEmailsCol): ?>
             <th class="num">With emails</th>
+            <?php endif; ?>
             <?php if ($isTeam): ?>
             <th>Last Push</th>
             <?php endif; ?>
+            <th></th>
           </tr>
         </thead>
         <tbody>
         <?php foreach ($countryRows as $r):
             $cName = (string) $r['country'];
+            $openHref = $sweBase . '&country=' . rawurlencode($cName);
             $hay = mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
             $newN = (int) ($adminNewByCountry[$cName] ?? 0);
             ?>
           <tr data-swe-country-row data-search="<?= h($hay) ?>">
             <td>
-              <a class="extracted-country-link" href="<?= h($sweBase) ?>&amp;country=<?= urlencode($cName) ?>">
+              <a class="extracted-country-link" href="<?= h($openHref) ?>">
                 <?= h($cName) ?>
               </a>
               <?php if ($newN > 0): ?>
@@ -651,11 +702,13 @@ if (!$inCountry) {
               <?php endif; ?>
             </td>
             <td class="num">
-              <a class="extracted-country-count" href="<?= h($sweBase) ?>&amp;country=<?= urlencode($cName) ?>">
+              <a class="extracted-country-count" href="<?= h($openHref) ?>" title="Open <?= h($cName) ?>">
                 <?= (int) $r['total'] ?>
               </a>
             </td>
+            <?php if ($showWithEmailsCol): ?>
             <td class="num muted"><?= (int) $r['with_emails'] ?></td>
+            <?php endif; ?>
             <?php if ($isTeam):
                 $lp = trim((string) ($r['last_pushed_at'] ?? ''));
                 $recentPush = false;
@@ -671,10 +724,13 @@ if (!$inCountry) {
               <?php endif; ?>
             </td>
             <?php endif; ?>
+            <td class="num">
+              <a class="btn secondary small" href="<?= h($openHref) ?>">Open</a>
+            </td>
           </tr>
         <?php endforeach; ?>
           <tr class="sheet-search-empty" data-swe-country-search-empty hidden>
-            <td colspan="<?= $isTeam ? 4 : 3 ?>" class="muted">No countries match your search.</td>
+            <td colspan="<?= (int) $countryTableCols ?>" class="muted">No countries match your search.</td>
           </tr>
         </tbody>
       </table>
@@ -686,7 +742,7 @@ if (!$inCountry) {
           <p class="muted">They appear here when you click Push in Extracting Results.</p>
         <?php elseif ($isAdminAll): ?>
           <p>No mirrored sites yet.</p>
-          <p class="muted">They sync from Admin, or open a country above and paste / import CSV like Campaign.</p>
+          <p class="muted">They sync from Admin, or open an empty country above and paste / import CSV like Campaign.</p>
         <?php else: ?>
           <p>No sites yet.</p>
           <p class="muted">They appear when Team pushes from Sites with emails - Team (after adding emails).</p>
@@ -696,6 +752,13 @@ if (!$inCountry) {
     </div>
     <script>
     (function () {
+      document.querySelectorAll('[data-swe-country-row]').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+          if (e.target.closest('a, button, input, label, select, textarea')) return;
+          var a = row.querySelector('a.extracted-country-link');
+          if (a && a.href) window.location.href = a.href;
+        });
+      });
       var input = document.getElementById('swe-country-search');
       if (!input) return;
       var matchRows = [], matchIndex = -1;

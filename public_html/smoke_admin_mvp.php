@@ -1121,7 +1121,9 @@ if (str_contains($emailsHub, 'Final list from Team Push')
     ok('emails hub Admin naming + no hub New clear');
 }
 if (!str_contains($emailsHub, 'Working list from Team Push')
-    || !str_contains($emailsHub, 'emailed checkpoint here')) {
+    || !str_contains($emailsHub, 'emailed checkpoint here')
+    || !str_contains($emailsHub, 'Keeps a copy after emailed or remove on Admin')
+    || str_contains($emailsHub, 'keeps copies after emailed/remove')) {
     fail('emails hub missing Admin working-list copy');
 } else {
     ok('emails hub Admin working-list copy');
@@ -1193,7 +1195,11 @@ if (substr_count($campAppSmoke, 'csrf_field()') < 21
 }
 if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
     || !str_contains($sweAppSmoke, '<div class="table-wrap">')
-    || !str_contains($sweAppSmoke, 'also creates the Admin working-list row')) {
+    || !str_contains($sweAppSmoke, 'also creates the Admin working-list row')
+    || !str_contains($sweAppSmoke, 'Open an empty country')
+    || !str_contains($sweAppSmoke, 'data-no-draft')
+    || !str_contains($sweAppSmoke, 'emptyCatalogCountries')
+    || str_contains($sweAppSmoke, 'keeps copies after emailed/remove')) {
     fail('SWE country list missing table-wrap or Final add-site copy');
 } else {
     ok('SWE country list table-wrap + Final add-site copy');

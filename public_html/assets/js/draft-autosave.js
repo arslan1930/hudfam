@@ -307,8 +307,7 @@
         var n = apply(form, parsed.data);
         if (n > 0) {
           restoredAny = true;
-          markStatus(form, true);
-          // Notify page scripts (e.g. order sheet totals) that values changed.
+          // One message: the restore banner. Skip the in-form “Draft saved” chip.
           form.dispatchEvent(new Event('input', { bubbles: true }));
           form.dispatchEvent(new Event('change', { bubbles: true }));
         }

@@ -182,7 +182,7 @@ if ($folder === '') {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info('Emails data', 'Three folders: Admin is the working list from Team Push (emailed checkpoint here). Final is an Admin-only archive that keeps copies after emailed/remove. Campaign is separate country sheets with their own emailed marks.') ?></h1>
+        <h1><?= label_with_info('Emails data', 'Three folders: Admin is the working list from Team Push (emailed checkpoint here). Final keeps a copy after you mark emailed or remove on Admin. Campaign is separate country sheets with their own emailed marks.') ?></h1>
         <p class="muted">Admin working list · Final archive · Campaign country sheets.</p>
       </div>
     </div>
@@ -242,14 +242,13 @@ if ($folder === '') {
           <a class="folder" href="<?= h($base) ?>&amp;folder=all_sites_with_emails">
             <h3>Final</h3>
             <p class="muted">
-              Admin-only archive of Sites with emails - Admin (keeps copies after emailed/remove) ·
+              Keeps a copy after emailed or remove on Admin ·
               <?= (int) $allCountryCount ?> countr<?= $allCountryCount === 1 ? 'y' : 'ies' ?>
               · <?= (int) $allTotal ?> site<?= (int) $allTotal === 1 ? '' : 's' ?>
-              · <?= (int) $allWithEmails ?> with email<?= (int) $allWithEmails === 1 ? '' : 's' ?>
             </p>
             <?php folder_open_cue(); ?>
           </a>
-          <?= info_icon('Admin-only archive of Sites with emails - Admin. Mark emailed / remove from Admin keeps a copy here. Repair copies Admin → Final and never deletes archive rows. Open a country to paste or import CSV / Excel / TXT like Campaign (also creates the Admin working-list row). Not linked to Team.', 'About All sites with emails - Final') ?>
+          <?= info_icon('Final keeps a copy after you mark emailed or remove on Admin. Repair copies Admin → Final and never deletes archive rows. Open a country to paste or import CSV / Excel / TXT like Campaign (also creates the Admin working-list row). Not linked to Team.', 'About All sites with emails - Final') ?>
         </div>
         <div class="folder-with-info">
           <a class="folder" href="<?= h($base) ?>&amp;folder=email_campaigns">
