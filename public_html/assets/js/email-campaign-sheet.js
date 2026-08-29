@@ -197,7 +197,7 @@
       var markTitle = sent
         ? 'Clear emailed mark on this site only'
         : 'Mark this site as emailed';
-      markBtn.textContent = sent ? 'Undo' : 'Emailed';
+      markBtn.textContent = sent ? 'Undo mark' : 'Mark emailed';
       markBtn.title = markTitle;
       markBtn.setAttribute('aria-label', markTitle);
       markBtn.classList.toggle('secondary', sent);

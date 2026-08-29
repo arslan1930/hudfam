@@ -2796,10 +2796,22 @@ if (!str_contains($sweUi, 'is-dense')
     || !str_contains($cssUi, '.main.is-sheet-app > .alert-box.alert-ok .alert-title')
     || !str_contains($layoutUiSmoke, 'is-sheet-app')
     || !str_contains($sweUi, "'Undo' : 'Emailed'")
-    || !str_contains($campUi, "'Undo' : 'Emailed'")) {
+    || !str_contains($campUi, "'Undo mark' : 'Mark emailed'")) {
     fail('sheets missing dense rows / compact emailed rule / short mark labels');
 } else {
     ok('dense sheet rows + compact checkpoint + short Emailed/Undo');
+}
+$campLibSmokeUx = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
+if (!str_contains($campUi, 'href="#camp-fill-gaps"')
+    || !str_contains($campUi, 'Not emailed (')
+    || !str_contains($campUi, 'Search site or email (this page)')
+    || substr_count($campUi, 'id="camp-add-toggle"') !== 1
+    || !str_contains($campLibSmokeUx, 'function email_campaign_default_language')
+    || !str_contains($campLibSmokeUx, 'function email_campaign_fill_blank_row_languages')
+    || !str_contains($cssUi, '.swe-checkpoint-compact .with-info-label')) {
+    fail('campaign sheet missing Fill gaps header, chip counts, or language default');
+} else {
+    ok('campaign sheet Fill gaps in header, chip counts, language default');
 }
 if (!str_contains($cssUi, '@media (max-width: 899px)')
     || !str_contains($cssUi, 'table.sheet-cards-mobile tr')

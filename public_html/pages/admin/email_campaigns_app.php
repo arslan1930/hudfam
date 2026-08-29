@@ -511,6 +511,7 @@ if ($sheetId > 0) {
     if ($batchFilter > 0 && !$openBatch) {
         $batchFilter = 0;
     }
+    email_campaign_fill_blank_row_languages($sheetId, $sheetCountry);
     $inv = email_campaign_rows_inventory_query(
         $sheetId,
         ['q' => $q, 'sent' => $sentFilter, 'batch' => $batchFilter],
@@ -603,7 +604,7 @@ if ($sheetId > 0) {
       </div>
       <div class="actions">
         <?php render_task_presence('camp:' . $sheetId, 'Others on Email Sheet · ' . $sheetCountry); ?>
-        <button type="button" class="btn" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+        <a class="btn secondary" href="#camp-fill-gaps">Fill gaps</a>
         <a class="btn secondary" href="#camp-bulk-add">Paste / import</a>
         <a class="btn secondary" href="<?= h($projectHref) ?>">Project countries</a>
       </div>
@@ -635,9 +636,9 @@ if ($sheetId > 0) {
           <p class="swe-sent-filters">
             <?php
             $sentLinks = [
-                '' => 'All',
-                '0' => 'Not emailed',
-                '1' => 'Emailed',
+                '' => 'All (' . (int) $filledCount . ')',
+                '0' => 'Not emailed (' . (int) $sentStats['unsent'] . ')',
+                '1' => 'Emailed (' . (int) $sentStats['sent'] . ')',
             ];
             foreach ($sentLinks as $val => $label):
                 $href = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
@@ -731,7 +732,7 @@ if ($sheetId > 0) {
           <?php render_sheet_tool_menu_close(); ?>
         </div>
         <div class="actions">
-          <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+          <button type="button" class="btn small" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
           <?php
           render_sheet_edit_toolbar($formAction, sheet_history_key('campaign', (string) $sheetId), [
               'q' => $q,
@@ -742,7 +743,7 @@ if ($sheetId > 0) {
           ?>
           <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
             <span class="visually-hidden">Search sites and emails</span>
-            <input id="swe-row-search" type="search" placeholder="Search site or email…"
+            <input id="swe-row-search" type="search" placeholder="Search site or email (this page)"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
                    <?= $filledCount < 1 && $q === '' && $sentFilter === '' && $batchFilter < 1 ? 'disabled' : '' ?>
                    title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
@@ -841,6 +842,9 @@ if ($sheetId > 0) {
               $domain = (string) $r['domain'];
               $lang = trim((string) ($r['language'] ?? ''));
               if ($lang === '') {
+                  $lang = email_campaign_default_language($sheetCountry);
+              }
+              if ($lang === '') {
                   $lang = '—';
               }
               $e1 = (string) $r['email1'];
@@ -909,7 +913,7 @@ if ($sheetId > 0) {
                           data-email-sent="<?= $isEmailed ? '0' : '1' ?>" data-domain="<?= h($domain) ?>"
                           title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>"
                           aria-label="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
-                    <?= $isEmailed ? 'Undo' : 'Emailed' ?>
+                    <?= $isEmailed ? 'Undo mark' : 'Mark emailed' ?>
                   </button>
                   <?php render_sheet_row_more_open(); ?>
                   <button class="btn secondary small" type="button"

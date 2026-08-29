@@ -2224,6 +2224,28 @@ try {
     } else {
         fail("campaign row count=$rc");
     }
+    $campLang = (string) db()->query(
+        "SELECT language FROM email_campaign_rows WHERE sheet_id=" . (int) $sid . " AND domain='txfcamp-site.com'"
+    )->fetchColumn();
+    if ($campLang === 'German') {
+        pass('campaign add stores country default language');
+    } else {
+        fail("campaign language expected German, got=$campLang");
+    }
+    $beSheet = create_email_campaign_sheet('Belgium', (int) $adminUser['id']);
+    db()->prepare(
+        "INSERT INTO email_campaign_rows (sheet_id, domain, country, language, email1)
+         VALUES (?,?,?,?,?)"
+    )->execute([$beSheet, 'txfcamp-blanklang.be', 'Belgium', '', 'hello@txfcamp-blanklang.be']);
+    $filledLang = email_campaign_fill_blank_row_languages((int) $beSheet, 'Belgium');
+    $beLang = (string) db()->query(
+        "SELECT language FROM email_campaign_rows WHERE sheet_id=" . (int) $beSheet . " AND domain='txfcamp-blanklang.be'"
+    )->fetchColumn();
+    if ($filledLang >= 1 && $beLang === 'Dutch') {
+        pass('campaign blank language backfill uses country default');
+    } else {
+        fail("campaign backfill lang=$beLang filled=$filledLang");
+    }
 
     // Remove one of two emails → site stays.
     clear_email_campaign_domain_exclusion($sid, 'txfcamp-two.com');
