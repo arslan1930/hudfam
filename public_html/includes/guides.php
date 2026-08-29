@@ -240,10 +240,10 @@ function guide_orders(): string
 {
     return render_page_purpose(
         'Order management — Processing and Completed',
-        'Processing is filled from Website prices Processing. Completed is after a live URL and Mark completed. Only Completed unpaid rows push to an invoice. Website prices never stores LIVE URL, profit, client, or invoice fields.',
+        'Processing is Website prices Processing, leftover after Website prices leaves Processing, or + Add order. Completed is after a live URL and Mark completed. Only Completed unpaid rows push to an invoice. Website prices never stores LIVE URL, profit, client, or invoice fields.',
         'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices.',
         [
-            'Processing: rows from Website prices Processing, or + Add order. Fill LIVE URL, country, and client email or name, then Mark completed — saving a live URL does not complete the row. Save still works on half-filled Processing rows.',
+            'Processing default view is still in Website prices Processing. Leftover stays here when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client email or name, then Mark completed — saving a live URL does not complete the row. Save still works on half-filled Processing rows.',
             'Copy selected sites or live URLs copies ticked Copy boxes on this page only. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet.',
             'Completed: unpaid until you click Mark paid (or mark Paid on the invoice). Tick Bill boxes and Push to invoice, or use Push unpaid (N) to open Generate with this filter’s unpaid rows ticked (or an honest label if the list is too long). A row already on a draft or unpaid invoice cannot be pushed again — open that bill from the row. Country and client email/name are required to push. Clearing a live URL on Save also clears Paid (you will be asked to confirm). Paid stays in this folder. Website prices status is not changed when you mark paid.',
             'Open in Website prices jumps to the linked site. If that status no longer matches this folder, the mismatch is shown. Removing a row while Website prices is still Processing brings it back on the next Processing load; removing a Completed-linked row can optionally set Website prices back to Processing.',

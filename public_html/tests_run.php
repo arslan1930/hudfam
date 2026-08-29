@@ -4912,6 +4912,53 @@ try {
         fail('WP not_interested hid OM row, auto-completed, or missing WP status');
     }
 
+    $originWpDomain = 'txfom-origin-wp-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
+    $wpOriginId = site_price_insert_row([
+        'country' => 'Germany',
+        'domain' => $originWpDomain,
+        'status_slug' => 'processing',
+        'created_by' => (int) $adminUser['id'],
+    ]);
+    order_reconcile_processing_from_website_prices();
+    $omOriginWp = get_order_item_by_site_price_row((int) $wpOriginId);
+    $manOriginDomain = 'txfom-origin-man-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
+    $manOriginId = add_order_pipeline_row((int) $adminUser['id'], 'origin-manual@example.com');
+    update_order_item((int) $manOriginId, 0, [
+        'site_name' => $manOriginDomain,
+        'country' => 'Germany',
+        'client_label' => 'origin-manual@example.com',
+        'owner_price' => 1,
+        'decided_price' => 2,
+    ]);
+    $foundIn = static function (array $rows, int $id): bool {
+        foreach ($rows as $row) {
+            if ((int) ($row['id'] ?? 0) === $id) {
+                return true;
+            }
+        }
+        return false;
+    };
+    $wpId = (int) ($omOriginWp['id'] ?? 0);
+    $leaveId = (int) ($omLeave['id'] ?? 0);
+    $wpInWp = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'wp', 'q' => $originWpDomain]), $wpId);
+    $wpInLeft = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'leftover', 'q' => $originWpDomain]), $wpId);
+    $wpInMan = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'manual', 'q' => $originWpDomain]), $wpId);
+    $leaveInWp = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'wp', 'q' => $leaveDomain]), $leaveId);
+    $leaveInLeft = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'leftover', 'q' => $leaveDomain]), $leaveId);
+    $leaveInAll = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'q' => $leaveDomain]), $leaveId);
+    $manInMan = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'manual', 'q' => $manOriginDomain]), (int) $manOriginId);
+    $manInWp = $foundIn(list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'wp', 'q' => $manOriginDomain]), (int) $manOriginId);
+    $omitIsAll = normalize_order_pipeline_origin('') === 'all'
+        && normalize_order_pipeline_origin('nope') === 'all'
+        && normalize_order_pipeline_origin('wp') === 'wp';
+    if ($omitIsAll && $wpInWp && !$wpInLeft && !$wpInMan
+        && !$leaveInWp && $leaveInLeft && $leaveInAll
+        && $manInMan && !$manInWp) {
+        pass('Processing origin wp leftover manual all');
+    } else {
+        fail('Processing origin filter mismatch');
+    }
+
     $restoreDomain = 'txfom-restore-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
     $wpRestoreId = site_price_insert_row([
         'country' => 'Germany',
@@ -5069,6 +5116,9 @@ try {
         && str_contains($ordersPhpSrc, 'data-orig-live')
         && str_contains($ordersPhpSrc, 'Clearing the live URL also clears Paid')
         && str_contains($ordersPhpSrc, 'Every ticked row needs a live URL, country, and client email or name')
+        && str_contains($ordersPhpSrc, 'id="om-origin-tabs"')
+        && str_contains($ordersPhpSrc, 'Added here')
+        && str_contains($ordersPhpSrc, 'Leftover')
         && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
         pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
     } else {

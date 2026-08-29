@@ -125,7 +125,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign'],
             ],
             'Office' => [
-                'admin_orders' => ['Order management', 'Processing · Completed'],
+                'admin_orders&folder=processing' => ['Order management', 'Processing · Completed'],
                 'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                 'admin_invoices' => ['Invoices', 'Printable bills from unpaid LIVE'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
@@ -261,10 +261,15 @@ function render_header(string $title, string $panel = ''): void
             $active = '';
             if (str_contains($page, 'folder=')) {
                 parse_str(substr($page, strpos($page, '&') + 1), $qs);
-                $active = (
-                    $current === $activePage
-                    && (string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')
-                ) ? ' active' : '';
+                if ($activePage === 'admin_orders') {
+                    // Sidebar opens Processing; stay lit on the hub and Completed too.
+                    $active = nav_is_active('admin_orders', $current) ? ' active' : '';
+                } else {
+                    $active = (
+                        $current === $activePage
+                        && (string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')
+                    ) ? ' active' : '';
+                }
             } else {
                 // Use aliases so child routes (order sheet, invoice view, Semrush sheet, …) light the parent.
                 $active = nav_is_active($activePage, $current) ? ' active' : '';
