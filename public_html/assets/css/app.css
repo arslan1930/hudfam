@@ -4036,12 +4036,13 @@ a.card.stat:focus-visible {
 /* Shared by sheet + blank invoices: logo only, no gradient header bar. */
 .invoice-doc-logohead {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
-  padding: 0.9rem 1.35rem 0.25rem;
+  padding: 0.9rem 1.35rem 0.45rem;
   background: #fff;
   border: 0;
   box-shadow: none;
+  overflow: visible;
 }
 .invoice-list-table thead th {
   position: relative;
@@ -4066,10 +4067,11 @@ a.card.stat:focus-visible {
 .invoice-doc-logo {
   height: 52px;
   width: auto;
-  max-width: 260px;
+  max-width: 280px;
   display: block;
   object-fit: contain;
-  border-radius: 10px;
+  object-position: left center;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -4261,7 +4263,9 @@ a.card.stat:focus-visible {
 .invoice-print-body .invoice-doc-logohead {
   display: flex !important;
   justify-content: flex-start !important;
-  padding: 0.9rem 1.35rem 0.25rem !important;
+  align-items: flex-start !important;
+  padding: 0.9rem 1.35rem 0.45rem !important;
+  overflow: visible !important;
 }
 .invoice-print-body .invoice-doc-ids {
   display: flex !important;
@@ -4291,7 +4295,11 @@ a.card.stat:focus-visible {
 }
 .invoice-print-body .invoice-doc-logo {
   height: 52px !important;
-  max-width: 260px !important;
+  width: auto !important;
+  max-width: 280px !important;
+  border-radius: 0 !important;
+  object-fit: contain !important;
+  object-position: left center !important;
 }
 .invoice-print-body .invoice-doc-admin-note {
   background: transparent;
@@ -4329,6 +4337,8 @@ a.card.stat:focus-visible {
   .invoice-doc-logohead {
     display: flex !important;
     justify-content: flex-start !important;
+    align-items: flex-start !important;
+    padding: 0.9rem 1.35rem 0.45rem !important;
   }
   .invoice-doc-ids {
     display: flex !important;
@@ -4362,7 +4372,11 @@ a.card.stat:focus-visible {
   }
   .invoice-doc-logo {
     height: 52px !important;
-    max-width: 260px !important;
+    width: auto !important;
+    max-width: 280px !important;
+    border-radius: 0 !important;
+    object-fit: contain !important;
+    object-position: left center !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

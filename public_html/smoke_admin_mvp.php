@@ -1639,14 +1639,20 @@ if (!str_contains($invoiceGenerate, 'invoice-legacy-client')
 }
 $invoiceCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($invoiceCss, '.invoice-doc-logohead')
-    || !str_contains($invoiceCss, 'padding: 0.9rem 1.35rem 0.25rem')
+    || !str_contains($invoiceCss, 'padding: 0.9rem 1.35rem 0.45rem')
     || !str_contains($invoiceCss, '.invoice-print-toolbar')
     || !str_contains($invoiceCss, 'height: 52px !important')
+    || !str_contains($invoiceCss, 'object-position: left center')
     || preg_match('/\.invoice-doc-logo\s*\{[^}]*height:\s*40px/', $invoiceCss)
     || preg_match('/@media print[\s\S]{0,1200}\.invoice-doc-logo\s*\{[^}]*height:\s*48px/', $invoiceCss)) {
     fail('invoice logo gutter / print size mismatch');
 } else {
     ok('invoice logo gutter 1.35rem and 52px print');
+}
+if (!is_file($root . '/assets/img/topurlz-logo.png')) {
+    fail('missing assets/img/topurlz-logo.png');
+} else {
+    ok('file assets/img/topurlz-logo.png');
 }
 
 $adminDepts = file_get_contents($root . '/pages/admin/departments.php') ?: '';
