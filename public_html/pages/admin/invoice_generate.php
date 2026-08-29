@@ -19,6 +19,14 @@ $company = invoice_company_defaults();
 $nextNumber = next_invoice_number();
 $billAsDefault = $precheck ? invoice_bill_as_from_orders($invoiceable) : '';
 $billAsLabels = invoice_bill_as_labels($invoiceable);
+$pickCap = invoice_generate_pick_cap();
+$pickTotal = count($invoiceable);
+$pickTruncated = false;
+if (!$selectedFromSheet && $pickTotal > $pickCap) {
+    $invoiceable = array_slice($invoiceable, 0, $pickCap);
+    $pickTruncated = true;
+}
+$emptyStats = (!$invoiceable && !$selectedFromSheet) ? invoice_generate_empty_stats() : null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
@@ -43,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
         if (!$picked) {
             throw new InvalidArgumentException('Tick at least one unpaid LIVE row.');
         }
+        invoice_assert_single_bill_as($picked);
         $group = (string) post('group_same_amount') === '1';
         $lines = build_invoice_lines_from_orders($picked, $group);
         $billAs = trim((string) post('bill_to_name'));
@@ -120,12 +129,36 @@ render_header('Generate invoice', 'admin');
         <?php if ($selectedFromSheet): ?>
           Rows you pushed from Order management — already ticked. Untick any you do not want on this bill.
         <?php else: ?>
-          All unpaid LIVE rows from Order management. Tick the ones to bill — nothing is selected until you choose.
+          Tick the ones to bill — nothing is selected until you choose. Or Push from Completed.
         <?php endif; ?>
       </p>
+      <?php if ($pickTruncated): ?>
+        <p class="help">Showing <?= (int) $pickCap ?> of <?= (int) $pickTotal ?> unpaid LIVE rows. Use Order management <strong>Push unpaid</strong> to tick a smaller set.</p>
+      <?php endif; ?>
       <?php if (!$invoiceable): ?>
         <div class="empty-state">
-          <p>No unpaid completed orders yet. Mark processing rows completed with a live URL, leave them unpaid, then push them here.</p>
+          <?php if ($selectedFromSheet): ?>
+            <p>Those pushed rows are not unpaid completed with a country and client, or they are already on a draft or unpaid invoice.</p>
+          <?php else: ?>
+            <?php $emptyStats = $emptyStats ?: invoice_generate_empty_stats(); ?>
+            <p>Nothing to tick yet:</p>
+            <ul class="invoice-empty-reasons">
+              <?php if ((int) ($emptyStats['completed_unpaid'] ?? 0) < 1): ?>
+                <li>No unpaid completed rows with a LIVE URL.</li>
+              <?php endif; ?>
+              <?php if ((int) ($emptyStats['missing_country_client'] ?? 0) > 0): ?>
+                <li><?= (int) $emptyStats['missing_country_client'] ?> completed unpaid <?= (int) $emptyStats['missing_country_client'] === 1 ? 'row is' : 'rows are' ?> missing country or client email/name.</li>
+              <?php endif; ?>
+              <?php if ((int) ($emptyStats['on_open_invoice'] ?? 0) > 0): ?>
+                <li><?= (int) $emptyStats['on_open_invoice'] ?> completed unpaid <?= (int) $emptyStats['on_open_invoice'] === 1 ? 'row is' : 'rows are' ?> already on a draft or unpaid invoice.</li>
+              <?php endif; ?>
+              <?php if ((int) ($emptyStats['completed_unpaid'] ?? 0) > 0
+                  && (int) ($emptyStats['missing_country_client'] ?? 0) < 1
+                  && (int) ($emptyStats['on_open_invoice'] ?? 0) < 1): ?>
+                <li>No unpaid completed rows with a LIVE URL, country, and client.</li>
+              <?php endif; ?>
+            </ul>
+          <?php endif; ?>
           <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Open Completed orders</a>
         </div>
       <?php else: ?>
@@ -139,7 +172,7 @@ render_header('Generate invoice', 'admin');
           Select all visible (<span data-invoice-pick-visible><?= count($invoiceable) ?></span>)
         </label>
         <p class="help" id="invoice-pick-mixed"<?= count($billAsLabels) > 1 && $precheck ? '' : ' hidden' ?>>
-          Ticked rows have different emails/names. They will share one bill-as line, or untick until they match.
+          Ticked rows have different emails/names. Untick until they match — they cannot share one invoice.
         </p>
         <ul class="invoice-item-pick" id="invoice-item-pick">
           <?php foreach ($invoiceable as $row): ?>
@@ -175,7 +208,7 @@ render_header('Generate invoice', 'admin');
         <p class="help" data-invoice-pick-empty hidden>No unpaid LIVE rows match that filter.</p>
         <p class="help"><span data-invoice-pick-count>0</span> selected</p>
         <label class="invoice-group-opt">
-          <input type="checkbox" name="group_same_amount" value="1" checked>
+          <input type="checkbox" name="group_same_amount" value="1">
           Group lines that share the same amount (qty &gt; 1)
         </label>
       <?php endif; ?>
@@ -266,7 +299,7 @@ render_header('Generate invoice', 'admin');
       </details>
 
       <p class="actions" style="margin-top:1.1rem">
-        <button class="btn large" type="submit" id="invoice-generate-submit" <?= (!$invoiceable || !$precheck) ? 'disabled' : '' ?>>Generate invoice</button>
+        <button class="btn large" type="submit" id="invoice-generate-submit" <?= ($invoiceable && $precheck && count($billAsLabels) <= 1) ? '' : 'disabled' ?>>Generate invoice</button>
       </p>
     </section>
   </div>
@@ -316,10 +349,10 @@ render_header('Generate invoice', 'admin');
       all.checked = visBoxes.length > 0 && visBoxes.every(function (cb) { return cb.checked; });
       all.indeterminate = visBoxes.some(function (cb) { return cb.checked; }) && !all.checked;
     }
-    if (submit) {
-      submit.disabled = checked.length < 1;
-    }
     var labels = uniqueBillAs(checked);
+    if (submit) {
+      submit.disabled = checked.length < 1 || labels.length > 1;
+    }
     if (mixed) mixed.hidden = labels.length < 2;
     if (bill && document.activeElement !== bill) {
       bill.value = labels.join(', ');

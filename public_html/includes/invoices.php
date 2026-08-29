@@ -507,6 +507,67 @@ function invoice_bill_as_labels(array $rows): array
     return array_values($labels);
 }
 
+function invoice_rows_have_mixed_bill_as(array $rows): bool
+{
+    return count(invoice_bill_as_labels($rows)) > 1;
+}
+
+function invoice_assert_single_bill_as(array $rows): void
+{
+    if (invoice_rows_have_mixed_bill_as($rows)) {
+        throw new InvalidArgumentException(
+            'Tick rows with the same bill-as (email or name). Mixed clients cannot share one invoice.'
+        );
+    }
+}
+
+/** Max unpaid LIVE rows shown on Generate when opened from Invoices (no ids=). */
+function invoice_generate_pick_cap(): int
+{
+    return 200;
+}
+
+/**
+ * Why Generate has nothing to tick.
+ *
+ * @return array{completed_unpaid:int,missing_country_client:int,on_open_invoice:int,invoiceable:int}
+ */
+function invoice_generate_empty_stats(): array
+{
+    ensure_order_schema();
+    try {
+        $rows = db()->query(
+            "SELECT id, country, client_label FROM order_items
+             WHERE row_type='site'
+               AND COALESCE(order_stage, 'processing') = 'completed'
+               AND TRIM(live_url) <> ''
+               AND COALESCE(is_paid, 0) = 0"
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        $rows = [];
+    }
+    $missing = 0;
+    $readyIds = [];
+    foreach ($rows as $row) {
+        if (trim((string) ($row['country'] ?? '')) === ''
+            || trim((string) ($row['client_label'] ?? '')) === '') {
+            $missing++;
+        } else {
+            $readyIds[] = (int) ($row['id'] ?? 0);
+        }
+    }
+    $onOpen = 0;
+    if ($readyIds) {
+        $onOpen = count(order_items_on_open_invoices($readyIds));
+    }
+    return [
+        'completed_unpaid' => count($rows),
+        'missing_country_client' => $missing,
+        'on_open_invoice' => $onOpen,
+        'invoiceable' => max(0, count($readyIds) - $onOpen),
+    ];
+}
+
 /** Bill-as shown on the list and printable bill (email/name; no client folder). */
 function invoice_display_bill_as(array $invoice): string
 {
