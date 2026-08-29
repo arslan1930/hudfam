@@ -488,6 +488,7 @@ if ($invViewId > 0) {
     $rPrint = req('GET', $base . '/index.php?page=admin_invoice_view&id=' . $invViewId . '&print=1');
     if ($rView['status'] === 200
         && str_contains($rView['body'], 'invoice-doc-logohead')
+        && str_contains($rView['body'], 'topurlz-logo.png')
         && (str_contains($rView['body'], 'Mark paid') || str_contains($rView['body'], 'Paid'))
         && !str_contains($rView['body'], 'Fatal error')) {
         pass('admin invoice open bill');
@@ -736,6 +737,7 @@ foreach ([
     '/asset.php?f=js/nav-shell.js',
     '/asset.php?f=js/sites-with-emails.js',
     '/asset.php?f=js/csrf.js',
+    '/asset.php?f=img/topurlz-logo.png',
 ] as $path) {
     $r = req('GET', $base . $path);
     if ($r['status'] === 200 && strlen($r['body']) > 50) {
