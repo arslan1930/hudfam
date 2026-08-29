@@ -312,6 +312,8 @@ $dashPhp = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
 if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
     || !str_contains($sitePricesLib, 'function site_price_lookup_niche')
     || !str_contains($sitePricesLib, 'function site_price_insert_row')
+    || !str_contains($sitePricesLib, 'function count_site_price_rows')
+    || !str_contains($sitePricesLib, 'function count_site_price_rows_by_lane')
     || !str_contains($sitePricesLib, 'function site_price_sort_rows')
     || !str_contains($sitePricesLib, 'function site_price_row_for_viewer')
     || !str_contains($sitePricesLib, 'function site_price_save_row')
@@ -1696,6 +1698,7 @@ if (str_contains($dashPage, 'each country has its own URL database')
 if (!str_contains($dashPage, 'data-dashboard-attention')
     || !str_contains($dashPage, 'count_sites_with_emails')
     || !str_contains($dashPage, 'count_email_campaign_sheets')
+    || !str_contains($dashPage, 'count_email_campaign_projects')
     || !str_contains($dashPage, 'count_invoices_by_work_status')
     || !str_contains($dashPage, 'count_invoices_unpaid')
     || !str_contains($dashPage, 'draft invoice')) {
@@ -1705,27 +1708,51 @@ if (!str_contains($dashPage, 'data-dashboard-attention')
 }
 if (str_contains($dashPage, 'admin_invoices&q=draft')
     || !str_contains($dashPage, 'admin_invoices&filter=draft')
-    || !str_contains($dashPage, 'admin_invoices&filter=unpaid')) {
-    fail('dashboard invoice tiles must use filter= not q=draft');
+    || !str_contains($dashPage, 'admin_invoices&filter=unpaid')
+    || str_contains($dashPage, 'drafts listed underneath')) {
+    fail('dashboard invoice tiles must use filter= and keep drafts off the unpaid tile');
 } else {
     ok('dashboard Draft/Unpaid tiles use invoice filter');
+}
+if (str_contains($dashPage, ". ' unpaid LIVE'")
+    || str_contains($dashPage, '\' unpaid LIVE\'')) {
+    fail('dashboard attention still duplicates unpaid LIVE');
+} else {
+    ok('dashboard unpaid LIVE is the stat tile only');
+}
+if (!str_contains($dashPage, 'admin_users&must_change=1')
+    || !str_contains($dashPage, 'must change password')) {
+    fail('dashboard missing must-change password chip');
+} else {
+    ok('dashboard must-change password chip');
 }
 if (!str_contains($dashPage, 'Emails Admin')
     || !str_contains($dashPage, 'URLs (all countries)')
     || !str_contains($dashPage, 'Could not load')
     || !str_contains($dashPage, 'render_admin_dashboard_stat')
     || !str_contains($dashPage, 'Unpaid LIVE')
-    || !str_contains($dashPage, 'Unpaid invoices')) {
+    || !str_contains($dashPage, 'Unpaid invoices')
+    || !str_contains($dashPage, 'Campaign sheets')) {
     fail('dashboard stats tiles missing pipeline labels');
 } else {
     ok('dashboard stats match pipeline');
 }
 if (!str_contains($dashPage, 'render_workflow')
+    || !str_contains($dashPage, "'Departments'")
     || !str_contains($dashPage, "'Extracted Sites'")
-    || !str_contains($dashPage, "'Emails data'")) {
+    || !str_contains($dashPage, "'Emails data'")
+    || !str_contains($dashPage, "'Orders + Invoices'")) {
     fail('dashboard missing workflow strip');
 } else {
     ok('dashboard workflow strip');
+}
+if (!str_contains($dashPage, 'Recent Our database adds')
+    || !str_contains($dashPage, 'count_site_price_rows_by_lane')
+    || !str_contains($dashPage, 'cards, stats, and chips')
+    || str_contains($dashPage, 'btn secondary" href="index.php?page=admin_prospects#add-sites">Our database')) {
+    fail('dashboard missing WP lanes / filter stats+chips / recent heading, or extra Our database button');
+} else {
+    ok('dashboard WP lanes, filter, recent heading, no extra Our database button');
 }
 
 $legacyTasks = file_get_contents($root . '/pages/admin/tasks.php') ?: '';
@@ -2056,6 +2083,7 @@ if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
 }
 if (!str_contains($campLib, 'function count_email_campaign_drafts_by_projects')
     || !str_contains($campLib, 'function count_email_campaign_sheets')
+    || !str_contains($campLib, 'function count_email_campaign_projects')
     || !str_contains($campLib, 'function move_email_campaign_draft')
     || !str_contains($campLib, 'function email_campaign_draft_size_warning')
     || !str_contains($campLib, '%%CAMPLINK')

@@ -452,7 +452,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'app-footer'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'Campaign sheets', 'app-footer'],
         'admin_prospects' => ['Our database', 'Markets'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],

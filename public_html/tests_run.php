@@ -5612,10 +5612,17 @@ try {
     }
 
     $dash = departments_dashboard_stats();
-    if (isset($dash['departments'], $dash['members'], $dash['open_tasks'], $dash['unassigned_team'])) {
+    $activeMembers = (int) db()->query(
+        'SELECT COUNT(DISTINCT m.user_id)
+         FROM department_members m
+         INNER JOIN users u ON u.id = m.user_id
+         WHERE u.is_active = 1'
+    )->fetchColumn();
+    if (isset($dash['departments'], $dash['members'], $dash['open_tasks'], $dash['unassigned_team'])
+        && (int) $dash['members'] === $activeMembers) {
         pass('departments dashboard stats');
     } else {
-        fail('departments dashboard stats missing keys');
+        fail('departments dashboard stats missing keys or counting inactive members');
     }
 
     // Residual: edit can keep historical assignee after member removed.

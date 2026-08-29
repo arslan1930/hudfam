@@ -490,6 +490,33 @@ function count_site_price_rows(?string $country = null): int
 }
 
 /**
+ * @return array{processing:int,new:int,other:int,total:int}
+ */
+function count_site_price_rows_by_lane(): array
+{
+    ensure_site_prices_schema();
+    $out = ['processing' => 0, 'new' => 0, 'other' => 0, 'total' => 0];
+    try {
+        $rows = db()->query(
+            'SELECT status_slug, COUNT(*) AS n FROM site_price_rows GROUP BY status_slug'
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return $out;
+    }
+    foreach ($rows as $row) {
+        $n = (int) ($row['n'] ?? 0);
+        $out['total'] += $n;
+        $lane = site_price_status_lane((string) ($row['status_slug'] ?? 'new'));
+        if ($lane === 'processing' || $lane === 'new') {
+            $out[$lane] += $n;
+        } else {
+            $out['other'] += $n;
+        }
+    }
+    return $out;
+}
+
+/**
  * @param list<array<string,mixed>> $rows
  * @return list<array<string,mixed>>
  */
