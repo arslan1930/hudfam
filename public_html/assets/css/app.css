@@ -2350,17 +2350,20 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .camp-hub-create-actions {
   margin-top: 1.15rem;
 }
-.camp-country-jump {
+.camp-country-jump,
+.sheet-country-jump {
   margin: 0 0 0.3rem;
 }
-.camp-country-jump .camp-sheet-title {
+.camp-country-jump .camp-sheet-title,
+.sheet-country-jump .camp-sheet-title {
   margin: 0;
 }
 .camp-country-jump-label {
   gap: 0.4rem;
 }
 .camp-country-jump-select,
-.camp-country-jump select {
+.camp-country-jump select,
+.sheet-country-jump select {
   font: inherit;
   font-size: inherit;
   font-weight: 700;

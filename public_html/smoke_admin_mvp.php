@@ -2809,13 +2809,26 @@ if (!str_contains($campUi, 'href="#camp-fill-gaps"')
     || !str_contains($campLibSmokeUx, 'function email_campaign_default_language')
     || !str_contains($campLibSmokeUx, 'function email_campaign_fill_blank_row_languages')
     || !str_contains($campLibSmokeUx, 'function list_email_campaign_project_country_nav')
-    || !str_contains($campUi, 'id="camp-country-jump"')
-    || !str_contains($campUi, 'Open another country in this project without going back')
+    || !str_contains($campUi, 'camp-country-jump')
+    || !str_contains($campUi, 'render_sheet_country_jump')
     || !str_contains($cssUi, '.camp-country-jump select')
+    || !str_contains($cssUi, '.sheet-country-jump select')
     || !str_contains($cssUi, '.swe-checkpoint-compact .with-info-label')) {
     fail('campaign sheet missing Fill gaps header, chip counts, or language default');
 } else {
     ok('campaign sheet Fill gaps in header, chip counts, language default');
+}
+$sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
+if (!str_contains($helpersSmoke, 'function render_sheet_country_jump')
+    || !str_contains($adminProspects, 'prospect-country-jump')
+    || !str_contains($adminProspects, 'list_prospect_country_nav')
+    || !str_contains($prospectsLib, 'function list_prospect_country_nav')
+    || !str_contains($sweUi, 'swe-country-jump')
+    || !str_contains($sweUi, 'list_sites_with_emails_country_nav')
+    || !str_contains($sweLibSmoke, 'function list_sites_with_emails_country_nav')) {
+    fail('country sheets missing in-place country switcher');
+} else {
+    ok('Our database + Admin/Final country title switcher');
 }
 if (!str_contains($cssUi, '@media (max-width: 899px)')
     || !str_contains($cssUi, 'table.sheet-cards-mobile tr')

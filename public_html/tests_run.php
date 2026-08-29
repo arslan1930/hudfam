@@ -2450,6 +2450,23 @@ try {
     } else {
         fail('country nav: ' . json_encode(['nav' => $navRows, 'other' => $otherNav]));
     }
+    $odbNav = list_prospect_country_nav('Germany');
+    $odbVals = array_column($odbNav, 'value');
+    $adminEmailNav = list_sites_with_emails_country_nav('admin');
+    $adminEmailVals = array_column($adminEmailNav, 'value');
+    $finalEmailNav = list_sites_with_emails_country_nav('admin_all');
+    $finalEmailVals = array_column($finalEmailNav, 'value');
+    if (in_array('Germany', $odbVals, true)
+        && in_array('Germany', $adminEmailVals, true)
+        && in_array('Germany', $finalEmailVals, true)) {
+        pass('Our database / Admin / Final country nav include Germany');
+    } else {
+        fail('sheet country nav: ' . json_encode([
+            'our_db' => $odbVals,
+            'admin' => $adminEmailVals,
+            'final' => $finalEmailVals,
+        ]));
+    }
     $projSuggest = search_email_campaign_suggestions_for_project($multiPid, 'txfcamp-multi', 20);
     $projDomains = array_map(static fn ($s) => (string) $s['domain'], $projSuggest);
     sort($projDomains);

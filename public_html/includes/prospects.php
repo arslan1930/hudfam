@@ -1023,6 +1023,59 @@ function prospect_country_folders(): array
     return $folders;
 }
 
+/**
+ * Filled Our database countries for the country-sheet title switcher (A–Z).
+ *
+ * @return list<array{value:string,label:string}>
+ */
+function list_prospect_country_nav(string $current = ''): array
+{
+    ensure_prospect_schema();
+    $rows = db()->query(
+        "SELECT TRIM(country) AS country
+         FROM prospect_sites
+         GROUP BY TRIM(country)
+         HAVING COUNT(*) > 0"
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    $seen = [];
+    $haveCurrent = false;
+    $currentKey = mb_strtolower(trim($current));
+    foreach ($rows as $row) {
+        $raw = (string) ($row['country'] ?? '');
+        if ($raw === '') {
+            $out[] = ['value' => '_none', 'label' => 'No country'];
+            $seen['_none'] = true;
+            if ($current === '' || $current === '_none') {
+                $haveCurrent = true;
+            }
+            continue;
+        }
+        $canon = resolve_canonical_country($raw);
+        $name = $canon ? $canon['name'] : $raw;
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = ['value' => $name, 'label' => $name];
+        if ($currentKey !== '' && $key === $currentKey) {
+            $haveCurrent = true;
+        }
+    }
+    if ($current === '_none' && empty($seen['_none'])) {
+        array_unshift($out, ['value' => '_none', 'label' => 'No country']);
+        $haveCurrent = true;
+    }
+    if ($current !== '' && $current !== '_none' && !$haveCurrent) {
+        $out[] = ['value' => $current, 'label' => $current];
+    }
+    usort($out, static function ($a, $b) {
+        return strcasecmp((string) $a['label'], (string) $b['label']);
+    });
+    return $out;
+}
+
 function parse_domain_list(string $raw): array
 {
     return parse_domain_list_strict($raw)['valid'];

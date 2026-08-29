@@ -1059,6 +1059,42 @@ function list_sites_with_emails_country_rows(string $scope = 'team'): array
     return $out;
 }
 
+/**
+ * Country names in this Sites-with-emails scope for the title switcher (A–Z).
+ *
+ * @return list<array{value:string,label:string}>
+ */
+function list_sites_with_emails_country_nav(string $scope = 'team'): array
+{
+    ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
+    $table = swe_table($scope);
+    $rows = db()->query(
+        "SELECT TRIM(country) AS country
+         FROM {$table}
+         WHERE TRIM(country) <> ''
+         GROUP BY TRIM(country)
+         ORDER BY country ASC"
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    $seen = [];
+    foreach ($rows as $row) {
+        $name = (string) ($row['country'] ?? '');
+        $canon = resolve_canonical_country($name);
+        $label = $canon ? $canon['name'] : $name;
+        if ($label === '') {
+            continue;
+        }
+        $key = mb_strtolower($label);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = ['value' => $label, 'label' => $label];
+    }
+    return $out;
+}
+
 function count_sites_with_emails(string $scope = 'team'): int
 {
     ensure_sites_with_emails_schema();

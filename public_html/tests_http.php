@@ -510,6 +510,7 @@ $addSheetAt = strpos($sheetBody, 'id="add-sites"');
 if ($r['status'] === 200
     && $sitesAt !== false && $addSheetAt !== false && $sitesAt < $addSheetAt
     && str_contains($sheetBody, 'Copy all')
+    && str_contains($sheetBody, 'id="prospect-country-jump"')
     && str_contains($sheetBody, 'Open website')
     && str_contains($sheetBody, 'What is this?')
     && str_contains($sheetBody, 'whole country folder')
@@ -678,6 +679,7 @@ if ($r['status'] === 200
 $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=all_sites_with_emails&country=Germany');
 if ($r['status'] === 200
     && str_contains($r['body'], 'id="swe-bulk-add"')
+    && str_contains($r['body'], 'id="swe-country-jump"')
     && str_contains($r['body'], 'name="paste_text"')
     && str_contains($r['body'], 'name="import_file"')
     && str_contains($r['body'], 'value="paste"')
@@ -690,6 +692,7 @@ if ($r['status'] === 200
 $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=sites_with_emails&country=Germany');
 if ($r['status'] === 200
     && !str_contains($r['body'], 'id="swe-bulk-add"')
+    && str_contains($r['body'], 'id="swe-country-jump"')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin working list has no Final bulk import');
 } else {

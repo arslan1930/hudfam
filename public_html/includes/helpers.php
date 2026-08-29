@@ -354,6 +354,69 @@ function render_sheet_checkpoint_compact(string $tip): void
 }
 
 /**
+ * Title-row country switcher: pick another country on this sheet without going back to the hub.
+ *
+ * @param list<array{value:string,label:string}> $options
+ * @param array<string, scalar|null> $hiddenQuery GET fields other than $selectName
+ */
+function render_sheet_country_jump(
+    string $selectName,
+    string $currentValue,
+    array $options,
+    array $hiddenQuery,
+    string $infoTip,
+    string $selectId = 'sheet-country-jump',
+    string $ariaLabel = 'Open another country'
+): void {
+    $seen = [];
+    $clean = [];
+    foreach ($options as $opt) {
+        $value = trim((string) ($opt['value'] ?? ''));
+        $label = trim((string) ($opt['label'] ?? ''));
+        if ($value === '' || $label === '') {
+            continue;
+        }
+        if (isset($seen[$value])) {
+            continue;
+        }
+        $seen[$value] = true;
+        $clean[] = ['value' => $value, 'label' => $label];
+    }
+    if ($currentValue !== '' && !isset($seen[$currentValue])) {
+        array_unshift($clean, ['value' => $currentValue, 'label' => $currentValue]);
+    }
+    if ($clean === []) {
+        $fallback = $currentValue !== '' ? $currentValue : 'Country';
+        $clean[] = ['value' => $currentValue !== '' ? $currentValue : 'country', 'label' => $fallback];
+    }
+    echo '<form class="sheet-country-jump camp-country-jump" method="get" action="index.php" data-no-draft>';
+    foreach ($hiddenQuery as $key => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $k = (string) $key;
+        if ($k === $selectName || $k === 'p' || $k === 'q') {
+            continue;
+        }
+        echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
+    }
+    echo '<h1 class="camp-sheet-title">';
+    echo '<label class="with-info camp-country-jump-label" for="' . h($selectId) . '">';
+    echo '<span class="visually-hidden">' . h($ariaLabel) . '</span>';
+    echo '<select id="' . h($selectId) . '" name="' . h($selectName) . '" onchange="this.form.submit()"'
+        . ' title="Open another country without going back" aria-label="' . h($ariaLabel) . '">';
+    foreach ($clean as $opt) {
+        $sel = (string) $opt['value'] === $currentValue ? ' selected' : '';
+        echo '<option value="' . h($opt['value']) . '"' . $sel . '>' . h($opt['label']) . '</option>';
+    }
+    echo '</select>';
+    echo info_icon($infoTip, 'About this country sheet');
+    echo '</label>';
+    echo '<noscript><button class="btn small" type="submit">Open</button></noscript>';
+    echo '</h1></form>';
+}
+
+/**
  * Breadcrumb trail. Each crumb: ['label' => string, 'href' => ?string]
  */
 function render_breadcrumbs(array $crumbs): void
