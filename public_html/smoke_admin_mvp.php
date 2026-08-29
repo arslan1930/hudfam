@@ -165,7 +165,9 @@ if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPa
 $invoicesAdminPage = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
 if (!str_contains($invoicesAdminPage, '$perPage = 50')
     || !str_contains($invoicesAdminPage, '$invoiceListQs')
-    || !str_contains($invoicesAdminPage, 'Previous')) {
+    || !str_contains($invoicesAdminPage, 'Previous')
+    || !str_contains($invoicesAdminPage, 'invoice-list-pager')
+    || !str_contains($invoicesAdminPage, 'invoice_list_page_numbers')) {
     fail('invoices.php missing 50/page pagination');
 } else {
     ok('invoices.php 50/page pagination');
@@ -195,6 +197,7 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
 }
 if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
     || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
+    || !str_contains($invoicesAdminPage, 'Unpaid invoices')
     || !str_contains($invoicesAdminPage, 'Completed unpaid')
     || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")
     || !str_contains($invoicesAdminPage, 'invoice-list-delete')
@@ -1978,7 +1981,8 @@ if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
     ok('layout nav uses aliases for child routes');
 }
 if (!str_contains($layoutNav, "'admin_orders&folder=processing'")
-    || !str_contains($layoutNav, "\$activePage === 'admin_orders'")) {
+    || !str_contains($layoutNav, "\$activePage === 'admin_orders'")
+    || !str_contains($layoutNav, "'admin_invoices&filter=unpaid'")) {
     fail('layout Order management does not open Processing');
 } else {
     ok('layout Order management opens Processing');

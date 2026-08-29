@@ -4635,6 +4635,21 @@ table.extracted-country-table th {
   background: #f9fafb;
   text-decoration: none;
 }
+.pagination .is-current {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border: 1px solid #9ca3af;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.pagination-gap {
+  color: var(--muted);
+  padding: 0 0.1rem;
+}
 
 /* Communication search cards */
 .camp-search-card {

@@ -5187,6 +5187,18 @@ try {
     } else {
         fail('invoice list incomplete helper');
     }
+    $pagesSmall = invoice_list_page_numbers(1, 4);
+    $pagesMid = invoice_list_page_numbers(5, 10);
+    $pagesFirst = invoice_list_page_numbers(1, 10);
+    if ($pagesSmall === [1, 2, 3, 4]
+        && $pagesMid === [1, 0, 4, 5, 6, 0, 10]
+        && $pagesFirst === [1, 2, 0, 10]
+        && invoice_list_page_numbers(10, 10) === [1, 0, 9, 10]
+    ) {
+        pass('invoice list pager numbers');
+    } else {
+        fail('invoice list pager numbers ' . json_encode([$pagesSmall, $pagesMid, $pagesFirst]));
+    }
 
     $invTotal = count_invoices();
     $invPage = list_invoices(['limit' => 1, 'offset' => 0]);

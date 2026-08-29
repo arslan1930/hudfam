@@ -509,6 +509,25 @@ if ($invViewId > 0) {
     fail('admin invoices list has no Open bill link');
 }
 
+$rUnpaidList = req('GET', $base . '/index.php?page=admin_invoices&filter=unpaid');
+if ($rUnpaidList['status'] === 200
+    && str_contains($rUnpaidList['body'], 'Unpaid invoices')
+    && str_contains($rUnpaidList['body'], 'invoice-list-chips')
+    && str_contains($rUnpaidList['body'], 'Completed unpaid')
+    && str_contains($rUnpaidList['body'], 'admin_invoices&amp;filter=unpaid')
+    && !str_contains($rUnpaidList['body'], 'Fatal error')) {
+    pass('admin invoices unpaid working view');
+} else {
+    fail('admin invoices unpaid working view status=' . ($rUnpaidList['status'] ?? '?'));
+}
+if ($r['status'] === 200
+    && str_contains($r['body'], 'All invoices')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin invoices all stays reachable');
+} else {
+    fail('admin invoices all missing');
+}
+
 $r = req('GET', $base . '/index.php?page=admin_invoice_generate&client_id=1');
 if ($r['status'] === 200
     && str_contains($r['body'], 'invoice-legacy-client')
