@@ -70,29 +70,13 @@ function txf_send_security_headers(): void
 }
 
 /**
- * Gzip HTML/PHP output when the client asks for it and the host is not
- * already compressing (zlib.output_compression). LiteSpeed/Apache may also
- * gzip; ob_gzhandler sets Content-Encoding so the server will not double-wrap.
+ * Do not gzip in PHP. Hostinger LiteSpeed already compresses HTML/CSS/JS.
+ * PHP gzip + the proxy gzip = ERR_CONTENT_DECODING_FAILED (Filter & add
+ * looks crashed because sites-form.js never parses). .htaccess mod_deflate
+ * is the safe path.
  */
 function txf_start_output_compression(): void
 {
-    if (PHP_SAPI === 'cli' || headers_sent()) {
-        return;
-    }
-    if (ini_get('zlib.output_compression')) {
-        return;
-    }
-    if (!function_exists('ob_gzhandler') || !extension_loaded('zlib')) {
-        return;
-    }
-    $enc = strtolower((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''));
-    if (!str_contains($enc, 'gzip') && !str_contains($enc, 'deflate')) {
-        return;
-    }
-    if (ob_get_level() > 0) {
-        return;
-    }
-    ob_start('ob_gzhandler');
 }
 
 /**

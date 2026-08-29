@@ -89,22 +89,6 @@ if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
     }
 }
 
-$raw = (string) file_get_contents($path);
-$payload = $raw;
-$ctype = $allowed[$f];
-$compressible = str_starts_with($ctype, 'text/')
-    || str_contains($ctype, 'javascript')
-    || str_contains($ctype, 'svg+xml');
-if ($compressible && function_exists('gzencode')) {
-    $enc = strtolower((string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? ''));
-    if (str_contains($enc, 'gzip')) {
-        $gz = gzencode($raw, 6);
-        if ($gz !== false && strlen($gz) < strlen($raw)) {
-            header('Content-Encoding: gzip');
-            header('Vary: Accept-Encoding');
-            $payload = $gz;
-        }
-    }
-}
-header('Content-Length: ' . (string) strlen($payload));
-echo $payload;
+// Do not gzip here. LiteSpeed/Apache gzip PHP output; a second gzip (or a
+// Content-Length that no longer matches) breaks CSS/JS on Team Filter & add.
+readfile($path);

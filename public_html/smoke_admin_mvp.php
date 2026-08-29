@@ -1366,10 +1366,11 @@ if (!str_contains($helpersSmoke, 'function txf_schema_is_current')
     || !str_contains($upgradePerfSmoke, 'txf_schema_clear_stamps')
     || !str_contains($htaccessSmoke, 'AddOutputFilterByType DEFLATE')
     || !str_contains($indexSmoke, '$txfLightPages')
-    || !str_contains($layoutFull, "js/csrf.js')) . '\" defer")) {
-    fail('perf: schema stamps / asset immutable / gzip / light login / csrf defer missing');
+    || str_contains($assetPhpPerfSmoke, 'gzencode')
+    || str_contains($layoutFull, "js/csrf.js')) . '\" defer")) {
+    fail('perf: schema stamps / asset immutable / light login missing, or PHP gzip/csrf-defer still on');
 } else {
-    ok('perf: schema stamps, versioned asset cache, gzip, light login, csrf defer');
+    ok('perf: schema stamps, versioned asset cache, light login, no PHP gzip');
 }
 $cliGuardNeedle = "PHP_SAPI !== 'cli'";
 $cliGuardFiles = [

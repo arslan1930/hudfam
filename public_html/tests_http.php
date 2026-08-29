@@ -872,6 +872,21 @@ if (
     fail('versioned asset cache headers status=' . $r['status']);
 }
 
+$jsMtime = (string) (@filemtime(__DIR__ . '/assets/js/sites-form.js') ?: time());
+$r = req('GET', $base . '/asset.php?f=js/sites-form.js&v=' . rawurlencode($jsMtime), [
+    'headers' => ['Accept-Encoding: gzip, deflate'],
+]);
+if (
+    $r['status'] === 200
+    && !str_starts_with($r['body'], "\x1f\x8b")
+    && str_contains($r['body'], 'VALID_TLDS')
+    && stripos($r['headers'], 'Content-Encoding: gzip') === false
+) {
+    pass('Filter JS served uncompressed (host gzip only)');
+} else {
+    fail('sites-form.js must not be gzipped by asset.php');
+}
+
 // install.php locked
 $r = req('GET', $base . '/install.php');
 if ($r['status'] === 403 || str_contains($r['body'], 'Install locked')) {
