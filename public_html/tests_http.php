@@ -643,10 +643,15 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
 }
 
 $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=all_sites_with_emails');
+$finalHub = $r['body'] ?? '';
 if ($r['status'] === 200
-    && str_contains($r['body'], 'swe-open-country')
-    && str_contains($r['body'], 'Open a country to paste or import')
-    && !str_contains($r['body'], 'Fatal error')) {
+    && str_contains($finalHub, 'swe-open-country')
+    && str_contains($finalHub, 'Open an empty country')
+    && str_contains($finalHub, 'data-no-draft')
+    && str_contains($finalHub, 'Final keeps a copy')
+    && str_contains($finalHub, '>Open</a>')
+    && !str_contains($finalHub, 'keeps copies after emailed/remove')
+    && !str_contains($finalHub, 'Fatal error')) {
     pass('admin Final folder country opener');
 } else {
     fail('admin Final folder opener status=' . ($r['status'] ?? '?'));

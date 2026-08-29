@@ -1319,6 +1319,17 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   text-decoration: none;
 }
 .extracted-country-link:hover { text-decoration: underline; }
+#swe-country-table tbody tr[data-swe-country-row] {
+  cursor: pointer;
+}
+#swe-country-table tbody tr[data-swe-country-row]:hover td {
+  background: #f8fafc;
+}
+.swe-country-search input[type="search"],
+#swe-country-search {
+  width: 18rem;
+  max-width: min(100%, 22rem);
+}
 .extracted-country-count {
   display: inline-block;
   min-width: 2rem;
