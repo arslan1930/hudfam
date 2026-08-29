@@ -204,8 +204,9 @@ if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
     || !str_contains($invoicesAdminPage, 'is-incomplete')
     || !str_contains($invoicesAdminPage, 'Add note')
     || !str_contains($invoicesAdminPage, 'class="num"')
-    || !str_contains($invoicesAdminPage, 'if ($invoiceQ !== \'\'):')
-    || str_contains($invoicesAdminPage, '$invoiceQ !== \'\' || $invoiceFilter !== \'\'')) {
+    || !str_contains($invoicesAdminPage, '">Clear</a>')
+    || !str_contains($invoicesAdminPage, "'filter' => \$invoiceFilter")
+    || str_contains($invoicesAdminPage, "page=admin_invoices') ?>\">Clear")) {
     fail('invoices.php missing list chips / search / paid-delete copy');
 } else {
     ok('invoices.php list chips, full search, paid-delete confirm');
