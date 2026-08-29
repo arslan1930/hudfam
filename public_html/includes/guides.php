@@ -245,7 +245,7 @@ function guide_orders(): string
         [
             'Processing: rows from Website prices Processing, or + Add order. Fill LIVE URL, then Mark completed — saving a live URL does not complete the row.',
             'Copy selected sites or live URLs copies ticked Copy boxes on this page only. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet.',
-            'Completed: unpaid until you click Mark paid (or mark Paid on the invoice). Tick Bill boxes and Push to invoice, or use Push unpaid (N) to open Generate with this filter’s unpaid rows ticked (or an honest label if the list is too long). Paid stays in this folder. Website prices status is not changed when you mark paid.',
+            'Completed: unpaid until you click Mark paid (or mark Paid on the invoice). Tick Bill boxes and Push to invoice, or use Push unpaid (N) to open Generate with this filter’s unpaid rows ticked (or an honest label if the list is too long). A row already on a draft or unpaid invoice cannot be pushed again — open that bill from the row. Paid stays in this folder. Website prices status is not changed when you mark paid.',
             'Open in Website prices jumps to the linked site. If that status no longer matches this folder, the mismatch is shown. Removing a row while Website prices is still Processing brings it back on the next Processing load; removing a Completed-linked row can optionally set Website prices back to Processing.',
             'Team Website prices shows the Completed status only — never LIVE URL, owner/decided/profit, client email/name, or invoices.',
         ]

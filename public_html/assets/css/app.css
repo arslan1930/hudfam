@@ -3723,6 +3723,13 @@ a.card.stat:focus-visible {
 .order-row.is-paid .col-paid .btn-paid.is-paid:hover {
   filter: brightness(1.05);
 }
+.order-on-invoice {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .order-download-bar {
   display: flex;
   flex-wrap: wrap;

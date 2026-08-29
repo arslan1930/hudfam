@@ -4570,6 +4570,40 @@ try {
             'vat_note' => '',
         ], $pipeLines, (int) $adminUser['id']);
         $pipeInv = get_invoice($pipeInvId);
+        $onOpenPipe = order_items_on_open_invoices([(int) $pipeId]);
+        $secondReady = list_invoiceable_order_items_by_ids([(int) $pipeId]);
+        $secondBlocked = false;
+        try {
+            create_invoice([
+                'invoice_date' => date('Y-m-d'),
+                'client_id' => 0,
+                'client_name' => 'buyer@example.com',
+                'bill_to_name' => 'buyer@example.com',
+                'bill_to_address' => '',
+                'bill_to_hrb' => '',
+                'bill_to_vat' => '',
+                'supplier_number' => 'NEW',
+                'cost_center' => '',
+                'orderer' => '',
+                'company_name' => 'Topurlz',
+                'company_bic' => 'TESTBIC',
+                'company_iban' => 'TESTIBAN',
+                'company_phone' => '',
+                'company_address' => '',
+                'company_reg_no' => '',
+                'vat_note' => '',
+            ], $pipeLines, (int) $adminUser['id']);
+        } catch (InvalidArgumentException $e) {
+            $secondBlocked = str_contains($e->getMessage(), 'Already on invoice');
+        }
+        if (isset($onOpenPipe[(int) $pipeId])
+            && $secondReady === []
+            && $secondBlocked
+            && (int) ($onOpenPipe[(int) $pipeId]['id'] ?? 0) === (int) $pipeInvId) {
+            pass('second push blocked while on open invoice');
+        } else {
+            fail('open invoice did not block a second bill');
+        }
         $linkedClient = (int) ($pipeInv['client_id'] ?? 0);
         if ($pipeInv && $linkedClient === 0 && (string) ($pipeInv['bill_to_name'] ?? '') === 'buyer@example.com') {
             if (invoice_display_bill_as($pipeInv) === 'buyer@example.com'
@@ -4621,6 +4655,54 @@ try {
         } else {
             fail('pipeline invoice kept a client folder link');
         }
+    }
+
+    $rebillDomain = 'txfom-rebill-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
+    $rebillId = add_order_pipeline_row((int) $adminUser['id'], 'rebill@example.com');
+    update_order_item((int) $rebillId, 0, [
+        'site_name' => $rebillDomain,
+        'country' => 'Germany',
+        'client_label' => 'rebill@example.com',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => date('Y-m-d'),
+        'owner_price' => 10,
+        'decided_price' => 20,
+        'live_url' => 'https://example.com/rebill-live',
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
+    order_mark_completed((int) $rebillId, 'https://example.com/rebill-live', (int) $adminUser['id']);
+    $rebillReady = list_invoiceable_order_items_by_ids([(int) $rebillId]);
+    if (count($rebillReady) === 1) {
+        $rebillInvId = create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_id' => 0,
+            'client_name' => 'rebill@example.com',
+            'bill_to_name' => 'rebill@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Topurlz',
+            'company_bic' => 'TESTBIC',
+            'company_iban' => 'TESTIBAN',
+            'company_phone' => '',
+            'company_address' => '',
+            'company_reg_no' => '',
+            'vat_note' => '',
+        ], build_invoice_lines_from_orders($rebillReady, false), (int) $adminUser['id']);
+        delete_invoice((int) $rebillInvId);
+        $afterDelInv = list_invoiceable_order_items_by_ids([(int) $rebillId]);
+        $afterDelMap = order_items_on_open_invoices([(int) $rebillId]);
+        if (count($afterDelInv) === 1 && $afterDelMap === []) {
+            pass('delete invoice frees order row for push');
+        } else {
+            fail('deleting invoice did not free the order row');
+        }
+    } else {
+        fail('rebill row was not invoiceable');
     }
 
     // OM folders: Website prices Processing → Processing; complete requires LIVE URL.

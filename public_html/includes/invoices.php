@@ -447,7 +447,7 @@ function list_invoiceable_order_items(int $clientId = 0): array
              ORDER BY sort_order ASC, id ASC"
         );
         $stmt->execute([$clientId]);
-        return $stmt->fetchAll();
+        return filter_order_items_not_on_open_invoice($stmt->fetchAll() ?: []);
     }
     $stmt = db()->query(
         "SELECT * FROM order_items
@@ -457,7 +457,7 @@ function list_invoiceable_order_items(int $clientId = 0): array
            AND COALESCE(is_paid, 0) = 0
          ORDER BY COALESCE(order_date, DATE(created_at)) DESC, id DESC"
     );
-    return $stmt->fetchAll();
+    return filter_order_items_not_on_open_invoice($stmt->fetchAll() ?: []);
 }
 
 /**
@@ -473,7 +473,7 @@ function list_invoiceable_order_items_by_ids(array $ids): array
             $out[] = $row;
         }
     }
-    return $out;
+    return filter_order_items_not_on_open_invoice($out);
 }
 
 /** Free-text bill-as from order rows (email or name). */
@@ -537,6 +537,83 @@ function parse_order_item_ids(string $raw): array
         }
     }
     return array_values(array_filter(array_map('intval', preg_split('/\s*,\s*/', $raw) ?: []), static fn ($id) => $id > 0));
+}
+
+/**
+ * Unpaid/draft invoices that still include these order rows.
+ *
+ * @param list<int> $orderItemIds
+ * @return array<int, array{id:int,invoice_number:string,work_status:string,payment_status:string}>
+ */
+function order_items_on_open_invoices(array $orderItemIds): array
+{
+    ensure_invoice_schema();
+    $want = [];
+    foreach ($orderItemIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $want[$id] = true;
+        }
+    }
+    if (!$want) {
+        return [];
+    }
+    try {
+        $rows = db()->query(
+            "SELECT i.id, i.invoice_number, i.work_status, i.payment_status, ii.order_item_ids
+             FROM invoices i
+             INNER JOIN invoice_items ii ON ii.invoice_id = i.id
+             WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
+               AND TRIM(ii.order_item_ids) <> ''
+             ORDER BY i.id DESC"
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        foreach (parse_order_item_ids((string) ($row['order_item_ids'] ?? '')) as $oid) {
+            if (!isset($want[$oid]) || isset($out[$oid])) {
+                continue;
+            }
+            $out[$oid] = [
+                'id' => (int) $row['id'],
+                'invoice_number' => (string) ($row['invoice_number'] ?? ''),
+                'work_status' => (string) ($row['work_status'] ?? 'done'),
+                'payment_status' => (string) ($row['payment_status'] ?? 'unpaid'),
+            ];
+        }
+        if (count($out) === count($want)) {
+            break;
+        }
+    }
+    return $out;
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function filter_order_items_not_on_open_invoice(array $rows): array
+{
+    if (!$rows) {
+        return [];
+    }
+    $ids = [];
+    foreach ($rows as $row) {
+        $ids[] = (int) ($row['id'] ?? 0);
+    }
+    $on = order_items_on_open_invoices($ids);
+    if (!$on) {
+        return $rows;
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        if (!isset($on[(int) ($row['id'] ?? 0)])) {
+            $out[] = $row;
+        }
+    }
+    return $out;
 }
 
 /**
@@ -960,6 +1037,26 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                     throw new InvalidArgumentException('Only rows with a LIVE URL can be invoiced.');
                 }
             }
+        }
+        $allOids = [];
+        foreach ($normalized as $line) {
+            foreach ($line['order_item_ids'] as $oid) {
+                $allOids[] = (int) $oid;
+            }
+        }
+        $onOpen = order_items_on_open_invoices($allOids);
+        if ($onOpen) {
+            $nums = [];
+            foreach ($onOpen as $inv) {
+                $num = trim((string) ($inv['invoice_number'] ?? ''));
+                if ($num !== '') {
+                    $nums[$num] = true;
+                }
+            }
+            throw new InvalidArgumentException(
+                'Already on invoice ' . implode(', ', array_keys($nums))
+                . '. Open that bill instead of generating another.'
+            );
         }
     }
 

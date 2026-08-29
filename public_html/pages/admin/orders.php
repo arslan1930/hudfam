@@ -267,14 +267,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Tick at least one unpaid completed row to push to an invoice.');
             }
             $picked = list_order_items_by_ids($selectedIds);
+            $onOpen = function_exists('order_items_on_open_invoices')
+                ? order_items_on_open_invoices($selectedIds)
+                : [];
             $ready = [];
+            $blockedNums = [];
             foreach ($picked as $row) {
+                $oid = (int) $row['id'];
+                if (isset($onOpen[$oid])) {
+                    $num = trim((string) ($onOpen[$oid]['invoice_number'] ?? ''));
+                    if ($num !== '') {
+                        $blockedNums[$num] = true;
+                    }
+                    continue;
+                }
                 if (order_is_completed($row) && !order_is_paid($row)) {
-                    $ready[] = (int) $row['id'];
+                    $ready[] = $oid;
                 }
             }
             if (!$ready) {
-                throw new InvalidArgumentException('None of the selected rows are unpaid completed orders with a LIVE URL.');
+                throw new InvalidArgumentException(
+                    $blockedNums
+                        ? ('Those rows are already on invoice ' . implode(', ', array_keys($blockedNums)) . '.')
+                        : 'None of the selected rows are unpaid completed orders with a LIVE URL.'
+                );
             }
             redirect('index.php?page=admin_invoice_generate&ids=' . implode(',', $ready));
         }
@@ -340,10 +356,33 @@ $unpaidFilterOpts = [
 ];
 $unpaidLiveCount = count_order_pipeline_rows($unpaidFilterOpts);
 $unpaidPushIds = [];
-if ($isCompleted && $unpaidLiveCount > 0 && $unpaidLiveCount <= order_invoice_push_id_cap()) {
+$unbilledCount = $unpaidLiveCount;
+$openInvoicesByOrder = [];
+if ($isCompleted && $unpaidLiveCount > 0 && function_exists('order_items_on_open_invoices')) {
+    $allUnpaidIds = list_order_pipeline_ids($unpaidFilterOpts);
+    $openOnUnpaid = order_items_on_open_invoices($allUnpaidIds);
+    $unpaidPushIds = [];
+    foreach ($allUnpaidIds as $oid) {
+        $oid = (int) $oid;
+        if ($oid > 0 && !isset($openOnUnpaid[$oid])) {
+            $unpaidPushIds[] = $oid;
+        }
+    }
+    $unbilledCount = count($unpaidPushIds);
+    if ($unbilledCount > order_invoice_push_id_cap()) {
+        $unpaidPushIds = [];
+    }
+} elseif ($isCompleted && $unpaidLiveCount > 0 && $unpaidLiveCount <= order_invoice_push_id_cap()) {
     $unpaidPushIds = list_order_pipeline_ids($unpaidFilterOpts);
 }
-$unpaidPush = order_invoice_generate_push_cta($unpaidLiveCount, $unpaidPushIds);
+$unpaidPush = order_invoice_generate_push_cta($unbilledCount, $unpaidPushIds);
+if ($isCompleted && $items && function_exists('order_items_on_open_invoices')) {
+    $pageIds = [];
+    foreach ($items as $row) {
+        $pageIds[] = (int) ($row['id'] ?? 0);
+    }
+    $openInvoicesByOrder = order_items_on_open_invoices($pageIds);
+}
 $filterCountries = list_order_pipeline_countries();
 $clientCatalog = list_order_pipeline_client_labels();
 $admins = order_admin_options();
@@ -651,11 +690,12 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           if ($rowAdminId < 1) {
               $rowAdminId = (int) ($user['id'] ?? 0);
           }
-          $canPush = $isCompleted && $done && !$paid;
+          $canPush = $isCompleted && $done && !$paid && empty($openInvoicesByOrder[$id]);
+          $openInv = $openInvoicesByOrder[$id] ?? null;
           $canComplete = $isProcessing && trim((string) ($row['live_url'] ?? '')) !== '';
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
-            data-row id="row-<?= $id ?>">
+            data-row id="row-<?= $id ?>"<?= $openInv ? ' data-on-invoice="1"' : '' ?>>
           <td class="col-check">
             <div class="order-check-pair">
               <input type="checkbox" value="<?= $id ?>" data-copy-check data-no-draft
@@ -664,7 +704,11 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
                      <?= ($isProcessing ? $canComplete : $canPush) ? '' : 'disabled' ?>
                      title="<?= $isProcessing
                          ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL before marking completed')
-                         : ($canPush ? 'Push this unpaid LIVE row to an invoice' : 'Only unpaid completed rows can be pushed') ?>"
+                         : ($canPush
+                            ? 'Push this unpaid LIVE row to an invoice'
+                            : ($openInv
+                                ? ('Already on invoice ' . (string) ($openInv['invoice_number'] ?? ''))
+                                : 'Only unpaid completed rows can be pushed')) ?>"
                      data-push-check>
             </div>
           </td>
@@ -774,6 +818,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
                       onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_paid';">
                 Mark paid
               </button>
+              <?php if ($openInv): ?>
+                <a class="order-on-invoice" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $openInv['id'] ?>">Invoice <?= h((string) $openInv['invoice_number']) ?></a>
+              <?php endif; ?>
             <?php endif; ?>
           </td>
           <td class="col-profit">
@@ -955,11 +1002,13 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         completeBtn.title = can ? 'Mark this order completed' : 'Fill LIVE URL before marking completed';
       }
     } else {
-      can = !!live && !paidBtn;
+      can = !!live && !paidBtn && !row.getAttribute('data-on-invoice');
       check.disabled = !can;
       check.title = can
         ? 'Push this unpaid LIVE row to an invoice'
-        : 'Only unpaid completed rows can be pushed';
+        : (row.getAttribute('data-on-invoice')
+          ? 'Already on an invoice'
+          : 'Only unpaid completed rows can be pushed');
     }
     if (!can) check.checked = false;
   }

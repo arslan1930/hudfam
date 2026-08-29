@@ -629,7 +629,7 @@ if ($r['status'] === 200
     && str_contains($r['body'], 'Download .txt')
     && str_contains($r['body'], '<span>Bill</span>')
     && str_contains($r['body'], 'Mark paid')
-    && (str_contains($r['body'], 'Push unpaid') || str_contains($r['body'], 'Generate invoice') || str_contains($r['body'], 'none ticked'))) {
+    && (str_contains($r['body'], 'Push unpaid') || str_contains($r['body'], 'Generate invoice') || str_contains($r['body'], 'none ticked') || str_contains($r['body'], 'Already on invoice'))) {
     pass('admin orders completed copy/download');
 } else {
     fail('admin orders completed copy status=' . $r['status']);
