@@ -172,9 +172,9 @@ if (!str_contains($invoicesAdminPage, '$perPage = 50')
 }
 if (!str_contains($invoicesAdminPage, 'name="filter"')
     || !str_contains($invoicesAdminPage, 'invoice-list-chips')
-    || !str_contains($invoicesAdminPage, 'filter=draft')
-    || !str_contains($invoicesAdminPage, 'filter=unpaid')
-    || !str_contains($invoicesAdminPage, 'filter=paid')
+    || !str_contains($invoicesAdminPage, "'draft' => ['Draft'")
+    || !str_contains($invoicesAdminPage, "'unpaid' => ['Unpaid'")
+    || !str_contains($invoicesAdminPage, "'paid' => ['Paid'")
     || !str_contains($invoicesAdminPage, 'normalize_invoice_list_filter')) {
     fail('invoices.php missing status filter');
 } else {
