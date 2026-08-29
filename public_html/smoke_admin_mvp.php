@@ -196,7 +196,11 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
 if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
     || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
     || !str_contains($invoicesAdminPage, 'Completed unpaid')
-    || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")) {
+    || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")
+    || !str_contains($invoicesAdminPage, 'invoice-list-delete')
+    || !str_contains($invoicesAdminPage, 'is-incomplete')
+    || !str_contains($invoicesAdminPage, 'Add note')
+    || !str_contains($invoicesAdminPage, 'class="num"')) {
     fail('invoices.php missing list chips / search / paid-delete copy');
 } else {
     ok('invoices.php list chips, full search, paid-delete confirm');

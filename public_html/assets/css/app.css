@@ -3365,6 +3365,11 @@ a.card.stat:focus-visible {
   vertical-align: middle;
   white-space: nowrap;
 }
+.invoice-manual-tag.is-kind {
+  color: #4b5563;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
 .invoice-list-note {
   margin-top: 0.2rem;
   font-size: 0.8rem;
@@ -3372,28 +3377,28 @@ a.card.stat:focus-visible {
   line-height: 1.3;
 }
 .invoice-note-box {
-  margin-top: 0.4rem;
+  margin-top: 0.15rem;
   width: 11.5rem;
   max-width: 100%;
 }
 .invoice-note-preview {
   display: block;
   width: 100%;
-  min-height: 2.6rem;
-  max-height: 3.4rem;
+  min-height: 1.5rem;
+  max-height: 1.7rem;
   margin: 0;
-  padding: 0.4rem 0.5rem;
+  padding: 0.1rem 0.4rem;
   text-align: left;
   font: inherit;
-  font-size: 0.8rem;
-  line-height: 1.35;
+  font-size: 0.76rem;
+  line-height: 1.3;
   color: var(--ink);
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 6px;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  box-shadow: none;
 }
 .invoice-note-preview:hover,
 .invoice-note-preview:focus-visible {
@@ -3403,9 +3408,10 @@ a.card.stat:focus-visible {
 .invoice-note-preview-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   overflow: hidden;
-  white-space: pre-wrap;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   word-break: break-word;
 }
 .invoice-note-preview-empty {
@@ -3888,6 +3894,34 @@ a.card.stat:focus-visible {
   flex-wrap: nowrap;
 }
 .invoice-list-actions form.inline { display: inline; margin: 0; }
+.invoice-list-delete {
+  background: none;
+  border: 0;
+  padding: 0.15rem 0.1rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+}
+.invoice-list-delete:hover,
+.invoice-list-delete:focus-visible {
+  color: var(--bad);
+  text-decoration: underline;
+  outline: none;
+}
+.invoice-list-delete.is-paid {
+  color: #9a3412;
+}
+.invoice-list-table tbody tr.is-incomplete td {
+  background: #fafafa;
+  color: #6b7280;
+}
+.invoice-list-table tbody tr.is-incomplete strong {
+  font-weight: 600;
+  color: #6b7280;
+}
 .invoice-pick-client .invoice-pick-row {
   display: flex;
   gap: 0.6rem;

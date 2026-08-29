@@ -5176,6 +5176,17 @@ try {
     } else {
         fail('invoice list filter draft missing blank');
     }
+    $blankRow = get_invoice((int) $invId) ?: [];
+    $blankRow['item_count'] = 0;
+    if (invoice_list_is_incomplete($blankRow)
+        && invoice_list_is_incomplete(['is_manual' => 1, 'work_status' => 'draft', 'item_count' => 0, 'total_amount' => 0])
+        && !invoice_list_is_incomplete(['is_manual' => 0, 'work_status' => 'done', 'item_count' => 0, 'total_amount' => 0])
+        && !invoice_list_is_incomplete(['is_manual' => 1, 'work_status' => 'draft', 'item_count' => 2, 'total_amount' => 40])
+    ) {
+        pass('invoice list incomplete helper');
+    } else {
+        fail('invoice list incomplete helper');
+    }
 
     $invTotal = count_invoices();
     $invPage = list_invoices(['limit' => 1, 'offset' => 0]);

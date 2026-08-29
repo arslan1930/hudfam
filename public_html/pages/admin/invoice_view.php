@@ -146,7 +146,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <h1>
       Invoice <?= h($invoice['invoice_number']) ?>
       <?php if ($isManual): ?>
-        <span class="invoice-manual-tag">(blank)</span>
+        <span class="invoice-manual-tag is-kind">(blank)</span>
       <?php endif; ?>
     </h1>
     <p class="muted">

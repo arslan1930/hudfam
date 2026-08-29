@@ -247,7 +247,7 @@ render_header('Invoices', 'admin');
             <th>Invoice No.</th>
             <th>Date</th>
             <th>Bill as</th>
-            <th>Items</th>
+            <th class="num">Items</th>
             <th class="num">Total</th>
             <th>Payment</th>
             <th></th>
@@ -264,9 +264,10 @@ render_header('Invoices', 'admin');
                 $clientLabel = '—';
             }
             $note = invoice_admin_note($inv);
+            $incomplete = invoice_list_is_incomplete($inv);
             $statusBits = $paid ? 'paid payment received' : ($draft ? 'draft needs data' : 'done unpaid waiting');
           ?>
-          <tr id="inv-<?= (int) $inv['id'] ?>" data-invoice-row
+          <tr id="inv-<?= (int) $inv['id'] ?>"<?= $incomplete ? ' class="is-incomplete"' : '' ?> data-invoice-row
               data-search="<?= h(mb_strtolower(trim(
                   (string) $inv['invoice_number'] . ' '
                   . ($manual ? 'blank manual ' : '')
@@ -280,7 +281,7 @@ render_header('Invoices', 'admin');
             <td data-invoice-cell>
               <strong><?= h($inv['invoice_number']) ?></strong>
               <?php if ($manual): ?>
-                <span class="invoice-manual-tag">(blank)</span>
+                <span class="invoice-manual-tag is-kind">(blank)</span>
               <?php endif; ?>
               <div class="invoice-note-box<?= $note !== '' ? ' has-note' : '' ?>" data-invoice-note-box>
                 <button type="button" class="invoice-note-preview" data-note-open
@@ -289,7 +290,7 @@ render_header('Invoices', 'admin');
                   <?php if ($note !== ''): ?>
                     <span class="invoice-note-preview-text"><?= h($note) ?></span>
                   <?php else: ?>
-                    <span class="invoice-note-preview-empty">note…</span>
+                    <span class="invoice-note-preview-empty">Add note</span>
                   <?php endif; ?>
                 </button>
                 <form method="post" class="invoice-list-note-form" action="<?= h($listUrl) ?>"
@@ -315,7 +316,7 @@ render_header('Invoices', 'admin');
             <td data-invoice-cell>
               <?= h($clientLabel) ?>
             </td>
-            <td data-invoice-cell><?= (int) $inv['item_count'] ?></td>
+            <td class="num" data-invoice-cell><?= (int) $inv['item_count'] ?></td>
             <td class="num" data-invoice-cell><?= h(format_euro($inv['total_amount'])) ?></td>
             <td data-invoice-cell>
               <?php if ($paid): ?>
@@ -344,7 +345,7 @@ render_header('Invoices', 'admin');
             </td>
             <td class="invoice-list-actions">
               <div class="invoice-list-actions-row">
-                <a class="btn secondary small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
+                <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
                 <form method="post" class="inline" action="<?= h($listUrl) ?>"
                       onsubmit="return confirm(<?= h(json_encode(
                           $paid
@@ -356,7 +357,8 @@ render_header('Invoices', 'admin');
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                  <button class="btn secondary small" type="submit">Delete</button>
+                  <button class="invoice-list-delete<?= $paid ? ' is-paid' : '' ?>" type="submit"
+                          title="<?= $paid ? 'Delete a Paid invoice' : 'Delete invoice' ?>">Delete</button>
                 </form>
               </div>
             </td>
@@ -395,7 +397,7 @@ render_header('Invoices', 'admin');
           openBtn.querySelector('.invoice-note-preview-text').textContent = text;
           openBtn.title = 'Click to read or edit note';
         } else {
-          openBtn.innerHTML = '<span class="invoice-note-preview-empty">note…</span>';
+          openBtn.innerHTML = '<span class="invoice-note-preview-empty">Add note</span>';
           openBtn.title = 'Add a note';
         }
       }

@@ -811,6 +811,18 @@ function invoice_is_draft(array $invoice): bool
     return invoice_is_manual($invoice) && invoice_work_status($invoice) === 'draft';
 }
 
+/** Empty blank draft — €0 and no line items — so the list can de-emphasize it. */
+function invoice_list_is_incomplete(array $invoice): bool
+{
+    if (!invoice_is_draft($invoice)) {
+        return false;
+    }
+    $items = (int) ($invoice['item_count'] ?? 0);
+    $total = (float) ($invoice['total_amount'] ?? 0);
+
+    return $items < 1 && $total <= 0.00001;
+}
+
 function invoice_work_status_label(array $invoice): string
 {
     if (invoice_is_paid($invoice)) {
