@@ -281,6 +281,30 @@
     if (csvA) csvA.setAttribute('href', data.download_matches_csv || '#');
   }
 
+  function pageNumbers(current, total) {
+    current = Math.max(1, current);
+    total = Math.max(1, total);
+    if (total <= 7) {
+      var all = [];
+      for (var i = 1; i <= total; i++) all.push(i);
+      return all;
+    }
+    var keep = [1, total, current, current - 1, current + 1];
+    var uniq = [];
+    keep.forEach(function (n) {
+      if (n >= 1 && n <= total && uniq.indexOf(n) === -1) uniq.push(n);
+    });
+    uniq.sort(function (a, b) { return a - b; });
+    var out = [];
+    var prevN = 0;
+    uniq.forEach(function (n) {
+      if (prevN > 0 && n > prevN + 1) out.push(0);
+      out.push(n);
+      prevN = n;
+    });
+    return out;
+  }
+
   function updatePager(data) {
     if (!pagerEl) return;
     var hasRows = !!data.has_rows;
@@ -299,32 +323,49 @@
       label.textContent = 'Page ' + pageNum + ' / ' + pages + ' · ' + perPage + ' per page';
     }
 
-    var perPageForm = actions.querySelector('form');
-    Array.prototype.slice.call(actions.querySelectorAll('a')).forEach(function (a) {
-      if (perPageForm && perPageForm.contains(a)) return;
-      a.remove();
-    });
-
-    if (pageNum > 1) {
-      var prev = document.createElement('a');
-      prev.href = '?' + qs + '&p=' + (pageNum - 1);
-      prev.textContent = 'Prev';
-      actions.insertBefore(prev, label || actions.firstChild);
-    }
-    if (pageNum < pages) {
-      var next = document.createElement('a');
-      next.href = '?' + qs + '&p=' + (pageNum + 1);
-      next.textContent = 'Next';
-      if (label && label.nextSibling) {
-        actions.insertBefore(next, label.nextSibling);
-      } else if (label) {
-        actions.appendChild(next);
-      } else {
-        actions.insertBefore(next, actions.firstChild);
+    var nav = pagerEl.querySelector('nav.pagination');
+    if (nav) {
+      nav.innerHTML = '';
+      if (pageNum > 1) {
+        var prev = document.createElement('a');
+        prev.href = '?' + qs + '&p=' + (pageNum - 1);
+        prev.textContent = 'Previous';
+        nav.appendChild(prev);
+      }
+      if (pages > 1) {
+        pageNumbers(pageNum, pages).forEach(function (n) {
+          if (n < 1) {
+            var gap = document.createElement('span');
+            gap.className = 'pagination-gap';
+            gap.setAttribute('aria-hidden', 'true');
+            gap.textContent = '…';
+            nav.appendChild(gap);
+            return;
+          }
+          if (n === pageNum) {
+            var cur = document.createElement('span');
+            cur.className = 'is-current';
+            cur.setAttribute('aria-current', 'page');
+            cur.textContent = String(n);
+            nav.appendChild(cur);
+            return;
+          }
+          var a = document.createElement('a');
+          a.href = '?' + qs + '&p=' + n;
+          a.textContent = String(n);
+          nav.appendChild(a);
+        });
+      }
+      if (pageNum < pages) {
+        var next = document.createElement('a');
+        next.href = '?' + qs + '&p=' + (pageNum + 1);
+        next.textContent = 'Next';
+        nav.appendChild(next);
       }
     }
 
     if (qHidden) qHidden.value = String(data.q || '');
+    var perPageForm = actions.querySelector('form');
     if (perPageForm) {
       var qInput = perPageForm.querySelector('input[name="q"]');
       if (qInput) qInput.value = String(data.q || '');

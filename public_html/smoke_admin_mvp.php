@@ -745,6 +745,51 @@ if (str_contains($adminProspects, 'id="prospects_per_page"')
 } else {
     ok('Our database Per page only in pager');
 }
+if (!str_contains($adminProspects, 'invoice_list_page_numbers')
+    || !str_contains($adminProspects, 'guide_inventory()')
+    || !str_contains($adminProspects, 'prospect_copy_all_label')
+    || !str_contains($adminProspects, 'prospect_country_sheet_url')
+    || !str_contains($adminProspects, 'prospect_open_in_folder_label')
+    || !str_contains($adminProspects, 'Open website')
+    || !str_contains($adminProspects, 'show empty countries')
+    || !str_contains($adminProspects, 'whole country folder')
+    || str_contains($adminProspects, 'Go to site')
+    || str_contains($adminProspects, '<th>URL</th>')
+    || str_contains($adminProspects, 'Add sites above')
+    || str_contains($adminProspects, 'choose rows per page below')) {
+    fail('Our database missing hub/country UX (guide, pager, Open in, empty toggle)');
+} else {
+    ok('Our database hub/country UX: guide, pager, Open in, empty toggle');
+}
+$marketsPos = strpos($adminProspects, 'id="prospect-markets"');
+$superPos = strpos($adminProspects, 'id="super-search"');
+$sitesPos = strpos($adminProspects, 'id="prospect-sites-card"');
+$addToPos = strpos($adminProspects, 'Add sites to');
+if ($marketsPos === false || $superPos === false || $marketsPos > $superPos) {
+    fail('Our database hub Markets is not above Super search');
+} else {
+    ok('Our database hub Markets above Super search');
+}
+if ($sitesPos === false || $addToPos === false || $sitesPos > $addToPos) {
+    fail('Our database country Sites table is not above Add sites');
+} else {
+    ok('Our database country Sites table above Add sites');
+}
+if (!str_contains($prospectsLib, 'function prospect_copy_all_label')
+    || !str_contains($prospectsLib, 'function prospect_country_sheet_url')
+    || !str_contains($prospectsLib, 'p.niche LIKE')
+    || !str_contains($prospectsLib, 'Open website')
+    || !str_contains($prospectsLib, 'duplicate found and removed')) {
+    fail('Our database helpers missing copy labels / niche super-search / Open website');
+} else {
+    ok('Our database helpers copy labels + niche super-search + Open website');
+}
+if (!str_contains($prospectsCountryJs, 'pageNumbers')
+    || !str_contains($prospectsCountryJs, 'nav.pagination')) {
+    fail('prospects-country.js missing numbered pager rebuild');
+} else {
+    ok('prospects-country.js numbered pager rebuild');
+}
 if (!str_contains($adminProspects, 'data-open-default')
     || !str_contains($adminProspects, "setMarketOpen(market, market.getAttribute('data-open-default') === '1')")) {
     fail('Our database market search-clear does not restore default accordion');

@@ -64,17 +64,13 @@ if ($filterCreatedBy > 0) {
 $filterCreatedLabel = $filterCreatedUser
     ? trim((string) ($filterCreatedUser['full_name'] ?: $filterCreatedUser['username']))
     : '';
-$withPerson = static function (string $url) use ($filterCreatedBy): string {
-    if ($filterCreatedBy < 1 || str_contains($url, 'created_by=')) {
-        return $url;
-    }
-    $hash = '';
-    $hashPos = strpos($url, '#');
-    if ($hashPos !== false) {
-        $hash = substr($url, $hashPos);
-        $url = substr($url, 0, $hashPos);
-    }
-    return $url . (str_contains($url, '?') ? '&' : '?') . 'created_by=' . $filterCreatedBy . $hash;
+$sheetKeep = static function (array $extra = []) use ($filterCreatedBy, $nicheFilter): array {
+    return $extra + [
+        'created_by' => $filterCreatedBy,
+        'q' => trim((string) (post('q') ?: get('q'))),
+        'niche' => $nicheFilter,
+        'per_page' => (int) (post('per_page') ?: get('per_page')),
+    ];
 };
 
 $addRaw = '';
@@ -124,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
         redirect('index.php?page=admin_prospects&super_q=' . rawurlencode($returnSuper) . '#super-search');
     }
     if ($returnCountry !== '') {
-        redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
+        redirect(prospect_country_sheet_url($returnCountry, $sheetKeep()));
     }
     redirect('index.php?page=admin_prospects');
 }
@@ -158,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'save_n
         ? trim((string) ($saved['country'] ?? ''))
         : trim((string) post('country'));
     if ($backCountry !== '') {
-        redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($backCountry)));
+        redirect(prospect_country_sheet_url($backCountry, $sheetKeep()));
     }
     redirect('index.php?page=admin_prospects');
 }
@@ -191,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
     flash($result['ok'] ? 'ok' : 'error', $result['ok']
         ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's') . '.'
         : (string) ($result['error'] ?? 'Could not remove selected sites.'));
-    redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
+    redirect(prospect_country_sheet_url($returnCountry, $sheetKeep()));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
@@ -221,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     flash($result['ok'] ? 'ok' : 'error', $result['ok']
         ? ($actionHist === 'redo_last' ? 'Redid last remove.' : 'Undid last remove.')
         : (string) ($result['error'] ?? 'Could not undo/redo.'));
-    redirect($withPerson('index.php?page=admin_prospects&country=' . rawurlencode($returnCountry)));
+    redirect(prospect_country_sheet_url($returnCountry, $sheetKeep()));
 }
 
 // --- Remove by list from Our database (country folder) ---
@@ -247,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
                     ? 'No matching sites removed. Check the list (root domains) and try again.'
                     : 'No sites from that list were found in ' . $result['country'] . '.'
             );
-            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($result['country']) . '#remove-by-list'));
+            redirect(prospect_country_sheet_url($result['country'], $sheetKeep(['hash' => 'remove-by-list'])));
         }
         $msg = 'Removed ' . (int) $result['removed'] . ' site(s) from Our database · ' . $result['country'];
         if ((int) $result['not_found'] > 0) {
@@ -257,12 +253,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
             $msg .= ' · ' . (int) $result['invalid'] . ' invalid skipped';
         }
         flash('ok', $msg . '.');
-        redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($result['country'])));
+        redirect(prospect_country_sheet_url($result['country'], $sheetKeep()));
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
         redirect(
             $removeCountry !== ''
-                ? $withPerson('index.php?page=admin_prospects&country=' . urlencode($removeCountry) . '#remove-by-list')
+                ? prospect_country_sheet_url($removeCountry, $sheetKeep(['hash' => 'remove-by-list']))
                 : 'index.php?page=admin_prospects'
         );
     }
@@ -282,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
         $addCountry = $canon['name'];
         if (trim($addRaw) === '') {
             flash('error', 'Paste at least one root domain.');
-            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'));
+            redirect(prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites'])));
         }
         $parsed = parse_domain_list_strict($addRaw);
         if ($parsed['invalid_count'] > 0) {
@@ -294,14 +290,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
                     ? $parsed['valid_text'] . "\n" . implode("\n", array_column($parsed['invalid'], 'raw'))
                     : $addRaw,
             ];
-            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'));
+            redirect(prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites'])));
         }
         $result = admin_add_urls_to_database($addRaw, $user, $addCountry, $addLanguage);
         $dup = (int) ($result['duplicated'] ?? 0);
         $insN = (int) ($result['inserted'] ?? 0);
         if ($insN < 1 && $dup < 1 && (int) ($result['total'] ?? 0) < 1) {
             flash('error', 'No valid root domains found. Example: example.com or my-site.co.uk');
-            redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites'));
+            redirect(prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites'])));
         }
         if ($insN > 0) {
             flash('ok', 'Saved ' . $insN . ' new site(s) to ' . $result['country'] . '.');
@@ -310,12 +306,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             flash('fade', prospect_duplicates_deleted_message($dup) . '.');
         }
         unset($_SESSION['admin_prospects_add_draft']);
-        redirect($withPerson('index.php?page=admin_prospects&country=' . urlencode($result['country'])));
+        redirect(prospect_country_sheet_url($result['country'], [
+            'created_by' => $filterCreatedBy,
+        ]));
     } catch (Throwable $e) {
         flash('error', 'Could not save sites. ' . $e->getMessage());
         redirect(
             $addCountry !== ''
-                ? $withPerson('index.php?page=admin_prospects&country=' . urlencode($addCountry) . '#add-sites')
+                ? prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites']))
                 : 'index.php?page=admin_prospects#add-sites'
         );
     }
@@ -459,134 +457,12 @@ if (!$inCountry && !$emptyCountry) {
         <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
+        <a class="btn" href="#add-sites">Add sites</a>
         <a class="btn secondary" href="#super-search">Super search</a>
-        <a class="btn secondary" href="#add-sites">Add sites</a>
         <a class="btn secondary" href="index.php?page=admin_prospect_batches">Site adding history</a>
       </div>
     </div>
-
-    <div class="card" id="super-search">
-      <h2>Super search</h2>
-      <p class="help">
-        Search any site across <strong>all country databases</strong>.
-        If it exists in more than one country, every place is listed.
-      </p>
-      <form method="get" action="index.php" class="super-search-form">
-        <input type="hidden" name="page" value="admin_prospects">
-        <label class="visually-hidden" for="super_q">Site name</label>
-        <div class="super-search-row">
-          <input id="super_q" name="super_q" type="search" value="<?= h($superQ) ?>"
-                 placeholder="example.com" required autocomplete="off" spellcheck="false" data-no-draft>
-          <button class="btn" type="submit">Super search</button>
-          <?php if ($superQ !== ''): ?>
-            <a class="btn secondary" href="index.php?page=admin_prospects">Clear</a>
-          <?php endif; ?>
-        </div>
-      </form>
-
-      <?php if ($superQ !== ''): ?>
-        <?php if (!$superResults): ?>
-          <div class="empty-state" style="margin-top:0.85rem">
-            <p>No matches for “<?= h($superQ) ?>” in any country database.</p>
-          </div>
-        <?php else: ?>
-          <p class="help" style="margin-top:0.85rem">
-            <?php if ($superTruncated): ?>
-              Showing the first <strong><?= (int) $superLimit ?></strong> matches
-              in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>
-              (more exist). Narrow the search to see the rest.
-            <?php else: ?>
-              Found <strong><?= count($superResults) ?></strong> match<?= count($superResults) === 1 ? '' : 'es' ?>
-              in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>.
-            <?php endif; ?>
-          </p>
-          <div class="table-wrap" style="margin-top:0.55rem">
-            <table class="super-search-table">
-              <thead>
-                <tr>
-                  <th>Niche</th>
-                  <th>Site</th>
-                  <th>Country</th>
-                  <th>Language</th>
-                  <th>Added</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-              <?php foreach ($superResults as $hit):
-                  $hitCountry = trim((string) ($hit['country'] ?? ''));
-                  $countryHref = $hitCountry !== '' ? $hitCountry : '_none';
-                  $countryLabel = $hitCountry !== '' ? $hitCountry : 'No country';
-                  $openUrl = 'index.php?page=admin_prospects&country=' . rawurlencode($countryHref)
-                      . '&q=' . rawurlencode((string) $hit['domain']);
-                  ?>
-                <tr>
-                  <td><?php
-                    $hitNiches = prospect_parse_niches((string) ($hit['niche'] ?? ''));
-                    if ($hitNiches === []) {
-                        echo '—';
-                    } else {
-                        echo h(prospect_format_niches($hitNiches));
-                    }
-                  ?></td>
-                  <td><strong><?= h((string) $hit['domain']) ?></strong></td>
-                  <td>
-                    <?= h($countryLabel) ?>
-                  </td>
-                  <td><?= h((string) ($hit['language'] ?: '—')) ?></td>
-                  <td class="muted"><?= h(substr((string) ($hit['created_at'] ?? ''), 0, 10)) ?></td>
-                  <td class="actions">
-                    <a class="btn small" href="<?= h($openUrl) ?>">Go to site</a>
-                    <form method="post" action="index.php?page=admin_prospects#super-search" class="inline-form"
-                          onsubmit="return confirm(<?= h(json_encode(
-                              'Remove ' . (string) $hit['domain'] . ' from ' . ($hitCountry !== '' ? $hitCountry : 'No country') . '?',
-                              JSON_UNESCAPED_UNICODE
-                          )) ?>);">
-                      <?= csrf_field() ?>
-                      <input type="hidden" name="action" value="remove_site">
-                      <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
-                      <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
-                      <button class="btn secondary small danger" type="submit">Remove</button>
-                    </form>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        <?php endif; ?>
-      <?php endif; ?>
-    </div>
-
-    <div class="card" id="add-sites">
-      <h2>Add sites</h2>
-      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
-      <form method="post" action="index.php?page=admin_prospects#add-sites">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="add_sites">
-        <div class="form-grid">
-          <?= render_country_typeahead($addCountry, [
-              'id' => 'add_country',
-              'label' => 'Country',
-              'required' => true,
-              'attrs' => 'data-fill-language="#add_language" data-fill-region="select[name=region]"',
-          ]) ?>
-          <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
-        </div>
-        <div style="margin-top:0.9rem">
-          <?= render_domains_paste_field('urls', $addRaw, [
-              'id' => 'urls',
-              'label' => 'Sites (root domains)',
-              'required' => true,
-              'rows' => 12,
-          ]) ?>
-        </div>
-        <p class="actions" style="margin-top:1rem">
-          <button class="btn" type="submit">Save to country database</button>
-        </p>
-      </form>
-    </div>
-    <?= sites_form_script_tag() ?>
+    <?= guide_inventory() ?>
 
     <?php if ($folders): ?>
     <div class="card prospect-markets-toolbar">
@@ -601,21 +477,26 @@ if (!$inCountry && !$emptyCountry) {
         </label>
       </div>
       <p class="help" style="margin:0.45rem 0 0">
-        Europe first · English markets second. Click a market to expand/collapse.
-        Folders show country name and site count. Sorted by no. of sites.
+        Click a market to expand. Empty countries stay hidden until you search the name or
+        <label class="prospect-show-empty">
+          <input id="prospect-show-empty" type="checkbox" data-no-draft>
+          show empty countries
+        </label>.
       </p>
     </div>
 
     <div id="prospect-markets">
     <?php
-    $marketIndex = 0;
     foreach ($byRegion as $regionLabel => $list):
-        $marketIndex++;
         $marketId = 'market-' . preg_replace('/[^a-z0-9]+/i', '-', strtolower($regionLabel));
-        $openByDefault = $marketIndex <= 2; // Europe + English open
+        $openByDefault = false;
         $marketTotal = 0;
+        $filledCount = 0;
         foreach ($list as $f) {
             $marketTotal += (int) $f['total'];
+            if ((int) $f['total'] > 0) {
+                $filledCount++;
+            }
         }
         ?>
       <div class="card prospect-market<?= $openByDefault ? ' is-open' : '' ?>"
@@ -627,7 +508,8 @@ if (!$inCountry && !$emptyCountry) {
                 aria-controls="<?= h($marketId) ?>">
           <span class="prospect-market-title"><?= h($regionLabel) ?></span>
           <span class="prospect-market-meta muted">
-            <?= count($list) ?> countr<?= count($list) === 1 ? 'y' : 'ies' ?>
+            <?= (int) $filledCount ?> with sites
+            · <?= count($list) ?> countr<?= count($list) === 1 ? 'y' : 'ies' ?>
             · <?= (int) $marketTotal ?> site<?= (int) $marketTotal === 1 ? '' : 's' ?>
           </span>
           <span class="prospect-market-chevron" aria-hidden="true"></span>
@@ -647,14 +529,16 @@ if (!$inCountry && !$emptyCountry) {
               <a class="folder"
                  href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>"
                  data-prospect-country
+                 data-prospect-empty="<?= $siteCount < 1 ? '1' : '0' ?>"
                  data-search="<?= h($searchHay) ?>"
-                 title="<?= h($label) ?>">
+                 title="<?= h($label) ?>"
+                 <?= $siteCount < 1 ? 'hidden' : '' ?>>
                 <h3>
                   <span class="prospect-folder-label"><?= h($label) ?></span>
                 </h3>
                 <p class="muted">
                   <span class="prospect-folder-count"><?= $siteCount ?></span>
-                  no. of sites
+                  site<?= $siteCount === 1 ? '' : 's' ?>
                 </p>
                 <?php folder_open_cue(); ?>
               </a>
@@ -671,6 +555,7 @@ if (!$inCountry && !$emptyCountry) {
     <script>
     (function () {
       var searchInput = document.getElementById('prospect-country-search');
+      var showEmpty = document.getElementById('prospect-show-empty');
       var matchCards = [];
       var matchIndex = -1;
       var meta = document.querySelector('[data-prospect-country-search-meta]');
@@ -700,8 +585,8 @@ if (!$inCountry && !$emptyCountry) {
       });
 
       function filterCountries() {
-        if (!searchInput) return;
-        var q = String(searchInput.value || '').trim().toLowerCase();
+        var q = searchInput ? String(searchInput.value || '').trim().toLowerCase() : '';
+        var allowEmpty = !!(showEmpty && showEmpty.checked);
         matchCards = [];
         clearHits();
         var anyShown = 0;
@@ -710,7 +595,9 @@ if (!$inCountry && !$emptyCountry) {
           var shownInMarket = 0;
           market.querySelectorAll('[data-prospect-country]').forEach(function (card) {
             var hay = String(card.getAttribute('data-search') || '');
+            var isEmpty = card.getAttribute('data-prospect-empty') === '1';
             var hit = !q || hay.indexOf(q) !== -1;
+            if (hit && isEmpty && !q && !allowEmpty) hit = false;
             card.hidden = !hit;
             if (hit) {
               shownInMarket++;
@@ -724,7 +611,7 @@ if (!$inCountry && !$emptyCountry) {
             if (shownInMarket > 0) setMarketOpen(market, true);
             market.hidden = shownInMarket === 0;
           } else {
-            market.hidden = false;
+            market.hidden = shownInMarket === 0;
             setMarketOpen(market, market.getAttribute('data-open-default') === '1');
           }
         });
@@ -778,11 +665,153 @@ if (!$inCountry && !$emptyCountry) {
           }
         });
       }
+      if (showEmpty) {
+        showEmpty.addEventListener('change', function () {
+          matchIndex = -1;
+          filterCountries();
+        });
+      }
+      filterCountries();
     })();
     </script>
     <?php else: ?>
       <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
     <?php endif; ?>
+
+    <div class="card" id="super-search">
+      <h2>Super search</h2>
+      <p class="help">
+        Search any site or niche across <strong>all country databases</strong>.
+        If it exists in more than one country, every place is listed.
+      </p>
+      <form method="get" action="index.php" class="super-search-form">
+        <input type="hidden" name="page" value="admin_prospects">
+        <label class="visually-hidden" for="super_q">Site name or niche</label>
+        <div class="super-search-row">
+          <input id="super_q" name="super_q" type="search" value="<?= h($superQ) ?>"
+                 placeholder="example.com or Health"
+                 required autocomplete="off" spellcheck="false" data-no-draft>
+          <button class="btn" type="submit">Super search</button>
+          <?php if ($superQ !== ''): ?>
+            <a class="btn secondary" href="index.php?page=admin_prospects">Clear</a>
+          <?php endif; ?>
+        </div>
+      </form>
+
+      <?php if ($superQ !== ''): ?>
+        <?php if (!$superResults): ?>
+          <div class="empty-state" style="margin-top:0.85rem">
+            <p>No matches for “<?= h($superQ) ?>” in any country database.</p>
+          </div>
+        <?php else: ?>
+          <p class="help" style="margin-top:0.85rem">
+            <?php if ($superTruncated): ?>
+              Showing the first <strong><?= (int) $superLimit ?></strong> matches
+              in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>
+              (more exist). Narrow the search to see the rest.
+            <?php else: ?>
+              Found <strong><?= count($superResults) ?></strong> match<?= count($superResults) === 1 ? '' : 'es' ?>
+              in <strong><?= count($superByCountry) ?></strong> countr<?= count($superByCountry) === 1 ? 'y' : 'ies' ?>.
+            <?php endif; ?>
+          </p>
+          <div class="table-wrap" style="margin-top:0.55rem">
+            <table class="super-search-table">
+              <thead>
+                <tr>
+                  <th>Niche</th>
+                  <th>Site</th>
+                  <th>Country</th>
+                  <th>Language</th>
+                  <th>Added</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php foreach ($superResults as $hit):
+                  $hitCountry = trim((string) ($hit['country'] ?? ''));
+                  $countryHref = $hitCountry !== '' ? $hitCountry : '_none';
+                  $countryLabel = $hitCountry !== '' ? $hitCountry : 'No country';
+                  $hitDomain = (string) ($hit['domain'] ?? '');
+                  $hitUrl = (string) ($hit['url'] ?? '');
+                  $openUrl = 'index.php?page=admin_prospects&country=' . rawurlencode($countryHref)
+                      . '&q=' . rawurlencode($hitDomain);
+                  ?>
+                <tr>
+                  <td><?php
+                    $hitNiches = prospect_parse_niches((string) ($hit['niche'] ?? ''));
+                    if ($hitNiches === []) {
+                        echo '—';
+                    } else {
+                        echo h(prospect_format_niches($hitNiches));
+                    }
+                  ?></td>
+                  <td>
+                    <strong><?= h($hitDomain) ?></strong>
+                    <?php if (function_exists('render_open_site_anchor')): ?>
+                      <?= render_open_site_anchor($hitUrl !== '' ? $hitUrl : $hitDomain, [
+                          'class' => 'small',
+                          'label' => 'Open website',
+                      ]) ?>
+                    <?php endif; ?>
+                  </td>
+                  <td>
+                    <?= h($countryLabel) ?>
+                  </td>
+                  <td><?= h((string) ($hit['language'] ?: '—')) ?></td>
+                  <td class="muted"><?= h(substr((string) ($hit['created_at'] ?? ''), 0, 10)) ?></td>
+                  <td class="actions">
+                    <a class="btn small" href="<?= h($openUrl) ?>"><?= h(prospect_open_in_folder_label($hitCountry)) ?></a>
+                    <form method="post" action="index.php?page=admin_prospects#super-search" class="inline-form"
+                          onsubmit="return confirm(<?= h(json_encode(
+                              'Remove ' . $hitDomain . ' from ' . $countryLabel . '?',
+                              JSON_UNESCAPED_UNICODE
+                          )) ?>);">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="action" value="remove_site">
+                      <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
+                      <input type="hidden" name="super_q" value="<?= h($superQ) ?>">
+                      <button class="btn secondary small danger" type="submit">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      <?php endif; ?>
+    </div>
+
+    <div class="card" id="add-sites">
+      <h2>Add sites</h2>
+      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
+      <form method="post" action="index.php?page=admin_prospects#add-sites">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="add_sites">
+        <div class="form-grid">
+          <?= render_country_typeahead($addCountry, [
+              'id' => 'add_country',
+              'label' => 'Country',
+              'required' => true,
+              'attrs' => 'data-fill-language="#add_language" data-fill-region="select[name=region]"',
+          ]) ?>
+          <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
+        </div>
+        <div style="margin-top:0.9rem">
+          <?= render_domains_paste_field('urls', $addRaw, [
+              'id' => 'urls',
+              'label' => 'Sites (root domains)',
+              'required' => true,
+              'rows' => 8,
+          ]) ?>
+        </div>
+        <p class="actions" style="margin-top:1rem">
+          <button class="btn" type="submit">Save to country database</button>
+        </p>
+      </form>
+    </div>
+    <?= sites_form_script_tag() ?>
+    <?= function_exists('open_site_script_tag') ? open_site_script_tag() : '' ?>
     <?php
     render_footer('admin');
     return;
@@ -937,12 +966,19 @@ if ($wantsAjax && !$emptyCountry) {
 }
 
 render_header('Our database · ' . $sheetLabel, 'admin');
+$copyAllLabel = prospect_copy_all_label($filterCreatedBy, $nicheFilter);
+$clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryName, [
+    'q' => $q,
+    'niche' => $nicheFilter,
+    'per_page' => $perPage,
+]);
 ?>
 <?php render_breadcrumbs([
     ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects'],
     ['label' => $sheetLabel],
 ]); ?>
+<?= guide_inventory() ?>
 <div class="topbar">
   <div>
     <h1><?= h($sheetLabel) ?></h1>
@@ -950,7 +986,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
       <?php if ($filterCreatedBy > 0): ?>
         Showing sites added by <strong><?= h($filterCreatedLabel) ?></strong>.
         Add/remove still apply to the whole country folder.
-        <a href="index.php?page=admin_prospects&amp;country=<?= urlencode($emptyCountry ? '_none' : $countryName) ?>">Clear person filter</a>
+        <a href="<?= h($clearPersonUrl) ?>">Clear person filter</a>
         ·
       <?php endif; ?>
       <span id="prospect_country_total_label"><?= (int) $countryTotal ?></span>
@@ -965,11 +1001,12 @@ render_header('Our database · ' . $sheetLabel, 'admin');
         match<span id="prospect_match_plural"><?= (int) $searchMatchCount === 1 ? '' : 'es' ?></span>
         for “<span id="prospect_match_q_label"><?= h($q) ?></span>”
       </span>
-      · choose rows per page below
     </p>
   </div>
   <div class="actions">
     <?php if (!$emptyCountry): ?>
+      <a class="btn" href="#add-sites">Add sites</a>
+      <span class="swe-copy-group">
       <button
         type="button"
         class="btn secondary"
@@ -979,10 +1016,14 @@ render_header('Our database · ' . $sheetLabel, 'admin');
         data-fallback-download-url="<?= h($downloadTxtUrl) ?>"
         data-count="<?= (int) $countryTotal ?>"
         <?= $countryTotal > 0 ? '' : 'disabled' ?>
-      >Copy all</button>
-      <a class="btn secondary" href="<?= h($downloadTxtUrl) ?>">Download .txt</a>
-      <a class="btn secondary" href="<?= h($downloadCsvUrl) ?>">Download CSV</a>
-      <a class="btn secondary" href="#add-sites">Add sites</a>
+      ><?= h($copyAllLabel) ?></button>
+      <?php
+      render_sheet_tool_menu_open('Download', 'Download this list');
+      ?>
+        <a class="btn secondary small" href="<?= h($downloadTxtUrl) ?>">Download .txt</a>
+        <a class="btn secondary small" href="<?= h($downloadCsvUrl) ?>">Download CSV</a>
+      <?php render_sheet_tool_menu_close(); ?>
+      </span>
     <?php endif; ?>
     <a class="btn secondary" href="<?= h($filterCreatedBy > 0
         ? 'index.php?page=admin_prospects&created_by=' . $filterCreatedBy
@@ -990,31 +1031,6 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   </div>
 </div>
 <p class="help" id="prospect_copy_status" hidden></p>
-
-<?php if (!$emptyCountry): ?>
-<div class="card" id="add-sites">
-  <h2>Add sites to <?= h($countryName) ?></h2>
-  <p class="help">Paste root domains into this country’s Our database folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
-  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="add_sites">
-    <input type="hidden" name="country" value="<?= h($countryName) ?>">
-    <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
-    <div style="margin-top:0.9rem">
-      <?= render_domains_paste_field('urls', $addRaw, [
-          'id' => 'urls',
-          'label' => 'Sites (root domains)',
-          'required' => true,
-          'rows' => 10,
-      ]) ?>
-    </div>
-    <p class="actions" style="margin-top:1rem">
-      <button class="btn" type="submit">Save to <?= h($countryName) ?></button>
-    </p>
-  </form>
-</div>
-<?= sites_form_script_tag() ?>
-<?php endif; ?>
 
 <div class="card" id="prospect-sites-card">
   <div class="invoice-list-toolbar prospect-site-toolbar" style="margin-bottom:0.75rem;flex-wrap:wrap;gap:0.65rem">
@@ -1041,7 +1057,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
         <input type="hidden" id="prospect_q_hidden" value="<?= h($q) ?>">
         <span class="sheet-search-meta muted" data-prospect-site-search-meta hidden></span>
       </label>
-      <div class="actions prospect-match-actions" id="prospect-match-actions"
+      <div class="actions prospect-match-actions swe-copy-group" id="prospect-match-actions"
           <?= ($q !== '' && $searchMatchCount > 0) ? '' : ' hidden' ?>>
         <button
           type="button"
@@ -1052,8 +1068,12 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           data-fallback-download-url="<?= h($downloadMatchesTxtUrl) ?>"
           data-count="<?= (int) $searchMatchCount ?>"
         >Copy matches</button>
-        <a class="btn secondary small" id="prospect_matches_txt" href="<?= h($downloadMatchesTxtUrl !== '' ? $downloadMatchesTxtUrl : '#') ?>">Matches .txt</a>
-        <a class="btn secondary small" id="prospect_matches_csv" href="<?= h($downloadMatchesCsvUrl !== '' ? $downloadMatchesCsvUrl : '#') ?>">Matches CSV</a>
+        <?php
+        render_sheet_tool_menu_open('Matches', 'Download matching sites');
+        ?>
+          <a class="btn secondary small" id="prospect_matches_txt" href="<?= h($downloadMatchesTxtUrl !== '' ? $downloadMatchesTxtUrl : '#') ?>">Matches .txt</a>
+          <a class="btn secondary small" id="prospect_matches_csv" href="<?= h($downloadMatchesCsvUrl !== '' ? $downloadMatchesCsvUrl : '#') ?>">Matches CSV</a>
+        <?php render_sheet_tool_menu_close(); ?>
       </div>
     </div>
     <?php endif; ?>
@@ -1082,7 +1102,7 @@ render_header('Our database · ' . $sheetLabel, 'admin');
           <input type="checkbox" data-sheet-select-all-check title="Select all matching rows on this page" aria-label="Select all matching rows on this page">
         </label>
       </th>
-      <th>Niche</th><th>Domain</th><th>URL</th><th>Language</th><th>Added by</th><th>When</th>
+      <th>Niche</th><th>Domain</th><th>Language</th><th>Added by</th><th>When</th>
     </tr></thead>
     <tbody id="prospect-site-tbody">
     <?= prospect_site_rows_html($rows) ?>
@@ -1092,15 +1112,28 @@ render_header('Our database · ' . $sheetLabel, 'admin');
   <div id="prospect-site-empty" class="empty-state"<?= $rows ? ' hidden' : '' ?>>
     <p data-prospect-empty-text><?= $q !== '' ? 'No search matches in this country.' : 'No sites in this country yet.' ?></p>
     <?php if (!$emptyCountry && $q === ''): ?>
-      <a class="btn" href="#add-sites" data-prospect-empty-add>Add sites above</a>
+      <a class="btn" href="#add-sites" data-prospect-empty-add>Add sites</a>
     <?php endif; ?>
   </div>
   <div id="prospect-site-pager"<?= !$rows ? ' hidden' : '' ?>>
     <p class="help sheet-search-empty" data-prospect-site-search-empty hidden>No search matches on this page.</p>
     <div class="actions" style="margin-top:0.8rem;align-items:center;gap:0.65rem;flex-wrap:wrap">
-      <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a><?php endif; ?>
-      <span data-prospect-page-label>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
+      <nav class="pagination" aria-label="Our database pages">
+      <?php if ($pageNum > 1): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Previous</a><?php endif; ?>
+      <?php if ($pages > 1): ?>
+        <?php foreach (invoice_list_page_numbers((int) $pageNum, $pages) as $pageLink): ?>
+          <?php if ($pageLink < 1): ?>
+            <span class="pagination-gap" aria-hidden="true">…</span>
+          <?php elseif ($pageLink === $pageNum): ?>
+            <span class="is-current" aria-current="page"><?= (int) $pageLink ?></span>
+          <?php else: ?>
+            <a href="?<?= h($qs) ?>&amp;p=<?= (int) $pageLink ?>"><?= (int) $pageLink ?></a>
+          <?php endif; ?>
+        <?php endforeach; ?>
+      <?php endif; ?>
       <?php if ($pageNum < $pages): ?><a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a><?php endif; ?>
+      </nav>
+      <span data-prospect-page-label>Page <?= $pageNum ?> / <?= $pages ?> · <?= (int) $perPage ?> per page</span>
       <?php
       render_sheet_per_page_filter([
           'page' => 'admin_prospects',
@@ -1115,18 +1148,50 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 </div>
 
 <?php if (!$emptyCountry): ?>
+<div class="card" id="add-sites">
+  <h2>Add sites to <?= h($countryName) ?></h2>
+  <p class="help">
+    Paste root domains into this country’s Our database folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.
+    <?php if ($filterCreatedBy > 0): ?>
+      New sites join the <strong>whole folder</strong>, not only <?= h($filterCreatedLabel) ?>’s list.
+    <?php endif; ?>
+  </p>
+  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="add_sites">
+    <input type="hidden" name="country" value="<?= h($countryName) ?>">
+    <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
+    <div style="margin-top:0.9rem">
+      <?= render_domains_paste_field('urls', $addRaw, [
+          'id' => 'urls',
+          'label' => 'Sites (root domains)',
+          'required' => true,
+          'rows' => 8,
+      ]) ?>
+    </div>
+    <p class="actions" style="margin-top:1rem">
+      <button class="btn" type="submit">Save to <?= h($countryName) ?></button>
+    </p>
+  </form>
+</div>
+<?= sites_form_script_tag() ?>
+<?php endif; ?>
+
+<?php if (!$emptyCountry): ?>
 <div class="card" id="remove-by-list" style="margin-top:1rem">
   <h2>Remove by list</h2>
   <p class="help">
     Paste site names (or upload a 1-column CSV) to remove those exact domains from
     <strong><?= h($countryName) ?></strong> in Our database.
+    This removes from the <strong>whole country folder</strong>, not only the current person or niche view.
   </p>
   <form
     method="post"
     action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#remove-by-list"
     enctype="multipart/form-data"
     onsubmit="return confirm(<?= h(json_encode(
-        'Remove all matching sites from this list in ' . $countryName . ' (Our database)?',
+        'Remove all matching sites from this list in ' . $countryName
+        . ' (Our database)? This removes from the whole country folder, not only a person or niche filter.',
         JSON_UNESCAPED_UNICODE
     )) ?>);"
   >
@@ -1146,5 +1211,6 @@ render_header('Our database · ' . $sheetLabel, 'admin');
 <script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
 <?= prospect_niche_taxonomy_script() ?>
 <?= niche_chips_script_tag() ?>
+<?= function_exists('open_site_script_tag') ? open_site_script_tag() : '' ?>
 <script src="<?= h(script_asset_url('js/prospects-country.js')) ?>" defer></script>
 <?php render_footer('admin'); ?>

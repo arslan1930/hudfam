@@ -387,6 +387,10 @@ function render_sheet_edit_toolbar(string $actionUrl, string $historyKey, array 
     if ($createdBy > 0) {
         $nav .= '<input type="hidden" name="created_by" value="' . $createdBy . '">';
     }
+    $niche = trim((string) ($opts['niche'] ?? ''));
+    if ($niche !== '') {
+        $nav .= '<input type="hidden" name="niche" value="' . h($niche) . '">';
+    }
     $url = h($actionUrl);
     echo '<div class="sheet-edit-toolbar" data-sheet-select-root data-sheet-history-key="' . h($historyKey) . '">';
     echo '<button type="button" class="btn secondary small sheet-history-btn" data-sheet-undo'

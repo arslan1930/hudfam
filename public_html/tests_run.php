@@ -355,7 +355,8 @@ try {
     );
     if ((int) ($adminDup['inserted'] ?? -1) === 0
         && (int) ($adminDup['duplicated'] ?? 0) >= 3
-        && str_contains(prospect_duplicates_deleted_message(3), '3 duplicated')) {
+        && prospect_duplicates_deleted_message(1) === '1 duplicate found and removed'
+        && str_contains(prospect_duplicates_deleted_message(3), '3 duplicates found and removed')) {
         pass('admin_add_urls_to_database auto-deletes duplicates');
     } else {
         fail('admin_add duplicate delete: ' . json_encode($adminDup));
@@ -407,11 +408,26 @@ try {
         && str_contains($rowHtml, 'data-label="Domain"')
         && strpos($rowHtml, 'data-label="Niche"') < strpos($rowHtml, 'data-label="Domain"')
         && str_contains($rowHtml, 'data-niche-chips')
+        && str_contains($rowHtml, 'Open website')
+        && !str_contains($rowHtml, 'data-label="URL"')
         && !str_contains($rowHtml, 'data-label="Status"')
         && !str_contains($rowHtml, 'contacting')) {
         pass('prospect_site_rows_html Niche before Domain, no Status');
     } else {
         fail('prospect_site_rows_html niche/status: ' . $rowHtml);
+    }
+    if (prospect_copy_all_label(0, '') === 'Copy all'
+        && prospect_copy_all_label(0, 'Health') === 'Copy Health'
+        && prospect_copy_all_label(12, '') === 'Copy this person’s sites'
+        && prospect_copy_all_label(12, '_none') === 'Copy this person’s sites with no niche'
+        && prospect_open_in_folder_label('Germany') === 'Open in Germany'
+        && prospect_open_in_folder_label('') === 'Open in No country'
+        && str_contains(prospect_country_sheet_url('Germany', ['q' => 'blog', 'niche' => 'Health']), 'q=blog')
+        && str_contains(prospect_country_sheet_url('Germany', ['q' => 'blog', 'niche' => 'Health']), 'niche=Health')
+        && !str_contains(prospect_country_sheet_url('Germany', ['q' => 'blog']), 'created_by=')) {
+        pass('prospect copy label + sheet URL keep filters');
+    } else {
+        fail('prospect copy/url helpers');
     }
 
     $parsedNiches = prospect_parse_niches('Health, fitness, Health, salud, Guest posts');
@@ -496,6 +512,17 @@ try {
         pass('update_prospect_site_niches autosave parse');
     } else {
         fail('update_prospect_site_niches: ' . json_encode($savedNiches));
+    }
+    $superNicheHits = array_column(search_prospect_sites_global('Medical', 50), 'domain');
+    $superExactHits = array_column(search_prospect_sites_global('txftest-finance-de.com', 20), 'domain');
+    if (in_array('txftest-finance-de.com', $superNicheHits, true)
+        && in_array('txftest-finance-de.com', $superExactHits, true)) {
+        pass('search_prospect_sites_global matches domain and niche');
+    } else {
+        fail('super search domain/niche: ' . json_encode([
+            'niche' => $superNicheHits,
+            'exact' => $superExactHits,
+        ]));
     }
     $nfSql = prospect_sql_niche_filter('p.niche', 'Health');
     if ($nfSql['sql'] !== '' && ($nfSql['params'][0] ?? '') === 'Health') {
