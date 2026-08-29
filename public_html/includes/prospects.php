@@ -1316,29 +1316,87 @@ function prospect_filter_gate_clear(): void
 }
 
 /**
+ * Unique domains from the last Filter run for $country, or [] if none / expired / mismatch.
+ *
+ * @return list<string>
+ */
+function prospect_filter_gate_domains(string $country): array
+{
+    $gate = $_SESSION['prospect_filter_gate'] ?? null;
+    if (!is_array($gate)) {
+        return [];
+    }
+    $country = trim($country);
+    if ($country === '' || ($gate['country'] ?? '') !== $country) {
+        return [];
+    }
+    $at = (int) ($gate['at'] ?? 0);
+    if ($at < 1 || (time() - $at) > 7200) {
+        return [];
+    }
+    $allowed = $gate['allowed'] ?? null;
+    if (!is_array($allowed)) {
+        return [];
+    }
+    $out = [];
+    foreach ($allowed as $d => $ok) {
+        if ($ok && is_string($d) && $d !== '') {
+            $out[] = $d;
+        }
+    }
+    return $out;
+}
+
+/**
+ * Drop sent domains from the Filter unique set (one TLD column at a time).
+ * Remaining domains stay gated so Separate / Send can continue without re-pasting.
+ *
+ * @param list<string> $sentDomains
+ * @return list<string>
+ */
+function prospect_filter_gate_subtract(string $country, array $sentDomains): array
+{
+    $left = prospect_filter_gate_domains($country);
+    if ($left === []) {
+        prospect_filter_gate_clear();
+        return [];
+    }
+    $remove = [];
+    foreach ($sentDomains as $d) {
+        $n = normalize_domain((string) $d);
+        if ($n !== '') {
+            $remove[$n] = true;
+        }
+    }
+    $remaining = [];
+    foreach ($left as $d) {
+        if (empty($remove[$d])) {
+            $remaining[] = $d;
+        }
+    }
+    if ($remaining === []) {
+        prospect_filter_gate_clear();
+        return [];
+    }
+    prospect_filter_gate_set($country, $remaining);
+    return $remaining;
+}
+
+/**
  * True when $country matches the last Filter run and every domain is in that unique set.
  *
  * @param list<string> $domains
  */
 function prospect_filter_gate_allows(string $country, array $domains): bool
 {
-    $gate = $_SESSION['prospect_filter_gate'] ?? null;
-    if (!is_array($gate)) {
-        return false;
-    }
-    $country = trim($country);
-    if ($country === '' || ($gate['country'] ?? '') !== $country) {
-        return false;
-    }
-    $at = (int) ($gate['at'] ?? 0);
-    if ($at < 1 || (time() - $at) > 7200) {
-        return false;
-    }
-    $allowed = $gate['allowed'] ?? null;
-    if (!is_array($allowed)) {
-        return false;
-    }
     if (!$domains) {
+        return false;
+    }
+    $allowed = [];
+    foreach (prospect_filter_gate_domains($country) as $d) {
+        $allowed[$d] = true;
+    }
+    if ($allowed === []) {
         return false;
     }
     foreach ($domains as $d) {

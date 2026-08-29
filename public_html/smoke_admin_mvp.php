@@ -2538,6 +2538,12 @@ if (!str_contains($httpSmoke, 'forgot_password page')
 } else {
     ok('tests_http.php Account/forgot route asserts');
 }
+if (!str_contains($httpSmoke, 'finder Send this ending stays on Filter')
+    || !str_contains($httpSmoke, 'finder Send leftover unique still on Filter')) {
+    fail('tests_http.php missing finder Send stay-on-Filter assert');
+} else {
+    ok('tests_http.php finder Send stays on Filter');
+}
 
 $prospectCheckSf = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 if (!str_contains($prospectCheckSf, 'Separate all')
@@ -2605,6 +2611,20 @@ if (!str_contains($prospectsLib, 'function prospect_filter_gate_set')
 } else {
     ok('prospect Filter gate helpers');
 }
+if (!str_contains($prospectsLib, 'function prospect_filter_gate_subtract')
+    || !str_contains($prospectsLib, 'function prospect_filter_gate_domains')
+    || !str_contains($prospectCheckSf, 'prospect_filter_gate_subtract')) {
+    fail('Filter missing remaining-after-Send gate subtract');
+} else {
+    ok('Filter Send subtracts remaining unique');
+}
+if (str_contains($prospectCheckSf, 'page=team_prospect_batch&id=')) {
+    fail('Filter & add still redirects Add/Send to Site adding history');
+} elseif (!str_contains($prospectCheckSf, 'page=team_prospect_check&country=')) {
+    fail('Filter & add missing stay-on-Filter redirect');
+} else {
+    ok('Filter & add stays on Filter after Add/Send');
+}
 if (!str_contains($prospectsLib, 'function filter_domains_routed_against_prospects')
     || !str_contains($prospectsLib, 'route_domains_by_country_tld')) {
     fail('prospects.php missing routed Filter helper');
@@ -2639,6 +2659,11 @@ if (!str_contains($testsSf, 'group_domains_by_tld splits')) {
     fail('tests_run.php missing TLD separate coverage');
 } else {
     ok('tests_run TLD separate coverage');
+}
+if (!str_contains($testsSf, 'gate subtract leaves remaining unique')) {
+    fail('tests_run.php missing Filter Send remaining-unique coverage');
+} else {
+    ok('tests_run Filter Send remaining unique');
 }
 
 $sitesFormJs = file_get_contents($root . '/assets/js/sites-form.js') ?: '';

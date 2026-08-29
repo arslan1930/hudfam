@@ -6632,6 +6632,24 @@ try {
     } else {
         fail('gate still open after clear');
     }
+    prospect_filter_gate_set('Germany', ['alpha.de', 'beta.at', 'gamma.com']);
+    $left = prospect_filter_gate_subtract('Germany', ['alpha.de']);
+    if (
+        $left === ['beta.at', 'gamma.com']
+        && prospect_filter_gate_allows('Germany', ['beta.at'])
+        && !prospect_filter_gate_allows('Germany', ['alpha.de'])
+        && prospect_filter_gate_domains('Germany') === ['beta.at', 'gamma.com']
+    ) {
+        pass('gate subtract leaves remaining unique');
+    } else {
+        fail('gate subtract remaining=' . json_encode($left));
+    }
+    $emptyLeft = prospect_filter_gate_subtract('Germany', ['beta.at', 'gamma.com']);
+    if ($emptyLeft === [] && prospect_filter_gate_domains('Germany') === []) {
+        pass('gate subtract last domains clears');
+    } else {
+        fail('gate subtract last=' . json_encode($emptyLeft));
+    }
 } catch (Throwable $e) {
     fail('filter gate: ' . $e->getMessage());
 }
