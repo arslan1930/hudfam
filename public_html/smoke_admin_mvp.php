@@ -1415,7 +1415,10 @@ if ($pushNeedle === false || $saveAfterPush === false
 if (!str_contains($ordersPage, 'Mark paid')
     || !str_contains($ordersPage, 'btn-paid-mark')
     || !str_contains($ordersPage, 'Remove paid mark?')
-    || !str_contains($ordersPage, 'With live URL')) {
+    || !str_contains($ordersPage, 'With live URL')
+    || !str_contains($ordersPage, 'data-on-invoice')
+    || !str_contains($ordersPage, 'order-on-invoice')
+    || !str_contains($ordersPage, 'Already on invoice')) {
     fail('orders missing Mark paid label or Processing live-URL footer');
 } else {
     ok('orders Mark paid label + Processing live-URL footer');
@@ -1484,6 +1487,8 @@ if (!str_contains($invoicesLib, 'function count_invoices')
     || !str_contains($invoicesLib, 'function invoices_where_sql')
     || !str_contains($invoicesLib, 'function count_invoices_by_work_status')
     || !str_contains($invoicesLib, 'function count_invoices_unpaid')
+    || !str_contains($invoicesLib, 'function order_items_on_open_invoices')
+    || !str_contains($invoicesLib, 'function filter_order_items_not_on_open_invoice')
     || !str_contains($invoicesLib, 'function normalize_invoice_list_filter')
     || !str_contains($invoicesLib, 'function invoice_list_query')
     || !str_contains($invoicesLib, "i.work_status='draft'")
@@ -1501,6 +1506,12 @@ foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden
     }
 }
 ok('tests_run OM coverage needles');
+foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push'] as $needle) {
+    if (!str_contains($testsFull, $needle)) {
+        fail("tests_run.php missing OM coverage: {$needle}");
+    }
+}
+ok('tests_run OM double-bill coverage');
 
 $invoiceGenerate = file_get_contents($root . '/pages/admin/invoice_generate.php') ?: '';
 if (!str_contains($invoiceGenerate, 'csrf_field()')) {
