@@ -175,16 +175,19 @@ try {
                         if ($dupN > 0) {
                             flash('fade', prospect_duplicates_deleted_message($dupN) . '.');
                         }
-                        prospect_filter_gate_clear();
+                        // Send this ending: keep leftover unique so the next TLD can go out
+                        // without re-pasting. Add unique (whole list) closes the gate.
+                        if ($action === 'send_tld_column') {
+                            prospect_filter_gate_subtract($country, $selected);
+                        } else {
+                            prospect_filter_gate_clear();
+                        }
                         // Only jump to Extracting when that tool is unlocked for this user.
+                        // Finding-only users stay on Filter (history is via Site adding history).
                         if (!empty($added['extract_batch_id']) && $canSendExtracting) {
                             redirect('index.php?page=team_extract_batch&id=' . (int) $added['extract_batch_id']);
                         }
-                        $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
-                        if (!empty($added['batch_id'])) {
-                            $redir = 'index.php?page=team_prospect_batch&id=' . (int) $added['batch_id'];
-                        }
-                        redirect($redir);
+                        redirect('index.php?page=team_prospect_check&country=' . urlencode($country));
                     }
                 }
             }
@@ -231,6 +234,31 @@ try {
     flash('error', 'Prospects database tables are missing or broken. Open upgrade.php once, then try Filter again.');
 }
 
+// Drop a stale Filter gate when the selected country no longer matches.
+$gateCountry = (string) (($_SESSION['prospect_filter_gate'] ?? [])['country'] ?? '');
+if ($gateCountry !== '' && $country !== '' && $gateCountry !== $country) {
+    prospect_filter_gate_clear();
+}
+
+// After Send this ending (GET back to Filter), re-show leftover unique from the gate.
+if ($result === null && $country !== '') {
+    $gated = prospect_filter_gate_domains($country);
+    if ($gated) {
+        try {
+            $restored = filter_domains_routed_against_prospects($gated, $country);
+            if (!empty($restored['new'])) {
+                $result = $restored;
+                $raw = implode("\n", $result['new']);
+                prospect_filter_gate_set($country, $result['new']);
+            } else {
+                prospect_filter_gate_clear();
+            }
+        } catch (Throwable $e) {
+            // Leave the paste box empty; user can Filter again.
+        }
+    }
+}
+
 $tldCheck = [
     'warn' => false,
     'message' => '',
@@ -249,12 +277,6 @@ $tldGroups = ($result && !empty($result['new']))
     ? group_domains_by_tld($result['new'])
     : [];
 $sendBtnLabel = 'Send this ending';
-
-// Drop a stale Filter gate when the selected country no longer matches.
-$gateCountry = (string) (($_SESSION['prospect_filter_gate'] ?? [])['country'] ?? '');
-if ($gateCountry !== '' && $country !== '' && $gateCountry !== $country) {
-    prospect_filter_gate_clear();
-}
 
 $stepPaste = !$result ? 'active' : 'done';
 $stepFilter = $result ? 'active' : '';
