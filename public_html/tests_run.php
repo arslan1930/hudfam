@@ -4874,6 +4874,8 @@ try {
         && str_contains($ordersPhpSrc, "copy' => 'live_urls'")
         && str_contains($ordersPhpSrc, 'order_pipeline_download_txt')
         && str_contains($ordersPhpSrc, 'Could not copy. Use Download .txt')
+        && str_contains($ordersPhpSrc, 'Mark paid')
+        && str_contains($ordersPhpSrc, 'With live URL')
         && !str_contains($sitePricesLibSrc, 'Copy all live URLs')
         && !str_contains($sitePricesLibSrc, 'Copy selected live URLs')
         && !str_contains($teamWpSrc, 'Copy all live URLs')
