@@ -3259,9 +3259,25 @@ tr.swe-row-updated {
   gap: 0.55rem 1rem;
   margin-bottom: 0.85rem;
 }
+.invoice-list-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.invoice-list-search {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0;
+  flex-wrap: wrap;
+}
 .invoice-list-search input[type="search"] {
-  width: 9.5rem;
-  max-width: 38vw;
+  flex: 1 1 16rem;
+  width: auto;
+  min-width: 12rem;
+  max-width: none;
 }
 .dashboard-search input[type="search"] {
   width: 11rem;
