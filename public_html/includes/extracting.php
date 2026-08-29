@@ -233,7 +233,8 @@ function list_extract_batches(int $limit = 2000): array
 function list_extract_batch_country_nav(int $currentId = 0): array
 {
     ensure_extract_schema();
-    purge_expired_empty_extract_batches();
+    // Do not purge here: an open empty sheet must stay in the switcher.
+    // Hub list_extract_batches() still removes countries empty for 1 hour.
     $currentId = max(0, $currentId);
     $sql = 'SELECT id, country FROM extract_batches WHERE (site_count > 0';
     if ($currentId > 0) {

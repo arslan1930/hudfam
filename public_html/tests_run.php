@@ -1893,6 +1893,16 @@ try {
     } else {
         fail('extract nav unexpected: ' . json_encode(['nav' => $nav, 'without' => $without]));
     }
+    db()->prepare(
+        'UPDATE extract_batches SET site_count=0, emptied_at = DATE_SUB(NOW(), INTERVAL 2 HOUR) WHERE id=?'
+    )->execute([$navEmpty]);
+    list_extract_batch_country_nav($navEmpty);
+    $stillOpen = get_extract_batch($navEmpty);
+    if ($stillOpen) {
+        pass('extract country nav does not purge open empty batch');
+    } else {
+        fail('extract country nav purged the open empty batch');
+    }
     $capped = list_extract_batches(10000);
     if (is_array($capped)) {
         pass('list_extract_batches accepts raised cap');
