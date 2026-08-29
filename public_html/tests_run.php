@@ -2435,6 +2435,21 @@ try {
             'other_de' => $otherDe,
         ]));
     }
+    $navRows = list_email_campaign_project_country_nav($multiPid);
+    $navNames = array_map(static fn ($s) => (string) $s['country'], $navRows);
+    $navIds = array_map(static fn ($s) => (int) $s['id'], $navRows);
+    sort($navNames);
+    $otherNav = list_email_campaign_project_country_nav($otherPid);
+    $otherNavIds = array_map(static fn ($s) => (int) $s['id'], $otherNav);
+    if ($navNames === ['France', 'Germany']
+        && in_array($multiDe, $navIds, true)
+        && in_array($multiFr, $navIds, true)
+        && !in_array($otherDe, $navIds, true)
+        && $otherNavIds === [$otherDe]) {
+        pass('campaign country nav lists only this project’s countries');
+    } else {
+        fail('country nav: ' . json_encode(['nav' => $navRows, 'other' => $otherNav]));
+    }
     $projSuggest = search_email_campaign_suggestions_for_project($multiPid, 'txfcamp-multi', 20);
     $projDomains = array_map(static fn ($s) => (string) $s['domain'], $projSuggest);
     sort($projDomains);

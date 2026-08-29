@@ -1489,6 +1489,33 @@ function list_email_campaign_sheets_for_project(int $projectId): array
     return list_email_campaign_sheets(null, $projectId);
 }
 
+/**
+ * Cheap country switcher list (id + name only — no row counts).
+ *
+ * @return list<array{id:int,country:string}>
+ */
+function list_email_campaign_project_country_nav(int $projectId): array
+{
+    if ($projectId < 1) {
+        return [];
+    }
+    ensure_email_campaign_schema();
+    $st = db()->prepare(
+        'SELECT id, name FROM email_campaign_sheets WHERE project_id = ? ORDER BY name ASC'
+    );
+    $st->execute([$projectId]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $country = (string) ($row['name'] ?? '');
+        $canon = resolve_canonical_country($country);
+        $out[] = [
+            'id' => (int) $row['id'],
+            'country' => $canon ? $canon['name'] : $country,
+        ];
+    }
+    return $out;
+}
+
 function count_email_campaign_sheets(): int
 {
     ensure_email_campaign_schema();

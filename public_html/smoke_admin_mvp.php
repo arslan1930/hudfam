@@ -2808,6 +2808,10 @@ if (!str_contains($campUi, 'href="#camp-fill-gaps"')
     || substr_count($campUi, 'id="camp-add-toggle"') !== 1
     || !str_contains($campLibSmokeUx, 'function email_campaign_default_language')
     || !str_contains($campLibSmokeUx, 'function email_campaign_fill_blank_row_languages')
+    || !str_contains($campLibSmokeUx, 'function list_email_campaign_project_country_nav')
+    || !str_contains($campUi, 'id="camp-country-jump"')
+    || !str_contains($campUi, 'Open another country in this project without going back')
+    || !str_contains($cssUi, '.camp-country-jump select')
     || !str_contains($cssUi, '.swe-checkpoint-compact .with-info-label')) {
     fail('campaign sheet missing Fill gaps header, chip counts, or language default');
 } else {

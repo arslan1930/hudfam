@@ -570,6 +570,23 @@ if ($sheetId > 0) {
     $projectHref = $sheetProjectId > 0
         ? ($campBase . '&project=' . $sheetProjectId)
         : $campBase;
+    $projectCountryNav = $sheetProjectId > 0
+        ? list_email_campaign_project_country_nav($sheetProjectId)
+        : [];
+    if ($projectCountryNav === []) {
+        $projectCountryNav[] = ['id' => $sheetId, 'country' => $sheetCountry];
+    } else {
+        $navHasCurrent = false;
+        foreach ($projectCountryNav as $navRow) {
+            if ((int) ($navRow['id'] ?? 0) === $sheetId) {
+                $navHasCurrent = true;
+                break;
+            }
+        }
+        if (!$navHasCurrent) {
+            array_unshift($projectCountryNav, ['id' => $sheetId, 'country' => $sheetCountry]);
+        }
+    }
     $gapDiff = diff_email_campaign_vs_archives($sheetId, $sheetCountry, ['sample' => 20]);
     $gapCounts = is_array($gapDiff['counts'] ?? null) ? $gapDiff['counts'] : [];
     $gapSamples = is_array($gapDiff['samples'] ?? null) ? $gapDiff['samples'] : [];
@@ -588,7 +605,34 @@ if ($sheetId > 0) {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info($sheetCountry, 'Country sheet inside project “' . $projectName . '”. Data here is only for this country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.') ?></h1>
+        <form class="camp-country-jump" method="get" action="index.php" data-no-draft>
+          <input type="hidden" name="page" value="admin_emails_data">
+          <input type="hidden" name="folder" value="email_campaigns">
+          <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
+          <h1 class="camp-sheet-title">
+            <label class="with-info camp-country-jump-label" for="camp-country-jump">
+              <span class="visually-hidden">Country in <?= h($projectName) ?></span>
+              <select id="camp-country-jump" name="sheet" onchange="this.form.submit()"
+                      title="Open another country in this project without going back"
+                      aria-label="Country in <?= h($projectName) ?>">
+                <?php foreach ($projectCountryNav as $navRow):
+                    $navId = (int) ($navRow['id'] ?? 0);
+                    $navName = (string) ($navRow['country'] ?? '');
+                    if ($navId < 1 || $navName === '') {
+                        continue;
+                    }
+                    ?>
+                  <option value="<?= $navId ?>"<?= $navId === $sheetId ? ' selected' : '' ?>><?= h($navName) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <?= info_icon(
+                  'Country sheet inside project “' . $projectName . '”. Pick another country in this project from this list — you do not need to go back to the project. Data here is only for the open country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.',
+                  'About this country sheet'
+              ) ?>
+            </label>
+            <noscript><button class="btn small" type="submit">Open</button></noscript>
+          </h1>
+        </form>
         <p class="muted">
           Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
@@ -606,7 +650,7 @@ if ($sheetId > 0) {
         <?php render_task_presence('camp:' . $sheetId, 'Others on Email Sheet · ' . $sheetCountry); ?>
         <a class="btn secondary" href="#camp-fill-gaps">Fill gaps</a>
         <a class="btn secondary" href="#camp-bulk-add">Paste / import</a>
-        <a class="btn secondary" href="<?= h($projectHref) ?>">Project countries</a>
+        <a class="btn secondary" href="<?= h($projectHref) ?>">All countries</a>
       </div>
     </div>
     <p class="help">
@@ -1281,7 +1325,7 @@ if ($sheetId > 0) {
         <?php else: ?>
           Communication Team search is <strong>hidden</strong> for this project.
           Turn it on from
-          <a href="<?= h($projectHref) ?>">Project countries</a>.
+          <a href="<?= h($projectHref) ?>">All countries</a>.
         <?php endif; ?>
       </p>
     </div>
