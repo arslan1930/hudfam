@@ -3686,7 +3686,7 @@ a.card.stat:focus-visible {
 .order-sheet .col-profit { width: 6.5rem; text-align: right; }
 .order-sheet .col-del { width: 4.8rem; text-align: center; }
 .order-sheet .col-live { min-width: 240px; }
-.order-sheet .col-paid { width: 4.6rem; text-align: center; }
+.order-sheet .col-paid { width: 6.6rem; text-align: center; }
 .btn-paid {
   display: inline-flex;
   align-items: center;
@@ -3703,6 +3703,12 @@ a.card.stat:focus-visible {
   text-transform: uppercase;
   cursor: pointer;
   line-height: 1.1;
+}
+.btn-paid.btn-paid-mark {
+  text-transform: none;
+  letter-spacing: 0;
+  min-width: 5.6rem;
+  font-weight: 650;
 }
 .btn-paid:hover {
   border-color: #4a9b6e;

@@ -608,7 +608,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL'];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
@@ -628,6 +628,7 @@ if ($r['status'] === 200
     && str_contains($r['body'], 'Push to invoice')
     && str_contains($r['body'], 'Download .txt')
     && str_contains($r['body'], '<span>Bill</span>')
+    && str_contains($r['body'], 'Mark paid')
     && (str_contains($r['body'], 'Push unpaid') || str_contains($r['body'], 'Generate invoice') || str_contains($r['body'], 'none ticked'))) {
     pass('admin orders completed copy/download');
 } else {

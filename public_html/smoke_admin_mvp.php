@@ -1403,6 +1403,23 @@ if (str_contains($ordersPage, 'if ($isProcessing):') && str_contains($ordersPage
 } else {
     fail('orders Push to invoice not gated to Completed');
 }
+$pushNeedle = strpos($ordersPage, "action === 'push_invoice'");
+$saveAfterPush = $pushNeedle !== false ? strpos($ordersPage, '$saveCurrent();', $pushNeedle) : false;
+$nextActionAfterPush = $pushNeedle !== false ? strpos($ordersPage, "action ===", $pushNeedle + 10) : false;
+if ($pushNeedle === false || $saveAfterPush === false
+    || ($nextActionAfterPush !== false && $saveAfterPush > $nextActionAfterPush)) {
+    fail('orders Push to invoice must save the sheet first');
+} else {
+    ok('orders Push to invoice saves sheet first');
+}
+if (!str_contains($ordersPage, 'Mark paid')
+    || !str_contains($ordersPage, 'btn-paid-mark')
+    || !str_contains($ordersPage, 'Remove paid mark?')
+    || !str_contains($ordersPage, 'With live URL')) {
+    fail('orders missing Mark paid label or Processing live-URL footer');
+} else {
+    ok('orders Mark paid label + Processing live-URL footer');
+}
 if (!str_contains($ordersPage, 'Unpaid LIVE') || !str_contains($ordersPage, "value=\"unpaid\"")) {
     fail('orders missing unpaid LIVE filter');
 } else {

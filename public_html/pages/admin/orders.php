@@ -260,6 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isCompleted) {
                 throw new InvalidArgumentException('Push to invoice is only on Completed orders.');
             }
+            $saveCurrent();
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
             if (!$selectedIds) {
@@ -609,7 +610,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?></th>
           <th class="col-paid"><?= $isProcessing
               ? label_with_info('Complete', 'Mark this row completed after the live URL is filled. Moves it to Completed orders and sets Website prices to Completed.')
-              : label_with_info('Paid', 'Paid after the invoice is marked paid, or click here. Paid rows cannot be pushed to a new invoice.') ?></th>
+              : label_with_info('Paid', 'Click Mark paid after payment, or mark Paid on the invoice. Green Paid means it is already paid. Paid rows cannot be pushed to a new invoice.') ?></th>
           <th class="col-profit"><?= label_with_info('Profit', 'Auto-calculated: Decided price − Owner price.') ?></th>
           <th class="col-month"><?= label_with_info('Month', 'Article month, or for Banner/Textlink the start month plus end month.') ?></th>
           <th class="col-del"><?= label_with_info('Remove', 'Deletes this row after confirmation. Cannot be undone.') ?></th>
@@ -763,15 +764,15 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
               <button class="btn-paid is-paid" type="submit"
                       title="Click to remove paid mark"
                       data-paid="paid"
-                      onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='unmark_paid';">
+                      onclick="if (!confirm('Remove paid mark?')) return false; document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='unmark_paid';">
                 Paid
               </button>
             <?php else: ?>
-              <button class="btn-paid" type="submit"
+              <button class="btn-paid btn-paid-mark" type="submit"
                       data-paid=""
                       title="Mark this completed row as paid"
                       onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_paid';">
-                Paid
+                Mark paid
               </button>
             <?php endif; ?>
           </td>
@@ -825,8 +826,8 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <td><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
           <td><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
           <td>
-            <span class="muted">Completed </span>
-            <strong data-total-completed><?= (int) $completedCount ?></strong>
+            <span class="muted"><?= $isProcessing ? 'With live URL ' : 'Completed ' ?></span>
+            <strong data-total-completed><?= (int) ($isProcessing ? $liveFilledCount : $completedCount) ?></strong>
           </td>
           <td></td>
           <td><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
