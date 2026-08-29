@@ -758,6 +758,9 @@ if (!str_contains($adminProspects, 'invoice_list_page_numbers')
     || str_contains($adminProspects, 'Add sites above')
     || str_contains($adminProspects, 'choose rows per page below')
     || str_contains($adminProspects, 'Team adds merge')
+    || str_contains($adminProspects, 'no. of sites')
+    || !str_contains($adminProspects, 'Click a market to open it')
+    || !str_contains($adminProspects, "' is-empty'")
     || !str_contains($adminProspects, 'Team Filter &amp; add writes into these folders.')
     || !str_contains($adminProspects, 'data-show-processing="Saving sites…')) {
     fail('Our database missing hub/country UX (guide, pager, Open in, empty toggle)');
@@ -915,6 +918,9 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, 'Restore already wrote localStorage')
     || !str_contains($draftJsSmoke, 'restoreBannerVisible')
     || !str_contains($draftJsSmoke, 'saveForm(form, index, true)')
+    || !str_contains($draftJsSmoke, "typeahead::")
+    || !str_contains($draftJsSmoke, 'typeahead:select')
+    || !str_contains($draftJsSmoke, 'Typed country')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -2841,7 +2847,9 @@ if (!str_contains($teamHistory, 'render_breadcrumbs')
 }
 if (!str_contains($helpers, 'function folder_open_cue')
     || !str_contains($teamDash, 'folder_open_cue()')
-    || !str_contains($cssUi, '.folder-open {')) {
+    || !str_contains($cssUi, '.folder-open {')
+    || !str_contains($cssUi, '.folder.is-empty')
+    || !str_contains($cssUi, '.prospect-markets-toolbar .sheet-search')) {
     fail('folder Open cue missing from cards or CSS');
 } else {
     ok('folder Open cue on tool cards');

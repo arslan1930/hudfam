@@ -484,7 +484,7 @@ if (!$inCountry && !$emptyCountry) {
         </label>
       </div>
       <p class="help" style="margin:0.45rem 0 0">
-        Click a market to expand. Empty countries stay hidden until you search the name or
+        Click a market to open it. Empty countries stay hidden until you search or
         <label class="prospect-show-empty">
           <input id="prospect-show-empty" type="checkbox" data-no-draft>
           show empty countries
@@ -533,7 +533,7 @@ if (!$inCountry && !$emptyCountry) {
                     . $siteCount . ' sites'
                 ));
                 ?>
-              <a class="folder"
+              <a class="folder<?= $siteCount < 1 ? ' is-empty' : '' ?>"
                  href="index.php?page=admin_prospects&amp;country=<?= urlencode($href) ?>"
                  data-prospect-country
                  data-prospect-empty="<?= $siteCount < 1 ? '1' : '0' ?>"

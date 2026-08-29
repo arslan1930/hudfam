@@ -164,7 +164,10 @@ if (str_contains($procJs, "method === 'get'")
     && str_contains($procJs, 'GET forms do')
     && str_contains($draftJs, 'Restore already wrote localStorage')
     && str_contains($draftJs, 'restoreBannerVisible')
-    && str_contains($draftJs, 'saveForm(form, index, true)')) {
+    && str_contains($draftJs, 'saveForm(form, index, true)')
+    && str_contains($draftJs, "typeahead::")
+    && str_contains($draftJs, 'typeahead:select')
+    && str_contains($draftJs, 'Typed country')) {
     pass('GET forms skip overlay unless marked; restore does not re-save draft');
 } else {
     fail('processing overlay GET skip / draft restore re-save guard');
