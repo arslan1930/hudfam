@@ -450,6 +450,18 @@ if (!$inCountry && !$emptyCountry) {
     foreach ($folders as $f) {
         $grandTotal += (int) $f['total'];
     }
+    $busiestRegion = '';
+    $busiestTotal = 0;
+    foreach ($byRegion as $regionLabel => $list) {
+        $t = 0;
+        foreach ($list as $f) {
+            $t += (int) $f['total'];
+        }
+        if ($t > $busiestTotal) {
+            $busiestTotal = $t;
+            $busiestRegion = $regionLabel;
+        }
+    }
 
     render_header('Our database', 'admin');
     ?>
@@ -496,7 +508,7 @@ if (!$inCountry && !$emptyCountry) {
     <?php
     foreach ($byRegion as $regionLabel => $list):
         $marketId = 'market-' . preg_replace('/[^a-z0-9]+/i', '-', strtolower($regionLabel));
-        $openByDefault = false;
+        $openByDefault = ($busiestTotal > 0 && $regionLabel === $busiestRegion);
         $marketTotal = 0;
         $filledCount = 0;
         foreach ($list as $f) {
@@ -538,7 +550,6 @@ if (!$inCountry && !$emptyCountry) {
                  data-prospect-country
                  data-prospect-empty="<?= $siteCount < 1 ? '1' : '0' ?>"
                  data-search="<?= h($searchHay) ?>"
-                 title="<?= h($label) ?>"
                  <?= $siteCount < 1 ? 'hidden' : '' ?>>
                 <h3>
                   <span class="prospect-folder-label"><?= h($label) ?></span>

@@ -491,7 +491,10 @@ if ($r['status'] === 200
     && str_contains($hubBody, 'Click a market to open it')
     && str_contains($hubBody, 'data-prospect-empty=')
     && str_contains($hubBody, 'Team Filter &amp; add writes into these folders.')
+    && str_contains($hubBody, 'data-open-default="1"')
+    && substr_count($hubBody, 'data-open-default="1"') === 1
     && str_contains($hubBody, 'data-show-processing="Saving sites…')
+    && !str_contains($hubBody, 'Europe first')
     && !str_contains($hubBody, 'Team adds merge')
     && !str_contains($hubBody, 'no. of sites')
     && !str_contains($hubBody, 'Go to site')
