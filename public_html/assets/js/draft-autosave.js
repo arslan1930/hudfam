@@ -90,6 +90,11 @@
         data[key] = el.value;
       }
     }
+    form.querySelectorAll('[data-typeahead-input]').forEach(function (el) {
+      var id = String(el.id || '');
+      if (!id) return;
+      data['typeahead::' + id] = el.value;
+    });
     return data;
   }
 
@@ -123,6 +128,25 @@
         changed++;
       }
     }
+    form.querySelectorAll('[data-typeahead-input]').forEach(function (el) {
+      var id = String(el.id || '');
+      if (!id) return;
+      var tkey = 'typeahead::' + id;
+      if (!Object.prototype.hasOwnProperty.call(data, tkey)) return;
+      if (String(el.value) !== String(data[tkey])) {
+        el.value = data[tkey];
+        changed++;
+      }
+    });
+    form.querySelectorAll('[data-typeahead]').forEach(function (root) {
+      var hidden = root.querySelector('[data-typeahead-value]');
+      var vis = root.querySelector('[data-typeahead-input]');
+      if (!hidden || !vis) return;
+      if (hidden.value && vis.value !== hidden.value) {
+        vis.value = hidden.value;
+        changed++;
+      }
+    });
     return changed;
   }
 
@@ -269,12 +293,26 @@
     form.setAttribute('data-draft-bound', '1');
     form.addEventListener('input', function (e) {
       if (restoring) return;
-      if (!e.target || isSkippable(e.target)) return;
+      if (!e.target) return;
+      if (e.target.getAttribute && e.target.hasAttribute('data-typeahead-input')) {
+        scheduleSave(form, index);
+        return;
+      }
+      if (isSkippable(e.target)) return;
       scheduleSave(form, index);
     });
     form.addEventListener('change', function (e) {
       if (restoring) return;
-      if (!e.target || isSkippable(e.target)) return;
+      if (!e.target) return;
+      if (e.target.getAttribute && e.target.hasAttribute('data-typeahead-input')) {
+        scheduleSave(form, index);
+        return;
+      }
+      if (isSkippable(e.target)) return;
+      scheduleSave(form, index);
+    });
+    form.addEventListener('typeahead:select', function () {
+      if (restoring) return;
       scheduleSave(form, index);
     });
     form.addEventListener('submit', function () {
@@ -320,14 +358,6 @@
         var n = apply(form, parsed.data);
         if (n > 0) {
           restoredAny = true;
-          // Sync typeahead display from the restored hidden value.
-          form.querySelectorAll('[data-typeahead]').forEach(function (root) {
-            var hidden = root.querySelector('[data-typeahead-value]');
-            var vis = root.querySelector('[data-typeahead-input]');
-            if (hidden && vis && hidden.value && vis.value !== hidden.value) {
-              vis.value = hidden.value;
-            }
-          });
           // Paste Ready/attention listens on the textarea. Keep restoring=true
           // so this does not paint “Draft saved” next to the yellow banner.
           form.querySelectorAll('textarea[name], input:not([type="hidden"]), select').forEach(function (el) {

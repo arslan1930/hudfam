@@ -488,9 +488,12 @@ if ($r['status'] === 200
     && $marketsAt < $addAt && $addAt < $superAt
     && str_contains($hubBody, 'What is this?')
     && str_contains($hubBody, 'show empty countries')
+    && str_contains($hubBody, 'Click a market to open it')
+    && str_contains($hubBody, 'data-prospect-empty=')
     && str_contains($hubBody, 'Team Filter &amp; add writes into these folders.')
     && str_contains($hubBody, 'data-show-processing="Saving sites…')
     && !str_contains($hubBody, 'Team adds merge')
+    && !str_contains($hubBody, 'no. of sites')
     && !str_contains($hubBody, 'Go to site')
     && !str_contains($hubBody, 'Fatal error')) {
     pass('admin Our database hub Markets then Add sites');
