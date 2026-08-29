@@ -126,7 +126,12 @@
     return changed;
   }
 
-  function saveForm(form, index) {
+  function restoreBannerVisible() {
+    var bar = document.getElementById('draft-restore-banner');
+    return !!(bar && !bar.hidden);
+  }
+
+  function saveForm(form, index, silent) {
     if (restoring) return;
     try {
       var key = formStorageKey(form, index);
@@ -136,7 +141,8 @@
         data: data,
       };
       localStorage.setItem(key, JSON.stringify(payload));
-      markStatus(form, true);
+      // Yellow restore banner is the only draft story until Save or Discard.
+      if (!silent) markStatus(form, true);
     } catch (e) {
       // quota / private mode
     }
@@ -173,14 +179,18 @@
   }
 
   function scheduleSave(form, index) {
+    // Restore already wrote localStorage. Re-saving after restoring=false
+    // would paint the in-form “Draft saved” chip next to the yellow banner.
+    if (restoring) return;
     var key = formStorageKey(form, index);
     if (timers[key]) clearTimeout(timers[key]);
     timers[key] = setTimeout(function () {
-      saveForm(form, index);
+      saveForm(form, index, false);
     }, debounceMs);
   }
 
   function markStatus(form, saved) {
+    if (saved && restoreBannerVisible()) return;
     var status = form.querySelector('[data-draft-status]');
     if (!status) {
       status = document.createElement('div');
@@ -258,16 +268,19 @@
   function bindForm(form, index) {
     form.setAttribute('data-draft-bound', '1');
     form.addEventListener('input', function (e) {
+      if (restoring) return;
       if (!e.target || isSkippable(e.target)) return;
       scheduleSave(form, index);
     });
     form.addEventListener('change', function (e) {
+      if (restoring) return;
       if (!e.target || isSkippable(e.target)) return;
       scheduleSave(form, index);
     });
     form.addEventListener('submit', function () {
-      // Keep latest values until the next page confirms save via ok flash.
-      saveForm(form, index);
+      // Keep latest values if the POST fails. Do not paint the in-form chip
+      // under the Saving overlay — the restore banner already covers this.
+      saveForm(form, index, true);
     });
   }
 
@@ -307,19 +320,35 @@
         var n = apply(form, parsed.data);
         if (n > 0) {
           restoredAny = true;
-          // One message: the restore banner. Skip the in-form “Draft saved” chip.
-          form.dispatchEvent(new Event('input', { bubbles: true }));
-          form.dispatchEvent(new Event('change', { bubbles: true }));
+          // Sync typeahead display from the restored hidden value.
+          form.querySelectorAll('[data-typeahead]').forEach(function (root) {
+            var hidden = root.querySelector('[data-typeahead-value]');
+            var vis = root.querySelector('[data-typeahead-input]');
+            if (hidden && vis && hidden.value && vis.value !== hidden.value) {
+              vis.value = hidden.value;
+            }
+          });
+          // Paste Ready/attention listens on the textarea. Keep restoring=true
+          // so this does not paint “Draft saved” next to the yellow banner.
+          form.querySelectorAll('textarea[name], input:not([type="hidden"]), select').forEach(function (el) {
+            if (isSkippable(el)) return;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          });
         }
       } catch (e) {
         // ignore bad JSON
       }
     });
-    restoring = false;
 
     if (restoredAny && !shouldClearDraft()) {
       showBanner();
+      document.querySelectorAll('[data-draft-status]').forEach(function (el) {
+        el.hidden = true;
+        el.textContent = '';
+      });
     }
+    restoring = false;
   }
 
   if (document.readyState === 'loading') {

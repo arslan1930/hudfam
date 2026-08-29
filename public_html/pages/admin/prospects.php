@@ -460,7 +460,8 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1><?= label_with_info('Our database', 'Country folders of unique sites. Team Filter & add writes here.') ?></h1>
-        <p class="muted">Each country is its own site database. Team adds merge into these same folders. <?= (int) $grandTotal ?> sites total.</p>
+        <p class="muted">Each country is its own site database. Team Filter &amp; add writes into these folders.</p>
+        <p class="muted"><?= (int) $grandTotal ?> sites total.</p>
       </div>
       <div class="actions">
         <a class="btn" href="#add-sites">Add sites</a>
@@ -684,6 +685,38 @@ if (!$inCountry && !$emptyCountry) {
       <div class="card empty-state"><p>No countries configured. Run upgrade.php once.</p></div>
     <?php endif; ?>
 
+    <div class="card" id="add-sites">
+      <h2>Add sites</h2>
+      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
+      <form method="post" action="index.php?page=admin_prospects#add-sites" id="prospect-add-sites-form"
+            data-show-processing="Saving sites…">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="add_sites">
+        <div class="form-grid">
+          <?= render_country_typeahead($addCountry, [
+              'id' => 'add_country',
+              'label' => 'Country',
+              'required' => true,
+              'attrs' => 'data-fill-language="#add_language" data-fill-region="select[name=region]"',
+          ]) ?>
+          <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
+        </div>
+        <div style="margin-top:0.9rem">
+          <?= render_domains_paste_field('urls', $addRaw, [
+              'id' => 'urls',
+              'label' => 'Sites (root domains)',
+              'required' => true,
+              'rows' => 8,
+              'ready_use' => 'Save uses the Ready list only.',
+              'attention_hint' => 'Save only uses the Ready list above.',
+          ]) ?>
+        </div>
+        <p class="actions" style="margin-top:1rem">
+          <button class="btn" type="submit">Save to country database</button>
+        </p>
+      </form>
+    </div>
+
     <div class="card" id="super-search">
       <h2>Super search</h2>
       <p class="help">
@@ -786,37 +819,6 @@ if (!$inCountry && !$emptyCountry) {
           </div>
         <?php endif; ?>
       <?php endif; ?>
-    </div>
-
-    <div class="card" id="add-sites">
-      <h2>Add sites</h2>
-      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
-      <form method="post" action="index.php?page=admin_prospects#add-sites" id="prospect-add-sites-form">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="add_sites">
-        <div class="form-grid">
-          <?= render_country_typeahead($addCountry, [
-              'id' => 'add_country',
-              'label' => 'Country',
-              'required' => true,
-              'attrs' => 'data-fill-language="#add_language" data-fill-region="select[name=region]"',
-          ]) ?>
-          <input type="hidden" name="language" id="add_language" value="<?= h($addLanguage) ?>">
-        </div>
-        <div style="margin-top:0.9rem">
-          <?= render_domains_paste_field('urls', $addRaw, [
-              'id' => 'urls',
-              'label' => 'Sites (root domains)',
-              'required' => true,
-              'rows' => 8,
-              'ready_use' => 'Save uses the Ready list only.',
-              'attention_hint' => 'Save only uses the Ready list above.',
-          ]) ?>
-        </div>
-        <p class="actions" style="margin-top:1rem">
-          <button class="btn" type="submit">Save to country database</button>
-        </p>
-      </form>
     </div>
     <?= sites_form_script_tag() ?>
     <?= function_exists('open_site_script_tag') ? open_site_script_tag() : '' ?>
@@ -1173,7 +1175,8 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
       New sites join the <strong>whole folder</strong>, not only <?= h($filterCreatedLabel) ?>’s list.
     <?php endif; ?>
   </p>
-  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites" id="prospect-add-sites-form">
+  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites" id="prospect-add-sites-form"
+        data-show-processing="Saving sites…">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_sites">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">

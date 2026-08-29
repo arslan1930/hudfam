@@ -485,12 +485,15 @@ $superAt = strpos($hubBody, 'id="super-search"');
 $addAt = strpos($hubBody, 'id="add-sites"');
 if ($r['status'] === 200
     && $marketsAt !== false && $superAt !== false && $addAt !== false
-    && $marketsAt < $superAt && $superAt < $addAt
+    && $marketsAt < $addAt && $addAt < $superAt
     && str_contains($hubBody, 'What is this?')
     && str_contains($hubBody, 'show empty countries')
+    && str_contains($hubBody, 'Team Filter &amp; add writes into these folders.')
+    && str_contains($hubBody, 'data-show-processing="Saving sites…')
+    && !str_contains($hubBody, 'Team adds merge')
     && !str_contains($hubBody, 'Go to site')
     && !str_contains($hubBody, 'Fatal error')) {
-    pass('admin Our database hub Markets first');
+    pass('admin Our database hub Markets then Add sites');
 } else {
     fail('admin Our database hub layout status=' . $r['status']);
 }
@@ -505,6 +508,7 @@ if ($r['status'] === 200
     && str_contains($sheetBody, 'What is this?')
     && str_contains($sheetBody, 'whole country folder')
     && str_contains($sheetBody, 'Save uses the Ready list only.')
+    && str_contains($sheetBody, 'data-show-processing="Saving sites…')
     && !str_contains($sheetBody, 'Push uses Ready only')
     && !str_contains($sheetBody, '<th>URL</th>')
     && !str_contains($sheetBody, 'Go to site')

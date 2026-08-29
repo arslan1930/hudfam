@@ -756,19 +756,24 @@ if (!str_contains($adminProspects, 'invoice_list_page_numbers')
     || str_contains($adminProspects, 'Go to site')
     || str_contains($adminProspects, '<th>URL</th>')
     || str_contains($adminProspects, 'Add sites above')
-    || str_contains($adminProspects, 'choose rows per page below')) {
+    || str_contains($adminProspects, 'choose rows per page below')
+    || str_contains($adminProspects, 'Team adds merge')
+    || !str_contains($adminProspects, 'Team Filter &amp; add writes into these folders.')
+    || !str_contains($adminProspects, 'data-show-processing="Saving sites…')) {
     fail('Our database missing hub/country UX (guide, pager, Open in, empty toggle)');
 } else {
     ok('Our database hub/country UX: guide, pager, Open in, empty toggle');
 }
 $marketsPos = strpos($adminProspects, 'id="prospect-markets"');
+$addHubPos = strpos($adminProspects, 'id="add-sites"');
 $superPos = strpos($adminProspects, 'id="super-search"');
 $sitesPos = strpos($adminProspects, 'id="prospect-sites-card"');
 $addToPos = strpos($adminProspects, 'Add sites to');
-if ($marketsPos === false || $superPos === false || $marketsPos > $superPos) {
-    fail('Our database hub Markets is not above Super search');
+if ($marketsPos === false || $addHubPos === false || $superPos === false
+    || $marketsPos > $addHubPos || $addHubPos > $superPos) {
+    fail('Our database hub is not Markets then Add sites then Super search');
 } else {
-    ok('Our database hub Markets above Super search');
+    ok('Our database hub Markets then Add sites then Super search');
 }
 if ($sitesPos === false || $addToPos === false || $sitesPos > $addToPos) {
     fail('Our database country Sites table is not above Add sites');
@@ -907,6 +912,9 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, 'alert-box.alert-ok')
     || !str_contains($draftJsSmoke, 'just_added')
     || !str_contains($draftJsSmoke, 'prospect-add-sites-form')
+    || !str_contains($draftJsSmoke, 'Restore already wrote localStorage')
+    || !str_contains($draftJsSmoke, 'restoreBannerVisible')
+    || !str_contains($draftJsSmoke, 'saveForm(form, index, true)')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -2685,6 +2693,7 @@ if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
     || !str_contains($procJsSmoke, 'finishPageLoad')
     || !str_contains($procJsSmoke, 'NAV_DELAY_MS')
     || !str_contains($procJsSmoke, 'armDelayedLoading')
+    || !str_contains($procJsSmoke, "method === 'get'")
     || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
     fail('Missing delayed loading overlay or select-remove JS');
 } else {

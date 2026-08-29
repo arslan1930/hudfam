@@ -137,6 +137,7 @@ if ($guardOk) {
 }
 
 $draftJs = (string) file_get_contents(__DIR__ . '/assets/js/draft-autosave.js');
+$procJs = (string) file_get_contents(__DIR__ . '/assets/js/app-processing.js');
 $helpersSrc = (string) file_get_contents(__DIR__ . '/includes/helpers.php');
 $sweAppSrc = (string) file_get_contents(__DIR__ . '/pages/sites_with_emails_app.php');
 $indexSrc = (string) file_get_contents(__DIR__ . '/index.php');
@@ -152,10 +153,21 @@ if (
     && str_contains($draftJs, 'alert-box.alert-ok')
     && str_contains($draftJs, 'just_added')
     && str_contains($draftJs, 'prospect-add-sites-form')
+    && str_contains($draftJs, 'Restore already wrote localStorage')
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
     fail('draft autosave / sheet / presence CSRF wiring');
+}
+
+if (str_contains($procJs, "method === 'get'")
+    && str_contains($procJs, 'GET forms do')
+    && str_contains($draftJs, 'Restore already wrote localStorage')
+    && str_contains($draftJs, 'restoreBannerVisible')
+    && str_contains($draftJs, 'saveForm(form, index, true)')) {
+    pass('GET forms skip overlay unless marked; restore does not re-save draft');
+} else {
+    fail('processing overlay GET skip / draft restore re-save guard');
 }
 
 // --- Login ---
