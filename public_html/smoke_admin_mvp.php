@@ -181,7 +181,8 @@ if (!str_contains($invoicesAdminPage, 'name="filter"')
     ok('invoices.php status filter');
 }
 if (!str_contains($invoicesAdminPage, "\$listOpts['client_id']")
-    || !str_contains($invoicesAdminPage, 'older client profile')
+    || !str_contains($invoicesAdminPage, 'Leftover client folder')
+    || !str_contains($invoicesAdminPage, 'client_id=')
     || !str_contains($invoicesAdminPage, 'name="client_id"')) {
     fail('invoices.php missing client_id scope');
 } else {
@@ -1510,6 +1511,7 @@ if (!str_contains($invoicesLib, 'function count_invoices')
     || !str_contains($invoicesLib, 'function invoice_generate_empty_stats')
     || !str_contains($invoicesLib, 'function invoice_assert_single_bill_as')
     || !str_contains($invoicesLib, 'function invoice_generate_pick_cap')
+    || !str_contains($invoicesLib, 'function list_invoice_linked_order_items')
     || !str_contains($invoicesLib, "i.work_status='draft'")
     || !str_contains($invoicesLib, "i.payment_status='unpaid' AND i.work_status='done'")
     || !str_contains($invoicesLib, 'LIMIT ')) {
@@ -1528,7 +1530,7 @@ if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1618,6 +1620,21 @@ if (!str_contains($invoiceViewCsrf, 'invoice-print-toolbar')
     fail('invoice view missing print toolbar / Mark paid');
 } else {
     ok('invoice view print toolbar + Mark paid');
+}
+if (!str_contains($invoiceViewCsrf, 'invoice-om-links')
+    || !str_contains($invoiceViewCsrf, 'list_invoice_linked_order_items')
+    || !str_contains($invoiceViewCsrf, 'Leftover client-folder')
+    || !str_contains($invoiceViewCsrf, 'folder=completed')) {
+    fail('invoice view missing OM row links');
+} else {
+    ok('invoice view OM row links');
+}
+if (!str_contains($invoiceGenerate, 'invoice-legacy-client')
+    || !str_contains($invoiceGenerate, 'client_id=')
+    || !str_contains($invoiceGenerate, 'Show all unpaid LIVE')) {
+    fail('invoice_generate missing leftover client_id banner');
+} else {
+    ok('invoice_generate leftover client_id banner');
 }
 $invoiceCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($invoiceCss, '.invoice-doc-logohead')

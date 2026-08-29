@@ -261,7 +261,7 @@ function guide_invoices(): string
         [
             'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. Group same amount is off unless you turn it on.',
             'Blank invoice: fill bill-as and line items, Save as draft or Save as done. On a generated bill, Save bill as to fix the email/name.',
-            'Mark paid on the list or the open bill when payment is received. Draft / Unpaid / Paid counts sit above the search.',
+            'Mark paid on the list or the open bill when payment is received. Draft / Unpaid / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Completed).',
         ]
     );
 }

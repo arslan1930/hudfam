@@ -508,6 +508,16 @@ if ($invViewId > 0) {
     fail('admin invoices list has no Open bill link');
 }
 
+$r = req('GET', $base . '/index.php?page=admin_invoice_generate&client_id=1');
+if ($r['status'] === 200
+    && str_contains($r['body'], 'invoice-legacy-client')
+    && str_contains($r['body'], 'Show all unpaid LIVE')
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin invoice generate leftover client_id');
+} else {
+    fail('admin invoice generate leftover client_id status=' . ($r['status'] ?? '?'));
+}
+
 $r = req('GET', $base . '/index.php?page=admin_invoice_generate');
 $genCopy = str_contains($r['body'] ?? '', 'Tick the ones to bill')
     || str_contains($r['body'] ?? '', 'Nothing to tick')

@@ -389,6 +389,27 @@ function list_invoice_items(int $invoiceId): array
     return $stmt->fetchAll();
 }
 
+/**
+ * Order-management rows stored on this invoice's lines.
+ *
+ * @return list<array<string,mixed>>
+ */
+function list_invoice_linked_order_items(int $invoiceId): array
+{
+    $ids = [];
+    foreach (list_invoice_items($invoiceId) as $item) {
+        foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+            if ($oid > 0) {
+                $ids[$oid] = $oid;
+            }
+        }
+    }
+    if (!$ids) {
+        return [];
+    }
+    return list_order_items_by_ids(array_values($ids));
+}
+
 function get_invoice_client_profile(int $clientId): ?array
 {
     ensure_invoice_schema();

@@ -94,6 +94,8 @@ $isManual = invoice_is_manual($invoice);
 $isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
 $editableBill = !$isManual && !$isPaid && !$print;
+$linkedOrders = (!$print && !$isManual) ? list_invoice_linked_order_items($id) : [];
+$legacyClientId = (int) ($invoice['client_id'] ?? 0);
 
 if ($print) {
     $editable = false;
@@ -166,6 +168,9 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         · Bill as is the email or name — optional address stays hidden on the print unless filled
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
+      <?php endif; ?>
+      <?php if ($legacyClientId > 0): ?>
+        · Leftover client-folder id <?= (int) $legacyClientId ?> — new bills use Bill as
       <?php endif; ?>
     </p>
   </div>
@@ -374,5 +379,44 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 <div class="invoice-preview-wrap">
   <?php include __DIR__ . '/_invoice_document.php'; ?>
 </div>
+<?php endif; ?>
+<?php if ($linkedOrders): ?>
+<section class="card no-print invoice-om-links">
+  <h2><?= label_with_info('Order management rows', 'Sites on this bill. Open Completed to jump to the sheet row.') ?></h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Site</th>
+          <th>LIVE URL</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($linkedOrders as $omRow): ?>
+          <?php
+            $omId = (int) ($omRow['id'] ?? 0);
+            $omSite = trim((string) ($omRow['site_name'] ?? ''));
+            $omLive = trim((string) ($omRow['live_url'] ?? ''));
+            $omHref = 'index.php?page=admin_orders&folder=completed';
+            if ($omSite !== '') {
+                $omHref .= '&q=' . rawurlencode($omSite);
+            }
+            $omHref .= '#row-' . $omId;
+          ?>
+          <tr>
+            <td><?= h($omSite !== '' ? $omSite : 'Site') ?></td>
+            <td><?php if ($omLive !== ''): ?>
+              <a href="<?= h($omLive) ?>" target="_blank" rel="noopener"><?= h($omLive) ?></a>
+            <?php else: ?>
+              —
+            <?php endif; ?></td>
+            <td><a class="btn secondary small" href="<?= h($omHref) ?>">Completed</a></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</section>
 <?php endif; ?>
 <?php render_footer('admin'); ?>

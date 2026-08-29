@@ -121,6 +121,14 @@ render_header('Generate invoice', 'admin');
   <?php if ($selectedFromSheet): ?>
     <input type="hidden" name="ids" value="<?= h(implode(',', $selectedFromSheet)) ?>">
   <?php endif; ?>
+  <?php if ($clientId > 0): ?>
+    <p class="help invoice-legacy-client">
+      Leftover <code>client_id=<?= (int) $clientId ?></code> filter — older client folders.
+      New bills use Bill as.
+      <a href="index.php?page=admin_invoice_generate">Show all unpaid LIVE</a>
+    </p>
+    <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
+  <?php endif; ?>
 
   <div class="orders-layout">
     <section class="card">
