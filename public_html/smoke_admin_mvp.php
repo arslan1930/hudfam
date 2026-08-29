@@ -1581,6 +1581,33 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
 } else {
     ok('Invoice list/view csrf_field on POST forms');
 }
+if (!str_contains($invoicesListCsrf, 'btn-paid-mark')
+    || !str_contains($invoicesListCsrf, 'Mark paid')
+    || str_contains($invoicesListCsrf, 'Mark payment received')) {
+    fail('invoices list unpaid CTA is not Mark paid');
+} else {
+    ok('invoices list unpaid CTA is Mark paid');
+}
+if (!str_contains($invoiceViewCsrf, 'invoice-print-toolbar')
+    || str_contains($invoiceViewCsrf, 'onload="window.print()"')
+    || !str_contains($invoiceViewCsrf, 'does not print automatically')
+    || !str_contains($invoiceViewCsrf, 'btn-paid-mark')
+    || str_contains($invoiceViewCsrf, 'Mark payment received')) {
+    fail('invoice view missing print toolbar / Mark paid');
+} else {
+    ok('invoice view print toolbar + Mark paid');
+}
+$invoiceCss = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($invoiceCss, '.invoice-doc-logohead')
+    || !str_contains($invoiceCss, 'padding: 0.9rem 1.35rem 0.25rem')
+    || !str_contains($invoiceCss, '.invoice-print-toolbar')
+    || !str_contains($invoiceCss, 'height: 52px !important')
+    || preg_match('/\.invoice-doc-logo\s*\{[^}]*height:\s*40px/', $invoiceCss)
+    || preg_match('/@media print[\s\S]{0,1200}\.invoice-doc-logo\s*\{[^}]*height:\s*48px/', $invoiceCss)) {
+    fail('invoice logo gutter / print size mismatch');
+} else {
+    ok('invoice logo gutter 1.35rem and 52px print');
+}
 
 $adminDepts = file_get_contents($root . '/pages/admin/departments.php') ?: '';
 if (!str_contains($adminDepts, 'csrf_field()')) {

@@ -119,7 +119,11 @@ if ($print) {
     }
   </style>
 </head>
-<body class="invoice-print-body" onload="window.print()">
+<body class="invoice-print-body">
+  <p class="invoice-print-toolbar no-print">
+    <button type="button" class="btn" onclick="window.print()">Print</button>
+    <span class="help">Preview first — this page does not print automatically.</span>
+  </p>
 <?php include __DIR__ . '/_invoice_document.php'; ?>
 </body>
 </html>
@@ -187,19 +191,19 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
             onsubmit="return confirm(<?= h(json_encode(
                 $isManual
-                    ? 'Mark this blank invoice as payment received?'
-                    : 'Mark this invoice as payment received? Linked unpaid sheet rows will be marked Paid.',
+                    ? 'Mark this blank invoice as paid?'
+                    : 'Mark this invoice as paid? Linked unpaid sheet rows will be marked Paid.',
                 JSON_UNESCAPED_UNICODE
             )) ?>);">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_paid">
-        <button class="btn<?= $editable ? ' secondary' : '' ?>" type="submit">Mark payment received</button>
+        <button class="btn-paid btn-paid-mark" type="submit">Mark paid</button>
       </form>
     <?php elseif ($editable && $isDraft): ?>
-      <span class="help" style="align-self:center">Mark Paid after Save as done</span>
+      <span class="help" style="align-self:center">Mark paid after Save as done</span>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener"
-       title="Download or print even with a zero total">Print / PDF</a>
+       title="Open a print preview. It does not print until you click Print.">Print / PDF</a>
   </div>
   <?php if ($editable): ?>
     <p class="help no-print" id="blank-invoice-save-hint" style="margin:0.35rem 0 0;text-align:right" hidden>

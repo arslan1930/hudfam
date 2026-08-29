@@ -458,7 +458,7 @@ foreach (
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order', 'leftover', 'added here'],
-        'admin_invoices' => ['Invoice'],
+        'admin_invoices' => ['Invoice', 'Mark paid'],
         'admin_users' => ['Users', 'Awaiting assignment', 'Must change password', 'users-office'],
         'account_password' => ['Change password', 'breadcrumbs'],
     ] as $page => $needles
@@ -476,6 +476,36 @@ foreach (
     } else {
         fail("page $label status={$r['status']} missing=" . implode(',', $bad) . ' fatal=' . (str_contains($r['body'], 'Fatal error') ? 'yes' : 'no'));
     }
+}
+
+$r = req('GET', $base . '/index.php?page=admin_invoices');
+$invViewId = 0;
+if (preg_match('/admin_invoice_view(?:&amp;|&)id=(\d+)/', $r['body'] ?? '', $invM)) {
+    $invViewId = (int) $invM[1];
+}
+if ($invViewId > 0) {
+    $rView = req('GET', $base . '/index.php?page=admin_invoice_view&id=' . $invViewId);
+    $rPrint = req('GET', $base . '/index.php?page=admin_invoice_view&id=' . $invViewId . '&print=1');
+    if ($rView['status'] === 200
+        && str_contains($rView['body'], 'invoice-doc-logohead')
+        && (str_contains($rView['body'], 'Mark paid') || str_contains($rView['body'], 'Paid'))
+        && !str_contains($rView['body'], 'Fatal error')) {
+        pass('admin invoice open bill');
+    } else {
+        fail('admin invoice open bill status=' . ($rView['status'] ?? '?'));
+    }
+    if ($rPrint['status'] === 200
+        && str_contains($rPrint['body'], 'invoice-print-toolbar')
+        && str_contains($rPrint['body'], 'does not print automatically')
+        && str_contains($rPrint['body'], 'invoice-doc-logohead')
+        && !str_contains($rPrint['body'], 'onload="window.print()"')
+        && !str_contains($rPrint['body'], 'Fatal error')) {
+        pass('admin invoice print preview');
+    } else {
+        fail('admin invoice print preview status=' . ($rPrint['status'] ?? '?'));
+    }
+} else {
+    fail('admin invoices list has no Open bill link');
 }
 
 $r = req('GET', $base . '/index.php?page=admin_users&awaiting=1');
