@@ -173,6 +173,9 @@
   }
 
   function scheduleSave(form, index) {
+    // Restore already wrote localStorage. Re-saving after restoring=false
+    // would paint the in-form “Draft saved” chip next to the yellow banner.
+    if (restoring) return;
     var key = formStorageKey(form, index);
     if (timers[key]) clearTimeout(timers[key]);
     timers[key] = setTimeout(function () {
@@ -258,10 +261,12 @@
   function bindForm(form, index) {
     form.setAttribute('data-draft-bound', '1');
     form.addEventListener('input', function (e) {
+      if (restoring) return;
       if (!e.target || isSkippable(e.target)) return;
       scheduleSave(form, index);
     });
     form.addEventListener('change', function (e) {
+      if (restoring) return;
       if (!e.target || isSkippable(e.target)) return;
       scheduleSave(form, index);
     });

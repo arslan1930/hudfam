@@ -7,7 +7,8 @@
  *   <form data-show-processing="Paste sites…">…</form>
  *
  * First paint: overlay stays hidden (no flash). Same-origin navigations and
- * unmarked form posts show "Loading…" only after NAV_DELAY_MS. Long posts with
+ * unmarked POST forms show "Loading…" only after NAV_DELAY_MS. GET forms do
+ * not arm the overlay unless they set data-show-processing. Long posts with
  * data-show-processing / AppProcessing.show() appear immediately.
  */
 (function () {
@@ -153,6 +154,7 @@
         return;
       }
       var marked = form.hasAttribute('data-show-processing');
+      var method = String(form.method || 'get').toLowerCase();
       var msg = marked
         ? (form.getAttribute('data-show-processing') || 'Processing…')
         : 'Loading…';
@@ -169,6 +171,11 @@
             }
           );
         }, 0);
+        return;
+      }
+      // Super search and other GET filters already show results on the next
+      // paint. Do not put Loading… over a page that is already visible.
+      if (method === 'get') {
         return;
       }
       window.setTimeout(function () {
