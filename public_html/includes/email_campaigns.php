@@ -1495,6 +1495,12 @@ function count_email_campaign_sheets(): int
     return (int) db()->query('SELECT COUNT(*) FROM email_campaign_sheets')->fetchColumn();
 }
 
+function count_email_campaign_projects(): int
+{
+    ensure_email_campaign_schema();
+    return (int) db()->query('SELECT COUNT(*) FROM email_campaign_projects')->fetchColumn();
+}
+
 /**
  * @param bool|null $onlyTeamVisible true = only sheets in projects shown to Communication Team
  * @return list<array{id:int,name:string,country:string,project_id:int,project_name:string,team_search_visible:bool,region:string,language:string,row_count:int,with_emails:int,created_at:?string,updated_at:?string}>

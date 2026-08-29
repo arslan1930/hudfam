@@ -5,13 +5,21 @@ if (!function_exists('render_admin_dashboard_stat')) {
     /**
      * @param array{ok?:bool,n?:int} $result
      */
-    function render_admin_dashboard_stat(string $label, array $result, string $href, string $okTitle, string $sub = ''): void
-    {
+    function render_admin_dashboard_stat(
+        string $label,
+        array $result,
+        string $href,
+        string $okTitle,
+        string $sub = '',
+        string $search = ''
+    ): void {
         $ok = !empty($result['ok']);
         $n = (int) ($result['n'] ?? 0);
         $val = $ok ? number_format($n) : '—';
         $title = $ok ? $okTitle : 'Could not load';
-        echo '<a class="card stat" href="' . h($href) . '" title="' . h($title) . '">';
+        $hay = trim($search !== '' ? $search : (strtolower($label . ' ' . $okTitle . ' ' . $sub)));
+        echo '<a class="card stat" href="' . h($href) . '" title="' . h($title) . '"'
+            . ' data-dashboard-item data-search="' . h($hay) . '">';
         echo '<span class="muted">' . h($label) . '</span>';
         echo '<strong>' . h($val) . '</strong>';
         if ($sub !== '') {
@@ -39,6 +47,16 @@ $sweFinal = cached_count_result('dash_swe_final', static function () {
 $campaignSheets = cached_count_result('dash_campaign_sheets', static function () {
     return count_email_campaign_sheets();
 });
+$campaignProjects = cached_count_result('dash_campaign_projects', static function () {
+    return function_exists('count_email_campaign_projects')
+        ? count_email_campaign_projects()
+        : 0;
+});
+$mustChangePasswords = cached_count_result('dash_must_change', static function () {
+    return (int) db()->query(
+        'SELECT COUNT(*) FROM users WHERE must_change_password=1 AND is_active=1'
+    )->fetchColumn();
+});
 $invoiceDrafts = cached_count_result('dash_invoice_drafts', static function () {
     return count_invoices_by_work_status('draft');
 });
@@ -52,7 +70,6 @@ try {
 } catch (Throwable $e) {
     $recent = [];
 }
-$orderClientCount = 0;
 $orderRowCount = 0;
 $orderUnpaidLive = 0;
 $omOk = true;
@@ -60,16 +77,31 @@ $deptOpenTasks = 0;
 $deptMembers = 0;
 $deptUnassignedTeam = 0;
 $deptOk = true;
+$wpProcessing = 0;
+$wpNew = 0;
+$wpTotal = 0;
+$wpOk = true;
 try {
     $omStats = order_management_dashboard_stats();
-    $orderRowCount = (int) ($omStats['orders'] ?? ($omStats['clients'] ?? 0));
-    $orderClientCount = $orderRowCount;
+    $orderRowCount = (int) ($omStats['orders'] ?? 0);
     $orderUnpaidLive = (int) ($omStats['unpaid_live'] ?? 0);
 } catch (Throwable $e) {
     $omOk = false;
-    $orderClientCount = 0;
     $orderRowCount = 0;
     $orderUnpaidLive = 0;
+}
+try {
+    if (function_exists('count_site_price_rows_by_lane')) {
+        $wpLanes = count_site_price_rows_by_lane();
+        $wpProcessing = (int) ($wpLanes['processing'] ?? 0);
+        $wpNew = (int) ($wpLanes['new'] ?? 0);
+        $wpTotal = (int) ($wpLanes['total'] ?? 0);
+    }
+} catch (Throwable $e) {
+    $wpOk = false;
+    $wpProcessing = 0;
+    $wpNew = 0;
+    $wpTotal = 0;
 }
 try {
     $deptStats = departments_dashboard_stats();
@@ -87,10 +119,12 @@ $adminEmailsNew = function_exists('admin_has_new_data') && admin_has_new_data('e
 $teamCount = !empty($team['ok']) ? (int) $team['n'] : 0;
 $invoiceDraftCount = !empty($invoiceDrafts['ok']) ? (int) $invoiceDrafts['n'] : 0;
 $invoiceUnpaidCount = !empty($invoiceUnpaid['ok']) ? (int) $invoiceUnpaid['n'] : 0;
-
-$invoiceSub = '';
-if (!empty($invoiceDrafts['ok']) && $invoiceDraftCount > 0) {
-    $invoiceSub = number_format($invoiceDraftCount) . ' draft';
+$mustChangeCount = !empty($mustChangePasswords['ok']) ? (int) $mustChangePasswords['n'] : 0;
+$campaignProjectCount = !empty($campaignProjects['ok']) ? (int) $campaignProjects['n'] : 0;
+$campaignSheetSub = '';
+if (!empty($campaignProjects['ok']) && $campaignProjectCount > 0) {
+    $campaignSheetSub = number_format($campaignProjectCount) . ' project'
+        . ($campaignProjectCount === 1 ? '' : 's');
 }
 
 render_header('Dashboard', 'admin');
@@ -105,20 +139,19 @@ render_header('Dashboard', 'admin');
       <span class="visually-hidden">Filter this page</span>
       <input id="dashboard-search" type="search" placeholder="Filter this page…"
              autocomplete="off" spellcheck="false" data-no-draft
-             title="Type to filter · Enter = next match · Shift+Enter = previous">
+             title="Type to filter cards, stats, and chips · Enter = next match · Shift+Enter = previous">
       <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
     </label>
-    <a class="btn secondary" href="index.php?page=admin_prospects#add-sites">Our database</a>
   </div>
 </div>
 
 <?php
 render_workflow([
+    ['label' => 'Departments', 'href' => 'index.php?page=admin_departments', 'hint' => 'Assign Team to tools'],
     ['label' => 'Our database', 'href' => 'index.php?page=admin_prospects', 'hint' => 'Country folders'],
     ['label' => 'Extracted Sites', 'href' => 'index.php?page=admin_extracted', 'hint' => 'From Extracting Push'],
     ['label' => 'Emails data', 'href' => 'index.php?page=admin_emails_data', 'hint' => 'Admin · Final · Campaign'],
-    ['label' => 'Order management', 'href' => 'index.php?page=admin_orders', 'hint' => 'Processing · Completed'],
-    ['label' => 'Invoices', 'href' => 'index.php?page=admin_invoices', 'hint' => 'Printable bills'],
+    ['label' => 'Orders + Invoices', 'href' => 'index.php?page=admin_orders', 'hint' => 'Sheet then printable bills'],
 ]);
 render_dashboard_help('admin');
 ?>
@@ -144,10 +177,11 @@ render_dashboard_help('admin');
       'Sites with emails — Admin working list'
   );
   render_admin_dashboard_stat(
-      'Campaigns',
+      'Campaign sheets',
       $campaignSheets,
       'index.php?page=admin_emails_data&folder=email_campaigns',
-      'Email campaign country sheets'
+      'Email campaign country sheets',
+      $campaignSheetSub
   );
   render_admin_dashboard_stat(
       'Unpaid LIVE',
@@ -159,8 +193,7 @@ render_dashboard_help('admin');
       'Unpaid invoices',
       $invoiceUnpaid,
       'index.php?page=admin_invoices&filter=unpaid',
-      'Generated invoices waiting for payment (drafts listed underneath)',
-      $invoiceSub
+      'Generated invoices waiting for payment'
   );
   ?>
 </div>
@@ -171,37 +204,44 @@ if ($deptOk && $deptUnassignedTeam > 0) {
     $attention[] = [
         'href' => 'index.php?page=admin_users&awaiting=1',
         'label' => (int) $deptUnassignedTeam . ' team awaiting assignment',
+        'search' => 'awaiting access users assignment team',
+    ];
+}
+if ($mustChangeCount > 0) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_users&must_change=1',
+        'label' => (int) $mustChangeCount . ' must change password',
+        'search' => 'must change password users',
     ];
 }
 if ($deptOk && $deptOpenTasks > 0) {
     $attention[] = [
         'href' => 'index.php?page=admin_departments',
         'label' => (int) $deptOpenTasks . ' open task' . ($deptOpenTasks === 1 ? '' : 's'),
-    ];
-}
-if ($adminEmailsNew) {
-    $attention[] = [
-        'href' => 'index.php?page=admin_emails_data&folder=sites_with_emails',
-        'label' => 'New Admin emails',
-    ];
-}
-if ($omOk && $orderUnpaidLive > 0) {
-    $attention[] = [
-        'href' => 'index.php?page=admin_orders&folder=completed&status=unpaid',
-        'label' => (int) $orderUnpaidLive . ' unpaid LIVE',
+        'search' => 'open tasks departments',
     ];
 }
 if (!empty($invoiceDrafts['ok']) && $invoiceDraftCount > 0) {
     $attention[] = [
         'href' => 'index.php?page=admin_invoices&filter=draft',
         'label' => number_format($invoiceDraftCount) . ' draft invoice' . ($invoiceDraftCount === 1 ? '' : 's'),
+        'search' => 'draft invoices',
+    ];
+}
+if ($adminEmailsNew) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_emails_data&folder=sites_with_emails',
+        'label' => 'New Admin emails',
+        'search' => 'new admin emails',
     ];
 }
 if ($attention):
 ?>
 <div class="dashboard-attention" data-dashboard-attention>
   <?php foreach ($attention as $chip): ?>
-    <a href="<?= h((string) $chip['href']) ?>"><?= h((string) $chip['label']) ?></a>
+    <a href="<?= h((string) $chip['href']) ?>"
+       data-dashboard-item
+       data-search="<?= h((string) ($chip['search'] ?? '')) ?>"><?= h((string) $chip['label']) ?></a>
   <?php endforeach; ?>
 </div>
 <?php endif; ?>
@@ -241,9 +281,22 @@ if ($attention):
     <p><?= (int) $orderRowCount ?> order<?= (int) $orderRowCount === 1 ? '' : 's' ?><?php if ($orderUnpaidLive > 0): ?> · <?= (int) $orderUnpaidLive ?> unpaid LIVE<?php endif; ?> — Processing · Completed.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_site_prices" data-dashboard-item
-     data-search="website prices publisher rates country sheet da dr traffic status office">
+     data-search="website prices publisher rates country sheet da dr traffic status office processing new">
     <h2>Website prices</h2>
-    <p>Publisher rate book — one country sheet of prices and statuses.</p>
+    <p><?php if ($wpOk): ?>
+        <?= number_format($wpTotal) ?> <?= $wpTotal === 1 ? 'row' : 'rows' ?><?php
+            $wpBits = [];
+            if ($wpProcessing > 0) {
+                $wpBits[] = number_format($wpProcessing) . ' Processing';
+            }
+            if ($wpNew > 0) {
+                $wpBits[] = number_format($wpNew) . ' New';
+            }
+            echo $wpBits !== [] ? ' · ' . implode(' · ', $wpBits) : '';
+        ?> — publisher rate book.
+      <?php else: ?>
+        Publisher rate book — one country sheet of prices and statuses.
+      <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_invoices" data-dashboard-item
      data-search="invoices generate printable blank draft done payment unpaid">
@@ -256,10 +309,10 @@ if ($attention):
       <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_users" data-dashboard-item
-     data-search="users admin team logins password department assign awaiting">
+     data-search="users admin team logins password department assign awaiting must change">
     <h2>Users</h2>
     <p><?php if (!empty($team['ok'])): ?>
-        <?= number_format($teamCount) ?> active team user<?= $teamCount === 1 ? '' : 's' ?><?php if ($deptUnassignedTeam > 0): ?> · <?= (int) $deptUnassignedTeam ?> awaiting assignment<?php endif; ?>.
+        <?= number_format($teamCount) ?> active team user<?= $teamCount === 1 ? '' : 's' ?><?php if ($deptUnassignedTeam > 0): ?> · <?= (int) $deptUnassignedTeam ?> awaiting assignment<?php endif; ?><?php if ($mustChangeCount > 0): ?> · <?= (int) $mustChangeCount ?> must change password<?php endif; ?>.
       <?php else: ?>
         Could not load team users.
       <?php endif; ?></p>
@@ -274,7 +327,7 @@ if ($attention):
 
 <div class="card" id="dashboard-recent-card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.7rem">
-    <h2 style="margin:0">Recent adds</h2>
+    <h2 style="margin:0">Recent Our database adds</h2>
     <a class="btn secondary small" href="index.php?page=admin_prospect_batches">See all</a>
   </div>
   <?php if ($recent): ?>
@@ -319,6 +372,7 @@ if ($attention):
   var emptyCards = document.querySelector('[data-dashboard-search-empty]');
   var emptyRecent = document.querySelector('[data-dashboard-recent-empty]');
   var recentCard = document.getElementById('dashboard-recent-card');
+  var attention = document.querySelector('[data-dashboard-attention]');
 
   function clearHits() {
     document.querySelectorAll('.sheet-search-hit').forEach(function (el) {
@@ -329,7 +383,7 @@ if ($attention):
   function filterDashboard() {
     var q = String(input.value || '').trim().toLowerCase();
     var items = document.querySelectorAll('[data-dashboard-item]');
-    var shownCards = 0;
+    var shownMain = 0;
     var shownRecent = 0;
     matchItems = [];
     clearHits();
@@ -338,14 +392,22 @@ if ($attention):
       var hit = !q || hay.indexOf(q) !== -1;
       el.hidden = !hit;
       if (hit) {
-        if (el.classList.contains('launch-card')) shownCards++;
-        else shownRecent++;
+        if (el.closest('#dashboard-recent-table')) shownRecent++;
+        else shownMain++;
         if (q) matchItems.push(el);
       }
     });
-    if (emptyCards) emptyCards.hidden = !(q && shownCards === 0);
+    if (emptyCards) emptyCards.hidden = !(q && shownMain === 0);
     if (emptyRecent) emptyRecent.hidden = !(q && shownRecent === 0 && document.querySelectorAll('#dashboard-recent-table [data-dashboard-item]').length > 0);
     if (recentCard) recentCard.hidden = !!(q && shownRecent === 0);
+    if (attention) {
+      var chips = attention.querySelectorAll('[data-dashboard-item]');
+      var shownChips = 0;
+      chips.forEach(function (chip) {
+        if (!chip.hidden) shownChips++;
+      });
+      attention.hidden = !!(q && chips.length && shownChips === 0);
+    }
     if (matchIndex >= matchItems.length) matchIndex = matchItems.length ? 0 : -1;
     if (meta) {
       if (q) {

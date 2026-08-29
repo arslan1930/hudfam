@@ -522,7 +522,10 @@ function departments_dashboard_stats(): array
         'SELECT COUNT(*) FROM departments WHERE is_active=1'
     )->fetchColumn();
     $members = (int) db()->query(
-        'SELECT COUNT(DISTINCT user_id) FROM department_members'
+        'SELECT COUNT(DISTINCT m.user_id)
+         FROM department_members m
+         INNER JOIN users u ON u.id = m.user_id
+         WHERE u.is_active = 1'
     )->fetchColumn();
     $open = (int) db()->query(
         "SELECT COUNT(*) FROM department_tasks t
