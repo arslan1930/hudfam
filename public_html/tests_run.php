@@ -5221,6 +5221,16 @@ try {
         } else {
             fail('generated invoice missing/zero');
         }
+        $linkedOm = list_invoice_linked_order_items((int) $genId);
+        $linkedIds = [];
+        foreach ($linkedOm as $lor) {
+            $linkedIds[] = (int) ($lor['id'] ?? 0);
+        }
+        if (in_array((int) $genItemId, $linkedIds, true)) {
+            pass('invoice linked OM rows');
+        } else {
+            fail('invoice linked OM rows missing item ' . $genItemId);
+        }
         if (count_invoices_unpaid() >= 1) {
             pass('invoice unpaid-done count helper');
         } else {

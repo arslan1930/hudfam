@@ -142,8 +142,8 @@ render_header('Invoices', 'admin');
     <h2 style="margin:0" class="with-info-heading"><?php
       if ($invoiceClientId > 0) {
           echo label_with_info(
-              'Invoices billed as ' . $clientScopeLabel,
-              'Older invoices that were linked to a client profile. New bills use Bill as (email or name) and show on All invoices.'
+              'Leftover client folder',
+              'Older invoices that were linked to a client profile (client_id=). New bills use Bill as (email or name) and show on All invoices.'
           );
       } else {
           echo label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.');
@@ -195,14 +195,15 @@ render_header('Invoices', 'admin');
   </div>
   <?php if ($invoiceClientId > 0): ?>
     <p class="muted" style="margin:0 0 0.65rem">
-      Linked to an older client profile. New bills are listed on All invoices by Bill as.
+      Leftover <code>client_id=<?= (int) $invoiceClientId ?></code> link<?= $clientScopeLabel !== '' ? ' · ' . h($clientScopeLabel) : '' ?>.
+      New bills are listed on All invoices by Bill as.
     </p>
   <?php endif; ?>
   <?php if (!$invoices && $totalInvoices < 1): ?>
     <div class="empty-state">
       <p><?php
         if ($invoiceClientId > 0 && $invoiceQ === '' && $invoiceFilter === '') {
-            echo 'No invoices linked to this older client profile.';
+            echo 'No invoices linked to this leftover client folder.';
         } elseif ($invoiceFilter === 'unpaid' && $invoiceQ === '') {
             echo 'No unpaid invoices. Open Completed unpaid in Order management to generate a bill.';
         } elseif ($invoiceQ !== '' || $invoiceFilter !== '' || $invoiceClientId > 0) {

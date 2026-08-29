@@ -115,11 +115,19 @@ render_header('Generate invoice', 'admin');
   </div>
 </div>
 
-<form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate">
+<form method="post" class="invoice-generate-form" action="index.php?page=admin_invoice_generate" data-no-draft autocomplete="off">
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="generate">
   <?php if ($selectedFromSheet): ?>
     <input type="hidden" name="ids" value="<?= h(implode(',', $selectedFromSheet)) ?>">
+  <?php endif; ?>
+  <?php if ($clientId > 0): ?>
+    <p class="help invoice-legacy-client">
+      Leftover <code>client_id=<?= (int) $clientId ?></code> filter — older client folders.
+      New bills use Bill as.
+      <a href="index.php?page=admin_invoice_generate">Show all unpaid LIVE</a>
+    </p>
+    <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
   <?php endif; ?>
 
   <div class="orders-layout">
@@ -208,7 +216,7 @@ render_header('Generate invoice', 'admin');
         <p class="help" data-invoice-pick-empty hidden>No unpaid LIVE rows match that filter.</p>
         <p class="help"><span data-invoice-pick-count>0</span> selected</p>
         <label class="invoice-group-opt">
-          <input type="checkbox" name="group_same_amount" value="1">
+          <input type="checkbox" name="group_same_amount" value="1" data-no-draft autocomplete="off">
           Group lines that share the same amount (qty &gt; 1)
         </label>
       <?php endif; ?>
@@ -315,6 +323,8 @@ render_header('Generate invoice', 'admin');
   var visibleEl = document.querySelector('[data-invoice-pick-visible]');
   var emptyEl = document.querySelector('[data-invoice-pick-empty]');
   var rows = Array.prototype.slice.call(document.querySelectorAll('[data-invoice-pick-row]'));
+  var group = document.querySelector('input[name="group_same_amount"]');
+  if (group) group.checked = false;
   if (!rows.length) return;
 
   function visibleRows() {
