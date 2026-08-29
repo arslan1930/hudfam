@@ -116,8 +116,8 @@ render_header('Invoices', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid Order management rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark Paid when payment arrives.</p>
+    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid Order management rows that have a LIVE URL. Mark paid to set those rows Paid.') ?></h1>
+    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark paid when payment arrives.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Order management</a>
@@ -250,11 +250,6 @@ render_header('Invoices', 'admin');
               <?php if ($manual): ?>
                 <span class="invoice-manual-tag">(blank)</span>
               <?php endif; ?>
-              <?php if ($manual && $draft): ?>
-                <span class="invoice-pay-badge is-draft">Draft</span>
-              <?php elseif ($manual && !$paid): ?>
-                <span class="invoice-pay-badge is-done">Done</span>
-              <?php endif; ?>
               <div class="invoice-note-box<?= $note !== '' ? ' has-note' : '' ?>" data-invoice-note-box>
                 <button type="button" class="invoice-note-preview" data-note-open
                         aria-expanded="false"
@@ -309,8 +304,8 @@ render_header('Invoices', 'admin');
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="mark_paid">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                  <button class="btn-paid invoice-list-pay-btn" type="submit" title="Mark invoice as paid">
-                    Paid
+                  <button class="btn-paid btn-paid-mark invoice-list-pay-btn" type="submit" title="Mark this invoice as paid">
+                    Mark paid
                   </button>
                 </form>
               <?php endif; ?>
