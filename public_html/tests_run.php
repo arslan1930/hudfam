@@ -5040,6 +5040,16 @@ try {
     } else {
         fail('Push unpaid CTA helper mismatch');
     }
+    if (order_row_ready_for_complete(['live_url' => 'https://x.test/p', 'country' => 'Germany', 'client_label' => 'a@b.c'])
+        && !order_row_ready_for_complete(['live_url' => 'https://x.test/p', 'country' => '', 'client_label' => 'a@b.c'])
+        && !order_row_ready_for_complete(['live_url' => '', 'country' => 'Germany', 'client_label' => 'a@b.c'])
+        && !order_row_ready_for_invoice(['order_stage' => 'completed', 'live_url' => 'https://x.test/p', 'country' => 'Germany', 'client_label' => 'a@b.c', 'is_paid' => 1])
+        && order_row_ready_for_invoice(['order_stage' => 'completed', 'live_url' => 'https://x.test/p', 'country' => 'Germany', 'client_label' => 'a@b.c', 'is_paid' => 0])
+    ) {
+        pass('OM complete/invoice ready helpers');
+    } else {
+        fail('OM complete/invoice ready helpers');
+    }
 
     $wpHref = order_wp_sheet_url([
         'site_price_row_id' => 99,
@@ -5140,7 +5150,9 @@ try {
         && str_contains($ordersPhpSrc, 'will reappear the next time Processing loads')
         && str_contains($ordersPhpSrc, 'Also set Website prices back to Processing')
         && str_contains($ordersPhpSrc, 'Mark this order completed?')
-        && str_contains($ordersPhpSrc, '$stayProcessing')
+        && str_contains($ordersPhpSrc, "['folder' => 'completed'")
+        && str_contains($ordersPhpSrc, 'No leftover Processing orders')
+        && str_contains($ordersPhpSrc, 'order_row_ready_for_complete')
         && str_contains($ordersPhpSrc, 'Need a country on every ticked row before completing')
         && str_contains($ordersPhpSrc, 'Need a client email or name on every ticked row before completing')
         && str_contains($ordersPhpSrc, 'data-orig-live')

@@ -684,7 +684,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'Leftover', 'Added here'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client'];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {

@@ -3205,6 +3205,9 @@ tr.swe-row-updated {
   gap: 0.65rem 0.9rem;
   min-width: 0;
 }
+.om-origin-tabs {
+  margin: 0 0 0.85rem;
+}
 .order-filter-bar {
   margin-bottom: 1rem;
   padding: 0.75rem 0.9rem;

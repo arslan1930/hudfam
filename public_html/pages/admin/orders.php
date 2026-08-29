@@ -240,7 +240,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$selectedIds) {
                 throw new InvalidArgumentException('Tick at least one row (with a live URL) to mark completed.');
             }
-            $stayProcessing = $oneId > 0 && count($selectedIds) === 1;
             $result = order_mark_items_completed($selectedIds, $urls, (int) ($user['id'] ?? 0));
             if ($result['ok'] < 1) {
                 throw new InvalidArgumentException(
@@ -252,10 +251,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $msg .= ' ' . implode(' ', $result['errors']);
             }
             flash('ok', $msg);
-            if ($stayProcessing) {
-                redirect($ordersQs());
+            $jumpId = $oneId > 0 && count($selectedIds) === 1
+                ? $oneId
+                : ((count($selectedIds) === 1) ? (int) $selectedIds[0] : 0);
+            $doneUrl = $ordersQs(['folder' => 'completed', 'status' => 'unpaid', 'p' => 1]);
+            if ($jumpId > 0) {
+                $doneUrl .= '#row-' . $jumpId;
             }
-            redirect($ordersQs(['folder' => 'completed']));
+            redirect($doneUrl);
         }
         if ($action === 'mark_paid') {
             if (!$isCompleted) {
@@ -596,14 +599,21 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <div class="order-filter-actions">
       <button class="btn secondary small" type="submit">Search</button>
       <?php if ($filtersOn): ?>
-        <a class="btn secondary small" href="index.php?page=admin_orders&amp;folder=<?= h($folder) ?>">Clear</a>
+        <a class="btn secondary small" href="<?= h($ordersQs([
+            'q' => '',
+            'country' => '',
+            'admin_id' => 0,
+            'date_from' => '',
+            'date_to' => '',
+            'p' => 1,
+        ])) ?>">Clear</a>
       <?php endif; ?>
     </div>
   </div>
 </form>
 
 <?php if ($isProcessing): ?>
-<p class="muted om-origin-tabs" id="om-origin-tabs">
+<nav class="invoice-list-chips om-origin-tabs" id="om-origin-tabs" aria-label="Processing origin">
   <?php
     $originLabels = [
         'wp' => 'Website prices Processing',
@@ -615,14 +625,12 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         $ohref = $ordersQs(['origin' => $okey, 'p' => 1]);
         $isCur = $origin === $okey;
   ?>
-    <?= $okey === 'wp' ? '' : ' · ' ?>
-    <?php if ($isCur): ?>
-      <strong><?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)</strong>
-    <?php else: ?>
-      <a href="<?= h($ohref) ?>"><?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)</a>
-    <?php endif; ?>
+    <a class="btn secondary small<?= $isCur ? ' active-soft' : '' ?>"
+       href="<?= h($ohref) ?>"<?= $isCur ? ' aria-current="page"' : '' ?>>
+      <?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)
+    </a>
   <?php endforeach; ?>
-</p>
+</nav>
 <?php endif; ?>
 
 <div class="orders-summary orders-summary-6">
@@ -708,7 +716,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
               </label>
               <label class="order-check-head" for="order-select-all">
                 <span><?= $isProcessing ? 'Complete' : 'Bill' ?></span>
-                <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
+                <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows ready to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
               </label>
             </div>
           </th>
@@ -734,9 +742,26 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       <?php if (!$items): ?>
         <tr>
           <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
-            <?= $filtersOn ? 'No orders match this filter.' : ($isProcessing ? 'No processing orders — Website prices Processing rows appear here, or click “Add order”.' : 'No completed orders yet — mark processing rows completed with a live URL.') ?>
+            <?= $filtersOn
+                ? 'No orders match this filter.'
+                : ($isProcessing
+                    ? ($origin === 'leftover'
+                        ? 'No leftover Processing orders. Website prices Processing and Added here are other tabs.'
+                        : ($origin === 'manual'
+                            ? 'No orders added here. Use + Add order, or open Website prices Processing.'
+                            : ($origin === 'all'
+                                ? 'No processing orders. Website prices Processing rows appear here, or click + Add order.'
+                                : 'No Website prices Processing rows. Leftover and Added here are other tabs.')))
+                    : 'No completed orders yet — mark processing rows completed with a live URL.') ?>
             <?php if ($filtersOn): ?>
-              <a href="index.php?page=admin_orders&amp;folder=<?= h($folder) ?>">Clear filters</a>
+              <a href="<?= h($ordersQs([
+                  'q' => '',
+                  'country' => '',
+                  'admin_id' => 0,
+                  'date_from' => '',
+                  'date_to' => '',
+                  'p' => 1,
+              ])) ?>">Clear filters</a>
             <?php endif; ?>
           </td>
         </tr>
@@ -765,9 +790,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           if ($rowAdminId < 1) {
               $rowAdminId = (int) ($user['id'] ?? 0);
           }
-          $canPush = $isCompleted && $done && !$paid && empty($openInvoicesByOrder[$id]);
+          $canPush = $isCompleted && order_row_ready_for_invoice($row) && empty($openInvoicesByOrder[$id]);
           $openInv = $openInvoicesByOrder[$id] ?? null;
-          $canComplete = $isProcessing && trim((string) ($row['live_url'] ?? '')) !== '';
+          $canComplete = $isProcessing && order_row_ready_for_complete($row);
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
             data-row id="row-<?= $id ?>"<?= $openInv ? ' data-on-invoice="1"' : '' ?>>
@@ -778,12 +803,12 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
               <input type="checkbox" name="item_ids[]" value="<?= $id ?>"
                      <?= ($isProcessing ? $canComplete : $canPush) ? '' : 'disabled' ?>
                      title="<?= $isProcessing
-                         ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL before marking completed')
+                         ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL, country, and client before marking completed')
                          : ($canPush
                             ? 'Push this unpaid LIVE row to an invoice'
                             : ($openInv
                                 ? ('Already on invoice ' . (string) ($openInv['invoice_number'] ?? ''))
-                                : 'Only unpaid completed rows can be pushed')) ?>"
+                                : 'Only unpaid completed rows with live URL, country, and client can be pushed')) ?>"
                      data-push-check>
             </div>
           </td>
@@ -873,7 +898,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <td class="col-paid">
             <?php if ($isProcessing): ?>
               <button class="btn secondary small" type="submit"
-                      title="<?= $canComplete ? 'Mark this order completed' : 'Fill LIVE URL before marking completed' ?>"
+                      title="<?= $canComplete ? 'Mark this order completed' : 'Fill LIVE URL, country, and client before marking completed' ?>"
                       <?= $canComplete ? '' : 'disabled' ?>
                       data-complete-btn
                       onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_completed';">
@@ -1060,30 +1085,36 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       if (emptyOpt) emptyOpt.textContent = isPlacement ? 'Start' : 'Month';
     }
   }
-  function syncPushCheck(row) {
+  function rowReady(row) {
     var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
+    var country = String((row.querySelector('[name^="country"]') || {}).value || '').trim();
+    var client = String((row.querySelector('[name^="client_label"]') || {}).value || '').trim();
+    return !!(live && country && client);
+  }
+  function syncPushCheck(row) {
     var paidBtn = row.querySelector('.btn-paid.is-paid');
     var check = row.querySelector('[data-push-check]');
     var completeBtn = row.querySelector('[data-complete-btn]');
     if (!check) return;
     var folder = sheetFolder;
     var can;
+    var ready = rowReady(row);
     if (folder === 'processing') {
-      can = !!live;
+      can = ready;
       check.disabled = !can;
-      check.title = can ? 'Mark this row completed' : 'Fill LIVE URL before marking completed';
+      check.title = can ? 'Mark this row completed' : 'Fill LIVE URL, country, and client before marking completed';
       if (completeBtn) {
         completeBtn.disabled = !can;
-        completeBtn.title = can ? 'Mark this order completed' : 'Fill LIVE URL before marking completed';
+        completeBtn.title = can ? 'Mark this order completed' : 'Fill LIVE URL, country, and client before marking completed';
       }
     } else {
-      can = !!live && !paidBtn && !row.getAttribute('data-on-invoice');
+      can = ready && !paidBtn && !row.getAttribute('data-on-invoice');
       check.disabled = !can;
       check.title = can
         ? 'Push this unpaid LIVE row to an invoice'
         : (row.getAttribute('data-on-invoice')
           ? 'Already on an invoice'
-          : 'Only unpaid completed rows can be pushed');
+          : 'Only unpaid completed rows with live URL, country, and client can be pushed');
     }
     if (!can) check.checked = false;
   }

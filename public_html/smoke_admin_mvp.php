@@ -1424,7 +1424,9 @@ if (!str_contains($ordersPage, '<span>Copy</span>')
     || !str_contains($ordersPage, 'Open in Website prices')
     || !str_contains($ordersPage, 'omConfirmRemove')
     || !str_contains($ordersPage, 'restore_wp')
-    || !str_contains($ordersPage, '$stayProcessing')
+    || !str_contains($ordersPage, "['folder' => 'completed'")
+    || !str_contains($ordersPage, 'No leftover Processing orders')
+    || !str_contains($ordersPage, 'order_row_ready_for_complete')
     || !str_contains($ordersPage, 'Mark this order completed?')
     || !str_contains($ordersPage, 'order_invoice_generate_push_cta')) {
     fail('orders missing Copy/Complete labels, WP link, or confirm');
