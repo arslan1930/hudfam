@@ -458,7 +458,7 @@ foreach (
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order', 'leftover', 'added here'],
-        'admin_invoices' => ['Invoice', 'Mark paid'],
+        'admin_invoices' => ['Invoice', 'Mark paid', 'invoice-list-chips'],
         'admin_users' => ['Users', 'Awaiting assignment', 'Must change password', 'users-office'],
         'account_password' => ['Change password', 'breadcrumbs'],
     ] as $page => $needles

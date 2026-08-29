@@ -171,9 +171,10 @@ if (!str_contains($invoicesAdminPage, '$perPage = 50')
     ok('invoices.php 50/page pagination');
 }
 if (!str_contains($invoicesAdminPage, 'name="filter"')
-    || !str_contains($invoicesAdminPage, 'value="draft"')
-    || !str_contains($invoicesAdminPage, 'value="unpaid"')
-    || !str_contains($invoicesAdminPage, 'value="paid"')
+    || !str_contains($invoicesAdminPage, 'invoice-list-chips')
+    || !str_contains($invoicesAdminPage, 'filter=draft')
+    || !str_contains($invoicesAdminPage, 'filter=unpaid')
+    || !str_contains($invoicesAdminPage, 'filter=paid')
     || !str_contains($invoicesAdminPage, 'normalize_invoice_list_filter')) {
     fail('invoices.php missing status filter');
 } else {
@@ -190,6 +191,14 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
     fail('invoices.php missing Bill as column');
 } else {
     ok('invoices.php Bill as column');
+}
+if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
+    || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
+    || !str_contains($invoicesAdminPage, 'Completed unpaid')
+    || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")) {
+    fail('invoices.php missing list chips / search / paid-delete copy');
+} else {
+    ok('invoices.php list chips, full search, paid-delete confirm');
 }
 $adminProspects = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
 if (str_contains($adminProspects, 'Clean errors') || str_contains($adminProspects, 'Clean Errors')) {
