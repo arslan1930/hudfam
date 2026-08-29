@@ -1507,6 +1507,9 @@ if (!str_contains($invoicesLib, 'function count_invoices')
     || !str_contains($invoicesLib, 'function filter_order_items_not_on_open_invoice')
     || !str_contains($invoicesLib, 'function normalize_invoice_list_filter')
     || !str_contains($invoicesLib, 'function invoice_list_query')
+    || !str_contains($invoicesLib, 'function invoice_generate_empty_stats')
+    || !str_contains($invoicesLib, 'function invoice_assert_single_bill_as')
+    || !str_contains($invoicesLib, 'function invoice_generate_pick_cap')
     || !str_contains($invoicesLib, "i.work_status='draft'")
     || !str_contains($invoicesLib, "i.payment_status='unpaid' AND i.work_status='done'")
     || !str_contains($invoicesLib, 'LIMIT ')) {
@@ -1525,7 +1528,7 @@ if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1554,6 +1557,16 @@ if (!str_contains($invoiceGenerate, 'unpaid LIVE')
     fail('invoice_generate missing unpaid LIVE pick / bill-as');
 } else {
     ok('invoice_generate unpaid LIVE pick + bill-as');
+}
+if (!str_contains($invoiceGenerate, 'invoice_assert_single_bill_as')
+    || !str_contains($invoiceGenerate, 'cannot share one invoice')
+    || !str_contains($invoiceGenerate, 'invoice_generate_empty_stats')
+    || !str_contains($invoiceGenerate, 'invoice_generate_pick_cap')
+    || !str_contains($invoiceGenerate, 'Push from Completed')
+    || str_contains($invoiceGenerate, 'group_same_amount" value="1" checked')) {
+    fail('invoice_generate missing mixed bill-as / empty reasons / grouping off');
+} else {
+    ok('invoice_generate mixed bill-as blocked, empty reasons, grouping off');
 }
 if (!is_file($root . '/assets/js/searchable-select.js')) {
     fail('missing assets/js/searchable-select.js');

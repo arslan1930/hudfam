@@ -508,6 +508,20 @@ if ($invViewId > 0) {
     fail('admin invoices list has no Open bill link');
 }
 
+$r = req('GET', $base . '/index.php?page=admin_invoice_generate');
+$genCopy = str_contains($r['body'] ?? '', 'Tick the ones to bill')
+    || str_contains($r['body'] ?? '', 'Nothing to tick')
+    || str_contains($r['body'] ?? '', 'Push from Completed');
+$groupOff = !str_contains($r['body'] ?? '', 'group_same_amount" value="1" checked');
+if ($r['status'] === 200
+    && $genCopy
+    && $groupOff
+    && !str_contains($r['body'], 'Fatal error')) {
+    pass('admin invoice generate none ticked');
+} else {
+    fail('admin invoice generate status=' . ($r['status'] ?? '?'));
+}
+
 $r = req('GET', $base . '/index.php?page=admin_users&awaiting=1');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Awaiting assignment')

@@ -4423,6 +4423,36 @@ try {
     } else {
         fail('invoice generate typeahead min too low');
     }
+    try {
+        invoice_assert_single_bill_as([
+            ['client_label' => 'alpha@example.com'],
+            ['client_label' => 'beta@example.com'],
+        ]);
+        fail('mixed bill-as should throw');
+    } catch (InvalidArgumentException $e) {
+        if (str_contains($e->getMessage(), 'same bill-as')) {
+            pass('mixed bill-as blocked');
+        } else {
+            fail('mixed bill-as message: ' . $e->getMessage());
+        }
+    }
+    invoice_assert_single_bill_as([
+        ['client_label' => 'same@example.com'],
+        ['client_label' => 'same@example.com'],
+    ]);
+    $emptyStats = invoice_generate_empty_stats();
+    $listedInv = list_invoiceable_order_items(0);
+    if (isset($emptyStats['invoiceable'], $emptyStats['completed_unpaid'], $emptyStats['missing_country_client'], $emptyStats['on_open_invoice'])
+        && (int) $emptyStats['invoiceable'] === count($listedInv)) {
+        pass('generate empty stats match invoiceable');
+    } else {
+        fail('generate empty stats invoiceable=' . json_encode($emptyStats) . ' listed=' . count($listedInv));
+    }
+    if (invoice_generate_pick_cap() >= 80) {
+        pass('generate pick cap');
+    } else {
+        fail('generate pick cap too low');
+    }
     $listed = list_order_clients(['filter' => 'unpaid']);
     $foundUnpaid = false;
     foreach ($listed as $row) {

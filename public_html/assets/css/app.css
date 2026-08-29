@@ -3279,6 +3279,10 @@ tr.swe-row-updated {
   min-width: 12rem;
   max-width: none;
 }
+.invoice-empty-reasons {
+  margin: 0.35rem 0 0.85rem;
+  padding-left: 1.25rem;
+}
 .dashboard-search input[type="search"] {
   width: 11rem;
   max-width: 40vw;
