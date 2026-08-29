@@ -328,17 +328,28 @@ try {
     $mardidGal = analyze_pasted_domain_line('mardid.gal');
     $eus = analyze_pasted_domain_line('berria.eus');
     $scot = analyze_pasted_domain_line('gov.scot');
+    $run = analyze_pasted_domain_line('dashport.run');
+    $shotGal = analyze_pasted_domain_line('fedgalmon.gal');
+    $shotMadrid = analyze_pasted_domain_line('tanatorios.madrid');
+    $shotEus = analyze_pasted_domain_line('emf.eus');
     $comz = analyze_pasted_domain_line('not-a-site.comz');
     $fakeMardidTld = analyze_pasted_domain_line('site.mardid');
+    $bare = analyze_pasted_domain_line('zonlab');
     if (!empty($gal['ok']) && ($gal['domain'] ?? '') === 'praza.gal'
         && !empty($madrid['ok']) && ($madrid['domain'] ?? '') === 'comunidad.madrid'
         && !empty($mardidGal['ok']) && ($mardidGal['domain'] ?? '') === 'mardid.gal'
         && !empty($eus['ok']) && ($eus['domain'] ?? '') === 'berria.eus'
         && !empty($scot['ok']) && ($scot['domain'] ?? '') === 'gov.scot'
+        && !empty($run['ok']) && ($run['domain'] ?? '') === 'dashport.run'
+        && !empty($shotGal['ok']) && ($shotGal['domain'] ?? '') === 'fedgalmon.gal'
+        && !empty($shotMadrid['ok']) && ($shotMadrid['domain'] ?? '') === 'tanatorios.madrid'
+        && !empty($shotEus['ok']) && ($shotEus['domain'] ?? '') === 'emf.eus'
         && empty($comz['ok'])
         && empty($fakeMardidTld['ok'])
-        && is_known_tld('gal') && is_known_tld('madrid') && !is_known_tld('comz') && !is_known_tld('mardid')) {
-        pass('real geoTLDs .gal .madrid .eus .scot accepted; .comz and .mardid skipped');
+        && empty($bare['ok'])
+        && is_known_tld('gal') && is_known_tld('madrid') && is_known_tld('run')
+        && !is_known_tld('comz') && !is_known_tld('mardid')) {
+        pass('real geoTLDs .gal .madrid .eus .scot .run accepted; .comz .mardid and bare names skipped');
     } else {
         fail('geoTLD clean: ' . json_encode([
             'gal' => $gal,
@@ -346,8 +357,13 @@ try {
             'mardid.gal' => $mardidGal,
             'eus' => $eus,
             'scot' => $scot,
+            'run' => $run,
+            'fedgalmon.gal' => $shotGal,
+            'tanatorios.madrid' => $shotMadrid,
+            'emf.eus' => $shotEus,
             'comz' => $comz,
             'mardid' => $fakeMardidTld,
+            'zonlab' => $bare,
         ]));
     }
 } catch (Throwable $e) {
