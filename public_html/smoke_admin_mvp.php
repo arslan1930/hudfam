@@ -759,6 +759,7 @@ if (!str_contains($adminProspects, 'invoice_list_page_numbers')
     || str_contains($adminProspects, 'choose rows per page below')
     || str_contains($adminProspects, 'Team adds merge')
     || str_contains($adminProspects, 'no. of sites')
+    || str_contains($adminProspects, 'Europe first')
     || !str_contains($adminProspects, 'Click a market to open it')
     || !str_contains($adminProspects, "' is-empty'")
     || !str_contains($adminProspects, 'Team Filter &amp; add writes into these folders.')
@@ -814,7 +815,9 @@ if (!str_contains($prospectsCountryJs, 'pageNumbers')
     ok('prospects-country.js numbered pager rebuild');
 }
 if (!str_contains($adminProspects, 'data-open-default')
-    || !str_contains($adminProspects, "setMarketOpen(market, market.getAttribute('data-open-default') === '1')")) {
+    || !str_contains($adminProspects, "setMarketOpen(market, market.getAttribute('data-open-default') === '1')")
+    || !str_contains($adminProspects, '$busiestRegion')
+    || !str_contains($adminProspects, '$openByDefault = ($busiestTotal > 0')) {
     fail('Our database market search-clear does not restore default accordion');
 } else {
     ok('Our database market accordion restores on search clear');
