@@ -545,7 +545,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <?php endif; ?>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_orders">Folders</a>
+    <a class="btn secondary" href="index.php?page=admin_orders">All folders</a>
     <?php if ($isProcessing): ?>
       <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed unpaid</a>
     <?php else: ?>
@@ -560,7 +560,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 
 <?= guide_orders() ?>
 
-<form method="get" action="index.php" class="card order-filter-bar" id="order-filter-bar" data-no-draft>
+<form method="get" action="index.php" class="card order-filter-bar<?= $isCompleted ? ' order-filter-bar-completed' : '' ?>" id="order-filter-bar" data-no-draft>
   <input type="hidden" name="page" value="admin_orders">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
   <?php if ($isProcessing): ?>
@@ -574,7 +574,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <label class="sheet-search" for="order-sheet-search" style="margin:0">
       <span class="visually-hidden">Search orders</span>
       <input id="order-sheet-search" type="search" name="q" value="<?= h($filter['q']) ?>"
-             placeholder="Search site, client, country, admin…" autocomplete="off" spellcheck="false" data-no-draft>
+             placeholder="<?= $isCompleted ? 'Site, client, country, admin' : 'Search site, client, country, admin…' ?>" autocomplete="off" spellcheck="false" data-no-draft>
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Country</span>
@@ -664,7 +664,16 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 </nav>
 <?php endif; ?>
 
-<div class="orders-summary orders-summary-6">
+<?php
+$showPagingStats = $totalRows !== $siteCount;
+$compactUnpaidStats = $isCompleted && $filter['status'] === 'unpaid';
+$summaryMods = 'orders-summary-6';
+if ($compactUnpaidStats && !$showPagingStats) {
+    $summaryMods = 'orders-summary-3';
+}
+?>
+<div class="orders-summary <?= h($summaryMods) ?>">
+  <?php if (!$compactUnpaidStats || $showPagingStats): ?>
   <div class="orders-summary-item">
     <strong><?= (int) $totalRows ?></strong>
     <span><?= label_with_info('Orders', 'Rows matching this filter (all pages).') ?></span>
@@ -673,10 +682,13 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <strong data-summary-sites><?= (int) $siteCount ?></strong>
     <span><?= label_with_info('This page', 'Rows on the current page.') ?></span>
   </div>
+  <?php endif; ?>
+  <?php if (!$compactUnpaidStats): ?>
   <div class="orders-summary-item orders-summary-done">
     <strong data-summary-completed><?= (int) ($isProcessing ? $liveFilledCount : $completedCount) ?></strong>
     <span><?= label_with_info($isCompleted ? 'Completed on page' : 'With live URL on page', $isCompleted ? 'Rows on this page already marked completed.' : 'Rows on this page that already have a live URL filled — still Processing until you mark completed.') ?></span>
   </div>
+  <?php endif; ?>
   <?php if ($isCompleted): ?>
   <div class="orders-summary-item">
     <strong><?= (int) $unbilledCount ?></strong>
@@ -691,11 +703,11 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <?php endif; ?>
   <div class="orders-summary-item">
     <strong data-summary-decided><?= h(format_money($totalDecided)) ?></strong>
-    <span><?= label_with_info('Decided on page', 'Sum of decided prices on this page.') ?></span>
+    <span><?= label_with_info('Decided', 'Sum of decided prices on this page.') ?></span>
   </div>
   <div class="orders-summary-item">
     <strong data-summary-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong>
-    <span><?= label_with_info('Profit on page', 'Decided − Owner on this page.') ?></span>
+    <span><?= label_with_info('Profit', 'Decided − Owner on this page.') ?></span>
   </div>
 </div>
 
@@ -743,8 +755,12 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     </div>
   </div>
-  <p class="muted order-check-hint" style="margin:0.35rem 0 0">
-    Left tick = <strong>Copy</strong> (this page). Right tick = <strong><?= $isProcessing ? 'Mark completed' : 'Push to invoice' ?></strong>.
+  <p class="<?= $isCompleted ? 'order-check-hint order-check-hint-bill' : 'muted order-check-hint' ?>" style="margin:0.35rem 0 0">
+    <?php if ($isProcessing): ?>
+      Left tick = <strong>Copy</strong> (this page). Right tick = <strong>Mark completed</strong>.
+    <?php else: ?>
+      Left tick = <strong>Copy</strong> (this page). Right tick = <strong>Bill</strong>, then use <strong>Push to invoice</strong> on this sheet.
+    <?php endif; ?>
   </p>
   <p class="muted" id="order-copy-status" style="margin:0.35rem 0 0" hidden></p>
 
@@ -771,8 +787,8 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <th class="col-client"><?= label_with_info('Client email or name', 'Free text — email or a short name. No client folder or extra details required.') ?></th>
           <th class="col-site"><?= label_with_info('Site name', 'Website or domain for this row (e.g. site.com).') ?></th>
           <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?></th>
-          <th class="col-price"><?= label_with_info('Owner price', 'What you pay the site owner / publisher.') ?></th>
-          <th class="col-price"><?= label_with_info('Decided price', 'What the client pays you. Profit = Decided − Owner.') ?></th>
+          <th class="col-price"><?= label_with_info('Owner', 'Owner price — what you pay the site owner / publisher.') ?></th>
+          <th class="col-price"><?= label_with_info('Decided', 'Decided price — what the client pays you. Profit = Decided − Owner.') ?></th>
           <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?></th>
           <th class="col-paid"><?= $isProcessing
               ? label_with_info('Complete', 'Mark this row completed after the live URL is filled. Moves it to Completed orders and sets Website prices to Completed.')
@@ -1018,14 +1034,16 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       <tfoot>
         <tr>
           <td colspan="8"><strong>Page totals</strong></td>
-          <td><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
-          <td><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
-          <td>
-            <span class="muted"><?= $isProcessing ? 'With live URL ' : 'Completed ' ?></span>
-            <strong data-total-completed><?= (int) ($isProcessing ? $liveFilledCount : $completedCount) ?></strong>
+          <td class="col-price"><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
+          <td class="col-price"><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
+          <td class="col-live">
+            <?php if ($isProcessing): ?>
+              <span class="muted">With live URL </span>
+              <strong data-total-completed><?= (int) $liveFilledCount ?></strong>
+            <?php endif; ?>
           </td>
-          <td></td>
-          <td><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
+          <td class="col-paid"></td>
+          <td class="col-profit"><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
           <td colspan="2"></td>
         </tr>
       </tfoot>
@@ -1056,8 +1074,6 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <?php if ($isProcessing): ?>
       <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
-    <?php else: ?>
-      <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
     <?php endif; ?>
   </div>
 </form>

@@ -2931,6 +2931,13 @@ tr.swe-row-updated {
   line-height: 1.2;
   word-break: break-word;
 }
+.order-sheet th.col-price .with-info-label,
+.order-sheet th.col-profit .with-info-label,
+.order-sheet th.col-live .with-info-label,
+.order-sheet th.col-placement .with-info-label {
+  white-space: nowrap;
+  word-break: normal;
+}
 .order-sheet th .info-tip {
   width: 0.95rem;
   height: 0.95rem;
@@ -3173,6 +3180,9 @@ tr.swe-row-updated {
 .orders-summary-6 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+.orders-summary-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .orders-summary-done {
   border-color: #b7dcc8;
   background: linear-gradient(180deg, #f3faf6 0%, #ffffff 100%);
@@ -3280,6 +3290,15 @@ tr.swe-row-updated {
 .order-filter-bar .sheet-search input[type="search"] {
   width: 16rem;
   max-width: 70vw;
+}
+.order-filter-bar-completed .sheet-search {
+  flex: 1 1 22rem;
+  min-width: 18rem;
+}
+.order-filter-bar-completed .sheet-search input[type="search"] {
+  width: 100%;
+  min-width: 18rem;
+  max-width: none;
 }
 .order-filter-actions {
   display: flex;
@@ -3714,7 +3733,7 @@ a.card.stat:focus-visible {
 }
 .order-sheet {
   width: 100%;
-  min-width: 1860px;
+  min-width: 1900px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -3748,6 +3767,13 @@ a.card.stat:focus-visible {
   line-height: 1.1;
 }
 .order-check-hint { font-size: 0.82rem; }
+.order-check-hint-bill {
+  color: #1f2937;
+  font-size: 0.88rem;
+}
+.order-check-hint-bill strong {
+  color: var(--brand-deep);
+}
 .order-wp-open {
   font-size: 0.75rem;
   line-height: 1.2;
@@ -3764,7 +3790,7 @@ a.card.stat:focus-visible {
 .order-sheet .col-admin { min-width: 140px; width: 148px; }
 .order-sheet .col-client { min-width: 200px; }
 .order-sheet .col-site { min-width: 188px; }
-.order-sheet .col-placement { min-width: 108px; width: 118px; }
+.order-sheet .col-placement { min-width: 148px; width: 152px; }
 .site-cell {
   display: grid;
   gap: 0.28rem;
@@ -3785,6 +3811,10 @@ a.card.stat:focus-visible {
   border-style: solid;
 }
 .order-sheet .col-price { width: 7.5rem; }
+.order-sheet tfoot .col-price,
+.order-sheet tfoot .col-profit {
+  text-align: right;
+}
 .order-sheet .col-profit { width: 6.5rem; text-align: right; }
 .order-sheet .col-del { width: 4.8rem; text-align: center; }
 .order-sheet .col-live { min-width: 240px; }
@@ -4551,7 +4581,8 @@ a.card.stat:focus-visible {
   .panel-guide-grid { grid-template-columns: 1fr; }
   .orders-layout { grid-template-columns: 1fr; }
   .orders-summary,
-  .orders-summary-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .orders-summary-6,
+  .orders-summary-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .month-year-cell { grid-template-columns: 1fr; }
   /* Screen edit/preview only — never collapse the Print/PDF page */
   body:not(.invoice-print-body) .invoice-doc-parties,

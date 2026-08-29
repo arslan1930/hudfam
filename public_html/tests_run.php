@@ -5274,6 +5274,22 @@ try {
         fail('OM sheet gap UI missing');
     }
 
+    $omCssSrc = file_get_contents(__DIR__ . '/assets/css/app.css') ?: '';
+    if (str_contains($ordersPhpSrc, 'All folders')
+        && !str_contains($ordersPhpSrc, '>Folders</a>')
+        && str_contains($ordersPhpSrc, 'order-filter-bar-completed')
+        && str_contains($ordersPhpSrc, 'order-check-hint-bill')
+        && str_contains($ordersPhpSrc, 'compactUnpaidStats')
+        && str_contains($ordersPhpSrc, "label_with_info('Owner'")
+        && str_contains($ordersPhpSrc, 'then use <strong>Push to invoice</strong> on this sheet')
+        && str_contains($omCssSrc, 'order-filter-bar-completed')
+        && str_contains($omCssSrc, 'th.col-price .with-info-label')
+        && str_contains($omCssSrc, 'order-check-hint-bill')) {
+        pass('OM Completed unpaid sheet UX');
+    } else {
+        fail('OM Completed unpaid sheet UX missing');
+    }
+
     $invId = create_blank_invoice((int) $adminUser['id']);
     pass("blank invoice id=$invId");
     $draftAfterBlank = count_invoices_by_work_status('draft');

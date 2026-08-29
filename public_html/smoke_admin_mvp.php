@@ -1556,6 +1556,30 @@ if (!str_contains($ordersPage, 'Unpaid LIVE')
 } else {
     ok('orders unpaid LIVE filter');
 }
+$ordersCss = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($ordersPage, 'All folders')
+    || str_contains($ordersPage, '>Folders</a>')
+    || !str_contains($ordersPage, 'order-filter-bar-completed')
+    || !str_contains($ordersPage, 'order-check-hint-bill')
+    || !str_contains($ordersPage, 'compactUnpaidStats')
+    || !str_contains($ordersPage, "label_with_info('Owner'")
+    || !str_contains($ordersPage, "label_with_info('Decided'")
+    || !str_contains($ordersPage, 'then use <strong>Push to invoice</strong> on this sheet')
+    || !str_contains($ordersCss, 'order-filter-bar-completed')
+    || !str_contains($ordersCss, 'th.col-price .with-info-label')
+    || !str_contains($ordersCss, 'order-check-hint-bill')) {
+    fail('orders missing Completed unpaid sheet UX');
+} else {
+    ok('orders Completed unpaid sheet UX (All folders, search, Bill hint, compact stats)');
+}
+$stickyNeedle = strpos($ordersPage, 'class="actions-sticky"');
+$stickyPush = $stickyNeedle !== false ? strpos($ordersPage, "value='push_invoice'", $stickyNeedle) : false;
+$formCloseAfterSticky = $stickyNeedle !== false ? strpos($ordersPage, '</form>', $stickyNeedle) : false;
+if ($stickyNeedle === false || ($stickyPush !== false && $formCloseAfterSticky !== false && $stickyPush < $formCloseAfterSticky)) {
+    fail('orders sticky footer still has Push to invoice on Completed');
+} else {
+    ok('orders sticky footer Save only on Completed');
+}
 if (!str_contains($ordersPage, 'om-sheet-pager')
     || !str_contains($ordersPage, 'invoice_list_page_numbers')
     || !str_contains($ordersPage, 'Previous')) {
