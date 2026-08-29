@@ -1334,7 +1334,17 @@ function get_order_item(int $id): ?array
 }
 
 /**
- * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string,status?:string} $opts
+ * Processing origin: wp (still in Website prices Processing), leftover (linked, WP left Processing),
+ * manual (no Website prices link), or all. Omit / unknown → all so existing callers keep every Processing row.
+ */
+function normalize_order_pipeline_origin($origin): string
+{
+    $origin = strtolower(trim((string) $origin));
+    return in_array($origin, ['wp', 'leftover', 'manual', 'all'], true) ? $origin : 'all';
+}
+
+/**
+ * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string,status?:string,folder?:string,origin?:string} $opts
  * @return array{0:string,1:list<mixed>}
  */
 function order_pipeline_where_sql(array $opts = []): array
@@ -1345,6 +1355,20 @@ function order_pipeline_where_sql(array $opts = []): array
     if ($folder === 'processing') {
         // Stay visible while order_stage is processing, even if Website prices left Processing.
         $where[] = "COALESCE(i.order_stage, 'processing') = 'processing'";
+        $origin = normalize_order_pipeline_origin($opts['origin'] ?? 'all');
+        if ($origin === 'wp') {
+            $where[] = "i.site_price_row_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM site_price_rows owp
+                WHERE owp.id = i.site_price_row_id AND owp.status_slug = 'processing'
+            )";
+        } elseif ($origin === 'leftover') {
+            $where[] = "i.site_price_row_id IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM site_price_rows owp
+                WHERE owp.id = i.site_price_row_id AND owp.status_slug = 'processing'
+            )";
+        } elseif ($origin === 'manual') {
+            $where[] = 'i.site_price_row_id IS NULL';
+        }
     } elseif ($folder === 'completed') {
         $where[] = "COALESCE(i.order_stage, 'processing') = 'completed'";
         $where[] = "TRIM(i.live_url) <> ''";

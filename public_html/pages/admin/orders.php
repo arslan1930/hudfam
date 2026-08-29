@@ -13,6 +13,15 @@ $isProcessing = $folder === 'processing';
 $isCompleted = $folder === 'completed';
 $isHub = $folder === '';
 
+$origin = 'all';
+if ($isProcessing) {
+    $rawOrigin = strtolower(trim((string) get('origin')));
+    if ($rawOrigin === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        $rawOrigin = strtolower(trim((string) ($_POST['origin'] ?? '')));
+    }
+    $origin = in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'wp';
+}
+
 $filter = [
     'q' => trim((string) get('q')),
     'country' => trim((string) get('country')),
@@ -34,7 +43,7 @@ if (!in_array($perPage, [50, 100, 250], true)) {
 }
 $pageNum = max(1, (int) get('p', 1));
 
-$ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pageNum, $folder): string {
+$ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pageNum, $folder, $origin): string {
     $params = array_merge([
         'page' => 'admin_orders',
         'folder' => $folder,
@@ -46,11 +55,19 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
         'status' => $filter['status'],
         'per' => $perPage,
         'p' => $pageNum,
+        'origin' => $origin,
     ], $overrides);
     $bits = ['page=' . rawurlencode((string) $params['page'])];
     $folderName = (string) ($params['folder'] ?? '');
     if ($folderName === 'processing' || $folderName === 'completed') {
         $bits[] = 'folder=' . rawurlencode($folderName);
+    }
+    if ($folderName === 'processing') {
+        $orig = strtolower(trim((string) ($params['origin'] ?? '')));
+        if (!in_array($orig, ['wp', 'leftover', 'manual', 'all'], true)) {
+            $orig = 'wp';
+        }
+        $bits[] = 'origin=' . rawurlencode($orig);
     }
     foreach (['q', 'country', 'date_from', 'date_to'] as $k) {
         $v = trim((string) ($params[$k] ?? ''));
@@ -94,6 +111,9 @@ $listOpts = [
     'status' => $filter['status'],
     'folder' => $folder,
 ];
+if ($isProcessing) {
+    $listOpts['origin'] = $origin;
+}
 
 $download = strtolower((string) get('download'));
 if ($folder !== '' && ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt')) {
@@ -161,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => 'all',
                 'date_from' => '',
                 'date_to' => '',
+                'origin' => 'manual',
             ]) . '#sheet-bottom');
         }
         if ($action === 'save_sheet') {
@@ -314,6 +335,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($isHub) {
     $processingCount = count_order_pipeline_rows(['folder' => 'processing']);
+    $processingWp = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'wp']);
+    $processingLeftover = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'leftover']);
+    $processingManual = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'manual']);
     $completedCount = count_order_pipeline_rows(['folder' => 'completed']);
     $unpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
     render_header('Order management', 'admin');
@@ -324,7 +348,7 @@ if ($isHub) {
     ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Order management', 'Two folders. Processing is filled from Website prices Processing. Completed is after you add a live URL and mark the order done. Only Completed unpaid rows can be pushed to an invoice.') ?></h1>
+    <h1><?= label_with_info('Order management', 'Two folders. Processing holds Website prices Processing, leftover after Website prices leaves Processing, and orders added here. Completed is after you add a live URL and mark the order done. Only Completed unpaid rows can be pushed to an invoice.') ?></h1>
     <p class="muted">Processing · Completed. Website prices never shows LIVE URL, profit, client, or invoice fields. Team sees the Website prices status change only.</p>
   </div>
   <div class="actions">
@@ -336,7 +360,11 @@ if ($isHub) {
 <div class="launch-cards om-folder-cards" id="om-folders">
   <a class="launch-card" href="index.php?page=admin_orders&amp;folder=processing" data-om-folder="processing">
     <h2>Processing</h2>
-    <p><strong class="om-folder-count"><?= (int) $processingCount ?></strong> order<?= $processingCount === 1 ? '' : 's' ?> from Website prices Processing. Fill OM fields, then mark completed with a live URL.</p>
+    <p><strong class="om-folder-count"><?= (int) $processingCount ?></strong> in Processing.
+      <?= (int) $processingWp ?> still in Website prices Processing ·
+      <?= (int) $processingLeftover ?> leftover ·
+      <?= (int) $processingManual ?> added here.
+      Fill OM fields, then mark completed with a live URL.</p>
   </a>
   <a class="launch-card" href="index.php?page=admin_orders&amp;folder=completed" data-om-folder="completed">
     <h2>Completed orders</h2>
@@ -397,6 +425,12 @@ if ($isCompleted && $items && function_exists('order_items_on_open_invoices')) {
 }
 $filterCountries = list_order_pipeline_countries();
 $clientCatalog = list_order_pipeline_client_labels();
+$originCounts = ['wp' => 0, 'leftover' => 0, 'manual' => 0, 'all' => 0];
+if ($isProcessing) {
+    foreach (['wp', 'leftover', 'manual', 'all'] as $okey) {
+        $originCounts[$okey] = count_order_pipeline_rows(array_merge($listOpts, ['origin' => $okey]));
+    }
+}
 $admins = order_admin_options();
 $adminById = [];
 foreach ($admins as $aRow) {
@@ -481,8 +515,8 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 <div class="topbar">
   <div>
     <?php if ($isProcessing): ?>
-      <h1><?= label_with_info('Processing', 'Rows from Website prices Processing, plus any you add here. Fill LIVE URL, then Mark completed. That moves the order here to Completed and sets Website prices to Completed. Saving a live URL does not complete the row by itself.') ?></h1>
-      <p class="muted">Website prices Processing feeds this folder. Mark completed requires a live URL. Push to invoice is only on Completed orders.</p>
+      <h1><?= label_with_info('Processing', 'Default view is still in Website prices Processing. Leftover stays when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row by itself.') ?></h1>
+      <p class="muted">Not every Processing row is from Website prices Processing. Mark completed requires a live URL, country, and client. Push to invoice is only on Completed orders.</p>
     <?php else: ?>
       <h1><?= label_with_info('Completed orders', 'After a live URL and Mark completed. Unpaid until Paid. Tick unpaid rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.') ?></h1>
       <p class="muted">Unpaid until paid. Push to invoice from here. Team Website prices only shows the Completed status — never LIVE URL, profit, or client.</p>
@@ -507,6 +541,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 <form method="get" action="index.php" class="card order-filter-bar" id="order-filter-bar" data-no-draft>
   <input type="hidden" name="page" value="admin_orders">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
+  <?php if ($isProcessing): ?>
+  <input type="hidden" name="origin" value="<?= h($origin) ?>">
+  <?php endif; ?>
   <input type="hidden" name="per" value="<?= (int) $perPage ?>">
   <div class="order-filter-grid">
     <label class="sheet-search" for="order-sheet-search" style="margin:0">
@@ -565,6 +602,29 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   </div>
 </form>
 
+<?php if ($isProcessing): ?>
+<p class="muted om-origin-tabs" id="om-origin-tabs">
+  <?php
+    $originLabels = [
+        'wp' => 'Website prices Processing',
+        'leftover' => 'Leftover',
+        'manual' => 'Added here',
+        'all' => 'All Processing',
+    ];
+    foreach ($originLabels as $okey => $olabel):
+        $ohref = $ordersQs(['origin' => $okey, 'p' => 1]);
+        $isCur = $origin === $okey;
+  ?>
+    <?= $okey === 'wp' ? '' : ' · ' ?>
+    <?php if ($isCur): ?>
+      <strong><?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)</strong>
+    <?php else: ?>
+      <a href="<?= h($ohref) ?>"><?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)</a>
+    <?php endif; ?>
+  <?php endforeach; ?>
+</p>
+<?php endif; ?>
+
 <div class="orders-summary orders-summary-6">
   <div class="orders-summary-item">
     <strong><?= (int) $totalRows ?></strong>
@@ -599,6 +659,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
+  <?php if ($isProcessing): ?>
+  <input type="hidden" name="origin" value="<?= h($origin) ?>">
+  <?php endif; ?>
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <input type="hidden" name="restore_wp" id="restore-wp" value="">
   <div class="order-sheet-toolbar">

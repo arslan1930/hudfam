@@ -452,12 +452,12 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'Campaign sheets', 'app-footer'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
         'admin_prospects' => ['Our database', 'Markets'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
-        'admin_orders' => ['Order'],
+        'admin_orders' => ['Order', 'leftover', 'added here'],
         'admin_invoices' => ['Invoice'],
         'admin_users' => ['Users', 'Awaiting assignment', 'Must change password', 'users-office'],
         'account_password' => ['Change password', 'breadcrumbs'],
@@ -608,7 +608,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'Leftover', 'Added here'];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
