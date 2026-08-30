@@ -3202,6 +3202,12 @@ tr.swe-row-updated {
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
   align-items: start;
 }
+.invoice-generate-form .orders-layout > .card {
+  min-width: 0;
+}
+.invoice-generate-form .form-grid {
+  align-items: start;
+}
 .orders-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3295,6 +3301,14 @@ tr.swe-row-updated {
   align-items: center;
   gap: 0.65rem 0.9rem;
   min-width: 0;
+}
+.om-folder-tabs {
+  margin: 0 0 0.85rem;
+  gap: 0.45rem;
+}
+.om-folder-tabs .btn {
+  min-width: 10.5rem;
+  justify-content: center;
 }
 .om-origin-tabs,
 .om-status-tabs {
@@ -4009,8 +4023,13 @@ a.card.stat:focus-visible {
 .invoice-list-table .num { text-align: right; white-space: nowrap; }
 .invoice-list-table th,
 .invoice-list-table td {
-  vertical-align: middle;
+  vertical-align: top;
   border-bottom: 1px solid var(--line, #e5e7eb);
+  padding: 0.7rem 0.65rem;
+}
+.invoice-list-table td:nth-child(3) {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .invoice-list-table tbody tr:last-child td {
   border-bottom: 1px solid var(--line, #e5e7eb);
@@ -4182,11 +4201,17 @@ a.card.stat:focus-visible {
   font-weight: 650;
   cursor: pointer;
 }
+#invoice-dest-existing input[type="search"] {
+  width: 100%;
+  max-width: 100%;
+  margin: 0.35rem 0 0;
+}
 #invoice-dest-existing select {
   width: 100%;
   margin-top: 0.4rem;
 }
-#invoice-append-preview {
+#invoice-append-preview,
+#invoice-sent-hint {
   margin-top: 0.5rem;
 }
 
@@ -4274,7 +4299,7 @@ a.card.stat:focus-visible {
   flex-wrap: wrap;
   gap: 1.25rem 2rem;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   padding: 0.85rem 1.35rem;
   border-bottom: 1px solid #dbe3ec;
   font-family: Arial, Helvetica, sans-serif;

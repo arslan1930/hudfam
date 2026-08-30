@@ -28,6 +28,14 @@ if (!$selectedFromSheet && $pickTotal > $pickCap) {
 }
 $emptyStats = (!$invoiceable && !$selectedFromSheet) ? invoice_generate_empty_stats() : null;
 $openInvoices = list_invoices_open_for_append(50);
+$sentUnpaidByBill = [];
+foreach (list_invoices(['filter' => 'unpaid', 'limit' => 80]) as $sentInv) {
+    $billKey = mb_strtolower(invoice_display_bill_as($sentInv));
+    if ($billKey === '' || isset($sentUnpaidByBill[$billKey])) {
+        continue;
+    }
+    $sentUnpaidByBill[$billKey] = (string) ($sentInv['invoice_number'] ?? '');
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
@@ -122,8 +130,8 @@ render_header('Generate invoice', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management. New invoice gets the next number. Add to existing only for unpaid bills with the same bill-as. No client folder required.') ?></h1>
-    <p class="muted">Push unpaid LIVE orders here for payment. Create a new bill, or add them onto an unpaid invoice. Bill-as can be the client email or name from the sheet.</p>
+    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management. New invoice gets the next number. Add to existing only for Draft bills that have not been sent yet. A bill already sent for payment (for example Armin) stays locked.') ?></h1>
+    <p class="muted">Push unpaid LIVE orders here. Create a new bill, or add them onto a Draft that is not sent yet. Bills already sent for payment cannot take more sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Order management</a>
@@ -243,7 +251,7 @@ render_header('Generate invoice', 'admin');
     </section>
 
     <section class="card">
-      <h2><?= label_with_info('Invoice details', 'New invoice: number is assigned automatically. Add to existing: pick an unpaid bill with the same bill-as. Date and extra details apply to new invoices only.') ?></h2>
+      <h2><?= label_with_info('Invoice details', 'New invoice: number is assigned automatically. Add to existing: only Draft invoices (not yet sent) with the same bill-as. Invoices already sent for payment stay locked.') ?></h2>
 
       <fieldset class="invoice-dest-mode">
         <legend class="visually-hidden">Invoice destination</legend>
@@ -260,14 +268,14 @@ render_header('Generate invoice', 'admin');
 
       <div id="invoice-dest-existing" hidden>
         <?php if (!$openInvoices): ?>
-          <p class="help">No unpaid invoices yet — generate a new one first.</p>
+          <p class="help">No Draft invoices to add to. Bills already sent for payment stay locked — generate a new invoice for more sites.</p>
         <?php else: ?>
-          <label for="invoice-existing-search">Find unpaid invoice</label>
+          <label for="invoice-existing-search">Find Draft invoice</label>
           <input id="invoice-existing-search" type="search" placeholder="Number or bill-as…"
                  autocomplete="off" spellcheck="false" data-no-draft>
-          <label for="existing_invoice_id" class="visually-hidden">Unpaid invoice</label>
+          <label for="existing_invoice_id" class="visually-hidden">Draft invoice</label>
           <select name="existing_invoice_id" id="existing_invoice_id" size="7" data-no-draft>
-            <option value="">— pick an unpaid invoice —</option>
+            <option value="">— pick a Draft invoice —</option>
             <?php foreach ($openInvoices as $openInv): ?>
               <?php
                 $openNum = (string) ($openInv['invoice_number'] ?? '');
@@ -305,6 +313,8 @@ render_header('Generate invoice', 'admin');
           <input id="invoice_date" name="invoice_date" type="date" value="<?= h(date('Y-m-d')) ?>">
         </div>
       </div>
+
+      <p class="help" id="invoice-sent-hint" hidden></p>
 
       <h3 class="invoice-subhead">Bill as</h3>
       <label for="bill_to_name">Client email or name <span class="help">(optional)</span></label>
@@ -400,6 +410,8 @@ render_header('Generate invoice', 'admin');
   var existSelect = document.getElementById('existing_invoice_id');
   var existSearch = document.getElementById('invoice-existing-search');
   var appendPreview = document.getElementById('invoice-append-preview');
+  var sentHint = document.getElementById('invoice-sent-hint');
+  var sentBills = <?= json_encode($sentUnpaidByBill, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_FORCE_OBJECT) ?>;
   var dateEl = document.getElementById('invoice_date');
   var form = document.querySelector('.invoice-generate-form');
   if (group) group.checked = false;
@@ -504,6 +516,20 @@ render_header('Generate invoice', 'admin');
           + ' → ' + euro(cur + add) + '.';
       } else {
         appendPreview.hidden = true;
+      }
+    }
+    if (sentHint) {
+      var sentNum = '';
+      if (!existing && labels.length === 1 && sentBills) {
+        sentNum = String(sentBills[String(labels[0] || '').toLowerCase()] || '');
+      }
+      if (sentNum) {
+        sentHint.hidden = false;
+        sentHint.textContent = labels[0] + ' already has invoice ' + sentNum
+          + ' sent for payment. This creates a new bill for these sites.';
+      } else {
+        sentHint.hidden = true;
+        sentHint.textContent = '';
       }
     }
   }

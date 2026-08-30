@@ -23,6 +23,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'Payment marked received — linked sheet rows set to Paid.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
+        if ($action === 'mark_sent') {
+            mark_invoice_sent($id);
+            flash('ok', 'Invoice marked as sent — waiting for payment. More sites need a new bill.');
+            redirect('index.php?page=admin_invoice_view&id=' . $id);
+        }
         if ($action === 'save_bill') {
             if ($isManual) {
                 throw new InvalidArgumentException('Use Save as draft / Save as done on a blank invoice.');
@@ -156,14 +161,16 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php if ($isPaid): ?>
         <span class="invoice-pay-badge is-paid">Paid</span>
       <?php elseif ($isDraft): ?>
-        <span class="invoice-pay-badge is-draft" title="Still needs data">Draft</span>
+        <span class="invoice-pay-badge is-draft" title="Not sent yet">Draft</span>
       <?php elseif ($isManual): ?>
         <span class="invoice-pay-badge is-done" title="Sent — waiting for payment">Done · waiting</span>
       <?php else: ?>
-        <span class="invoice-pay-badge">Unpaid</span>
+        <span class="invoice-pay-badge">Unpaid · sent</span>
       <?php endif; ?>
       <?php if ($editable): ?>
         · <strong>Draft</strong> = still needs data · <strong>Done</strong> = sent, waiting for payment
+      <?php elseif ($isDraft && !$isManual): ?>
+        · Draft — add more sites from Generate, then Save as done to send
       <?php elseif ($editableBill): ?>
         · Bill as is the email or name — optional address stays hidden on the print unless filled
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
@@ -192,7 +199,18 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
               id="blank-invoice-save-done"
               title="Mark as sent — requires a bill total above €0">Save as done</button>
     <?php endif; ?>
-    <?php if (!$isPaid && (!$isManual || !$isDraft)): ?>
+    <?php if ($isDraft && !$isManual && !$isPaid): ?>
+      <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
+            onsubmit="return confirm(<?= h(json_encode(
+                'Mark this invoice as sent for payment? You will not be able to add more sites to it.',
+                JSON_UNESCAPED_UNICODE
+            )) ?>);">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="mark_sent">
+        <button class="btn" type="submit">Save as done</button>
+      </form>
+    <?php endif; ?>
+    <?php if (!$isPaid && !$isDraft): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
             onsubmit="return confirm(<?= h(json_encode(
                 $isManual
@@ -204,7 +222,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <input type="hidden" name="action" value="mark_paid">
         <button class="btn-paid btn-paid-mark" type="submit">Mark paid</button>
       </form>
-    <?php elseif ($editable && $isDraft): ?>
+    <?php elseif ($isDraft): ?>
       <span class="help" style="align-self:center">Mark paid after Save as done</span>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener"

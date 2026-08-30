@@ -4948,15 +4948,37 @@ try {
             fail('open invoice did not block a second bill');
         }
 
-        $openAppendIds = [];
-        foreach (list_invoices_open_for_append(50) as $openHit) {
-            $openAppendIds[] = (int) ($openHit['id'] ?? 0);
-        }
-        $alreadyOnThis = false;
+        $sentBlocked = false;
         try {
             append_orders_to_invoice((int) $pipeInvId, $pipeLines, $pipeReady);
         } catch (InvalidArgumentException $e) {
-            $alreadyOnThis = str_contains($e->getMessage(), 'already on this invoice');
+            $sentBlocked = str_contains($e->getMessage(), 'already sent for payment');
+        }
+        $openDraftIds = [];
+        foreach (list_invoices_open_for_append(50) as $openHit) {
+            $openDraftIds[] = (int) ($openHit['id'] ?? 0);
+        }
+        if ($sentBlocked && !in_array((int) $pipeInvId, $openDraftIds, true)) {
+            pass('append rejected on sent invoice');
+        } else {
+            fail('sent invoice was still open for append');
+        }
+
+        $draftId = create_blank_invoice((int) $adminUser['id']);
+        update_invoice_bill_header((int) $draftId, [
+            'invoice_date' => date('Y-m-d'),
+            'admin_note' => '',
+            'bill_to_name' => 'buyer@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+        ]);
+        $openDraftIds = [];
+        foreach (list_invoices_open_for_append(50) as $openHit) {
+            $openDraftIds[] = (int) ($openHit['id'] ?? 0);
         }
         $appendId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
         update_order_item((int) $appendId, 0, [
@@ -4973,26 +4995,27 @@ try {
         ]);
         $appendMarked = order_mark_completed((int) $appendId, 'https://example.com/pipeline-append', (int) $adminUser['id']);
         $appendReady = list_invoiceable_order_items_by_ids([(int) $appendId]);
-        $beforeItems = list_invoice_items((int) $pipeInvId);
-        $beforeTotal = (float) ($pipeInv['total_amount'] ?? 0);
-        $beforeNum = (string) ($pipeInv['invoice_number'] ?? '');
+        $beforeDraft = get_invoice((int) $draftId);
+        $beforeItems = list_invoice_items((int) $draftId);
+        $beforeTotal = (float) ($beforeDraft['total_amount'] ?? 0);
+        $beforeNum = (string) ($beforeDraft['invoice_number'] ?? '');
         $appendRes = ['id' => 0, 'added' => 0, 'invoice_number' => ''];
         $appendOk = false;
         if (!empty($appendMarked['ok']) && count($appendReady) === 1) {
             $appendRes = append_orders_to_invoice(
-                (int) $pipeInvId,
+                (int) $draftId,
                 build_invoice_lines_from_orders($appendReady, false),
                 $appendReady
             );
-            $afterInv = get_invoice((int) $pipeInvId);
-            $afterItems = list_invoice_items((int) $pipeInvId);
+            $afterInv = get_invoice((int) $draftId);
+            $afterItems = list_invoice_items((int) $draftId);
             $appendOk = (int) ($appendRes['added'] ?? 0) === 1
                 && count($afterItems) === count($beforeItems) + 1
                 && abs((float) ($afterInv['total_amount'] ?? 0) - ($beforeTotal + 18)) < 0.011
                 && (string) ($afterInv['invoice_number'] ?? '') === $beforeNum
-                && (string) ($appendRes['invoice_number'] ?? '') === $beforeNum
-                && in_array((int) $pipeInvId, $openAppendIds, true)
-                && $alreadyOnThis;
+                && invoice_is_draft($afterInv)
+                && invoice_can_append_orders($afterInv)
+                && in_array((int) $draftId, $openDraftIds, true);
         }
         if ($appendOk) {
             pass('append unpaid LIVE grows existing invoice');
@@ -5002,55 +5025,30 @@ try {
         $againOnThis = false;
         try {
             append_orders_to_invoice(
-                (int) $pipeInvId,
+                (int) $draftId,
                 build_invoice_lines_from_orders($appendReady, false),
                 $appendReady
             );
         } catch (InvalidArgumentException $e) {
             $againOnThis = str_contains($e->getMessage(), 'already on this invoice');
         }
-        $bRowId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
-        update_order_item((int) $bRowId, 0, [
-            'site_name' => 'pipeline-other-inv.com',
-            'country' => 'Germany',
-            'client_label' => 'buyer@example.com',
-            'admin_user_id' => (int) $adminUser['id'],
-            'order_date' => '2026-08-17',
-            'owner_price' => 5,
-            'decided_price' => 11,
-            'live_url' => 'https://example.com/pipeline-other-inv',
-            'order_month' => 8,
-            'order_year' => 2026,
+        $bDraftId = create_blank_invoice((int) $adminUser['id']);
+        update_invoice_bill_header((int) $bDraftId, [
+            'invoice_date' => date('Y-m-d'),
+            'admin_note' => '',
+            'bill_to_name' => 'buyer@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
         ]);
-        order_mark_completed((int) $bRowId, 'https://example.com/pipeline-other-inv', (int) $adminUser['id']);
-        $bReady = list_invoiceable_order_items_by_ids([(int) $bRowId]);
-        $bInvId = 0;
-        if (count($bReady) === 1) {
-            $bInvId = create_invoice([
-                'invoice_date' => date('Y-m-d'),
-                'client_id' => 0,
-                'client_name' => 'buyer@example.com',
-                'bill_to_name' => 'buyer@example.com',
-                'bill_to_address' => '',
-                'bill_to_hrb' => '',
-                'bill_to_vat' => '',
-                'supplier_number' => 'NEW',
-                'cost_center' => '',
-                'orderer' => '',
-                'company_name' => 'Topurlz',
-                'company_bic' => 'TESTBIC',
-                'company_iban' => 'TESTIBAN',
-                'company_phone' => '',
-                'company_address' => '',
-                'company_reg_no' => '',
-                'vat_note' => '',
-            ], build_invoice_lines_from_orders($bReady, false), (int) $adminUser['id']);
-        }
         $crossBlocked = false;
-        if ($bInvId > 0 && $appendReady) {
+        if ($appendReady) {
             try {
                 append_orders_to_invoice(
-                    (int) $bInvId,
+                    (int) $bDraftId,
                     build_invoice_lines_from_orders($appendReady, false),
                     $appendReady
                 );
@@ -5077,7 +5075,7 @@ try {
         if (count($mixReady) === 1) {
             try {
                 append_orders_to_invoice(
-                    (int) $pipeInvId,
+                    (int) $draftId,
                     build_invoice_lines_from_orders($mixReady, false),
                     $mixReady
                 );
@@ -5085,7 +5083,21 @@ try {
                 $mixBlocked = str_contains($e->getMessage(), 'billed as');
             }
         }
-        if ($againOnThis && $crossBlocked && $mixBlocked) {
+        mark_invoice_sent((int) $draftId);
+        $draftSent = get_invoice((int) $draftId);
+        $sentAfterDone = false;
+        try {
+            append_orders_to_invoice(
+                (int) $draftId,
+                build_invoice_lines_from_orders($mixReady, false),
+                $mixReady
+            );
+        } catch (InvalidArgumentException $e) {
+            $sentAfterDone = str_contains($e->getMessage(), 'already sent for payment');
+        }
+        if ($againOnThis && $crossBlocked && $mixBlocked
+            && $draftSent && invoice_is_sent_for_payment($draftSent)
+            && $sentAfterDone) {
             pass('append skips this invoice, blocks other open, mixed bill-as');
         } else {
             fail('append guards missed this/other invoice or mixed bill-as');
@@ -5654,7 +5666,7 @@ try {
     }
 
     $omCssSrc = file_get_contents(__DIR__ . '/assets/css/app.css') ?: '';
-    if (str_contains($ordersPhpSrc, 'All folders')
+    if (str_contains($ordersPhpSrc, 'id="om-folder-tabs"')
         && !str_contains($ordersPhpSrc, '>Folders</a>')
         && str_contains($ordersPhpSrc, 'order-filter-bar-completed')
         && str_contains($ordersPhpSrc, 'order-check-hint-bill')

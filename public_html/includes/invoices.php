@@ -340,7 +340,7 @@ function list_invoices(array $opts = []): array
 }
 
 /**
- * Unpaid or draft invoices that can still receive unpaid LIVE rows.
+ * Draft invoices that can still receive unpaid LIVE rows (not yet sent for payment).
  *
  * @return list<array<string,mixed>>
  */
@@ -352,6 +352,7 @@ function list_invoices_open_for_append(int $limit = 50): array
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
          FROM invoices i
          WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
+           AND COALESCE(i.work_status, 'done') = 'draft'
          ORDER BY i.invoice_date DESC, i.id DESC
          LIMIT " . $limit;
     try {
@@ -857,8 +858,8 @@ function invoice_is_manual(array $invoice): bool
 }
 
 /**
- * Blank-invoice lifecycle: draft = still needs data; done = sent, waiting for payment.
- * Sheet-generated invoices are always done.
+ * Draft = not sent yet (still building). Done = sent to the client, waiting for payment.
+ * Sheet Generate creates Done invoices. Blank invoices start as Draft.
  */
 function invoice_work_status(array $invoice): string
 {
@@ -868,7 +869,19 @@ function invoice_work_status(array $invoice): string
 
 function invoice_is_draft(array $invoice): bool
 {
-    return invoice_is_manual($invoice) && invoice_work_status($invoice) === 'draft';
+    return invoice_work_status($invoice) === 'draft';
+}
+
+/** Unpaid Done invoice — already with the client, waiting for payment. */
+function invoice_is_sent_for_payment(array $invoice): bool
+{
+    return !invoice_is_paid($invoice) && invoice_work_status($invoice) === 'done';
+}
+
+/** Only Draft invoices can still receive more unpaid LIVE rows. */
+function invoice_can_append_orders(array $invoice): bool
+{
+    return !invoice_is_paid($invoice) && invoice_is_draft($invoice);
 }
 
 /** Empty blank draft — €0 and no line items — so the list can de-emphasize it. */
@@ -1377,6 +1390,12 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
     if (($invoice['payment_status'] ?? 'unpaid') === 'paid') {
         throw new InvalidArgumentException('Paid invoices cannot take more orders. Generate a new bill instead.');
     }
+    if (!invoice_can_append_orders($invoice)) {
+        throw new InvalidArgumentException(
+            'Invoice ' . (string) ($invoice['invoice_number'] ?? '')
+            . ' was already sent for payment. Generate a new invoice for more sites.'
+        );
+    }
     invoice_assert_single_bill_as($picked);
     $existingBill = invoice_display_bill_as($invoice);
     $fromOrders = invoice_bill_as_from_orders($picked);
@@ -1474,10 +1493,8 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
         }
         $newTotal = round((float) ($invoice['total_amount'] ?? 0) + $addedTotal, 2);
         $billTo = $existingBill !== '' ? $existingBill : $fromOrders;
-        $isManual = invoice_is_manual($invoice) ? 0 : (int) ($invoice['is_manual'] ?? 0);
-        $workStatus = invoice_is_manual($invoice)
-            ? 'done'
-            : (string) ($invoice['work_status'] ?? 'done');
+        $isManual = 0;
+        $workStatus = 'draft';
         $pdo->prepare(
             'UPDATE invoices
              SET total_amount=?, bill_to_name=?, client_name=?, is_manual=?, work_status=?, updated_at=NOW()
@@ -1519,9 +1536,9 @@ function mark_invoice_payment_received(int $invoiceId): void
     if (($invoice['payment_status'] ?? 'unpaid') === 'paid') {
         return;
     }
-    if (invoice_is_manual($invoice) && invoice_is_draft($invoice)) {
+    if (invoice_is_draft($invoice)) {
         throw new InvalidArgumentException(
-            'This blank invoice is still a Draft. Save as Done first (sent / waiting for payment), then mark Paid.'
+            'This invoice is still a Draft. Save as Done first (sent / waiting for payment), then mark Paid.'
         );
     }
 
@@ -1551,6 +1568,31 @@ function mark_invoice_payment_received(int $invoiceId): void
 function invoice_is_paid(array $invoice): bool
 {
     return ($invoice['payment_status'] ?? 'unpaid') === 'paid';
+}
+
+/** Mark a Draft invoice as sent (Done — waiting for payment). */
+function mark_invoice_sent(int $invoiceId): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    if (invoice_is_paid($invoice)) {
+        throw new InvalidArgumentException('Paid invoices are already finished.');
+    }
+    if (!invoice_is_draft($invoice)) {
+        return;
+    }
+    if (invoice_list_is_incomplete($invoice) || (float) ($invoice['total_amount'] ?? 0) <= 0.00001) {
+        throw new InvalidArgumentException('Save as Done needs a total above €0.');
+    }
+    db()->prepare(
+        "UPDATE invoices SET work_status='done', is_manual=?, updated_at=NOW() WHERE id=?"
+    )->execute([
+        invoice_is_manual($invoice) ? 1 : 0,
+        $invoiceId,
+    ]);
 }
 
 function delete_invoice(int $id): void
