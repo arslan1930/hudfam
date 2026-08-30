@@ -621,9 +621,12 @@ $genCopy = str_contains($r['body'] ?? '', 'Tick the ones to bill')
     || str_contains($r['body'] ?? '', 'Nothing to tick')
     || str_contains($r['body'] ?? '', 'Push from Completed');
 $groupOff = !str_contains($r['body'] ?? '', 'group_same_amount" value="1" checked');
+$addExisting = str_contains($r['body'] ?? '', 'Add to existing')
+    && str_contains($r['body'] ?? '', 'name="destination"');
 if ($r['status'] === 200
     && $genCopy
     && $groupOff
+    && $addExisting
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin invoice generate none ticked');
 } else {

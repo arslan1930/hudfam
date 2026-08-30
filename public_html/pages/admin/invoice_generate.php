@@ -27,6 +27,7 @@ if (!$selectedFromSheet && $pickTotal > $pickCap) {
     $pickTruncated = true;
 }
 $emptyStats = (!$invoiceable && !$selectedFromSheet) ? invoice_generate_empty_stats() : null;
+$openInvoices = list_invoices_open_for_append(50);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
@@ -79,6 +80,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
             'vat_note' => (string) post('vat_note'),
         ];
 
+        $destination = (string) post('destination') === 'existing' ? 'existing' : 'new';
+        if ($destination === 'existing') {
+            $existingId = (int) post('existing_invoice_id');
+            if ($existingId < 1) {
+                throw new InvalidArgumentException('Pick an unpaid invoice to add these rows to.');
+            }
+            $result = append_orders_to_invoice($existingId, $lines, $picked);
+            $n = (int) ($result['added'] ?? 0);
+            flash(
+                'ok',
+                'Added ' . $n . ' site' . ($n === 1 ? '' : 's')
+                . ' to invoice ' . (string) ($result['invoice_number'] ?? '') . '.'
+            );
+            redirect('index.php?page=admin_invoice_view&id=' . (int) $result['id']);
+        }
+
         $id = create_invoice($header, $lines, (int) ($user['id'] ?? 0));
         $created = get_invoice($id);
         flash('ok', 'Invoice ' . ($created['invoice_number'] ?? '') . ' generated.');
@@ -105,8 +122,8 @@ render_header('Generate invoice', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management and create a printable bill. No client folder or extra details required — bill-as is the email or name from the order.') ?></h1>
-    <p class="muted">Push unpaid LIVE orders here for payment. Bill-as can be the client email or name from the sheet. Address and company details are optional.</p>
+    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management. New invoice gets the next number. Add to existing only for unpaid bills with the same bill-as. No client folder required.') ?></h1>
+    <p class="muted">Push unpaid LIVE orders here for payment. Create a new bill, or add them onto an unpaid invoice. Bill-as can be the client email or name from the sheet.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Order management</a>
@@ -193,7 +210,10 @@ render_header('Generate invoice', 'admin');
                   . (string) ($row['live_url'] ?? '')
               ));
             ?>
-            <li data-invoice-pick-row data-search="<?= h($pickSearch) ?>" data-bill-as="<?= h($who) ?>">
+            <li data-invoice-pick-row
+                data-search="<?= h($pickSearch) ?>"
+                data-bill-as="<?= h($who) ?>"
+                data-amount="<?= h(number_format((float) parse_money($row['decided_price'] ?? 0), 2, '.', '')) ?>">
               <label>
                 <input type="checkbox" name="item_ids[]" value="<?= (int) $row['id'] ?>"
                        <?= $precheck ? 'checked' : '' ?> data-invoice-pick-item>
@@ -223,7 +243,55 @@ render_header('Generate invoice', 'admin');
     </section>
 
     <section class="card">
-      <h2><?= label_with_info('Invoice details', 'Invoice number is assigned automatically. Date appears on the bill. Bill-as is optional free text from the order (email or name).') ?></h2>
+      <h2><?= label_with_info('Invoice details', 'New invoice: number is assigned automatically. Add to existing: pick an unpaid bill with the same bill-as. Date and extra details apply to new invoices only.') ?></h2>
+
+      <fieldset class="invoice-dest-mode">
+        <legend class="visually-hidden">Invoice destination</legend>
+        <label>
+          <input type="radio" name="destination" value="new" checked data-invoice-dest>
+          New invoice
+        </label>
+        <label>
+          <input type="radio" name="destination" value="existing" data-invoice-dest
+                 <?= $openInvoices ? '' : 'disabled' ?>>
+          Add to existing
+        </label>
+      </fieldset>
+
+      <div id="invoice-dest-existing" hidden>
+        <?php if (!$openInvoices): ?>
+          <p class="help">No unpaid invoices yet — generate a new one first.</p>
+        <?php else: ?>
+          <label for="invoice-existing-search">Find unpaid invoice</label>
+          <input id="invoice-existing-search" type="search" placeholder="Number or bill-as…"
+                 autocomplete="off" spellcheck="false" data-no-draft>
+          <label for="existing_invoice_id" class="visually-hidden">Unpaid invoice</label>
+          <select name="existing_invoice_id" id="existing_invoice_id" size="7" data-no-draft>
+            <option value="">— pick an unpaid invoice —</option>
+            <?php foreach ($openInvoices as $openInv): ?>
+              <?php
+                $openNum = (string) ($openInv['invoice_number'] ?? '');
+                $openBill = invoice_display_bill_as($openInv);
+                $openTotal = (float) ($openInv['total_amount'] ?? 0);
+                $openSearch = mb_strtolower($openNum . ' ' . $openBill);
+              ?>
+              <option value="<?= (int) $openInv['id'] ?>"
+                      data-number="<?= h($openNum) ?>"
+                      data-total="<?= h(number_format($openTotal, 2, '.', '')) ?>"
+                      data-bill-as="<?= h($openBill) ?>"
+                      data-search="<?= h($openSearch) ?>">
+                <?= h($openNum) ?>
+                <?= $openBill !== '' ? ' · ' . h($openBill) : '' ?>
+                · <?= h(format_euro($openTotal)) ?>
+                · <?= (int) ($openInv['item_count'] ?? 0) ?> line<?= (int) ($openInv['item_count'] ?? 0) === 1 ? '' : 's' ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <p class="help" id="invoice-append-preview" hidden></p>
+        <?php endif; ?>
+      </div>
+
+      <div id="invoice-dest-new">
       <div class="form-grid">
         <div>
           <label for="invoice_number"><?= label_with_info('Invoice No.', 'Generated automatically from the last invoice number. You cannot reuse or edit it.') ?></label>
@@ -234,7 +302,7 @@ render_header('Generate invoice', 'admin');
         </div>
         <div>
           <label for="invoice_date">Date</label>
-          <input id="invoice_date" name="invoice_date" type="date" value="<?= h(date('Y-m-d')) ?>" required>
+          <input id="invoice_date" name="invoice_date" type="date" value="<?= h(date('Y-m-d')) ?>">
         </div>
       </div>
 
@@ -306,6 +374,8 @@ render_header('Generate invoice', 'admin');
         </div>
       </details>
 
+      </div>
+
       <p class="actions" style="margin-top:1.1rem">
         <button class="btn large" type="submit" id="invoice-generate-submit" <?= ($invoiceable && $precheck && count($billAsLabels) <= 1) ? '' : 'disabled' ?>>Generate invoice</button>
       </p>
@@ -324,16 +394,60 @@ render_header('Generate invoice', 'admin');
   var emptyEl = document.querySelector('[data-invoice-pick-empty]');
   var rows = Array.prototype.slice.call(document.querySelectorAll('[data-invoice-pick-row]'));
   var group = document.querySelector('input[name="group_same_amount"]');
+  var destNew = document.getElementById('invoice-dest-new');
+  var destExist = document.getElementById('invoice-dest-existing');
+  var destRadios = document.querySelectorAll('[data-invoice-dest]');
+  var existSelect = document.getElementById('existing_invoice_id');
+  var existSearch = document.getElementById('invoice-existing-search');
+  var appendPreview = document.getElementById('invoice-append-preview');
+  var dateEl = document.getElementById('invoice_date');
+  var form = document.querySelector('.invoice-generate-form');
   if (group) group.checked = false;
-  if (!rows.length) return;
 
-  function visibleRows() {
-    return rows.filter(function (row) { return row.style.display !== 'none'; });
+  function destMode() {
+    var checked = document.querySelector('[data-invoice-dest]:checked');
+    return checked ? String(checked.value || 'new') : 'new';
   }
-  function boxesIn(list) {
-    return list.map(function (row) {
-      return row.querySelector('[data-invoice-pick-item]');
-    }).filter(Boolean);
+  function selectedAmount() {
+    var total = 0;
+    rows.forEach(function (row) {
+      var cb = row.querySelector('[data-invoice-pick-item]');
+      if (!cb || !cb.checked) return;
+      total += parseFloat(row.getAttribute('data-amount') || '0') || 0;
+    });
+    return total;
+  }
+  function euro(n) {
+    return '€' + (Math.round(n * 100) / 100).toFixed(2);
+  }
+  function applyDest() {
+    var existing = destMode() === 'existing';
+    if (destNew) destNew.hidden = existing;
+    if (destExist) destExist.hidden = !existing;
+    if (dateEl) {
+      dateEl.required = !existing;
+      dateEl.disabled = existing;
+    }
+    if (existSelect) existSelect.required = existing;
+    sync();
+  }
+  function applyExistingSearch() {
+    if (!existSelect || !existSearch) return;
+    var q = String(existSearch.value || '').trim().toLowerCase();
+    Array.prototype.forEach.call(existSelect.options, function (opt) {
+      if (!opt.value) {
+        opt.hidden = false;
+        return;
+      }
+      var hay = String(opt.getAttribute('data-search') || '');
+      opt.hidden = !!(q && hay.indexOf(q) === -1);
+    });
+  }
+  function checkedCount() {
+    return rows.filter(function (row) {
+      var cb = row.querySelector('[data-invoice-pick-item]');
+      return cb && cb.checked;
+    }).length;
   }
   function uniqueBillAs(checked) {
     var seen = {};
@@ -348,6 +462,14 @@ render_header('Generate invoice', 'admin');
     });
     return out;
   }
+  function visibleRows() {
+    return rows.filter(function (row) { return row.style.display !== 'none'; });
+  }
+  function boxesIn(list) {
+    return list.map(function (row) {
+      return row.querySelector('[data-invoice-pick-item]');
+    }).filter(Boolean);
+  }
   function sync() {
     var vis = visibleRows();
     var visBoxes = boxesIn(vis);
@@ -357,15 +479,32 @@ render_header('Generate invoice', 'admin');
     if (emptyEl) emptyEl.hidden = vis.length > 0;
     if (all) {
       all.checked = visBoxes.length > 0 && visBoxes.every(function (cb) { return cb.checked; });
-      all.indeterminate = visBoxes.some(function (cb) { return cb.checked; }) && !all.checked;
+      all.indeterminate = visBoxes.some(function (cb) { return cb.checked; }) && visBoxes.length > 0 && !all.checked;
     }
     var labels = uniqueBillAs(checked);
+    var existing = destMode() === 'existing';
+    var pickedInv = existSelect && existSelect.value;
     if (submit) {
-      submit.disabled = checked.length < 1 || labels.length > 1;
+      submit.disabled = checked.length < 1 || labels.length > 1 || (existing && !pickedInv);
+      submit.textContent = existing && pickedInv
+        ? ('Add to invoice ' + (existSelect.options[existSelect.selectedIndex].getAttribute('data-number') || pickedInv))
+        : 'Generate invoice';
     }
     if (mixed) mixed.hidden = labels.length < 2;
     if (bill && document.activeElement !== bill) {
       bill.value = labels.join(', ');
+    }
+    if (appendPreview) {
+      if (existing && pickedInv && checked.length > 0) {
+        var opt = existSelect.options[existSelect.selectedIndex];
+        var cur = parseFloat(opt.getAttribute('data-total') || '0') || 0;
+        var add = selectedAmount();
+        appendPreview.hidden = false;
+        appendPreview.textContent = 'Current ' + euro(cur) + ' + selected ' + euro(add)
+          + ' → ' + euro(cur + add) + '.';
+      } else {
+        appendPreview.hidden = true;
+      }
     }
   }
   function applySearch() {
@@ -377,6 +516,23 @@ render_header('Generate invoice', 'admin');
     sync();
   }
 
+  destRadios.forEach(function (r) {
+    r.addEventListener('change', applyDest);
+  });
+  if (existSelect) existSelect.addEventListener('change', sync);
+  if (existSearch) existSearch.addEventListener('input', applyExistingSearch);
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (destMode() !== 'existing') return;
+      var n = checkedCount();
+      var opt = existSelect ? existSelect.options[existSelect.selectedIndex] : null;
+      var num = opt ? String(opt.getAttribute('data-number') || '') : '';
+      if (!num || n < 1) return;
+      if (!window.confirm('Add ' + n + ' site' + (n === 1 ? '' : 's') + ' to invoice ' + num + '?')) {
+        e.preventDefault();
+      }
+    });
+  }
   if (all) {
     all.addEventListener('change', function () {
       boxesIn(visibleRows()).forEach(function (cb) { cb.checked = all.checked; });
@@ -389,7 +545,7 @@ render_header('Generate invoice', 'admin');
   if (search) {
     search.addEventListener('input', applySearch);
   }
-  sync();
+  applyDest();
 })();
 </script>
 <?php render_footer('admin'); ?>

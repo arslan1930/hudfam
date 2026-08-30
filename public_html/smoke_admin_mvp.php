@@ -1697,7 +1697,7 @@ foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden
     }
 }
 ok('tests_run OM coverage needles');
-foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push'] as $needle) {
+foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push', 'append unpaid LIVE grows existing invoice', 'append skips this invoice, blocks other open, mixed bill-as', 'append rejected on paid invoice'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1797,6 +1797,16 @@ if (!str_contains($invoiceGenerate, 'invoice-legacy-client')
     fail('invoice_generate missing leftover client_id banner');
 } else {
     ok('invoice_generate leftover client_id banner');
+}
+if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
+    || !str_contains($invoicesLib, 'function list_invoices_open_for_append')
+    || !str_contains($invoiceGenerate, 'name="destination"')
+    || !str_contains($invoiceGenerate, 'Add to existing')
+    || !str_contains($invoiceGenerate, 'existing_invoice_id')
+    || str_contains($invoiceGenerate, 'name="invoice_number"')) {
+    fail('invoice generate missing add-to-existing unpaid destination');
+} else {
+    ok('invoice generate add to existing unpaid');
 }
 $invoiceCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($invoiceCss, '.invoice-doc-logohead')
