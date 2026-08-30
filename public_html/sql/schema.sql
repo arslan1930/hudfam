@@ -387,6 +387,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   live_url VARCHAR(500) NOT NULL DEFAULT '',
+  article_doc_url VARCHAR(500) NOT NULL DEFAULT '',
   client_label VARCHAR(255) NOT NULL DEFAULT '',
   admin_user_id INT NULL,
   order_date DATE NULL,
@@ -470,6 +471,20 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   sort_order INT NOT NULL DEFAULT 0,
   INDEX (invoice_id, sort_order),
   CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS invoice_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  invoice_id INT NULL,
+  event_type VARCHAR(40) NOT NULL DEFAULT '',
+  actor_user_id INT NULL,
+  summary VARCHAR(500) NOT NULL DEFAULT '',
+  payload TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ie_invoice (invoice_id, id),
+  INDEX idx_ie_type (event_type),
+  CONSTRAINT fk_ie_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Semrush Research: Admin-seeded site names per country (Site Finding sheet)

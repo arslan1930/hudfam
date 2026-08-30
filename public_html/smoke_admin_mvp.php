@@ -1835,6 +1835,13 @@ if (!str_contains($invoiceViewCsrf, 'invoice-history')
 } else {
     ok('invoice view History and Article doc');
 }
+$schemaSqlLate = file_get_contents($root . '/sql/schema.sql') ?: '';
+if (!str_contains($schemaSqlLate, 'article_doc_url VARCHAR(500)')
+    || !str_contains($schemaSqlLate, 'CREATE TABLE IF NOT EXISTS invoice_events')) {
+    fail('schema.sql missing article_doc_url or invoice_events');
+} else {
+    ok('schema.sql article doc + invoice events');
+}
 if (!str_contains($invoiceGenerate, 'invoice-legacy-client')
     || !str_contains($invoiceGenerate, 'client_id=')
     || !str_contains($invoiceGenerate, 'Show all unpaid LIVE')) {

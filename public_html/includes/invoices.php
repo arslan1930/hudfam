@@ -1674,6 +1674,7 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
         throw new InvalidArgumentException('Those rows are already on this invoice.');
     }
 
+    $newTotal = round((float) ($invoice['total_amount'] ?? 0) + $addedTotal, 2);
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -1692,7 +1693,6 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
                 $line['sort_order'],
             ]);
         }
-        $newTotal = round((float) ($invoice['total_amount'] ?? 0) + $addedTotal, 2);
         $billTo = $existingBill !== '' ? $existingBill : $fromOrders;
         $isManual = 0;
         $workStatus = invoice_is_draft($invoice) ? 'draft' : 'done';
