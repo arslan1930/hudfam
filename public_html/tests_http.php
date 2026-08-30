@@ -470,7 +470,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting > 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting &gt; 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
         'admin_prospects' => ['Our database', 'Markets', 'What is this?', 'show empty countries', 'Super search', 'Add sites'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
@@ -825,7 +825,8 @@ if ($rUnpaidOm['status'] === 200
     && str_contains($rUnpaidOm['body'], 'Bill</strong>, then use')
     && str_contains($rUnpaidOm['body'], 'Push to invoice')
     && str_contains($rUnpaidOm['body'], 'Mark paid')
-    && str_contains($rUnpaidOm['body'], 'orders-summary-3')
+    && (str_contains($rUnpaidOm['body'], 'orders-summary-3')
+        || str_contains($rUnpaidOm['body'], 'orders-summary-6'))
     && str_contains($rUnpaidOm['body'], '>Owner</span>')
     && str_contains($rUnpaidOm['body'], '>Decided</span>')
     && !str_contains($rUnpaidOm['body'], 'Fatal error')) {

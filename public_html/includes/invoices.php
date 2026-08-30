@@ -497,8 +497,8 @@ function list_invoices_waiting_totals_by_bill_as(int $limit = 8): array
                     COALESCE(SUM(total_amount), 0) AS total
                  FROM invoices
                  WHERE payment_status='unpaid' AND COALESCE(work_status, 'done')='done'
-                 GROUP BY TRIM(COALESCE(NULLIF(TRIM(bill_to_name), ''), client_name))
-                 HAVING TRIM(COALESCE(NULLIF(TRIM(bill_to_name), ''), client_name)) <> ''
+                 GROUP BY bill_as
+                 HAVING bill_as <> ''
                  ORDER BY total DESC, n DESC
                  LIMIT " . $limit;
         $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];

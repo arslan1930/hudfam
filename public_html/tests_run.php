@@ -5340,9 +5340,11 @@ try {
         if ($waitingLabel === 'Waiting'
             && $draftLabel === 'Draft'
             && $matchWait
-            && (int) ($matchWait['id'] ?? 0) === (int) $draftId
+            && invoice_bill_as_key(invoice_display_bill_as($matchWait)) === 'buyer@example.com'
+            && invoice_can_append_orders($matchWait)
+            && !invoice_is_draft($matchWait)
             && str_contains($hrefMatch, 'ids=' . (int) $sentGrowId)
-            && str_contains($hrefMatch, 'existing=' . (int) $draftId)
+            && str_contains($hrefMatch, 'existing=' . (int) ($matchWait['id'] ?? 0))
             && $agedN >= 1
             && $foundBillTotal) {
             pass('invoice waiting match, labels, aging');
