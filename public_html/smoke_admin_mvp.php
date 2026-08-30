@@ -2544,6 +2544,11 @@ if (!str_contains($httpSmoke, 'finder Send this ending stays on Filter')
 } else {
     ok('tests_http.php finder Send stays on Filter');
 }
+if (!str_contains($httpSmoke, 'tld-separate.js Delete ending strips paste and unique')) {
+    fail('tests_http.php missing tld-separate Delete column strip assert');
+} else {
+    ok('tests_http.php tld-separate Delete column strip');
+}
 
 $prospectCheckSf = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 if (!str_contains($prospectCheckSf, 'Separate all')
@@ -2580,6 +2585,24 @@ if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspac
     fail('tld-separate.js missing tab workspace render');
 } else {
     ok('tld-separate.js tab workspace');
+}
+if (str_contains($tldJs, "sourceSel !== '#domains'")
+    || str_contains($tldJs, 'if (!el || el.readOnly) return')) {
+    fail('tld-separate.js Delete still skips unique/paste columns');
+} elseif (!str_contains($tldJs, 'function stripSharedColumns')
+    || !str_contains($tldJs, 'function domainKey')
+    || !str_contains($tldJs, 'function stripLinesFromTextarea')
+    || !str_contains($tldJs, "querySelector('#domains')")
+    || !str_contains($tldJs, "querySelector('#unique_domains_preview')")) {
+    fail('tld-separate.js missing Delete ending column strip');
+} else {
+    ok('tld-separate.js Delete ending strips paste and unique columns');
+}
+if (!str_contains($prospectCheckSf, 'data-source="#domains"')
+    || !str_contains($prospectCheckSf, 'data-source="#unique_domains_preview"')) {
+    fail('Filter missing both Separate all sources');
+} else {
+    ok('Filter Separate all paste + unique sources');
 }
 $cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (str_contains($cssApp, '.tld-workspace-list')

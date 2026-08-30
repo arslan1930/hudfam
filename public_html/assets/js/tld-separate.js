@@ -80,17 +80,25 @@
       });
     }
 
-    function syncAddAllHidden() {
-      var hidden = document.querySelector('#add_unique_form [name="domains"]');
-      var btn = document.getElementById('add_unique_btn');
-      if (!hidden || !preloaded) return;
-      if (sourceSel !== '#unique_domains_preview') return;
+    function remainingUniqueText() {
       var parts = [];
       orderedKeys(preloaded).forEach(function (tld) {
         var list = preloaded[tld] || [];
         if (list.length) parts.push(list.join('\n'));
       });
-      var joined = parts.join('\n');
+      return parts.join('\n');
+    }
+
+    function syncAddAllHidden() {
+      var hidden = document.querySelector('#add_unique_form [name="domains"]');
+      var btn = document.getElementById('add_unique_btn');
+      var preview = document.querySelector('#unique_domains_preview');
+      if (sourceSel === '#unique_domains_preview' && preview) {
+        preview.value = remainingUniqueText();
+      }
+      if (!hidden || !preloaded) return;
+      if (sourceSel !== '#unique_domains_preview') return;
+      var joined = remainingUniqueText();
       hidden.value = joined;
       if (btn) {
         var n = joined ? joined.split(/\n+/).filter(function (l) { return l.trim(); }).length : 0;
@@ -101,23 +109,79 @@
       }
     }
 
-    function stripDomainsFromSource(list) {
-      if (sourceSel !== '#domains' || !list || !list.length) return;
-      var el = document.querySelector(sourceSel);
-      if (!el || el.readOnly) return;
+    /** Host/root hint for one paste line (https/path/www → example.com). */
+    function domainKey(line) {
+      var s = String(line || '').trim().toLowerCase();
+      if (!s) return '';
+      var md = s.match(/\((https?:\/\/[^)\s]+)\)/i);
+      if (md) {
+        s = md[1].toLowerCase();
+      } else {
+        var href = s.match(/https?:\/\/[^\s<>"']+/i);
+        if (href) s = href[0].toLowerCase();
+      }
+      s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^\/\//, '');
+      if (s.indexOf('@') !== -1) s = s.split('@').pop() || '';
+      s = s.split('/')[0].split('?')[0].split('#')[0];
+      if (s.indexOf('\t') !== -1) s = s.split('\t')[0];
+      if (s.indexOf(':') !== -1 && s.indexOf(']') === -1) s = s.split(':')[0];
+      s = s.replace(/^www\./, '').replace(/\.$/, '').trim();
+      return s;
+    }
+
+    function lineHitsDrop(line, drop) {
+      var raw = String(line || '').trim().toLowerCase();
+      if (!raw) return true;
+      if (drop[raw]) return true;
+      var host = domainKey(line);
+      if (host && drop[host]) return true;
+      if (!host) return false;
+      for (var d in drop) {
+        if (!Object.prototype.hasOwnProperty.call(drop, d) || !d) continue;
+        if (host === d) return true;
+        if (host.length > d.length && host.slice(-(d.length + 1)) === '.' + d) return true;
+      }
+      return false;
+    }
+
+    function stripLinesFromTextarea(el, list) {
+      if (!el || !list || !list.length) return;
       var drop = {};
       list.forEach(function (d) {
-        drop[String(d).toLowerCase()] = true;
+        var k = String(d || '').trim().toLowerCase();
+        if (k) drop[k] = true;
       });
       var kept = String(el.value || '').split(/\n+/).filter(function (line) {
-        var t = String(line || '').trim().toLowerCase();
-        if (!t) return false;
-        return !drop[t];
+        if (!String(line || '').trim()) return false;
+        return !lineHitsDrop(line, drop);
       });
       el.value = kept.join('\n');
       try {
         el.dispatchEvent(new Event('input', { bubbles: true }));
       } catch (e) { /* ignore */ }
+    }
+
+    function dropDomainsFromMap(groups, list) {
+      if (!groups || !list || !list.length) return;
+      var drop = {};
+      list.forEach(function (d) {
+        var k = String(d || '').trim().toLowerCase();
+        if (k) drop[k] = true;
+      });
+      Object.keys(groups).forEach(function (tld) {
+        var kept = (groups[tld] || []).filter(function (d) {
+          return !drop[String(d || '').trim().toLowerCase()];
+        });
+        if (kept.length) groups[tld] = kept;
+        else delete groups[tld];
+      });
+    }
+
+    function stripSharedColumns(list) {
+      if (!list || !list.length) return;
+      stripLinesFromTextarea(document.querySelector('#domains'), list);
+      var preview = document.querySelector('#unique_domains_preview');
+      if (preview) stripLinesFromTextarea(preview, list);
     }
 
     function renderActivePanel(tld) {
@@ -384,6 +448,20 @@
       });
     }
 
+    document.addEventListener('txf-tld-ending-removed', function (ev) {
+      if (!ev || !ev.detail || ev.detail.origin === root) return;
+      var list = ev.detail.domains || [];
+      if (!list.length) return;
+      dropDomainsFromMap(preloaded, list);
+      dropDomainsFromMap(pristine, list);
+      if (root.getAttribute('data-separated') === '1') {
+        activeTld = '';
+        renderGroups(preloaded || {});
+      } else {
+        syncAddAllHidden();
+      }
+    });
+
     root.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -449,7 +527,12 @@
         if (pristine && pristine[tld]) {
           delete pristine[tld];
         }
-        stripDomainsFromSource(removed);
+        stripSharedColumns(removed);
+        try {
+          document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
+            detail: { domains: removed, origin: root }
+          }));
+        } catch (err3) { /* ignore */ }
         activeTld = '';
         renderGroups(preloaded || {});
         if (!orderedKeys(preloaded || {}).length) {
