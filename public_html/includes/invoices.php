@@ -88,8 +88,7 @@ function ensure_invoice_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS invoice_events (
+    $invoiceEventsSql = "CREATE TABLE IF NOT EXISTS invoice_events (
           id INT AUTO_INCREMENT PRIMARY KEY,
           invoice_id INT NULL,
           event_type VARCHAR(40) NOT NULL DEFAULT '',
@@ -98,11 +97,21 @@ function ensure_invoice_schema(): void
           payload TEXT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           INDEX idx_ie_invoice (invoice_id, id),
-          INDEX idx_ie_type (event_type),
+          INDEX idx_ie_type (event_type)";
+    try {
+        $pdo->exec(
+            $invoiceEventsSql . ",
           CONSTRAINT fk_ie_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
           CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
+        );
+    } catch (Throwable $e) {
+        try {
+            $pdo->exec($invoiceEventsSql . ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        } catch (Throwable $e2) {
+            // History is optional — billing pages must still load.
+        }
+    }
 
     // Migrate older invoice tables
     try {

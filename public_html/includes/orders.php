@@ -177,9 +177,6 @@ function ensure_order_schema(): void
         if ($stageWasMissing) {
             $folderAlters[] = "ADD COLUMN order_stage ENUM('processing','completed') NOT NULL DEFAULT 'processing' AFTER site_price_row_id";
         }
-        if (!in_array('article_doc_url', $cols, true)) {
-            $folderAlters[] = "ADD COLUMN article_doc_url VARCHAR(500) NOT NULL DEFAULT '' AFTER live_url";
-        }
         if ($folderAlters) {
             $pdo->exec('ALTER TABLE order_items ' . implode(', ', $folderAlters));
         }
@@ -224,6 +221,18 @@ function ensure_order_schema(): void
         }
     } catch (Throwable $e) {
         // ignore on fresh installs
+    }
+
+    try {
+        $docCols = $pdo->query('SHOW COLUMNS FROM order_items')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('article_doc_url', $docCols, true)) {
+            $pdo->exec(
+                "ALTER TABLE order_items
+                 ADD COLUMN article_doc_url VARCHAR(500) NOT NULL DEFAULT '' AFTER live_url"
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore
     }
 
     try {
