@@ -335,6 +335,9 @@ function render_footer(string $panel = ''): void
             echo '<script src="' . h(script_asset_url('js/alert-fade.js')) . '" defer></script>';
         }
         echo '</main></div>';
+    } else {
+        // Login / forgot / reset / verify: Show password (logged-in pages load it above).
+        echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
     }
     echo '</body></html>';
 }

@@ -93,6 +93,11 @@ if (!str_contains($layout, 'password-toggle.js')) {
 } else {
     ok('layout loads password-toggle.js');
 }
+if (!str_contains($layout, 'Login / forgot / reset / verify')) {
+    fail('layout missing guest Show password script');
+} else {
+    ok('layout loads password-toggle.js on login');
+}
 
 $index = file_get_contents($root . '/index.php') ?: '';
 if (!str_contains($index, "'account_password'")) {
@@ -2538,6 +2543,12 @@ if (!str_contains($httpSmoke, 'forgot_password page')
 } else {
     ok('tests_http.php Account/forgot route asserts');
 }
+if (!str_contains($httpSmoke, 'bad login keeps username and recovery help')
+    || !str_contains($httpSmoke, 'Username or Admin email')) {
+    fail('tests_http.php missing login recovery UX asserts');
+} else {
+    ok('tests_http.php login recovery UX');
+}
 if (!str_contains($httpSmoke, 'finder Send this ending stays on Filter')
     || !str_contains($httpSmoke, 'finder Send leftover unique still on Filter')) {
     fail('tests_http.php missing finder Send stay-on-Filter assert');
@@ -3049,6 +3060,24 @@ if (!str_contains($loginPhp, 'render_project_credit()')
     fail('logged-out pages missing Teqnowebs credit or commit buttons');
 } else {
     ok('login/forgot/reset/verify Teqnowebs credit');
+}
+$mailLib = file_get_contents($root . '/includes/mail.php') ?: '';
+$toggleJs = file_get_contents($root . '/assets/js/password-toggle.js') ?: '';
+$testsRunLogin = file_get_contents($root . '/tests_run.php') ?: '';
+if (!str_contains($loginPhp, 'Username or Admin email')
+    || !str_contains($loginPhp, 'value="<?= h($userName) ?>"')
+    || !str_contains($loginPhp, 'Sign in to')
+    || str_contains($loginPhp, 'Shared site database')
+    || !str_contains($loginPhp, 'id="login_help"')
+    || !str_contains($loginPhp, 'app_mail_reset_is_ready')
+    || !str_contains($forgotPhp, 'app_mail_reset_is_ready')
+    || !str_contains($mailLib, 'function app_mail_reset_is_ready')
+    || !str_contains($toggleJs, 'password-caps-hint')
+    || !str_contains($toggleJs, 'CapsLock')
+    || !str_contains($testsRunLogin, 'app_mail_reset_is_ready returns bool')) {
+    fail('login recovery UX missing keep-username / Show / Caps Lock / mail-ready copy');
+} else {
+    ok('login recovery UX keep-username, Show, Caps Lock, mail-ready');
 }
 $extractBatchUi = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
 if (!str_contains($extractBatchUi, 'id="extract_push_btn"')
