@@ -4888,6 +4888,162 @@ try {
         fail('add order did not copy filter country');
     }
 
+    $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
+    $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
+    $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');
+    $docId = add_order_pipeline_row((int) $adminUser['id'], 'doc-buyer@example.com');
+    update_order_item((int) $docId, 0, [
+        'site_name' => 'article-doc-site.com',
+        'country' => 'Germany',
+        'client_label' => 'doc-buyer@example.com',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => '2026-08-21',
+        'owner_price' => 10,
+        'decided_price' => 25,
+        'live_url' => 'https://example.com/article-doc-live',
+        'article_doc_url' => 'docs.google.com/document/d/txf-doc-abc',
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
+    $docSaved = get_order_item((int) $docId);
+    $savedViaSheet = save_order_sheet_rows(
+        0,
+        [(int) $docId => 'article-doc-site.com'],
+        [(int) $docId => ''],
+        [(int) $docId => ''],
+        [(int) $docId => 'Germany'],
+        [(int) $docId => 8],
+        [(int) $docId => ''],
+        [(int) $docId => 2026],
+        [(int) $docId => 10],
+        [(int) $docId => 25],
+        [(int) $docId => 'https://example.com/article-doc-live'],
+        [(int) $docId => 'doc-buyer@example.com'],
+        [(int) $docId => (int) $adminUser['id']],
+        [(int) $docId => '2026-08-21'],
+        [(int) $docId => 'https://docs.google.com/document/d/txf-doc-abc']
+    );
+    $docAfterSheet = get_order_item((int) $docId);
+    $docMarked = order_mark_completed((int) $docId, 'https://example.com/article-doc-live', (int) $adminUser['id']);
+    $docAfterComplete = get_order_item((int) $docId);
+    $docDesc = order_invoice_description($docAfterComplete ?: []);
+    $foundByDoc = false;
+    foreach (list_order_pipeline_rows(['folder' => 'completed', 'q' => 'txf-doc-abc']) as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $docId) {
+            $foundByDoc = true;
+            break;
+        }
+    }
+    if ($docNormJs === ''
+        && $docNormBare === 'https://docs.google.com/document/d/txf-doc-abc'
+        && $docNormFull === 'https://docs.google.com/document/d/ok'
+        && (string) ($docSaved['article_doc_url'] ?? '') === 'https://docs.google.com/document/d/txf-doc-abc'
+        && $savedViaSheet === 1
+        && (string) ($docAfterSheet['article_doc_url'] ?? '') === 'https://docs.google.com/document/d/txf-doc-abc'
+        && !empty($docMarked['ok'])
+        && (string) ($docAfterComplete['article_doc_url'] ?? '') === 'https://docs.google.com/document/d/txf-doc-abc'
+        && order_stage($docAfterComplete) === 'completed'
+        && $foundByDoc
+        && str_contains($docDesc, 'example.com/article-doc-live')
+        && !str_contains($docDesc, 'docs.google.com')) {
+        pass('article doc URL saved and kept after complete');
+    } else {
+        fail('article doc URL not saved, searched, or leaked onto invoice description');
+    }
+    require_once __DIR__ . '/includes/sites_form.php';
+    $docOpenBare = open_site_url_for_domain('docs.google.com/document/d/txf-doc-abc');
+    $docOpenFull = open_site_url_for_domain('https://docs.google.com/document/d/ok');
+    if ($docOpenBare === 'https://docs.google.com/document/d/txf-doc-abc'
+        && $docOpenFull === 'https://docs.google.com/document/d/ok') {
+        pass('article doc Open keeps Google Doc path');
+    } else {
+        fail('article doc Open dropped Google Doc path');
+    }
+
+    $docReady = list_invoiceable_order_items_by_ids([(int) $docId]);
+    if (count($docReady) !== 1) {
+        fail('article doc row not invoiceable');
+    } else {
+        $docInvId = create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_id' => 0,
+            'client_name' => 'doc-buyer@example.com',
+            'bill_to_name' => 'doc-buyer@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Topurlz',
+            'company_bic' => 'TESTBIC',
+            'company_iban' => 'TESTIBAN',
+            'company_phone' => '',
+            'company_address' => '',
+            'company_reg_no' => '',
+            'vat_note' => '',
+        ], build_invoice_lines_from_orders($docReady, false), (int) $adminUser['id']);
+        $createdHasDoc = false;
+        foreach (list_invoice_events((int) $docInvId) as $ev) {
+            if (($ev['event_type'] ?? '') !== 'created') {
+                continue;
+            }
+            foreach ((array) (($ev['payload_data'] ?? [])['rows'] ?? []) as $snap) {
+                if ((int) ($snap['order_item_id'] ?? 0) === (int) $docId
+                    && str_contains((string) ($snap['article_doc_url'] ?? ''), 'txf-doc-abc')
+                    && str_contains((string) ($snap['live_url'] ?? ''), 'article-doc-live')) {
+                    $createdHasDoc = true;
+                }
+            }
+        }
+        if ($createdHasDoc) {
+            pass('invoice created event snapshots article doc');
+        } else {
+            fail('invoice created event missing article doc snapshot');
+        }
+
+        $docAppendId = add_order_pipeline_row((int) $adminUser['id'], 'doc-buyer@example.com');
+        update_order_item((int) $docAppendId, 0, [
+            'site_name' => 'article-doc-append.com',
+            'country' => 'Germany',
+            'client_label' => 'doc-buyer@example.com',
+            'admin_user_id' => (int) $adminUser['id'],
+            'order_date' => '2026-08-21',
+            'owner_price' => 11,
+            'decided_price' => 26,
+            'live_url' => 'https://example.com/article-doc-append',
+            'article_doc_url' => 'https://docs.google.com/document/d/txf-doc-append',
+            'order_month' => 8,
+            'order_year' => 2026,
+        ]);
+        $docAppendMarked = order_mark_completed((int) $docAppendId, 'https://example.com/article-doc-append', (int) $adminUser['id']);
+        $docAppendReady = list_invoiceable_order_items_by_ids([(int) $docAppendId]);
+        $appendHasDoc = false;
+        if (!empty($docAppendMarked['ok']) && count($docAppendReady) === 1) {
+            append_orders_to_invoice(
+                (int) $docInvId,
+                build_invoice_lines_from_orders($docAppendReady, false),
+                $docAppendReady
+            );
+            foreach (list_invoice_events((int) $docInvId) as $ev) {
+                if (($ev['event_type'] ?? '') !== 'sites_added') {
+                    continue;
+                }
+                foreach ((array) (($ev['payload_data'] ?? [])['rows'] ?? []) as $snap) {
+                    if ((int) ($snap['order_item_id'] ?? 0) === (int) $docAppendId
+                        && str_contains((string) ($snap['article_doc_url'] ?? ''), 'txf-doc-append')) {
+                        $appendHasDoc = true;
+                    }
+                }
+            }
+        }
+        if ($appendHasDoc) {
+            pass('invoice append event snapshots article doc');
+        } else {
+            fail('invoice append event missing article doc snapshot');
+        }
+    }
+
     $pipeReady = list_invoiceable_order_items_by_ids([(int) $pipeId]);
     if (count($pipeReady) !== 1) {
         fail('pipeline invoiceable missing row');

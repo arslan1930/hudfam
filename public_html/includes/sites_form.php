@@ -260,10 +260,14 @@ function open_site_url_for_domain(string $domain): string
     if ($raw === '') {
         return '';
     }
-    // Full URLs (order LIVE links, etc.) — open as given after light cleanup.
+    // Full URLs (order LIVE links, Google Docs, etc.) — open as given after light cleanup.
     if (preg_match('#^https?://#i', $raw)) {
         $raw = preg_replace('/\s+/', '', $raw) ?? $raw;
         return $raw;
+    }
+    // Article doc paste without scheme: keep the /document/d/… path.
+    if (preg_match('#^(?:www\.)?(?:docs|drive)\.google\.com/.+#i', $raw)) {
+        return 'https://' . preg_replace('/\s+/', '', $raw);
     }
     $host = function_exists('extract_host_candidate')
         ? extract_host_candidate($raw)

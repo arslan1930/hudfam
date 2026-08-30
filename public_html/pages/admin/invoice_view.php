@@ -100,6 +100,7 @@ $isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
 $editableBill = !$isManual && !$isPaid && !$print;
 $linkedOrders = (!$print && !$isManual) ? list_invoice_linked_order_items($id) : [];
+$invoiceEvents = $print ? [] : list_invoice_events($id);
 $legacyClientId = (int) ($invoice['client_id'] ?? 0);
 
 if ($print) {
@@ -409,6 +410,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <tr>
           <th>Site</th>
           <th>LIVE URL</th>
+          <th>Article doc</th>
           <th></th>
         </tr>
       </thead>
@@ -418,6 +420,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
             $omId = (int) ($omRow['id'] ?? 0);
             $omSite = trim((string) ($omRow['site_name'] ?? ''));
             $omLive = trim((string) ($omRow['live_url'] ?? ''));
+            $omDoc = trim((string) ($omRow['article_doc_url'] ?? ''));
             $omHref = 'index.php?page=admin_orders&folder=completed';
             if ($omSite !== '') {
                 $omHref .= '&q=' . rawurlencode($omSite);
@@ -431,6 +434,11 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
             <?php else: ?>
               —
             <?php endif; ?></td>
+            <td><?php if ($omDoc !== ''): ?>
+              <a href="<?= h($omDoc) ?>" target="_blank" rel="noopener">Open</a>
+            <?php else: ?>
+              —
+            <?php endif; ?></td>
             <td><a class="btn secondary small" href="<?= h($omHref) ?>">Completed</a></td>
           </tr>
         <?php endforeach; ?>
@@ -439,4 +447,55 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   </div>
 </section>
 <?php endif; ?>
+<section class="card no-print invoice-history">
+  <h2><?= label_with_info('History', 'Who changed this invoice and which sites were on it then. Article doc and LIVE URL are internal — they do not print on the bill.') ?></h2>
+  <?php if (!$invoiceEvents): ?>
+    <p class="muted">No history yet.</p>
+  <?php else: ?>
+    <ol class="invoice-history-list">
+      <?php foreach ($invoiceEvents as $ev): ?>
+        <?php
+          $evWhen = (string) ($ev['created_at'] ?? '');
+          $evWho = invoice_event_actor_label($ev);
+          $evSummary = trim((string) ($ev['summary'] ?? ''));
+          $evType = invoice_event_type_label((string) ($ev['event_type'] ?? ''));
+          $evRows = (array) (($ev['payload_data'] ?? [])['rows'] ?? []);
+        ?>
+        <li class="invoice-history-item">
+          <div class="invoice-history-meta">
+            <time datetime="<?= h($evWhen) ?>"><?= h($evWhen !== '' ? $evWhen : '') ?></time>
+            <span class="invoice-history-who"><?= h($evWho) ?></span>
+            <span class="invoice-history-type"><?= h($evType) ?></span>
+          </div>
+          <?php if ($evSummary !== ''): ?>
+            <p class="invoice-history-summary"><?= h($evSummary) ?></p>
+          <?php endif; ?>
+          <?php if ($evRows): ?>
+            <details class="invoice-history-sites">
+              <summary><?= count($evRows) === 1 ? '1 site' : (count($evRows) . ' sites') ?></summary>
+              <ul>
+                <?php foreach ($evRows as $snap): ?>
+                  <?php
+                    $snapSite = trim((string) ($snap['site_name'] ?? ''));
+                    $snapLive = trim((string) ($snap['live_url'] ?? ''));
+                    $snapDoc = trim((string) ($snap['article_doc_url'] ?? ''));
+                  ?>
+                  <li>
+                    <strong><?= h($snapSite !== '' ? $snapSite : 'Site') ?></strong>
+                    <?php if ($snapLive !== ''): ?>
+                      · LIVE <a href="<?= h($snapLive) ?>" target="_blank" rel="noopener">Open</a>
+                    <?php endif; ?>
+                    <?php if ($snapDoc !== ''): ?>
+                      · Article doc <a href="<?= h($snapDoc) ?>" target="_blank" rel="noopener">Open</a>
+                    <?php endif; ?>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+            </details>
+          <?php endif; ?>
+        </li>
+      <?php endforeach; ?>
+    </ol>
+  <?php endif; ?>
+</section>
 <?php render_footer('admin'); ?>

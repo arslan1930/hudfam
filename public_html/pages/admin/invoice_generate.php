@@ -231,9 +231,10 @@ render_header('Generate invoice', 'admin');
               $who = trim((string) ($row['client_label'] ?? ''));
               $country = trim((string) ($row['country'] ?? ''));
               $meta = trim($who . ($country !== '' ? ($who !== '' ? ' · ' : '') . $country : ''));
+              $docUrl = trim((string) ($row['article_doc_url'] ?? ''));
               $pickSearch = mb_strtolower(trim(
                   (string) ($row['site_name'] ?? '') . ' ' . $who . ' ' . $country . ' '
-                  . (string) ($row['live_url'] ?? '')
+                  . (string) ($row['live_url'] ?? '') . ' ' . $docUrl
               ));
             ?>
             <li data-invoice-pick-row
@@ -256,6 +257,9 @@ render_header('Generate invoice', 'admin');
                 </span>
                 <span class="invoice-pick-price"><?= h(format_euro($row['decided_price'])) ?></span>
               </label>
+              <?php if ($docUrl !== ''): ?>
+                <a class="muted invoice-pick-doc" href="<?= h($docUrl) ?>" target="_blank" rel="noopener">Doc</a>
+              <?php endif; ?>
             </li>
           <?php endforeach; ?>
         </ul>

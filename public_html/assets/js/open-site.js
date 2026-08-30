@@ -60,8 +60,13 @@
     if (!link) return;
     var raw = String(hostOrUrl || '').trim();
     var host = normalizeSiteHost(raw);
-    var ok = isOpenableSite(host) || /^https?:\/\//i.test(raw);
-    var openTarget = /^https?:\/\//i.test(raw) ? siteOpenUrl(raw) : (ok ? siteOpenUrl(host) : '');
+    var isHttp = /^https?:\/\//i.test(raw);
+    var isGdoc = /^(?:www\.)?(?:docs|drive)\.google\.com\//i.test(raw);
+    var ok = isOpenableSite(host) || isHttp || isGdoc;
+    var openTarget = '';
+    if (isHttp) openTarget = siteOpenUrl(raw);
+    else if (isGdoc) openTarget = 'https://' + raw.replace(/\s+/g, '');
+    else if (ok) openTarget = siteOpenUrl(host);
     var cell = link.closest ? link.closest('[data-open-site-cell], .swe-site-cell, .open-site-cell') : null;
     if (cell) cell.classList.toggle('is-invalid-site', !ok);
     if (ok && openTarget) {
