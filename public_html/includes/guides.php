@@ -260,7 +260,7 @@ function guide_invoices(): string
         'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Done when sent). Mark paid when payment arrives — that writes Paid back onto linked sheet rows.',
         'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
         [
-            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. Group same amount is off unless you turn it on.',
+            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. New invoice gets the next number; Add to existing only for unpaid bills with the same bill-as. Group same amount is off unless you turn it on.',
             'Blank invoice: fill bill-as and line items, Save as draft or Save as done. On a generated bill, Save bill as to fix the email/name.',
             'Mark paid on the list or the open bill when payment is received. Draft / Unpaid / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Completed).',
         ]

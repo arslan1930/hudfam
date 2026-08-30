@@ -4947,6 +4947,149 @@ try {
         } else {
             fail('open invoice did not block a second bill');
         }
+
+        $openAppendIds = [];
+        foreach (list_invoices_open_for_append(50) as $openHit) {
+            $openAppendIds[] = (int) ($openHit['id'] ?? 0);
+        }
+        $alreadyOnThis = false;
+        try {
+            append_orders_to_invoice((int) $pipeInvId, $pipeLines, $pipeReady);
+        } catch (InvalidArgumentException $e) {
+            $alreadyOnThis = str_contains($e->getMessage(), 'already on this invoice');
+        }
+        $appendId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
+        update_order_item((int) $appendId, 0, [
+            'site_name' => 'pipeline-append.com',
+            'country' => 'Germany',
+            'client_label' => 'buyer@example.com',
+            'admin_user_id' => (int) $adminUser['id'],
+            'order_date' => '2026-08-16',
+            'owner_price' => 8,
+            'decided_price' => 18,
+            'live_url' => 'https://example.com/pipeline-append',
+            'order_month' => 8,
+            'order_year' => 2026,
+        ]);
+        $appendMarked = order_mark_completed((int) $appendId, 'https://example.com/pipeline-append', (int) $adminUser['id']);
+        $appendReady = list_invoiceable_order_items_by_ids([(int) $appendId]);
+        $beforeItems = list_invoice_items((int) $pipeInvId);
+        $beforeTotal = (float) ($pipeInv['total_amount'] ?? 0);
+        $beforeNum = (string) ($pipeInv['invoice_number'] ?? '');
+        $appendRes = ['id' => 0, 'added' => 0, 'invoice_number' => ''];
+        $appendOk = false;
+        if (!empty($appendMarked['ok']) && count($appendReady) === 1) {
+            $appendRes = append_orders_to_invoice(
+                (int) $pipeInvId,
+                build_invoice_lines_from_orders($appendReady, false),
+                $appendReady
+            );
+            $afterInv = get_invoice((int) $pipeInvId);
+            $afterItems = list_invoice_items((int) $pipeInvId);
+            $appendOk = (int) ($appendRes['added'] ?? 0) === 1
+                && count($afterItems) === count($beforeItems) + 1
+                && abs((float) ($afterInv['total_amount'] ?? 0) - ($beforeTotal + 18)) < 0.011
+                && (string) ($afterInv['invoice_number'] ?? '') === $beforeNum
+                && (string) ($appendRes['invoice_number'] ?? '') === $beforeNum
+                && in_array((int) $pipeInvId, $openAppendIds, true)
+                && $alreadyOnThis;
+        }
+        if ($appendOk) {
+            pass('append unpaid LIVE grows existing invoice');
+        } else {
+            fail('append did not grow the unpaid invoice or reused a number');
+        }
+        $againOnThis = false;
+        try {
+            append_orders_to_invoice(
+                (int) $pipeInvId,
+                build_invoice_lines_from_orders($appendReady, false),
+                $appendReady
+            );
+        } catch (InvalidArgumentException $e) {
+            $againOnThis = str_contains($e->getMessage(), 'already on this invoice');
+        }
+        $bRowId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
+        update_order_item((int) $bRowId, 0, [
+            'site_name' => 'pipeline-other-inv.com',
+            'country' => 'Germany',
+            'client_label' => 'buyer@example.com',
+            'admin_user_id' => (int) $adminUser['id'],
+            'order_date' => '2026-08-17',
+            'owner_price' => 5,
+            'decided_price' => 11,
+            'live_url' => 'https://example.com/pipeline-other-inv',
+            'order_month' => 8,
+            'order_year' => 2026,
+        ]);
+        order_mark_completed((int) $bRowId, 'https://example.com/pipeline-other-inv', (int) $adminUser['id']);
+        $bReady = list_invoiceable_order_items_by_ids([(int) $bRowId]);
+        $bInvId = 0;
+        if (count($bReady) === 1) {
+            $bInvId = create_invoice([
+                'invoice_date' => date('Y-m-d'),
+                'client_id' => 0,
+                'client_name' => 'buyer@example.com',
+                'bill_to_name' => 'buyer@example.com',
+                'bill_to_address' => '',
+                'bill_to_hrb' => '',
+                'bill_to_vat' => '',
+                'supplier_number' => 'NEW',
+                'cost_center' => '',
+                'orderer' => '',
+                'company_name' => 'Topurlz',
+                'company_bic' => 'TESTBIC',
+                'company_iban' => 'TESTIBAN',
+                'company_phone' => '',
+                'company_address' => '',
+                'company_reg_no' => '',
+                'vat_note' => '',
+            ], build_invoice_lines_from_orders($bReady, false), (int) $adminUser['id']);
+        }
+        $crossBlocked = false;
+        if ($bInvId > 0 && $appendReady) {
+            try {
+                append_orders_to_invoice(
+                    (int) $bInvId,
+                    build_invoice_lines_from_orders($appendReady, false),
+                    $appendReady
+                );
+            } catch (InvalidArgumentException $e) {
+                $crossBlocked = str_contains($e->getMessage(), 'Already on invoice');
+            }
+        }
+        $mixId = add_order_pipeline_row((int) $adminUser['id'], 'other-buyer@example.com');
+        update_order_item((int) $mixId, 0, [
+            'site_name' => 'pipeline-mix-bill.com',
+            'country' => 'Germany',
+            'client_label' => 'other-buyer@example.com',
+            'admin_user_id' => (int) $adminUser['id'],
+            'order_date' => '2026-08-18',
+            'owner_price' => 4,
+            'decided_price' => 9,
+            'live_url' => 'https://example.com/pipeline-mix',
+            'order_month' => 8,
+            'order_year' => 2026,
+        ]);
+        order_mark_completed((int) $mixId, 'https://example.com/pipeline-mix', (int) $adminUser['id']);
+        $mixReady = list_invoiceable_order_items_by_ids([(int) $mixId]);
+        $mixBlocked = false;
+        if (count($mixReady) === 1) {
+            try {
+                append_orders_to_invoice(
+                    (int) $pipeInvId,
+                    build_invoice_lines_from_orders($mixReady, false),
+                    $mixReady
+                );
+            } catch (InvalidArgumentException $e) {
+                $mixBlocked = str_contains($e->getMessage(), 'billed as');
+            }
+        }
+        if ($againOnThis && $crossBlocked && $mixBlocked) {
+            pass('append skips this invoice, blocks other open, mixed bill-as');
+        } else {
+            fail('append guards missed this/other invoice or mixed bill-as');
+        }
         $linkedClient = (int) ($pipeInv['client_id'] ?? 0);
         if ($pipeInv && $linkedClient === 0 && (string) ($pipeInv['bill_to_name'] ?? '') === 'buyer@example.com') {
             if (invoice_display_bill_as($pipeInv) === 'buyer@example.com'
@@ -4994,6 +5137,38 @@ try {
                 pass('pipeline invoice without client folder');
             } else {
                 fail('pipeline invoice paid did not write back to order');
+            }
+            $paidAppendId = add_order_pipeline_row((int) $adminUser['id'], 'buyer+fixed@example.com');
+            update_order_item((int) $paidAppendId, 0, [
+                'site_name' => 'pipeline-paid-target.com',
+                'country' => 'Germany',
+                'client_label' => 'buyer+fixed@example.com',
+                'admin_user_id' => (int) $adminUser['id'],
+                'order_date' => date('Y-m-d'),
+                'owner_price' => 3,
+                'decided_price' => 7,
+                'live_url' => 'https://example.com/pipeline-paid-target',
+                'order_month' => 8,
+                'order_year' => 2026,
+            ]);
+            order_mark_completed((int) $paidAppendId, 'https://example.com/pipeline-paid-target', (int) $adminUser['id']);
+            $paidAppendReady = list_invoiceable_order_items_by_ids([(int) $paidAppendId]);
+            $paidTargetBlocked = false;
+            if (count($paidAppendReady) === 1) {
+                try {
+                    append_orders_to_invoice(
+                        (int) $pipeInvId,
+                        build_invoice_lines_from_orders($paidAppendReady, false),
+                        $paidAppendReady
+                    );
+                } catch (InvalidArgumentException $e) {
+                    $paidTargetBlocked = str_contains($e->getMessage(), 'Paid invoices cannot');
+                }
+            }
+            if ($paidTargetBlocked) {
+                pass('append rejected on paid invoice');
+            } else {
+                fail('append allowed onto a paid invoice');
             }
         } else {
             fail('pipeline invoice kept a client folder link');

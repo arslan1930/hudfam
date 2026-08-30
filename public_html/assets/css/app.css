@@ -4167,6 +4167,29 @@ a.card.stat:focus-visible {
   font-weight: 700;
   white-space: nowrap;
 }
+.invoice-dest-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  margin: 0 0 1rem;
+  border: 0;
+  padding: 0;
+}
+.invoice-dest-mode label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+#invoice-dest-existing select {
+  width: 100%;
+  margin-top: 0.4rem;
+}
+#invoice-append-preview {
+  margin-top: 0.5rem;
+}
+
 .invoice-number-auto {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-weight: 700;

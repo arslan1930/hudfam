@@ -340,6 +340,28 @@ function list_invoices(array $opts = []): array
 }
 
 /**
+ * Unpaid or draft invoices that can still receive unpaid LIVE rows.
+ *
+ * @return list<array<string,mixed>>
+ */
+function list_invoices_open_for_append(int $limit = 50): array
+{
+    ensure_invoice_schema();
+    $limit = max(1, min(200, $limit));
+    $sql = "SELECT i.*,
+                (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
+         FROM invoices i
+         WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
+         ORDER BY i.invoice_date DESC, i.id DESC
+         LIMIT " . $limit;
+    try {
+        return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
  * @param array{q?:string,filter?:string,client_id?:int} $opts
  * @return array{0:string,1:list<mixed>}
  */
@@ -1098,6 +1120,91 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
 }
 
 /**
+ * @param list<array{order_item_ids?:list<int>}> $normalized
+ * @return list<int>
+ */
+function invoice_order_ids_from_lines(array $normalized): array
+{
+    $ids = [];
+    foreach ($normalized as $line) {
+        foreach ((array) ($line['order_item_ids'] ?? []) as $oid) {
+            $oid = (int) $oid;
+            if ($oid > 0) {
+                $ids[] = $oid;
+            }
+        }
+    }
+    return $ids;
+}
+
+/**
+ * Paid / LIVE / country / client checks for sheet invoice lines.
+ *
+ * @param list<array{order_item_ids?:list<int>}> $normalized
+ */
+function invoice_assert_order_rows_ready(array $normalized): void
+{
+    foreach ($normalized as $line) {
+        foreach ((array) ($line['order_item_ids'] ?? []) as $oid) {
+            $oid = (int) $oid;
+            if ($oid < 1) {
+                continue;
+            }
+            $chk = db()->prepare(
+                "SELECT is_paid, live_url, country, client_label FROM order_items
+                 WHERE id=? AND row_type='site' LIMIT 1"
+            );
+            $chk->execute([$oid]);
+            $row = $chk->fetch();
+            if (!$row) {
+                throw new InvalidArgumentException('One of the selected sheet rows was not found.');
+            }
+            if ((int) ($row['is_paid'] ?? 0) === 1) {
+                throw new InvalidArgumentException('Paid rows cannot be added to an invoice. Unmark paid first, or pick unpaid rows only.');
+            }
+            if (trim((string) ($row['live_url'] ?? '')) === '') {
+                throw new InvalidArgumentException('Only rows with a LIVE URL can be invoiced.');
+            }
+            if (trim((string) ($row['country'] ?? '')) === '') {
+                throw new InvalidArgumentException('Country is required before pushing a row to an invoice.');
+            }
+            if (trim((string) ($row['client_label'] ?? '')) === '') {
+                throw new InvalidArgumentException('Client email or name is required before pushing a row to an invoice.');
+            }
+        }
+    }
+}
+
+/**
+ * Block rows that already sit on a different unpaid/draft invoice.
+ *
+ * @param list<array{order_item_ids?:list<int>}> $normalized
+ */
+function invoice_assert_not_on_other_open_invoice(array $normalized, int $ignoreInvoiceId = 0): void
+{
+    $onOpen = order_items_on_open_invoices(invoice_order_ids_from_lines($normalized));
+    if (!$onOpen) {
+        return;
+    }
+    $nums = [];
+    foreach ($onOpen as $inv) {
+        if ($ignoreInvoiceId > 0 && (int) ($inv['id'] ?? 0) === $ignoreInvoiceId) {
+            continue;
+        }
+        $num = trim((string) ($inv['invoice_number'] ?? ''));
+        if ($num !== '') {
+            $nums[$num] = true;
+        }
+    }
+    if ($nums) {
+        throw new InvalidArgumentException(
+            'Already on invoice ' . implode(', ', array_keys($nums))
+            . '. Open that bill instead of generating another.'
+        );
+    }
+}
+
+/**
  * @param array<string,mixed> $header
  * @param list<array{description:string,amount:float|string,qty:int|string,line_total?:float|string}> $lines
  */
@@ -1158,51 +1265,8 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
 
     // Guard: never invoice already-paid order rows (sheet invoices only)
     if (!$isManual) {
-        foreach ($normalized as $line) {
-            foreach ($line['order_item_ids'] as $oid) {
-                $chk = db()->prepare(
-                    "SELECT is_paid, live_url, country, client_label FROM order_items
-                     WHERE id=? AND row_type='site' LIMIT 1"
-                );
-                $chk->execute([$oid]);
-                $row = $chk->fetch();
-                if (!$row) {
-                    throw new InvalidArgumentException('One of the selected sheet rows was not found.');
-                }
-                if ((int) ($row['is_paid'] ?? 0) === 1) {
-                    throw new InvalidArgumentException('Paid rows cannot be added to an invoice. Unmark paid first, or pick unpaid rows only.');
-                }
-                if (trim((string) ($row['live_url'] ?? '')) === '') {
-                    throw new InvalidArgumentException('Only rows with a LIVE URL can be invoiced.');
-                }
-                if (trim((string) ($row['country'] ?? '')) === '') {
-                    throw new InvalidArgumentException('Country is required before pushing a row to an invoice.');
-                }
-                if (trim((string) ($row['client_label'] ?? '')) === '') {
-                    throw new InvalidArgumentException('Client email or name is required before pushing a row to an invoice.');
-                }
-            }
-        }
-        $allOids = [];
-        foreach ($normalized as $line) {
-            foreach ($line['order_item_ids'] as $oid) {
-                $allOids[] = (int) $oid;
-            }
-        }
-        $onOpen = order_items_on_open_invoices($allOids);
-        if ($onOpen) {
-            $nums = [];
-            foreach ($onOpen as $inv) {
-                $num = trim((string) ($inv['invoice_number'] ?? ''));
-                if ($num !== '') {
-                    $nums[$num] = true;
-                }
-            }
-            throw new InvalidArgumentException(
-                'Already on invoice ' . implode(', ', array_keys($nums))
-                . '. Open that bill instead of generating another.'
-            );
-        }
+        invoice_assert_order_rows_ready($normalized);
+        invoice_assert_not_on_other_open_invoice($normalized, 0);
     }
 
     $pdo = db();
@@ -1294,6 +1358,151 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
     }
 
     throw $lastError ?? new RuntimeException('Could not allocate a unique invoice number.');
+}
+
+/**
+ * Add unpaid LIVE order lines onto an existing unpaid invoice (same invoice number).
+ *
+ * @param list<array{description:string,amount:float|string,qty:int|string,line_total?:float|string,order_item_ids?:list<int>}> $lines
+ * @param list<array<string,mixed>> $picked
+ * @return array{id:int,added:int,invoice_number:string}
+ */
+function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): array
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    if (($invoice['payment_status'] ?? 'unpaid') === 'paid') {
+        throw new InvalidArgumentException('Paid invoices cannot take more orders. Generate a new bill instead.');
+    }
+    invoice_assert_single_bill_as($picked);
+    $existingBill = invoice_display_bill_as($invoice);
+    $fromOrders = invoice_bill_as_from_orders($picked);
+    if ($existingBill !== '' && $fromOrders !== ''
+        && mb_strtolower($existingBill) !== mb_strtolower($fromOrders)) {
+        throw new InvalidArgumentException(
+            'Those rows are billed as ' . $fromOrders
+            . '. Invoice ' . (string) ($invoice['invoice_number'] ?? '')
+            . ' is billed as ' . $existingBill . '.'
+        );
+    }
+
+    $normalized = [];
+    $sortBase = 0;
+    foreach (list_invoice_items($invoiceId) as $item) {
+        $sortBase = max($sortBase, (int) ($item['sort_order'] ?? 0) + 1);
+    }
+    $sort = $sortBase;
+    foreach ($lines as $line) {
+        $desc = trim((string) ($line['description'] ?? ''));
+        if ($desc === '') {
+            continue;
+        }
+        $amount = parse_money($line['amount'] ?? 0);
+        $qty = max(1, (int) ($line['qty'] ?? 1));
+        $lineTotal = isset($line['line_total'])
+            ? parse_money($line['line_total'])
+            : round($amount * $qty, 2);
+        $normalized[] = [
+            'description' => $desc,
+            'amount' => $amount,
+            'qty' => $qty,
+            'line_total' => $lineTotal,
+            'order_item_ids' => array_values(array_filter(array_map('intval', (array) ($line['order_item_ids'] ?? [])), static fn ($id) => $id > 0)),
+            'sort_order' => $sort++,
+        ];
+    }
+    if (!$normalized) {
+        throw new InvalidArgumentException('Select at least one unpaid LIVE row to add.');
+    }
+    invoice_assert_order_rows_ready($normalized);
+    invoice_assert_not_on_other_open_invoice($normalized, $invoiceId);
+
+    $onThis = order_items_on_open_invoices(invoice_order_ids_from_lines($normalized));
+    $filtered = [];
+    $addedTotal = 0.0;
+    $addedRows = 0;
+    foreach ($normalized as $line) {
+        $keep = [];
+        foreach ($line['order_item_ids'] as $oid) {
+            $oid = (int) $oid;
+            if (isset($onThis[$oid]) && (int) ($onThis[$oid]['id'] ?? 0) === $invoiceId) {
+                continue;
+            }
+            $keep[] = $oid;
+        }
+        if (!$keep) {
+            continue;
+        }
+        $qty = count($keep);
+        $amount = (float) $line['amount'];
+        $lineTotal = round($amount * $qty, 2);
+        $filtered[] = [
+            'description' => $line['description'],
+            'amount' => $amount,
+            'qty' => $qty,
+            'line_total' => $lineTotal,
+            'order_item_ids' => $keep,
+            'sort_order' => $line['sort_order'],
+        ];
+        $addedTotal += $lineTotal;
+        $addedRows += $qty;
+    }
+    if (!$filtered) {
+        throw new InvalidArgumentException('Those rows are already on this invoice.');
+    }
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $itemStmt = $pdo->prepare(
+            'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, order_item_ids, sort_order)
+             VALUES (?,?,?,?,?,?,?)'
+        );
+        foreach ($filtered as $line) {
+            $itemStmt->execute([
+                $invoiceId,
+                $line['description'],
+                $line['amount'],
+                $line['qty'],
+                $line['line_total'],
+                implode(',', $line['order_item_ids']),
+                $line['sort_order'],
+            ]);
+        }
+        $newTotal = round((float) ($invoice['total_amount'] ?? 0) + $addedTotal, 2);
+        $billTo = $existingBill !== '' ? $existingBill : $fromOrders;
+        $isManual = invoice_is_manual($invoice) ? 0 : (int) ($invoice['is_manual'] ?? 0);
+        $workStatus = invoice_is_manual($invoice)
+            ? 'done'
+            : (string) ($invoice['work_status'] ?? 'done');
+        $pdo->prepare(
+            'UPDATE invoices
+             SET total_amount=?, bill_to_name=?, client_name=?, is_manual=?, work_status=?, updated_at=NOW()
+             WHERE id=?'
+        )->execute([
+            $newTotal,
+            $billTo !== '' ? $billTo : (string) ($invoice['bill_to_name'] ?? ''),
+            $billTo !== '' ? $billTo : (string) ($invoice['client_name'] ?? ''),
+            $isManual,
+            $workStatus,
+            $invoiceId,
+        ]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'id' => $invoiceId,
+        'added' => $addedRows,
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+    ];
 }
 
 /**
