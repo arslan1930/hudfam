@@ -4950,6 +4950,15 @@ try {
     } else {
         fail('article doc URL not saved, searched, or leaked onto invoice description');
     }
+    require_once __DIR__ . '/includes/sites_form.php';
+    $docOpenBare = open_site_url_for_domain('docs.google.com/document/d/txf-doc-abc');
+    $docOpenFull = open_site_url_for_domain('https://docs.google.com/document/d/ok');
+    if ($docOpenBare === 'https://docs.google.com/document/d/txf-doc-abc'
+        && $docOpenFull === 'https://docs.google.com/document/d/ok') {
+        pass('article doc Open keeps Google Doc path');
+    } else {
+        fail('article doc Open dropped Google Doc path');
+    }
 
     $docReady = list_invoiceable_order_items_by_ids([(int) $docId]);
     if (count($docReady) !== 1) {

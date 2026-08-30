@@ -4200,7 +4200,11 @@ a.card.stat:focus-visible {
 .invoice-item-pick li[style*="display: none"] {
   display: none;
 }
-.invoice-item-pick li { border-bottom: 1px solid var(--line, #e5e7eb); }
+.invoice-item-pick li {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
 .invoice-item-pick li:last-child { border-bottom: none; }
 .invoice-item-pick label {
   display: grid;
@@ -4210,6 +4214,8 @@ a.card.stat:focus-visible {
   padding: 0.7rem 0.8rem;
   margin: 0;
   cursor: pointer;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .invoice-item-pick input { margin-top: 0.2rem; }
 .invoice-pick-main { display: grid; gap: 0.15rem; min-width: 0; }
@@ -4219,6 +4225,12 @@ a.card.stat:focus-visible {
 }
 .invoice-pick-price {
   font-weight: 700;
+  white-space: nowrap;
+}
+.invoice-pick-doc {
+  flex: 0 0 auto;
+  padding: 0.7rem 0.85rem 0.7rem 0;
+  font-size: 0.85rem;
   white-space: nowrap;
 }
 .invoice-dest-mode {

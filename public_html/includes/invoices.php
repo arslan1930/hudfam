@@ -11,6 +11,8 @@ function ensure_invoice_schema(): void
     }
     $done = true;
     if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        ensure_order_schema();
+        invoice_ensure_events_table();
         return;
     }
     ensure_order_schema();
@@ -88,30 +90,7 @@ function ensure_invoice_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
-    $invoiceEventsSql = "CREATE TABLE IF NOT EXISTS invoice_events (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          invoice_id INT NULL,
-          event_type VARCHAR(40) NOT NULL DEFAULT '',
-          actor_user_id INT NULL,
-          summary VARCHAR(500) NOT NULL DEFAULT '',
-          payload TEXT NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_ie_invoice (invoice_id, id),
-          INDEX idx_ie_type (event_type)";
-    try {
-        $pdo->exec(
-            $invoiceEventsSql . ",
-          CONSTRAINT fk_ie_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
-          CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
-    } catch (Throwable $e) {
-        try {
-            $pdo->exec($invoiceEventsSql . ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-        } catch (Throwable $e2) {
-            // History is optional — billing pages must still load.
-        }
-    }
+    invoice_ensure_events_table();
 
     // Migrate older invoice tables
     try {
@@ -172,6 +151,39 @@ function ensure_invoice_schema(): void
     }
     if (function_exists('txf_schema_mark_current')) {
         txf_schema_mark_current(__FUNCTION__);
+    }
+}
+
+function invoice_ensure_events_table(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $sql = "CREATE TABLE IF NOT EXISTS invoice_events (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          invoice_id INT NULL,
+          event_type VARCHAR(40) NOT NULL DEFAULT '',
+          actor_user_id INT NULL,
+          summary VARCHAR(500) NOT NULL DEFAULT '',
+          payload TEXT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_ie_invoice (invoice_id, id),
+          INDEX idx_ie_type (event_type)";
+    try {
+        db()->exec(
+            $sql . ",
+          CONSTRAINT fk_ie_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+          CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    } catch (Throwable $e) {
+        try {
+            db()->exec($sql . ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        } catch (Throwable $e2) {
+            // History is optional — billing pages must still load.
+        }
     }
 }
 
@@ -505,44 +517,48 @@ function list_invoice_linked_order_items(int $invoiceId): array
  */
 function invoice_snapshot_order_rows(array $orderIds): array
 {
-    $ids = [];
-    foreach ($orderIds as $oid) {
-        $oid = (int) $oid;
-        if ($oid > 0 && !isset($ids[$oid])) {
-            $ids[$oid] = $oid;
+    try {
+        $ids = [];
+        foreach ($orderIds as $oid) {
+            $oid = (int) $oid;
+            if ($oid > 0 && !isset($ids[$oid])) {
+                $ids[$oid] = $oid;
+            }
         }
-    }
-    $ids = array_values($ids);
-    if ($ids === []) {
-        return [];
-    }
-    $byId = [];
-    foreach (list_order_items_by_ids($ids) as $item) {
-        $byId[(int) ($item['id'] ?? 0)] = $item;
-    }
-    $out = [];
-    foreach ($ids as $id) {
-        $item = $byId[$id] ?? null;
-        if (!$item) {
+        $ids = array_values($ids);
+        if ($ids === []) {
+            return [];
+        }
+        $byId = [];
+        foreach (list_order_items_by_ids($ids) as $item) {
+            $byId[(int) ($item['id'] ?? 0)] = $item;
+        }
+        $out = [];
+        foreach ($ids as $id) {
+            $item = $byId[$id] ?? null;
+            if (!$item) {
+                $out[] = [
+                    'order_item_id' => $id,
+                    'site_name' => '',
+                    'live_url' => '',
+                    'article_doc_url' => '',
+                    'decided_price' => null,
+                ];
+                continue;
+            }
+            $decided = $item['decided_price'] ?? null;
             $out[] = [
                 'order_item_id' => $id,
-                'site_name' => '',
-                'live_url' => '',
-                'article_doc_url' => '',
-                'decided_price' => null,
+                'site_name' => (string) ($item['site_name'] ?? ''),
+                'live_url' => (string) ($item['live_url'] ?? ''),
+                'article_doc_url' => (string) ($item['article_doc_url'] ?? ''),
+                'decided_price' => ($decided !== null && $decided !== '') ? (float) $decided : null,
             ];
-            continue;
         }
-        $decided = $item['decided_price'] ?? null;
-        $out[] = [
-            'order_item_id' => $id,
-            'site_name' => (string) ($item['site_name'] ?? ''),
-            'live_url' => (string) ($item['live_url'] ?? ''),
-            'article_doc_url' => (string) ($item['article_doc_url'] ?? ''),
-            'decided_price' => ($decided !== null && $decided !== '') ? (float) $decided : null,
-        ];
+        return $out;
+    } catch (Throwable $e) {
+        return [];
     }
-    return $out;
 }
 
 /**

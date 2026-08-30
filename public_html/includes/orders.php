@@ -3,6 +3,36 @@
  * Admin Order Management — one pipeline sheet (country, date, admin, client email/name).
  */
 
+function order_ensure_article_doc_column(): bool
+{
+    static $has = null;
+    if ($has === true) {
+        return true;
+    }
+    try {
+        $pdo = db();
+        $cols = $pdo->query("SHOW COLUMNS FROM order_items LIKE 'article_doc_url'")->fetch(PDO::FETCH_ASSOC);
+        if ($cols) {
+            $has = true;
+            return true;
+        }
+        $pdo->exec(
+            "ALTER TABLE order_items
+             ADD COLUMN article_doc_url VARCHAR(500) NOT NULL DEFAULT '' AFTER live_url"
+        );
+        $has = true;
+        return true;
+    } catch (Throwable $e) {
+        $has = false;
+        return false;
+    }
+}
+
+function order_has_article_doc_column(): bool
+{
+    return order_ensure_article_doc_column();
+}
+
 function ensure_order_schema(): void
 {
     static $done = false;
@@ -11,6 +41,7 @@ function ensure_order_schema(): void
     }
     $done = true;
     if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        order_ensure_article_doc_column();
         return;
     }
     $pdo = db();
@@ -223,17 +254,7 @@ function ensure_order_schema(): void
         // ignore on fresh installs
     }
 
-    try {
-        $docCols = $pdo->query('SHOW COLUMNS FROM order_items')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('article_doc_url', $docCols, true)) {
-            $pdo->exec(
-                "ALTER TABLE order_items
-                 ADD COLUMN article_doc_url VARCHAR(500) NOT NULL DEFAULT '' AFTER live_url"
-            );
-        }
-    } catch (Throwable $e) {
-        // ignore
-    }
+    order_ensure_article_doc_column();
 
     try {
         $cCols = $pdo->query('SHOW COLUMNS FROM order_clients')->fetchAll(PDO::FETCH_COLUMN);
@@ -1116,7 +1137,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $sets[] = 'order_date=?';
         $params[] = normalize_order_date($data['order_date']) ?: date('Y-m-d');
     }
-    if (array_key_exists('article_doc_url', $data)) {
+    if (array_key_exists('article_doc_url', $data) && order_has_article_doc_column()) {
         $sets[] = 'article_doc_url=?';
         $params[] = order_normalize_article_doc_url((string) $data['article_doc_url']);
     }
@@ -1441,10 +1462,17 @@ function order_pipeline_where_sql(array $opts = []): array
     $q = trim((string) ($opts['q'] ?? ''));
     if ($q !== '') {
         $like = '%' . $q . '%';
-        $where[] = '(i.site_name LIKE ? OR i.site_note LIKE ? OR i.country LIKE ?
-            OR i.client_label LIKE ? OR i.live_url LIKE ? OR i.article_doc_url LIKE ?
-            OR COALESCE(u.full_name, \'\') LIKE ? OR COALESCE(u.username, \'\') LIKE ?)';
-        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
+        if (order_has_article_doc_column()) {
+            $where[] = '(i.site_name LIKE ? OR i.site_note LIKE ? OR i.country LIKE ?
+                OR i.client_label LIKE ? OR i.live_url LIKE ? OR i.article_doc_url LIKE ?
+                OR COALESCE(u.full_name, \'\') LIKE ? OR COALESCE(u.username, \'\') LIKE ?)';
+            array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
+        } else {
+            $where[] = '(i.site_name LIKE ? OR i.site_note LIKE ? OR i.country LIKE ?
+                OR i.client_label LIKE ? OR i.live_url LIKE ?
+                OR COALESCE(u.full_name, \'\') LIKE ? OR COALESCE(u.username, \'\') LIKE ?)';
+            array_push($params, $like, $like, $like, $like, $like, $like, $like);
+        }
     }
     $country = trim((string) ($opts['country'] ?? ''));
     if ($country !== '') {

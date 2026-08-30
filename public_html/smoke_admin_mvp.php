@@ -1830,7 +1830,9 @@ if (!str_contains($invoiceViewCsrf, 'invoice-history')
     || !str_contains($invoiceViewCsrf, 'list_invoice_events')
     || !str_contains($invoiceViewCsrf, 'No history yet')
     || !str_contains($invoiceViewCsrf, 'Article doc')
-    || !str_contains($invoicesLib, 'CREATE TABLE IF NOT EXISTS invoice_events')) {
+    || !str_contains($invoicesLib, 'CREATE TABLE IF NOT EXISTS invoice_events')
+    || !str_contains($invoicesLib, 'function invoice_ensure_events_table')
+    || !str_contains($ordersLib, 'function order_ensure_article_doc_column')) {
     fail('invoice view missing History / Article doc');
 } else {
     ok('invoice view History and Article doc');
@@ -2396,6 +2398,13 @@ if (!str_contains($openSiteJs, 'OpenSite') || !str_contains($openSiteJs, 'normal
     fail('open-site.js missing shared Open helpers');
 } else {
     ok('open-site.js shared helpers');
+}
+$openSitePhp = file_get_contents($root . '/includes/sites_form.php') ?: '';
+if (!str_contains($openSiteJs, 'docs|drive)\\.google\\.com')
+    || !str_contains($openSitePhp, 'docs|drive)\\.google\\.com')) {
+    fail('Open site missing Google Doc path keep');
+} else {
+    ok('Open site keeps Google Doc path');
 }
 $campApp = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
 $campDraftsTeam = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
