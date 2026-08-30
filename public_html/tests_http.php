@@ -470,7 +470,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting > 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
         'admin_prospects' => ['Our database', 'Markets', 'What is this?', 'show empty countries', 'Super search', 'Add sites'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
@@ -590,7 +590,7 @@ if ($invViewId > 0) {
 
 $rUnpaidList = req('GET', $base . '/index.php?page=admin_invoices&filter=unpaid');
 if ($rUnpaidList['status'] === 200
-    && str_contains($rUnpaidList['body'], 'Unpaid invoices')
+    && str_contains($rUnpaidList['body'], 'Waiting invoices')
     && str_contains($rUnpaidList['body'], 'invoice-list-chips')
     && str_contains($rUnpaidList['body'], 'Completed unpaid')
     && str_contains($rUnpaidList['body'], 'admin_invoices&amp;filter=unpaid')
@@ -803,6 +803,7 @@ if ($r['status'] === 200
     && str_contains($r['body'], 'Copy selected sites (this page)')
     && str_contains($r['body'], 'Push to invoice')
     && str_contains($r['body'], 'Download .txt')
+    && str_contains($r['body'], 'Download month close')
     && str_contains($r['body'], '<span>Bill</span>')
     && str_contains($r['body'], 'Mark paid')
     && str_contains($r['body'], 'data-orig-live')
@@ -851,6 +852,18 @@ if ($r['status'] === 200
     pass('admin orders download=txt');
 } else {
     fail('admin orders download=txt status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=completed&download=month_close&close_month=' . date('Y-m') . '&status=all');
+if ($r['status'] === 200
+    && str_contains($r['headers'], 'text/csv')
+    && str_contains($r['headers'], 'order-month-close-')
+    && str_contains($r['body'], 'Month close')
+    && str_contains($r['body'], 'Owner total')
+    && str_contains($r['body'], 'Decided total')
+    && str_contains($r['body'], 'Profit')) {
+    pass('admin orders month close csv');
+} else {
+    fail('admin orders month close csv status=' . ($r['status'] ?? '?'));
 }
 
 // Bare admin_extracted should hop into the country-list folder

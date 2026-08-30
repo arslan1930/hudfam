@@ -245,7 +245,7 @@ function guide_orders(): string
             'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices. Processing and Completed stay on the page as tabs — you do not have to go back to the hub.',
         [
             'Processing default view is still in Website prices Processing. Leftover stays here when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client email or name, then Mark completed — saving a live URL does not complete the row. Article doc is the Google Doc for the piece (not the live page) and stays after Mark completed. Save still works on half-filled Processing rows.',
-            'Copy selected sites or live URLs copies ticked Copy boxes on this page only. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet.',
+            'Copy selected sites or live URLs copies ticked Copy boxes on this page only. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet. On Completed, Download month close is this calendar month with owner / decided / profit totals.',
             'Completed: unpaid until you click Mark paid (or mark Paid on the invoice). Tick Bill boxes and Push to invoice, or use Push unpaid (N) to open Generate with this filter’s unpaid rows ticked (or an honest label if the list is too long). A row already on a draft or unpaid invoice cannot be pushed again — open that bill from the row. Country and client email/name are required to push. Clearing a live URL on Save also clears Paid (you will be asked to confirm). Paid stays in this folder. Website prices status is not changed when you mark paid.',
             'Open in Website prices jumps to the linked site. If that status no longer matches this folder, the mismatch is shown. Removing a row while Website prices is still Processing brings it back on the next Processing load; removing a Completed-linked row can optionally set Website prices back to Processing.',
             'Team Website prices shows the Completed status only — never LIVE URL, owner/decided/profit, client email/name, or invoices.',
@@ -257,12 +257,12 @@ function guide_invoices(): string
 {
     return render_page_purpose(
         'Invoices — printable bills',
-        'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Done when sent). Mark paid when payment arrives — that writes Paid back onto linked sheet rows.',
+        'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Waiting when sent). Mark paid when payment arrives — that writes Paid back onto linked sheet rows.',
         'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
         [
-            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. New invoice gets the next number. Add to existing puts more sites on an unpaid bill with the same bill-as — Draft or Waiting (already sent, still unpaid) — same invoice number. Open an Unpaid invoice and use Add sites to this invoice. Paid invoices stay locked. Group same amount is off unless you turn it on.',
-            'Blank invoice: fill bill-as and line items, Save as draft or Save as done. On a generated bill, Save bill as to fix the email/name.',
-            'Mark paid on the list or the open bill when payment is received. Draft / Unpaid / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Article doc, Completed) and a History of who added sites. Article doc does not print on the bill.',
+            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. If that bill-as already has a Draft or Waiting bill, Add to existing is selected. New invoice gets the next number. Open a Waiting invoice and use Add sites — matching unpaid LIVE rows are ticked. Paid invoices stay locked. Group same amount is off unless you turn it on.',
+            'Blank invoice: fill bill-as and line items, Save as draft or Mark as sent. On a generated bill, Save bill as to fix the email/name.',
+            'Mark paid on the list or the open bill when payment is received. Draft / Waiting / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Article doc, Completed) and a History of who added sites. Article doc does not print on the bill.',
         ]
     );
 }

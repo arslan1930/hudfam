@@ -146,9 +146,9 @@ render_header('Invoices', 'admin');
               'Older invoices that were linked to a client profile (client_id=). New bills use Bill as (email or name) and show on All invoices.'
           );
       } elseif ($invoiceFilter === 'draft') {
-          echo label_with_info('Draft invoices', 'Blank invoices that still need data. Save as done on the bill when they are ready to send.');
+          echo label_with_info('Draft invoices', 'Not sent yet. Mark as sent on the bill when they are ready.');
       } elseif ($invoiceFilter === 'unpaid') {
-          echo label_with_info('Unpaid invoices', 'Sent bills waiting for payment. Add sites keeps the same invoice number. Mark paid when it arrives.');
+          echo label_with_info('Waiting invoices', 'Sent bills still unpaid. Add sites keeps the same invoice number. Mark paid when it arrives.');
       } elseif ($invoiceFilter === 'paid') {
           echo label_with_info('Paid invoices', 'Payment received. Linked Order management rows stay Paid if you delete the bill.');
       } else {
@@ -160,7 +160,7 @@ render_header('Invoices', 'admin');
         $chipDefs = [
             '' => ['All', $chipAll],
             'draft' => ['Draft', $chipDraft],
-            'unpaid' => ['Unpaid', $chipUnpaid],
+            'unpaid' => ['Waiting', $chipUnpaid],
             'paid' => ['Paid', $chipPaid],
         ];
         foreach ($chipDefs as $chipKey => $chipRow):
@@ -213,7 +213,7 @@ render_header('Invoices', 'admin');
         if ($invoiceClientId > 0 && $invoiceQ === '' && $invoiceFilter === '') {
             echo 'No invoices linked to this leftover client folder.';
         } elseif ($invoiceFilter === 'unpaid' && $invoiceQ === '') {
-            echo 'No unpaid invoices. Open Completed unpaid in Order management to generate a bill.';
+            echo 'No waiting invoices. Open Completed unpaid in Order management to generate a bill.';
         } elseif ($invoiceQ !== '' || $invoiceFilter !== '' || $invoiceClientId > 0) {
             echo 'No invoices match this filter.';
         } else {
@@ -239,7 +239,7 @@ render_header('Invoices', 'admin');
       <?php if ($invoiceFilter === 'draft'): ?>
         · Draft
       <?php elseif ($invoiceFilter === 'unpaid'): ?>
-        · Unpaid
+        · Waiting
       <?php elseif ($invoiceFilter === 'paid'): ?>
         · Paid
       <?php endif; ?>
@@ -330,7 +330,7 @@ render_header('Invoices', 'admin');
               <?php if ($paid): ?>
                 <span class="invoice-pay-badge is-paid" title="Payment already received">Paid</span>
               <?php elseif ($draft): ?>
-                <span class="invoice-pay-badge is-draft" title="Still needs data — open and Save as done when ready">Draft</span>
+                <span class="invoice-pay-badge is-draft" title="Still needs data — open and Mark as sent when ready">Draft</span>
               <?php else: ?>
                 <div class="invoice-pay-stack">
                   <span class="invoice-pay-badge" title="Sent — waiting for payment">Waiting</span>

@@ -180,7 +180,7 @@ if (!str_contains($invoicesAdminPage, '$perPage = 50')
 if (!str_contains($invoicesAdminPage, 'name="filter"')
     || !str_contains($invoicesAdminPage, 'invoice-list-chips')
     || !str_contains($invoicesAdminPage, "'draft' => ['Draft'")
-    || !str_contains($invoicesAdminPage, "'unpaid' => ['Unpaid'")
+    || !str_contains($invoicesAdminPage, "'unpaid' => ['Waiting'")
     || !str_contains($invoicesAdminPage, "'paid' => ['Paid'")
     || !str_contains($invoicesAdminPage, 'normalize_invoice_list_filter')) {
     fail('invoices.php missing status filter');
@@ -202,7 +202,7 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
 }
 if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
     || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
-    || !str_contains($invoicesAdminPage, 'Unpaid invoices')
+    || !str_contains($invoicesAdminPage, 'Waiting invoices')
     || !str_contains($invoicesAdminPage, 'Completed unpaid')
     || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")
     || !str_contains($invoicesAdminPage, 'invoice-list-delete')
@@ -1585,7 +1585,9 @@ if (!str_contains($ordersPage, 'Mark paid')
     || !str_contains($ordersPage, 'With live URL')
     || !str_contains($ordersPage, 'data-on-invoice')
     || !str_contains($ordersPage, 'order-on-invoice')
-    || !str_contains($ordersPage, 'Already on invoice')) {
+    || !str_contains($ordersPage, 'Already on invoice')
+    || !str_contains($ordersPage, 'invoice_generate_append_href')
+    || !str_contains($ordersPage, 'Download month close')) {
     fail('orders missing Mark paid label or Processing live-URL footer');
 } else {
     ok('orders Mark paid label + Processing live-URL footer');
@@ -1788,6 +1790,8 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
     fail('Invoice view Generate another still scoped to a client folder');
 } elseif (!str_contains($invoiceViewCsrf, 'Add sites to this invoice')
     || !str_contains($invoiceViewCsrf, 'invoice_generate_append_href')
+    || !str_contains($invoiceViewCsrf, 'Mark as sent')
+    || str_contains($invoiceViewCsrf, 'Save as done')
     || str_contains($invoiceViewCsrf, 'Generate another')
     || str_contains($invoiceViewCsrf, 'More sites need a new bill')
     || str_contains($invoiceViewCsrf, 'You will not be able to add more sites')) {
@@ -1862,8 +1866,12 @@ if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
     || !str_contains($invoiceGenerate, 'Use Add to existing to put these sites')
     || !str_contains($invoiceGenerate, 'Paid invoices cannot take more sites')
     || !str_contains($invoiceGenerate, 'Find Draft or waiting invoice')
-    || !str_contains($invoiceGenerate, 'Waiting = already sent, still unpaid')
+    || !str_contains($invoiceGenerate, 'Waiting = sent, still unpaid')
     || !str_contains($invoiceGenerate, "get('existing')")
+    || !str_contains($invoicesLib, 'function invoice_match_open_for_bill_as')
+    || !str_contains($invoiceGenerate, 'selectedExistBillAs')
+    || !str_contains($invoiceGenerate, 'maybeAutoExisting')
+    || !str_contains($invoiceGenerate, 'Use a new invoice instead')
     || !str_contains($invoicesLib, 'function invoice_append_status_label')
     || !str_contains($invoicesLib, 'function invoice_generate_append_href')
     || str_contains($invoiceGenerate, 'name="invoice_number"')) {
@@ -2082,7 +2090,10 @@ if (!str_contains($dashPage, 'Emails Admin')
     || !str_contains($dashPage, 'Could not load')
     || !str_contains($dashPage, 'render_admin_dashboard_stat')
     || !str_contains($dashPage, 'Unpaid LIVE')
-    || !str_contains($dashPage, 'Unpaid invoices')
+    || !str_contains($dashPage, 'Waiting invoices')
+    || !str_contains($dashPage, 'Waiting > 14 days')
+    || !str_contains($dashPage, 'count_invoices_waiting_older_than')
+    || !str_contains($dashPage, 'dashboard-waiting-bills')
     || !str_contains($dashPage, 'Campaign sheets')) {
     fail('dashboard stats tiles missing pipeline labels');
 } else {
