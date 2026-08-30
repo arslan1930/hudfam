@@ -1506,6 +1506,16 @@ if (!str_contains($ordersPage, "folder=processing")
 } else {
     ok('orders Processing and Completed hub');
 }
+$omCss = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($omCss, '.order-sheet-card')
+    || !preg_match('/\.order-sheet\s*\{[^}]*width:\s*max-content/', $omCss)
+    || !str_contains($omCss, 'flex-wrap: nowrap')
+    || !str_contains($omCss, 'grid-template-columns: 240px minmax(0, 1fr)')
+    || str_contains($omCss, 'min-width: 1900px')) {
+    fail('orders sheet still squeezes into the viewport');
+} else {
+    ok('orders sheet scrolls instead of squeezing');
+}
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
     || !str_contains($ordersPage, 'data-orig-live')
@@ -1697,7 +1707,7 @@ foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden
     }
 }
 ok('tests_run OM coverage needles');
-foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push', 'append unpaid LIVE grows existing invoice', 'append skips this invoice, blocks other open, mixed bill-as', 'append rejected on paid invoice', 'append rejected on sent invoice'] as $needle) {
+foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push', 'append unpaid LIVE grows existing invoice', 'append unpaid LIVE grows generated invoice', 'append skips this invoice, blocks other open, mixed bill-as', 'append rejected on paid invoice'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1807,7 +1817,8 @@ if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
     || !str_contains($invoiceGenerate, 'name="destination"')
     || !str_contains($invoiceGenerate, 'Add to existing')
     || !str_contains($invoiceGenerate, 'existing_invoice_id')
-    || !str_contains($invoiceGenerate, 'already sent for payment')
+    || !str_contains($invoiceGenerate, 'Use Add to existing to put these sites')
+    || !str_contains($invoiceGenerate, 'Paid invoices cannot take more sites')
     || str_contains($invoiceGenerate, 'name="invoice_number"')) {
     fail('invoice generate missing add-to-existing unpaid destination');
 } else {

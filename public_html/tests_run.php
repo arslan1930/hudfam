@@ -4948,20 +4948,59 @@ try {
             fail('open invoice did not block a second bill');
         }
 
-        $sentBlocked = false;
+        $sameOnGenerated = false;
         try {
             append_orders_to_invoice((int) $pipeInvId, $pipeLines, $pipeReady);
         } catch (InvalidArgumentException $e) {
-            $sentBlocked = str_contains($e->getMessage(), 'already sent for payment');
+            $sameOnGenerated = str_contains($e->getMessage(), 'already on this invoice');
         }
-        $openDraftIds = [];
+        $openAppendIds = [];
         foreach (list_invoices_open_for_append(50) as $openHit) {
-            $openDraftIds[] = (int) ($openHit['id'] ?? 0);
+            $openAppendIds[] = (int) ($openHit['id'] ?? 0);
         }
-        if ($sentBlocked && !in_array((int) $pipeInvId, $openDraftIds, true)) {
-            pass('append rejected on sent invoice');
+        $growGenId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
+        update_order_item((int) $growGenId, 0, [
+            'site_name' => 'pipeline-grow-generated.com',
+            'country' => 'Germany',
+            'client_label' => 'buyer@example.com',
+            'admin_user_id' => (int) $adminUser['id'],
+            'order_date' => '2026-08-17',
+            'owner_price' => 9,
+            'decided_price' => 22,
+            'live_url' => 'https://example.com/pipeline-grow-generated',
+            'order_month' => 8,
+            'order_year' => 2026,
+        ]);
+        $growGenMarked = order_mark_completed((int) $growGenId, 'https://example.com/pipeline-grow-generated', (int) $adminUser['id']);
+        $growGenReady = list_invoiceable_order_items_by_ids([(int) $growGenId]);
+        $beforeGen = get_invoice((int) $pipeInvId);
+        $beforeGenItems = list_invoice_items((int) $pipeInvId);
+        $beforeGenTotal = (float) ($beforeGen['total_amount'] ?? 0);
+        $beforeGenNum = (string) ($beforeGen['invoice_number'] ?? '');
+        $growGenOk = false;
+        if ($sameOnGenerated
+            && in_array((int) $pipeInvId, $openAppendIds, true)
+            && !empty($growGenMarked['ok'])
+            && count($growGenReady) === 1) {
+            $growGenRes = append_orders_to_invoice(
+                (int) $pipeInvId,
+                build_invoice_lines_from_orders($growGenReady, false),
+                $growGenReady
+            );
+            $afterGen = get_invoice((int) $pipeInvId);
+            $afterGenItems = list_invoice_items((int) $pipeInvId);
+            $growGenOk = (int) ($growGenRes['added'] ?? 0) === 1
+                && count($afterGenItems) === count($beforeGenItems) + 1
+                && abs((float) ($afterGen['total_amount'] ?? 0) - ($beforeGenTotal + 22)) < 0.011
+                && (string) ($afterGen['invoice_number'] ?? '') === $beforeGenNum
+                && !invoice_is_paid($afterGen)
+                && invoice_can_append_orders($afterGen)
+                && invoice_work_status($afterGen) === 'done';
+        }
+        if ($growGenOk) {
+            pass('append unpaid LIVE grows generated invoice');
         } else {
-            fail('sent invoice was still open for append');
+            fail('append did not grow the generated unpaid invoice');
         }
 
         $draftId = create_blank_invoice((int) $adminUser['id']);
@@ -5085,19 +5124,43 @@ try {
         }
         mark_invoice_sent((int) $draftId);
         $draftSent = get_invoice((int) $draftId);
-        $sentAfterDone = false;
-        try {
-            append_orders_to_invoice(
+        $sentGrowId = add_order_pipeline_row((int) $adminUser['id'], 'buyer@example.com');
+        update_order_item((int) $sentGrowId, 0, [
+            'site_name' => 'pipeline-grow-sent.com',
+            'country' => 'Germany',
+            'client_label' => 'buyer@example.com',
+            'admin_user_id' => (int) $adminUser['id'],
+            'order_date' => '2026-08-19',
+            'owner_price' => 5,
+            'decided_price' => 11,
+            'live_url' => 'https://example.com/pipeline-grow-sent',
+            'order_month' => 8,
+            'order_year' => 2026,
+        ]);
+        order_mark_completed((int) $sentGrowId, 'https://example.com/pipeline-grow-sent', (int) $adminUser['id']);
+        $sentGrowReady = list_invoiceable_order_items_by_ids([(int) $sentGrowId]);
+        $beforeSentGrow = get_invoice((int) $draftId);
+        $beforeSentItems = list_invoice_items((int) $draftId);
+        $beforeSentTotal = (float) ($beforeSentGrow['total_amount'] ?? 0);
+        $beforeSentNum = (string) ($beforeSentGrow['invoice_number'] ?? '');
+        $sentAfterDoneOk = false;
+        if ($draftSent && invoice_is_sent_for_payment($draftSent) && count($sentGrowReady) === 1) {
+            $sentGrowRes = append_orders_to_invoice(
                 (int) $draftId,
-                build_invoice_lines_from_orders($mixReady, false),
-                $mixReady
+                build_invoice_lines_from_orders($sentGrowReady, false),
+                $sentGrowReady
             );
-        } catch (InvalidArgumentException $e) {
-            $sentAfterDone = str_contains($e->getMessage(), 'already sent for payment');
+            $afterSentGrow = get_invoice((int) $draftId);
+            $sentAfterDoneOk = (int) ($sentGrowRes['added'] ?? 0) === 1
+                && count(list_invoice_items((int) $draftId)) === count($beforeSentItems) + 1
+                && abs((float) ($afterSentGrow['total_amount'] ?? 0) - ($beforeSentTotal + 11)) < 0.011
+                && (string) ($afterSentGrow['invoice_number'] ?? '') === $beforeSentNum
+                && invoice_can_append_orders($afterSentGrow)
+                && invoice_work_status($afterSentGrow) === 'done';
         }
         if ($againOnThis && $crossBlocked && $mixBlocked
             && $draftSent && invoice_is_sent_for_payment($draftSent)
-            && $sentAfterDone) {
+            && $sentAfterDoneOk) {
             pass('append skips this invoice, blocks other open, mixed bill-as');
         } else {
             fail('append guards missed this/other invoice or mixed bill-as');
