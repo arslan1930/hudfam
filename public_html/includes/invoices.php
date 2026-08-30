@@ -353,7 +353,8 @@ function list_invoices_open_for_append(int $limit = 50): array
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
          FROM invoices i
          WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
-         ORDER BY i.invoice_date DESC, i.id DESC
+         ORDER BY CASE WHEN COALESCE(i.work_status, 'done') = 'draft' THEN 1 ELSE 0 END,
+                  i.invoice_date DESC, i.id DESC
          LIMIT " . $limit;
     try {
         return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -882,6 +883,29 @@ function invoice_is_sent_for_payment(array $invoice): bool
 function invoice_can_append_orders(array $invoice): bool
 {
     return !invoice_is_paid($invoice);
+}
+
+/** Draft vs waiting for payment — used on Add to existing and the invoice list. */
+function invoice_append_status_label(array $invoice): string
+{
+    if (invoice_is_paid($invoice)) {
+        return 'Paid';
+    }
+    if (invoice_is_draft($invoice)) {
+        return 'Draft';
+    }
+
+    return 'Waiting';
+}
+
+function invoice_generate_append_href(int $invoiceId): string
+{
+    $invoiceId = max(0, $invoiceId);
+    if ($invoiceId < 1) {
+        return 'index.php?page=admin_invoice_generate';
+    }
+
+    return 'index.php?page=admin_invoice_generate&existing=' . $invoiceId;
 }
 
 /** Empty blank draft — €0 and no line items — so the list can de-emphasize it. */

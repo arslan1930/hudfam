@@ -148,7 +148,7 @@ render_header('Invoices', 'admin');
       } elseif ($invoiceFilter === 'draft') {
           echo label_with_info('Draft invoices', 'Blank invoices that still need data. Save as done on the bill when they are ready to send.');
       } elseif ($invoiceFilter === 'unpaid') {
-          echo label_with_info('Unpaid invoices', 'Sent bills waiting for payment. Mark paid when it arrives.');
+          echo label_with_info('Unpaid invoices', 'Sent bills waiting for payment. Add sites keeps the same invoice number. Mark paid when it arrives.');
       } elseif ($invoiceFilter === 'paid') {
           echo label_with_info('Paid invoices', 'Payment received. Linked Order management rows stay Paid if you delete the bill.');
       } else {
@@ -332,28 +332,34 @@ render_header('Invoices', 'admin');
               <?php elseif ($draft): ?>
                 <span class="invoice-pay-badge is-draft" title="Still needs data — open and Save as done when ready">Draft</span>
               <?php else: ?>
-                <form method="post" class="inline" action="<?= h($listUrl) ?>"
-                      data-stay-ajax data-stay-mark-paid
-                      onsubmit="return confirm(<?= h(json_encode(
-                          'Confirm this invoice is paid?' . "\n\n"
-                          . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
-                          . ($manual
-                              ? 'This will mark the blank invoice as Paid.'
-                              : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
-                          JSON_UNESCAPED_UNICODE
-                      )) ?>);">
-                  <?= csrf_field() ?>
-                  <input type="hidden" name="action" value="mark_paid">
-                  <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                  <button class="btn-paid btn-paid-mark invoice-list-pay-btn" type="submit" title="Mark this invoice as paid">
-                    Mark paid
-                  </button>
-                </form>
+                <div class="invoice-pay-stack">
+                  <span class="invoice-pay-badge" title="Sent — waiting for payment">Waiting</span>
+                  <form method="post" class="inline" action="<?= h($listUrl) ?>"
+                        data-stay-ajax data-stay-mark-paid
+                        onsubmit="return confirm(<?= h(json_encode(
+                            'Confirm this invoice is paid?' . "\n\n"
+                            . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
+                            . ($manual
+                                ? 'This will mark the blank invoice as Paid.'
+                                : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
+                            JSON_UNESCAPED_UNICODE
+                        )) ?>);">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="mark_paid">
+                    <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
+                    <button class="btn-paid btn-paid-mark invoice-list-pay-btn" type="submit" title="Mark this invoice as paid">
+                      Mark paid
+                    </button>
+                  </form>
+                </div>
               <?php endif; ?>
             </td>
             <td class="invoice-list-actions">
               <div class="invoice-list-actions-row">
                 <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
+                <?php if (!$paid && invoice_can_append_orders($inv) && !$manual): ?>
+                  <a class="btn secondary small" href="<?= h(invoice_generate_append_href((int) $inv['id'])) ?>">Add sites</a>
+                <?php endif; ?>
                 <form method="post" class="inline" action="<?= h($listUrl) ?>"
                       onsubmit="return confirm(<?= h(json_encode(
                           $paid

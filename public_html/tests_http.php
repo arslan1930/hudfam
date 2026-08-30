@@ -623,7 +623,8 @@ $genCopy = str_contains($r['body'] ?? '', 'Tick the ones to bill')
 $groupOff = !str_contains($r['body'] ?? '', 'group_same_amount" value="1" checked');
 $addExisting = str_contains($r['body'] ?? '', 'Add to existing')
     && str_contains($r['body'] ?? '', 'name="destination"')
-    && str_contains($r['body'] ?? '', 'Draft');
+    && str_contains($r['body'] ?? '', 'Draft')
+    && str_contains($r['body'] ?? '', 'Waiting');
 if ($r['status'] === 200
     && $genCopy
     && $groupOff
