@@ -4995,7 +4995,9 @@ try {
                 && (string) ($afterGen['invoice_number'] ?? '') === $beforeGenNum
                 && !invoice_is_paid($afterGen)
                 && invoice_can_append_orders($afterGen)
-                && invoice_work_status($afterGen) === 'done';
+                && invoice_work_status($afterGen) === 'done'
+                && invoice_append_status_label($afterGen) === 'Waiting'
+                && str_contains(invoice_generate_append_href((int) $pipeInvId), 'existing=' . (int) $pipeInvId);
         }
         if ($growGenOk) {
             pass('append unpaid LIVE grows generated invoice');

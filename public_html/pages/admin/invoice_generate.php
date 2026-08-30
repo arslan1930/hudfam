@@ -36,6 +36,17 @@ foreach ($openInvoices as $openInv) {
     }
     $unpaidByBill[$billKey] = (string) ($openInv['invoice_number'] ?? '');
 }
+$preselectExistingId = (int) get('existing');
+$preselectFound = false;
+foreach ($openInvoices as $openInv) {
+    if ((int) ($openInv['id'] ?? 0) === $preselectExistingId) {
+        $preselectFound = true;
+        break;
+    }
+}
+if (!$preselectFound) {
+    $preselectExistingId = 0;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
@@ -116,6 +127,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'genera
         } elseif ($clientId > 0) {
             $back .= '&client_id=' . $clientId;
         }
+        $keepExisting = (int) post('existing_invoice_id');
+        if ($keepExisting < 1) {
+            $keepExisting = (int) get('existing');
+        }
+        if ($keepExisting > 0) {
+            $back .= (str_contains($back, '?') ? '&' : '?') . 'existing=' . $keepExisting;
+        }
         redirect($back);
     }
 }
@@ -130,8 +148,8 @@ render_header('Generate invoice', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management. New invoice gets the next number. Add to existing puts more sites on an unpaid bill (same number) — Draft or already generated. Paid invoices stay locked.') ?></h1>
-    <p class="muted">Push unpaid LIVE orders here. Create a new bill, or add them onto an unpaid invoice with the same bill-as. Paid invoices cannot take more sites.</p>
+    <h1><?= label_with_info('Generate invoice', 'Tick unpaid LIVE rows from Order management. New invoice gets the next number. Add to existing puts more sites on the same unpaid bill — Draft or Waiting (already sent, still unpaid). Paid invoices stay locked.') ?></h1>
+    <p class="muted">Push unpaid LIVE orders here. Create a new bill, or add them onto a Draft or a waiting unpaid invoice with the same bill-as. Paid invoices cannot take more sites.</p>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Order management</a>
@@ -251,55 +269,64 @@ render_header('Generate invoice', 'admin');
     </section>
 
     <section class="card">
-      <h2><?= label_with_info('Invoice details', 'New invoice: number is assigned automatically. Add to existing: any unpaid invoice with the same bill-as (Draft or already generated). Paid invoices stay locked.') ?></h2>
+      <h2><?= label_with_info('Invoice details', 'New invoice: number is assigned automatically. Add to existing: any unpaid invoice with the same bill-as — Draft, or Waiting (sent, still unpaid). Paid invoices stay locked.') ?></h2>
 
       <fieldset class="invoice-dest-mode">
         <legend class="visually-hidden">Invoice destination</legend>
         <label>
-          <input type="radio" name="destination" value="new" checked data-invoice-dest>
+          <input type="radio" name="destination" value="new" data-invoice-dest
+                 <?= $preselectExistingId > 0 ? '' : 'checked' ?>>
           New invoice
         </label>
         <label>
           <input type="radio" name="destination" value="existing" data-invoice-dest
-                 <?= $openInvoices ? '' : 'disabled' ?>>
+                 <?= $openInvoices ? '' : 'disabled' ?>
+                 <?= $preselectExistingId > 0 ? 'checked' : '' ?>>
           Add to existing
         </label>
       </fieldset>
 
-      <div id="invoice-dest-existing" hidden>
+      <div id="invoice-dest-existing" <?= $preselectExistingId > 0 ? '' : 'hidden' ?>>
         <?php if (!$openInvoices): ?>
           <p class="help">No unpaid invoices to add to. Paid invoices stay locked — generate a new invoice for more sites.</p>
         <?php else: ?>
-          <label for="invoice-existing-search">Find unpaid invoice</label>
-          <input id="invoice-existing-search" type="search" placeholder="Number or bill-as…"
+          <label for="invoice-existing-search">Find Draft or waiting invoice</label>
+          <input id="invoice-existing-search" type="search" placeholder="Number, bill-as, Draft, or Waiting…"
                  autocomplete="off" spellcheck="false" data-no-draft>
           <label for="existing_invoice_id" class="visually-hidden">Unpaid invoice</label>
           <select name="existing_invoice_id" id="existing_invoice_id" size="7" data-no-draft>
-            <option value="">— pick an unpaid invoice —</option>
+            <option value="">— pick a Draft or waiting invoice —</option>
             <?php foreach ($openInvoices as $openInv): ?>
               <?php
                 $openNum = (string) ($openInv['invoice_number'] ?? '');
                 $openBill = invoice_display_bill_as($openInv);
                 $openTotal = (float) ($openInv['total_amount'] ?? 0);
-                $openSearch = mb_strtolower($openNum . ' ' . $openBill);
+                $openStatus = invoice_append_status_label($openInv);
+                $openSearch = mb_strtolower($openNum . ' ' . $openBill . ' ' . $openStatus
+                    . (invoice_is_draft($openInv) ? '' : ' unpaid sent waiting'));
+                $openSelected = $preselectExistingId > 0 && (int) ($openInv['id'] ?? 0) === $preselectExistingId;
               ?>
               <option value="<?= (int) $openInv['id'] ?>"
                       data-number="<?= h($openNum) ?>"
                       data-total="<?= h(number_format($openTotal, 2, '.', '')) ?>"
                       data-bill-as="<?= h($openBill) ?>"
-                      data-search="<?= h($openSearch) ?>">
+                      data-status="<?= h($openStatus) ?>"
+                      data-search="<?= h($openSearch) ?>"
+                      <?= $openSelected ? 'selected' : '' ?>>
                 <?= h($openNum) ?>
+                · <?= h($openStatus) ?>
                 <?= $openBill !== '' ? ' · ' . h($openBill) : '' ?>
                 · <?= h(format_euro($openTotal)) ?>
                 · <?= (int) ($openInv['item_count'] ?? 0) ?> line<?= (int) ($openInv['item_count'] ?? 0) === 1 ? '' : 's' ?>
               </option>
             <?php endforeach; ?>
           </select>
+          <p class="help">Waiting = already sent, still unpaid. Same invoice number. Paid bills are not listed.</p>
           <p class="help" id="invoice-append-preview" hidden></p>
         <?php endif; ?>
       </div>
 
-      <div id="invoice-dest-new">
+      <div id="invoice-dest-new" <?= $preselectExistingId > 0 ? 'hidden' : '' ?>>
       <div class="form-grid">
         <div>
           <label for="invoice_number"><?= label_with_info('Invoice No.', 'Generated automatically from the last invoice number. You cannot reuse or edit it.') ?></label>
@@ -526,7 +553,7 @@ render_header('Generate invoice', 'admin');
       if (unpaidNum) {
         sentHint.hidden = false;
         sentHint.textContent = labels[0] + ' already has unpaid invoice ' + unpaidNum
-          + '. Use Add to existing to put these sites on that bill.';
+          + ' (Draft or waiting). Use Add to existing to put these sites on that bill.';
       } else {
         sentHint.hidden = true;
         sentHint.textContent = '';

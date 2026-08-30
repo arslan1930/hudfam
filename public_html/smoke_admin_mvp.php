@@ -1775,6 +1775,12 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
     fail('Invoice list/view POST forms missing csrf_field');
 } elseif (str_contains($invoiceViewCsrf, 'admin_invoice_generate&amp;client_id=')) {
     fail('Invoice view Generate another still scoped to a client folder');
+} elseif (!str_contains($invoiceViewCsrf, 'Add sites to this invoice')
+    || !str_contains($invoiceViewCsrf, 'invoice_generate_append_href')
+    || str_contains($invoiceViewCsrf, 'Generate another')
+    || str_contains($invoiceViewCsrf, 'More sites need a new bill')
+    || str_contains($invoiceViewCsrf, 'You will not be able to add more sites')) {
+    fail('invoice view missing Add sites on waiting unpaid bills');
 } else {
     ok('Invoice list/view csrf_field on POST forms');
 }
@@ -1784,6 +1790,13 @@ if (!str_contains($invoicesListCsrf, 'btn-paid-mark')
     fail('invoices list unpaid CTA is not Mark paid');
 } else {
     ok('invoices list unpaid CTA is Mark paid');
+}
+if (!str_contains($invoicesListCsrf, 'Add sites')
+    || !str_contains($invoicesListCsrf, 'invoice_generate_append_href')
+    || !str_contains($invoicesListCsrf, 'Waiting')) {
+    fail('invoices list missing Add sites on waiting bills');
+} else {
+    ok('invoices list Add sites on waiting unpaid');
 }
 if (!str_contains($invoiceViewCsrf, 'invoice-print-toolbar')
     || str_contains($invoiceViewCsrf, 'onload="window.print()"')
@@ -1819,6 +1832,11 @@ if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
     || !str_contains($invoiceGenerate, 'existing_invoice_id')
     || !str_contains($invoiceGenerate, 'Use Add to existing to put these sites')
     || !str_contains($invoiceGenerate, 'Paid invoices cannot take more sites')
+    || !str_contains($invoiceGenerate, 'Find Draft or waiting invoice')
+    || !str_contains($invoiceGenerate, 'Waiting = already sent, still unpaid')
+    || !str_contains($invoiceGenerate, "get('existing')")
+    || !str_contains($invoicesLib, 'function invoice_append_status_label')
+    || !str_contains($invoicesLib, 'function invoice_generate_append_href')
     || str_contains($invoiceGenerate, 'name="invoice_number"')) {
     fail('invoice generate missing add-to-existing unpaid destination');
 } else {

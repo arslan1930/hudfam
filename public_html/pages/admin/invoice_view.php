@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'mark_sent') {
             mark_invoice_sent($id);
-            flash('ok', 'Invoice marked as sent — waiting for payment. More sites need a new bill.');
+            flash('ok', 'Invoice marked as sent — waiting for payment. You can still add more unpaid sites to this bill.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
         if ($action === 'save_bill') {
@@ -163,14 +163,16 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php elseif ($isDraft): ?>
         <span class="invoice-pay-badge is-draft" title="Not sent yet">Draft</span>
       <?php elseif ($isManual): ?>
-        <span class="invoice-pay-badge is-done" title="Sent — waiting for payment">Done · waiting</span>
+        <span class="invoice-pay-badge is-done" title="Sent — waiting for payment">Waiting</span>
       <?php else: ?>
-        <span class="invoice-pay-badge">Unpaid · sent</span>
+        <span class="invoice-pay-badge" title="Sent — waiting for payment">Waiting</span>
       <?php endif; ?>
       <?php if ($editable): ?>
-        · <strong>Draft</strong> = still needs data · <strong>Done</strong> = sent, waiting for payment
+        · <strong>Draft</strong> = still needs data · <strong>Waiting</strong> = sent, still unpaid
       <?php elseif ($isDraft && !$isManual): ?>
         · Draft — add more sites from Generate, then Save as done to send
+      <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
+        · Waiting for payment — add more unpaid sites to this invoice, or Mark paid when it arrives
       <?php elseif ($editableBill): ?>
         · Bill as is the email or name — optional address stays hidden on the print unless filled
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
@@ -185,8 +187,8 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a>
     <?php if ($isManual): ?>
       <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
-    <?php else: ?>
-      <a class="btn secondary" href="index.php?page=admin_invoice_generate">Generate another</a>
+    <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
+      <a class="btn" href="<?= h(invoice_generate_append_href($id)) ?>">Add sites to this invoice</a>
     <?php endif; ?>
     <?php if ($editableBill): ?>
       <button class="btn" type="submit" form="generated-invoice-form">Save bill as</button>
@@ -202,7 +204,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php if ($isDraft && !$isManual && !$isPaid): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
             onsubmit="return confirm(<?= h(json_encode(
-                'Mark this invoice as sent for payment? You will not be able to add more sites to it.',
+                'Mark this invoice as sent for payment? You can still add more unpaid sites until it is paid.',
                 JSON_UNESCAPED_UNICODE
             )) ?>);">
         <?= csrf_field() ?>
