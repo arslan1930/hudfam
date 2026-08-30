@@ -20,12 +20,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $app = app_config()['app_name'] ?? 'TechxForm';
+$mailReady = function_exists('app_mail_reset_is_ready') && app_mail_reset_is_ready();
 render_header('Forgot password');
 ?>
 <div class="login-wrap">
   <div class="login-card">
     <h1>Forgot password</h1>
-    <p class="muted">Admin only — reset using your <strong>verified</strong> Admin email. Team members must ask Admin to set a new password.</p>
+    <p class="muted">Admin only — reset using your <strong>verified</strong> Admin email. Team members must ask Admin to set a new password on Users.</p>
+    <?php if (!$mailReady): ?>
+      <ul class="messages"><li class="error">Mail is not set on this server yet (mail_from / SMTP). A reset email may not arrive. Ask the person who installed the site, or recover Admin from the server (see HOSTINGER.md).</li></ul>
+    <?php endif; ?>
     <?php if ($error): ?><ul class="messages"><li class="error"><?= h($error) ?></li></ul><?php endif; ?>
     <?php if ($message): ?><ul class="messages"><li><?= h($message) ?></li></ul><?php endif; ?>
     <?php if (!$message): ?>

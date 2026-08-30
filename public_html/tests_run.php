@@ -29,6 +29,7 @@ require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/site_prices.php';
 require __DIR__ . '/includes/invoices.php';
+require __DIR__ . '/includes/mail.php';
 require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/semrush_research.php';
 require __DIR__ . '/includes/sheet_history.php';
@@ -206,6 +207,11 @@ try {
         fail('bad login should fail');
     } else {
         pass('bad login rejected');
+    }
+    if (function_exists('app_mail_reset_is_ready') && is_bool(app_mail_reset_is_ready())) {
+        pass('app_mail_reset_is_ready returns bool');
+    } else {
+        fail('app_mail_reset_is_ready missing');
     }
 
     // Admin may sign in with account email; Team may not.

@@ -5152,6 +5152,10 @@ textarea:focus-visible {
 .password-toggle:hover {
   background: #f5f7fa;
 }
+.password-caps-hint {
+  margin: 0.3rem 0 0;
+  color: var(--warn, #9a6700);
+}
 
 .users-office {
   display: grid;

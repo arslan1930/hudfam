@@ -396,6 +396,10 @@ function login_post(string $base, string $username, string $password): array
 $r = req('GET', $base . '/index.php?page=login');
 if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_contains($r['body'], 'name="_csrf"')
     && str_contains($r['body'], 'teqnowebs.com') && str_contains($r['body'], 'Sign in')
+    && str_contains($r['body'], 'Username or Admin email')
+    && str_contains($r['body'], 'password-toggle.js')
+    && str_contains($r['body'], 'Sign in to')
+    && !str_contains($r['body'], 'Shared site database')
     && !str_contains($r['body'], 'class="app-bar"')) {
     pass('login page');
 } else {
@@ -405,10 +409,16 @@ if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_c
 // Public auth routes (Account stack — must not 404)
 $r = req('GET', $base . '/index.php?page=forgot_password');
 if ($r['status'] === 200 && str_contains($r['body'], 'Forgot password')
-    && str_contains($r['body'], 'teqnowebs.com') && !str_contains($r['body'], 'class="app-bar"')) {
+    && str_contains($r['body'], 'teqnowebs.com') && !str_contains($r['body'], 'class="app-bar"')
+    && str_contains($r['body'], 'password-toggle.js')) {
     pass('forgot_password page');
 } else {
     fail('forgot_password status=' . $r['status']);
+}
+if ($r['status'] === 200 && (str_contains($r['body'], 'mail_from') || str_contains($r['body'], 'verified'))) {
+    pass('forgot_password mail or verified-email copy');
+} else {
+    fail('forgot_password missing mail/verified copy');
 }
 $r = req('GET', $base . '/index.php?page=reset_password');
 if ($r['status'] === 200 && (str_contains($r['body'], 'Reset') || str_contains($r['body'], 'password'))
@@ -438,6 +448,14 @@ if ($r['status'] === 200 && (str_contains($r['body'], 'Invalid') || str_contains
     pass('bad login stays on form');
 } else {
     fail('bad login unexpected status=' . $r['status']);
+}
+if ($r['status'] === 200
+    && str_contains($r['body'], 'value="admin"')
+    && str_contains($r['body'], 'login_help')
+    && str_contains($r['body'], 'Team: ask Admin')) {
+    pass('bad login keeps username and recovery help');
+} else {
+    fail('bad login missing kept username or recovery help');
 }
 
 // Admin login
