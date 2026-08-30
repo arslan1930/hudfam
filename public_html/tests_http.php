@@ -887,6 +887,19 @@ if (
     fail('sites-form.js must not be gzipped by asset.php');
 }
 
+$tldMtime = (string) (@filemtime(__DIR__ . '/assets/js/tld-separate.js') ?: time());
+$r = req('GET', $base . '/asset.php?f=js/tld-separate.js&v=' . rawurlencode($tldMtime));
+if (
+    $r['status'] === 200
+    && str_contains($r['body'], 'function stripSharedColumns')
+    && str_contains($r['body'], 'function domainKey')
+    && !str_contains($r['body'], "sourceSel !== '#domains'")
+) {
+    pass('tld-separate.js Delete ending strips paste and unique');
+} else {
+    fail('tld-separate.js Delete ending strip missing status=' . $r['status']);
+}
+
 // install.php locked
 $r = req('GET', $base . '/install.php');
 if ($r['status'] === 403 || str_contains($r['body'], 'Install locked')) {
