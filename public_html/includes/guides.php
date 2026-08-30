@@ -242,7 +242,7 @@ function guide_orders(): string
     return render_page_purpose(
         'Order management — Processing and Completed',
         'Processing is Website prices Processing, leftover after Website prices leaves Processing, or + Add order. Completed is after a live URL and Mark completed. Only Completed unpaid rows push to an invoice. Website prices never stores LIVE URL, profit, client, or invoice fields.',
-        'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices.',
+            'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices. Processing and Completed stay on the page as tabs — you do not have to go back to the hub.',
         [
             'Processing default view is still in Website prices Processing. Leftover stays here when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client email or name, then Mark completed — saving a live URL does not complete the row. Save still works on half-filled Processing rows.',
             'Copy selected sites or live URLs copies ticked Copy boxes on this page only. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet.',
@@ -260,7 +260,7 @@ function guide_invoices(): string
         'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Done when sent). Mark paid when payment arrives — that writes Paid back onto linked sheet rows.',
         'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
         [
-            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. New invoice gets the next number; Add to existing only for unpaid bills with the same bill-as. Group same amount is off unless you turn it on.',
+            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. New invoice gets the next number. Add to existing only for Draft bills not yet sent. An invoice already sent for payment (waiting unpaid) stays locked — generate a new bill for more sites. Group same amount is off unless you turn it on.',
             'Blank invoice: fill bill-as and line items, Save as draft or Save as done. On a generated bill, Save bill as to fix the email/name.',
             'Mark paid on the list or the open bill when payment is received. Draft / Unpaid / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Completed).',
         ]

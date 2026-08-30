@@ -1581,7 +1581,7 @@ if (!str_contains($ordersPage, 'Unpaid LIVE')
     ok('orders unpaid LIVE filter');
 }
 $ordersCss = file_get_contents($root . '/assets/css/app.css') ?: '';
-if (!str_contains($ordersPage, 'All folders')
+if (!str_contains($ordersPage, 'id="om-folder-tabs"')
     || str_contains($ordersPage, '>Folders</a>')
     || !str_contains($ordersPage, 'order-filter-bar-completed')
     || !str_contains($ordersPage, 'order-check-hint-bill')
@@ -1594,7 +1594,7 @@ if (!str_contains($ordersPage, 'All folders')
     || !str_contains($ordersCss, 'order-check-hint-bill')) {
     fail('orders missing Completed unpaid sheet UX');
 } else {
-    ok('orders Completed unpaid sheet UX (All folders, search, Bill hint, compact stats)');
+    ok('orders Completed unpaid sheet UX (folder tabs, search, Bill hint, compact stats)');
 }
 $stickyNeedle = strpos($ordersPage, 'class="actions-sticky"');
 $stickyPush = $stickyNeedle !== false ? strpos($ordersPage, "value='push_invoice'", $stickyNeedle) : false;
@@ -1697,7 +1697,7 @@ foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden
     }
 }
 ok('tests_run OM coverage needles');
-foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push', 'append unpaid LIVE grows existing invoice', 'append skips this invoice, blocks other open, mixed bill-as', 'append rejected on paid invoice'] as $needle) {
+foreach (['second push blocked while on open invoice', 'delete invoice frees order row for push', 'append unpaid LIVE grows existing invoice', 'append skips this invoice, blocks other open, mixed bill-as', 'append rejected on paid invoice', 'append rejected on sent invoice'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1760,7 +1760,8 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
     || !str_contains($invoiceViewCsrf, 'csrf_field()')
     || !str_contains($invoiceViewCsrf, "value=\"save_blank\"")
     || !str_contains($invoiceViewCsrf, "value=\"save_bill\"")
-    || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")) {
+    || !str_contains($invoiceViewCsrf, "value=\"mark_paid\"")
+    || !str_contains($invoiceViewCsrf, "value=\"mark_sent\"")) {
     fail('Invoice list/view POST forms missing csrf_field');
 } elseif (str_contains($invoiceViewCsrf, 'admin_invoice_generate&amp;client_id=')) {
     fail('Invoice view Generate another still scoped to a client folder');
@@ -1800,9 +1801,13 @@ if (!str_contains($invoiceGenerate, 'invoice-legacy-client')
 }
 if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
     || !str_contains($invoicesLib, 'function list_invoices_open_for_append')
+    || !str_contains($invoicesLib, 'function invoice_is_sent_for_payment')
+    || !str_contains($invoicesLib, 'function invoice_can_append_orders')
+    || !str_contains($invoicesLib, 'function mark_invoice_sent')
     || !str_contains($invoiceGenerate, 'name="destination"')
     || !str_contains($invoiceGenerate, 'Add to existing')
     || !str_contains($invoiceGenerate, 'existing_invoice_id')
+    || !str_contains($invoiceGenerate, 'already sent for payment')
     || str_contains($invoiceGenerate, 'name="invoice_number"')) {
     fail('invoice generate missing add-to-existing unpaid destination');
 } else {
@@ -2145,6 +2150,7 @@ if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
     ok('layout nav uses aliases for child routes');
 }
 if (!str_contains($layoutNav, "'admin_orders&folder=processing'")
+    || !str_contains($layoutNav, "'admin_orders&folder=completed'")
     || !str_contains($layoutNav, "\$activePage === 'admin_orders'")
     || !str_contains($layoutNav, "'admin_invoices&filter=unpaid'")) {
     fail('layout Order management does not open Processing');

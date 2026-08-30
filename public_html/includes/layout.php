@@ -126,7 +126,8 @@ function render_header(string $title, string $panel = ''): void
                 'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign'],
             ],
             'Office' => [
-                'admin_orders&folder=processing' => ['Order management', 'Processing · Completed'],
+                'admin_orders&folder=processing' => ['Order management', 'Processing'],
+                'admin_orders&folder=completed' => ['Completed orders', 'Unpaid LIVE · invoices'],
                 'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                 'admin_invoices&filter=unpaid' => ['Invoices', 'Printable bills from unpaid LIVE'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
@@ -263,8 +264,18 @@ function render_header(string $title, string $panel = ''): void
             if (str_contains($page, 'folder=')) {
                 parse_str(substr($page, strpos($page, '&') + 1), $qs);
                 if ($activePage === 'admin_orders') {
-                    // Sidebar opens Processing; stay lit on the hub and Completed too.
-                    $active = nav_is_active('admin_orders', $current) ? ' active' : '';
+                    $want = (string) ($qs['folder'] ?? '');
+                    $have = (string) ($_GET['folder'] ?? '');
+                    if ($want === 'processing') {
+                        $active = nav_is_active('admin_orders', $current)
+                            && ($have === 'processing' || $have === '')
+                            ? ' active' : '';
+                    } else {
+                        $active = (
+                            nav_is_active('admin_orders', $current)
+                            && $have === $want
+                        ) ? ' active' : '';
+                    }
                 } else {
                     $active = (
                         $current === $activePage

@@ -115,6 +115,27 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
     return 'index.php?' . implode('&', $bits);
 };
 
+$renderOmFolderTabs = static function (string $currentFolder, int $procN, int $compN, int $unpaidN) use ($ordersQs): void {
+    $procHref = $ordersQs(['folder' => 'processing', 'p' => 1, 'origin' => 'wp', 'status' => 'all']);
+    $compHref = $ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid']);
+    $procOn = $currentFolder === 'processing';
+    $compOn = $currentFolder === 'completed';
+    ?>
+<nav class="invoice-list-chips om-folder-tabs" id="om-folder-tabs" aria-label="Order folders">
+  <a class="btn secondary<?= $procOn ? ' active-soft' : '' ?>"
+     href="<?= h($procHref) ?>"<?= $procOn ? ' aria-current="page"' : '' ?>
+     data-om-folder-tab="processing">
+    Processing (<?= (int) $procN ?>)
+  </a>
+  <a class="btn secondary<?= $compOn ? ' active-soft' : '' ?>"
+     href="<?= h($compHref) ?>"<?= $compOn ? ' aria-current="page"' : '' ?>
+     data-om-folder-tab="completed">
+    Completed (<?= (int) $compN ?><?= $unpaidN > 0 ? ' · ' . (int) $unpaidN . ' unpaid' : '' ?>)
+  </a>
+</nav>
+    <?php
+};
+
 $listOpts = [
     'q' => $filter['q'],
     'country' => $filter['country'],
@@ -373,6 +394,7 @@ if ($isHub) {
   </div>
 </div>
 <?= guide_orders() ?>
+<?php $renderOmFolderTabs('', (int) $processingCount, (int) $completedCount, (int) $unpaidCompleted); ?>
 <div class="launch-cards om-folder-cards" id="om-folders">
   <a class="launch-card" href="index.php?page=admin_orders&amp;folder=processing" data-om-folder="processing">
     <h2>Processing</h2>
@@ -525,6 +547,9 @@ $colspan = 15;
 $placementOptions = order_placement_options();
 $filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] > 0
     || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '';
+$tabProcessingCount = count_order_pipeline_rows(['folder' => 'processing']);
+$tabCompletedCount = count_order_pipeline_rows(['folder' => 'completed']);
+$tabUnpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
 
 render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 ?>
@@ -545,18 +570,14 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <?php endif; ?>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_orders">All folders</a>
-    <?php if ($isProcessing): ?>
-      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed unpaid</a>
-    <?php else: ?>
-      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=processing">Processing</a>
-    <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoices">Invoices</a>
     <?php if ($isCompleted): ?>
       <a class="<?= h($unpaidPush['class']) ?>" href="<?= h($unpaidPush['href']) ?>"><?= h($unpaidPush['label']) ?></a>
     <?php endif; ?>
   </div>
 </div>
+
+<?php $renderOmFolderTabs($folder, (int) $tabProcessingCount, (int) $tabCompletedCount, (int) $tabUnpaidCompleted); ?>
 
 <?= guide_orders() ?>
 

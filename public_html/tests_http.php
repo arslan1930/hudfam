@@ -622,7 +622,8 @@ $genCopy = str_contains($r['body'] ?? '', 'Tick the ones to bill')
     || str_contains($r['body'] ?? '', 'Push from Completed');
 $groupOff = !str_contains($r['body'] ?? '', 'group_same_amount" value="1" checked');
 $addExisting = str_contains($r['body'] ?? '', 'Add to existing')
-    && str_contains($r['body'] ?? '', 'name="destination"');
+    && str_contains($r['body'] ?? '', 'name="destination"')
+    && str_contains($r['body'] ?? '', 'Draft');
 if ($r['status'] === 200
     && $genCopy
     && $groupOff
@@ -779,7 +780,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'om-folder-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client'];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
@@ -812,7 +813,8 @@ if ($rUnpaidOm['status'] === 200
     && str_contains($rUnpaidOm['body'], 'Unpaid to bill')
     && str_contains($rUnpaidOm['body'], 'om-status-tabs')
     && str_contains($rUnpaidOm['body'], 'status=unpaid')
-    && str_contains($rUnpaidOm['body'], 'All folders')
+    && str_contains($rUnpaidOm['body'], 'om-folder-tabs')
+    && str_contains($rUnpaidOm['body'], 'data-om-folder-tab="processing"')
     && str_contains($rUnpaidOm['body'], 'Site, client, country, admin')
     && str_contains($rUnpaidOm['body'], 'Bill</strong>, then use')
     && str_contains($rUnpaidOm['body'], 'Push to invoice')
