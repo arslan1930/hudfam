@@ -88,6 +88,22 @@ function ensure_invoice_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS invoice_events (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          invoice_id INT NULL,
+          event_type VARCHAR(40) NOT NULL DEFAULT '',
+          actor_user_id INT NULL,
+          summary VARCHAR(500) NOT NULL DEFAULT '',
+          payload TEXT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_ie_invoice (invoice_id, id),
+          INDEX idx_ie_type (event_type),
+          CONSTRAINT fk_ie_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+          CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
     // Migrate older invoice tables
     try {
         $invCols = $pdo->query('SHOW COLUMNS FROM invoices')->fetchAll(PDO::FETCH_COLUMN);
@@ -470,6 +486,144 @@ function list_invoice_linked_order_items(int $invoiceId): array
         return [];
     }
     return list_order_items_by_ids(array_values($ids));
+}
+
+/**
+ * Snapshot OM rows at bill time: site, LIVE URL, article doc, decided price.
+ *
+ * @param list<int|string> $orderIds
+ * @return list<array{order_item_id:int,site_name:string,live_url:string,article_doc_url:string,decided_price:?float}>
+ */
+function invoice_snapshot_order_rows(array $orderIds): array
+{
+    $ids = [];
+    foreach ($orderIds as $oid) {
+        $oid = (int) $oid;
+        if ($oid > 0 && !isset($ids[$oid])) {
+            $ids[$oid] = $oid;
+        }
+    }
+    $ids = array_values($ids);
+    if ($ids === []) {
+        return [];
+    }
+    $byId = [];
+    foreach (list_order_items_by_ids($ids) as $item) {
+        $byId[(int) ($item['id'] ?? 0)] = $item;
+    }
+    $out = [];
+    foreach ($ids as $id) {
+        $item = $byId[$id] ?? null;
+        if (!$item) {
+            $out[] = [
+                'order_item_id' => $id,
+                'site_name' => '',
+                'live_url' => '',
+                'article_doc_url' => '',
+                'decided_price' => null,
+            ];
+            continue;
+        }
+        $decided = $item['decided_price'] ?? null;
+        $out[] = [
+            'order_item_id' => $id,
+            'site_name' => (string) ($item['site_name'] ?? ''),
+            'live_url' => (string) ($item['live_url'] ?? ''),
+            'article_doc_url' => (string) ($item['article_doc_url'] ?? ''),
+            'decided_price' => ($decided !== null && $decided !== '') ? (float) $decided : null,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Durable invoice audit row. Never throws — billing must not fail if history cannot write.
+ *
+ * @param array<string,mixed> $payload
+ */
+function invoice_record_event(?int $invoiceId, string $eventType, ?int $actorUserId, string $summary, array $payload = []): void
+{
+    try {
+        ensure_invoice_schema();
+        $eventType = trim($eventType);
+        if ($eventType === '') {
+            return;
+        }
+        if ($actorUserId === null || $actorUserId < 1) {
+            $u = function_exists('current_user') ? current_user() : null;
+            $actorUserId = $u ? (int) ($u['id'] ?? 0) : 0;
+        }
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            $json = '{}';
+        }
+        $stmt = db()->prepare(
+            'INSERT INTO invoice_events (invoice_id, event_type, actor_user_id, summary, payload)
+             VALUES (?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $invoiceId !== null && $invoiceId > 0 ? $invoiceId : null,
+            mb_substr($eventType, 0, 40),
+            $actorUserId > 0 ? $actorUserId : null,
+            mb_substr(trim($summary), 0, 500),
+            $json,
+        ]);
+    } catch (Throwable $e) {
+        // History must never block billing.
+    }
+}
+
+function invoice_event_type_label(string $type): string
+{
+    $map = [
+        'created' => 'Created',
+        'sites_added' => 'Sites added',
+        'bill_as_saved' => 'Bill as saved',
+        'marked_sent' => 'Marked sent',
+        'marked_paid' => 'Marked paid',
+        'note_saved' => 'Note saved',
+        'blank_saved' => 'Blank invoice saved',
+        'deleted' => 'Deleted',
+    ];
+    $type = trim($type);
+    return $map[$type] ?? $type;
+}
+
+function invoice_event_actor_label(array $event): string
+{
+    $name = trim((string) ($event['actor_full_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($event['actor_username'] ?? ''));
+    }
+    return $name !== '' ? $name : 'System';
+}
+
+/** @return list<array<string,mixed>> */
+function list_invoice_events(int $invoiceId): array
+{
+    if ($invoiceId < 1) {
+        return [];
+    }
+    try {
+        ensure_invoice_schema();
+        $stmt = db()->prepare(
+            'SELECT e.*, u.username AS actor_username, u.full_name AS actor_full_name
+             FROM invoice_events e
+             LEFT JOIN users u ON u.id = e.actor_user_id
+             WHERE e.invoice_id = ?
+             ORDER BY e.id DESC'
+        );
+        $stmt->execute([$invoiceId]);
+        $rows = $stmt->fetchAll() ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+    foreach ($rows as &$row) {
+        $decoded = json_decode((string) ($row['payload'] ?? ''), true);
+        $row['payload_data'] = is_array($decoded) ? $decoded : [];
+    }
+    unset($row);
+    return $rows;
 }
 
 function get_invoice_client_profile(int $clientId): ?array
@@ -954,6 +1108,12 @@ function update_invoice_admin_note(int $invoiceId, string $note): void
         $note = mb_substr($note, 0, 255);
     }
     db()->prepare('UPDATE invoices SET admin_note=?, updated_at=NOW() WHERE id=?')->execute([$note, $invoiceId]);
+    invoice_record_event($invoiceId, 'note_saved', null, $note !== '' ? 'Note saved.' : 'Note cleared.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => (float) ($invoice['total_amount'] ?? 0),
+        'rows' => [],
+    ]);
 }
 
 /**
@@ -1003,6 +1163,13 @@ function update_invoice_bill_header(int $invoiceId, array $header): void
         trim((string) ($header['cost_center'] ?? '')),
         trim((string) ($header['orderer'] ?? '')),
         $invoiceId,
+    ]);
+    invoice_record_event($invoiceId, 'bill_as_saved', null, 'Bill as saved.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => (float) ($invoice['total_amount'] ?? 0),
+        'rows' => [],
+        'bill_to_name' => $billName,
     ]);
 }
 
@@ -1154,6 +1321,12 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
         }
         throw $e;
     }
+    invoice_record_event($invoiceId, 'blank_saved', null, $workStatus === 'done' ? 'Blank invoice saved as done.' : 'Blank invoice saved as draft.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => $total,
+        'rows' => [],
+    ]);
 }
 
 /**
@@ -1378,6 +1551,16 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
             }
 
             $pdo->commit();
+            $orderIds = $isManual ? [] : invoice_order_ids_from_lines($normalized);
+            $rowCount = count($orderIds);
+            invoice_record_event($invoiceId, 'created', $createdBy, $isManual
+                ? 'Created blank invoice.'
+                : ('Created invoice with ' . $rowCount . ' site' . ($rowCount === 1 ? '' : 's') . '.'), [
+                'invoice_number' => $invoiceNumber,
+                'total_before' => 0,
+                'total_after' => round($total, 2),
+                'rows' => invoice_snapshot_order_rows($orderIds),
+            ]);
             return $invoiceId;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -1533,6 +1716,14 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
         throw $e;
     }
 
+    $addedIds = invoice_order_ids_from_lines($filtered);
+    invoice_record_event($invoiceId, 'sites_added', null, 'Added ' . $addedRows . ' site' . ($addedRows === 1 ? '' : 's') . '.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => round((float) ($invoice['total_amount'] ?? 0), 2),
+        'total_after' => $newTotal,
+        'rows' => invoice_snapshot_order_rows($addedIds),
+    ]);
+
     return [
         'id' => $invoiceId,
         'added' => $addedRows,
@@ -1581,6 +1772,20 @@ function mark_invoice_payment_received(int $invoiceId): void
         $pdo->rollBack();
         throw $e;
     }
+    $paidIds = [];
+    foreach ($items as $item) {
+        foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+            if ($oid > 0) {
+                $paidIds[] = $oid;
+            }
+        }
+    }
+    invoice_record_event($invoiceId, 'marked_paid', null, 'Payment marked received.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => (float) ($invoice['total_amount'] ?? 0),
+        'rows' => invoice_snapshot_order_rows($paidIds),
+    ]);
 }
 
 function invoice_is_paid(array $invoice): bool
@@ -1611,10 +1816,41 @@ function mark_invoice_sent(int $invoiceId): void
         invoice_is_manual($invoice) ? 1 : 0,
         $invoiceId,
     ]);
+    $sentIds = [];
+    foreach (list_invoice_items($invoiceId) as $item) {
+        foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+            if ($oid > 0) {
+                $sentIds[] = $oid;
+            }
+        }
+    }
+    invoice_record_event($invoiceId, 'marked_sent', null, 'Marked as sent — waiting for payment.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => (float) ($invoice['total_amount'] ?? 0),
+        'rows' => invoice_snapshot_order_rows($sentIds),
+    ]);
 }
 
 function delete_invoice(int $id): void
 {
     ensure_invoice_schema();
+    $invoice = get_invoice($id);
+    if ($invoice) {
+        $orderIds = [];
+        foreach (list_invoice_items($id) as $item) {
+            foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+                if ($oid > 0) {
+                    $orderIds[] = $oid;
+                }
+            }
+        }
+        invoice_record_event($id, 'deleted', null, 'Invoice deleted.', [
+            'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+            'total_before' => (float) ($invoice['total_amount'] ?? 0),
+            'total_after' => 0,
+            'rows' => invoice_snapshot_order_rows($orderIds),
+        ]);
+    }
     db()->prepare('DELETE FROM invoices WHERE id=?')->execute([$id]);
 }

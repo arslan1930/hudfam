@@ -46,6 +46,7 @@ function ensure_order_schema(): void
           owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           live_url VARCHAR(500) NOT NULL DEFAULT '',
+          article_doc_url VARCHAR(500) NOT NULL DEFAULT '',
           client_label VARCHAR(255) NOT NULL DEFAULT '',
           admin_user_id INT NULL,
           order_date DATE NULL,
@@ -175,6 +176,9 @@ function ensure_order_schema(): void
         }
         if ($stageWasMissing) {
             $folderAlters[] = "ADD COLUMN order_stage ENUM('processing','completed') NOT NULL DEFAULT 'processing' AFTER site_price_row_id";
+        }
+        if (!in_array('article_doc_url', $cols, true)) {
+            $folderAlters[] = "ADD COLUMN article_doc_url VARCHAR(500) NOT NULL DEFAULT '' AFTER live_url";
         }
         if ($folderAlters) {
             $pdo->exec('ALTER TABLE order_items ' . implode(', ', $folderAlters));
@@ -316,6 +320,30 @@ function order_invoice_description(array $row): string
     }
     $url = trim((string) ($row['live_url'] ?? ''));
     return 'Article Published -' . "\n" . $url;
+}
+
+/** Google Doc (or other https) URL for the piece — not the live page, not printed on invoices. */
+function order_normalize_article_doc_url(string $raw): string
+{
+    $url = trim($raw);
+    if ($url === '') {
+        return '';
+    }
+    if (!preg_match('#^https?://#i', $url)) {
+        if (preg_match('#^(?:www\.)?(?:docs|drive)\.google\.com/#i', $url)) {
+            $url = 'https://' . $url;
+        } else {
+            return '';
+        }
+    }
+    $lower = strtolower($url);
+    if (str_starts_with($lower, 'javascript:') || str_starts_with($lower, 'data:')) {
+        return '';
+    }
+    if (mb_strlen($url) > 500) {
+        $url = mb_substr($url, 0, 500);
+    }
+    return $url;
 }
 
 function parse_money($value): float
@@ -982,7 +1010,7 @@ function add_order_year_end(int $clientId, int $endingYear): int
 }
 
 /**
- * @param array{site_name?:string,site_note?:string,placement_type?:string,country?:string,order_month?:mixed,period_end_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string} $data
+ * @param array{site_name?:string,site_note?:string,placement_type?:string,country?:string,order_month?:mixed,period_end_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string,article_doc_url?:string} $data
  */
 function update_order_item(int $itemId, int $clientId, array $data): void
 {
@@ -1079,6 +1107,10 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $sets[] = 'order_date=?';
         $params[] = normalize_order_date($data['order_date']) ?: date('Y-m-d');
     }
+    if (array_key_exists('article_doc_url', $data)) {
+        $sets[] = 'article_doc_url=?';
+        $params[] = order_normalize_article_doc_url((string) $data['article_doc_url']);
+    }
 
     $sql = 'UPDATE order_items SET ' . implode(', ', $sets)
         . ' WHERE id=? AND row_type=\'site\'';
@@ -1104,6 +1136,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
  * @param array<int|string,mixed> $owner
  * @param array<int|string,mixed> $decided
  * @param array<int|string,string> $urls
+ * @param array<int|string,string> $articleDocUrls
  */
 function save_order_sheet_rows(
     int $clientId,
@@ -1119,7 +1152,8 @@ function save_order_sheet_rows(
     array $urls,
     array $clientLabels = [],
     array $adminIds = [],
-    array $dates = []
+    array $dates = [],
+    array $articleDocUrls = []
 ): int {
     ensure_order_schema();
     $saved = 0;
@@ -1148,6 +1182,9 @@ function save_order_sheet_rows(
         }
         if (array_key_exists($id, $dates) || array_key_exists((string) $id, $dates)) {
             $data['order_date'] = $dates[$id] ?? '';
+        }
+        if (array_key_exists($id, $articleDocUrls) || array_key_exists((string) $id, $articleDocUrls)) {
+            $data['article_doc_url'] = $articleDocUrls[$id] ?? '';
         }
         update_order_item($itemId, $clientId, $data);
         $saved++;
@@ -1396,9 +1433,9 @@ function order_pipeline_where_sql(array $opts = []): array
     if ($q !== '') {
         $like = '%' . $q . '%';
         $where[] = '(i.site_name LIKE ? OR i.site_note LIKE ? OR i.country LIKE ?
-            OR i.client_label LIKE ? OR i.live_url LIKE ?
+            OR i.client_label LIKE ? OR i.live_url LIKE ? OR i.article_doc_url LIKE ?
             OR COALESCE(u.full_name, \'\') LIKE ? OR COALESCE(u.username, \'\') LIKE ?)';
-        array_push($params, $like, $like, $like, $like, $like, $like, $like);
+        array_push($params, $like, $like, $like, $like, $like, $like, $like, $like);
     }
     $country = trim((string) ($opts['country'] ?? ''));
     if ($country !== '') {
@@ -1676,6 +1713,7 @@ function order_pipeline_export_rows(array $items): array
             'owner' => format_money($row['owner_price']),
             'decided' => format_money($row['decided_price']),
             'profit' => format_money($profit),
+            'article_doc_url' => (string) ($row['article_doc_url'] ?? ''),
             'live_url' => (string) ($row['live_url'] ?? ''),
             'paid' => order_is_paid($row) ? 'Paid' : '',
             'month' => order_month_label((int) ($row['order_month'] ?? 0)),
@@ -1754,12 +1792,12 @@ function order_pipeline_download_csv(array $rows): void
     fputcsv($out, []);
     fputcsv($out, [
         'Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink',
-        'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
+        'Owner price', 'Decided price', 'Article doc', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
     ]);
     foreach ($rows as $r) {
         fputcsv($out, [
             $r['country'], $r['date'], $r['admin'], $r['client'], $r['site'], $r['note'] ?? '',
-            $r['placement'] ?? '', $r['owner'], $r['decided'], $r['live_url'], $r['paid'] ?? '',
+            $r['placement'] ?? '', $r['owner'], $r['decided'], $r['article_doc_url'] ?? '', $r['live_url'], $r['paid'] ?? '',
             $r['profit'], $r['month'], $r['end_month'] ?? '', $r['year'], $r['status'],
         ]);
     }
@@ -1773,8 +1811,8 @@ function order_pipeline_download_xls(array $rows): void
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Pragma: no-cache');
     header('Expires: 0');
-    $keys = ['country', 'date', 'admin', 'client', 'site', 'note', 'placement', 'owner', 'decided', 'live_url', 'paid', 'profit', 'month', 'end_month', 'year', 'status'];
-    $heads = ['Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink', 'Owner price', 'Decided price', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status'];
+    $keys = ['country', 'date', 'admin', 'client', 'site', 'note', 'placement', 'owner', 'decided', 'article_doc_url', 'live_url', 'paid', 'profit', 'month', 'end_month', 'year', 'status'];
+    $heads = ['Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink', 'Owner price', 'Decided price', 'Article doc', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status'];
     echo '<html><head><meta charset="utf-8"></head><body>';
     echo '<table border="1" cellpadding="4" cellspacing="0">';
     echo '<tr><th colspan="' . count($heads) . '">Order management</th></tr>';

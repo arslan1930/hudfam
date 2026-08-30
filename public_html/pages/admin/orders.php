@@ -185,16 +185,17 @@ $postedFields = static function (): array {
         (array) ($_POST['client_label'] ?? []),
         (array) ($_POST['admin_user_id'] ?? []),
         (array) ($_POST['order_date'] ?? []),
+        (array) ($_POST['article_doc_url'] ?? []),
     ];
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     try {
-        [$sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates] = $postedFields();
-        $saveCurrent = static function () use ($sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates): int {
+        [$sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls] = $postedFields();
+        $saveCurrent = static function () use ($sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls): int {
             return save_order_sheet_rows(
-                0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates
+                0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls
             );
         };
 
@@ -543,7 +544,7 @@ foreach ($items as $row) {
     }
 }
 
-$colspan = 15;
+$colspan = 16;
 $placementOptions = order_placement_options();
 $filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] > 0
     || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '';
@@ -595,7 +596,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <label class="sheet-search" for="order-sheet-search" style="margin:0">
       <span class="visually-hidden">Search orders</span>
       <input id="order-sheet-search" type="search" name="q" value="<?= h($filter['q']) ?>"
-             placeholder="<?= $isCompleted ? 'Site, client, country, admin' : 'Search site, client, country, admin…' ?>" autocomplete="off" spellcheck="false" data-no-draft>
+             placeholder="<?= $isCompleted ? 'Site, client, country, admin, doc' : 'Search site, client, country, admin, doc…' ?>" autocomplete="off" spellcheck="false" data-no-draft>
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Country</span>
@@ -810,6 +811,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
           <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?></th>
           <th class="col-price"><?= label_with_info('Owner', 'Owner price — what you pay the site owner / publisher.') ?></th>
           <th class="col-price"><?= label_with_info('Decided', 'Decided price — what the client pays you. Profit = Decided − Owner.') ?></th>
+          <th class="col-doc"><?= label_with_info('Article doc', 'Google Doc for the piece that was or will be published. Not the live page. Internal only — not printed on the invoice.') ?></th>
           <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?></th>
           <th class="col-paid"><?= $isProcessing
               ? label_with_info('Complete', 'Mark this row completed after the live URL is filled. Moves it to Completed orders and sets Website prices to Completed.')
@@ -971,6 +973,15 @@ if ($compactUnpaidStats && !$showPagingStats) {
                    name="decided_price[<?= $id ?>]" value="<?= h(format_money($row['decided_price'])) ?>"
                    data-decided placeholder="0.00" autocomplete="off">
           </td>
+          <td class="col-doc">
+            <div class="open-site-cell order-doc-cell" data-open-site-cell>
+              <input class="cell-input" type="text" name="article_doc_url[<?= $id ?>]"
+                     value="<?= h((string) ($row['article_doc_url'] ?? '')) ?>"
+                     placeholder="Google Doc URL" autocomplete="off"
+                     data-open-site-host>
+              <?= render_open_site_anchor((string) ($row['article_doc_url'] ?? ''), ['class' => 'order-open-site', 'label' => 'Open']) ?>
+            </div>
+          </td>
           <td class="col-live">
             <div class="open-site-cell order-live-cell" data-open-site-cell>
               <input class="cell-input" type="text" name="live_url[<?= $id ?>]"
@@ -1057,6 +1068,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
           <td colspan="8"><strong>Page totals</strong></td>
           <td class="col-price"><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
           <td class="col-price"><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
+          <td class="col-doc"></td>
           <td class="col-live">
             <?php if ($isProcessing): ?>
               <span class="muted">With live URL </span>

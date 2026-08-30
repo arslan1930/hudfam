@@ -1537,6 +1537,17 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .order-live-cell .order-open-site {
   flex: 0 0 auto;
 }
+.order-doc-cell {
+  flex-wrap: nowrap;
+  min-width: 14rem;
+}
+.order-doc-cell .cell-input {
+  flex: 1 1 auto;
+  min-width: 10rem;
+}
+.order-doc-cell .order-open-site {
+  flex: 0 0 auto;
+}
 .swe-open-count {
   min-width: 6.5rem;
   padding: 0.4rem 0.5rem;
@@ -2973,6 +2984,7 @@ tr.swe-row-updated {
 .order-sheet th.col-price .with-info-label,
 .order-sheet th.col-profit .with-info-label,
 .order-sheet th.col-live .with-info-label,
+.order-sheet th.col-doc .with-info-label,
 .order-sheet th.col-placement .with-info-label {
   white-space: nowrap;
   word-break: normal;
@@ -3879,6 +3891,7 @@ a.card.stat:focus-visible {
 .order-sheet .col-profit { min-width: 6.5rem; width: 6.5rem; text-align: right; white-space: nowrap; }
 .order-sheet .col-del { width: 4.8rem; min-width: 4.8rem; text-align: center; white-space: nowrap; }
 .order-sheet .col-live { min-width: 16rem; }
+.order-sheet .col-doc { min-width: 16rem; }
 .order-sheet .col-paid { min-width: 9.5rem; width: 9.5rem; text-align: center; }
 .btn-paid {
   display: inline-flex;
@@ -4491,6 +4504,42 @@ a.card.stat:focus-visible {
   align-items: center;
   gap: 0.65rem 1rem;
   margin: 0 0 0.85rem;
+}
+.invoice-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.invoice-history-item {
+  border-left: 3px solid var(--brand-2);
+  padding: 0 0 0.75rem 0.7rem;
+  margin: 0 0 0.7rem;
+}
+.invoice-history-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.invoice-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.invoice-history-who,
+.invoice-history-type {
+  color: #111827;
+  font-weight: 600;
+}
+.invoice-history-summary {
+  margin: 0.25rem 0 0;
+}
+.invoice-history-sites {
+  margin-top: 0.35rem;
+}
+.invoice-history-sites ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
 }
 .invoice-print-body .invoice-doc {
   max-width: 820px;
