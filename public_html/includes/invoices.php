@@ -340,7 +340,8 @@ function list_invoices(array $opts = []): array
 }
 
 /**
- * Draft invoices that can still receive unpaid LIVE rows (not yet sent for payment).
+ * Unpaid invoices that can still receive unpaid LIVE rows (Draft or generated Done).
+ * Paid bills stay locked.
  *
  * @return list<array<string,mixed>>
  */
@@ -352,7 +353,6 @@ function list_invoices_open_for_append(int $limit = 50): array
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
          FROM invoices i
          WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
-           AND COALESCE(i.work_status, 'done') = 'draft'
          ORDER BY i.invoice_date DESC, i.id DESC
          LIMIT " . $limit;
     try {
@@ -878,10 +878,10 @@ function invoice_is_sent_for_payment(array $invoice): bool
     return !invoice_is_paid($invoice) && invoice_work_status($invoice) === 'done';
 }
 
-/** Only Draft invoices can still receive more unpaid LIVE rows. */
+/** Unpaid invoices can still receive more unpaid LIVE rows. Paid stays locked. */
 function invoice_can_append_orders(array $invoice): bool
 {
-    return !invoice_is_paid($invoice) && invoice_is_draft($invoice);
+    return !invoice_is_paid($invoice);
 }
 
 /** Empty blank draft — €0 and no line items — so the list can de-emphasize it. */
@@ -1387,14 +1387,8 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
     if (!$invoice) {
         throw new InvalidArgumentException('Invoice not found.');
     }
-    if (($invoice['payment_status'] ?? 'unpaid') === 'paid') {
+    if (($invoice['payment_status'] ?? 'unpaid') === 'paid' || !invoice_can_append_orders($invoice)) {
         throw new InvalidArgumentException('Paid invoices cannot take more orders. Generate a new bill instead.');
-    }
-    if (!invoice_can_append_orders($invoice)) {
-        throw new InvalidArgumentException(
-            'Invoice ' . (string) ($invoice['invoice_number'] ?? '')
-            . ' was already sent for payment. Generate a new invoice for more sites.'
-        );
     }
     invoice_assert_single_bill_as($picked);
     $existingBill = invoice_display_bill_as($invoice);
@@ -1494,7 +1488,7 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
         $newTotal = round((float) ($invoice['total_amount'] ?? 0) + $addedTotal, 2);
         $billTo = $existingBill !== '' ? $existingBill : $fromOrders;
         $isManual = 0;
-        $workStatus = 'draft';
+        $workStatus = invoice_is_draft($invoice) ? 'draft' : 'done';
         $pdo->prepare(
             'UPDATE invoices
              SET total_amount=?, bill_to_name=?, client_name=?, is_manual=?, work_status=?, updated_at=NOW()
