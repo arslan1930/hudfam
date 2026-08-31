@@ -28,6 +28,7 @@
   var redoStack = [];
   var lastSnapshot = normalizeText(ta.value);
   var lastSavedText = lastSnapshot;
+  var knownServerCount = parseInt(shell.getAttribute('data-site-count') || String(linesOf(lastSnapshot).length), 10) || 0;
   var applyingHistory = false;
   var saveTimer = null;
   var saveInFlight = false;
@@ -180,8 +181,14 @@
     body.set('action', 'autosave_sites');
     body.set('ajax', '1');
     body.set('sites_text', text);
+    body.set('expected_count', String(knownServerCount));
     var writerAt = shell.getAttribute('data-writer-at') || '';
     if (writerAt) body.set('writer_at', writerAt);
+    // CSRF if present in page meta / helper
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta && csrfMeta.getAttribute('content')) {
+      body.set('_csrf', csrfMeta.getAttribute('content'));
+    }
 
     fetch(postUrl, {
       method: 'POST',
@@ -217,6 +224,8 @@
           }
         }
         var n = typeof data.site_count === 'number' ? data.site_count : linesOf(ta.value).length;
+        knownServerCount = n;
+        shell.setAttribute('data-site-count', String(n));
         updateCounts(n);
         if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
         if (data.writer_name || data.writer_at) {
@@ -251,13 +260,18 @@
             lastSnapshot = normalizeText(savedRaw);
             lastSavedText = lastSnapshot;
             applyingHistory = false;
-            updateCounts();
+            var nReload = typeof data.site_count === 'number' ? data.site_count : linesOf(lastSnapshot).length;
+            knownServerCount = nReload;
+            shell.setAttribute('data-site-count', String(nReload));
+            updateCounts(nReload);
           }
           undoStack = [];
           redoStack = [];
           syncHistoryButtons();
           if (data.writer_name || data.writer_at) {
             setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+          } else {
+            setAutosaveLabel('Reloaded');
           }
         } else {
           setAutosaveLabel('Save failed');

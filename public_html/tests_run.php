@@ -1621,11 +1621,52 @@ try {
         fail('extract sites writer missing after save: ' . json_encode($writerSave));
     }
     $writerConflict = extract_sites_writer_conflict($batchId, (int) $adminUser['id'], '2000-01-01 00:00:00');
-    $sameWriter = extract_sites_writer_conflict($batchId, (int) $teamUser['id'], '2000-01-01 00:00:00');
-    if (!empty($writerConflict['conflict']) && $sameWriter === null) {
-        pass('extract sites writer conflict when another user has a newer save');
+    $sameWriterStale = extract_sites_writer_conflict($batchId, (int) $teamUser['id'], '2000-01-01 00:00:00');
+    $freshStamp = trim((string) ($written['sites_writer_at'] ?? ''));
+    $sameWriterFresh = extract_sites_writer_conflict($batchId, (int) $teamUser['id'], $freshStamp);
+    if (!empty($writerConflict['conflict'])
+        && !empty($sameWriterStale['conflict'])
+        && $sameWriterFresh === null) {
+        pass('extract sites writer conflict on stale stamp (any user); fresh stamp OK');
     } else {
-        fail('extract sites writer conflict unexpected: ' . json_encode([$writerConflict, $sameWriter]));
+        fail('extract sites writer conflict unexpected: ' . json_encode([$writerConflict, $sameWriterStale, $sameWriterFresh]));
+    }
+    $countConflict = extract_sites_writer_conflict(
+        $batchId,
+        (int) $teamUser['id'],
+        $freshStamp,
+        max(0, (int) ($written['site_count'] ?? 0) - 1)
+    );
+    if (!empty($countConflict['conflict'])) {
+        pass('extract sites conflict when expected_count is behind server');
+    } else {
+        fail('extract expected_count conflict missing: ' . json_encode($countConflict));
+    }
+    // Filter & add path stamps writer so open tabs cannot wipe new domains.
+    $beforeWriter = trim((string) (get_extract_batch($batchId)['sites_writer_at'] ?? ''));
+    usleep(1100000); // writer_at is DATETIME second precision
+    $addStamp = add_domains_to_extract_sites(
+        [['domain' => 'txfpush-stamp-extra.com', 'prospect_site_id' => null]],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe'
+    );
+    $afterAdd = get_extract_batch($batchId);
+    $afterWriter = trim((string) ($afterAdd['sites_writer_at'] ?? ''));
+    $staleAfterAdd = extract_sites_writer_conflict($batchId, (int) $teamUser['id'], $beforeWriter);
+    if ((int) ($addStamp['added'] ?? 0) === 1
+        && $afterWriter !== ''
+        && strcmp($afterWriter, $beforeWriter) > 0
+        && !empty($staleAfterAdd['conflict'])) {
+        pass('Filter & add into Extracting stamps writer and conflicts stale tabs');
+    } else {
+        fail('Filter & add writer stamp: ' . json_encode([
+            'add' => $addStamp,
+            'before' => $beforeWriter,
+            'after' => $afterWriter,
+            'conflict' => $staleAfterAdd,
+        ]));
     }
     $missingBatch = extract_sites_writer_conflict(999999999, (int) $adminUser['id'], '2000-01-01 00:00:00');
     if (is_array($missingBatch) && empty($missingBatch['conflict']) && ($missingBatch['ok'] ?? true) === false) {

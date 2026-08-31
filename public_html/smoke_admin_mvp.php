@@ -1004,6 +1004,8 @@ if (!str_contains($teamHistory, 'count_prospect_batches')
 $extractSitesJs = file_get_contents($root . '/assets/js/extract-sites-list.js') ?: '';
 $semrushSheetJs = file_get_contents($root . '/assets/js/semrush-sheet.js') ?: '';
 if (!str_contains($extractSitesJs, 'writer_at')
+    || !str_contains($extractSitesJs, 'expected_count')
+    || !str_contains($extractSitesJs, 'knownServerCount')
     || !str_contains($extractSitesJs, 'data.conflict')
     || !str_contains($extractSitesJs, 'err.conflict')
     || !str_contains($extractSitesJs, 'lastSavedText = lastSnapshot')
@@ -1016,6 +1018,17 @@ if (!str_contains($extractSitesJs, 'writer_at')
     fail('Extracting/Semrush sheets missing last-writer conflict check');
 } else {
     ok('Extracting + Semrush last-writer conflict');
+}
+$extractBatchConflict = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+$extractLibConflict = file_get_contents($root . '/includes/extracting.php') ?: '';
+if (!str_contains($extractBatchConflict, 'data-site-count')
+    || !str_contains($extractBatchConflict, 'expected_count')
+    || !str_contains($extractBatchConflict, 'Filter &amp; add')
+    || !str_contains($extractLibConflict, 'stamp_extract_sites_writer($batchId, $uid)')
+    || !str_contains($extractLibConflict, '$expectedCount')) {
+    fail('Extract Sites list missing stale-autosave guards (writer stamp + expected_count)');
+} else {
+    ok('Extract Sites list stale-autosave guards');
 }
 $sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($sweAppSmoke, 'new from Push')

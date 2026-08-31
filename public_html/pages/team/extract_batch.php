@@ -19,9 +19,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'autosave_sites') {
         $raw = (string) post('sites_text');
         $actorId = (int) ($user['id'] ?? 0) ?: null;
-        $conflict = extract_sites_writer_conflict($id, $actorId, (string) post('writer_at'));
+        $expectedCount = post('expected_count') !== '' && post('expected_count') !== null
+            ? (int) post('expected_count')
+            : null;
+        $conflict = extract_sites_writer_conflict(
+            $id,
+            $actorId,
+            (string) post('writer_at'),
+            $expectedCount
+        );
         if (is_array($conflict) && !empty($conflict['conflict'])) {
+            $fresh = get_extract_batch($id);
             $conflict['domains'] = get_extract_batch_domains($id);
+            $conflict['site_count'] = (int) ($fresh['site_count'] ?? count($conflict['domains']));
+            $conflict['writer_at'] = (string) ($fresh['sites_writer_at'] ?? ($conflict['writer_at'] ?? ''));
+            $conflict['writer_name'] = trim((string) (($fresh['sites_writer_name'] ?? '') !== ''
+                ? $fresh['sites_writer_name']
+                : ($fresh['sites_writer_username'] ?? ($conflict['writer_name'] ?? ''))));
             if ($wantsJson) {
                 extract_json_response($conflict, 409);
             }
@@ -183,6 +197,7 @@ render_header('Extracting · ' . $country, 'team');
       Sites waiting to extract for <strong><?= h($country) ?></strong>.
       Changes <strong>autosave</strong> in real time.
       <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page.
+      If another teammate (or Filter &amp; add) updates this list while you have it open, your tab reloads the full list instead of overwriting.
       If emptied, this page stays open; the country hides when you return to Extracting sites,
       and the row is removed after <strong>1 hour</strong> unless new sites are added (new sites appear at the top).
     </p>
@@ -196,6 +211,7 @@ render_header('Extracting · ' . $country, 'team');
       data-batch-id="<?= (int) $id ?>"
       data-post-url="index.php?page=team_extract_batch&amp;id=<?= (int) $id ?>"
       data-writer-at="<?= h((string) ($batch['sites_writer_at'] ?? '')) ?>"
+      data-site-count="<?= (int) count($domains) ?>"
     >
       <div class="domains-paste-head">
         <label for="sites_list_text">Sites (root domains)</label>

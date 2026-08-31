@@ -200,6 +200,10 @@ function add_domains_to_extract_sites(
         }
     }
     refresh_extract_batch_site_count($batchId);
+    // Stamp writer so open Sites-list tabs see a conflict instead of wiping Filter & add inserts.
+    if ($added > 0) {
+        stamp_extract_sites_writer($batchId, $uid);
+    }
 
     return ['batch_id' => $batchId, 'added' => $added];
 }
@@ -253,38 +257,53 @@ function stamp_extract_sites_writer(int $batchId, ?int $userId): void
 }
 
 /**
- * @return array{ok:bool,conflict?:bool,error?:string,writer_name?:string,writer_at?:string}|null
+ * Block stale Sites-list autosaves that would wipe domains added by Filter & add
+ * or another open tab.
+ *
+ * @return array{ok:bool,conflict?:bool,error?:string,writer_name?:string,writer_at?:string,site_count?:int}|null
  */
-function extract_sites_writer_conflict(int $batchId, ?int $actorId, string $clientAt): ?array
-{
+function extract_sites_writer_conflict(
+    int $batchId,
+    ?int $actorId,
+    string $clientAt,
+    ?int $expectedCount = null
+): ?array {
     $batch = get_extract_batch($batchId);
     if (!$batch) {
         return ['ok' => false, 'error' => 'Batch not found.'];
     }
     $dbAt = trim((string) ($batch['sites_writer_at'] ?? ''));
-    $dbWriter = (int) ($batch['sites_writer_id'] ?? 0);
-    if ($clientAt === '' || $dbAt === '' || $dbWriter < 1) {
+    $dbCount = (int) ($batch['site_count'] ?? 0);
+    $clientAt = trim($clientAt);
+    // $actorId kept for call-site compatibility; conflicts apply to every open tab.
+    unset($actorId);
+    $staleStamp = ($dbAt !== '' && ($clientAt === '' || strcmp($dbAt, $clientAt) > 0));
+    $staleCount = ($expectedCount !== null && $expectedCount >= 0 && $dbCount > $expectedCount);
+
+    if (!$staleStamp && !$staleCount) {
         return null;
     }
-    if ($actorId !== null && $actorId > 0 && $dbWriter === $actorId) {
-        return null;
-    }
-    if (strcmp($dbAt, $clientAt) <= 0) {
-        return null;
-    }
+
     $name = trim((string) (($batch['sites_writer_name'] ?? '') !== ''
         ? $batch['sites_writer_name']
         : ($batch['sites_writer_username'] ?? '')));
     if ($name === '') {
         $name = 'Someone';
     }
+    $msg = $staleCount && !$staleStamp
+        ? ('Sites list grew to ' . $dbCount . ' while this page was open (was '
+            . (int) $expectedCount . '). Reloaded the full list — review before editing again.')
+        : ($name . ' updated this Sites list'
+            . ($dbAt !== '' ? ' at ' . substr($dbAt, 0, 16) : '')
+            . '. Reloaded the full list — review before editing again.');
+
     return [
         'ok' => false,
         'conflict' => true,
-        'error' => $name . ' saved this Sites list at ' . substr($dbAt, 0, 16)
-            . '. Reload to avoid overwriting.',
+        'error' => $msg,
         'writer_name' => $name,
         'writer_at' => $dbAt,
+        'site_count' => $dbCount,
     ];
 }
 
