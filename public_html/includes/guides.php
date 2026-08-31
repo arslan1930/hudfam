@@ -141,6 +141,7 @@ function guide_filter_add(): string
             'Select an existing country database (Germany, Spain, …) as the starting folder for generic TLDs.',
             'Paste root domains and Filter unique sites — .at/.ch/… go to Austria/Switzerland/… and duplicates in those Our databases are removed.',
             'Add only the remaining unique sites — that leftover is this Filter run (your session), not the shared country total. Each destination folder and Extracting Sites list are shared — both teammates see the same country count after refresh. Separate before Filter is Copy/Delete only.',
+            'If Admin later removes those sites from Our database, they also leave Extracting. Filter unique and Add again to put them back at the top of Extracting.',
         ]
     );
 }
@@ -157,6 +158,7 @@ function guide_extracting(): string
             'Sites list tools: Copy, Undo, Redo, and Open first 10–50 (Open next continues in batches of 10).',
             'Paste into Extracting Results → Clean to root domains (Ready vs Needs attention) → Push uses Ready only. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country.',
             'Sites list is filled only with domains that were unique in that country’s Our database after Filter & add (TLD-routed).',
+            'Removing a site from Our database also removes it from this country’s Extracting Sites list. Filter & add of unique sites puts them back at the top.',
             'Add emails in Team, then Push to Admin. Final keeps archive copies; Campaign sheets are separate.',
         ]
     );

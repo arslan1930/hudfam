@@ -1013,6 +1013,19 @@ if (!str_contains($extractingHub, 'shared')
 } else {
     ok('Extracting hub shared Sites list copy');
 }
+$extractLibSync = file_get_contents($root . '/includes/extracting.php') ?: '';
+$prospectsLibSync = file_get_contents($root . '/includes/prospects.php') ?: '';
+$adminProspectsSync = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
+$guidesSync = file_get_contents($root . '/includes/guides.php') ?: '';
+if (!str_contains($extractLibSync, 'function remove_domains_from_extract_sites_for_country')
+    || !str_contains($extractLibSync, 'Drop any leftover Extracting row first')
+    || !str_contains($prospectsLibSync, 'function prospect_remove_domains_from_extracting')
+    || !str_contains($adminProspectsSync, 'Our database and Extracting sites')
+    || !str_contains($guidesSync, 'also removes it from this country’s Extracting')) {
+    fail('Our database delete missing Extracting Sites cascade / re-add');
+} else {
+    ok('Our database delete clears Extracting; Filter & add re-inserts');
+}
 if (!str_contains($teamHistory, 'count_prospect_batches')
     || !str_contains($teamHistory, '$totalBatches > 100')) {
     fail('Team history missing pager when days exceed 100');

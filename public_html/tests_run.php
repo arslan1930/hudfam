@@ -7536,6 +7536,115 @@ try {
     fail('shared extract count: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+// --- Our database delete also clears Extracting; Filter & add puts sites back on top ---
+try {
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfsync-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfsync-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfsync-%'");
+
+    $syncAdd = add_prospect_domains(
+        ['txfsync-keep.de', 'txfsync-del.de', 'txfsync-list.de'],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'sync seed'
+    );
+    $idDeSync = get_or_create_extract_batch('Germany', $adminUser, 'German', 'europe');
+    $idAtSync = get_or_create_extract_batch('Austria', $adminUser, 'German', 'europe');
+    db()->prepare(
+        'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
+         VALUES (?,?,NULL,?)'
+    )->execute([$idAtSync, 'txfsync-keep.at', (int) $adminUser['id']]);
+    $has = static function (int $batchId, string $domain): int {
+        $st = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=? AND domain=?');
+        $st->execute([$batchId, $domain]);
+        return (int) $st->fetchColumn();
+    };
+    $delId = (int) db()->query(
+        "SELECT id FROM prospect_sites WHERE country='Germany' AND domain='txfsync-del.de' LIMIT 1"
+    )->fetchColumn();
+    $removedRow = delete_prospect_site_by_id($delId);
+    $afterDelEx = $has($idDeSync, 'txfsync-del.de');
+    $keepEx = $has($idDeSync, 'txfsync-keep.de');
+    $atUntouched = $has($idAtSync, 'txfsync-keep.at');
+    $listRm = remove_prospect_sites_by_list('Germany', "txfsync-list.de\n");
+    $afterListEx = $has($idDeSync, 'txfsync-list.de');
+
+    $readd = add_prospect_domains(
+        ['txfsync-del.de'],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'sync readd'
+    );
+    $domainsAfterReadd = get_extract_batch_domains($idDeSync);
+    $readdOnTop = ($domainsAfterReadd[0] ?? '') === 'txfsync-del.de';
+    $readdPresent = $has($idDeSync, 'txfsync-del.de') === 1;
+
+    db()->prepare(
+        'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
+         VALUES (?,?,NULL,?)'
+    )->execute([$idDeSync, 'txfsync-orphan.de', (int) $adminUser['id']]);
+    $orphanAdd = add_prospect_domains(
+        ['txfsync-orphan.de'],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'sync orphan'
+    );
+    $orphanDomains = get_extract_batch_domains($idDeSync);
+    $orphanOnTop = ($orphanDomains[0] ?? '') === 'txfsync-orphan.de';
+    $orphanCount = $has($idDeSync, 'txfsync-orphan.de');
+
+    if (
+        (int) ($syncAdd['inserted'] ?? 0) === 3
+        && is_array($removedRow)
+        && ($removedRow['domain'] ?? '') === 'txfsync-del.de'
+        && $afterDelEx === 0
+        && $keepEx === 1
+        && $atUntouched === 1
+        && (int) ($listRm['removed'] ?? 0) === 1
+        && $afterListEx === 0
+        && (int) ($readd['inserted'] ?? 0) === 1
+        && $readdPresent
+        && $readdOnTop
+        && (int) ($orphanAdd['inserted'] ?? 0) === 1
+        && ($orphanAdd['extract_error'] ?? '') === ''
+        && $orphanOnTop
+        && $orphanCount === 1
+    ) {
+        pass('Our database delete clears Extracting; Filter & add puts sites back on top');
+    } else {
+        fail('Our DB / Extracting sync unexpected: ' . json_encode([
+            'syncAdd' => $syncAdd,
+            'afterDelEx' => $afterDelEx,
+            'keepEx' => $keepEx,
+            'atUntouched' => $atUntouched,
+            'listRm' => $listRm,
+            'afterListEx' => $afterListEx,
+            'readd' => $readd,
+            'top' => $domainsAfterReadd[0] ?? '',
+            'orphanAdd' => $orphanAdd,
+            'orphanTop' => $orphanDomains[0] ?? '',
+            'orphanCount' => $orphanCount,
+        ]));
+    }
+
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfsync-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfsync-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfsync-%'");
+    refresh_extract_batch_site_count($idDeSync);
+    refresh_extract_batch_site_count($idAtSync);
+} catch (Throwable $e) {
+    fail('Our DB / Extracting sync: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Admin Users U-1: unique email + verify reset ---
 try {
     ensure_account_schema();

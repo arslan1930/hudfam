@@ -114,7 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
         if (function_exists('sheet_history_push_remove')) {
             sheet_history_push_remove('prospect', (string) ($removed['country'] ?? ''), [$removed]);
         }
-        flash('ok', 'Removed ' . (string) $removed['domain'] . ' from ' . ((string) ($removed['country'] ?: 'No country')) . '.');
+        flash('ok', 'Removed ' . (string) $removed['domain'] . ' from ' . ((string) ($removed['country'] ?: 'No country'))
+            . ' (Our database and Extracting sites).');
     }
     if ($returnSuper !== '') {
         redirect('index.php?page=admin_prospects&super_q=' . rawurlencode($returnSuper) . '#super-search');
@@ -185,7 +186,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
         exit;
     }
     flash($result['ok'] ? 'ok' : 'error', $result['ok']
-        ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's') . '.'
+        ? 'Removed ' . (int) $result['count'] . ' selected site' . ((int) $result['count'] === 1 ? '' : 's')
+            . ' from Our database and Extracting sites.'
         : (string) ($result['error'] ?? 'Could not remove selected sites.'));
     redirect(prospect_country_sheet_url($returnCountry, $sheetKeep()));
 }
@@ -247,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'remove
         }
         $msg = 'Removed ' . (int) $result['removed'] . ' site'
             . ((int) $result['removed'] === 1 ? '' : 's')
-            . ' from Our database · ' . $result['country'];
+            . ' from Our database and Extracting sites · ' . $result['country'];
         if ((int) $result['not_found'] > 0) {
             $msg .= ' · ' . (int) $result['not_found'] . ' not found';
         }
@@ -1229,7 +1231,8 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
   <h2>Remove by list</h2>
   <p class="help">
     Paste site names (or upload a 1-column CSV) to remove those exact domains from
-    <strong><?= h($countryName) ?></strong> in Our database.
+    <strong><?= h($countryName) ?></strong> in Our database
+    <strong>and</strong> from that country’s Extracting Sites list.
     This removes from the <strong>whole country folder</strong>, not only the current person or niche view.
   </p>
   <form
@@ -1238,7 +1241,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
     enctype="multipart/form-data"
     onsubmit="return confirm(<?= h(json_encode(
         'Remove all matching sites from this list in ' . $countryName
-        . ' (Our database)? This removes from the whole country folder, not only a person or niche filter.',
+        . ' (Our database and Extracting sites)? This removes from the whole country folder, not only a person or niche filter.',
         JSON_UNESCAPED_UNICODE
     )) ?>);"
   >
@@ -1248,7 +1251,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
     <textarea name="remove_text" class="inventory-box" rows="8" placeholder="site-to-remove.com"></textarea>
     <label style="display:block;margin-top:0.6rem">CSV (1 column)</label>
     <input type="file" name="remove_csv" accept=".csv,text/csv,text/plain,.txt">
-    <p class="help">One site name per row. Only domains already in this country folder are removed.</p>
+    <p class="help">One site name per row. Only domains already in this country folder are removed from Our database and Extracting.</p>
     <div class="actions" style="margin-top:0.75rem">
       <button class="btn danger" type="submit">Remove listed sites</button>
     </div>
