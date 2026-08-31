@@ -3188,17 +3188,17 @@ function email_campaign_xlsx_cell_text(\SimpleXMLElement $c, array $shared): str
         }
         return trim((string) ($shared[(int) $v] ?? ''));
     }
-    if ($type === 'inlineStr') {
+    if ($type === 'inlinestr') {
         $isNodes = email_campaign_xlsx_xpath($c, './is');
+        if ($isNodes === [] && isset($c->is)) {
+            $isNodes = [$c->is];
+        }
         if ($isNodes !== []) {
             $text = email_campaign_xlsx_si_text($isNodes[0]);
             if ($text !== '') {
                 return $text;
             }
         }
-    }
-    if ($type === 'str' || $type === 'inlineStr') {
-        return $v;
     }
     return $v;
 }
