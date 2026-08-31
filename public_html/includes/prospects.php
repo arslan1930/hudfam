@@ -2122,6 +2122,7 @@ function remove_prospect_sites_by_list(string $country, string $raw): array
         );
         $del->execute(array_merge([$country], $found));
         $removed += $del->rowCount();
+        prospect_remove_domains_from_extracting($country, $found);
     }
 
     return [
@@ -2746,7 +2747,39 @@ function delete_prospect_site_by_id(int $id): ?array
         return null;
     }
     db()->prepare('DELETE FROM prospect_sites WHERE id=?')->execute([$id]);
+    prospect_remove_domains_from_extracting(
+        (string) ($row['country'] ?? ''),
+        [(string) ($row['domain'] ?? '')]
+    );
     return $row;
+}
+
+/**
+ * After a country-folder delete, also drop those domains from Extracting Sites.
+ *
+ * @param list<string> $domains
+ */
+function prospect_remove_domains_from_extracting(string $country, array $domains): void
+{
+    $country = trim($country);
+    $clean = [];
+    foreach ($domains as $d) {
+        $n = normalize_domain((string) $d);
+        if ($n !== '') {
+            $clean[] = $n;
+        }
+    }
+    if ($country === '' || $clean === []) {
+        return;
+    }
+    if (!function_exists('remove_domains_from_extract_sites_for_country')) {
+        require_once __DIR__ . '/extracting.php';
+    }
+    try {
+        remove_domains_from_extract_sites_for_country($country, $clean);
+    } catch (Throwable $e) {
+        // Our database row is already gone; Extracting catch-up must not fail the delete.
+    }
 }
 
 /**

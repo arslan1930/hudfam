@@ -182,24 +182,25 @@ function add_domains_to_extract_sites(
     $batchId = get_or_create_extract_batch($country, $user, $language, $region);
     $ins = db()->prepare(
         'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
-         VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE
-           prospect_site_id = COALESCE(VALUES(prospect_site_id), prospect_site_id)'
+         VALUES (?,?,?,?)'
     );
+    $drop = db()->prepare('DELETE FROM extract_batch_sites WHERE batch_id=? AND domain=?');
     $added = 0;
     $failed = 0;
     $failMsg = '';
     $uid = (int) ($user['id'] ?? 0) ?: null;
     // Insert newest-first among this batch so ORDER BY id DESC shows paste order at top.
+    // Drop any leftover Extracting row first so a re-add after Our database
+    // delete is a new row at the top, not a silent unique-key no-op.
     foreach (array_reverse($rows) as $row) {
         try {
+            $drop->execute([$batchId, $row['domain']]);
             $ins->execute([
                 $batchId,
                 $row['domain'],
                 $row['prospect_site_id'] ?: null,
                 $uid,
             ]);
-            // rowCount is 1 for insert, 2 for update on MySQL; only count fresh inserts
             if ($ins->rowCount() === 1) {
                 $added++;
             }
@@ -546,6 +547,40 @@ function remove_extract_batch_domains(int $batchId, array $domains): array
         ];
     }
     return $out;
+}
+
+/**
+ * Extracting batch id for a country, or 0 if none (does not create a row).
+ */
+function find_extract_batch_id_for_country(string $country): int
+{
+    ensure_extract_schema();
+    $country = trim($country);
+    if ($country === '') {
+        return 0;
+    }
+    $canon = function_exists('resolve_canonical_country') ? resolve_canonical_country($country) : null;
+    if (is_array($canon) && ($canon['name'] ?? '') !== '') {
+        $country = (string) $canon['name'];
+    }
+    $stmt = db()->prepare('SELECT id FROM extract_batches WHERE country=? LIMIT 1');
+    $stmt->execute([$country]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Drop domains from that country’s Extracting Sites list only.
+ * Used when Admin removes the same domains from Our database.
+ *
+ * @param list<string> $domains
+ */
+function remove_domains_from_extract_sites_for_country(string $country, array $domains): int
+{
+    $batchId = find_extract_batch_id_for_country($country);
+    if ($batchId < 1) {
+        return 0;
+    }
+    return count(remove_extract_batch_domains($batchId, $domains));
 }
 
 /**
