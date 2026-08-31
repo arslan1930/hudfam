@@ -1427,7 +1427,8 @@ $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php'
 if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
     || !str_contains($campLibSmoke, 'skipped_duplicate')
     || !str_contains($campLibSmoke, "'replace'")
-    || !str_contains($campAppSmoke, 'duplicate domain(s) skipped')
+    || !str_contains($campLibSmoke, 'duplicate domain(s) skipped')
+    || !str_contains($campAppSmoke, 'email_campaign_bulk_result_message')
     || !str_contains($campAppSmoke, "import_email_campaign_sheet_from_swe(\$sheetId, \$source, \$sheetCountry, 'replace')")) {
     fail('campaigns missing duplicate skip / replace-different-emails');
 } else {
