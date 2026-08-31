@@ -1459,12 +1459,17 @@ if (!str_contains($ordersPage, 'Mark paid')
 } else {
     ok('orders Mark paid label + Processing live-URL footer');
 }
-if (!str_contains($ordersPage, 'Unpaid LIVE') || !str_contains($ordersPage, "value=\"unpaid\"")) {
+if (!str_contains($ordersPage, 'Unpaid LIVE')
+    || !str_contains($ordersPage, 'Unpaid to bill')
+    || !str_contains($ordersPage, 'om-status-tabs')
+    || !str_contains($ordersPage, 'Completed unpaid')) {
     fail('orders missing unpaid LIVE filter');
 } else {
     ok('orders unpaid LIVE filter');
 }
-if (!str_contains($ordersPage, "['p' => \$pageNum") && !str_contains($ordersPage, 'Page <?= (int) $pageNum ?>')) {
+if (!str_contains($ordersPage, 'om-sheet-pager')
+    || !str_contains($ordersPage, 'invoice_list_page_numbers')
+    || !str_contains($ordersPage, 'Previous')) {
     fail('orders missing list pagination');
 } else {
     ok('orders list pagination');
