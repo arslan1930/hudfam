@@ -30,11 +30,16 @@ $filter = [
     'date_to' => (string) get('date_to'),
     'status' => (string) get('status'),
 ];
-$allowedStatus = $isCompleted ? ['all', 'unpaid', 'paid'] : ['all', 'open', 'completed', 'unpaid', 'paid'];
-if (!in_array($filter['status'], $allowedStatus, true)) {
-    $filter['status'] = 'all';
-}
 if ($isProcessing) {
+    $filter['status'] = 'all';
+} elseif ($isCompleted) {
+    if ($filter['status'] === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        $filter['status'] = (string) ($_POST['status'] ?? '');
+    }
+    if (!in_array($filter['status'], ['all', 'unpaid', 'paid'], true)) {
+        $filter['status'] = 'unpaid';
+    }
+} elseif (!in_array($filter['status'], ['all', 'open', 'completed', 'unpaid', 'paid'], true)) {
     $filter['status'] = 'all';
 }
 $perPage = (int) get('per', 100);
@@ -79,9 +84,17 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
     if ($adminId > 0) {
         $bits[] = 'admin_id=' . $adminId;
     }
-    $status = (string) ($params['status'] ?? 'all');
-    if ($status !== '' && $status !== 'all') {
-        $bits[] = 'status=' . rawurlencode($status);
+    if ($folderName === 'completed') {
+        $st = (string) ($params['status'] ?? 'unpaid');
+        if (!in_array($st, ['all', 'unpaid', 'paid'], true)) {
+            $st = 'unpaid';
+        }
+        $bits[] = 'status=' . rawurlencode($st);
+    } else {
+        $status = (string) ($params['status'] ?? 'all');
+        if ($status !== '' && $status !== 'all') {
+            $bits[] = 'status=' . rawurlencode($status);
+        }
     }
     $per = (int) ($params['per'] ?? 100);
     if ($per !== 100) {
@@ -240,7 +253,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$selectedIds) {
                 throw new InvalidArgumentException('Tick at least one row (with a live URL) to mark completed.');
             }
-            $stayProcessing = $oneId > 0 && count($selectedIds) === 1;
             $result = order_mark_items_completed($selectedIds, $urls, (int) ($user['id'] ?? 0));
             if ($result['ok'] < 1) {
                 throw new InvalidArgumentException(
@@ -252,10 +264,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $msg .= ' ' . implode(' ', $result['errors']);
             }
             flash('ok', $msg);
-            if ($stayProcessing) {
-                redirect($ordersQs());
+            $jumpId = $oneId > 0 && count($selectedIds) === 1
+                ? $oneId
+                : ((count($selectedIds) === 1) ? (int) $selectedIds[0] : 0);
+            $doneUrl = $ordersQs(['folder' => 'completed', 'status' => 'unpaid', 'p' => 1]);
+            if ($jumpId > 0) {
+                $doneUrl .= '#row-' . $jumpId;
             }
-            redirect($ordersQs(['folder' => 'completed']));
+            redirect($doneUrl);
         }
         if ($action === 'mark_paid') {
             if (!$isCompleted) {
@@ -431,6 +447,12 @@ if ($isProcessing) {
         $originCounts[$okey] = count_order_pipeline_rows(array_merge($listOpts, ['origin' => $okey]));
     }
 }
+$completedStatusCounts = ['all' => 0, 'unpaid' => 0, 'paid' => 0];
+if ($isCompleted) {
+    foreach (['all', 'unpaid', 'paid'] as $sk) {
+        $completedStatusCounts[$sk] = count_order_pipeline_rows(array_merge($listOpts, ['status' => $sk]));
+    }
+}
 $admins = order_admin_options();
 $adminById = [];
 foreach ($admins as $aRow) {
@@ -502,7 +524,7 @@ foreach ($items as $row) {
 $colspan = 15;
 $placementOptions = order_placement_options();
 $filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] > 0
-    || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '' || $filter['status'] !== 'all';
+    || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '';
 
 render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 ?>
@@ -516,16 +538,16 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <div>
     <?php if ($isProcessing): ?>
       <h1><?= label_with_info('Processing', 'Default view is still in Website prices Processing. Leftover stays when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row by itself.') ?></h1>
-      <p class="muted">Not every Processing row is from Website prices Processing. Mark completed requires a live URL, country, and client. Push to invoice is only on Completed orders.</p>
+      <p class="muted">Fill live URL, country, and client, then Mark completed. Saving a live URL does not complete the row.</p>
     <?php else: ?>
       <h1><?= label_with_info('Completed orders', 'After a live URL and Mark completed. Unpaid until Paid. Tick unpaid rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.') ?></h1>
-      <p class="muted">Unpaid until paid. Push to invoice from here. Team Website prices only shows the Completed status — never LIVE URL, profit, or client.</p>
+      <p class="muted">Unpaid until paid. Push to an invoice from here. Paid stays in this folder.</p>
     <?php endif; ?>
   </div>
   <div class="actions">
     <a class="btn secondary" href="index.php?page=admin_orders">Folders</a>
     <?php if ($isProcessing): ?>
-      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed orders</a>
+      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed unpaid</a>
     <?php else: ?>
       <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=processing">Processing</a>
     <?php endif; ?>
@@ -543,6 +565,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
   <?php if ($isProcessing): ?>
   <input type="hidden" name="origin" value="<?= h($origin) ?>">
+  <?php endif; ?>
+  <?php if ($isCompleted): ?>
+  <input type="hidden" name="status" value="<?= h($filter['status']) ?>">
   <?php endif; ?>
   <input type="hidden" name="per" value="<?= (int) $perPage ?>">
   <div class="order-filter-grid">
@@ -583,27 +608,24 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       <span class="visually-hidden">To date</span>
       <input type="date" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" data-no-draft>
     </label>
-    <?php if ($isCompleted): ?>
-    <label class="order-filter-field">
-      <span class="visually-hidden">Status</span>
-      <select name="status" aria-label="Filter by status" onchange="this.form.submit()">
-        <option value="all" <?= $filter['status'] === 'all' ? 'selected' : '' ?>>All statuses</option>
-        <option value="unpaid" <?= $filter['status'] === 'unpaid' ? 'selected' : '' ?>>Unpaid LIVE</option>
-        <option value="paid" <?= $filter['status'] === 'paid' ? 'selected' : '' ?>>Paid</option>
-      </select>
-    </label>
-    <?php endif; ?>
     <div class="order-filter-actions">
       <button class="btn secondary small" type="submit">Search</button>
       <?php if ($filtersOn): ?>
-        <a class="btn secondary small" href="index.php?page=admin_orders&amp;folder=<?= h($folder) ?>">Clear</a>
+        <a class="btn secondary small" href="<?= h($ordersQs([
+            'q' => '',
+            'country' => '',
+            'admin_id' => 0,
+            'date_from' => '',
+            'date_to' => '',
+            'p' => 1,
+        ])) ?>">Clear</a>
       <?php endif; ?>
     </div>
   </div>
 </form>
 
 <?php if ($isProcessing): ?>
-<p class="muted om-origin-tabs" id="om-origin-tabs">
+<nav class="invoice-list-chips om-origin-tabs" id="om-origin-tabs" aria-label="Processing origin">
   <?php
     $originLabels = [
         'wp' => 'Website prices Processing',
@@ -615,14 +637,31 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         $ohref = $ordersQs(['origin' => $okey, 'p' => 1]);
         $isCur = $origin === $okey;
   ?>
-    <?= $okey === 'wp' ? '' : ' · ' ?>
-    <?php if ($isCur): ?>
-      <strong><?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)</strong>
-    <?php else: ?>
-      <a href="<?= h($ohref) ?>"><?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)</a>
-    <?php endif; ?>
+    <a class="btn secondary small<?= $isCur ? ' active-soft' : '' ?>"
+       href="<?= h($ohref) ?>"<?= $isCur ? ' aria-current="page"' : '' ?>>
+      <?= h($olabel) ?> (<?= (int) ($originCounts[$okey] ?? 0) ?>)
+    </a>
   <?php endforeach; ?>
-</p>
+</nav>
+<?php endif; ?>
+<?php if ($isCompleted): ?>
+<nav class="invoice-list-chips om-status-tabs" id="om-status-tabs" aria-label="Completed payment">
+  <?php
+    $statusLabels = [
+        'unpaid' => 'Unpaid',
+        'paid' => 'Paid',
+        'all' => 'All',
+    ];
+    foreach ($statusLabels as $skey => $slabel):
+        $shref = $ordersQs(['status' => $skey, 'p' => 1]);
+        $sOn = $filter['status'] === $skey;
+  ?>
+    <a class="btn secondary small<?= $sOn ? ' active-soft' : '' ?>"
+       href="<?= h($shref) ?>"<?= $sOn ? ' aria-current="page"' : '' ?>>
+      <?= h($slabel) ?> (<?= (int) ($completedStatusCounts[$skey] ?? 0) ?>)
+    </a>
+  <?php endforeach; ?>
+</nav>
 <?php endif; ?>
 
 <div class="orders-summary orders-summary-6">
@@ -640,8 +679,14 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   </div>
   <?php if ($isCompleted): ?>
   <div class="orders-summary-item">
-    <strong><?= (int) $unpaidLiveCount ?></strong>
-    <span><?= label_with_info('Unpaid LIVE', 'Completed unpaid rows matching this search, country, admin, and dates — ready to push to an invoice.') ?></span>
+    <strong><?= (int) $unbilledCount ?></strong>
+    <span><?= label_with_info(
+        'Unpaid to bill',
+        'Completed unpaid rows not already on a draft or unpaid invoice. Unpaid LIVE includes rows already on a bill.'
+    ) ?></span>
+    <?php if ($unpaidLiveCount > $unbilledCount): ?>
+      <span class="muted"><?= (int) ($unpaidLiveCount - $unbilledCount) ?> already on a bill</span>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
   <div class="orders-summary-item">
@@ -662,6 +707,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <?php if ($isProcessing): ?>
   <input type="hidden" name="origin" value="<?= h($origin) ?>">
   <?php endif; ?>
+  <?php if ($isCompleted): ?>
+  <input type="hidden" name="status" value="<?= h($filter['status']) ?>">
+  <?php endif; ?>
   <input type="hidden" name="item_id" id="delete-item-id" value="">
   <input type="hidden" name="restore_wp" id="restore-wp" value="">
   <div class="order-sheet-toolbar">
@@ -675,17 +723,21 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </div>
     <div class="actions">
       <?php if ($isProcessing): ?>
-        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites (this page)</button>
-        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs (this page)</button>
-        <button class="btn secondary" type="button" data-copy-all-live
-                data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
+        <span class="swe-copy-group">
+          <button class="btn secondary small" type="button" data-copy-selected-sites>Copy selected sites (this page)</button>
+          <button class="btn secondary small" type="button" data-copy-selected-live>Copy selected live URLs (this page)</button>
+          <button class="btn secondary small" type="button" data-copy-all-live
+                  data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
+        </span>
         <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
       <?php else: ?>
-        <button class="btn secondary" type="button" data-copy-selected-live>Copy selected live URLs (this page)</button>
-        <button class="btn secondary" type="button" data-copy-all-live
-                data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
-        <button class="btn secondary" type="button" data-copy-selected-sites>Copy selected sites (this page)</button>
+        <span class="swe-copy-group">
+          <button class="btn secondary small" type="button" data-copy-selected-live>Copy selected live URLs (this page)</button>
+          <button class="btn secondary small" type="button" data-copy-all-live
+                  data-copy-url="<?= h($ordersQs(['copy' => 'live_urls'])) ?>">Copy all live URLs</button>
+          <button class="btn secondary small" type="button" data-copy-selected-sites>Copy selected sites (this page)</button>
+        </span>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
       <?php endif; ?>
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
@@ -708,7 +760,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
               </label>
               <label class="order-check-head" for="order-select-all">
                 <span><?= $isProcessing ? 'Complete' : 'Bill' ?></span>
-                <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows with a live URL to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
+                <input type="checkbox" id="order-select-all" title="<?= $isProcessing ? 'Select all rows ready to mark completed' : 'Select all unpaid LIVE to push to invoice' ?>" data-no-draft>
               </label>
             </div>
           </th>
@@ -734,9 +786,30 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       <?php if (!$items): ?>
         <tr>
           <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
-            <?= $filtersOn ? 'No orders match this filter.' : ($isProcessing ? 'No processing orders — Website prices Processing rows appear here, or click “Add order”.' : 'No completed orders yet — mark processing rows completed with a live URL.') ?>
+            <?= $filtersOn
+                ? 'No orders match this filter.'
+                : ($isProcessing
+                    ? ($origin === 'leftover'
+                        ? 'No leftover Processing orders. Website prices Processing and Added here are other tabs.'
+                        : ($origin === 'manual'
+                            ? 'No orders added here. Use + Add order, or open Website prices Processing.'
+                            : ($origin === 'all'
+                                ? 'No processing orders. Website prices Processing rows appear here, or click + Add order.'
+                                : 'No Website prices Processing rows. Leftover and Added here are other tabs.')))
+                    : ($filter['status'] === 'unpaid'
+                        ? 'No unpaid completed orders to bill. Open All to see Paid, or mark Processing rows completed.'
+                        : ($filter['status'] === 'paid'
+                            ? 'No paid completed orders.'
+                            : 'No completed orders yet — mark processing rows completed with a live URL.'))) ?>
             <?php if ($filtersOn): ?>
-              <a href="index.php?page=admin_orders&amp;folder=<?= h($folder) ?>">Clear filters</a>
+              <a href="<?= h($ordersQs([
+                  'q' => '',
+                  'country' => '',
+                  'admin_id' => 0,
+                  'date_from' => '',
+                  'date_to' => '',
+                  'p' => 1,
+              ])) ?>">Clear filters</a>
             <?php endif; ?>
           </td>
         </tr>
@@ -765,9 +838,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           if ($rowAdminId < 1) {
               $rowAdminId = (int) ($user['id'] ?? 0);
           }
-          $canPush = $isCompleted && $done && !$paid && empty($openInvoicesByOrder[$id]);
+          $canPush = $isCompleted && order_row_ready_for_invoice($row) && empty($openInvoicesByOrder[$id]);
           $openInv = $openInvoicesByOrder[$id] ?? null;
-          $canComplete = $isProcessing && trim((string) ($row['live_url'] ?? '')) !== '';
+          $canComplete = $isProcessing && order_row_ready_for_complete($row);
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
             data-row id="row-<?= $id ?>"<?= $openInv ? ' data-on-invoice="1"' : '' ?>>
@@ -778,12 +851,12 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
               <input type="checkbox" name="item_ids[]" value="<?= $id ?>"
                      <?= ($isProcessing ? $canComplete : $canPush) ? '' : 'disabled' ?>
                      title="<?= $isProcessing
-                         ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL before marking completed')
+                         ? ($canComplete ? 'Mark this row completed' : 'Fill LIVE URL, country, and client before marking completed')
                          : ($canPush
                             ? 'Push this unpaid LIVE row to an invoice'
                             : ($openInv
                                 ? ('Already on invoice ' . (string) ($openInv['invoice_number'] ?? ''))
-                                : 'Only unpaid completed rows can be pushed')) ?>"
+                                : 'Only unpaid completed rows with live URL, country, and client can be pushed')) ?>"
                      data-push-check>
             </div>
           </td>
@@ -873,7 +946,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
           <td class="col-paid">
             <?php if ($isProcessing): ?>
               <button class="btn secondary small" type="submit"
-                      title="<?= $canComplete ? 'Mark this order completed' : 'Fill LIVE URL before marking completed' ?>"
+                      title="<?= $canComplete ? 'Mark this order completed' : 'Fill LIVE URL, country, and client before marking completed' ?>"
                       <?= $canComplete ? '' : 'disabled' ?>
                       data-complete-btn
                       onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='mark_completed';">
@@ -961,14 +1034,9 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   </div>
   <p class="help" style="margin:0.75rem 0 0" id="sheet-bottom">
     <?php if ($isProcessing): ?>
-      Rows come from <strong>Website prices Processing</strong>, or click <strong>+ Add order</strong> for a manual row.
-      Fill <strong>LIVE URL</strong>, then <strong>Mark completed</strong> — saving a live URL does not complete the order.
-      Completing moves the row to Completed orders and sets Website prices to Completed. Publisher reply email is not copied into client email/name.
-      Open in Website prices jumps to the linked site. If that site’s status no longer matches this folder, the mismatch is shown on the row.
+      Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row.
     <?php else: ?>
-      Use the filter bar to search by site, client email or name, country, admin, date, or unpaid/paid.
-      Tick unpaid completed rows and <strong>Push to invoice</strong> to bill them.
-      Paid stays in this folder. Website prices is not changed when you mark paid.
+      Tick unpaid rows and Push to invoice. Paid stays in this folder.
     <?php endif; ?>
   </p>
   <?php if ($countryCatalog): ?>
@@ -995,26 +1063,38 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 </form>
 
 <?php if ($totalPages > 1 || $totalRows > 50): ?>
-<p class="muted" style="margin-top:0.85rem">
-  Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>
-  · <?= (int) $totalRows ?> order<?= $totalRows === 1 ? '' : 's' ?>
-  ·
-  <?php foreach ([50, 100, 250] as $n): ?>
-    <?php if ($perPage === $n): ?>
-      <strong><?= (int) $n ?></strong>
-    <?php else: ?>
-      <a href="<?= h($ordersQs(['per' => $n, 'p' => 1])) ?>"><?= (int) $n ?></a>
-    <?php endif; ?>
-    <?= $n === 250 ? '' : ' · ' ?>
-  <?php endforeach; ?>
-  per page
+<nav class="pagination om-sheet-pager" aria-label="Order pages">
   <?php if ($pageNum > 1): ?>
-    · <a href="<?= h($ordersQs(['p' => $pageNum - 1])) ?>">Previous</a>
+    <a href="<?= h($ordersQs(['p' => $pageNum - 1])) ?>">Previous</a>
+  <?php endif; ?>
+  <?php if ($totalPages > 1): ?>
+    <?php foreach (invoice_list_page_numbers((int) $pageNum, $totalPages) as $pageLink): ?>
+      <?php if ($pageLink < 1): ?>
+        <span class="pagination-gap" aria-hidden="true">…</span>
+      <?php elseif ($pageLink === $pageNum): ?>
+        <span class="is-current" aria-current="page"><?= (int) $pageLink ?></span>
+      <?php else: ?>
+        <a href="<?= h($ordersQs(['p' => $pageLink])) ?>"><?= (int) $pageLink ?></a>
+      <?php endif; ?>
+    <?php endforeach; ?>
   <?php endif; ?>
   <?php if ($pageNum < $totalPages): ?>
-    · <a href="<?= h($ordersQs(['p' => $pageNum + 1])) ?>">Next</a>
+    <a href="<?= h($ordersQs(['p' => $pageNum + 1])) ?>">Next</a>
   <?php endif; ?>
-</p>
+  <span class="muted">
+    <?= (int) $totalRows ?> order<?= $totalRows === 1 ? '' : 's' ?>
+    ·
+    <?php foreach ([50, 100, 250] as $n): ?>
+      <?php if ($perPage === $n): ?>
+        <strong><?= (int) $n ?></strong>
+      <?php else: ?>
+        <a href="<?= h($ordersQs(['per' => $n, 'p' => 1])) ?>"><?= (int) $n ?></a>
+      <?php endif; ?>
+      <?= $n === 250 ? '' : ' · ' ?>
+    <?php endforeach; ?>
+    per page
+  </span>
+</nav>
 <?php endif; ?>
 
 <div class="card order-download-bar" id="sheet-download">
@@ -1060,30 +1140,36 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       if (emptyOpt) emptyOpt.textContent = isPlacement ? 'Start' : 'Month';
     }
   }
-  function syncPushCheck(row) {
+  function rowReady(row) {
     var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
+    var country = String((row.querySelector('[name^="country"]') || {}).value || '').trim();
+    var client = String((row.querySelector('[name^="client_label"]') || {}).value || '').trim();
+    return !!(live && country && client);
+  }
+  function syncPushCheck(row) {
     var paidBtn = row.querySelector('.btn-paid.is-paid');
     var check = row.querySelector('[data-push-check]');
     var completeBtn = row.querySelector('[data-complete-btn]');
     if (!check) return;
     var folder = sheetFolder;
     var can;
+    var ready = rowReady(row);
     if (folder === 'processing') {
-      can = !!live;
+      can = ready;
       check.disabled = !can;
-      check.title = can ? 'Mark this row completed' : 'Fill LIVE URL before marking completed';
+      check.title = can ? 'Mark this row completed' : 'Fill LIVE URL, country, and client before marking completed';
       if (completeBtn) {
         completeBtn.disabled = !can;
-        completeBtn.title = can ? 'Mark this order completed' : 'Fill LIVE URL before marking completed';
+        completeBtn.title = can ? 'Mark this order completed' : 'Fill LIVE URL, country, and client before marking completed';
       }
     } else {
-      can = !!live && !paidBtn && !row.getAttribute('data-on-invoice');
+      can = ready && !paidBtn && !row.getAttribute('data-on-invoice');
       check.disabled = !can;
       check.title = can
         ? 'Push this unpaid LIVE row to an invoice'
         : (row.getAttribute('data-on-invoice')
           ? 'Already on an invoice'
-          : 'Only unpaid completed rows can be pushed');
+          : 'Only unpaid completed rows with live URL, country, and client can be pushed');
     }
     if (!can) check.checked = false;
   }
