@@ -515,6 +515,8 @@ if ($rUnpaidList['status'] === 200
     && str_contains($rUnpaidList['body'], 'invoice-list-chips')
     && str_contains($rUnpaidList['body'], 'Completed unpaid')
     && str_contains($rUnpaidList['body'], 'admin_invoices&amp;filter=unpaid')
+    && str_contains($rUnpaidList['body'], 'help-details page-purpose')
+    && !str_contains($rUnpaidList['body'], '>Clear</a>')
     && !str_contains($rUnpaidList['body'], 'Fatal error')) {
     pass('admin invoices unpaid working view');
 } else {
@@ -682,7 +684,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'Leftover', 'Added here'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client'];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
@@ -694,7 +696,7 @@ if ($r['status'] === 200 && !$omCopyBad && !str_contains($r['body'], 'Fatal erro
 } else {
     fail('admin orders processing copy status=' . $r['status'] . ' missing=' . implode(',', $omCopyBad));
 }
-$r = req('GET', $base . '/index.php?page=admin_orders&folder=completed');
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=completed&status=all');
 if ($r['status'] === 200
     && str_contains($r['body'], 'Copy selected live URLs (this page)')
     && str_contains($r['body'], 'Copy all live URLs')
@@ -709,6 +711,16 @@ if ($r['status'] === 200
     pass('admin orders completed copy/download');
 } else {
     fail('admin orders completed copy status=' . $r['status']);
+}
+$rUnpaidOm = req('GET', $base . '/index.php?page=admin_orders&folder=completed');
+if ($rUnpaidOm['status'] === 200
+    && str_contains($rUnpaidOm['body'], 'Unpaid to bill')
+    && str_contains($rUnpaidOm['body'], 'om-status-tabs')
+    && str_contains($rUnpaidOm['body'], 'status=unpaid')
+    && !str_contains($rUnpaidOm['body'], 'Fatal error')) {
+    pass('admin orders completed unpaid working view');
+} else {
+    fail('admin orders completed unpaid working view status=' . ($rUnpaidOm['status'] ?? '?'));
 }
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&copy=live_urls');
 $copyJson = json_decode($r['body'], true);

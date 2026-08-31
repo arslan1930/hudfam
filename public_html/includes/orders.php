@@ -385,6 +385,19 @@ function order_is_completed(array $row): bool
     return order_stage($row) === 'completed' && trim((string) ($row['live_url'] ?? '')) !== '';
 }
 
+/** LIVE URL + country + client — required to mark completed or push to an invoice. */
+function order_row_ready_for_complete(array $row): bool
+{
+    return trim((string) ($row['live_url'] ?? '')) !== ''
+        && trim((string) ($row['country'] ?? '')) !== ''
+        && trim((string) ($row['client_label'] ?? '')) !== '';
+}
+
+function order_row_ready_for_invoice(array $row): bool
+{
+    return order_is_completed($row) && !order_is_paid($row) && order_row_ready_for_complete($row);
+}
+
 function get_order_item_by_site_price_row(int $sitePriceRowId): ?array
 {
     ensure_order_schema();

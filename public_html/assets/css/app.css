@@ -657,12 +657,18 @@ summary:focus-visible {
 /* Page / panel help banners */
 .page-purpose {
   margin: 0 0 1rem;
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--line);
+  padding: 0;
   border-left: 3px solid var(--brand);
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, #ffffff 0%, #f5f6f8 100%);
-  box-shadow: var(--shadow);
+}
+.page-purpose > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+}
+.page-purpose > summary::after {
+  margin-left: auto;
+  float: none;
 }
 .page-purpose-badge {
   display: inline-block;
@@ -3199,6 +3205,10 @@ tr.swe-row-updated {
   gap: 0.65rem 0.9rem;
   min-width: 0;
 }
+.om-origin-tabs,
+.om-status-tabs {
+  margin: 0 0 0.85rem;
+}
 .order-filter-bar {
   margin-bottom: 1rem;
   padding: 0.75rem 0.9rem;
@@ -3271,13 +3281,22 @@ tr.swe-row-updated {
   gap: 0.4rem;
   align-items: center;
   margin: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .invoice-list-search input[type="search"] {
-  flex: 1 1 16rem;
+  flex: 1 1 auto;
   width: auto;
-  min-width: 12rem;
+  min-width: 0;
   max-width: none;
+}
+@media (max-width: 640px) {
+  .invoice-list-search {
+    flex-wrap: wrap;
+  }
+  .invoice-list-search input[type="search"] {
+    flex: 1 1 12rem;
+    min-width: 12rem;
+  }
 }
 .invoice-empty-reasons {
   margin: 0.35rem 0 0.85rem;
