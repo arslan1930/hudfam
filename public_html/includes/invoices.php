@@ -410,9 +410,11 @@ function invoices_where_sql(array $opts = []): array
     $params = [];
     $q = trim((string) ($opts['q'] ?? ''));
     if ($q !== '') {
-        $like = '%' . $q . '%';
-        $clauses[] = '(i.invoice_number LIKE ? OR i.client_name LIKE ? OR i.bill_to_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)';
-        array_push($params, $like, $like, $like, $like, $like, $like);
+        [$searchSql, $searchParams] = invoices_search_sql($q);
+        if ($searchSql !== '') {
+            $clauses[] = $searchSql;
+            array_push($params, ...$searchParams);
+        }
     }
     $filter = normalize_invoice_list_filter((string) ($opts['filter'] ?? ''));
     if ($filter === 'draft') {
@@ -431,6 +433,37 @@ function invoices_where_sql(array $opts = []): array
         return ['', []];
     }
     return [' WHERE ' . implode(' AND ', $clauses), $params];
+}
+
+/**
+ * List search: number / bill-as / note, plus Draft and Waiting labels (not SQL work_status done).
+ *
+ * @return array{0:string,1:list<mixed>}
+ */
+function invoices_search_sql(string $q): array
+{
+    $q = trim($q);
+    if ($q === '') {
+        return ['', []];
+    }
+    $like = '%' . $q . '%';
+    $or = [
+        'i.invoice_number LIKE ?',
+        'i.client_name LIKE ?',
+        'i.bill_to_name LIKE ?',
+        "IFNULL(i.admin_note, '') LIKE ?",
+        'i.payment_status LIKE ?',
+    ];
+    $params = [$like, $like, $like, $like, $like];
+    $ql = mb_strtolower($q);
+    if (preg_match('/\bwaiting\b/u', $ql)) {
+        $or[] = "(i.payment_status='unpaid' AND COALESCE(i.work_status, 'done')='done')";
+    }
+    if (preg_match('/\bdraft\b/u', $ql)) {
+        $or[] = "i.work_status='draft'";
+    }
+
+    return ['(' . implode(' OR ', $or) . ')', $params];
 }
 
 function count_invoices(array $opts = []): int
@@ -819,8 +852,12 @@ function invoice_bill_as_labels(array $rows): array
     $labels = [];
     foreach ($rows as $row) {
         $v = trim((string) ($row['client_label'] ?? ''));
-        if ($v !== '') {
-            $labels[$v] = $v;
+        $key = invoice_bill_as_key($v);
+        if ($key === '') {
+            continue;
+        }
+        if (!isset($labels[$key])) {
+            $labels[$key] = $v;
         }
     }
     return array_values($labels);

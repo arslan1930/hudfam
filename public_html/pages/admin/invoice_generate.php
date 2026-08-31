@@ -324,7 +324,7 @@ render_header('Generate invoice', 'admin');
 
       <div id="invoice-dest-existing" <?= $preselectExistingId > 0 ? '' : 'hidden' ?>>
         <?php if (!$openInvoices): ?>
-          <p class="help">No unpaid invoices to add to. Paid invoices stay locked — generate a new invoice for more sites.</p>
+          <p class="help">No Draft or Waiting invoices to add to. Paid invoices stay locked — generate a new invoice for more sites.</p>
         <?php else: ?>
           <label for="invoice-existing-search">Find Draft or waiting invoice</label>
           <input id="invoice-existing-search" type="search" placeholder="Number, bill-as, Draft, or Waiting…"
@@ -538,8 +538,9 @@ render_header('Generate invoice', 'admin');
     checked.forEach(function (cb) {
       var row = cb.closest('[data-invoice-pick-row]');
       var v = row ? String(row.getAttribute('data-bill-as') || '').trim() : '';
-      if (v && !seen[v]) {
-        seen[v] = true;
+      var k = v.toLowerCase();
+      if (v && !seen[k]) {
+        seen[k] = true;
         out.push(v);
       }
     });
@@ -627,8 +628,8 @@ render_header('Generate invoice', 'admin');
       }
       if (unpaidNum) {
         sentHint.hidden = false;
-        sentHint.textContent = labels[0] + ' already has unpaid invoice ' + unpaidNum
-          + ' (Draft or waiting). Use Add to existing to put these sites on that bill.';
+        sentHint.textContent = labels[0] + ' already has invoice ' + unpaidNum
+          + ' (Draft or Waiting). Use Add to existing to put these sites on that bill.';
       } else {
         sentHint.hidden = true;
         sentHint.textContent = '';

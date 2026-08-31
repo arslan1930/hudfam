@@ -326,7 +326,7 @@ if ($attention):
       <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_invoices&amp;filter=unpaid" data-dashboard-item
-     data-search="invoices generate printable blank draft done payment unpaid">
+     data-search="invoices generate printable blank draft waiting paid payment unpaid">
     <h2>Invoices</h2>
     <p><?php if (!empty($invoiceUnpaid['ok']) && !empty($invoiceDrafts['ok'])): ?>
         <?= number_format($invoiceUnpaidCount) ?> waiting

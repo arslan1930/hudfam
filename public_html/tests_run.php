@@ -6072,6 +6072,39 @@ try {
         } else {
             fail('invoice list filter unpaid');
         }
+        $waitSearch = list_invoices(['q' => 'Waiting']);
+        $doneSearch = list_invoices(['q' => 'done']);
+        $draftSearch = list_invoices(['q' => 'Draft']);
+        $foundWaitSearch = false;
+        $foundDoneSearch = false;
+        $foundDraftSearch = false;
+        foreach ($waitSearch as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $genId) {
+                $foundWaitSearch = true;
+                break;
+            }
+        }
+        foreach ($doneSearch as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $genId) {
+                $foundDoneSearch = true;
+                break;
+            }
+        }
+        foreach ($draftSearch as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $invId) {
+                $foundDraftSearch = true;
+                break;
+            }
+        }
+        $caseLabels = invoice_bill_as_labels([
+            ['client_label' => 'Buyer@Example.com'],
+            ['client_label' => 'buyer@example.com'],
+        ]);
+        if ($foundWaitSearch && !$foundDoneSearch && $foundDraftSearch && count($caseLabels) === 1) {
+            pass('invoice search Waiting/Draft labels, not done');
+        } else {
+            fail('invoice search Waiting/Draft labels');
+        }
         $clientList = list_invoices(['client_id' => (int) $genClientId]);
         $foundGenOnClient = false;
         $blankOnClient = false;
