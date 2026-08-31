@@ -3066,7 +3066,8 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-    $firstLine = (string) strtok($raw, "\n");
+    $nl = strpos($raw, "\n");
+    $firstLine = $nl === false ? $raw : substr($raw, 0, $nl);
     $delimiter = ',';
     $tabs = substr_count($firstLine, "\t");
     $semis = substr_count($firstLine, ';');
@@ -3077,17 +3078,17 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
         $delimiter = ';';
     }
 
-    $fh = fopen($path, 'rb');
+    // Parse the normalized text, not the original file — classic Mac (\r) CSVs
+    // otherwise become one giant row because fgetcsv only splits on \n.
+    $fh = fopen('php://temp', 'r+');
     if (!$fh) {
         throw new InvalidArgumentException('Could not read the uploaded file.');
     }
-    $bom = fread($fh, 3);
-    if ($bom !== "\xEF\xBB\xBF") {
-        rewind($fh);
-    }
+    fwrite($fh, $raw);
+    rewind($fh);
     $out = [];
     $rowNum = 0;
-    while (($row = fgetcsv($fh, 0, $delimiter)) !== false) {
+    while (($row = fgetcsv($fh, 0, $delimiter, '"', '')) !== false) {
         $rowNum++;
         if ($row === [null] || $row === false) {
             continue;
@@ -3144,30 +3145,125 @@ function email_campaign_xlsx_xpath(\SimpleXMLElement $el, string $localPath): ar
 }
 
 /**
+ * Shared-string / inline-string text. Uses direct t + rich r/t, skipping rPh (phonetic).
+ */
+function email_campaign_xlsx_si_text(\SimpleXMLElement $si): string
+{
+    $direct = email_campaign_xlsx_xpath($si, './t');
+    if ($direct !== []) {
+        $buf = '';
+        foreach ($direct as $t) {
+            $buf .= (string) $t;
+        }
+        return trim($buf);
+    }
+    $parts = [];
+    foreach (email_campaign_xlsx_xpath($si, './r/t') as $t) {
+        $parts[] = (string) $t;
+    }
+    return trim(implode('', $parts));
+}
+
+function email_campaign_xlsx_cell_v(\SimpleXMLElement $c): string
+{
+    $nodes = email_campaign_xlsx_xpath($c, './v');
+    if ($nodes !== []) {
+        return trim((string) $nodes[0]);
+    }
+    return trim((string) ($c->v ?? ''));
+}
+
+/**
  * Text inside one spreadsheetml cell (shared string, inline string, or cached value).
  *
  * @param list<string> $shared
  */
 function email_campaign_xlsx_cell_text(\SimpleXMLElement $c, array $shared): string
 {
-    $type = (string) ($c['t'] ?? '');
+    $type = strtolower(trim((string) ($c['t'] ?? '')));
+    $v = email_campaign_xlsx_cell_v($c);
     if ($type === 's') {
-        $idx = (int) trim((string) ($c->v ?? ''));
-        return trim((string) ($shared[$idx] ?? ''));
+        if ($v === '') {
+            return '';
+        }
+        return trim((string) ($shared[(int) $v] ?? ''));
     }
-    if ($type === 'inlineStr' || isset($c->is) || $type === 'str') {
-        if ($type === 'inlineStr' || isset($c->is)) {
-            $buf = '';
-            foreach (email_campaign_xlsx_xpath($c, './/t') as $t) {
-                $buf .= (string) $t;
-            }
-            if ($buf !== '') {
-                return trim($buf);
+    if ($type === 'inlineStr') {
+        $isNodes = email_campaign_xlsx_xpath($c, './is');
+        if ($isNodes !== []) {
+            $text = email_campaign_xlsx_si_text($isNodes[0]);
+            if ($text !== '') {
+                return $text;
             }
         }
-        return trim((string) ($c->v ?? ''));
     }
-    return trim((string) ($c->v ?? ''));
+    if ($type === 'str' || $type === 'inlineStr') {
+        return $v;
+    }
+    return $v;
+}
+
+/**
+ * First (visible) worksheet zip path from workbook.xml + rels.
+ * xl/worksheets/sheet1.xml is not always the leftmost tab.
+ */
+function email_campaign_xlsx_first_sheet_path(ZipArchive $zip): string
+{
+    $fallback = 'xl/worksheets/sheet1.xml';
+    $wb = $zip->getFromName('xl/workbook.xml');
+    $rels = $zip->getFromName('xl/_rels/workbook.xml.rels');
+    if (!is_string($wb) || $wb === '' || !is_string($rels) || $rels === '') {
+        return $fallback;
+    }
+    $wbXml = @simplexml_load_string($wb);
+    $relsXml = @simplexml_load_string($rels);
+    if ($wbXml === false || $relsXml === false) {
+        return $fallback;
+    }
+    $sheets = email_campaign_xlsx_xpath($wbXml, '//sheet');
+    if ($sheets === []) {
+        return $fallback;
+    }
+    $chosen = null;
+    foreach ($sheets as $sheet) {
+        $state = strtolower((string) ($sheet['state'] ?? ''));
+        if ($state === 'hidden' || $state === 'veryhidden') {
+            continue;
+        }
+        $chosen = $sheet;
+        break;
+    }
+    if ($chosen === null) {
+        $chosen = $sheets[0];
+    }
+    $rNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    $rid = '';
+    $rAttrs = $chosen->attributes($rNs);
+    if ($rAttrs && isset($rAttrs['id'])) {
+        $rid = (string) $rAttrs['id'];
+    }
+    if ($rid === '') {
+        $rid = (string) ($chosen['id'] ?? '');
+    }
+    if ($rid === '') {
+        return $fallback;
+    }
+    $relNodes = email_campaign_xlsx_xpath($relsXml, '//Relationship');
+    foreach ($relNodes as $rel) {
+        if ((string) ($rel['Id'] ?? '') !== $rid) {
+            continue;
+        }
+        $target = str_replace('\\', '/', trim((string) ($rel['Target'] ?? '')));
+        $target = ltrim($target, '/');
+        if ($target === '' || str_contains($target, 'chartsheets')) {
+            continue;
+        }
+        if (!str_starts_with($target, 'xl/')) {
+            $target = 'xl/' . $target;
+        }
+        return $target;
+    }
+    return $fallback;
 }
 
 function email_campaign_xlsx_col_index(string $ref, int $fallback): int
@@ -3210,16 +3306,12 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
         $sx = @simplexml_load_string($ssXml);
         if ($sx !== false) {
             foreach (email_campaign_xlsx_xpath($sx, '//si') as $si) {
-                $buf = '';
-                foreach (email_campaign_xlsx_xpath($si, './/t') as $t) {
-                    $buf .= (string) $t;
-                }
-                $shared[] = $buf;
+                $shared[] = email_campaign_xlsx_si_text($si);
             }
         }
     }
 
-    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    $sheetXml = $zip->getFromName(email_campaign_xlsx_first_sheet_path($zip));
     if (!is_string($sheetXml) || $sheetXml === '') {
         // Fallback: first worksheet_* path
         for ($i = 0; $i < $zip->numFiles; $i++) {

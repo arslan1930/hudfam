@@ -185,7 +185,7 @@ render_header('Extracting · ' . $country, 'team');
       );
     ?>
     <p class="muted">
-      <span id="sites_count_label"><?= count($domains) ?></span> site<?= count($domains) === 1 ? '' : 's' ?>
+      <span id="sites_count_label"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
       in this country’s <strong>shared</strong> Sites list
       (both teammates see the same number after refresh)
     </p>

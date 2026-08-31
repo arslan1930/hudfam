@@ -85,7 +85,7 @@
     if (footerCount) {
       footerCount.textContent = n + ' site' + (n === 1 ? '' : 's');
     }
-    if (countLabel) countLabel.textContent = String(n);
+    if (countLabel) countLabel.textContent = n + ' site' + (n === 1 ? '' : 's');
     if (copyBtn) copyBtn.disabled = n === 0;
     syncOpenBulkButton();
   }

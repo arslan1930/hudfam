@@ -2469,7 +2469,10 @@ if (!str_contains($campLib, 'function email_campaign_bulk_result_message')
     || !str_contains($campApp, 'Extra columns after email 4 are ignored')
     || !str_contains($campLib, 'function email_campaign_xlsx_xpath')
     || !str_contains($campLib, 'local-name()')
-    || !str_contains($campLib, 'function_exists(\'simplexml_load_string\')')) {
+    || !str_contains($campLib, 'function_exists(\'simplexml_load_string\')')
+    || !str_contains($campLib, 'function email_campaign_xlsx_first_sheet_path')
+    || !str_contains($campLib, 'php://temp')
+    || !str_contains($campLib, 'rPh')) {
     fail('Campaign paste/import missing shared result message, extra-column help, or xlsx xpath fix');
 } else {
     ok('Campaign paste/import result message + extra-column help');
