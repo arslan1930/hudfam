@@ -2050,10 +2050,14 @@ if (!str_contains($teamDash, "post('action') === 'set_status'")
     || !str_contains($teamDash, 'csrf_field()')
     || !str_contains($teamDash, 'team_can_set_department_task_status')
     || !str_contains($teamDash, 'id="dashboard-search"')
-    || !str_contains($teamDash, 'data-dashboard-item')) {
-    fail('team dashboard missing status dropdown CSRF or Filter this page');
+    || !str_contains($teamDash, 'data-dashboard-item')
+    || !str_contains($teamDash, 'department_primary_tool_url')
+    || !str_contains($teamDash, '>Tasks</a>')
+    || !str_contains($teamDash, 'department_task_assignee_label')
+    || !str_contains($teamDash, 'Tasks and assignment')) {
+    fail('team dashboard missing status dropdown CSRF, Filter this page, or tool Open');
 } else {
-    ok('team dashboard status dropdown + Filter this page');
+    ok('team dashboard status dropdown + Filter this page + tool Open');
 }
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
@@ -2061,6 +2065,8 @@ foreach ([
     'clear_open_department_task_assignees',
     'department_task_is_overdue',
     'departments_dashboard_stats',
+    'department_primary_tool_url',
+    'department_task_assignee_label',
 ] as $fn) {
     if (!str_contains($deptLib, "function {$fn}")) {
         fail("departments.php missing {$fn}");
@@ -2247,6 +2253,7 @@ foreach ([
     'assignee cannot change someone else task status',
     'prospect_site_rows_html Niche before Domain, no Status',
     'edit keeps historical assignee after remove',
+    'department primary tool URLs + assignee label',
 ] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing Departments coverage: {$needle}");
@@ -2697,6 +2704,7 @@ foreach ([
     'semrush Clear country is Finding not Extracting',
     'extract last_pushed_at stamped after Push',
     'team_page_unlocked admin emails search + delete alias',
+    'department primary tool URLs + assignee label',
 ] as $needle) {
     if (!str_contains($testsTeam, $needle)) {
         fail("tests_run.php missing Team coverage: {$needle}");

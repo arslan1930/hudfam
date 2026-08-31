@@ -97,6 +97,7 @@ if ($deptScoped) {
               <tr>
                 <th>Department</th>
                 <th>Task</th>
+                <th>Assigned</th>
                 <th>Status</th>
                 <th>Due</th>
                 <th></th>
@@ -107,15 +108,22 @@ if ($deptScoped) {
                 $mine = (int) ($t['assigned_to'] ?? 0) === $uid;
                 $overdue = department_task_is_overdue($t);
                 $canSetStatus = team_can_set_department_task_status($user, $t);
+                $slug = (string) ($t['department_slug'] ?? '');
+                $assigneeLabel = department_task_assignee_label($t);
+                $toolUrl = department_primary_tool_url($slug);
+                $folderUrl = department_folder_url($slug);
+                $openLabel = department_task_open_label($slug);
                 $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
                 $hay = mb_strtolower(trim(
                     (string) $t['department_name'] . ' '
                     . (string) $t['title'] . ' '
                     . department_task_status_label((string) $t['status']) . ' '
+                    . $assigneeLabel . ' '
                     . (string) ($t['notes'] ?? '') . ' '
                     . (string) ($t['due_date'] ?? '')
                     . ($mine ? ' yours' : '')
                     . ($overdue ? ' overdue' : '')
+                    . ' ' . $openLabel
                 ));
                 ?>
               <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>
@@ -129,6 +137,7 @@ if ($deptScoped) {
                     <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
                   <?php endif; ?>
                 </td>
+                <td class="muted"><?= h($assigneeLabel) ?></td>
                 <td>
                   <?php if ($canSetStatus): ?>
                   <form method="post" action="index.php?page=team_dashboard" class="inline-form">
@@ -147,7 +156,10 @@ if ($deptScoped) {
                 </td>
                 <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
                 <td>
-                  <a class="btn secondary small" href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $t['department_slug']) ?>">Open</a>
+                  <div class="dept-task-actions">
+                    <a class="btn secondary small" href="<?= h($toolUrl) ?>" title="<?= h($openLabel) ?>"><?= h($openLabel) ?></a>
+                    <a class="muted" href="<?= h($folderUrl) ?>">Tasks</a>
+                  </div>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -206,16 +218,17 @@ if ($deptScoped) {
     <?php if ($myDepartments): ?>
     <div class="card" style="margin-top:1rem">
       <h2>Your departments</h2>
+      <p class="muted">Tasks and assignment — tools are in Your tools above.</p>
       <div class="folders">
         <?php foreach ($myDepartments as $d):
             $stats = department_stats((int) $d['id']);
             ?>
           <a class="folder" href="index.php?page=team_departments&amp;folder=<?= urlencode((string) $d['slug']) ?>"
              data-dashboard-item
-             data-search="<?= h(mb_strtolower((string) $d['name'] . ' ' . (int) $stats['open_tasks'] . ' open tasks')) ?>">
+             data-search="<?= h(mb_strtolower((string) $d['name'] . ' ' . (int) $stats['open_tasks'] . ' open tasks assignment')) ?>">
             <h3><?= h((string) $d['name']) ?></h3>
-            <p class="muted"><?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?></p>
-            <?php folder_open_cue(); ?>
+            <p class="muted"><?= (int) $stats['open_tasks'] ?> open task<?= (int) $stats['open_tasks'] === 1 ? '' : 's' ?> · assignment</p>
+            <?php folder_open_cue('Tasks'); ?>
           </a>
         <?php endforeach; ?>
       </div>

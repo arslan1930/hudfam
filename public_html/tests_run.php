@@ -7042,6 +7042,19 @@ try {
     } else {
         fail('semrush Clear country ACL unexpected');
     }
+    $otherTool = department_primary_tool_url('unknown_dept');
+    if (department_primary_tool_url('site_extracting') === 'index.php?page=team_extracting'
+        && department_primary_tool_url('site_finding') === 'index.php?page=team_prospect_check'
+        && department_primary_tool_url('email_extracting') === 'index.php?page=team_sites_emails'
+        && department_primary_tool_url('communication') === 'index.php?page=team_email_campaigns'
+        && str_contains($otherTool, 'team_departments')
+        && str_contains($otherTool, 'folder=unknown_dept')
+        && department_task_open_label('site_extracting') === 'Open Extracting sites'
+        && department_task_assignee_label(['assigned_to' => 0]) === 'Whole department') {
+        pass('department primary tool URLs + assignee label');
+    } else {
+        fail('department primary tool URL helper unexpected');
+    }
 
     $day = '2099-01-15';
     $batchDe = get_or_create_prospect_batch(
