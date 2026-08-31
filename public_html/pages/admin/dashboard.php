@@ -63,6 +63,11 @@ $invoiceDrafts = cached_count_result('dash_invoice_drafts', static function () {
 $invoiceUnpaid = cached_count_result('dash_invoice_unpaid', static function () {
     return count_invoices_unpaid();
 });
+$invoiceWaitingAged = cached_count_result('dash_invoice_waiting_aged', static function () {
+    return function_exists('count_invoices_waiting_older_than')
+        ? count_invoices_waiting_older_than(14)
+        : 0;
+});
 
 $recent = [];
 try {
@@ -119,6 +124,15 @@ $adminEmailsNew = function_exists('admin_has_new_data') && admin_has_new_data('e
 $teamCount = !empty($team['ok']) ? (int) $team['n'] : 0;
 $invoiceDraftCount = !empty($invoiceDrafts['ok']) ? (int) $invoiceDrafts['n'] : 0;
 $invoiceUnpaidCount = !empty($invoiceUnpaid['ok']) ? (int) $invoiceUnpaid['n'] : 0;
+$invoiceWaitingAgedCount = !empty($invoiceWaitingAged['ok']) ? (int) $invoiceWaitingAged['n'] : 0;
+$waitingByBill = [];
+try {
+    $waitingByBill = function_exists('list_invoices_waiting_totals_by_bill_as')
+        ? list_invoices_waiting_totals_by_bill_as(8)
+        : [];
+} catch (Throwable $e) {
+    $waitingByBill = [];
+}
 $mustChangeCount = !empty($mustChangePasswords['ok']) ? (int) $mustChangePasswords['n'] : 0;
 $campaignProjectCount = !empty($campaignProjects['ok']) ? (int) $campaignProjects['n'] : 0;
 $campaignSheetSub = '';
@@ -190,10 +204,16 @@ render_dashboard_help('admin');
       'Live placements not marked paid'
   );
   render_admin_dashboard_stat(
-      'Unpaid invoices',
+      'Waiting invoices',
       $invoiceUnpaid,
       'index.php?page=admin_invoices&filter=unpaid',
-      'Generated invoices waiting for payment'
+      'Sent invoices still unpaid'
+  );
+  render_admin_dashboard_stat(
+      'Waiting > 14 days',
+      $invoiceWaitingAged,
+      'index.php?page=admin_invoices&filter=unpaid',
+      'Waiting bills dated 14 days ago or older'
   );
   ?>
 </div>
@@ -226,6 +246,13 @@ if (!empty($invoiceDrafts['ok']) && $invoiceDraftCount > 0) {
         'href' => 'index.php?page=admin_invoices&filter=draft',
         'label' => number_format($invoiceDraftCount) . ' draft invoice' . ($invoiceDraftCount === 1 ? '' : 's'),
         'search' => 'draft invoices',
+    ];
+}
+if (!empty($invoiceWaitingAged['ok']) && $invoiceWaitingAgedCount > 0) {
+    $attention[] = [
+        'href' => 'index.php?page=admin_invoices&filter=unpaid',
+        'label' => number_format($invoiceWaitingAgedCount) . ' waiting > 14 days',
+        'search' => 'waiting invoices overdue unpaid 14 days',
     ];
 }
 if ($adminEmailsNew) {
@@ -299,10 +326,10 @@ if ($attention):
       <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_invoices&amp;filter=unpaid" data-dashboard-item
-     data-search="invoices generate printable blank draft done payment unpaid">
+     data-search="invoices generate printable blank draft waiting paid payment unpaid">
     <h2>Invoices</h2>
     <p><?php if (!empty($invoiceUnpaid['ok']) && !empty($invoiceDrafts['ok'])): ?>
-        <?= number_format($invoiceUnpaidCount) ?> unpaid
+        <?= number_format($invoiceUnpaidCount) ?> waiting
         · <?= number_format($invoiceDraftCount) ?> draft.
       <?php else: ?>
         Generate printable invoices from unpaid LIVE orders.
@@ -324,6 +351,30 @@ if ($attention):
   </a>
 </div>
 <p class="help dashboard-search-empty" data-dashboard-search-empty hidden style="margin-top:0.5rem">No dashboard items match your search.</p>
+
+<?php if ($waitingByBill): ?>
+<div class="card" id="dashboard-waiting-bills" data-dashboard-item
+     data-search="waiting invoices bill as unpaid euro totals">
+  <div class="invoice-list-toolbar" style="margin-bottom:0.7rem">
+    <h2 style="margin:0"><?= label_with_info('Waiting by bill-as', 'Unpaid sent invoices grouped by client email or name. Open Waiting to mark paid.') ?></h2>
+    <a class="btn secondary small" href="index.php?page=admin_invoices&amp;filter=unpaid">Waiting invoices</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Bill as</th><th class="num">Bills</th><th class="num">Total</th></tr></thead>
+      <tbody>
+      <?php foreach ($waitingByBill as $billRow): ?>
+        <tr>
+          <td><?= h((string) $billRow['bill_as']) ?></td>
+          <td class="num"><?= (int) $billRow['n'] ?></td>
+          <td class="num"><?= h(format_euro($billRow['total'])) ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="card" id="dashboard-recent-card">
   <div class="invoice-list-toolbar" style="margin-bottom:0.7rem">

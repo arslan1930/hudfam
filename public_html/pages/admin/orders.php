@@ -105,8 +105,12 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
         $bits[] = 'p=' . $p;
     }
     $download = strtolower(trim((string) ($params['download'] ?? '')));
-    if ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt') {
+    if ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt' || $download === 'month_close') {
         $bits[] = 'download=' . rawurlencode($download);
+    }
+    $closeMonth = trim((string) ($params['close_month'] ?? ''));
+    if ($download === 'month_close' && $closeMonth !== '') {
+        $bits[] = 'close_month=' . rawurlencode($closeMonth);
     }
     $copy = strtolower(trim((string) ($params['copy'] ?? '')));
     if ($copy === 'live_urls') {
@@ -150,7 +154,20 @@ if ($isProcessing) {
 }
 
 $download = strtolower((string) get('download'));
-if ($folder !== '' && ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt')) {
+if ($folder !== '' && ($download === 'csv' || $download === 'xls' || $download === 'excel' || $download === 'txt' || $download === 'month_close')) {
+    if ($download === 'month_close') {
+        $ym = function_exists('order_pipeline_close_month')
+            ? order_pipeline_close_month((string) get('close_month'))
+            : date('Y-m');
+        [$monthFrom, $monthTo] = order_pipeline_month_close_bounds($ym);
+        $monthOpts = $listOpts;
+        $monthOpts['folder'] = 'completed';
+        $monthOpts['status'] = 'all';
+        $monthOpts['date_from'] = $monthFrom;
+        $monthOpts['date_to'] = $monthTo;
+        order_pipeline_download_month_close(order_pipeline_export_rows(list_order_pipeline_rows($monthOpts)), $ym);
+        exit;
+    }
     $exportItems = list_order_pipeline_rows($listOpts);
     if ($download === 'txt') {
         order_pipeline_download_txt(order_live_urls_from_rows($exportItems));
@@ -363,7 +380,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         : 'None of the selected rows are unpaid completed orders with a LIVE URL.'
                 );
             }
-            redirect('index.php?page=admin_invoice_generate&ids=' . implode(',', $ready));
+            $matchId = 0;
+            if (function_exists('invoice_bill_as_labels') && function_exists('invoice_match_open_for_bill_as')) {
+                $readyRows = [];
+                foreach ($picked as $row) {
+                    if (in_array((int) ($row['id'] ?? 0), $ready, true)) {
+                        $readyRows[] = $row;
+                    }
+                }
+                $readyLabels = invoice_bill_as_labels($readyRows);
+                if (count($readyLabels) === 1) {
+                    $match = invoice_match_open_for_bill_as($readyLabels[0]);
+                    $matchId = (int) ($match['id'] ?? 0);
+                }
+            }
+            redirect(invoice_generate_href_for_orders($ready, $matchId));
         }
     } catch (Throwable $e) {
         flash('error', $e->getMessage());
@@ -1016,6 +1047,9 @@ if ($compactUnpaidStats && !$showPagingStats) {
               </button>
               <?php if ($openInv): ?>
                 <a class="order-on-invoice" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $openInv['id'] ?>">Invoice <?= h((string) $openInv['invoice_number']) ?></a>
+                <?php if (function_exists('invoice_can_append_orders') && invoice_can_append_orders($openInv)): ?>
+                  <a class="order-on-invoice" href="<?= h(invoice_generate_append_href((int) $openInv['id'])) ?>">Add sites</a>
+                <?php endif; ?>
               <?php endif; ?>
             <?php endif; ?>
           </td>
@@ -1149,12 +1183,17 @@ if ($compactUnpaidStats && !$showPagingStats) {
 <div class="card order-download-bar" id="sheet-download">
   <div>
     <strong>Download this sheet</strong>
-    <p class="muted" style="margin:0.25rem 0 0">CSV and Excel are the full sheet (this folder and filter, all pages). .txt is live URLs only, one per line.</p>
+    <p class="muted" style="margin:0.25rem 0 0">CSV and Excel are the full sheet (this folder and filter, all pages). .txt is live URLs only, one per line.<?php if ($isCompleted): ?> Month close is all Completed rows in this calendar month (paid and unpaid), with owner / decided / profit totals.<?php endif; ?></p>
   </div>
   <div class="actions">
     <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'csv'])) ?>">Download CSV</a>
     <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'xls'])) ?>">Download Excel</a>
     <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'txt'])) ?>">Download .txt</a>
+    <?php if ($isCompleted && function_exists('order_pipeline_close_month')): ?>
+      <?php $closeYm = order_pipeline_close_month(); ?>
+      <a class="btn secondary small" href="<?= h($ordersQs(['download' => 'month_close', 'close_month' => $closeYm, 'status' => 'all'])) ?>"
+         title="All Completed rows in <?= h($closeYm) ?> — paid and unpaid, with totals">Download month close</a>
+    <?php endif; ?>
   </div>
 </div>
 

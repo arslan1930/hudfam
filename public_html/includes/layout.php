@@ -129,7 +129,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_orders&folder=processing' => ['Order management', 'Processing'],
                 'admin_orders&folder=completed' => ['Completed orders', 'Unpaid LIVE · invoices'],
                 'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
-                'admin_invoices&filter=unpaid' => ['Invoices', 'Printable bills from unpaid LIVE'],
+                'admin_invoices&filter=unpaid' => ['Invoices', 'Waiting bills from unpaid LIVE'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
                 'admin_account' => ['Account', 'Email verify · password'],
             ],

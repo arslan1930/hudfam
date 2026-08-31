@@ -410,9 +410,11 @@ function invoices_where_sql(array $opts = []): array
     $params = [];
     $q = trim((string) ($opts['q'] ?? ''));
     if ($q !== '') {
-        $like = '%' . $q . '%';
-        $clauses[] = '(i.invoice_number LIKE ? OR i.client_name LIKE ? OR i.bill_to_name LIKE ? OR IFNULL(i.admin_note, \'\') LIKE ? OR i.payment_status LIKE ? OR i.work_status LIKE ?)';
-        array_push($params, $like, $like, $like, $like, $like, $like);
+        [$searchSql, $searchParams] = invoices_search_sql($q);
+        if ($searchSql !== '') {
+            $clauses[] = $searchSql;
+            array_push($params, ...$searchParams);
+        }
     }
     $filter = normalize_invoice_list_filter((string) ($opts['filter'] ?? ''));
     if ($filter === 'draft') {
@@ -431,6 +433,37 @@ function invoices_where_sql(array $opts = []): array
         return ['', []];
     }
     return [' WHERE ' . implode(' AND ', $clauses), $params];
+}
+
+/**
+ * List search: number / bill-as / note, plus Draft and Waiting labels (not SQL work_status done).
+ *
+ * @return array{0:string,1:list<mixed>}
+ */
+function invoices_search_sql(string $q): array
+{
+    $q = trim($q);
+    if ($q === '') {
+        return ['', []];
+    }
+    $like = '%' . $q . '%';
+    $or = [
+        'i.invoice_number LIKE ?',
+        'i.client_name LIKE ?',
+        'i.bill_to_name LIKE ?',
+        "IFNULL(i.admin_note, '') LIKE ?",
+        'i.payment_status LIKE ?',
+    ];
+    $params = [$like, $like, $like, $like, $like];
+    $ql = mb_strtolower($q);
+    if (preg_match('/\bwaiting\b/u', $ql)) {
+        $or[] = "(i.payment_status='unpaid' AND COALESCE(i.work_status, 'done')='done')";
+    }
+    if (preg_match('/\bdraft\b/u', $ql)) {
+        $or[] = "i.work_status='draft'";
+    }
+
+    return ['(' . implode(' OR ', $or) . ')', $params];
 }
 
 function count_invoices(array $opts = []): int
@@ -461,6 +494,63 @@ function count_invoices_unpaid(): int
         "SELECT COUNT(*) FROM invoices
          WHERE payment_status='unpaid' AND work_status='done'"
     )->fetchColumn();
+}
+
+/** Waiting bills whose invoice date is at least $days ago. */
+function count_invoices_waiting_older_than(int $days = 14): int
+{
+    ensure_invoice_schema();
+    $days = max(1, min(365, $days));
+    try {
+        $stmt = db()->prepare(
+            "SELECT COUNT(*) FROM invoices
+             WHERE payment_status='unpaid' AND COALESCE(work_status, 'done')='done'
+               AND invoice_date <= DATE_SUB(CURDATE(), INTERVAL ? DAY)"
+        );
+        $stmt->execute([$days]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * Waiting unpaid totals grouped by bill-as (largest first).
+ *
+ * @return list<array{bill_as:string,n:int,total:float}>
+ */
+function list_invoices_waiting_totals_by_bill_as(int $limit = 8): array
+{
+    ensure_invoice_schema();
+    $limit = max(1, min(40, $limit));
+    try {
+        $sql = "SELECT
+                    TRIM(COALESCE(NULLIF(TRIM(bill_to_name), ''), client_name)) AS bill_as,
+                    COUNT(*) AS n,
+                    COALESCE(SUM(total_amount), 0) AS total
+                 FROM invoices
+                 WHERE payment_status='unpaid' AND COALESCE(work_status, 'done')='done'
+                 GROUP BY bill_as
+                 HAVING bill_as <> ''
+                 ORDER BY total DESC, n DESC
+                 LIMIT " . $limit;
+        $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        $bill = trim((string) ($row['bill_as'] ?? ''));
+        if ($bill === '') {
+            continue;
+        }
+        $out[] = [
+            'bill_as' => $bill,
+            'n' => (int) ($row['n'] ?? 0),
+            'total' => round((float) ($row['total'] ?? 0), 2),
+        ];
+    }
+    return $out;
 }
 
 function get_invoice(int $id): ?array
@@ -762,8 +852,12 @@ function invoice_bill_as_labels(array $rows): array
     $labels = [];
     foreach ($rows as $row) {
         $v = trim((string) ($row['client_label'] ?? ''));
-        if ($v !== '') {
-            $labels[$v] = $v;
+        $key = invoice_bill_as_key($v);
+        if ($key === '') {
+            continue;
+        }
+        if (!isset($labels[$key])) {
+            $labels[$key] = $v;
         }
     }
     return array_values($labels);
@@ -838,6 +932,68 @@ function invoice_display_bill_as(array $invoice): string
         $name = trim((string) ($invoice['client_name'] ?? ''));
     }
     return $name;
+}
+
+function invoice_bill_as_key(string $value): string
+{
+    return mb_strtolower(trim($value));
+}
+
+/**
+ * First open (Waiting then Draft) unpaid invoice with this bill-as.
+ *
+ * @return ?array<string,mixed>
+ */
+function invoice_match_open_for_bill_as(string $billAs): ?array
+{
+    $key = invoice_bill_as_key($billAs);
+    if ($key === '') {
+        return null;
+    }
+    foreach (list_invoices_open_for_append(200) as $inv) {
+        if (invoice_bill_as_key(invoice_display_bill_as($inv)) === $key) {
+            return $inv;
+        }
+    }
+    return null;
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function invoice_rows_for_bill_as(array $rows, string $billAs): array
+{
+    $key = invoice_bill_as_key($billAs);
+    if ($key === '') {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        if (invoice_bill_as_key((string) ($row['client_label'] ?? '')) === $key) {
+            $out[] = $row;
+        }
+    }
+    return $out;
+}
+
+function invoice_generate_href_for_orders(array $orderIds, int $existingInvoiceId = 0): string
+{
+    $ids = [];
+    foreach ($orderIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    $href = 'index.php?page=admin_invoice_generate';
+    if ($ids) {
+        $href .= '&ids=' . implode(',', $ids);
+    }
+    if ($existingInvoiceId > 0) {
+        $href .= '&existing=' . $existingInvoiceId;
+    }
+    return $href;
 }
 
 function invoice_has_extra_bill_details(array $invoice): bool
@@ -1101,13 +1257,7 @@ function invoice_list_is_incomplete(array $invoice): bool
 
 function invoice_work_status_label(array $invoice): string
 {
-    if (invoice_is_paid($invoice)) {
-        return 'Paid';
-    }
-    if (invoice_is_draft($invoice)) {
-        return 'Draft';
-    }
-    return 'Done';
+    return invoice_append_status_label($invoice);
 }
 
 function normalize_invoice_work_status(string $status): string

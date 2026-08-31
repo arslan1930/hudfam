@@ -5323,6 +5323,34 @@ try {
         } else {
             fail('append guards missed this/other invoice or mixed bill-as');
         }
+        $waitingLabel = invoice_work_status_label($draftSent ?: []);
+        $draftLabel = invoice_work_status_label(get_invoice((int) $bDraftId) ?: []);
+        $matchWait = invoice_match_open_for_bill_as('BUYER@example.com');
+        $hrefMatch = invoice_generate_href_for_orders([(int) $sentGrowId], (int) ($matchWait['id'] ?? 0));
+        db()->prepare('UPDATE invoices SET invoice_date = DATE_SUB(CURDATE(), INTERVAL 20 DAY) WHERE id=?')
+            ->execute([(int) $draftId]);
+        $agedN = count_invoices_waiting_older_than(14);
+        $foundBillTotal = false;
+        foreach (list_invoices_waiting_totals_by_bill_as(40) as $br) {
+            if (invoice_bill_as_key((string) ($br['bill_as'] ?? '')) === 'buyer@example.com') {
+                $foundBillTotal = (int) ($br['n'] ?? 0) >= 1 && (float) ($br['total'] ?? 0) > 0;
+                break;
+            }
+        }
+        if ($waitingLabel === 'Waiting'
+            && $draftLabel === 'Draft'
+            && $matchWait
+            && invoice_bill_as_key(invoice_display_bill_as($matchWait)) === 'buyer@example.com'
+            && invoice_can_append_orders($matchWait)
+            && !invoice_is_draft($matchWait)
+            && str_contains($hrefMatch, 'ids=' . (int) $sentGrowId)
+            && str_contains($hrefMatch, 'existing=' . (int) ($matchWait['id'] ?? 0))
+            && $agedN >= 1
+            && $foundBillTotal) {
+            pass('invoice waiting match, labels, aging');
+        } else {
+            fail('invoice waiting ops helpers');
+        }
         $linkedClient = (int) ($pipeInv['client_id'] ?? 0);
         if ($pipeInv && $linkedClient === 0 && (string) ($pipeInv['bill_to_name'] ?? '') === 'buyer@example.com') {
             if (invoice_display_bill_as($pipeInv) === 'buyer@example.com'
@@ -5836,6 +5864,27 @@ try {
     }
 
     $sitePricesLibSrc = file_get_contents(__DIR__ . '/includes/site_prices.php') ?: '';
+    $febBounds = order_pipeline_month_close_bounds('2026-02');
+    $monthCloseTot = order_pipeline_month_close_totals([
+        ['owner' => '10.00', 'decided' => '25.50', 'profit' => '15.50', 'paid' => 'Paid'],
+        ['owner' => '4', 'decided' => '6', 'profit' => '2', 'paid' => ''],
+    ]);
+    if (order_pipeline_close_month('2026-08') === '2026-08'
+        && order_pipeline_close_month('nope') === date('Y-m')
+        && $febBounds === ['2026-02-01', '2026-02-28']
+        && $monthCloseTot['sites'] === 2
+        && abs($monthCloseTot['owner'] - 14.0) < 0.011
+        && abs($monthCloseTot['decided'] - 31.5) < 0.011
+        && abs($monthCloseTot['profit'] - 17.5) < 0.011
+        && $monthCloseTot['paid'] === 1
+        && $monthCloseTot['unpaid'] === 1
+        && str_contains($ordersPhpSrc, 'Download month close')
+        && str_contains($ordersPhpSrc, "download === 'month_close'")) {
+        pass('OM month close bounds and totals');
+    } else {
+        fail('OM month close helpers');
+    }
+
     if (str_contains($ordersPhpSrc, 'data-copy-check')
         && str_contains($ordersPhpSrc, 'data-push-check')
         && str_contains($ordersPhpSrc, 'Copy selected sites (this page)')
@@ -6022,6 +6071,39 @@ try {
             pass('invoice list filter unpaid excludes drafts');
         } else {
             fail('invoice list filter unpaid');
+        }
+        $waitSearch = list_invoices(['q' => 'Waiting']);
+        $doneSearch = list_invoices(['q' => 'done']);
+        $draftSearch = list_invoices(['q' => 'Draft']);
+        $foundWaitSearch = false;
+        $foundDoneSearch = false;
+        $foundDraftSearch = false;
+        foreach ($waitSearch as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $genId) {
+                $foundWaitSearch = true;
+                break;
+            }
+        }
+        foreach ($doneSearch as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $genId) {
+                $foundDoneSearch = true;
+                break;
+            }
+        }
+        foreach ($draftSearch as $row) {
+            if ((int) ($row['id'] ?? 0) === (int) $invId) {
+                $foundDraftSearch = true;
+                break;
+            }
+        }
+        $caseLabels = invoice_bill_as_labels([
+            ['client_label' => 'Buyer@Example.com'],
+            ['client_label' => 'buyer@example.com'],
+        ]);
+        if ($foundWaitSearch && !$foundDoneSearch && $foundDraftSearch && count($caseLabels) === 1) {
+            pass('invoice search Waiting/Draft labels, not done');
+        } else {
+            fail('invoice search Waiting/Draft labels');
         }
         $clientList = list_invoices(['client_id' => (int) $genClientId]);
         $foundGenOnClient = false;

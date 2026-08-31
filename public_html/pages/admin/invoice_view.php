@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'save_bill') {
             if ($isManual) {
-                throw new InvalidArgumentException('Use Save as draft / Save as done on a blank invoice.');
+                throw new InvalidArgumentException('Use Save as draft / Mark as sent on a blank invoice.');
             }
             update_invoice_bill_header($id, [
                 'invoice_date' => (string) post('invoice_date'),
@@ -171,7 +171,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php if ($editable): ?>
         · <strong>Draft</strong> = still needs data · <strong>Waiting</strong> = sent, still unpaid
       <?php elseif ($isDraft && !$isManual): ?>
-        · Draft — add more sites from Generate, then Save as done to send
+        · Draft — add more sites from Generate, then Mark as sent
       <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
         · Waiting for payment — add more unpaid sites to this invoice, or Mark paid when it arrives
       <?php elseif ($editableBill): ?>
@@ -200,7 +200,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
               title="Save progress even if incomplete">Save as draft</button>
       <button class="btn" type="submit" form="blank-invoice-form" name="work_status" value="done"
               id="blank-invoice-save-done"
-              title="Mark as sent — requires a bill total above €0">Save as done</button>
+              title="Mark as sent — requires a bill total above €0">Mark as sent</button>
     <?php endif; ?>
     <?php if ($isDraft && !$isManual && !$isPaid): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
@@ -210,7 +210,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
             )) ?>);">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_sent">
-        <button class="btn" type="submit">Save as done</button>
+        <button class="btn" type="submit">Mark as sent</button>
       </form>
     <?php endif; ?>
     <?php if (!$isPaid && !$isDraft): ?>
@@ -226,14 +226,14 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <button class="btn-paid btn-paid-mark" type="submit">Mark paid</button>
       </form>
     <?php elseif ($isDraft): ?>
-      <span class="help" style="align-self:center">Mark paid after Save as done</span>
+      <span class="help" style="align-self:center">Mark paid after Mark as sent</span>
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>&amp;print=1" target="_blank" rel="noopener"
        title="Open a print preview. It does not print until you click Print.">Print / PDF</a>
   </div>
   <?php if ($editable): ?>
     <p class="help no-print" id="blank-invoice-save-hint" style="margin:0.35rem 0 0;text-align:right" hidden>
-      Save as done needs a total above €0. Use <strong>Save as draft</strong> while descriptions or amounts are still incomplete.
+      Mark as sent needs a total above €0. Use <strong>Save as draft</strong> while descriptions or amounts are still incomplete.
     </p>
   <?php endif; ?>
 </div>
@@ -370,7 +370,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       e.preventDefault();
       syncSaveState(0);
       if (saveHint) saveHint.hidden = false;
-      alert('Save as done needs a total above €0. Use Save as draft while the invoice is incomplete.');
+      alert('Mark as sent needs a total above €0. Use Save as draft while the invoice is incomplete.');
     }
   });
   syncRemove();

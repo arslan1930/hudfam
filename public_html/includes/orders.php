@@ -1841,6 +1841,97 @@ function order_pipeline_download_csv(array $rows): void
     fclose($out);
 }
 
+function order_pipeline_close_month(string $raw = ''): string
+{
+    $raw = trim($raw);
+    if (preg_match('/^(\d{4})-(\d{2})$/', $raw, $m)) {
+        $year = (int) $m[1];
+        $month = (int) $m[2];
+        if ($year >= 2018 && $month >= 1 && $month <= 12) {
+            return sprintf('%04d-%02d', $year, $month);
+        }
+    }
+    return date('Y-m');
+}
+
+/** @return array{0:string,1:string} */
+function order_pipeline_month_close_bounds(string $ym): array
+{
+    $ym = order_pipeline_close_month($ym);
+    $start = $ym . '-01';
+    $end = date('Y-m-t', strtotime($start . ' 12:00:00') ?: time());
+    return [$start, $end];
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @return array{sites:int,owner:float,decided:float,profit:float,paid:int,unpaid:int}
+ */
+function order_pipeline_month_close_totals(array $rows): array
+{
+    $owner = 0.0;
+    $decided = 0.0;
+    $profit = 0.0;
+    $paidN = 0;
+    $unpaidN = 0;
+    foreach ($rows as $r) {
+        $owner += (float) parse_money($r['owner'] ?? 0);
+        $decided += (float) parse_money($r['decided'] ?? 0);
+        $profit += (float) parse_money($r['profit'] ?? 0);
+        if (trim((string) ($r['paid'] ?? '')) !== '') {
+            $paidN++;
+        } else {
+            $unpaidN++;
+        }
+    }
+
+    return [
+        'sites' => count($rows),
+        'owner' => round($owner, 2),
+        'decided' => round($decided, 2),
+        'profit' => round($profit, 2),
+        'paid' => $paidN,
+        'unpaid' => $unpaidN,
+    ];
+}
+
+function order_pipeline_download_month_close(array $rows, string $ym): void
+{
+    $ym = order_pipeline_close_month($ym);
+    $totals = order_pipeline_month_close_totals($rows);
+    $filename = 'order-month-close-' . $ym . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    $out = fopen('php://output', 'w');
+    if ($out === false) {
+        return;
+    }
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Month close', $ym]);
+    fputcsv($out, ['Exported', date('Y-m-d H:i')]);
+    fputcsv($out, ['Sites', (string) $totals['sites']]);
+    fputcsv($out, ['Owner total', format_money($totals['owner'])]);
+    fputcsv($out, ['Decided total', format_money($totals['decided'])]);
+    fputcsv($out, ['Profit', format_money($totals['profit'])]);
+    fputcsv($out, ['Paid rows', (string) $totals['paid']]);
+    fputcsv($out, ['Unpaid rows', (string) $totals['unpaid']]);
+    fputcsv($out, []);
+    fputcsv($out, [
+        'Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink',
+        'Owner price', 'Decided price', 'Article doc', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
+    ]);
+    foreach ($rows as $r) {
+        fputcsv($out, [
+            $r['country'], $r['date'], $r['admin'], $r['client'], $r['site'], $r['note'] ?? '',
+            $r['placement'] ?? '', $r['owner'], $r['decided'], $r['article_doc_url'] ?? '', $r['live_url'], $r['paid'] ?? '',
+            $r['profit'], $r['month'], $r['end_month'] ?? '', $r['year'], $r['status'],
+        ]);
+    }
+    fclose($out);
+}
+
 function order_pipeline_download_xls(array $rows): void
 {
     $filename = 'order-sheet-' . date('Y-m-d') . '.xls';
