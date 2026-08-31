@@ -9,6 +9,10 @@ try {
     flash('error', 'Extracting sites tables are missing. Open upgrade.php once, then reload.');
 }
 
+$wait = extract_hub_waiting_summary($batches);
+$waitSites = (int) ($wait['sites'] ?? 0);
+$waitCountries = (int) ($wait['countries'] ?? 0);
+
 render_header('Extracting sites', 'team');
 ?>
 <?php render_breadcrumbs([
@@ -19,11 +23,17 @@ render_header('Extracting sites', 'team');
   <div>
     <h1>Extracting sites</h1>
     <p class="muted">
-      Countries with sites waiting to extract appear here.
-      The <strong>Sites</strong> number is the <strong>shared</strong> Sites list for that country — both teammates see the same count after refresh (it is not your Filter leftover).
-      Empty countries hide when you open this page (and are removed after 1 hour) until Filter &amp; add brings them back.
-      Our database can be larger — it keeps everything; Extracting shrinks after Push.
+      Shared waiting list per country — both teammates see the same shared <strong>Sites</strong> count after you reload
+      (it is not your Filter leftover). Open a country to extract. Site Finding adds new unique sites.
     </p>
+    <?php if ($waitCountries > 0): ?>
+      <p class="muted" data-extract-hub-total>
+        <strong><?= h(number_format($waitSites)) ?></strong>
+        site<?= $waitSites === 1 ? '' : 's' ?> waiting
+        · <?= (int) $waitCountries ?> <?= $waitCountries === 1 ? 'country' : 'countries' ?>
+        <span class="help">(all countries on this list)</span>
+      </p>
+    <?php endif; ?>
   </div>
   <div class="actions">
     <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
@@ -49,8 +59,9 @@ render_header('Extracting sites', 'team');
     <thead>
       <tr>
         <th>Country</th>
-        <th title="Shared Sites list waiting to extract — same number for every teammate after refresh">Sites</th>
+        <th title="Shared Sites list waiting to extract — same number for every teammate after you reload">Sites</th>
         <th>Updated</th>
+        <th>Last saved</th>
         <th>Last Push</th>
         <th></th>
       </tr>
@@ -58,31 +69,58 @@ render_header('Extracting sites', 'team');
     <tbody>
     <?php foreach ($batches as $b):
         $bCountry = (string) ($b['country'] ?? '');
-        $hay = mb_strtolower($bCountry . ' ' . (int) ($b['site_count'] ?? 0) . ' sites');
+        $siteN = (int) ($b['site_count'] ?? 0);
+        $cues = extract_hub_row_cues($b);
+        $writerName = trim((string) (($b['sites_writer_name'] ?? '') !== ''
+            ? $b['sites_writer_name']
+            : ($b['sites_writer_username'] ?? '')));
+        $writerAt = extract_hub_stamp((string) ($b['sites_writer_at'] ?? ''));
+        $writerLabel = last_writer_label($writerName, $writerAt);
+        $updatedStamp = extract_hub_stamp((string) ($b['updated_at'] ?? ''));
+        $pushStamp = extract_hub_stamp((string) ($b['last_pushed_at'] ?? ''));
+        $hay = mb_strtolower($bCountry . ' ' . $siteN . ' sites ' . $writerName);
+        $badgeClass = !empty($cues['stale']) ? 'sent' : 'agreed';
         ?>
       <tr data-extract-country-row data-search="<?= h($hay) ?>">
         <td><strong><?= h($bCountry) ?></strong></td>
-        <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
-        <td class="muted"><?= h((string) ($b['updated_at'] ?? '')) ?></td>
-        <td class="muted"><?php
-            $lastPush = trim((string) ($b['last_pushed_at'] ?? ''));
-            echo $lastPush !== '' ? h(substr($lastPush, 0, 16)) : '—';
-        ?></td>
+        <td>
+          <span class="extract-hub-cues">
+            <span class="badge <?= h($badgeClass) ?>"><?= (int) $siteN ?></span>
+            <?php if (!empty($cues['large'])): ?>
+              <span class="badge extract-large">Large</span>
+            <?php endif; ?>
+            <?php if (!empty($cues['quiet'])): ?>
+              <span class="badge draft">No Push yet</span>
+            <?php elseif (!empty($cues['stale'])): ?>
+              <span class="badge draft">Quiet</span>
+            <?php endif; ?>
+          </span>
+        </td>
+        <td class="muted"><?= $updatedStamp !== '' ? h($updatedStamp) : '—' ?></td>
+        <td class="muted"><?= $writerLabel !== '' ? h($writerLabel) : '—' ?></td>
+        <td class="muted"><?= $pushStamp !== '' ? h($pushStamp) : '—' ?></td>
         <td><a class="btn secondary small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>
     <?php endforeach; ?>
     </tbody>
   </table>
   </div>
+  <p class="help" id="extract-country-search-empty" hidden>No countries match.</p>
   <script>
   (function () {
     var input = document.getElementById('extract-country-search');
+    var emptyEl = document.getElementById('extract-country-search-empty');
     if (!input) return;
     input.addEventListener('input', function () {
       var q = String(input.value || '').trim().toLowerCase();
-      document.querySelectorAll('[data-extract-country-row]').forEach(function (row) {
-        row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+      var rows = document.querySelectorAll('[data-extract-country-row]');
+      var shown = 0;
+      rows.forEach(function (row) {
+        var hit = !q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1;
+        row.hidden = !hit;
+        if (hit) shown++;
       });
+      if (emptyEl) emptyEl.hidden = !q || shown > 0;
     });
   })();
   </script>

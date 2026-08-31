@@ -1013,6 +1013,18 @@ if (!str_contains($extractingHub, 'shared')
 } else {
     ok('Extracting hub shared Sites list copy');
 }
+if (str_contains($extractingHub, 'Extracting shrinks after Push')) {
+    fail('Extracting hub still says Extracting only shrinks after Push');
+} elseif (!str_contains($extractingHub, 'data-extract-hub-total')
+    || !str_contains($extractingHub, 'Last saved')
+    || !str_contains($extractingHub, 'last_writer_label')
+    || !str_contains($extractingHub, 'extract_hub_row_cues')
+    || !str_contains($extractingHub, 'extract-country-search-empty')
+    || !str_contains($extractingHub, 'No countries match')) {
+    fail('Extracting hub missing waiting total, last-saved, cues, or empty search');
+} else {
+    ok('Extracting hub waiting total, last-saved, cues, empty search');
+}
 $extractLibSync = file_get_contents($root . '/includes/extracting.php') ?: '';
 $prospectsLibSync = file_get_contents($root . '/includes/prospects.php') ?: '';
 $adminProspectsSync = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
@@ -2338,7 +2350,8 @@ if (str_contains($guidesPhp, 'Backspace delete')
     || str_contains($guidesPhp, 'Open links in new tabs')) {
     fail('guide_extracting still documents missing Sites list Open/Backspace UI');
 } elseif (!str_contains($guidesPhp, 'Copy, Undo, Redo')
-    || !str_contains($guidesPhp, 'Open first 10')) {
+    || !str_contains($guidesPhp, 'Open first 10')
+    || !str_contains($guidesPhp, 'waiting list')) {
     fail('guide_extracting missing real Sites list tools');
 } else {
     ok('Extracting guide matches Sites list tools');
@@ -3082,7 +3095,9 @@ if (!str_contains($extractBatchJump, 'extract-country-jump')
     || !str_contains($extractHubSmoke, 'list_extract_batches(2000)')
     || !str_contains($extractLibSmoke, 'min(10000, $limit)')
     || !str_contains($extractLibSmoke, 'live_site_count')
-    || !str_contains($extractLibSmoke, 'EXISTS (SELECT 1 FROM extract_batch_sites')) {
+    || !str_contains($extractLibSmoke, 'function extract_hub_waiting_summary')
+    || !str_contains($extractLibSmoke, 'function extract_hub_row_cues')
+    || !str_contains($extractLibSmoke, 'function extract_hub_stamp')) {
     fail('Extracting missing country switcher, hub search/cap, or live site count');
 } else {
     ok('Extracting country switcher + hub search cap');

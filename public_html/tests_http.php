@@ -1143,6 +1143,17 @@ if ($r['status'] === 200
 } else {
     fail('extractor Extracting hub missing search or empty wait');
 }
+if ($r['status'] === 200 && str_contains($r['body'], 'id="extract-country-search"')) {
+    if (str_contains($r['body'], 'Last saved')
+        && str_contains($r['body'], 'id="extract-country-search-empty"')
+        && str_contains($r['body'], 'data-extract-hub-total')) {
+        pass('extractor Extracting hub last-saved, total, empty search');
+    } else {
+        fail('extractor Extracting hub missing last-saved/total/empty-search');
+    }
+} else {
+    pass('extractor Extracting hub empty wait (no country table)');
+}
 if ($r['status'] === 200 && preg_match('/team_extract_batch&amp;id=(\d+)/', $r['body'], $m)) {
     $rSheet = req('GET', $base . '/index.php?page=team_extract_batch&id=' . (int) $m[1]);
     if ($rSheet['status'] === 200

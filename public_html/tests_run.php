@@ -7645,6 +7645,41 @@ try {
     fail('Our DB / Extracting sync: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+try {
+    $now = strtotime('2026-08-31 16:00:00');
+    $sum = extract_hub_waiting_summary([
+        ['site_count' => 3764],
+        ['site_count' => 3],
+        ['site_count' => 0],
+        ['country' => 'Skip empty'],
+    ]);
+    $stamp = extract_hub_stamp('2026-08-31 16:10:46');
+    $large = extract_hub_row_cues(['site_count' => 1027, 'updated_at' => '2026-08-31 15:01:06', 'last_pushed_at' => '2026-08-31 15:01:00'], $now);
+    $quiet = extract_hub_row_cues(['site_count' => 149, 'updated_at' => '2026-08-20 16:18:09', 'last_pushed_at' => ''], $now);
+    $freshSmall = extract_hub_row_cues(['site_count' => 3, 'updated_at' => '2026-08-29 14:02:36', 'last_pushed_at' => ''], $now);
+    if (
+        (int) ($sum['sites'] ?? 0) === 3767
+        && (int) ($sum['countries'] ?? 0) === 2
+        && $stamp === '2026-08-31 16:10'
+        && extract_hub_stamp('') === ''
+        && !empty($large['large']) && empty($large['stale']) && empty($large['quiet'])
+        && !empty($quiet['stale']) && !empty($quiet['quiet']) && empty($quiet['large'])
+        && empty($freshSmall['stale']) && empty($freshSmall['quiet']) && empty($freshSmall['large'])
+    ) {
+        pass('extract hub waiting total + stale/large/quiet cues');
+    } else {
+        fail('extract hub cues unexpected: ' . json_encode([
+            'sum' => $sum,
+            'stamp' => $stamp,
+            'large' => $large,
+            'quiet' => $quiet,
+            'freshSmall' => $freshSmall,
+        ]));
+    }
+} catch (Throwable $e) {
+    fail('extract hub cues: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 // --- Admin Users U-1: unique email + verify reset ---
 try {
     ensure_account_schema();
