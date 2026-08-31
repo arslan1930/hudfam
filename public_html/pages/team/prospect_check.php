@@ -151,36 +151,12 @@ try {
                         $result['new'] = [];
                         $raw = '';
                     } else {
-                        $parts = [];
-                        foreach (($added['by_country'] ?? []) as $dest => $info) {
-                            $n = (int) ($info['inserted'] ?? 0);
-                            if ($n > 0) {
-                                $parts[] = $n . ' → ' . $dest;
-                            }
-                        }
-                        $msg = 'Merged ' . (int) $added['inserted'] . ' new unique site(s)';
-                        if ($parts) {
-                            $msg .= ' (' . implode(', ', $parts) . ')';
-                        } else {
-                            $msg .= ' into ' . $country;
-                        }
-                        $landed = [];
-                        foreach (($added['by_country'] ?? []) as $dest => $info) {
-                            $n = (int) ($info['inserted'] ?? 0);
-                            if ($n > 0 && !empty($info['extract_batch_id'])) {
-                                $landed[] = $n . ' site' . ($n === 1 ? '' : 's')
-                                    . ' landed on Extracting for ' . $dest;
-                            }
-                        }
-                        if ($landed) {
-                            $msg .= '. ' . implode('. ', $landed);
-                        } elseif (!empty($added['extract_batch_id'])) {
-                            if (function_exists('team_page_unlocked')
-                                && team_page_unlocked($user, 'team_extract_batch')) {
-                                $msg .= ' · also added to Extracting sites → Sites list (per country)';
-                            } else {
-                                $msg .= ' · saved for the Extracting team (Sites list, per country)';
-                            }
+                        $insertedN = (int) $added['inserted'];
+                        $destNames = prospect_destination_names($added['by_country'] ?? [], 'inserted');
+                        $msg = 'Extracting received ' . $insertedN
+                            . ' site' . ($insertedN === 1 ? '' : 's');
+                        if ($destNames !== '') {
+                            $msg .= ' for ' . $destNames;
                         }
                         if (!empty($added['batch_id'])) {
                             $msg .= ' · saved in today’s history';
@@ -197,9 +173,7 @@ try {
                         }
                         prospect_filter_gate_clear();
                         // Only jump to Extracting when that tool is unlocked for this user.
-                        if (!empty($added['extract_batch_id'])
-                            && function_exists('team_page_unlocked')
-                            && team_page_unlocked($user, 'team_extract_batch')) {
+                        if (!empty($added['extract_batch_id']) && $canSendExtracting) {
                             redirect('index.php?page=team_extract_batch&id=' . (int) $added['extract_batch_id']);
                         }
                         $redir = 'index.php?page=team_prospect_check&country=' . urlencode($country);
@@ -270,7 +244,7 @@ if ($result && !empty($result['new'])) {
 $tldGroups = ($result && !empty($result['new']))
     ? group_domains_by_tld($result['new'])
     : [];
-$sendBtnLabel = $canSendExtracting ? 'Send to Extracting' : 'Add to country';
+$sendBtnLabel = 'Send this ending';
 
 // Drop a stale Filter gate when the selected country no longer matches.
 $gateCountry = (string) (($_SESSION['prospect_filter_gate'] ?? [])['country'] ?? '');
@@ -327,6 +301,12 @@ render_header('Filter & add', 'team');
           'label' => 'Country database',
           'attrs' => 'data-fill-language="#language" data-fill-region="select[name=region]" data-reload-on-select="1"',
       ]) ?>
+      <div class="full">
+        <p class="help" style="margin:0">
+          Starting folder for generic TLDs (.com, .net, .eu). Country endings (.at, .ch, …) route to their own folders.
+          Existing Our database URLs stay hidden. Filter removes sites already in each destination country.
+        </p>
+      </div>
       <input type="hidden" name="language" id="language" value="<?= h($language) ?>">
       <div><label>Region</label>
         <select name="region">
@@ -349,34 +329,15 @@ render_header('Filter & add', 'team');
     </div>
   </div>
 
-  <div class="grid two-box">
-    <div class="card box-panel panel-muted">
-      <h2>① Country database (private)</h2>
-      <p class="help">
-        <?php if ($country === ''): ?>
-          Select a country first. The existing site list stays hidden for privacy.
-        <?php else: ?>
-          Filtering still uses the full <?= h($country) ?> database to remove duplicates.
-          The existing site list is hidden from Team for privacy.
-        <?php endif; ?>
-      </p>
-      <div class="empty-state" style="min-height:12rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
-        <p class="muted" style="margin:0;max-width:18rem">
-          Existing country sites are not shown here.<br>
-          Paste your list on the right, then Filter — known sites are removed and only <strong>unique</strong> sites remain.
-        </p>
-      </div>
-    </div>
-    <div class="card box-panel">
-      <h2>② Paste new sites</h2>
-      <?= render_domains_paste_field('domains', $raw, [
-          'id' => 'domains',
-          'label' => 'Root domains',
-          'required' => true,
-          'rows' => 14,
-          'class' => 'inventory-box',
-      ]) ?>
-    </div>
+  <div class="card box-panel">
+    <h2>Paste new sites</h2>
+    <?= render_domains_paste_field('domains', $raw, [
+        'id' => 'domains',
+        'label' => 'Root domains',
+        'required' => true,
+        'rows' => 14,
+        'class' => 'inventory-box',
+    ]) ?>
   </div>
 
   <div class="actions-sticky">
@@ -414,8 +375,8 @@ render_header('Filter & add', 'team');
       Separate all
     </button>
     <span class="muted" style="font-size:0.88rem">
-      One ending at a time — Copy or Delete here. <?= h($sendBtnLabel) ?> only after
-      <strong>Filter unique sites</strong> (under New unique sites)
+      One ending at a time — Copy or Delete only. <?= h($sendBtnLabel) ?> appears after
+      <strong>Filter unique sites</strong>
     </span>
     <p class="help tld-separate-status" data-tld-status hidden></p>
   </div>
@@ -491,10 +452,15 @@ render_header('Filter & add', 'team');
   <div class="card panel-muted">
     <h2>Already known (skipped)</h2>
     <?php if ($result['existing']): ?>
+      <?php $existPhrase = prospect_destinations_phrase($result['by_country'] ?? [], 'existing'); ?>
       <div class="empty-state" style="min-height:10rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
-        <p class="muted" style="margin:0;max-width:18rem">
+        <p class="muted" style="margin:0;max-width:20rem">
           <strong><?= count($result['existing']) ?></strong> site<?= count($result['existing']) === 1 ? '' : 's' ?>
-          from your paste already exist in the destination country database(s) and were skipped.<br>
+          from your paste already exist in destination country database(s)<?php
+            if ($existPhrase !== '') {
+                echo ' (' . h($existPhrase) . ')';
+            }
+          ?> and were skipped.<br>
           Existing country URLs stay hidden for privacy.
         </p>
       </div>
@@ -534,9 +500,17 @@ render_header('Filter & add', 'team');
             I confirm these sites belong in <strong><?= h($country) ?></strong> (or I accept saving them there anyway).
           </label>
         <?php endif; ?>
+        <?php
+          $addN = count($result['new']);
+          $addDest = prospect_destinations_phrase($result['by_country'] ?? [], 'new');
+          $addLabel = 'Add ' . $addN . ' unique site' . ($addN === 1 ? '' : 's');
+          if ($addDest !== '') {
+              $addLabel .= ' (' . $addDest . ')';
+          }
+        ?>
         <div class="actions-sticky">
           <button class="btn large block" type="submit" id="add_unique_btn">
-            Add <?= count($result['new']) ?> new site<?= count($result['new']) === 1 ? '' : 's' ?> to <?= h($country) ?>
+            <?= h($addLabel) ?>
           </button>
         </div>
       </form>
@@ -591,7 +565,7 @@ render_header('Filter & add', 'team');
       <?php endif; ?>
     <?php else: ?>
       <div class="empty-state">
-        <p>No new sites to add — everything you pasted is already in <?= h($country) ?>.</p>
+        <p>No new sites to add — everything you pasted is already in the destination country database(s).</p>
         <a class="btn secondary" href="index.php?page=team_prospect_check&amp;country=<?= urlencode($country) ?>">Paste a new list</a>
       </div>
     <?php endif; ?>

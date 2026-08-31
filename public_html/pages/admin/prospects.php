@@ -1008,7 +1008,21 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
 <?= guide_inventory() ?>
 <div class="topbar">
   <div>
-    <h1><?= h($sheetLabel) ?></h1>
+    <?php
+    $prospectJumpCurrent = $emptyCountry ? '_none' : $countryName;
+    render_sheet_country_jump(
+        'country',
+        $prospectJumpCurrent,
+        list_prospect_country_nav($prospectJumpCurrent),
+        [
+            'page' => 'admin_prospects',
+            'per_page' => $perPage,
+        ],
+        'Country database of unique sites. Pick another country from this list — you do not need to go back to All countries. Team Filter & add writes into these folders.',
+        'prospect-country-jump',
+        'Our database country'
+    );
+    ?>
     <p class="muted">
       <?php if ($filterCreatedBy > 0): ?>
         Showing sites added by <strong><?= h($filterCreatedLabel) ?></strong>.

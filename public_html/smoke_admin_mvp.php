@@ -990,7 +990,7 @@ if (!str_contains($extractingHub, 'Last Push')) {
 } else {
     ok('Extracting hub Last Push');
 }
-if (!str_contains($prospectCheck, 'landed on Extracting for')) {
+if (!str_contains($prospectCheck, 'Extracting received')) {
     fail('Filter & add missing Extracting landing flash');
 } else {
     ok('Filter & add Extracting landing flash');
@@ -2534,7 +2534,7 @@ if (!str_contains($prospectCheckSf, 'Filter unique sites')
 } else {
     ok('Filter & add CTA says Filter unique sites');
 }
-if (!str_contains($prospectCheckSf, 'saved for the Extracting team')
+if (!str_contains($prospectCheckSf, 'Extracting received')
     || !str_contains($prospectCheckSf, 'Clean to root domains')) {
     fail('Filter & add missing ACL-aware Extracting flash / Clean wording');
 } else {
@@ -2809,13 +2809,64 @@ if (!str_contains($campUi, 'href="#camp-fill-gaps"')
     || !str_contains($campLibSmokeUx, 'function email_campaign_default_language')
     || !str_contains($campLibSmokeUx, 'function email_campaign_fill_blank_row_languages')
     || !str_contains($campLibSmokeUx, 'function list_email_campaign_project_country_nav')
-    || !str_contains($campUi, 'id="camp-country-jump"')
-    || !str_contains($campUi, 'Open another country in this project without going back')
+    || !str_contains($campUi, 'camp-country-jump')
+    || !str_contains($campUi, 'render_sheet_country_jump')
     || !str_contains($cssUi, '.camp-country-jump select')
+    || !str_contains($cssUi, '.sheet-country-jump select')
     || !str_contains($cssUi, '.swe-checkpoint-compact .with-info-label')) {
     fail('campaign sheet missing Fill gaps header, chip counts, or language default');
 } else {
     ok('campaign sheet Fill gaps in header, chip counts, language default');
+}
+$sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
+if (!str_contains($helpersSmoke, 'function render_sheet_country_jump')
+    || !str_contains($adminProspects, 'prospect-country-jump')
+    || !str_contains($adminProspects, 'list_prospect_country_nav')
+    || !str_contains($prospectsLib, 'function list_prospect_country_nav')
+    || !str_contains($sweUi, 'swe-country-jump')
+    || !str_contains($sweUi, 'list_sites_with_emails_country_nav')
+    || !str_contains($sweLibSmoke, 'function list_sites_with_emails_country_nav')) {
+    fail('country sheets missing in-place country switcher');
+} else {
+    ok('Our database + Admin/Final country title switcher');
+}
+$extractLibSmoke = file_get_contents($root . '/includes/extracting.php') ?: '';
+$extractHubSmoke = file_get_contents($root . '/pages/team/extracting.php') ?: '';
+$extractBatchJump = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
+$semrushHubSmoke = file_get_contents($root . '/pages/team/semrush_research.php') ?: '';
+$tldJsSmoke = file_get_contents($root . '/assets/js/tld-separate.js') ?: '';
+if (!str_contains($extractBatchJump, 'extract-country-jump')
+    || !str_contains($extractBatchJump, 'list_extract_batch_country_nav')
+    || !str_contains($extractLibSmoke, 'function list_extract_batch_country_nav')
+    || !str_contains($extractHubSmoke, 'extract-country-search')
+    || !str_contains($extractHubSmoke, 'list_extract_batches(2000)')
+    || !str_contains($extractLibSmoke, 'min(10000, $limit)')) {
+    fail('Extracting missing country switcher or hub search/cap');
+} else {
+    ok('Extracting country switcher + hub search cap');
+}
+if (!str_contains($extractBatchJump, 'Clean first — Push only sends Ready.')) {
+    fail('Extracting Push empty Ready copy missing');
+} else {
+    ok('Extracting Push empty Ready copy');
+}
+if (!str_contains($semrushHubSmoke, 'Filled from Extracting Push; Clear is Site Finding / Admin.')) {
+    fail('Semrush hub missing ownership line');
+} else {
+    ok('Semrush hub ownership line');
+}
+if (!str_contains($prospectsLib, 'function prospect_destinations_phrase')
+    || !str_contains($prospectCheckSf, 'prospect_destinations_phrase')
+    || !str_contains($prospectCheckSf, 'Add ')
+    || !str_contains($prospectCheckSf, 'unique site')
+    || str_contains($prospectCheckSf, 'Country database (private)')
+    || !str_contains($prospectCheckSf, 'Send this ending')
+    || !str_contains($tldJsSmoke, 'Add ')
+    || !str_contains($tldJsSmoke, 'unique site')
+    || str_contains($tldJsSmoke, 'new sites to ')) {
+    fail('Filter & add missing destination-country Add copy or still shows private DB card');
+} else {
+    ok('Filter & add destination Add copy + no private DB card');
 }
 if (!str_contains($cssUi, '@media (max-width: 899px)')
     || !str_contains($cssUi, 'table.sheet-cards-mobile tr')

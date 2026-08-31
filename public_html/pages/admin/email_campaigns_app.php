@@ -605,34 +605,30 @@ if ($sheetId > 0) {
     ?>
     <div class="topbar">
       <div>
-        <form class="camp-country-jump" method="get" action="index.php" data-no-draft>
-          <input type="hidden" name="page" value="admin_emails_data">
-          <input type="hidden" name="folder" value="email_campaigns">
-          <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
-          <h1 class="camp-sheet-title">
-            <label class="with-info camp-country-jump-label" for="camp-country-jump">
-              <span class="visually-hidden">Country in <?= h($projectName) ?></span>
-              <select id="camp-country-jump" name="sheet" onchange="this.form.submit()"
-                      title="Open another country in this project without going back"
-                      aria-label="Country in <?= h($projectName) ?>">
-                <?php foreach ($projectCountryNav as $navRow):
-                    $navId = (int) ($navRow['id'] ?? 0);
-                    $navName = (string) ($navRow['country'] ?? '');
-                    if ($navId < 1 || $navName === '') {
-                        continue;
-                    }
-                    ?>
-                  <option value="<?= $navId ?>"<?= $navId === $sheetId ? ' selected' : '' ?>><?= h($navName) ?></option>
-                <?php endforeach; ?>
-              </select>
-              <?= info_icon(
-                  'Country sheet inside project “' . $projectName . '”. Pick another country in this project from this list — you do not need to go back to the project. Data here is only for the open country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.',
-                  'About this country sheet'
-              ) ?>
-            </label>
-            <noscript><button class="btn small" type="submit">Open</button></noscript>
-          </h1>
-        </form>
+        <?php
+        $campJumpOpts = [];
+        foreach ($projectCountryNav as $navRow) {
+            $navId = (int) ($navRow['id'] ?? 0);
+            $navName = (string) ($navRow['country'] ?? '');
+            if ($navId < 1 || $navName === '') {
+                continue;
+            }
+            $campJumpOpts[] = ['value' => (string) $navId, 'label' => $navName];
+        }
+        render_sheet_country_jump(
+            'sheet',
+            (string) $sheetId,
+            $campJumpOpts,
+            [
+                'page' => 'admin_emails_data',
+                'folder' => 'email_campaigns',
+                'per_page' => $perPage,
+            ],
+            'Country sheet inside project “' . $projectName . '”. Pick another country in this project from this list — you do not need to go back to the project. Data here is only for the open country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.',
+            'camp-country-jump',
+            'Country in ' . $projectName
+        );
+        ?>
         <p class="muted">
           Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>

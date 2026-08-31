@@ -1023,6 +1023,59 @@ function prospect_country_folders(): array
     return $folders;
 }
 
+/**
+ * Filled Our database countries for the country-sheet title switcher (A–Z).
+ *
+ * @return list<array{value:string,label:string}>
+ */
+function list_prospect_country_nav(string $current = ''): array
+{
+    ensure_prospect_schema();
+    $rows = db()->query(
+        "SELECT TRIM(country) AS country
+         FROM prospect_sites
+         GROUP BY TRIM(country)
+         HAVING COUNT(*) > 0"
+    )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    $seen = [];
+    $haveCurrent = false;
+    $currentKey = mb_strtolower(trim($current));
+    foreach ($rows as $row) {
+        $raw = (string) ($row['country'] ?? '');
+        if ($raw === '') {
+            $out[] = ['value' => '_none', 'label' => 'No country'];
+            $seen['_none'] = true;
+            if ($current === '' || $current === '_none') {
+                $haveCurrent = true;
+            }
+            continue;
+        }
+        $canon = resolve_canonical_country($raw);
+        $name = $canon ? $canon['name'] : $raw;
+        $key = mb_strtolower($name);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = ['value' => $name, 'label' => $name];
+        if ($currentKey !== '' && $key === $currentKey) {
+            $haveCurrent = true;
+        }
+    }
+    if ($current === '_none' && empty($seen['_none'])) {
+        array_unshift($out, ['value' => '_none', 'label' => 'No country']);
+        $haveCurrent = true;
+    }
+    if ($current !== '' && $current !== '_none' && !$haveCurrent) {
+        $out[] = ['value' => $current, 'label' => $current];
+    }
+    usort($out, static function ($a, $b) {
+        return strcasecmp((string) $a['label'], (string) $b['label']);
+    });
+    return $out;
+}
+
 function parse_domain_list(string $raw): array
 {
     return parse_domain_list_strict($raw)['valid'];
@@ -1160,6 +1213,72 @@ function filter_domains_routed_against_prospects(array $domains, string $selecte
         'by_country' => $byCountry,
         'routed_groups' => $groups,
     ];
+}
+
+/**
+ * Destination-country phrase from Filter / Add buckets (not the selected folder alone).
+ *
+ * @param array<string, array<string, mixed>> $byCountry
+ * @param 'new'|'existing'|'inserted' $kind
+ */
+function prospect_destinations_phrase(array $byCountry, string $kind = 'new'): string
+{
+    $bits = [];
+    foreach ($byCountry as $dest => $bucket) {
+        $name = trim((string) $dest);
+        if ($name === '' || !is_array($bucket)) {
+            continue;
+        }
+        if ($kind === 'inserted') {
+            $n = (int) ($bucket['inserted'] ?? 0);
+        } elseif ($kind === 'existing') {
+            $n = isset($bucket['existing']) && is_array($bucket['existing'])
+                ? count($bucket['existing'])
+                : (int) ($bucket['skipped'] ?? 0);
+        } else {
+            $n = isset($bucket['new']) && is_array($bucket['new'])
+                ? count($bucket['new'])
+                : (int) ($bucket['inserted'] ?? 0);
+        }
+        if ($n < 1) {
+            continue;
+        }
+        $bits[] = $name . ' ' . $n;
+    }
+    return implode(', ', $bits);
+}
+
+/**
+ * Destination country names only (Spain / Austria), for landing flash.
+ *
+ * @param array<string, array<string, mixed>> $byCountry
+ * @param 'new'|'existing'|'inserted' $kind
+ */
+function prospect_destination_names(array $byCountry, string $kind = 'inserted'): string
+{
+    $names = [];
+    foreach ($byCountry as $dest => $bucket) {
+        $name = trim((string) $dest);
+        if ($name === '' || !is_array($bucket)) {
+            continue;
+        }
+        if ($kind === 'inserted') {
+            $n = (int) ($bucket['inserted'] ?? 0);
+        } elseif ($kind === 'existing') {
+            $n = isset($bucket['existing']) && is_array($bucket['existing'])
+                ? count($bucket['existing'])
+                : (int) ($bucket['skipped'] ?? 0);
+        } else {
+            $n = isset($bucket['new']) && is_array($bucket['new'])
+                ? count($bucket['new'])
+                : (int) ($bucket['inserted'] ?? 0);
+        }
+        if ($n < 1) {
+            continue;
+        }
+        $names[] = $name;
+    }
+    return implode(' / ', $names);
 }
 
 /**

@@ -4,7 +4,7 @@ ensure_extract_schema();
 
 $batches = [];
 try {
-    $batches = list_extract_batches(200);
+    $batches = list_extract_batches(2000);
 } catch (Throwable $e) {
     flash('error', 'Extracting sites tables are missing. Open upgrade.php once, then reload.');
 }
@@ -32,6 +32,13 @@ render_header('Extracting sites', 'team');
 
 <?php if ($batches): ?>
 <div class="card">
+  <div class="invoice-list-toolbar camp-hub-toolbar">
+    <label class="sheet-search" for="extract-country-search">
+      <span class="visually-hidden">Search countries</span>
+      <input id="extract-country-search" type="search" placeholder="Find a country…"
+             autocomplete="off" spellcheck="false" data-no-draft>
+    </label>
+  </div>
   <div class="table-wrap">
   <table>
     <thead>
@@ -44,9 +51,12 @@ render_header('Extracting sites', 'team');
       </tr>
     </thead>
     <tbody>
-    <?php foreach ($batches as $b): ?>
-      <tr>
-        <td><strong><?= h((string) $b['country']) ?></strong></td>
+    <?php foreach ($batches as $b):
+        $bCountry = (string) ($b['country'] ?? '');
+        $hay = mb_strtolower($bCountry . ' ' . (int) ($b['site_count'] ?? 0) . ' sites');
+        ?>
+      <tr data-extract-country-row data-search="<?= h($hay) ?>">
+        <td><strong><?= h($bCountry) ?></strong></td>
         <td><span class="badge agreed"><?= (int) $b['site_count'] ?></span></td>
         <td class="muted"><?= h((string) ($b['updated_at'] ?? '')) ?></td>
         <td class="muted"><?php
@@ -59,6 +69,18 @@ render_header('Extracting sites', 'team');
     </tbody>
   </table>
   </div>
+  <script>
+  (function () {
+    var input = document.getElementById('extract-country-search');
+    if (!input) return;
+    input.addEventListener('input', function () {
+      var q = String(input.value || '').trim().toLowerCase();
+      document.querySelectorAll('[data-extract-country-row]').forEach(function (row) {
+        row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+      });
+    });
+  })();
+  </script>
 </div>
 <?php else: ?>
 <div class="card">

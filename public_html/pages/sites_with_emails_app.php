@@ -927,12 +927,29 @@ render_breadcrumbs($crumbs);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info(
+    <?php
+    $sweJumpTip = $isTeam
+        ? 'Add emails (autosave). Pick another country from this list — you do not need to go back to All countries. Push one site with its row button, or Push all sites that have at least one email.'
+        : ($isAdminAll
+            ? 'Final archive for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together.'
+            : 'Admin working list for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.');
+    $sweJumpHidden = ['per_page' => $perPage];
+    if ($isTeam) {
+        $sweJumpHidden['page'] = 'team_sites_emails';
+    } else {
+        $sweJumpHidden['page'] = 'admin_emails_data';
+        $sweJumpHidden['folder'] = (string) $sweFolder;
+    }
+    render_sheet_country_jump(
+        'country',
         $countryName,
-        $isTeam
-            ? 'Add emails (autosave). Push one site with its row button, or Push all sites that have at least one email.'
-            : 'Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.'
-    ) ?></h1>
+        list_sites_with_emails_country_nav($sweScope),
+        $sweJumpHidden,
+        $sweJumpTip,
+        'swe-country-jump',
+        $sweLabel . ' country'
+    );
+    ?>
     <p class="muted">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
       <?= $q !== '' || $sentFilter !== '' || $rowFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>

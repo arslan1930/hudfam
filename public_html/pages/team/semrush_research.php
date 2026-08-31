@@ -46,6 +46,9 @@ render_breadcrumbs([
     <p class="muted">
       <?= count($folders) ?> countr<?= count($folders) === 1 ? 'y' : 'ies' ?> with research sites · site names only
     </p>
+    <p class="help" style="margin:0.35rem 0 0">
+      Filled from Extracting Push; Clear is Site Finding / Admin.
+    </p>
   </div>
   <div class="actions">
     <?php if ($canFilter): ?>
@@ -63,6 +66,7 @@ render_breadcrumbs([
   <div class="empty-state">
     <p>No Semrush Research countries yet.</p>
     <p class="muted">
+      Filled from Extracting Push; Clear is Site Finding / Admin.
       When Extracting Results are pushed, a copy of those site names lands here (same country / TLD folders).
       <?php if ($isAdmin): ?>
         You can also <a href="<?= h(semrush_hub_url(true)) ?>">seed sites as Admin</a>.
