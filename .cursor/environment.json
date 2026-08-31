@@ -1,0 +1,12 @@
+{
+  "name": "TechxForm / Hudfam",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "php-server",
+      "command": "cd public_html && php -S 127.0.0.1:8080"
+    }
+  ],
+  "ports": [8080]
+}

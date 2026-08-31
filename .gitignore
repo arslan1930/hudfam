@@ -1,5 +1,6 @@
 # Local / secrets
 public_html/config.php
+public_html/install.lock
 .env
 .DS_Store
 .idea/
