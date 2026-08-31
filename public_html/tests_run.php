@@ -110,9 +110,9 @@ $teamUser = [
 ];
 
 // Clean prior test rows
-db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
-db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
-db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
+db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfshare-%'");
+db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfshare-%'");
+db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfshare-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
 db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
 db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
@@ -7307,6 +7307,117 @@ try {
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfroute-add-%'");
 } catch (Throwable $e) {
     fail('routed filter/add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Shared Extracting country count (two users) + live hub COUNT ---
+try {
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfshare-%'");
+
+    $shareA = add_prospect_domains(
+        ['txfshare-a.com'],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'share a'
+    );
+    $shareB = add_prospect_domains(
+        ['txfshare-b.com'],
+        $teamUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'share b'
+    );
+    $idDe = get_or_create_extract_batch('Germany', $adminUser, 'German', 'europe');
+    $st = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=? AND domain=?');
+    $st->execute([$idDe, 'txfshare-a.com']);
+    $hasA = (int) $st->fetchColumn();
+    $st->execute([$idDe, 'txfshare-b.com']);
+    $hasB = (int) $st->fetchColumn();
+    $live = refresh_extract_batch_site_count($idDe);
+    $hub = list_extract_batches(2000);
+    $hubDe = 0;
+    foreach ($hub as $row) {
+        if ((string) ($row['country'] ?? '') === 'Germany') {
+            $hubDe = (int) ($row['site_count'] ?? 0);
+            break;
+        }
+    }
+    $cntStmt = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
+    $cntStmt->execute([$idDe]);
+    $rawCnt = (int) $cntStmt->fetchColumn();
+
+    // Stale denormalized column must not hide a filled list on the hub.
+    db()->prepare('UPDATE extract_batches SET site_count=0 WHERE id=?')->execute([$idDe]);
+    $hubAfterStale = list_extract_batches(2000);
+    $hubDeStale = 0;
+    foreach ($hubAfterStale as $row) {
+        if ((string) ($row['country'] ?? '') === 'Germany') {
+            $hubDeStale = (int) ($row['site_count'] ?? 0);
+            break;
+        }
+    }
+
+    if (
+        (int) ($shareA['inserted'] ?? 0) === 1
+        && (int) ($shareB['inserted'] ?? 0) === 1
+        && ($shareA['extract_error'] ?? '') === ''
+        && ($shareB['extract_error'] ?? '') === ''
+        && $hasA === 1
+        && $hasB === 1
+        && $live === $rawCnt
+        && $hubDe === $rawCnt
+        && $hubDeStale === $rawCnt
+        && $hubDeStale >= 2
+    ) {
+        pass('two users add to same Extracting country; hub uses live count');
+    } else {
+        fail('shared extract count unexpected: ' . json_encode([
+            'shareA' => $shareA,
+            'shareB' => $shareB,
+            'hasA' => $hasA,
+            'hasB' => $hasB,
+            'live' => $live,
+            'rawCnt' => $rawCnt,
+            'hubDe' => $hubDe,
+            'hubDeStale' => $hubDeStale,
+        ]));
+    }
+
+    $msg = email_campaign_bulk_result_message('Imported file into sheet', [
+        'added' => 2,
+        'updated' => 1,
+        'skipped' => 3,
+        'skipped_duplicate' => 1,
+        'skipped_empty' => 1,
+        'skipped_excluded' => 1,
+        'lines' => 6,
+        'errors' => ['skip.com: Add at least one email — each site must have email data.'],
+    ]);
+    if (
+        str_contains($msg, '2 new, 1 updated')
+        && str_contains($msg, 'duplicate domain(s) skipped')
+        && str_contains($msg, 'skipped (no emails)')
+        && str_contains($msg, 'previously removed (not re-added)')
+        && str_contains($msg, '6 data line(s)')
+        && str_contains($msg, 'Issues:')
+    ) {
+        pass('campaign import result message lists added/skipped/lines/errors');
+    } else {
+        fail('campaign import result message: ' . $msg);
+    }
+
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfshare-%'");
+    refresh_extract_batch_site_count($idDe);
+} catch (Throwable $e) {
+    fail('shared extract count: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Admin Users U-1: unique email + verify reset ---

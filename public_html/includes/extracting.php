@@ -219,15 +219,27 @@ function list_extract_batches(int $limit = 2000): array
     purge_expired_empty_extract_batches();
     $limit = max(1, min(10000, $limit));
     // Hide empty countries here; they may still be open on the batch page until leave / 1 hour.
+    // Live COUNT so a stale extract_batches.site_count cannot disagree with the Sites list.
     $sql = "SELECT b.*, u.username, u.full_name,
-                   w.username AS sites_writer_username, w.full_name AS sites_writer_name
+                   w.username AS sites_writer_username, w.full_name AS sites_writer_name,
+                   COALESCE(c.n, 0) AS live_site_count
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
             LEFT JOIN users w ON w.id = b.sites_writer_id
-            WHERE b.site_count > 0
+            LEFT JOIN (
+                SELECT batch_id, COUNT(*) AS n FROM extract_batch_sites GROUP BY batch_id
+            ) c ON c.batch_id = b.id
+            WHERE COALESCE(c.n, 0) > 0
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
-    return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($rows as &$row) {
+        $row['site_count'] = (int) ($row['live_site_count'] ?? 0);
+        unset($row['live_site_count']);
+    }
+    unset($row);
+
+    return $rows;
 }
 
 /**
@@ -242,11 +254,11 @@ function list_extract_batch_country_nav(int $currentId = 0): array
     // Do not purge here: an open empty sheet must stay in the switcher.
     // Hub list_extract_batches() still removes countries empty for 1 hour.
     $currentId = max(0, $currentId);
-    $sql = 'SELECT id, country FROM extract_batches WHERE (site_count > 0';
+    $sql = 'SELECT b.id, b.country FROM extract_batches b WHERE (EXISTS (SELECT 1 FROM extract_batch_sites s WHERE s.batch_id = b.id)';
     if ($currentId > 0) {
-        $sql .= ' OR id = ' . $currentId;
+        $sql .= ' OR b.id = ' . $currentId;
     }
-    $sql .= ') ORDER BY country ASC, id ASC';
+    $sql .= ') ORDER BY b.country ASC, b.id ASC';
     $out = [];
     $seen = [];
     foreach (db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
@@ -581,7 +593,10 @@ function save_extract_batch_results(int $batchId, string $resultsText): void
 function count_extract_batches(): int
 {
     ensure_extract_schema();
-    return (int) db()->query('SELECT COUNT(*) FROM extract_batches WHERE site_count > 0')->fetchColumn();
+    return (int) db()->query(
+        'SELECT COUNT(*) FROM extract_batches b
+         WHERE EXISTS (SELECT 1 FROM extract_batch_sites s WHERE s.batch_id = b.id)'
+    )->fetchColumn();
 }
 
 function extract_request_wants_json(): bool

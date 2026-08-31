@@ -18,7 +18,12 @@ render_header('Extracting sites', 'team');
 <div class="topbar">
   <div>
     <h1>Extracting sites</h1>
-    <p class="muted">Countries with sites in their <strong>Sites list</strong> appear here. Empty countries hide when you open this page (and are removed after 1 hour) until Filter &amp; add brings them back.</p>
+    <p class="muted">
+      Countries with sites waiting to extract appear here.
+      The <strong>Sites</strong> number is the <strong>shared</strong> Sites list for that country — both teammates see the same count after refresh (it is not your Filter leftover).
+      Empty countries hide when you open this page (and are removed after 1 hour) until Filter &amp; add brings them back.
+      Our database can be larger — it keeps everything; Extracting shrinks after Push.
+    </p>
   </div>
   <div class="actions">
     <?php if (team_page_unlocked($user, 'team_prospect_check')): ?>
@@ -44,7 +49,7 @@ render_header('Extracting sites', 'team');
     <thead>
       <tr>
         <th>Country</th>
-        <th>Sites</th>
+        <th title="Shared Sites list waiting to extract — same number for every teammate after refresh">Sites</th>
         <th>Updated</th>
         <th>Last Push</th>
         <th></th>

@@ -2763,6 +2763,50 @@ function email_campaign_slots_equal(array $a, array $b): bool
 }
 
 /**
+ * Human-readable result after Campaign paste / file import.
+ *
+ * @param array{
+ *   added?:int,updated?:int,skipped?:int,skipped_duplicate?:int,skipped_excluded?:int,
+ *   skipped_emails?:int,skipped_empty?:int,lines?:int,errors?:list<string>
+ * } $result
+ */
+function email_campaign_bulk_result_message(string $prefix, array $result): string
+{
+    $msg = $prefix . ': '
+        . (int) ($result['added'] ?? 0) . ' new, ' . (int) ($result['updated'] ?? 0) . ' updated';
+    if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
+    }
+    if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+    }
+    if ((int) ($result['skipped_emails'] ?? 0) > 0) {
+        $n = (int) $result['skipped_emails'];
+        $msg .= ', ' . $n . ' previously removed email' . ($n === 1 ? '' : 's') . ' stripped';
+    }
+    if ((int) ($result['skipped_empty'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
+    }
+    $accounted = (int) ($result['skipped_duplicate'] ?? 0)
+        + (int) ($result['skipped_excluded'] ?? 0)
+        + (int) ($result['skipped_empty'] ?? 0);
+    $otherSkip = (int) ($result['skipped'] ?? 0) - $accounted;
+    if ($otherSkip > 0) {
+        $msg .= ', ' . $otherSkip . ' other skipped';
+    }
+    $msg .= '.';
+    if (isset($result['lines'])) {
+        $msg .= ' · ' . (int) $result['lines'] . ' data line(s).';
+    }
+    $errors = $result['errors'] ?? [];
+    if (is_array($errors) && $errors !== []) {
+        $msg .= ' Issues: ' . implode('; ', array_slice($errors, 0, 8));
+    }
+
+    return $msg;
+}
+
+/**
  * Paste / import lines: site.com,email@x.com  OR  site.com email1 email2 …
  * Tuned for Admin bulk entry (1000+ rows).
  * Previously removed domains/emails are skipped (not re-added).
@@ -2770,7 +2814,7 @@ function email_campaign_slots_equal(array $a, array $b): bool
  *
  * @return array{
  *   added:int,updated:int,skipped:int,skipped_excluded:int,skipped_emails:int,
- *   skipped_duplicate:int,errors:list<string>
+ *   skipped_duplicate:int,skipped_empty:int,errors:list<string>
  * }
  */
 function paste_email_campaign_rows(int $sheetId, string $raw): array
@@ -2794,6 +2838,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     $skippedExcluded = 0;
     $skippedEmails = 0;
     $skippedDuplicate = 0;
+    $skippedEmpty = 0;
     /** @var list<string> $errors */
     $errors = [];
     /** @var array<string, array{0:string,1:string,2:string,3:string}> $seenDomains */
@@ -2875,6 +2920,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
                 if (count($errors) < 25) {
                     $errors[] = $domainRaw . ': Add at least one email — each site must have email data.';
                 }
+                $skippedEmpty++;
                 $skipped++;
                 continue;
             }
@@ -2945,6 +2991,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
         'skipped_excluded' => $skippedExcluded,
         'skipped_emails' => $skippedEmails,
         'skipped_duplicate' => $skippedDuplicate,
+        'skipped_empty' => $skippedEmpty,
         'errors' => $errors,
     ];
 }

@@ -1526,6 +1526,7 @@ render_sheet_checkpoint_compact(
   <p class="help">
     Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
     (comma, tab, or semicolon). Header row is optional and skipped.
+    Extra columns after email 4 are ignored. Each site needs at least one email.
     Built for large lists — paste or upload thousands of rows at once.
     Same formats as Campaign. Lines with no email are skipped.
   </p>
@@ -1559,7 +1560,7 @@ render_sheet_checkpoint_compact(
            accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
     <p class="help" style="margin-top:0.35rem">
       Accepts <strong>.csv</strong>, <strong>.xlsx</strong> (Excel), and <strong>.txt</strong> / <strong>.tsv</strong>.
-      First columns = site + up to 4 emails. Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
+      First columns = site + up to 4 emails (extra columns ignored). Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
     </p>
     <p class="actions" style="margin-top:0.75rem">
       <button class="btn" type="submit">Import file into sheet</button>
