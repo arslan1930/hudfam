@@ -1162,8 +1162,9 @@ if ($r['status'] === 200 && preg_match('/team_extract_batch&amp;id=(\d+)/', $r['
         && str_contains($rSheet['body'], 'data-extract-open-count')
         && str_contains($rSheet['body'], 'First 20')
         && str_contains($rSheet['body'], 'First 50')
-        && str_contains($rSheet['body'], 'data-extract-open-bulk')) {
-        pass('extractor Extracting country sheet switcher + Open first 10–50');
+        && str_contains($rSheet['body'], 'data-extract-open-bulk')
+        && str_contains($rSheet['body'], 'Open &amp; remove')) {
+        pass('extractor Extracting country sheet switcher + Open & remove first 10–50');
     } else {
         fail('extractor Extracting country sheet missing switcher/Open status=' . $rSheet['status']);
     }

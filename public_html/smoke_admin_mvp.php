@@ -2350,7 +2350,8 @@ if (str_contains($guidesPhp, 'Backspace delete')
     || str_contains($guidesPhp, 'Open links in new tabs')) {
     fail('guide_extracting still documents missing Sites list Open/Backspace UI');
 } elseif (!str_contains($guidesPhp, 'Copy, Undo, Redo')
-    || !str_contains($guidesPhp, 'Open first 10')
+    || !str_contains($guidesPhp, 'Open & remove first 10')
+    || !str_contains($guidesPhp, 'Undo restores')
     || !str_contains($guidesPhp, 'waiting list')) {
     fail('guide_extracting missing real Sites list tools');
 } else {
@@ -2368,24 +2369,35 @@ if (!str_contains($extractSitesJs, 'data.domains')) {
 } else {
     ok('extract Sites-list autosave syncs textarea');
 }
-if (!str_contains($extractBatchT, 'data-extract-open-count')
+if (str_contains($extractBatchT, 'Extracting shrinks after Push')) {
+    fail('Extracting country sheet still says Extracting only shrinks after Push');
+} elseif (!str_contains($extractBatchT, 'data-extract-open-count')
     || !str_contains($extractBatchT, 'data-extract-open-bulk')
     || !str_contains($extractBatchT, 'data-extract-open-continue')
     || !str_contains($extractBatchT, 'First 20')
-    || !str_contains($extractBatchT, 'First 50')) {
-    fail('Extracting Sites list missing Open first 10–50 controls');
+    || !str_contains($extractBatchT, 'First 50')
+    || !str_contains($extractBatchT, 'Open &amp; remove')) {
+    fail('Extracting Sites list missing Open & remove first 10–50 controls');
 } else {
-    ok('Extracting Sites list Open first 10–50');
+    ok('Extracting Sites list Open & remove first 10–50');
 }
 if (!str_contains($extractSitesJs, 'listEligibleOpenHosts')
-    || !str_contains($extractSitesJs, 'Open all ')
+    || !str_contains($extractSitesJs, 'Open & remove all ')
+    || !str_contains($extractSitesJs, 'removeHostsFromText')
+    || !str_contains($extractSitesJs, 'applyOpenRemove')
     || !str_contains($extractSitesJs, 'syncOpenBulkButton')
     || !str_contains($extractSitesJs, 'OPEN_BATCH_SIZE')
     || !str_contains($extractSitesJs, 'startOrContinueOpen')
-    || !str_contains($extractSitesJs, 'Open next ')) {
-    fail('extract-sites-list.js missing Open first N / batch continue logic');
+    || !str_contains($extractSitesJs, 'clearOpenBatchState();')
+    || !str_contains($extractSitesJs, 'openBatchState.remaining')
+    || !str_contains($extractSitesJs, 'normalizeText(ta.value) !== text')
+    || !str_contains($extractSitesJs, 'keepOpenStatus')
+    || !str_contains($extractSitesJs, 'Open next ')
+    || str_contains($extractSitesJs, 'openBatchState.offset')
+    || str_contains($extractSitesJs, 'openBatchState.items')) {
+    fail('extract-sites-list.js missing Open & remove / remaining Open next logic');
 } else {
-    ok('extract-sites-list.js Open first N + batch continue');
+    ok('extract-sites-list.js Open & remove + remaining Open next');
 }
 
 $sweLib = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
