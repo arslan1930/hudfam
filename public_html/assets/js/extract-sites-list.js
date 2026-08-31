@@ -37,6 +37,7 @@
   var countTimer = null;
   var OPEN_BATCH_SIZE = 10;
   var openBatchState = null;
+  var keepOpenStatus = false;
   var OPEN_COUNT_STORAGE_KEY = 'extract-open-count';
 
   function scheduleCounts() {
@@ -212,10 +213,16 @@
       })
       .then(function (data) {
         lastSavedText = text;
+        if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+        // Open next / Undo / typing can change the box while this save is in flight.
+        // Do not write the older snapshot back over the current list.
+        if (normalizeText(ta.value) !== text) {
+          return;
+        }
         if (data.domains != null) {
           var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
           var saved = normalizeText(savedRaw);
-          if (saved !== normalizeText(ta.value)) {
+          if (saved !== text) {
             applyingHistory = true;
             ta.value = savedRaw;
             lastSnapshot = saved;
@@ -225,11 +232,14 @@
         }
         var n = typeof data.site_count === 'number' ? data.site_count : linesOf(ta.value).length;
         updateCounts(n);
-        if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
         if (data.writer_name || data.writer_at) {
           setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
         } else {
           setAutosaveLabel('Saved');
+        }
+        if (keepOpenStatus) {
+          keepOpenStatus = false;
+          return;
         }
         if (data.empty) {
           setStatus(
@@ -497,6 +507,7 @@
   }
 
   function reportOpenBatch(opened, attempted, goal, done, remaining, isContinue) {
+    if (opened > 0) keepOpenStatus = true;
     if (opened === 0) {
       setStatus(
         'Could not open tabs — allow popups for this site, then try again.',

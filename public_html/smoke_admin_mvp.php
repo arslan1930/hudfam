@@ -2390,6 +2390,8 @@ if (!str_contains($extractSitesJs, 'listEligibleOpenHosts')
     || !str_contains($extractSitesJs, 'startOrContinueOpen')
     || !str_contains($extractSitesJs, 'clearOpenBatchState();')
     || !str_contains($extractSitesJs, 'openBatchState.remaining')
+    || !str_contains($extractSitesJs, 'normalizeText(ta.value) !== text')
+    || !str_contains($extractSitesJs, 'keepOpenStatus')
     || !str_contains($extractSitesJs, 'Open next ')
     || str_contains($extractSitesJs, 'openBatchState.offset')
     || str_contains($extractSitesJs, 'openBatchState.items')) {
