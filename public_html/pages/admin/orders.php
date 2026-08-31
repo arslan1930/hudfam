@@ -14,12 +14,12 @@ $isCompleted = $folder === 'completed';
 $isHub = $folder === '';
 
 $origin = 'all';
+$rawOrigin = '';
 if ($isProcessing) {
     $rawOrigin = strtolower(trim((string) get('origin')));
     if ($rawOrigin === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $rawOrigin = strtolower(trim((string) ($_POST['origin'] ?? '')));
     }
-    $origin = in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'wp';
 }
 
 $filter = [
@@ -32,6 +32,15 @@ $filter = [
 ];
 if ($isProcessing) {
     $filter['status'] = 'all';
+    $origin = function_exists('order_pipeline_pick_processing_origin')
+        ? order_pipeline_pick_processing_origin($rawOrigin, [
+            'q' => $filter['q'],
+            'country' => $filter['country'],
+            'admin_id' => $filter['admin_id'],
+            'date_from' => $filter['date_from'],
+            'date_to' => $filter['date_to'],
+        ])
+        : (in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'wp');
 } elseif ($isCompleted) {
     if ($filter['status'] === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $filter['status'] = (string) ($_POST['status'] ?? '');
@@ -69,10 +78,9 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
     }
     if ($folderName === 'processing') {
         $orig = strtolower(trim((string) ($params['origin'] ?? '')));
-        if (!in_array($orig, ['wp', 'leftover', 'manual', 'all'], true)) {
-            $orig = 'wp';
+        if (in_array($orig, ['wp', 'leftover', 'manual', 'all'], true)) {
+            $bits[] = 'origin=' . rawurlencode($orig);
         }
-        $bits[] = 'origin=' . rawurlencode($orig);
     }
     foreach (['q', 'country', 'date_from', 'date_to'] as $k) {
         $v = trim((string) ($params[$k] ?? ''));
@@ -120,7 +128,7 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
 };
 
 $renderOmFolderTabs = static function (string $currentFolder, int $procN, int $compN, int $unpaidN) use ($ordersQs): void {
-    $procHref = $ordersQs(['folder' => 'processing', 'p' => 1, 'origin' => 'wp', 'status' => 'all']);
+    $procHref = $ordersQs(['folder' => 'processing', 'p' => 1, 'origin' => '', 'status' => 'all']);
     $compHref = $ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid']);
     $procOn = $currentFolder === 'processing';
     $compOn = $currentFolder === 'completed';
@@ -594,7 +602,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 <div class="topbar">
   <div>
     <?php if ($isProcessing): ?>
-      <h1><?= label_with_info('Processing', 'Default view is still in Website prices Processing. Leftover stays when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row by itself.') ?></h1>
+      <h1><?= label_with_info('Processing', 'Opens Website prices Processing when that tab has rows, otherwise Leftover or Added here. Leftover stays when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row by itself.') ?></h1>
       <p class="muted">Fill live URL, country, and client, then Mark completed. Saving a live URL does not complete the row.</p>
     <?php else: ?>
       <h1><?= label_with_info('Completed orders', 'After a live URL and Mark completed. Unpaid until Paid. Tick unpaid rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.') ?></h1>

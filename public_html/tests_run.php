@@ -5735,6 +5735,16 @@ try {
     } else {
         fail('Processing origin filter mismatch');
     }
+    $pickWp = order_pipeline_pick_processing_origin('', ['q' => $originWpDomain]);
+    $pickMan = order_pipeline_pick_processing_origin('', ['q' => $manOriginDomain]);
+    $pickStay = order_pipeline_pick_processing_origin('wp', ['q' => $manOriginDomain]);
+    $pickExpl = order_pipeline_pick_processing_origin('manual', ['q' => $originWpDomain]);
+    if ($pickWp === 'wp' && $pickMan === 'manual' && $pickStay === 'wp' && $pickExpl === 'manual') {
+        pass('Processing default origin follows non-empty tab');
+    } else {
+        fail('Processing default origin: wp=' . $pickWp . ' man=' . $pickMan
+            . ' stay=' . $pickStay . ' expl=' . $pickExpl);
+    }
 
     $restoreDomain = 'txfom-restore-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
     $wpRestoreId = site_price_insert_row([

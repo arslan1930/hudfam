@@ -1430,6 +1430,29 @@ function normalize_order_pipeline_origin($origin): string
 }
 
 /**
+ * Processing sheet tab. Explicit origin= is kept. Missing origin opens the first
+ * non-empty tab (Website prices Processing, then Leftover, then Added here).
+ *
+ * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string} $countOpts
+ */
+function order_pipeline_pick_processing_origin(string $rawOrigin, array $countOpts = []): string
+{
+    $raw = strtolower(trim($rawOrigin));
+    if (in_array($raw, ['wp', 'leftover', 'manual', 'all'], true)) {
+        return $raw;
+    }
+    $base = $countOpts;
+    $base['folder'] = 'processing';
+    unset($base['origin'], $base['status']);
+    foreach (['wp', 'leftover', 'manual'] as $key) {
+        if (count_order_pipeline_rows(array_merge($base, ['origin' => $key])) > 0) {
+            return $key;
+        }
+    }
+    return 'wp';
+}
+
+/**
  * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string,status?:string,folder?:string,origin?:string} $opts
  * @return array{0:string,1:list<mixed>}
  */
