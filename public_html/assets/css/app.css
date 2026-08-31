@@ -2559,6 +2559,9 @@ tr.swe-row-updated {
 .badge.sent, .badge.processing { background: #fff1cc; color: var(--warn); }
 .badge.rejected, .badge.blocked { background: #f3d6d6; color: var(--bad); }
 .badge.draft, .badge.negotiating { background: #e5e7eb; color: var(--brand-deep); }
+.extract-hub-cues { display: inline-flex; flex-wrap: wrap; gap: 0.28rem; align-items: center; }
+.badge.extract-large { background: var(--brand-soft); color: var(--brand-deep); }
+#extract-country-search-empty { margin: 0.65rem 0 0; }
 .folders { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; }
 .folder {
   display: flex;

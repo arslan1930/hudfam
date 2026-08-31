@@ -248,6 +248,62 @@ function list_extract_batches(int $limit = 2000): array
     return $rows;
 }
 
+/** Hub clock: YYYY-MM-DD HH:MM (empty string stays empty). */
+function extract_hub_stamp(string $at): string
+{
+    $at = trim($at);
+    if ($at === '') {
+        return '';
+    }
+    return substr($at, 0, 16);
+}
+
+/**
+ * Sum waiting Sites across hub rows (already live counts, filled countries only).
+ *
+ * @param list<array<string,mixed>> $batches
+ * @return array{countries:int,sites:int}
+ */
+function extract_hub_waiting_summary(array $batches): array
+{
+    $sites = 0;
+    $countries = 0;
+    foreach ($batches as $b) {
+        if (!is_array($b)) {
+            continue;
+        }
+        $n = (int) ($b['site_count'] ?? 0);
+        if ($n < 1) {
+            continue;
+        }
+        $countries++;
+        $sites += $n;
+    }
+    return ['countries' => $countries, 'sites' => $sites];
+}
+
+/**
+ * Queue cues for one hub row. Stale = Updated ≥ 7 days ago.
+ * Quiet = stale and never Push'd. Large = 500+ waiting.
+ *
+ * @param array<string,mixed> $batch
+ * @return array{large:bool,stale:bool,quiet:bool}
+ */
+function extract_hub_row_cues(array $batch, ?int $nowTs = null): array
+{
+    $nowTs = $nowTs ?? time();
+    $count = (int) ($batch['site_count'] ?? 0);
+    $updated = trim((string) ($batch['updated_at'] ?? ''));
+    $push = trim((string) ($batch['last_pushed_at'] ?? ''));
+    $updatedTs = $updated !== '' ? strtotime($updated) : false;
+    $stale = $updatedTs !== false && ($nowTs - $updatedTs) >= 7 * 86400;
+    return [
+        'large' => $count >= 500,
+        'stale' => $stale,
+        'quiet' => $stale && $push === '',
+    ];
+}
+
 /**
  * Cheap Extracting country switcher (id + country). Filled Sites lists only;
  * include $currentId even when that batch is empty so the open sheet stays in the list.
