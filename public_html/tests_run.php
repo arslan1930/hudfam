@@ -1623,6 +1623,39 @@ try {
     fail('filter: ' . $e->getMessage());
 }
 
+// --- Destination-country phrase (Filter / Add copy) ---
+try {
+    $phraseNew = prospect_destinations_phrase([
+        'Spain' => ['new' => ['a.es', 'b.es'], 'existing' => ['old.es']],
+        'Austria' => ['new' => ['c.at'], 'existing' => []],
+        'Germany' => ['new' => [], 'existing' => ['d.de']],
+    ], 'new');
+    $phraseExist = prospect_destinations_phrase([
+        'Spain' => ['new' => ['a.es'], 'existing' => ['old.es', 'x.es']],
+        'Austria' => ['new' => [], 'existing' => ['y.at']],
+    ], 'existing');
+    $phraseIns = prospect_destinations_phrase([
+        'Spain' => ['inserted' => 32, 'skipped' => 1],
+        'Austria' => ['inserted' => 8, 'skipped' => 0],
+        'Germany' => ['inserted' => 0, 'skipped' => 4],
+    ], 'inserted');
+    $names = prospect_destination_names([
+        'Spain' => ['inserted' => 32],
+        'Austria' => ['inserted' => 8],
+    ], 'inserted');
+    if ($phraseNew === 'Spain 2, Austria 1'
+        && $phraseExist === 'Spain 2, Austria 1'
+        && $phraseIns === 'Spain 32, Austria 8'
+        && $names === 'Spain / Austria'
+        && prospect_destinations_phrase([], 'new') === '') {
+        pass('prospect destination phrase + names');
+    } else {
+        fail('dest phrase unexpected: ' . json_encode([$phraseNew, $phraseExist, $phraseIns, $names]));
+    }
+} catch (Throwable $e) {
+    fail('dest phrase: ' . $e->getMessage());
+}
+
 // --- Extracting → Extracted + Team SWE ---
 try {
     $batchId = get_or_create_extract_batch($country, $teamUser, 'German', 'europe');
@@ -1837,6 +1870,49 @@ try {
     db()->exec("DELETE FROM semrush_sheet_comments WHERE body LIKE 'txfsem-route%'");
 } catch (Throwable $e) {
     fail('extracting: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Extracting country switcher nav (filled + current-empty) ---
+try {
+    $navFilled = get_or_create_extract_batch('Spain', $teamUser, 'Spanish', 'europe');
+    set_extract_batch_domains_from_text($navFilled, "txfnav-es.com\n", (int) ($teamUser['id'] ?? 0));
+    $navEmpty = get_or_create_extract_batch('Austria', $teamUser, 'German', 'europe');
+    set_extract_batch_domains_from_text($navEmpty, '', (int) ($teamUser['id'] ?? 0));
+    $nav = list_extract_batch_country_nav($navEmpty);
+    $ids = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $nav);
+    $countries = array_map(static fn ($r) => (string) ($r['country'] ?? ''), $nav);
+    $without = list_extract_batch_country_nav(0);
+    $withoutIds = array_map(static fn ($r) => (int) ($r['id'] ?? 0), $without);
+    if (in_array($navFilled, $ids, true)
+        && in_array($navEmpty, $ids, true)
+        && in_array('Spain', $countries, true)
+        && in_array('Austria', $countries, true)
+        && in_array($navFilled, $withoutIds, true)
+        && !in_array($navEmpty, $withoutIds, true)) {
+        pass('extract country nav includes filled + current empty');
+    } else {
+        fail('extract nav unexpected: ' . json_encode(['nav' => $nav, 'without' => $without]));
+    }
+    db()->prepare(
+        'UPDATE extract_batches SET site_count=0, emptied_at = DATE_SUB(NOW(), INTERVAL 2 HOUR) WHERE id=?'
+    )->execute([$navEmpty]);
+    list_extract_batch_country_nav($navEmpty);
+    $stillOpen = get_extract_batch($navEmpty);
+    if ($stillOpen) {
+        pass('extract country nav does not purge open empty batch');
+    } else {
+        fail('extract country nav purged the open empty batch');
+    }
+    $capped = list_extract_batches(10000);
+    if (is_array($capped)) {
+        pass('list_extract_batches accepts raised cap');
+    } else {
+        fail('list_extract_batches raised cap failed');
+    }
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfnav-%'");
+    refresh_extract_batch_site_count($navFilled);
+} catch (Throwable $e) {
+    fail('extract nav: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Team emails + Push to Admin (clears working copy) ---

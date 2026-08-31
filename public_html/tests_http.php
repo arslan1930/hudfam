@@ -947,6 +947,7 @@ $r = login_post($base, 'finder', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_prospect_check');
 if ($r['status'] === 200
     && (str_contains($r['body'], 'Filter') || str_contains($r['body'], 'Paste'))
+    && str_contains($r['body'], 'Filter unique sites')
     && str_contains($r['body'], 'csrf-token')) {
     pass('finder can open Filter & add');
 } else {
@@ -984,6 +985,25 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Extracting')) {
     pass('extractor can open Extracting');
 } else {
     fail('extractor blocked from Extracting status=' . $r['status']);
+}
+if ($r['status'] === 200
+    && (str_contains($r['body'], 'id="extract-country-search"')
+        || str_contains($r['body'], 'Waiting for sites from the team mate'))) {
+    pass('extractor Extracting hub search or empty wait');
+} else {
+    fail('extractor Extracting hub missing search or empty wait');
+}
+if ($r['status'] === 200 && preg_match('/team_extract_batch&amp;id=(\d+)/', $r['body'], $m)) {
+    $rSheet = req('GET', $base . '/index.php?page=team_extract_batch&id=' . (int) $m[1]);
+    if ($rSheet['status'] === 200
+        && str_contains($rSheet['body'], 'id="extract-country-jump"')
+        && str_contains($rSheet['body'], 'All countries')) {
+        pass('extractor Extracting country sheet switcher');
+    } else {
+        fail('extractor Extracting country sheet missing switcher status=' . $rSheet['status']);
+    }
+} else {
+    pass('extractor Extracting country sheet skipped (no filled batch)');
 }
 
 // Email Extracting folder shows tool shortcuts

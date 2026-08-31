@@ -207,11 +207,11 @@ function add_domains_to_extract_sites(
 /**
  * @return list<array<string,mixed>>
  */
-function list_extract_batches(int $limit = 200): array
+function list_extract_batches(int $limit = 2000): array
 {
     ensure_extract_schema();
     purge_expired_empty_extract_batches();
-    $limit = max(1, min(500, $limit));
+    $limit = max(1, min(10000, $limit));
     // Hide empty countries here; they may still be open on the batch page until leave / 1 hour.
     $sql = "SELECT b.*, u.username, u.full_name,
                    w.username AS sites_writer_username, w.full_name AS sites_writer_name
@@ -222,6 +222,43 @@ function list_extract_batches(int $limit = 200): array
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
     return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
+ * Cheap Extracting country switcher (id + country). Filled Sites lists only;
+ * include $currentId even when that batch is empty so the open sheet stays in the list.
+ *
+ * @return list<array{id:int,country:string}>
+ */
+function list_extract_batch_country_nav(int $currentId = 0): array
+{
+    ensure_extract_schema();
+    // Do not purge here: an open empty sheet must stay in the switcher.
+    // Hub list_extract_batches() still removes countries empty for 1 hour.
+    $currentId = max(0, $currentId);
+    $sql = 'SELECT id, country FROM extract_batches WHERE (site_count > 0';
+    if ($currentId > 0) {
+        $sql .= ' OR id = ' . $currentId;
+    }
+    $sql .= ') ORDER BY country ASC, id ASC';
+    $out = [];
+    $seen = [];
+    foreach (db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $id = (int) ($row['id'] ?? 0);
+        $raw = trim((string) ($row['country'] ?? ''));
+        if ($id < 1 || $raw === '' || isset($seen[$id])) {
+            continue;
+        }
+        $seen[$id] = true;
+        $canon = function_exists('resolve_canonical_country')
+            ? resolve_canonical_country($raw)
+            : null;
+        $out[] = [
+            'id' => $id,
+            'country' => $canon ? (string) $canon['name'] : $raw,
+        ];
+    }
+    return $out;
 }
 
 function stamp_extract_batch_last_pushed(?int $batchId): void

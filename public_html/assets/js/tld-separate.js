@@ -94,10 +94,9 @@
       hidden.value = joined;
       if (btn) {
         var n = joined ? joined.split(/\n+/).filter(function (l) { return l.trim(); }).length : 0;
-        var countryLabel = liveMeta().country || country || 'country';
         btn.textContent = n > 0
-          ? ('Add ' + n + ' new site' + (n === 1 ? '' : 's') + ' to ' + countryLabel)
-          : ('Add 0 new sites to ' + countryLabel);
+          ? ('Add ' + n + ' unique site' + (n === 1 ? '' : 's'))
+          : 'Add 0 unique sites';
         btn.disabled = n < 1;
       }
     }
