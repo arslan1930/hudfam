@@ -1033,7 +1033,7 @@ if (!str_contains($extractLibSync, 'function remove_domains_from_extract_sites_f
     || !str_contains($extractLibSync, 'Drop any leftover Extracting row first')
     || !str_contains($prospectsLibSync, 'function prospect_remove_domains_from_extracting')
     || !str_contains($adminProspectsSync, 'Our database and Extracting sites')
-    || !str_contains($guidesSync, 'also removes it from this country’s Extracting')) {
+    || !str_contains($guidesSync, 'Admin removes the same domains from Our database')) {
     fail('Our database delete missing Extracting Sites cascade / re-add');
 } else {
     ok('Our database delete clears Extracting; Filter & add re-inserts');
