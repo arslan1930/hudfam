@@ -262,6 +262,38 @@ function invoice_list_query(array $opts = []): string
     return 'index.php?' . implode('&', $bits);
 }
 
+/**
+ * Compact pager pages. 0 is an ellipsis gap between kept numbers.
+ *
+ * @return list<int>
+ */
+function invoice_list_page_numbers(int $current, int $total): array
+{
+    $current = max(1, $current);
+    $total = max(1, $total);
+    if ($total <= 7) {
+        return range(1, $total);
+    }
+    $keep = [1, $total, $current, $current - 1, $current + 1];
+    $keep = array_values(array_unique(array_filter(
+        $keep,
+        static function ($n) use ($total): bool {
+            return $n >= 1 && $n <= $total;
+        }
+    )));
+    sort($keep, SORT_NUMERIC);
+    $out = [];
+    $prev = 0;
+    foreach ($keep as $n) {
+        if ($prev > 0 && $n > $prev + 1) {
+            $out[] = 0;
+        }
+        $out[] = $n;
+        $prev = $n;
+    }
+    return $out;
+}
+
 /** Native <select> is enough below this many clients; typeahead kicks in at or above. */
 function invoice_generate_client_typeahead_min(): int
 {
@@ -809,6 +841,18 @@ function invoice_work_status(array $invoice): string
 function invoice_is_draft(array $invoice): bool
 {
     return invoice_is_manual($invoice) && invoice_work_status($invoice) === 'draft';
+}
+
+/** Empty blank draft — €0 and no line items — so the list can de-emphasize it. */
+function invoice_list_is_incomplete(array $invoice): bool
+{
+    if (!invoice_is_draft($invoice)) {
+        return false;
+    }
+    $items = (int) ($invoice['item_count'] ?? 0);
+    $total = (float) ($invoice['total_amount'] ?? 0);
+
+    return $items < 1 && $total <= 0.00001;
 }
 
 function invoice_work_status_label(array $invoice): string

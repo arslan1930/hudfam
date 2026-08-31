@@ -16,13 +16,14 @@ function render_page_purpose(string $title, string $what, string $how, array $st
         $stepsHtml = '<ol class="page-purpose-steps">' . $items . '</ol>';
     }
 
-    return '<aside class="page-purpose" aria-label="Page guide">'
-        . '<div class="page-purpose-badge">What is this?</div>'
-        . '<h2 class="page-purpose-title">' . h($title) . '</h2>'
+    return '<details class="help-details page-purpose">'
+        . '<summary>What is this? · ' . h($title) . '</summary>'
+        . '<div class="help-details-body">'
         . '<p class="page-purpose-what"><strong>Purpose:</strong> ' . h($what) . '</p>'
         . '<p class="page-purpose-how"><strong>How it works:</strong> ' . h($how) . '</p>'
         . $stepsHtml
-        . '</aside>';
+        . '</div>'
+        . '</details>';
 }
 
 function render_admin_panel_guide(): string

@@ -165,7 +165,9 @@ if (!str_contains($usersPage, '$usersPage') || !str_contains($usersPage, '$perPa
 $invoicesAdminPage = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
 if (!str_contains($invoicesAdminPage, '$perPage = 50')
     || !str_contains($invoicesAdminPage, '$invoiceListQs')
-    || !str_contains($invoicesAdminPage, 'Previous')) {
+    || !str_contains($invoicesAdminPage, 'Previous')
+    || !str_contains($invoicesAdminPage, 'invoice-list-pager')
+    || !str_contains($invoicesAdminPage, 'invoice_list_page_numbers')) {
     fail('invoices.php missing 50/page pagination');
 } else {
     ok('invoices.php 50/page pagination');
@@ -195,8 +197,16 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
 }
 if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
     || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
+    || !str_contains($invoicesAdminPage, 'Unpaid invoices')
     || !str_contains($invoicesAdminPage, 'Completed unpaid')
-    || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")) {
+    || !str_contains($invoicesAdminPage, "['filter' => 'unpaid']")
+    || !str_contains($invoicesAdminPage, 'invoice-list-delete')
+    || !str_contains($invoicesAdminPage, 'is-incomplete')
+    || !str_contains($invoicesAdminPage, 'Add note')
+    || !str_contains($invoicesAdminPage, 'class="num"')
+    || !str_contains($invoicesAdminPage, '">Clear</a>')
+    || !str_contains($invoicesAdminPage, "'filter' => \$invoiceFilter")
+    || str_contains($invoicesAdminPage, "page=admin_invoices') ?>\">Clear")) {
     fail('invoices.php missing list chips / search / paid-delete copy');
 } else {
     ok('invoices.php list chips, full search, paid-delete confirm');
@@ -297,6 +307,13 @@ if (!str_contains($guidesLib, 'function guide_orders')
     fail('Office page-purpose guides missing');
 } else {
     ok('Office Orders/Invoices/Account/Website prices guides present');
+}
+if (!str_contains($guidesLib, '<details class="help-details page-purpose">')
+    || !str_contains($guidesLib, '<summary>What is this? · ')
+    || !str_contains($guidesLib, 'help-details-body')) {
+    fail('page-purpose guide is not collapsed by default');
+} else {
+    ok('page-purpose guide is a collapsed details');
 }
 $ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 $invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
@@ -1407,7 +1424,9 @@ if (!str_contains($ordersPage, '<span>Copy</span>')
     || !str_contains($ordersPage, 'Open in Website prices')
     || !str_contains($ordersPage, 'omConfirmRemove')
     || !str_contains($ordersPage, 'restore_wp')
-    || !str_contains($ordersPage, '$stayProcessing')
+    || !str_contains($ordersPage, "['folder' => 'completed'")
+    || !str_contains($ordersPage, 'No leftover Processing orders')
+    || !str_contains($ordersPage, 'order_row_ready_for_complete')
     || !str_contains($ordersPage, 'Mark this order completed?')
     || !str_contains($ordersPage, 'order_invoice_generate_push_cta')) {
     fail('orders missing Copy/Complete labels, WP link, or confirm');
@@ -1440,12 +1459,17 @@ if (!str_contains($ordersPage, 'Mark paid')
 } else {
     ok('orders Mark paid label + Processing live-URL footer');
 }
-if (!str_contains($ordersPage, 'Unpaid LIVE') || !str_contains($ordersPage, "value=\"unpaid\"")) {
+if (!str_contains($ordersPage, 'Unpaid LIVE')
+    || !str_contains($ordersPage, 'Unpaid to bill')
+    || !str_contains($ordersPage, 'om-status-tabs')
+    || !str_contains($ordersPage, 'Completed unpaid')) {
     fail('orders missing unpaid LIVE filter');
 } else {
     ok('orders unpaid LIVE filter');
 }
-if (!str_contains($ordersPage, "['p' => \$pageNum") && !str_contains($ordersPage, 'Page <?= (int) $pageNum ?>')) {
+if (!str_contains($ordersPage, 'om-sheet-pager')
+    || !str_contains($ordersPage, 'invoice_list_page_numbers')
+    || !str_contains($ordersPage, 'Previous')) {
     fail('orders missing list pagination');
 } else {
     ok('orders list pagination');
@@ -1974,7 +1998,8 @@ if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
     ok('layout nav uses aliases for child routes');
 }
 if (!str_contains($layoutNav, "'admin_orders&folder=processing'")
-    || !str_contains($layoutNav, "\$activePage === 'admin_orders'")) {
+    || !str_contains($layoutNav, "\$activePage === 'admin_orders'")
+    || !str_contains($layoutNav, "'admin_invoices&filter=unpaid'")) {
     fail('layout Order management does not open Processing');
 } else {
     ok('layout Order management opens Processing');
