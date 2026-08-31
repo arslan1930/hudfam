@@ -262,6 +262,38 @@ function invoice_list_query(array $opts = []): string
     return 'index.php?' . implode('&', $bits);
 }
 
+/**
+ * Compact pager pages. 0 is an ellipsis gap between kept numbers.
+ *
+ * @return list<int>
+ */
+function invoice_list_page_numbers(int $current, int $total): array
+{
+    $current = max(1, $current);
+    $total = max(1, $total);
+    if ($total <= 7) {
+        return range(1, $total);
+    }
+    $keep = [1, $total, $current, $current - 1, $current + 1];
+    $keep = array_values(array_unique(array_filter(
+        $keep,
+        static function ($n) use ($total): bool {
+            return $n >= 1 && $n <= $total;
+        }
+    )));
+    sort($keep, SORT_NUMERIC);
+    $out = [];
+    $prev = 0;
+    foreach ($keep as $n) {
+        if ($prev > 0 && $n > $prev + 1) {
+            $out[] = 0;
+        }
+        $out[] = $n;
+        $prev = $n;
+    }
+    return $out;
+}
+
 /** Native <select> is enough below this many clients; typeahead kicks in at or above. */
 function invoice_generate_client_typeahead_min(): int
 {

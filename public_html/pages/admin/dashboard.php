@@ -298,7 +298,7 @@ if ($attention):
         Publisher rate book — one country sheet of prices and statuses.
       <?php endif; ?></p>
   </a>
-  <a class="launch-card" href="index.php?page=admin_invoices" data-dashboard-item
+  <a class="launch-card" href="index.php?page=admin_invoices&amp;filter=unpaid" data-dashboard-item
      data-search="invoices generate printable blank draft done payment unpaid">
     <h2>Invoices</h2>
     <p><?php if (!empty($invoiceUnpaid['ok']) && !empty($invoiceDrafts['ok'])): ?>

@@ -126,10 +126,10 @@ render_header('Invoices', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid Order management rows that have a LIVE URL. Mark paid to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark paid when payment arrives.</p>
+    <p class="muted">Generate from unpaid LIVE rows, or a blank invoice. Mark paid when payment arrives.</p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Order management</a>
+    <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed unpaid</a>
     <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
@@ -145,6 +145,12 @@ render_header('Invoices', 'admin');
               'Leftover client folder',
               'Older invoices that were linked to a client profile (client_id=). New bills use Bill as (email or name) and show on All invoices.'
           );
+      } elseif ($invoiceFilter === 'draft') {
+          echo label_with_info('Draft invoices', 'Blank invoices that still need data. Save as done on the bill when they are ready to send.');
+      } elseif ($invoiceFilter === 'unpaid') {
+          echo label_with_info('Unpaid invoices', 'Sent bills waiting for payment. Mark paid when it arrives.');
+      } elseif ($invoiceFilter === 'paid') {
+          echo label_with_info('Paid invoices', 'Payment received. Linked Order management rows stay Paid if you delete the bill.');
       } else {
           echo label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.');
       }
@@ -183,10 +189,12 @@ render_header('Invoices', 'admin');
              placeholder="Invoice no., bill as, or note" autocomplete="off" spellcheck="false" data-no-draft
              title="Search invoice number, bill as, or note">
       <button class="btn secondary small" type="submit">Search</button>
-      <?php if ($invoiceQ !== '' || $invoiceFilter !== ''): ?>
-        <a class="btn secondary small" href="<?= h($invoiceClientId > 0
-            ? invoice_list_query(['client_id' => $invoiceClientId])
-            : 'index.php?page=admin_invoices') ?>">Clear</a>
+      <?php if ($invoiceQ !== ''): ?>
+        <a class="btn secondary small" href="<?= h(invoice_list_query([
+            'filter' => $invoiceFilter,
+            'client_id' => $invoiceClientId,
+            'p' => 1,
+        ])) ?>">Clear</a>
       <?php endif; ?>
       <?php if ($invoiceClientId > 0): ?>
         <a class="btn secondary small" href="index.php?page=admin_invoices">All invoices</a>
@@ -368,15 +376,23 @@ render_header('Invoices', 'admin');
       </table>
     </div>
     <?php if ($totalPages > 1): ?>
-    <p class="muted" style="margin-top:0.85rem">
-      Page <?= (int) $pageNum ?> of <?= (int) $totalPages ?>
+    <nav class="pagination invoice-list-pager" aria-label="Invoice pages">
       <?php if ($pageNum > 1): ?>
-        · <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum - 1)])) ?>">Previous</a>
+        <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum - 1)])) ?>">Previous</a>
       <?php endif; ?>
+      <?php foreach (invoice_list_page_numbers((int) $pageNum, $totalPages) as $pageLink): ?>
+        <?php if ($pageLink < 1): ?>
+          <span class="pagination-gap" aria-hidden="true">…</span>
+        <?php elseif ($pageLink === $pageNum): ?>
+          <span class="is-current" aria-current="page"><?= (int) $pageLink ?></span>
+        <?php else: ?>
+          <a href="<?= h($invoiceListQs(['p' => (string) $pageLink])) ?>"><?= (int) $pageLink ?></a>
+        <?php endif; ?>
+      <?php endforeach; ?>
       <?php if ($pageNum < $totalPages): ?>
-        · <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum + 1)])) ?>">Next</a>
+        <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum + 1)])) ?>">Next</a>
       <?php endif; ?>
-    </p>
+    </nav>
     <?php endif; ?>
     <script>
     (function () {
