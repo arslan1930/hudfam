@@ -5268,6 +5268,9 @@ try {
         && str_contains($ordersPhpSrc, 'id="om-origin-tabs"')
         && str_contains($ordersPhpSrc, 'Added here')
         && str_contains($ordersPhpSrc, 'Leftover')
+        && str_contains($ordersPhpSrc, 'Default view is All Processing')
+        && str_contains($ordersPhpSrc, "? \$rawOrigin : 'all'")
+        && str_contains($ordersPhpSrc, 'Other tabs:')
         && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
         pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
     } else {

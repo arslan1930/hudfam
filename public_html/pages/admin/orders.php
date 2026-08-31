@@ -19,7 +19,8 @@ if ($isProcessing) {
     if ($rawOrigin === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $rawOrigin = strtolower(trim((string) ($_POST['origin'] ?? '')));
     }
-    $origin = in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'wp';
+    // Missing/invalid origin → All Processing (matches top Processing count; not empty WP-only).
+    $origin = in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'all';
 }
 
 $filter = [
@@ -70,7 +71,7 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
     if ($folderName === 'processing') {
         $orig = strtolower(trim((string) ($params['origin'] ?? '')));
         if (!in_array($orig, ['wp', 'leftover', 'manual', 'all'], true)) {
-            $orig = 'wp';
+            $orig = 'all';
         }
         $bits[] = 'origin=' . rawurlencode($orig);
     }
@@ -537,7 +538,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 <div class="topbar">
   <div>
     <?php if ($isProcessing): ?>
-      <h1><?= label_with_info('Processing', 'Default view is still in Website prices Processing. Leftover stays when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row by itself.') ?></h1>
+      <h1><?= label_with_info('Processing', 'Default view is All Processing. Use the chips for Website prices Processing, Leftover, or Added here. Fill LIVE URL, country, and client, then Mark completed. Saving a live URL does not complete the row by itself.') ?></h1>
       <p class="muted">Fill live URL, country, and client, then Mark completed. Saving a live URL does not complete the row.</p>
     <?php else: ?>
       <h1><?= label_with_info('Completed orders', 'After a live URL and Mark completed. Unpaid until Paid. Tick unpaid rows and Push to invoice. Paid stays in this folder. Website prices status is not changed when you mark paid.') ?></h1>
@@ -802,22 +803,8 @@ if ($compactUnpaidStats && !$showPagingStats) {
       <?php if (!$items): ?>
         <tr>
           <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
-            <?= $filtersOn
-                ? 'No orders match this filter.'
-                : ($isProcessing
-                    ? ($origin === 'leftover'
-                        ? 'No leftover Processing orders. Website prices Processing and Added here are other tabs.'
-                        : ($origin === 'manual'
-                            ? 'No orders added here. Use + Add order, or open Website prices Processing.'
-                            : ($origin === 'all'
-                                ? 'No processing orders. Website prices Processing rows appear here, or click + Add order.'
-                                : 'No Website prices Processing rows. Leftover and Added here are other tabs.')))
-                    : ($filter['status'] === 'unpaid'
-                        ? 'No unpaid completed orders to bill. Open All to see Paid, or mark Processing rows completed.'
-                        : ($filter['status'] === 'paid'
-                            ? 'No paid completed orders.'
-                            : 'No completed orders yet — mark processing rows completed with a live URL.'))) ?>
             <?php if ($filtersOn): ?>
+              No orders match this filter.
               <a href="<?= h($ordersQs([
                   'q' => '',
                   'country' => '',
@@ -826,6 +813,47 @@ if ($compactUnpaidStats && !$showPagingStats) {
                   'date_to' => '',
                   'p' => 1,
               ])) ?>">Clear filters</a>
+            <?php elseif ($isProcessing): ?>
+              <?php
+                if ($origin === 'leftover') {
+                    echo 'No leftover Processing orders.';
+                } elseif ($origin === 'manual') {
+                    echo 'No orders added here. Use + Add order, or open another tab.';
+                } elseif ($origin === 'all') {
+                    echo 'No processing orders. Website prices Processing rows appear here, or click + Add order.';
+                } else {
+                    echo 'No Website prices Processing rows.';
+                }
+                $originJumpLabels = [
+                    'wp' => 'Website prices Processing',
+                    'leftover' => 'Leftover',
+                    'manual' => 'Added here',
+                    'all' => 'All Processing',
+                ];
+                $jumpBits = [];
+                foreach ($originJumpLabels as $okey => $olabel) {
+                    if ($okey === $origin) {
+                        continue;
+                    }
+                    $n = (int) ($originCounts[$okey] ?? 0);
+                    if ($n < 1) {
+                        continue;
+                    }
+                    $jumpBits[] = '<a href="' . h($ordersQs(['origin' => $okey, 'p' => 1])) . '">'
+                        . h($olabel) . ' (' . $n . ')</a>';
+                }
+                if ($jumpBits) {
+                    echo ' Other tabs: ' . implode(' · ', $jumpBits) . '.';
+                } elseif ($origin !== 'all' && $origin !== 'manual') {
+                    echo ' Leftover and Added here are other tabs.';
+                }
+              ?>
+            <?php else: ?>
+              <?= $filter['status'] === 'unpaid'
+                  ? 'No unpaid completed orders to bill. Open All to see Paid, or mark Processing rows completed.'
+                  : ($filter['status'] === 'paid'
+                      ? 'No paid completed orders.'
+                      : 'No completed orders yet — mark processing rows completed with a live URL.') ?>
             <?php endif; ?>
           </td>
         </tr>
