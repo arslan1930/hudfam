@@ -206,10 +206,14 @@ render_header('Extracting · ' . $country, 'team');
       Sites waiting to extract for <strong><?= h($country) ?></strong> — this list is <strong>shared</strong>.
       Changes <strong>autosave</strong> in real time.
       <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page.
-      Use <strong>Open first 10–50</strong> to visit sites in new tabs (batches of 10 — <strong>Open next</strong> to continue).
+      Use <strong>Open &amp; remove first 10–50</strong> to visit sites in new tabs and take them off this list
+      (batches of 10 — <strong>Open next</strong> continues from the new top).
+      <strong>Undo</strong> puts them back while you stay on this page.
       If emptied, this page stays open; the country hides when you return to Extracting sites,
       and the row is removed after <strong>1 hour</strong> unless new sites are added (new sites appear at the top).
-      Our database can be larger — it keeps everything; Extracting shrinks after Push.
+      Our database can be larger — it keeps everything.
+      Extracting shrinks when you Push Results, Open &amp; remove, delete lines here,
+      or Admin removes the same domains from Our database.
     </p>
 
     <?php
@@ -227,10 +231,10 @@ render_header('Extracting · ' . $country, 'team');
           <div class="sites-list-actions">
             <?php render_undo_redo_arrow_buttons('sites_undo_btn', 'sites_redo_btn'); ?>
             <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
-            <div class="swe-open-group" data-extract-open-group role="group" aria-label="Open sites in new tabs">
-              <label class="visually-hidden" for="extract-open-count">How many sites to open</label>
+            <div class="swe-open-group" data-extract-open-group role="group" aria-label="Open and remove sites in new tabs">
+              <label class="visually-hidden" for="extract-open-count">How many sites to open and remove</label>
               <select id="extract-open-count" class="swe-open-count" data-extract-open-count
-                      title="Open sites from the top of this Sites list">
+                      title="How many sites to open and remove from the top of this list">
                 <option value="10" selected>First 10</option>
                 <option value="20">First 20</option>
                 <option value="30">First 30</option>
@@ -238,11 +242,11 @@ render_header('Extracting · ' . $country, 'team');
                 <option value="50">First 50</option>
               </select>
               <button type="button" class="btn secondary small" data-extract-open-bulk
-                      title="Open sites from the top of this Sites list in new tabs">
-                Open first 10
+                      title="Open sites from the top of this Sites list in new tabs and remove them. Undo puts them back.">
+                Open &amp; remove first 10
               </button>
               <button type="button" class="btn secondary small" data-extract-open-continue hidden
-                      title="Open the next batch of sites">
+                      title="Open the next batch of sites and remove them from this list. Undo puts them back.">
                 Open next 10
               </button>
             </div>
