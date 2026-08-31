@@ -171,7 +171,15 @@ try {
                         if ($action === 'send_tld_column') {
                             $msg .= ' · sent from TLD column';
                         }
-                        flash('ok', $msg . '.');
+                        $msg .= '. Folder totals are shared — both teammates see the same Extracting country count after refresh.';
+                        flash('ok', $msg);
+                        if (!empty($added['extract_error'])) {
+                            flash(
+                                'error',
+                                'Our database saved the sites, but Extracting did not: '
+                                . (string) $added['extract_error']
+                            );
+                        }
                         if ($dupN > 0) {
                             flash('fade', prospect_duplicates_deleted_message($dupN) . '.');
                         }
@@ -211,7 +219,8 @@ try {
             }
             if ($uniqueN > 0) {
                 $msg = 'Filtered (TLD → country): removed ' . $skippedN
-                    . ' already in destination database(s) · ' . $uniqueN . ' unique site(s) ready to add';
+                    . ' already in destination database(s) · ' . $uniqueN
+                    . ' unique site(s) ready to add (this Filter run)';
                 if ($routeBits) {
                     $msg .= ' (' . implode(', ', $routeBits) . ')';
                 }
@@ -330,7 +339,7 @@ render_header('Filter & add', 'team');
       <div class="full">
         <p class="help" style="margin:0">
           Starting folder for generic TLDs (.com, .net, .eu). Country endings (.at, .ch, …) route to their own folders.
-          Existing Our database URLs stay hidden. Filter removes sites already in each destination country.
+          Existing Our database URLs stay hidden. Filter leftover unique is this session; Extracting country totals are shared.
         </p>
       </div>
       <input type="hidden" name="language" id="language" value="<?= h($language) ?>">
@@ -441,7 +450,7 @@ render_header('Filter & add', 'team');
   <p class="muted" style="margin:0">
     Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
     Already in destination country database(s) <strong><?= count($result['existing']) ?></strong> ·
-    Unique <strong><?= count($result['new']) ?></strong>
+    Unique this Filter <strong><?= count($result['new']) ?></strong>
     <?php
       $routeSummary = [];
       foreach (($result['by_country'] ?? []) as $dest => $bucket) {
@@ -517,7 +526,9 @@ render_header('Filter & add', 'team');
         <p class="help">
           These are <strong>not</strong> in their destination country Our database yet
           (TLD routing: .at→Austria, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
-          Add merges them into the correct country folders and Extracting Sites lists.
+          This leftover is <strong>this Filter run</strong> (your session) — not the shared country total.
+          Add merges them into the correct country folders and Extracting Sites lists
+          (shared — both teammates see the same folder count after refresh).
           Or <strong>Separate all</strong> below to Send/Add one domain ending at a time.
         </p>
         <?php if (!empty($tldCheck['warn'])): ?>

@@ -177,13 +177,20 @@ function read_extracted_sites_upload(?array $file): string
     if ($size > 25 * 1024 * 1024) {
         throw new InvalidArgumentException('CSV is too large (max 25 MB).');
     }
-    $fh = fopen($tmp, 'rb');
+    $raw = (string) file_get_contents($tmp);
+    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+        $raw = substr($raw, 3);
+    }
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $fh = fopen('php://temp', 'r+');
     if (!$fh) {
         throw new InvalidArgumentException('Could not read the uploaded file.');
     }
+    fwrite($fh, $raw);
+    rewind($fh);
     $lines = [];
     $rowNum = 0;
-    while (($row = fgetcsv($fh)) !== false) {
+    while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
         $rowNum++;
         if ($row === [null] || $row === false) {
             continue;

@@ -1687,6 +1687,7 @@ function get_or_create_prospect_batch(
  *   skipped:int,
  *   batch_id:int|null,
  *   extract_batch_id:int|null,
+ *   extract_error:string,
  *   by_country:array<string, array{inserted:int,skipped:int,extract_batch_id:int|null}>
  * }
  */
@@ -1730,6 +1731,7 @@ function add_prospect_domains(
         'duplicated' => count($routed['existing'] ?? []),
         'batch_id' => null,
         'extract_batch_id' => null,
+        'extract_error' => '',
         'by_country' => [],
     ];
     $hasAnyNew = false;
@@ -1763,6 +1765,7 @@ function add_prospect_domains(
     $primaryExtractId = null;
     $selectedExtractId = null;
     $selectedBatchId = null;
+    $extractErrors = [];
 
     foreach ($byCountryUnique as $destName => $bucket) {
         $toAdd = array_values($bucket['new'] ?? []);
@@ -1856,8 +1859,16 @@ function add_prospect_domains(
                     $destRegion
                 );
                 $extractBatchId = !empty($extract['batch_id']) ? (int) $extract['batch_id'] : null;
+                if ($extractBatchId < 1) {
+                    $extractErrors[] = $destCountry . ': Extracting Sites list did not update';
+                } elseif ((int) ($extract['failed'] ?? 0) > 0) {
+                    $extractErrors[] = $destCountry . ': '
+                        . (int) $extract['failed'] . ' site(s) did not reach Extracting'
+                        . (!empty($extract['error']) ? ' (' . (string) $extract['error'] . ')' : '');
+                }
             } catch (Throwable $e) {
                 $extractBatchId = null;
+                $extractErrors[] = $destCountry . ': ' . $e->getMessage();
             }
         }
 
@@ -1903,6 +1914,7 @@ function add_prospect_domains(
         'duplicated' => $totalSkipped + $purged,
         'batch_id' => $selectedBatchId ?? $primaryBatchId,
         'extract_batch_id' => $selectedExtractId ?? $primaryExtractId,
+        'extract_error' => $extractErrors === [] ? '' : implode('; ', $extractErrors),
         'by_country' => $byCountryOut,
     ];
 }

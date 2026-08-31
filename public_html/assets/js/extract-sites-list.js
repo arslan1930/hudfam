@@ -35,6 +35,9 @@
   var MAX_UNDO = 80;
   var SAVE_DELAY_MS = 550;
   var countTimer = null;
+  var OPEN_BATCH_SIZE = 10;
+  var openBatchState = null;
+  var OPEN_COUNT_STORAGE_KEY = 'extract-open-count';
 
   function scheduleCounts() {
     if (countTimer) window.clearTimeout(countTimer);
@@ -82,8 +85,9 @@
     if (footerCount) {
       footerCount.textContent = n + ' site' + (n === 1 ? '' : 's');
     }
-    if (countLabel) countLabel.textContent = String(n);
+    if (countLabel) countLabel.textContent = n + ' site' + (n === 1 ? '' : 's');
     if (copyBtn) copyBtn.disabled = n === 0;
+    syncOpenBulkButton();
   }
 
   function syncHistoryButtons() {
@@ -340,4 +344,241 @@
         });
     });
   }
+
+  // --- Open first 10–50 from the Sites list (batches of 10) ---
+  function normalizeSiteHost(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    s = s.replace(/^[\s'"\[<\(]+/, '').replace(/[\s'"\]>\)]+$/, '');
+    try {
+      var probe = s;
+      if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(probe) && probe.indexOf('.') !== -1) {
+        if (/^[a-z0-9.-]+(\/|\?|#|$)/i.test(probe)) probe = 'https://' + probe;
+      }
+      probe = probe.replace(/^(?:h?ttps?|tps?):\/\//i, 'https://');
+      var u = new URL(probe);
+      if (u.hostname) s = u.hostname;
+    } catch (err) {
+      s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+      if (s.indexOf('//') === 0) s = s.slice(2);
+      s = s.split('/')[0].split('?')[0].split('#')[0];
+    }
+    if (s.indexOf('@') !== -1) s = s.split('@').pop() || '';
+    s = String(s).toLowerCase();
+    if (s.indexOf(':') !== -1 && s.indexOf(']') === -1) s = s.split(':')[0];
+    s = s.replace(/^www\./i, '').replace(/\.$/, '');
+    return s;
+  }
+
+  function isOpenableSite(host) {
+    host = String(host || '').toLowerCase();
+    if (!host || host.indexOf('.') === -1) return false;
+    if (/\s/.test(host)) return false;
+    if (!/^[a-z0-9.-]+$/.test(host)) return false;
+    if (host.charAt(0) === '-' || host.slice(-1) === '-' || host.indexOf('..') !== -1) return false;
+    var parts = host.split('.').filter(Boolean);
+    if (parts.length < 2) return false;
+    for (var i = 0; i < parts.length; i++) {
+      var label = parts[i];
+      if (!label || label.length > 63) return false;
+      if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) return false;
+    }
+    return true;
+  }
+
+  function siteOpenUrl(host) {
+    return 'https://' + host;
+  }
+
+  function listEligibleOpenHosts() {
+    var out = [];
+    var seen = {};
+    linesOf(ta.value).forEach(function (line) {
+      var host = normalizeSiteHost(line);
+      if (!isOpenableSite(host) || seen[host]) return;
+      seen[host] = true;
+      out.push({ host: host, url: siteOpenUrl(host) });
+    });
+    return out;
+  }
+
+  function clearOpenBatchState() {
+    openBatchState = null;
+    syncOpenContinueButton();
+  }
+
+  function syncOpenContinueButton() {
+    var cont = document.querySelector('[data-extract-open-continue]');
+    if (!cont) return;
+    if (!openBatchState || openBatchState.offset >= openBatchState.goal) {
+      cont.hidden = true;
+      cont.disabled = true;
+      return;
+    }
+    var left = openBatchState.goal - openBatchState.offset;
+    var next = Math.min(OPEN_BATCH_SIZE, left);
+    cont.hidden = false;
+    cont.disabled = false;
+    cont.textContent = 'Open next ' + next;
+    cont.title = 'Open the next ' + next + ' of '
+      + openBatchState.goal + ' sites (' + openBatchState.offset + ' already opened)';
+  }
+
+  function syncOpenBulkButton() {
+    var select = document.querySelector('[data-extract-open-count]');
+    var btn = document.querySelector('[data-extract-open-bulk]');
+    if (!btn) return;
+    var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+    var eligible = listEligibleOpenHosts();
+    var take = Math.min(choice, eligible.length);
+    if (eligible.length === 0) {
+      btn.disabled = true;
+      btn.textContent = 'No sites to open';
+      btn.title = 'No openable sites in this Sites list';
+      clearOpenBatchState();
+      return;
+    }
+    btn.disabled = false;
+    if (take < choice) {
+      btn.textContent = 'Open all ' + take;
+      btn.title = 'Open all ' + take + ' openable site' + (take === 1 ? '' : 's')
+        + ' in this Sites list'
+        + (take > OPEN_BATCH_SIZE ? ' (in batches of ' + OPEN_BATCH_SIZE + ')' : '');
+    } else {
+      btn.textContent = 'Open first ' + choice;
+      btn.title = 'Open the first ' + choice + ' sites in this Sites list in new tabs'
+        + (choice > OPEN_BATCH_SIZE ? ' (batches of ' + OPEN_BATCH_SIZE + ')' : '');
+    }
+    if (openBatchState) {
+      openBatchState.goal = Math.min(openBatchState.goal, eligible.length);
+      openBatchState.items = eligible.slice(0, openBatchState.goal);
+      if (openBatchState.offset > openBatchState.goal) {
+        openBatchState.offset = openBatchState.goal;
+      }
+      if (openBatchState.offset >= openBatchState.goal || openBatchState.goal < 1) {
+        clearOpenBatchState();
+      } else {
+        syncOpenContinueButton();
+      }
+    }
+  }
+
+  function openUrlBatch(urls) {
+    var opened = 0;
+    for (var i = 0; i < urls.length; i++) {
+      var w = window.open(urls[i], '_blank');
+      if (w) {
+        try { w.opener = null; } catch (err) {}
+        opened++;
+      }
+    }
+    return opened;
+  }
+
+  function reportOpenBatch(opened, attempted, goal, offsetAfter, isContinue) {
+    var remaining = Math.max(0, goal - offsetAfter);
+    if (opened === 0) {
+      setStatus(
+        'Could not open tabs — allow popups for this site, then try again.',
+        true
+      );
+      return;
+    }
+    if (opened < attempted) {
+      setStatus(
+        'Opened ' + opened + ' of ' + attempted
+          + ' in this batch — allow popups, then use Open next.',
+        true
+      );
+      return;
+    }
+    if (remaining > 0) {
+      setStatus(
+        'Opened ' + offsetAfter + ' of ' + goal
+          + ' · click Open next ' + Math.min(OPEN_BATCH_SIZE, remaining) + ' to continue.'
+      );
+    } else if (goal <= OPEN_BATCH_SIZE && !isContinue) {
+      setStatus(
+        goal === attempted
+          ? (attempted === 1 ? 'Opened 1 site in a new tab.' : ('Opened ' + attempted + ' sites in new tabs.'))
+          : ('Opened ' + offsetAfter + ' sites in new tabs.')
+      );
+    } else {
+      setStatus('Opened all ' + goal + ' sites in new tabs.');
+    }
+  }
+
+  function startOrContinueOpen(fromContinue) {
+    var select = document.querySelector('[data-extract-open-count]');
+    var choice = select ? (parseInt(select.value, 10) || 10) : 10;
+    var eligible = listEligibleOpenHosts();
+
+    if (!fromContinue) {
+      var take = Math.min(choice, eligible.length);
+      if (take < 1) {
+        setStatus('No sites to open in this Sites list.', true);
+        clearOpenBatchState();
+        syncOpenBulkButton();
+        return;
+      }
+      openBatchState = {
+        goal: take,
+        offset: 0,
+        items: eligible.slice(0, take)
+      };
+    }
+
+    if (!openBatchState || openBatchState.offset >= openBatchState.goal) {
+      clearOpenBatchState();
+      syncOpenBulkButton();
+      return;
+    }
+
+    var start = openBatchState.offset;
+    var end = Math.min(start + OPEN_BATCH_SIZE, openBatchState.goal);
+    var slice = (openBatchState.items || []).slice(start, end);
+    var urls = slice.map(function (item) { return item.url; });
+    var opened = openUrlBatch(urls);
+    openBatchState.offset = end;
+    reportOpenBatch(opened, slice.length, openBatchState.goal, openBatchState.offset, !!fromContinue);
+    if (openBatchState.offset >= openBatchState.goal) {
+      clearOpenBatchState();
+    } else {
+      syncOpenContinueButton();
+    }
+    syncOpenBulkButton();
+  }
+
+  var openCountSelect = document.querySelector('[data-extract-open-count]');
+  var openBulkBtn = document.querySelector('[data-extract-open-bulk]');
+  var openContinueBtn = document.querySelector('[data-extract-open-continue]');
+  if (openCountSelect) {
+    try {
+      var saved = window.sessionStorage && sessionStorage.getItem(OPEN_COUNT_STORAGE_KEY);
+      if (saved && openCountSelect.querySelector('option[value="' + saved + '"]')) {
+        openCountSelect.value = saved;
+      }
+    } catch (err) {}
+    openCountSelect.addEventListener('change', function () {
+      clearOpenBatchState();
+      try {
+        if (window.sessionStorage) {
+          sessionStorage.setItem(OPEN_COUNT_STORAGE_KEY, String(openCountSelect.value || '10'));
+        }
+      } catch (err2) {}
+      syncOpenBulkButton();
+    });
+  }
+  if (openBulkBtn) {
+    openBulkBtn.addEventListener('click', function () {
+      startOrContinueOpen(false);
+    });
+  }
+  if (openContinueBtn) {
+    openContinueBtn.addEventListener('click', function () {
+      startOrContinueOpen(true);
+    });
+  }
+  syncOpenBulkButton();
+  syncOpenContinueButton();
 })();

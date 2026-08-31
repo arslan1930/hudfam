@@ -266,35 +266,8 @@ if ($sheetId > 0) {
             }
             if ($action === 'paste') {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
-                $msg = 'Added to sheet: '
-                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
-                }
-                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
-                }
-                if ((int) ($result['skipped_emails'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped_emails'] . ' previously removed email'
-                        . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
-                }
-                if ((int) ($result['skipped'] ?? 0) > 0
-                    && (int) ($result['skipped_excluded'] ?? 0) < 1
-                    && (int) ($result['skipped_emails'] ?? 0) < 1
-                    && (int) ($result['skipped_duplicate'] ?? 0) < 1) {
-                    $msg .= ', ' . (int) $result['skipped'] . ' skipped';
-                } elseif ((int) ($result['skipped'] ?? 0)
-                    > ((int) ($result['skipped_excluded'] ?? 0) + (int) ($result['skipped_duplicate'] ?? 0))) {
-                    $otherSkip = (int) $result['skipped']
-                        - (int) ($result['skipped_excluded'] ?? 0)
-                        - (int) ($result['skipped_duplicate'] ?? 0);
-                    if ($otherSkip > 0) {
-                        $msg .= ', ' . $otherSkip . ' other skipped';
-                    }
-                }
-                $msg .= '.';
-                if ($result['errors'] !== []) {
-                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 8));
+                $msg = email_campaign_bulk_result_message('Added to sheet', $result);
+                if (($result['errors'] ?? []) !== []) {
                     flash('error', $msg);
                 } else {
                     flash('ok', $msg);
@@ -306,26 +279,8 @@ if ($sheetId > 0) {
             }
             if ($action === 'import_file') {
                 $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
-                $msg = 'Imported file into sheet: '
-                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
-                }
-                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
-                }
-                if ((int) ($result['skipped_emails'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped_emails'] . ' previously removed email'
-                        . ((int) $result['skipped_emails'] === 1 ? '' : 's') . ' stripped';
-                }
-                if ((int) ($result['skipped'] ?? 0) > 0
-                    && (int) ($result['skipped_excluded'] ?? 0) < 1
-                    && (int) ($result['skipped_duplicate'] ?? 0) < 1) {
-                    $msg .= ', ' . (int) $result['skipped'] . ' skipped';
-                }
-                $msg .= ' · ' . (int) ($result['lines'] ?? 0) . ' data line(s).';
-                if ($result['errors'] !== []) {
-                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 8));
+                $msg = email_campaign_bulk_result_message('Imported file into sheet', $result);
+                if (($result['errors'] ?? []) !== []) {
                     flash('error', $msg);
                 } else {
                     flash('ok', $msg);
@@ -1064,6 +1019,7 @@ if ($sheetId > 0) {
       <p class="help">
         Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
         (comma, tab, or semicolon). Header row is optional and skipped.
+        Extra columns after email 4 are ignored. Each site needs at least one email.
         Built for large lists — paste or upload thousands of rows at once.
         Sites or emails previously removed from this sheet are not re-added.
       </p>
@@ -1091,7 +1047,7 @@ if ($sheetId > 0) {
                accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
         <p class="help" style="margin-top:0.35rem">
           Accepts <strong>.csv</strong>, <strong>.xlsx</strong> (Excel), and <strong>.txt</strong> / <strong>.tsv</strong>.
-          First columns = site + up to 4 emails. Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
+          First columns = site + up to 4 emails (extra columns ignored). Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
         </p>
         <p class="actions" style="margin-top:0.75rem">
           <button class="btn" type="submit">Import file into sheet</button>

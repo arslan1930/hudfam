@@ -110,9 +110,9 @@ $teamUser = [
 ];
 
 // Clean prior test rows
-db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
-db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%'");
-db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
+db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfshare-%'");
+db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfshare-%'");
+db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfshare-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
 db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
 db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
@@ -7307,6 +7307,233 @@ try {
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfroute-add-%'");
 } catch (Throwable $e) {
     fail('routed filter/add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Shared Extracting country count (two users) + live hub COUNT ---
+try {
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfshare-%'");
+
+    $shareA = add_prospect_domains(
+        ['txfshare-a.com'],
+        $adminUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'share a'
+    );
+    $shareB = add_prospect_domains(
+        ['txfshare-b.com'],
+        $teamUser,
+        'Germany',
+        'German',
+        'europe',
+        '',
+        'share b'
+    );
+    $idDe = get_or_create_extract_batch('Germany', $adminUser, 'German', 'europe');
+    $st = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=? AND domain=?');
+    $st->execute([$idDe, 'txfshare-a.com']);
+    $hasA = (int) $st->fetchColumn();
+    $st->execute([$idDe, 'txfshare-b.com']);
+    $hasB = (int) $st->fetchColumn();
+    $live = refresh_extract_batch_site_count($idDe);
+    $hub = list_extract_batches(2000);
+    $hubDe = 0;
+    foreach ($hub as $row) {
+        if ((string) ($row['country'] ?? '') === 'Germany') {
+            $hubDe = (int) ($row['site_count'] ?? 0);
+            break;
+        }
+    }
+    $cntStmt = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
+    $cntStmt->execute([$idDe]);
+    $rawCnt = (int) $cntStmt->fetchColumn();
+
+    // Stale denormalized column must not hide a filled list on the hub.
+    db()->prepare('UPDATE extract_batches SET site_count=0 WHERE id=?')->execute([$idDe]);
+    $hubAfterStale = list_extract_batches(2000);
+    $hubDeStale = 0;
+    foreach ($hubAfterStale as $row) {
+        if ((string) ($row['country'] ?? '') === 'Germany') {
+            $hubDeStale = (int) ($row['site_count'] ?? 0);
+            break;
+        }
+    }
+
+    if (
+        (int) ($shareA['inserted'] ?? 0) === 1
+        && (int) ($shareB['inserted'] ?? 0) === 1
+        && ($shareA['extract_error'] ?? '') === ''
+        && ($shareB['extract_error'] ?? '') === ''
+        && $hasA === 1
+        && $hasB === 1
+        && $live === $rawCnt
+        && $hubDe === $rawCnt
+        && $hubDeStale === $rawCnt
+        && $hubDeStale >= 2
+    ) {
+        pass('two users add to same Extracting country; hub uses live count');
+    } else {
+        fail('shared extract count unexpected: ' . json_encode([
+            'shareA' => $shareA,
+            'shareB' => $shareB,
+            'hasA' => $hasA,
+            'hasB' => $hasB,
+            'live' => $live,
+            'rawCnt' => $rawCnt,
+            'hubDe' => $hubDe,
+            'hubDeStale' => $hubDeStale,
+        ]));
+    }
+
+    $msg = email_campaign_bulk_result_message('Imported file into sheet', [
+        'added' => 2,
+        'updated' => 1,
+        'skipped' => 3,
+        'skipped_duplicate' => 1,
+        'skipped_empty' => 1,
+        'skipped_excluded' => 1,
+        'lines' => 6,
+        'errors' => ['skip.com: Add at least one email — each site must have email data.'],
+    ]);
+    if (
+        str_contains($msg, '2 new, 1 updated')
+        && str_contains($msg, 'duplicate domain(s) skipped')
+        && str_contains($msg, 'skipped (no emails)')
+        && str_contains($msg, 'previously removed (not re-added)')
+        && str_contains($msg, '6 data line(s)')
+        && str_contains($msg, 'Issues:')
+    ) {
+        pass('campaign import result message lists added/skipped/lines/errors');
+    } else {
+        fail('campaign import result message: ' . $msg);
+    }
+
+    $xlsxNs = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    $xlsxPath = sys_get_temp_dir() . '/txfxlsx-import-' . getmypid() . '.xlsx';
+    if (!class_exists('ZipArchive') || !function_exists('simplexml_load_string')) {
+        pass('xlsx import skipped (PHP zip/xml missing)');
+    } else {
+        $writeXlsx = static function (string $path, array $files): void {
+            $z = new ZipArchive();
+            if ($z->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('Could not write test xlsx');
+            }
+            foreach ($files as $name => $xml) {
+                $z->addFromString($name, $xml);
+            }
+            $z->close();
+        };
+        $writeXlsx($xlsxPath, [
+            'xl/sharedStrings.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><sst xmlns="' . $xlsxNs . '" count="2" uniqueCount="2">'
+                . '<si><t>txfxlsx-a.de</t></si><si><t>a@txfxlsx-a.de</t></si></sst>',
+            'xl/worksheets/sheet1.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
+                . '</sheetData></worksheet>',
+        ]);
+        $xlsxShared = read_email_campaign_xlsx_as_paste_text($xlsxPath);
+        $writeXlsx($xlsxPath, [
+            'xl/worksheets/sheet1.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="inlineStr"><is><t>Site name</t></is></c>'
+                . '<c r="B1" t="inlineStr"><is><t>Email 1</t></is></c></row>'
+                . '<row r="2"><c r="A2" t="inlineStr"><is><t>txfxlsx-b.de</t></is></c>'
+                . '<c r="B2" t="inlineStr"><is><t>b@txfxlsx-b.de</t></is></c></row>'
+                . '</sheetData></worksheet>',
+        ]);
+        $xlsxInline = read_email_campaign_xlsx_as_paste_text($xlsxPath);
+        $rNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+        $relNs = 'http://schemas.openxmlformats.org/package/2006/relationships';
+        $writeXlsx($xlsxPath, [
+            'xl/workbook.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="' . $xlsxNs . '" xmlns:r="' . $rNs . '">'
+                . '<sheets>'
+                . '<sheet name="Old" sheetId="1" r:id="rId1" state="hidden"/>'
+                . '<sheet name="Live" sheetId="2" r:id="rId2"/>'
+                . '</sheets></workbook>',
+            'xl/_rels/workbook.xml.rels' =>
+                '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="' . $relNs . '">'
+                . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+                . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>'
+                . '</Relationships>',
+            'xl/worksheets/sheet1.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="inlineStr"><is><t>txfxlsx-hidden.de</t></is></c>'
+                . '<c r="B1" t="inlineStr"><is><t>h@txfxlsx-hidden.de</t></is></c></row>'
+                . '</sheetData></worksheet>',
+            'xl/worksheets/sheet2.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="inlineStr"><is><t>txfxlsx-first.de</t></is></c>'
+                . '<c r="B1" t="inlineStr"><is><t>f@txfxlsx-first.de</t></is></c></row>'
+                . '</sheetData></worksheet>',
+        ]);
+        $xlsxFirst = read_email_campaign_xlsx_as_paste_text($xlsxPath);
+        $writeXlsx($xlsxPath, [
+            'xl/sharedStrings.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><sst xmlns="' . $xlsxNs . '" count="2" uniqueCount="2">'
+                . '<si><t>txfxlsx-rph.de</t><rPh sb="0" eb="3"><t>phoneticjunk</t></rPh></si>'
+                . '<si><r><t>a@txfxlsx-rph.de</t></r></si></sst>',
+            'xl/worksheets/sheet1.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
+                . '</sheetData></worksheet>',
+        ]);
+        $xlsxRph = read_email_campaign_xlsx_as_paste_text($xlsxPath);
+        @unlink($xlsxPath);
+        $utf16Path = sys_get_temp_dir() . '/txfutf16-' . getmypid() . '.csv';
+        file_put_contents($utf16Path, "\xFF\xFEs\x00i\x00t\x00e\x00");
+        $utf16Err = '';
+        try {
+            email_campaign_rows_text_from_file_path($utf16Path, 'sites.csv');
+        } catch (Throwable $e) {
+            $utf16Err = $e->getMessage();
+        }
+        @unlink($utf16Path);
+        $macPath = sys_get_temp_dir() . '/txfmac-' . getmypid() . '.csv';
+        file_put_contents($macPath, "Site name,Email 1\rtxmac.de,a@txmac.de\rtxmac2.de,b@txmac2.de");
+        $macCsv = email_campaign_rows_text_from_file_path($macPath, 'sites.csv');
+        @unlink($macPath);
+        if (
+            str_contains($xlsxShared, 'txfxlsx-a.de')
+            && str_contains($xlsxShared, 'a@txfxlsx-a.de')
+            && str_contains($xlsxInline, 'txfxlsx-b.de')
+            && str_contains($xlsxInline, 'b@txfxlsx-b.de')
+            && !str_contains($xlsxInline, 'Site name')
+            && str_contains($xlsxFirst, 'txfxlsx-first.de')
+            && str_contains($xlsxFirst, 'f@txfxlsx-first.de')
+            && !str_contains($xlsxFirst, 'txfxlsx-hidden.de')
+            && str_contains($xlsxRph, 'txfxlsx-rph.de')
+            && str_contains($xlsxRph, 'a@txfxlsx-rph.de')
+            && !str_contains($xlsxRph, 'phoneticjunk')
+            && str_contains($utf16Err, 'UTF-16')
+            && str_contains($macCsv, 'txmac.de')
+            && str_contains($macCsv, 'txmac2.de')
+            && !str_contains($macCsv, 'Site name')
+        ) {
+            pass('xlsx import reads shared strings + inlineStr; UTF-16 CSV is rejected');
+        } else {
+            fail('xlsx/utf16 import: ' . json_encode([
+                'shared' => $xlsxShared,
+                'inline' => $xlsxInline,
+                'first' => $xlsxFirst,
+                'rph' => $xlsxRph,
+                'utf16' => $utf16Err,
+                'mac' => $macCsv,
+            ]));
+        }
+    }
+
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfshare-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfshare-%'");
+    refresh_extract_batch_site_count($idDe);
+} catch (Throwable $e) {
+    fail('shared extract count: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Admin Users U-1: unique email + verify reset ---

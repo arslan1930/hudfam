@@ -139,7 +139,7 @@ function get_or_create_extract_batch(
  * Dual path: push newly added domains into the country's Sites list box.
  *
  * @param list<array{domain:string,prospect_site_id?:int|null}>|list<string> $domains
- * @return array{batch_id:int,added:int}
+ * @return array{batch_id:int,added:int,failed:int,error:string}
  */
 function add_domains_to_extract_sites(
     array $domains,
@@ -173,7 +173,7 @@ function add_domains_to_extract_sites(
         ];
     }
     if ($rows === []) {
-        return ['batch_id' => 0, 'added' => 0];
+        return ['batch_id' => 0, 'added' => 0, 'failed' => 0, 'error' => ''];
     }
 
     // Caller must already de-dupe against this country’s Our database
@@ -187,6 +187,8 @@ function add_domains_to_extract_sites(
            prospect_site_id = COALESCE(VALUES(prospect_site_id), prospect_site_id)'
     );
     $added = 0;
+    $failed = 0;
+    $failMsg = '';
     $uid = (int) ($user['id'] ?? 0) ?: null;
     // Insert newest-first among this batch so ORDER BY id DESC shows paste order at top.
     foreach (array_reverse($rows) as $row) {
@@ -202,12 +204,15 @@ function add_domains_to_extract_sites(
                 $added++;
             }
         } catch (PDOException $e) {
-            // skip bad row
+            $failed++;
+            if ($failMsg === '') {
+                $failMsg = $e->getMessage();
+            }
         }
     }
     refresh_extract_batch_site_count($batchId);
 
-    return ['batch_id' => $batchId, 'added' => $added];
+    return ['batch_id' => $batchId, 'added' => $added, 'failed' => $failed, 'error' => $failMsg];
 }
 
 /**
@@ -219,15 +224,27 @@ function list_extract_batches(int $limit = 2000): array
     purge_expired_empty_extract_batches();
     $limit = max(1, min(10000, $limit));
     // Hide empty countries here; they may still be open on the batch page until leave / 1 hour.
+    // Live COUNT so a stale extract_batches.site_count cannot disagree with the Sites list.
     $sql = "SELECT b.*, u.username, u.full_name,
-                   w.username AS sites_writer_username, w.full_name AS sites_writer_name
+                   w.username AS sites_writer_username, w.full_name AS sites_writer_name,
+                   COALESCE(c.n, 0) AS live_site_count
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
             LEFT JOIN users w ON w.id = b.sites_writer_id
-            WHERE b.site_count > 0
+            LEFT JOIN (
+                SELECT batch_id, COUNT(*) AS n FROM extract_batch_sites GROUP BY batch_id
+            ) c ON c.batch_id = b.id
+            WHERE COALESCE(c.n, 0) > 0
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
-    return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($rows as &$row) {
+        $row['site_count'] = (int) ($row['live_site_count'] ?? 0);
+        unset($row['live_site_count']);
+    }
+    unset($row);
+
+    return $rows;
 }
 
 /**
@@ -242,11 +259,11 @@ function list_extract_batch_country_nav(int $currentId = 0): array
     // Do not purge here: an open empty sheet must stay in the switcher.
     // Hub list_extract_batches() still removes countries empty for 1 hour.
     $currentId = max(0, $currentId);
-    $sql = 'SELECT id, country FROM extract_batches WHERE (site_count > 0';
+    $sql = 'SELECT b.id, b.country FROM extract_batches b WHERE (EXISTS (SELECT 1 FROM extract_batch_sites s WHERE s.batch_id = b.id)';
     if ($currentId > 0) {
-        $sql .= ' OR id = ' . $currentId;
+        $sql .= ' OR b.id = ' . $currentId;
     }
-    $sql .= ') ORDER BY country ASC, id ASC';
+    $sql .= ') ORDER BY b.country ASC, b.id ASC';
     $out = [];
     $seen = [];
     foreach (db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
@@ -581,7 +598,10 @@ function save_extract_batch_results(int $batchId, string $resultsText): void
 function count_extract_batches(): int
 {
     ensure_extract_schema();
-    return (int) db()->query('SELECT COUNT(*) FROM extract_batches WHERE site_count > 0')->fetchColumn();
+    return (int) db()->query(
+        'SELECT COUNT(*) FROM extract_batches b
+         WHERE EXISTS (SELECT 1 FROM extract_batch_sites s WHERE s.batch_id = b.id)'
+    )->fetchColumn();
 }
 
 function extract_request_wants_json(): bool

@@ -1000,6 +1000,19 @@ if (!str_contains($prospectCheck, 'Extracting received')) {
 } else {
     ok('Filter & add Extracting landing flash');
 }
+if (!str_contains($prospectCheck, 'Unique this Filter')
+    || !str_contains($prospectCheck, 'this Filter run')
+    || !str_contains($prospectCheck, 'Folder totals are shared')) {
+    fail('Filter & add missing session leftover vs shared folder copy');
+} else {
+    ok('Filter & add leftover vs shared folder copy');
+}
+if (!str_contains($extractingHub, 'shared')
+    || !str_contains($extractingHub, 'Sites list')) {
+    fail('Extracting hub missing shared Sites list copy');
+} else {
+    ok('Extracting hub shared Sites list copy');
+}
 if (!str_contains($teamHistory, 'count_prospect_batches')
     || !str_contains($teamHistory, '$totalBatches > 100')) {
     fail('Team history missing pager when days exceed 100');
@@ -1414,7 +1427,8 @@ $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php'
 if (!str_contains($campLibSmoke, 'function email_campaign_slots_equal')
     || !str_contains($campLibSmoke, 'skipped_duplicate')
     || !str_contains($campLibSmoke, "'replace'")
-    || !str_contains($campAppSmoke, 'duplicate domain(s) skipped')
+    || !str_contains($campLibSmoke, 'duplicate domain(s) skipped')
+    || !str_contains($campAppSmoke, 'email_campaign_bulk_result_message')
     || !str_contains($campAppSmoke, "import_email_campaign_sheet_from_swe(\$sheetId, \$source, \$sheetCountry, 'replace')")) {
     fail('campaigns missing duplicate skip / replace-different-emails');
 } else {
@@ -2281,6 +2295,12 @@ if (!str_contains($prospectsLib, 'uniq_user_batch_date_country')) {
 } else {
     ok('prospect batches unique per user/day/country');
 }
+if (!str_contains($prospectsLib, "'extract_error'")
+    || !str_contains($prospectCheckT, "added['extract_error']")) {
+    fail('Filter add missing Extracting insert error surface');
+} else {
+    ok('Filter add surfaces Extracting insert errors');
+}
 if (!str_contains($prospectCheckT, 'json_encode') || !str_contains($prospectCheckT, 'confirm_tld_mismatch')) {
     fail('Finding TLD confirm not json_encode-safe');
 } else {
@@ -2304,7 +2324,8 @@ $guidesPhp = file_get_contents($root . '/includes/guides.php') ?: '';
 if (str_contains($guidesPhp, 'Backspace delete')
     || str_contains($guidesPhp, 'Open links in new tabs')) {
     fail('guide_extracting still documents missing Sites list Open/Backspace UI');
-} elseif (!str_contains($guidesPhp, 'Copy, Undo, and Redo')) {
+} elseif (!str_contains($guidesPhp, 'Copy, Undo, Redo')
+    || !str_contains($guidesPhp, 'Open first 10')) {
     fail('guide_extracting missing real Sites list tools');
 } else {
     ok('Extracting guide matches Sites list tools');
@@ -2320,6 +2341,25 @@ if (!str_contains($extractSitesJs, 'data.domains')) {
     fail('extract-sites-list.js autosave does not rewrite from server domains');
 } else {
     ok('extract Sites-list autosave syncs textarea');
+}
+if (!str_contains($extractBatchT, 'data-extract-open-count')
+    || !str_contains($extractBatchT, 'data-extract-open-bulk')
+    || !str_contains($extractBatchT, 'data-extract-open-continue')
+    || !str_contains($extractBatchT, 'First 20')
+    || !str_contains($extractBatchT, 'First 50')) {
+    fail('Extracting Sites list missing Open first 10–50 controls');
+} else {
+    ok('Extracting Sites list Open first 10–50');
+}
+if (!str_contains($extractSitesJs, 'listEligibleOpenHosts')
+    || !str_contains($extractSitesJs, 'Open all ')
+    || !str_contains($extractSitesJs, 'syncOpenBulkButton')
+    || !str_contains($extractSitesJs, 'OPEN_BATCH_SIZE')
+    || !str_contains($extractSitesJs, 'startOrContinueOpen')
+    || !str_contains($extractSitesJs, 'Open next ')) {
+    fail('extract-sites-list.js missing Open first N / batch continue logic');
+} else {
+    ok('extract-sites-list.js Open first N + batch continue');
 }
 
 $sweLib = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
@@ -2423,6 +2463,20 @@ if (!str_contains($openSiteJs, 'docs|drive)\\.google\\.com')
 $campApp = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
 $campDraftsTeam = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
 $campLib = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
+if (!str_contains($campLib, 'function email_campaign_bulk_result_message')
+    || !str_contains($campApp, 'email_campaign_bulk_result_message(\'Imported file into sheet\'')
+    || !str_contains($campApp, 'email_campaign_bulk_result_message(\'Added to sheet\'')
+    || !str_contains($campApp, 'Extra columns after email 4 are ignored')
+    || !str_contains($campLib, 'function email_campaign_xlsx_xpath')
+    || !str_contains($campLib, 'local-name()')
+    || !str_contains($campLib, 'function_exists(\'simplexml_load_string\')')
+    || !str_contains($campLib, 'function email_campaign_xlsx_first_sheet_path')
+    || !str_contains($campLib, 'php://temp')
+    || !str_contains($campLib, 'rPh')) {
+    fail('Campaign paste/import missing shared result message, extra-column help, or xlsx xpath fix');
+} else {
+    ok('Campaign paste/import result message + extra-column help');
+}
 if (!str_contains($campLib, 'function email_campaign_user_can_delete_draft')
     || !str_contains($campLib, 'updated_by')
     || !str_contains($campLib, 'email_campaign_draft_attribution')
@@ -3013,8 +3067,10 @@ if (!str_contains($extractBatchJump, 'extract-country-jump')
     || !str_contains($extractLibSmoke, 'function list_extract_batch_country_nav')
     || !str_contains($extractHubSmoke, 'extract-country-search')
     || !str_contains($extractHubSmoke, 'list_extract_batches(2000)')
-    || !str_contains($extractLibSmoke, 'min(10000, $limit)')) {
-    fail('Extracting missing country switcher or hub search/cap');
+    || !str_contains($extractLibSmoke, 'min(10000, $limit)')
+    || !str_contains($extractLibSmoke, 'live_site_count')
+    || !str_contains($extractLibSmoke, 'EXISTS (SELECT 1 FROM extract_batch_sites')) {
+    fail('Extracting missing country switcher, hub search/cap, or live site count');
 } else {
     ok('Extracting country switcher + hub search cap');
 }

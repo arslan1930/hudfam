@@ -1147,10 +1147,14 @@ if ($r['status'] === 200 && preg_match('/team_extract_batch&amp;id=(\d+)/', $r['
     $rSheet = req('GET', $base . '/index.php?page=team_extract_batch&id=' . (int) $m[1]);
     if ($rSheet['status'] === 200
         && str_contains($rSheet['body'], 'id="extract-country-jump"')
-        && str_contains($rSheet['body'], 'All countries')) {
-        pass('extractor Extracting country sheet switcher');
+        && str_contains($rSheet['body'], 'All countries')
+        && str_contains($rSheet['body'], 'data-extract-open-count')
+        && str_contains($rSheet['body'], 'First 20')
+        && str_contains($rSheet['body'], 'First 50')
+        && str_contains($rSheet['body'], 'data-extract-open-bulk')) {
+        pass('extractor Extracting country sheet switcher + Open first 10–50');
     } else {
-        fail('extractor Extracting country sheet missing switcher status=' . $rSheet['status']);
+        fail('extractor Extracting country sheet missing switcher/Open status=' . $rSheet['status']);
     }
 } else {
     pass('extractor Extracting country sheet skipped (no filled batch)');

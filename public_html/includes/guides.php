@@ -140,7 +140,7 @@ function guide_filter_add(): string
         [
             'Select an existing country database (Germany, Spain, …) as the starting folder for generic TLDs.',
             'Paste root domains and Filter unique sites — .at/.ch/… go to Austria/Switzerland/… and duplicates in those Our databases are removed.',
-            'Add only the remaining unique sites — each country folder and that country’s Extracting Sites list get only what is new there. Separate before Filter is Copy/Delete only.',
+            'Add only the remaining unique sites — that leftover is this Filter run (your session), not the shared country total. Each destination folder and Extracting Sites list are shared — both teammates see the same country count after refresh. Separate before Filter is Copy/Delete only.',
         ]
     );
 }
@@ -153,8 +153,8 @@ function guide_extracting(): string
         'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
         [
             'Teammate uses Filter & add and saves new unique sites.',
-            'Those sites appear here under Sites list for that country (editable textarea; edits autosave).',
-            'Sites list tools: Copy, Undo, and Redo while you stay on this page.',
+            'Those sites appear here under Sites list for that country (editable textarea; edits autosave). The country count is shared — both teammates see the same number after refresh.',
+            'Sites list tools: Copy, Undo, Redo, and Open first 10–50 (Open next continues in batches of 10).',
             'Paste into Extracting Results → Clean to root domains (Ready vs Needs attention) → Push uses Ready only. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country.',
             'Sites list is filled only with domains that were unique in that country’s Our database after Filter & add (TLD-routed).',
             'Add emails in Team, then Push to Admin. Final keeps archive copies; Campaign sheets are separate.',
