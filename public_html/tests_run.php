@@ -7412,6 +7412,69 @@ try {
         fail('campaign import result message: ' . $msg);
     }
 
+    $xlsxNs = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    $xlsxPath = sys_get_temp_dir() . '/txfxlsx-import-' . getmypid() . '.xlsx';
+    if (!class_exists('ZipArchive') || !function_exists('simplexml_load_string')) {
+        pass('xlsx import skipped (PHP zip/xml missing)');
+    } else {
+        $writeXlsx = static function (string $path, array $files): void {
+            $z = new ZipArchive();
+            if ($z->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('Could not write test xlsx');
+            }
+            foreach ($files as $name => $xml) {
+                $z->addFromString($name, $xml);
+            }
+            $z->close();
+        };
+        $writeXlsx($xlsxPath, [
+            'xl/sharedStrings.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><sst xmlns="' . $xlsxNs . '" count="2" uniqueCount="2">'
+                . '<si><t>txfxlsx-a.de</t></si><si><t>a@txfxlsx-a.de</t></si></sst>',
+            'xl/worksheets/sheet1.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
+                . '</sheetData></worksheet>',
+        ]);
+        $xlsxShared = read_email_campaign_xlsx_as_paste_text($xlsxPath);
+        $writeXlsx($xlsxPath, [
+            'xl/worksheets/sheet1.xml' =>
+                '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="' . $xlsxNs . '"><sheetData>'
+                . '<row r="1"><c r="A1" t="inlineStr"><is><t>Site name</t></is></c>'
+                . '<c r="B1" t="inlineStr"><is><t>Email 1</t></is></c></row>'
+                . '<row r="2"><c r="A2" t="inlineStr"><is><t>txfxlsx-b.de</t></is></c>'
+                . '<c r="B2" t="inlineStr"><is><t>b@txfxlsx-b.de</t></is></c></row>'
+                . '</sheetData></worksheet>',
+        ]);
+        $xlsxInline = read_email_campaign_xlsx_as_paste_text($xlsxPath);
+        @unlink($xlsxPath);
+        $utf16Path = sys_get_temp_dir() . '/txfutf16-' . getmypid() . '.csv';
+        file_put_contents($utf16Path, "\xFF\xFEs\x00i\x00t\x00e\x00");
+        $utf16Err = '';
+        try {
+            email_campaign_rows_text_from_file_path($utf16Path, 'sites.csv');
+        } catch (Throwable $e) {
+            $utf16Err = $e->getMessage();
+        }
+        @unlink($utf16Path);
+        if (
+            str_contains($xlsxShared, 'txfxlsx-a.de')
+            && str_contains($xlsxShared, 'a@txfxlsx-a.de')
+            && str_contains($xlsxInline, 'txfxlsx-b.de')
+            && str_contains($xlsxInline, 'b@txfxlsx-b.de')
+            && !str_contains($xlsxInline, 'Site name')
+            && str_contains($utf16Err, 'UTF-16')
+        ) {
+            pass('xlsx import reads shared strings + inlineStr; UTF-16 CSV is rejected');
+        } else {
+            fail('xlsx/utf16 import: ' . json_encode([
+                'shared' => $xlsxShared,
+                'inline' => $xlsxInline,
+                'utf16' => $utf16Err,
+            ]));
+        }
+    }
+
     db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfshare-%'");
     db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfshare-%'");
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfshare-%'");

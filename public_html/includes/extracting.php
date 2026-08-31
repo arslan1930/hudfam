@@ -139,7 +139,7 @@ function get_or_create_extract_batch(
  * Dual path: push newly added domains into the country's Sites list box.
  *
  * @param list<array{domain:string,prospect_site_id?:int|null}>|list<string> $domains
- * @return array{batch_id:int,added:int}
+ * @return array{batch_id:int,added:int,failed:int,error:string}
  */
 function add_domains_to_extract_sites(
     array $domains,
@@ -173,7 +173,7 @@ function add_domains_to_extract_sites(
         ];
     }
     if ($rows === []) {
-        return ['batch_id' => 0, 'added' => 0];
+        return ['batch_id' => 0, 'added' => 0, 'failed' => 0, 'error' => ''];
     }
 
     // Caller must already de-dupe against this country’s Our database
@@ -187,6 +187,8 @@ function add_domains_to_extract_sites(
            prospect_site_id = COALESCE(VALUES(prospect_site_id), prospect_site_id)'
     );
     $added = 0;
+    $failed = 0;
+    $failMsg = '';
     $uid = (int) ($user['id'] ?? 0) ?: null;
     // Insert newest-first among this batch so ORDER BY id DESC shows paste order at top.
     foreach (array_reverse($rows) as $row) {
@@ -202,12 +204,15 @@ function add_domains_to_extract_sites(
                 $added++;
             }
         } catch (PDOException $e) {
-            // skip bad row
+            $failed++;
+            if ($failMsg === '') {
+                $failMsg = $e->getMessage();
+            }
         }
     }
     refresh_extract_batch_site_count($batchId);
 
-    return ['batch_id' => $batchId, 'added' => $added];
+    return ['batch_id' => $batchId, 'added' => $added, 'failed' => $failed, 'error' => $failMsg];
 }
 
 /**

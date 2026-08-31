@@ -2466,8 +2466,11 @@ $campLib = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 if (!str_contains($campLib, 'function email_campaign_bulk_result_message')
     || !str_contains($campApp, 'email_campaign_bulk_result_message(\'Imported file into sheet\'')
     || !str_contains($campApp, 'email_campaign_bulk_result_message(\'Added to sheet\'')
-    || !str_contains($campApp, 'Extra columns after email 4 are ignored')) {
-    fail('Campaign paste/import missing shared result message or extra-column help');
+    || !str_contains($campApp, 'Extra columns after email 4 are ignored')
+    || !str_contains($campLib, 'function email_campaign_xlsx_xpath')
+    || !str_contains($campLib, 'local-name()')
+    || !str_contains($campLib, 'function_exists(\'simplexml_load_string\')')) {
+    fail('Campaign paste/import missing shared result message, extra-column help, or xlsx xpath fix');
 } else {
     ok('Campaign paste/import result message + extra-column help');
 }

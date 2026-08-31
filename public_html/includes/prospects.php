@@ -1861,6 +1861,10 @@ function add_prospect_domains(
                 $extractBatchId = !empty($extract['batch_id']) ? (int) $extract['batch_id'] : null;
                 if ($extractBatchId < 1) {
                     $extractErrors[] = $destCountry . ': Extracting Sites list did not update';
+                } elseif ((int) ($extract['failed'] ?? 0) > 0) {
+                    $extractErrors[] = $destCountry . ': '
+                        . (int) $extract['failed'] . ' site(s) did not reach Extracting'
+                        . (!empty($extract['error']) ? ' (' . (string) $extract['error'] . ')' : '');
                 }
             } catch (Throwable $e) {
                 $extractBatchId = null;

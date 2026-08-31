@@ -3050,6 +3050,16 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
     if (str_starts_with($raw, "\xEF\xBB\xBF")) {
         $raw = substr($raw, 3);
     }
+    if (str_starts_with($raw, "\xD0\xCF\x11\xE0")) {
+        throw new InvalidArgumentException(
+            'Old Excel .xls is not supported. Save as .xlsx or CSV (Excel → Save As → CSV UTF-8) and try again.'
+        );
+    }
+    if (str_starts_with($raw, "\xFF\xFE") || str_starts_with($raw, "\xFE\xFF")) {
+        throw new InvalidArgumentException(
+            'This file is UTF-16. Save as CSV UTF-8 or .xlsx and try again.'
+        );
+    }
     // Binary leftovers (zip/xlsx misnamed as .csv)
     if (str_starts_with($raw, 'PK')) {
         return read_email_campaign_xlsx_as_paste_text($path);
@@ -3110,6 +3120,70 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
 }
 
 /**
+ * XPath that works on default-namespaced spreadsheetml (Excel) XML.
+ * registerXPathNamespace is per-element and is not inherited by children.
+ *
+ * @return list<\SimpleXMLElement>
+ */
+function email_campaign_xlsx_xpath(\SimpleXMLElement $el, string $localPath): array
+{
+    $desc = str_starts_with($localPath, '//') || str_starts_with($localPath, './/');
+    $trimmed = ltrim($localPath, './');
+    $names = preg_split('#/+#', $trimmed) ?: [];
+    $names = array_values(array_filter($names, static fn ($n) => $n !== '' && $n !== '.'));
+    if ($names === []) {
+        return [];
+    }
+    $steps = array_map(
+        static fn (string $n): string => '*[local-name()="' . $n . '"]',
+        $names
+    );
+    $expr = ($desc ? './/' : './') . implode('/', $steps);
+    $nodes = @$el->xpath($expr);
+    return is_array($nodes) ? $nodes : [];
+}
+
+/**
+ * Text inside one spreadsheetml cell (shared string, inline string, or cached value).
+ *
+ * @param list<string> $shared
+ */
+function email_campaign_xlsx_cell_text(\SimpleXMLElement $c, array $shared): string
+{
+    $type = (string) ($c['t'] ?? '');
+    if ($type === 's') {
+        $idx = (int) trim((string) ($c->v ?? ''));
+        return trim((string) ($shared[$idx] ?? ''));
+    }
+    if ($type === 'inlineStr' || isset($c->is) || $type === 'str') {
+        if ($type === 'inlineStr' || isset($c->is)) {
+            $buf = '';
+            foreach (email_campaign_xlsx_xpath($c, './/t') as $t) {
+                $buf .= (string) $t;
+            }
+            if ($buf !== '') {
+                return trim($buf);
+            }
+        }
+        return trim((string) ($c->v ?? ''));
+    }
+    return trim((string) ($c->v ?? ''));
+}
+
+function email_campaign_xlsx_col_index(string $ref, int $fallback): int
+{
+    if (preg_match('/^([A-Z]+)/', $ref, $m)) {
+        $col = 0;
+        $letters = $m[1];
+        for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
+            $col = $col * 26 + (ord($letters[$i]) - 64);
+        }
+        return $col - 1;
+    }
+    return $fallback;
+}
+
+/**
  * Minimal first-sheet .xlsx reader → paste text (site + up to 4 email columns).
  * No external spreadsheet library required.
  */
@@ -3118,6 +3192,11 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
     if (!class_exists('ZipArchive')) {
         throw new InvalidArgumentException(
             'Excel (.xlsx) needs PHP ZipArchive. Save the file as CSV and import that instead.'
+        );
+    }
+    if (!function_exists('simplexml_load_string')) {
+        throw new InvalidArgumentException(
+            'Excel (.xlsx) needs PHP SimpleXML. Save the file as CSV and import that instead.'
         );
     }
     $zip = new ZipArchive();
@@ -3130,12 +3209,9 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
     if (is_string($ssXml) && $ssXml !== '') {
         $sx = @simplexml_load_string($ssXml);
         if ($sx !== false) {
-            $sx->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-            $siNodes = $sx->xpath('//m:si') ?: [];
-            foreach ($siNodes as $si) {
-                $texts = $si->xpath('.//m:t') ?: [];
+            foreach (email_campaign_xlsx_xpath($sx, '//si') as $si) {
                 $buf = '';
-                foreach ($texts as $t) {
+                foreach (email_campaign_xlsx_xpath($si, './/t') as $t) {
                     $buf .= (string) $t;
                 }
                 $shared[] = $buf;
@@ -3164,39 +3240,21 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
     if ($sheet === false) {
         throw new InvalidArgumentException('Could not parse the Excel worksheet. Save as CSV and try again.');
     }
-    $sheet->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-    $rowsXml = $sheet->xpath('//m:sheetData/m:row') ?: [];
+    $rowsXml = email_campaign_xlsx_xpath($sheet, '//sheetData/row');
     $out = [];
     $rowNum = 0;
     foreach ($rowsXml as $rowXml) {
         $rowNum++;
         $cells = [];
-        foreach ($rowXml->xpath('./m:c') ?: [] as $c) {
+        $seq = 0;
+        foreach (email_campaign_xlsx_xpath($rowXml, './c') as $c) {
             $ref = (string) ($c['r'] ?? '');
-            if (!preg_match('/^([A-Z]+)/', $ref, $m)) {
-                continue;
-            }
-            $col = 0;
-            $letters = $m[1];
-            for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
-                $col = $col * 26 + (ord($letters[$i]) - 64);
-            }
-            $colIndex = $col - 1; // 0-based
+            $colIndex = email_campaign_xlsx_col_index($ref, $seq);
+            $seq++;
             if ($colIndex < 0 || $colIndex > 4) {
                 continue; // only site + 4 emails
             }
-            $type = (string) ($c['t'] ?? '');
-            $v = (string) ($c->v ?? '');
-            if ($type === 's') {
-                $v = $shared[(int) $v] ?? '';
-            } elseif ($type === 'inlineStr') {
-                $tNodes = $c->xpath('.//m:t') ?: [];
-                $v = '';
-                foreach ($tNodes as $t) {
-                    $v .= (string) $t;
-                }
-            }
-            $cells[$colIndex] = trim($v);
+            $cells[$colIndex] = email_campaign_xlsx_cell_text($c, $shared);
         }
         if ($cells === []) {
             continue;
