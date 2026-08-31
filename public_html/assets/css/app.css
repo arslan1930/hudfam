@@ -2593,6 +2593,26 @@ tr.swe-row-updated {
 .prospect-folder-label {
   font-weight: 700;
 }
+.prospect-show-empty {
+  display: inline;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.prospect-show-empty input {
+  margin-right: 0.2rem;
+  vertical-align: -0.1em;
+}
+.prospect-domain-td .open-site-link,
+.super-search-table .open-site-link {
+  margin-left: 0.4rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+#prospect-site-table tr.is-just-added td {
+  background: #ecfdf3;
+}
 .folder.sheet-search-hit {
   outline: 2px solid #4b5563;
   outline-offset: 2px;

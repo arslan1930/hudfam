@@ -453,7 +453,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 foreach (
     [
         'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
-        'admin_prospects' => ['Our database', 'Markets'],
+        'admin_prospects' => ['Our database', 'Markets', 'What is this?', 'show empty countries', 'Super search', 'Add sites'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
@@ -476,6 +476,50 @@ foreach (
     } else {
         fail("page $label status={$r['status']} missing=" . implode(',', $bad) . ' fatal=' . (str_contains($r['body'], 'Fatal error') ? 'yes' : 'no'));
     }
+}
+
+$r = req('GET', $base . '/index.php?page=admin_prospects');
+$hubBody = $r['body'] ?? '';
+$marketsAt = strpos($hubBody, 'id="prospect-markets"');
+$superAt = strpos($hubBody, 'id="super-search"');
+$addAt = strpos($hubBody, 'id="add-sites"');
+if ($r['status'] === 200
+    && $marketsAt !== false && $superAt !== false && $addAt !== false
+    && $marketsAt < $superAt && $superAt < $addAt
+    && str_contains($hubBody, 'What is this?')
+    && str_contains($hubBody, 'show empty countries')
+    && !str_contains($hubBody, 'Go to site')
+    && !str_contains($hubBody, 'Fatal error')) {
+    pass('admin Our database hub Markets first');
+} else {
+    fail('admin Our database hub layout status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_prospects&country=Germany');
+$sheetBody = $r['body'] ?? '';
+$sitesAt = strpos($sheetBody, 'id="prospect-sites-card"');
+$addSheetAt = strpos($sheetBody, 'id="add-sites"');
+if ($r['status'] === 200
+    && $sitesAt !== false && $addSheetAt !== false && $sitesAt < $addSheetAt
+    && str_contains($sheetBody, 'Copy all')
+    && str_contains($sheetBody, 'Open website')
+    && str_contains($sheetBody, 'What is this?')
+    && str_contains($sheetBody, 'whole country folder')
+    && str_contains($sheetBody, 'Save uses the Ready list only.')
+    && !str_contains($sheetBody, 'Push uses Ready only')
+    && !str_contains($sheetBody, '<th>URL</th>')
+    && !str_contains($sheetBody, 'Go to site')
+    && !str_contains($sheetBody, 'Fatal error')) {
+    pass('admin Our database country Sites first');
+} else {
+    fail('admin Our database country layout status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=admin_prospects&country=Germany&just_added=30');
+if ($r['status'] === 200
+    && str_contains($r['body'] ?? '', '30 just added')
+    && !str_contains($r['body'] ?? '', 'Fatal error')) {
+    pass('admin Our database just-added cue');
+} else {
+    fail('admin Our database just-added cue status=' . $r['status']);
 }
 
 $r = req('GET', $base . '/index.php?page=admin_invoices');

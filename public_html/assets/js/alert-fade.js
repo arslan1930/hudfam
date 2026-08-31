@@ -1,5 +1,5 @@
 /**
- * Auto-hide temporary flash notices (e.g. “N duplicated found and deleted”).
+ * Auto-hide temporary flash notices (e.g. “N duplicates found and removed”).
  */
 (function () {
   'use strict';

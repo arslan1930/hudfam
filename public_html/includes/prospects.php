@@ -594,9 +594,103 @@ function prospect_duplicates_deleted_message(int $n): string
 {
     $n = max(0, $n);
     if ($n === 1) {
-        return '1 duplicated found and deleted';
+        return '1 duplicate found and removed';
     }
-    return $n . ' duplicated found and deleted';
+    return $n . ' duplicates found and removed';
+}
+
+/**
+ * Success flash after Admin Save to a country folder.
+ */
+function prospect_saved_sites_message(int $n, string $country): string
+{
+    $n = max(0, $n);
+    $country = trim($country);
+    $where = $country !== '' ? ' to ' . $country : '';
+    if ($n === 1) {
+        return 'Saved 1 new site' . $where . '. It is at the top of the list.';
+    }
+    return 'Saved ' . $n . ' new sites' . $where . '. They are at the top of the list.';
+}
+
+/**
+ * Copy-all button label: say which subset will actually copy.
+ */
+function prospect_copy_all_label(int $createdBy, string $nicheFilter): string
+{
+    $nicheFilter = prospect_normalized_niche_filter($nicheFilter);
+    $person = $createdBy > 0;
+    if ($person && $nicheFilter === '_none') {
+        return 'Copy this person’s sites with no niche';
+    }
+    if ($person && $nicheFilter !== '') {
+        return 'Copy this person’s ' . $nicheFilter . ' sites';
+    }
+    if ($person) {
+        return 'Copy this person’s sites';
+    }
+    if ($nicheFilter === '_none') {
+        return 'Copy sites with no niche';
+    }
+    if ($nicheFilter !== '') {
+        return 'Copy ' . $nicheFilter;
+    }
+    return 'Copy all';
+}
+
+/**
+ * Country-folder URL that keeps search / niche / person / paging.
+ *
+ * @param array{q?:string,niche?:string,created_by?:int|string,per_page?:int|string,p?:int|string,just_added?:int|string,hash?:string} $keep
+ */
+function prospect_country_sheet_url(string $country, array $keep = []): string
+{
+    $country = trim($country);
+    if ($country === '') {
+        $country = '_none';
+    }
+    $qs = [
+        'page' => 'admin_prospects',
+        'country' => $country,
+    ];
+    $q = trim((string) ($keep['q'] ?? ''));
+    if ($q !== '') {
+        $qs['q'] = $q;
+    }
+    $niche = function_exists('prospect_normalized_niche_filter')
+        ? prospect_normalized_niche_filter((string) ($keep['niche'] ?? ''))
+        : trim((string) ($keep['niche'] ?? ''));
+    if ($niche !== '') {
+        $qs['niche'] = $niche;
+    }
+    $createdBy = (int) ($keep['created_by'] ?? 0);
+    if ($createdBy > 0) {
+        $qs['created_by'] = (string) $createdBy;
+    }
+    $per = (int) ($keep['per_page'] ?? 0);
+    if ($per > 0) {
+        $qs['per_page'] = (string) $per;
+    }
+    $p = (int) ($keep['p'] ?? 0);
+    if ($p > 1) {
+        $qs['p'] = (string) $p;
+    }
+    $justAdded = (int) ($keep['just_added'] ?? 0);
+    if ($justAdded > 0) {
+        $qs['just_added'] = (string) $justAdded;
+    }
+    $url = 'index.php?' . http_build_query($qs);
+    $hash = trim((string) ($keep['hash'] ?? ''));
+    if ($hash !== '') {
+        $url .= '#' . ltrim($hash, '#');
+    }
+    return $url;
+}
+
+function prospect_open_in_folder_label(string $country): string
+{
+    $country = trim($country);
+    return 'Open in ' . ($country !== '' ? $country : 'No country');
 }
 
 /**
@@ -604,8 +698,9 @@ function prospect_duplicates_deleted_message(int $n): string
  *
  * @param list<array<string,mixed>> $rows
  */
-function prospect_site_rows_html(array $rows): string
+function prospect_site_rows_html(array $rows, string $highlightYmd = ''): string
 {
+    $highlightYmd = substr(trim($highlightYmd), 0, 10);
     ob_start();
     foreach ($rows as $s) {
         $domain = (string) ($s['domain'] ?? '');
@@ -615,7 +710,9 @@ function prospect_site_rows_html(array $rows): string
         $added = (string) (($s['added_by_full'] ?? '') ?: ($s['added_by_name'] ?? ''));
         $when = substr((string) ($s['created_at'] ?? ''), 0, 10);
         $hay = mb_strtolower(trim($domain . ' ' . $url . ' ' . $niche . ' ' . $lang . ' ' . $added));
+        $just = ($highlightYmd !== '' && $when === $highlightYmd);
         echo '<tr data-prospect-site-row data-domain="' . h($domain) . '" data-site-id="' . (int) ($s['id'] ?? 0) . '"'
+            . ($just ? ' class="is-just-added"' : '')
             . ' data-search="' . h($hay) . '">';
         echo '<td class="sheet-td-check" data-label="Select">';
         echo '<label class="sheet-check">';
@@ -630,8 +727,23 @@ function prospect_site_rows_html(array $rows): string
             'compact' => true,
         ]);
         echo '</td>';
-        echo '<td data-label="Domain"><strong>' . h($domain) . '</strong></td>';
-        echo '<td class="help" data-label="URL">' . h($url !== '' ? $url : '—') . '</td>';
+        echo '<td class="prospect-domain-td" data-label="Domain"><strong>' . h($domain) . '</strong>';
+        $openSrc = $url !== '' ? $url : $domain;
+        if (function_exists('render_open_site_anchor')) {
+            echo ' ' . render_open_site_anchor($openSrc, [
+                'class' => 'small',
+                'label' => 'Open website',
+            ]);
+        } else {
+            $openHref = preg_match('#^https?://#i', $openSrc)
+                ? $openSrc
+                : ('https://' . ltrim($domain, '/'));
+            if ($domain !== '') {
+                echo ' <a class="open-site-link small" href="' . h($openHref)
+                    . '" target="_blank" rel="noopener noreferrer">Open website</a>';
+            }
+        }
+        echo '</td>';
         echo '<td data-label="Language">' . h($lang !== '' ? $lang : '—') . '</td>';
         echo '<td data-label="Added by">' . h($added !== '' ? $added : '—') . '</td>';
         echo '<td data-label="When">' . h($when) . '</td>';
@@ -2126,13 +2238,15 @@ function search_prospect_sites_global(string $q, int $limit = 200): array
         "SELECT p.*, u.username AS added_by_name, u.full_name AS added_by_full
          FROM prospect_sites p
          LEFT JOIN users u ON u.id = p.created_by
-         WHERE p.domain LIKE ? OR p.url LIKE ? OR p.domain LIKE ? OR p.url LIKE ?
+         WHERE p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR IFNULL(p.notes,'') LIKE ?
+            OR p.domain LIKE ? OR p.url LIKE ? OR p.niche LIKE ? OR IFNULL(p.notes,'') LIKE ?
          ORDER BY
            CASE
              WHEN p.domain = ? THEN 0
              WHEN p.domain = ? THEN 1
              WHEN p.domain LIKE ? THEN 2
-             ELSE 3
+             WHEN p.niche LIKE ? THEN 3
+             ELSE 4
            END,
            p.country ASC,
            p.domain ASC
@@ -2142,11 +2256,16 @@ function search_prospect_sites_global(string $q, int $limit = 200): array
     $stmt->execute([
         $like,
         $like,
+        $like,
+        $like,
+        $rootLike,
+        $rootLike,
         $rootLike,
         $rootLike,
         $exact,
         $q,
         $exact . '%',
+        $like,
     ]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
