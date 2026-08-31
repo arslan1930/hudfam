@@ -824,9 +824,30 @@ function push_one_site_with_emails_team_to_admin(
         $emailedCleared = 1;
     }
 
-    $del = db()->prepare("DELETE FROM {$team} WHERE id=?");
-    $del->execute([$siteId]);
-    $cleared = $del->rowCount();
+    $cleared = 0;
+    $keptOnTeam = false;
+    // If Admin slots were full, keep leftover Team emails on the Team row instead of deleting.
+    if ($skippedFullSlots > 0 && $droppedEmails !== []) {
+        $keepNorm = normalize_email_slots($droppedEmails, false);
+        $keepSlots = $keepNorm['slots'] ?? ['', '', '', ''];
+        $keepHas = $keepSlots[0] !== '' || $keepSlots[1] !== '' || $keepSlots[2] !== '' || $keepSlots[3] !== '';
+        if ($keepHas) {
+            db()->prepare(
+                "UPDATE {$team}
+                 SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+                 WHERE id=?"
+            )->execute([$keepSlots[0], $keepSlots[1], $keepSlots[2], $keepSlots[3], $siteId]);
+            $keptOnTeam = true;
+        } else {
+            $del = db()->prepare("DELETE FROM {$team} WHERE id=?");
+            $del->execute([$siteId]);
+            $cleared = $del->rowCount();
+        }
+    } else {
+        $del = db()->prepare("DELETE FROM {$team} WHERE id=?");
+        $del->execute([$siteId]);
+        $cleared = $del->rowCount();
+    }
 
     if (function_exists('mark_admin_new_data')) {
         mark_admin_new_data('emails_admin', 1, $country);
@@ -837,6 +858,7 @@ function push_one_site_with_emails_team_to_admin(
         'pushed' => $already ? 0 : 1,
         'updated' => $already ? 1 : 0,
         'cleared' => $cleared,
+        'kept_on_team' => $keptOnTeam,
         'skipped_full_slots' => $skippedFullSlots,
         'dropped_emails' => $droppedEmails,
         'emailed_cleared' => $emailedCleared,
@@ -938,11 +960,13 @@ function push_sites_with_emails_team_to_admin(
         $already = is_array($adminRow);
         $beforeSlots = ['', '', '', ''];
         $wasEmailed = false;
+        $teamDropped = [];
         if ($already) {
             $beforeSlots = email_slots_from_row($adminRow);
             $wasEmailed = (int) ($adminRow['email_sent'] ?? 0) === 1;
             $merged = merge_swe_email_slots_prefer_admin_stats($beforeSlots, $slots);
             $slots = $merged['slots'];
+            $teamDropped = $merged['dropped_emails'] ?? [];
             if ((int) $merged['dropped'] > 0) {
                 $skippedFullSlots += (int) $merged['dropped'];
                 if (count($droppedDomains) < 8) {
@@ -983,7 +1007,22 @@ function push_sites_with_emails_team_to_admin(
         )) {
             $emailedCleared++;
         }
-        $pushedDomains[] = $domain;
+        if ($teamDropped !== []) {
+            $keepNorm = normalize_email_slots($teamDropped, false);
+            $keepSlots = $keepNorm['slots'] ?? ['', '', '', ''];
+            $keepHas = $keepSlots[0] !== '' || $keepSlots[1] !== '' || $keepSlots[2] !== '' || $keepSlots[3] !== '';
+            if ($keepHas) {
+                db()->prepare(
+                    "UPDATE {$team}
+                     SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+                     WHERE country=? AND domain=?"
+                )->execute([$keepSlots[0], $keepSlots[1], $keepSlots[2], $keepSlots[3], $country, $domain]);
+            } else {
+                $pushedDomains[] = $domain;
+            }
+        } else {
+            $pushedDomains[] = $domain;
+        }
         if ($already) {
             $updated++;
         } else {
@@ -991,7 +1030,7 @@ function push_sites_with_emails_team_to_admin(
         }
     }
 
-    // Clear Team working copy for rows that were pushed (keep no-email sites).
+    // Clear Team working copy for fully pushed rows (keep leftovers + no-email sites).
     $cleared = 0;
     if ($pushedDomains) {
         $chunkSize = 200;
@@ -1106,7 +1145,7 @@ function sites_with_emails_inventory_query(
     $country = trim((string) ($filters['country'] ?? ''));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1' — Admin only
-    $rowFilter = (string) ($filters['filter'] ?? ''); // '', 'new', 'updated' — Admin only
+    $rowFilter = (string) ($filters['filter'] ?? ''); // '', 'new', 'updated' — Admin; 'ready'|'needs' — Team
     $since = (string) ($filters['since'] ?? ''); // watermark for new/updated filters
 
     $where = ['country = ?'];
@@ -1115,6 +1154,14 @@ function sites_with_emails_inventory_query(
         $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
         $like = '%' . $q . '%';
         array_push($params, $like, $like, $like, $like, $like);
+    }
+    if ($scope === 'team' && ($rowFilter === 'ready' || $rowFilter === 'needs')) {
+        $hasEmailSql = "(email1<>'' OR email2<>'' OR email3<>'' OR email4<>'')";
+        if ($rowFilter === 'ready') {
+            $where[] = $hasEmailSql;
+        } else {
+            $where[] = 'NOT (' . $hasEmailSql . ')';
+        }
     }
     if ($scope === 'admin' && ($sentFilter === '0' || $sentFilter === '1')) {
         $where[] = 'email_sent = ?';
@@ -1152,8 +1199,8 @@ function sites_with_emails_inventory_query(
     );
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    // Expand packed multi-email cells (e.g. all four pasted into email1) into email1–4.
-    $rows = expand_packed_email_slots_in_rows($rows, $scope);
+    // Expand packed cells in memory only (do not write / bump updated_at on browse).
+    $rows = expand_packed_email_slots_in_rows($rows, $scope, false);
     return ['rows' => $rows, 'total' => $total, 'pages' => $pages];
 }
 
@@ -1396,25 +1443,29 @@ function clear_all_sites_with_emails_admin_emailed(string $country): array
 }
 
 /**
- * If a row has several addresses crammed into one cell, split into email1–4 and persist.
+ * Expand packed multi-email cells into email1–4 for display.
+ * Default is in-memory only so browsing a sheet does not bump updated_at / "new" signals.
+ * Pass $persist=true for one-off repair jobs.
  *
  * @param list<array<string,mixed>> $rows
  * @return list<array<string,mixed>>
  */
-function expand_packed_email_slots_in_rows(array $rows, string $scope): array
+function expand_packed_email_slots_in_rows(array $rows, string $scope, bool $persist = false): array
 {
     if ($rows === []) {
         return $rows;
     }
     $scope = swe_normalize_scope($scope);
-    // Final is a mirror — heal Admin (then sync), otherwise heal the listed table.
+    $upd = null;
     $writeScope = $scope === 'admin_all' ? 'admin' : $scope;
-    $writeTable = swe_table($writeScope);
-    $upd = db()->prepare(
-        "UPDATE {$writeTable}
-         SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
-         WHERE country=? AND domain=?"
-    );
+    if ($persist) {
+        $writeTable = swe_table($writeScope);
+        $upd = db()->prepare(
+            "UPDATE {$writeTable}
+             SET email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+             WHERE country=? AND domain=?"
+        );
+    }
     $out = [];
     foreach ($rows as $row) {
         $slots = email_slots_from_row($row);
@@ -1425,27 +1476,29 @@ function expand_packed_email_slots_in_rows(array $rows, string $scope): array
             (string) ($row['email4'] ?? ''),
         ];
         if ($slots !== $cur) {
-            $country = (string) ($row['country'] ?? '');
-            $domain = (string) ($row['domain'] ?? '');
-            if ($country !== '' && $domain !== '') {
-                try {
-                    $upd->execute([$slots[0], $slots[1], $slots[2], $slots[3], $country, $domain]);
-                    if ($writeScope === 'admin') {
-                        sync_sites_with_emails_admin_row_to_all([
-                            'domain' => $domain,
-                            'country' => $country,
-                            'language' => (string) ($row['language'] ?? ''),
-                            'region' => (string) ($row['region'] ?? ''),
-                            'email1' => $slots[0],
-                            'email2' => $slots[1],
-                            'email3' => $slots[2],
-                            'email4' => $slots[3],
-                            'extract_batch_id' => $row['extract_batch_id'] ?? null,
-                            'pushed_by' => $row['pushed_by'] ?? null,
-                        ]);
+            if ($persist && $upd) {
+                $country = (string) ($row['country'] ?? '');
+                $domain = (string) ($row['domain'] ?? '');
+                if ($country !== '' && $domain !== '') {
+                    try {
+                        $upd->execute([$slots[0], $slots[1], $slots[2], $slots[3], $country, $domain]);
+                        if ($writeScope === 'admin') {
+                            sync_sites_with_emails_admin_row_to_all([
+                                'domain' => $domain,
+                                'country' => $country,
+                                'language' => (string) ($row['language'] ?? ''),
+                                'region' => (string) ($row['region'] ?? ''),
+                                'email1' => $slots[0],
+                                'email2' => $slots[1],
+                                'email3' => $slots[2],
+                                'email4' => $slots[3],
+                                'extract_batch_id' => $row['extract_batch_id'] ?? null,
+                                'pushed_by' => $row['pushed_by'] ?? null,
+                            ]);
+                        }
+                    } catch (Throwable $e) {
+                        // still return expanded values for display
                     }
-                } catch (Throwable $e) {
-                    // still return expanded values for display
                 }
             }
             $row['email1'] = $slots[0];
@@ -1636,7 +1689,8 @@ function save_site_with_emails_row(
     array $emails,
     array $user,
     ?int $id = null,
-    string $scope = 'team'
+    string $scope = 'team',
+    bool $strictEmails = true
 ): array {
     ensure_sites_with_emails_schema();
     $origScope = swe_normalize_scope($scope);
@@ -1687,12 +1741,24 @@ function save_site_with_emails_row(
     if ($domain === '' || !is_root_domain($domain)) {
         return ['ok' => false, 'error' => 'Enter a valid site name (root domain).'];
     }
-    $norm = normalize_email_slots($emails);
+    $norm = normalize_email_slots($emails, $strictEmails);
     if (!$norm['ok']) {
-        return ['ok' => false, 'error' => (string) ($norm['error'] ?? 'Invalid email.')];
+        return [
+            'ok' => false,
+            'error' => (string) ($norm['error'] ?? 'Invalid email.'),
+            'skipped_invalid' => $norm['skipped_invalid'] ?? [],
+        ];
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
+    $skippedInvalid = $norm['skipped_invalid'] ?? [];
+    if ($strictEmails && is_array($skippedInvalid) && $skippedInvalid !== []) {
+        return [
+            'ok' => false,
+            'error' => 'Invalid email: ' . (string) $skippedInvalid[0],
+            'skipped_invalid' => $skippedInvalid,
+        ];
+    }
     $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
     $scopeNorm = swe_normalize_scope($scope);
 
@@ -1743,7 +1809,14 @@ function save_site_with_emails_row(
                 sync_sites_with_emails_admin_row_to_all($fresh);
             }
         }
-        return ['ok' => true, 'id' => $id, 'row_deleted' => false, 'domain' => $domain];
+        return [
+            'ok' => true,
+            'id' => $id,
+            'row_deleted' => false,
+            'domain' => $domain,
+            'slots' => $slots,
+            'skipped_invalid' => is_array($skippedInvalid) ? $skippedInvalid : [],
+        ];
     }
 
     if (!$hasEmail && $scopeNorm !== 'team') {
@@ -1782,7 +1855,12 @@ function save_site_with_emails_row(
                 'pushed_by' => $uid,
             ]);
         }
-        return ['ok' => true, 'id' => $newId];
+        return [
+            'ok' => true,
+            'id' => $newId,
+            'slots' => $slots,
+            'skipped_invalid' => is_array($skippedInvalid) ? $skippedInvalid : [],
+        ];
     } catch (PDOException $e) {
         return ['ok' => false, 'error' => $domain . ' already exists in ' . $country . '.'];
     }
@@ -1806,7 +1884,12 @@ function sites_with_emails_bulk_result_message(string $prefix, array $result): s
     if ((int) ($result['skipped_empty'] ?? 0) > 0) {
         $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
     }
-    $accounted = (int) ($result['skipped_duplicate'] ?? 0) + (int) ($result['skipped_empty'] ?? 0);
+    if ((int) ($result['skipped_invalid'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_invalid'] . ' invalid email(s) skipped';
+    }
+    $accounted = (int) ($result['skipped_duplicate'] ?? 0)
+        + (int) ($result['skipped_empty'] ?? 0)
+        + (int) ($result['skipped_invalid'] ?? 0);
     $otherSkip = (int) ($result['skipped'] ?? 0) - $accounted;
     if ($otherSkip > 0) {
         $msg .= ', ' . $otherSkip . ' other skipped';
@@ -1824,13 +1907,13 @@ function sites_with_emails_bulk_result_message(string $prefix, array $result): s
 }
 
 /**
- * Paste / import lines into All sites with emails - Final (same formats as Campaign).
- * Each site needs at least one email. Writes Admin working list then syncs Final.
- * Identical emails → skip; different emails → replace. No Campaign exclusion set.
+ * Paste / import lines into Final (Admin+Final) or Team working copy.
+ * Final: each site needs ≥1 email; identical → skip; different → replace.
+ * Team: emails optional; existing domain merges into empty slots (does not wipe).
  *
  * @return array{
  *   ok:bool,error?:string,added:int,updated:int,skipped:int,
- *   skipped_duplicate:int,skipped_empty:int,errors:list<string>
+ *   skipped_duplicate:int,skipped_empty:int,skipped_invalid:int,errors:list<string>
  * }
  */
 function paste_sites_with_emails_rows(
@@ -1846,14 +1929,16 @@ function paste_sites_with_emails_rows(
         'skipped' => 0,
         'skipped_duplicate' => 0,
         'skipped_empty' => 0,
+        'skipped_invalid' => 0,
         'errors' => [],
     ];
     $scope = swe_normalize_scope($scope);
-    if ($scope !== 'admin_all') {
-        $empty['error'] = 'Bulk paste is only for Final.';
+    if ($scope !== 'admin_all' && $scope !== 'team') {
+        $empty['error'] = 'Bulk paste is only for Final or Team.';
 
         return $empty;
     }
+    $isTeamPaste = ($scope === 'team');
     $canon = require_canonical_country($country);
     $country = $canon['name'];
     if (!function_exists('parse_email_campaign_bulk_line')) {
@@ -1872,6 +1957,7 @@ function paste_sites_with_emails_rows(
     $skipped = 0;
     $skippedDuplicate = 0;
     $skippedEmpty = 0;
+    $skippedInvalid = 0;
     /** @var list<string> $errors */
     $errors = [];
     /** @var array<string, array{0:string,1:string,2:string,3:string}> $seenDomains */
@@ -1901,18 +1987,26 @@ function paste_sites_with_emails_rows(
                 }
             }
 
-            $norm = normalize_email_slots($parsed['emails']);
+            $norm = normalize_email_slots($parsed['emails'], false);
             if (!$norm['ok']) {
                 if (count($errors) < 25) {
                     $errors[] = $domainRaw . ': ' . (string) ($norm['error'] ?? 'Invalid email.');
                 }
                 $skipped++;
+                $skippedInvalid++;
                 continue;
             }
             /** @var array{0:string,1:string,2:string,3:string} $slots */
             $slots = $norm['slots'] ?? ['', '', '', ''];
+            $invalidBits = $norm['skipped_invalid'] ?? [];
+            if (is_array($invalidBits) && $invalidBits !== []) {
+                $skippedInvalid += count($invalidBits);
+                if (count($errors) < 25) {
+                    $errors[] = $domainRaw . ': skipped invalid email(s) ' . implode(', ', array_slice($invalidBits, 0, 3));
+                }
+            }
             $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
-            if (!$hasEmail) {
+            if (!$hasEmail && !$isTeamPaste) {
                 $skippedEmpty++;
                 $skipped++;
                 if (count($errors) < 25) {
@@ -1924,6 +2018,61 @@ function paste_sites_with_emails_rows(
             if (isset($seenDomains[$domain]) && email_campaign_slots_equal($seenDomains[$domain], $slots)) {
                 $skippedDuplicate++;
                 $skipped++;
+                continue;
+            }
+
+            if ($isTeamPaste) {
+                $existingId = find_site_with_emails_id($country, $domain, 'team');
+                $existing = $existingId > 0 ? get_site_with_emails($existingId, 'team') : null;
+                if ($existingId > 0 && is_array($existing)) {
+                    $existingSlots = email_slots_from_row($existing);
+                    if (email_campaign_slots_equal($existingSlots, $slots)) {
+                        $skippedDuplicate++;
+                        $skipped++;
+                        $seenDomains[$domain] = $slots;
+                        continue;
+                    }
+                    // Merge into empty Team slots (do not wipe filled emails).
+                    $merged = merge_swe_email_slots_prefer_admin_stats($existingSlots, $slots);
+                    $saveSlots = $merged['slots'];
+                    $save = save_site_with_emails_row(
+                        $country,
+                        $domain,
+                        $saveSlots,
+                        $user,
+                        $existingId,
+                        'team',
+                        false
+                    );
+                    if (!empty($save['ok'])) {
+                        $updated++;
+                        $seenDomains[$domain] = $saveSlots;
+                    } else {
+                        $skipped++;
+                        if (count($errors) < 25) {
+                            $errors[] = $domain . ': ' . (string) ($save['error'] ?? 'Could not update.');
+                        }
+                    }
+                    continue;
+                }
+                $save = save_site_with_emails_row(
+                    $country,
+                    $domain,
+                    $slots,
+                    $user,
+                    null,
+                    'team',
+                    false
+                );
+                if (!empty($save['ok'])) {
+                    $added++;
+                    $seenDomains[$domain] = $slots;
+                } else {
+                    $skipped++;
+                    if (count($errors) < 25) {
+                        $errors[] = $domain . ': ' . (string) ($save['error'] ?? 'Could not add.');
+                    }
+                }
                 continue;
             }
 
@@ -1961,7 +2110,8 @@ function paste_sites_with_emails_rows(
                     $slots,
                     $user,
                     $existingId,
-                    $existingScope
+                    $existingScope,
+                    false
                 );
                 if (!empty($save['ok'])) {
                     $updated++;
@@ -1981,7 +2131,8 @@ function paste_sites_with_emails_rows(
                 $slots,
                 $user,
                 null,
-                'admin_all'
+                'admin_all',
+                false
             );
             if (!empty($save['ok'])) {
                 $added++;
@@ -2010,12 +2161,13 @@ function paste_sites_with_emails_rows(
         'skipped' => $skipped,
         'skipped_duplicate' => $skippedDuplicate,
         'skipped_empty' => $skippedEmpty,
+        'skipped_invalid' => $skippedInvalid,
         'errors' => $errors,
     ];
 }
 
 /**
- * Import CSV / Excel (.xlsx) / TXT into Final (wraps Campaign file reader).
+ * Import CSV / Excel (.xlsx) / TXT into Final or Team (wraps Campaign file reader).
  *
  * @param array<string,mixed>|null $file $_FILES['import_file']
  * @return array{

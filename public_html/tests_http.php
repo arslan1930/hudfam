@@ -997,12 +997,13 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Sites with emails')) {
 }
 $r = req('GET', $base . '/index.php?page=team_sites_emails&country=Germany');
 if ($r['status'] === 200
-    && !str_contains($r['body'], 'id="swe-bulk-add"')
-    && !str_contains($r['body'], 'name="import_file"')
+    && str_contains($r['body'], 'id="swe-bulk-add"')
+    && str_contains($r['body'], 'name="import_file"')
+    && str_contains($r['body'], 'Needs email')
     && !str_contains($r['body'], 'Fatal error')) {
-    pass('Team Sites with emails has no Campaign-style bulk import');
+    pass('Team Sites with emails has paste/import and Ready filters');
 } else {
-    fail('Team SWE bulk import leak status=' . ($r['status'] ?? '?'));
+    fail('Team SWE import/filters status=' . ($r['status'] ?? '?'));
 }
 $r = req('GET', $base . '/index.php?page=team_admin_emails_search');
 if ($r['status'] === 200

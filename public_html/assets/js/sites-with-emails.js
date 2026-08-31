@@ -218,26 +218,58 @@
   }
 
   function syncPushButton(readyOverride) {
-    var ready = typeof readyOverride === 'number' ? readyOverride : countReadyRows();
-    if (readyLabel && typeof readyOverride !== 'number') {
-      // Page-local count only — keep label in sync with visible rows when possible
-      readyLabel.textContent = String(ready);
-    } else if (readyLabel && typeof readyOverride === 'number') {
-      readyLabel.textContent = String(ready);
+    // Country-wide Ready label only updates from server overrides (not page-local typing).
+    if (readyLabel && typeof readyOverride === 'number') {
+      readyLabel.textContent = String(readyOverride);
     }
     if (!pushBtn) return;
+    var ready = typeof readyOverride === 'number' ? readyOverride : countReadyRows();
+    if (typeof readyOverride === 'number') {
+      if (ready > 0) {
+        pushBtn.disabled = false;
+        pushBtn.setAttribute('data-server-ready', '1');
+        pushBtn.title = 'Push every site on this country that has at least one email';
+      } else {
+        pushBtn.disabled = true;
+        pushBtn.removeAttribute('data-server-ready');
+        pushBtn.title = 'Add at least one email on a site first';
+      }
+      return;
+    }
+    // Local typing: enable when this page has ready rows; keep enabled if server said ready.
     if (ready > 0) {
       pushBtn.disabled = false;
-      pushBtn.setAttribute('data-server-ready', '1');
       pushBtn.title = 'Push every site on this country that has at least one email';
-    } else if (pushBtn.getAttribute('data-server-ready') === '1' && typeof readyOverride !== 'number') {
-      // Other pages may still have ready rows
+    } else if (pushBtn.getAttribute('data-server-ready') === '1') {
       pushBtn.disabled = false;
     } else {
       pushBtn.disabled = true;
-      pushBtn.removeAttribute('data-server-ready');
       pushBtn.title = 'Add at least one email on a site first';
     }
+  }
+
+  function syncRowStatusBadge(row) {
+    if (!row) return;
+    var status = row.querySelector('[data-swe-status]');
+    if (!status) return;
+    // Team Ready / Needs email only (Admin emailed state uses setRowEmailedState).
+    if (status.classList.contains('is-emailed') || status.classList.contains('is-archive')) {
+      return;
+    }
+    var hasEmail = row.getAttribute('data-has-email') === '1';
+    status.classList.toggle('is-ready', hasEmail);
+    status.classList.toggle('is-open', !hasEmail);
+    status.textContent = hasEmail ? 'Ready' : 'Needs email';
+  }
+
+  function applyServerSlots(form, slots) {
+    if (!form || !slots || !slots.length) return;
+    ['email1', 'email2', 'email3', 'email4'].forEach(function (name, i) {
+      var input = form.querySelector('[name="' + name + '"]') || document.querySelector('[form="' + form.id + '"][name="' + name + '"]');
+      if (!input) return;
+      var val = slots[i] != null ? String(slots[i]) : '';
+      input.value = val;
+    });
   }
 
   function saveFormOf(el) {
@@ -263,6 +295,7 @@
     } else {
       applyOpenedClass(row);
     }
+    syncRowStatusBadge(row);
     syncRowPushButton(row);
     syncPushButton();
   }
@@ -453,14 +486,21 @@
           return data;
         }
         var row = form.closest('[data-swe-row]');
+        if (data && data.slots) {
+          applyServerSlots(form, data.slots);
+        }
         refreshRowSearchIndex(row);
+        if (typeof data.ready_count === 'number') {
+          syncPushButton(data.ready_count);
+        } else {
+          syncPushButton();
+        }
         if (!opts.quiet) {
           setStatus('Saved.');
         } else {
           setStatus('Autosaved.');
         }
         maybeRefilter();
-        syncPushButton();
         return data;
       })
       .catch(function (err) {
@@ -656,7 +696,13 @@
       var overwriteField = document.getElementById('swe-push-confirm-overwrite');
       if (overwriteField) {
         var conflicts = parseInt(pushAllForm.getAttribute('data-conflict-count') || '0', 10) || 0;
-        overwriteField.value = conflicts > 0 ? '1' : '0';
+        if (overwriteField.type === 'checkbox') {
+          if (conflicts > 0) {
+            overwriteField.checked = true;
+          }
+        } else {
+          overwriteField.value = conflicts > 0 ? '1' : '0';
+        }
       }
       var btn = document.getElementById('swe-push-btn');
       if (btn) btn.disabled = true;

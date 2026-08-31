@@ -128,7 +128,16 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         if ($wantsJson) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode($result + ['site_count' => count_sites_with_emails_for_country($countryName, $sweScope)]);
+            if (!$result['ok']) {
+                http_response_code(400);
+            }
+            $payload = $result + [
+                'site_count' => count_sites_with_emails_for_country($countryName, $sweScope),
+            ];
+            if ($isTeam) {
+                $payload['ready_count'] = count_sites_with_emails_ready_to_push($countryName);
+            }
+            echo json_encode($payload);
             exit;
         }
         if (!$result['ok']) {
@@ -223,8 +232,8 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($back);
     }
 
-    // Final only: Campaign-style paste + CSV/xlsx/txt import (also writes Admin).
-    if ($isAdminAll && ($action === 'paste' || $action === 'import_file')) {
+    // Final or Team: Campaign-style paste + CSV/xlsx/txt import.
+    if (($isAdminAll || $isTeam) && ($action === 'paste' || $action === 'import_file')) {
         $finishBulk = static function (array $result, string $prefix) use (
             $countryName,
             $sweScope,
@@ -233,9 +242,10 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $back
         ): void {
             $msg = sites_with_emails_bulk_result_message($prefix, $result);
-            $hasErrors = ($result['errors'] ?? []) !== [];
-            flash($hasErrors ? 'error' : 'ok', $msg);
-            if ((int) ($result['added'] ?? 0) < 1 && (int) ($result['updated'] ?? 0) < 1) {
+            $imported = (int) ($result['added'] ?? 0) + (int) ($result['updated'] ?? 0);
+            $hasHardFail = empty($result['ok']) || $imported < 1;
+            flash($hasHardFail ? 'error' : 'ok', $msg);
+            if ($imported < 1) {
                 redirect($back . '#swe-bulk-add');
             }
             $totalAfter = count_sites_with_emails_for_country($countryName, $sweScope);
@@ -255,8 +265,8 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     redirect($back . '#swe-bulk-add');
                 }
                 $finishBulk(
-                    paste_sites_with_emails_rows($countryName, $pasteText, $sweUser, 'admin_all'),
-                    'Added to Final'
+                    paste_sites_with_emails_rows($countryName, $pasteText, $sweUser, $sweScope),
+                    $isTeam ? 'Added to Team' : 'Added to Final'
                 );
             }
             $finishBulk(
@@ -264,9 +274,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $countryName,
                     $_FILES['import_file'] ?? null,
                     $sweUser,
-                    'admin_all'
+                    $sweScope
                 ),
-                'Imported file into Final'
+                $isTeam ? 'Imported file into Team' : 'Imported file into Final'
             );
         } catch (Throwable $e) {
             flash('error', $e->getMessage());
@@ -406,6 +416,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ((int) ($result['skipped_full_slots'] ?? 0) > 0) {
             $oneMsg .= ' · ' . (int) $result['skipped_full_slots']
                 . ' Team email(s) not applied (Admin already had 4)';
+            if (!empty($result['kept_on_team'])) {
+                $oneMsg .= ' — left on Team for retry';
+            }
         }
         if ((int) ($result['emailed_cleared'] ?? 0) > 0) {
             $oneMsg .= ' · Admin emailed mark cleared (emails changed)';
@@ -425,6 +438,14 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $confirmOverwrite = post('confirm_overwrite') === '1';
         $pushed = push_sites_with_emails_team_to_admin($countryName, $sweUser, $confirmOverwrite);
         if (empty($pushed['ok'])) {
+            if (!empty($pushed['needs_confirm'])) {
+                flash(
+                    'error',
+                    (string) ($pushed['error'] ?? 'Confirm merge.')
+                    . ' Tick “Merge into existing Admin sites” below Push all, then submit again.'
+                );
+                redirect($back . '&confirm_push=1#swe-push-form');
+            }
             flash('error', (string) ($pushed['error'] ?? 'Could not push to Admin.'));
             redirect($back);
         }
@@ -445,7 +466,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ((int) ($pushed['skipped_full_slots'] ?? 0) > 0) {
             $msg .= ' · ' . (int) $pushed['skipped_full_slots']
-                . ' Team email(s) not applied (Admin already had 4)';
+                . ' Team email(s) not applied (Admin already had 4; leftovers kept on Team)';
             $dropDom = $pushed['dropped_domains'] ?? [];
             if (is_array($dropDom) && $dropDom !== []) {
                 $msg .= ' on ' . implode(', ', array_slice($dropDom, 0, 5));
@@ -534,6 +555,9 @@ if (!$inCountry) {
     render_breadcrumbs($crumbs);
     if ($isAdminAll && function_exists('guide_emails_data')) {
         echo guide_emails_data();
+    }
+    if ($isTeam && function_exists('guide_team_sites_emails')) {
+        echo guide_team_sites_emails();
     }
     ?>
     <div class="topbar">
@@ -749,7 +773,7 @@ if (!$inCountry) {
       <div class="empty-state">
         <?php if ($isTeam): ?>
           <p>No sites yet.</p>
-          <p class="muted">They appear here when you click Push in Extracting Results.</p>
+          <p class="muted">Site Extracting can Push results here, or open a country and paste / import a sheet, or use + Add site.</p>
         <?php elseif ($isAdminAll): ?>
           <p>No mirrored sites yet.</p>
           <p class="muted">They sync from Admin, or open an empty country above and paste / import CSV like Campaign.</p>
@@ -832,8 +856,16 @@ $sentFilter = (string) get('sent'); // Admin only: '', '0' (not sent), '1' (sent
 if ($sweScope !== 'admin' || ($sentFilter !== '0' && $sentFilter !== '1')) {
     $sentFilter = '';
 }
-$rowFilter = (string) get('filter'); // Admin only: '', 'new', 'updated'
-if ($sweScope !== 'admin' || ($rowFilter !== 'new' && $rowFilter !== 'updated')) {
+$rowFilter = (string) get('filter'); // Admin: new|updated; Team: ready|needs
+if ($sweScope === 'admin') {
+    if ($rowFilter !== 'new' && $rowFilter !== 'updated') {
+        $rowFilter = '';
+    }
+} elseif ($isTeam) {
+    if ($rowFilter !== 'ready' && $rowFilter !== 'needs') {
+        $rowFilter = '';
+    }
+} else {
     $rowFilter = '';
 }
 
@@ -972,7 +1004,7 @@ render_breadcrumbs($crumbs);
                 ? 'Add one site + at least one email · also creates the Admin working-list row'
                 : 'Add one site + up to 4 emails (emails optional)' ?>">+ Add site</button>
     <?php endif; ?>
-    <?php if ($isAdminAll): ?>
+    <?php if ($isTeam || $isAdminAll): ?>
     <a class="btn secondary" href="#swe-bulk-add">Paste / import</a>
     <?php endif; ?>
     <?php if ($isTeam): ?>
@@ -981,7 +1013,7 @@ render_breadcrumbs($crumbs);
           data-conflict-count="<?= (int) $pushConflictCount ?>"
           data-confirm-push-all="<?php
             $pushAllMsg = 'Push ALL ' . (int) $readyToPush . ' site(s) with emails to Sites with emails - Admin?'
-                . "\n\nThose rows will leave this Team working copy.";
+                . "\n\nThose rows will leave this Team working copy (leftover emails that did not fit Admin stay here).";
             if ($pushConflictCount > 0) {
                 $pushAllMsg .= "\n\n" . (int) $pushConflictCount
                     . ' already exist in Admin — Push will MERGE Team emails into empty Admin slots '
@@ -991,8 +1023,17 @@ render_breadcrumbs($crumbs);
           ?>">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="push_to_admin">
+      <?php if ($pushConflictCount > 0): ?>
+      <label class="swe-push-confirm-label" style="display:inline-flex;align-items:center;gap:0.35rem;margin-right:0.5rem;font-size:0.9rem">
+        <input type="checkbox" name="confirm_overwrite" value="1" id="swe-push-confirm-overwrite"
+               <?= (string) get('confirm_push') === '1' ? 'checked' : '' ?>>
+        Merge into <?= (int) $pushConflictCount ?> existing Admin site(s)
+      </label>
+      <?php else: ?>
       <input type="hidden" name="confirm_overwrite" value="0" id="swe-push-confirm-overwrite">
+      <?php endif; ?>
       <button class="btn" type="submit" id="swe-push-btn" <?= $readyToPush > 0 ? '' : 'disabled' ?>
+              data-server-ready="<?= $readyToPush > 0 ? '1' : '0' ?>"
               title="<?= $readyToPush > 0
                   ? ($pushConflictCount > 0
                       ? 'Push every ready site · ' . (int) $pushConflictCount . ' will merge into Admin'
@@ -1162,8 +1203,36 @@ render_sheet_checkpoint_compact(
         </form>
         <?php endif; ?>
       </p>
+      <?php elseif ($isTeam): ?>
+      <p class="swe-sent-filters" aria-label="Ready filter">
+        <?php
+        $readyLinks = [
+            '' => 'All',
+            'ready' => 'Ready',
+            'needs' => 'Needs email',
+        ];
+        $needsCount = max(0, $countryTotal - $readyToPush);
+        foreach ($readyLinks as $val => $label):
+            $href = $sweBase . '&country=' . rawurlencode($countryName);
+            $href = append_sheet_per_page_query($href, $perPage);
+            if ($q !== '') {
+                $href .= '&q=' . rawurlencode($q);
+            }
+            if ($val !== '') {
+                $href .= '&filter=' . rawurlencode($val);
+            }
+            $isCur = $rowFilter === $val;
+            $countSuffix = $val === 'ready' ? ' (' . (int) $readyToPush . ')'
+                : ($val === 'needs' ? ' (' . (int) $needsCount . ')' : '');
+            ?>
+          <?php if ($isCur): ?>
+            <strong><?= h($label . $countSuffix) ?></strong>
+          <?php else: ?>
+            <a href="<?= h($href) ?>"><?= h($label . $countSuffix) ?></a>
+          <?php endif; ?>
+        <?php endforeach; ?>
+      </p>
       <?php endif; ?>
-    </div>
     <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
       <span class="visually-hidden">Search sites and emails</span>
       <input id="swe-row-search" type="search" placeholder="Search site or email…"
@@ -1433,9 +1502,10 @@ render_sheet_checkpoint_compact(
   <div class="empty-state" id="swe-empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
-      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push.</p>
+      <p class="muted">Site Extracting can Push results here, or paste / import a sheet below, or use + Add site. Emails are optional until you Push.</p>
       <p class="actions" style="justify-content:center;margin-top:0.75rem">
         <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
+        <a class="btn secondary" href="#swe-bulk-add">Paste / import file</a>
       </p>
     <?php elseif ($isAdminAll): ?>
       <p>No mirrored sites in this country yet.</p>
@@ -1455,6 +1525,12 @@ render_sheet_checkpoint_compact(
       <p>No new sites<?= $q !== '' ? ' matching this search' : '' ?> since your last visit.</p>
     <?php elseif ($rowFilter === 'updated'): ?>
       <p>No updated sites<?= $q !== '' ? ' matching this search' : '' ?> since your last visit.</p>
+    <?php elseif ($rowFilter === 'ready'): ?>
+      <p>No Ready sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+      <p class="muted">Add at least one email on a site, or open All / Needs email.</p>
+    <?php elseif ($rowFilter === 'needs'): ?>
+      <p>No sites still needing email<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+      <p class="muted">Every site on this filter already has at least one email.</p>
     <?php elseif ($sentFilter === '0'): ?>
       <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
       <p class="muted">New Team pushes appear here until you mark them emailed.</p>
@@ -1503,14 +1579,22 @@ render_sheet_checkpoint_compact(
   </div>
 </div>
 
-<?php if ($isAdminAll): ?>
+<?php if ($isAdminAll || $isTeam): ?>
 <div class="card" style="margin-top:1rem" id="swe-bulk-add">
-  <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry on Final. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email and also creates the Admin working-list row. Identical emails are skipped; different emails replace the existing row.') ?></h2>
+  <h2><?= label_with_info(
+      'Add many sites (paste or file)',
+      $isTeam
+          ? 'Team bulk entry. Paste or import CSV / Excel (.xlsx) / TXT. One row per site: site + up to 4 emails (emails optional). Existing sites merge new emails into empty slots (filled emails stay). Does not write Admin/Final — Push when ready.'
+          : 'Admin bulk entry on Final. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email and also creates the Admin working-list row. Identical emails are skipped; different emails replace the existing row.'
+  ) ?></h2>
   <p class="help">
     Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
     (comma, tab, or semicolon). Header row is optional and skipped.
     Built for large lists — paste or upload thousands of rows at once.
-    Same formats as Campaign. Lines with no email are skipped.
+    Same formats as Campaign.
+    <?= $isTeam
+        ? 'Domain-only rows are allowed on Team. Existing domains merge into empty email slots.'
+        : 'Lines with no email are skipped.' ?>
   </p>
 
   <form method="post" action="<?= h($listBase) ?>" style="margin-top:0.85rem"

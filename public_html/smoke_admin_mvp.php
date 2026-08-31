@@ -2817,7 +2817,7 @@ if (!str_contains($sweLibSmoke, 'function paste_sites_with_emails_rows')
     || !str_contains($sweUi, 'name="paste_text"')
     || !str_contains($sweUi, 'name="import_file"')
     || !str_contains($sweUi, 'id="swe-open-country"')
-    || !str_contains($sweUi, '$isAdminAll && ($action === \'paste\'')
+    || !str_contains($sweUi, '($isAdminAll || $isTeam) && ($action === \'paste\'')
     || !str_contains($guidesLib, 'Paste or import CSV / Excel / TXT like Campaign')) {
     fail('Final missing Campaign-style paste/CSV import');
 } else {

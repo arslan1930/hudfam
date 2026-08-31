@@ -195,7 +195,7 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if (!empty($toolSet['team_sites_emails'])) {
                     $groups['Main']['team_sites_emails'] = [
-                        'Team',
+                        'Sites with emails',
                         'Add emails · Push to Admin',
                     ];
                 }
@@ -235,7 +235,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
                     'team_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
-                    'team_sites_emails' => ['Team', 'Add emails · Push to Admin'],
+                    'team_sites_emails' => ['Sites with emails', 'Add emails · Push to Admin'],
                     'team_admin_emails_search' => ['Admin search', 'Admin sheet · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Campaign sheets · all countries'],
                     'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],

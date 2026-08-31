@@ -2029,16 +2029,38 @@ try {
     db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txffinal-bulk%' OR domain LIKE 'txffinal-csv%' OR domain LIKE 'txffinal-dup%' OR domain LIKE 'txffinal-scale%'");
     db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txffinal-bulk%' OR domain LIKE 'txffinal-csv%' OR domain LIKE 'txffinal-dup%' OR domain LIKE 'txffinal-scale%'");
 
-    $teamBlocked = paste_sites_with_emails_rows(
+    $teamPaste = paste_sites_with_emails_rows(
         'Germany',
         "txffinal-bulk-team.de, team@txffinal-bulk.de\n",
         $teamUser,
         'team'
     );
-    if (empty($teamBlocked['ok'])) {
-        pass('Final bulk paste rejected on Team scope');
+    $teamPasteCount = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txffinal-bulk-team.de'"
+    )->fetchColumn();
+    $teamPasteAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txffinal-bulk-team.de'"
+    )->fetchColumn();
+    if (!empty($teamPaste['ok']) && (int) $teamPaste['added'] === 1 && $teamPasteCount === 1 && $teamPasteAdmin === 0) {
+        pass('Team bulk paste writes Team only (not Admin)');
     } else {
-        fail('Team bulk paste unexpectedly ok: ' . json_encode($teamBlocked));
+        fail('Team bulk paste: ' . json_encode($teamPaste) . " team=$teamPasteCount admin=$teamPasteAdmin");
+    }
+
+    // Strict interactive save rejects invalid emails.
+    $strictBad = save_site_with_emails_row(
+        'Germany',
+        'txffinal-bulk-team.de',
+        ['not-an-email', 'ok@txffinal-bulk-team.de'],
+        $teamUser,
+        find_site_with_emails_id('Germany', 'txffinal-bulk-team.de', 'team'),
+        'team',
+        true
+    );
+    if (empty($strictBad['ok'])) {
+        pass('Interactive save rejects invalid email (strict)');
+    } else {
+        fail('Strict save unexpectedly ok: ' . json_encode($strictBad));
     }
 
     $finalPaste = paste_sites_with_emails_rows('Germany', implode("\n", [

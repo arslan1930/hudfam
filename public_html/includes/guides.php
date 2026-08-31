@@ -215,9 +215,23 @@ function guide_emails_data(): string
         'Super search on this hub updates Admin only. Removing the last email deletes the Admin working-list row; Final keeps its archive copy. Repair copies Admin into Final and never deletes archive rows. Campaign emailed marks stay on that project sheet.',
         [
             'Admin: working list from Team Push; mark emailed here.',
-            'Final: archive copy of Admin; Mark emailed or Remove on Admin keeps a copy here. Repair copies Admin → Final. Adding a site here also creates the Admin working-list row. Existing folders open from the list; use Open an empty country only for a country that is not listed yet. Paste or import CSV / Excel / TXT like Campaign on that sheet.',
+            'Final: archive copy of Admin; Mark emailed or Remove on Admin keeps a copy here. Repair copies Admin → Final. Adding a site here also creates the Admin working-list row. Existing folders open from the list; use Open an empty country only for a country that is not listed yet. Paste or import CSV / Excel / TXT like Campaign on that sheet. Partial import issues show as notes when any rows were added (not a full failure).',
             'Campaign: create a project and country sheets. Communication Team searches the project. Emailed marks are per campaign, not Admin/Final. Mark up to here names a send batch so Admin can see who emailed which stretch.',
             'Fill gaps from Admin + Final copies into that country campaign sheet only. Admin emails win when both have the domain. Previously removed sites stay blocked. Campaign emailed marks stay. Admin and Final are not edited.',
+        ]
+    );
+}
+
+function guide_team_sites_emails(): string
+{
+    return render_page_purpose(
+        'Sites with emails — Team working copy',
+        'Email Extracting fills up to 4 emails per site, then Push to Admin. Sites usually arrive from Site Extracting Push; you can also paste / import a CSV or Excel sheet, or + Add site.',
+        'Edits autosave. Invalid emails are rejected (not silently dropped). Ready / Needs email filters help large countries. Push merges into empty Admin slots; if Admin already has 4 emails, leftovers stay on Team.',
+        [
+            'Open a country → fill emails → Push one row or Push all.',
+            'Paste / import: site + up to 4 emails (emails optional). Existing domains merge into empty slots only.',
+            'Admin emails search cleans Admin after Push. Communication Team uses Campaign tools separately.',
         ]
     );
 }
