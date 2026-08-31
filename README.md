@@ -2,6 +2,8 @@
 
 Linkbuilding inventory and client publication workflow — **Admin** + **Team** panels.
 
+**Team handbook (how the whole site works):** [`WEBSITE_GUIDE.md`](WEBSITE_GUIDE.md)
+
 ## Stack (plain code only)
 
 - **PHP** + **MySQL** + **HTML** + **CSS**
