@@ -226,14 +226,17 @@ function render_domains_paste_field(
         . 'Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>. '
         . 'Hyphens and multi-part TLDs are OK. One per line (or commas). '
         . '<strong>Clean to root domains</strong> fixes <code>https</code>/paths/subdomains into the Ready list; '
-        . 'lines it cannot fix move to <strong>Needs attention</strong> (Push uses Ready only).'
-        . '</p>';
+        . 'lines it cannot fix move to <strong>Needs attention</strong> ('
+        . h((string) ($opts['ready_use'] ?? 'Push uses Ready only'))
+        . ').</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
     $html .= '<div class="domains-paste-attention" data-domains-attention-wrap hidden>';
     $html .= '<label for="' . h($attentionId) . '">Needs attention</label>';
     $html .= '<textarea id="' . h($attentionId) . '" rows="4" class="domains-attention-box" '
         . 'data-domains-attention spellcheck="false" placeholder="Unfixable lines appear here after Clean"></textarea>';
-    $html .= '<p class="help" style="margin:0.35rem 0 0">Edit or delete these, then Clean again — or leave them; Push / Separate only use the Ready list above.</p>';
+    $html .= '<p class="help" style="margin:0.35rem 0 0">Edit or delete these, then Clean again — or leave them; '
+        . h((string) ($opts['attention_hint'] ?? 'Push / Separate only use the Ready list above.'))
+        . '</p>';
     $html .= '</div>';
     $html .= '</div>';
     return $html;

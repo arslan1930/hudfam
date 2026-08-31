@@ -91,7 +91,8 @@ function render_header(string $title, string $panel = ''): void
     $flashes = get_flashes();
     $clearDraft = false;
     foreach ($flashes as $flash) {
-        if (($flash['type'] ?? '') === 'ok') {
+        $flashType = (string) ($flash['type'] ?? '');
+        if ($flashType === 'ok' || $flashType === 'fade' || $flashType === 'ok-fade' || $flashType === 'dup') {
             $clearDraft = true;
             break;
         }

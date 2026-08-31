@@ -300,7 +300,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             redirect(prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites'])));
         }
         if ($insN > 0) {
-            flash('ok', 'Saved ' . $insN . ' new site(s) to ' . $result['country'] . '.');
+            flash('ok', prospect_saved_sites_message($insN, (string) $result['country']));
         }
         if ($dup > 0) {
             flash('fade', prospect_duplicates_deleted_message($dup) . '.');
@@ -308,6 +308,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
         unset($_SESSION['admin_prospects_add_draft']);
         redirect(prospect_country_sheet_url($result['country'], [
             'created_by' => $filterCreatedBy,
+            'just_added' => $insN,
+            'hash' => 'prospect-sites-card',
         ]));
     } catch (Throwable $e) {
         flash('error', 'Could not save sites. ' . $e->getMessage());
@@ -785,7 +787,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="card" id="add-sites">
       <h2>Add sites</h2>
       <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
-      <form method="post" action="index.php?page=admin_prospects#add-sites">
+      <form method="post" action="index.php?page=admin_prospects#add-sites" id="prospect-add-sites-form">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="add_sites">
         <div class="form-grid">
@@ -803,6 +805,8 @@ if (!$inCountry && !$emptyCountry) {
               'label' => 'Sites (root domains)',
               'required' => true,
               'rows' => 8,
+              'ready_use' => 'Save uses the Ready list only.',
+              'attention_hint' => 'Save only uses the Ready list above.',
           ]) ?>
         </div>
         <p class="actions" style="margin-top:1rem">
@@ -926,6 +930,9 @@ $qs = http_build_query(array_filter([
     'created_by' => $filterCreatedBy > 0 ? (string) $filterCreatedBy : '',
 ], static fn ($v) => $v !== '' && $v !== null));
 
+$justAdded = max(0, (int) get('just_added'));
+$highlightYmd = $justAdded > 0 ? date('Y-m-d') : '';
+
 if (!$emptyCountry && $addCountry === '') {
     $addCountry = $countryName;
 }
@@ -949,7 +956,7 @@ if ($wantsAjax && !$emptyCountry) {
         'page' => $pageNum,
         'pages' => $pages,
         'per_page' => $perPage,
-        'rows_html' => prospect_site_rows_html($rows),
+        'rows_html' => prospect_site_rows_html($rows, $highlightYmd),
         'has_rows' => $rows !== [],
         'export_matches_url' => $exportMatchesUrlAjax,
         'download_matches_txt' => $downloadMatchesTxtAjax,
@@ -1001,6 +1008,9 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
         match<span id="prospect_match_plural"><?= (int) $searchMatchCount === 1 ? '' : 'es' ?></span>
         for “<span id="prospect_match_q_label"><?= h($q) ?></span>”
       </span>
+      <?php if ($justAdded > 0): ?>
+        · <strong><?= (int) $justAdded ?> just added</strong> (top of the list)
+      <?php endif; ?>
     </p>
   </div>
   <div class="actions">
@@ -1105,7 +1115,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
       <th>Niche</th><th>Domain</th><th>Language</th><th>Added by</th><th>When</th>
     </tr></thead>
     <tbody id="prospect-site-tbody">
-    <?= prospect_site_rows_html($rows) ?>
+    <?= prospect_site_rows_html($rows, $highlightYmd) ?>
     </tbody>
   </table>
   </div>
@@ -1156,7 +1166,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
       New sites join the <strong>whole folder</strong>, not only <?= h($filterCreatedLabel) ?>’s list.
     <?php endif; ?>
   </p>
-  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites">
+  <form method="post" action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#add-sites" id="prospect-add-sites-form">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_sites">
     <input type="hidden" name="country" value="<?= h($countryName) ?>">
@@ -1167,6 +1177,8 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
           'label' => 'Sites (root domains)',
           'required' => true,
           'rows' => 8,
+          'ready_use' => 'Save uses the Ready list only.',
+          'attention_hint' => 'Save only uses the Ready list above.',
       ]) ?>
     </div>
     <p class="actions" style="margin-top:1rem">

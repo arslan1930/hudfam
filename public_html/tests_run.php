@@ -148,6 +148,8 @@ if (
     && preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppSrc)
     && str_contains($indexSrc, "\$page === 'presence_ping'")
     && str_contains($presenceJs, "body.set('_csrf'")
+    && str_contains($draftJs, 'shouldClearDraft')
+    && str_contains($draftJs, 'alert-box.alert-ok')
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
@@ -428,6 +430,29 @@ try {
         pass('prospect copy label + sheet URL keep filters');
     } else {
         fail('prospect copy/url helpers');
+    }
+    if (prospect_saved_sites_message(1, 'United States') === 'Saved 1 new site to United States. It is at the top of the list.'
+        && str_contains(prospect_saved_sites_message(30, 'United States'), 'Saved 30 new sites to United States')
+        && !str_contains(prospect_saved_sites_message(30, 'United States'), 'site(s)')
+        && str_contains(prospect_country_sheet_url('Germany', ['just_added' => 30]), 'just_added=30')) {
+        pass('prospect_saved_sites_message grammar + just_added URL');
+    } else {
+        fail('prospect_saved_sites_message');
+    }
+    $justHtml = prospect_site_rows_html([
+        [
+            'id' => 2,
+            'domain' => 'txf-just-added.example',
+            'url' => '',
+            'language' => 'English',
+            'added_by_full' => 'Admin',
+            'created_at' => date('Y-m-d') . ' 12:00:00',
+        ],
+    ], date('Y-m-d'));
+    if (str_contains($justHtml, 'is-just-added') && str_contains($justHtml, 'txf-just-added.example')) {
+        pass('prospect_site_rows_html highlights just-added day');
+    } else {
+        fail('prospect_site_rows_html just-added: ' . $justHtml);
     }
 
     $parsedNiches = prospect_parse_niches('Health, fitness, Health, salud, Guest posts');
