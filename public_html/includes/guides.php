@@ -91,7 +91,7 @@ function render_team_panel_guide(): string
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracting sites</h3>'
         . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
-        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> → Extracted Sites + Sites with emails – Team. Site Extracting only.</p>'
+        . '<p><strong>How:</strong> From Your work, Open on an extracting task (or <strong>Extracting sites</strong>) opens the country list. First 10–50 / Undo is on that country’s Sites list. Paste results and <strong>Push</strong> → Extracted Sites + Sites with emails – Team. Site Extracting only.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Sites with emails – Team</h3>'
@@ -343,7 +343,7 @@ function guide_team_departments(): string
         'Departments Admin assigned you to, with open tasks and due dates. Tools stay locked until you are in a department.',
         'Change status from Dashboard, or open a folder to assign tasks and filter. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task. Anyone in the department can assign a task to a current member.',
         [
-            'Dashboard can update Open / In progress / Done without opening the folder.',
+            'Dashboard Open on a task goes to that department’s tool (Extracting sites, Filter & add, Team emails, or Campaign search). A Tasks link opens this folder. Dashboard can update Open / In progress / Done without opening the folder.',
             'Open a department folder to assign a task to a teammate already in that department, or to the whole department.',
             'Update status only on your named tasks, or on tasks with no named assignee.',
             'Unlocked tools appear in the sidebar and on Dashboard after assignment. Website prices is Communication Team only.',

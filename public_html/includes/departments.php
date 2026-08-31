@@ -232,6 +232,56 @@ function department_tool_pages_for_user(array $user): array
     return array_values(array_unique($pages));
 }
 
+/** Primary Team tool page for a department slug (empty when the folder has no dedicated tool). */
+function department_primary_tool_page(string $slug): string
+{
+    return match ($slug) {
+        'site_finding' => 'team_prospect_check',
+        'site_extracting' => 'team_extracting',
+        'email_extracting' => 'team_sites_emails',
+        'communication' => 'team_email_campaigns',
+        default => '',
+    };
+}
+
+/** Dashboard task Open target — department tool when one exists, otherwise the folder. */
+function department_primary_tool_url(string $slug): string
+{
+    $page = department_primary_tool_page($slug);
+    if ($page === '') {
+        return 'index.php?page=team_departments&folder=' . rawurlencode($slug);
+    }
+    return 'index.php?page=' . $page;
+}
+
+function department_folder_url(string $slug): string
+{
+    return 'index.php?page=team_departments&folder=' . rawurlencode($slug);
+}
+
+function department_task_open_label(string $slug): string
+{
+    return match ($slug) {
+        'site_finding' => 'Open Filter & add',
+        'site_extracting' => 'Open Extracting sites',
+        'email_extracting' => 'Open Team emails',
+        'communication' => 'Open Campaign search',
+        default => 'Open',
+    };
+}
+
+function department_task_assignee_label(array $task): string
+{
+    if ((int) ($task['assigned_to'] ?? 0) < 1) {
+        return 'Whole department';
+    }
+    $name = trim((string) ($task['assigned_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($task['assigned_username'] ?? ''));
+    }
+    return $name !== '' ? $name : 'Assigned';
+}
+
 /**
  * True when this Team user may open a page (department tool ACL).
  * Admins always true. Waiting (no dept) users only core waiting pages.
@@ -779,10 +829,13 @@ function list_open_tasks_for_user(int $userId, int $limit = 50): array
     ensure_departments_schema();
     $limit = max(1, min(200, $limit));
     $stmt = db()->prepare(
-        "SELECT t.*, d.name AS department_name, d.slug AS department_slug
+        "SELECT t.*, d.name AS department_name, d.slug AS department_slug,
+                au.username AS assigned_username,
+                au.full_name AS assigned_name
          FROM department_tasks t
          INNER JOIN departments d ON d.id = t.department_id
          INNER JOIN department_members m ON m.department_id = t.department_id AND m.user_id = ?
+         LEFT JOIN users au ON au.id = t.assigned_to
          WHERE t.status IN ('open','in_progress') AND d.is_active=1
          ORDER BY FIELD(t.status, 'open', 'in_progress'),
                   t.due_date IS NULL, t.due_date ASC, t.id DESC

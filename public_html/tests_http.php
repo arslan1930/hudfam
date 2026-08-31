@@ -1136,6 +1136,15 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Extracting')) {
 } else {
     fail('extractor blocked from Extracting status=' . $r['status']);
 }
+$rDash = req('GET', $base . '/index.php?page=team_dashboard');
+if ($rDash['status'] === 200
+    && str_contains($rDash['body'], 'Your tools')
+    && str_contains($rDash['body'], 'page=team_extracting')
+    && str_contains($rDash['body'], 'Tasks and assignment')) {
+    pass('extractor dashboard tools + department Tasks copy');
+} else {
+    fail('extractor dashboard missing tools/Tasks copy status=' . $rDash['status']);
+}
 if ($r['status'] === 200
     && (str_contains($r['body'], 'id="extract-country-search"')
         || str_contains($r['body'], 'Waiting for sites from the team mate'))) {
