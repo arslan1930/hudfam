@@ -568,8 +568,8 @@ if ($invViewId > 0) {
         && (str_contains($rView['body'], 'Mark paid') || str_contains($rView['body'], 'Paid'))
         && str_contains($rView['body'], 'History')
         && str_contains($rView['body'], 'invoice-history')
-        && !str_contains($rView['body'], '<th>Article doc</th>')
-        && !str_contains($rView['body'], '<th>Document URL</th>')
+        && !str_contains($rView['body'], 'Article doc')
+        && !str_contains($rView['body'], 'Document URL')
         && !str_contains($rView['body'], 'invoice-pick-doc')
         && !str_contains($rView['body'], 'Fatal error')) {
         pass('admin invoice open bill');
@@ -598,6 +598,7 @@ if ($rUnpaidList['status'] === 200
     && str_contains($rUnpaidList['body'], 'Completed unpaid')
     && str_contains($rUnpaidList['body'], 'admin_invoices&amp;filter=unpaid')
     && str_contains($rUnpaidList['body'], 'help-details page-purpose')
+    && !str_contains($rUnpaidList['body'], 'Document URL')
     && !str_contains($rUnpaidList['body'], '>Clear</a>')
     && !str_contains($rUnpaidList['body'], 'Fatal error')) {
     pass('admin invoices unpaid working view');
@@ -606,6 +607,7 @@ if ($rUnpaidList['status'] === 200
 }
 if ($r['status'] === 200
     && str_contains($r['body'], 'All invoices')
+    && !str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin invoices all stays reachable');
 } else {
@@ -636,6 +638,7 @@ if ($r['status'] === 200
     && $groupOff
     && $addExisting
     && !str_contains($r['body'], 'invoice-pick-doc')
+    && !str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin invoice generate none ticked');
 } else {

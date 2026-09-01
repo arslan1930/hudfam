@@ -410,7 +410,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <tr>
           <th>Site</th>
           <th>LIVE URL</th>
-          <th></th>
+          <th>Completed</th>
         </tr>
       </thead>
       <tbody>
@@ -441,7 +441,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 </section>
 <?php endif; ?>
 <section class="card no-print invoice-history">
-  <h2><?= label_with_info('History', 'Who changed this invoice and which sites were on it then. LIVE URL is internal — it does not print on the bill. The Google Doc stays on Completed orders.') ?></h2>
+  <h2><?= label_with_info('History', 'Who changed this invoice and which sites were on it then. LIVE URL is internal — it does not print on the bill.') ?></h2>
   <?php if (!$invoiceEvents): ?>
     <p class="muted">No history yet.</p>
   <?php else: ?>
