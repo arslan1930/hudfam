@@ -429,6 +429,9 @@ summary:focus-visible {
   color: #7fa3ae;
 }
 .nav-group-end { margin-top: 1rem; }
+@media (min-width: 900px) {
+  .sidebar .nav-group-end { display: none; }
+}
 .sidebar-role {
   color: #b9d0c8;
   font-size: 0.85rem;
@@ -1235,6 +1238,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   margin-left: auto;
   align-items: center;
 }
+.sites-list-edit-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .sites-list-actions .swe-open-group {
   flex-wrap: wrap;
 }
@@ -2017,6 +2025,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   align-items: center;
 }
 .dept-task-actions .btn { margin: 0; }
+.dept-task-notes {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-top: 0.2rem;
+}
 .dept-due-overdue { color: var(--bad); font-weight: 650; }
 .dept-add-member select { min-width: 16rem; max-width: 100%; }
 .dept-task-form textarea { width: 100%; min-height: 4.5rem; }
@@ -5425,6 +5441,12 @@ textarea:focus-visible {
     display: none;
   }
   table.sheet-cards-mobile .swe-row-actions {
+    width: 100%;
+  }
+  table.sheet-cards-mobile td[data-label="Open"]::before {
+    display: none;
+  }
+  table.sheet-cards-mobile td[data-label="Open"] .dept-task-actions {
     width: 100%;
   }
   .swe-sheet-wrap {

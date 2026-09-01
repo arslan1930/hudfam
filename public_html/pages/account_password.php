@@ -15,12 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (is_admin()) {
                 redirect('index.php?page=admin_dashboard');
             }
-            $u = current_user() ?? $user;
-            redirect(
-                user_is_department_scoped($u)
-                    ? 'index.php?page=team_departments'
-                    : 'index.php?page=team_dashboard'
-            );
+            redirect(team_home_url());
         }
     }
 }
@@ -60,7 +55,7 @@ render_header('Change password', $panel);
       <?php if (!$forced): ?>
         <a class="btn secondary" href="index.php?page=<?= is_admin()
             ? 'admin_dashboard'
-            : (user_is_department_scoped($user) ? 'team_departments' : 'team_dashboard') ?>">Cancel</a>
+            : 'team_dashboard' ?>">Cancel</a>
       <?php endif; ?>
     </p>
   </form>

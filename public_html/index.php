@@ -30,12 +30,7 @@ if ($page === '' && current_user()) {
     if (is_admin()) {
         redirect('index.php?page=admin_dashboard');
     }
-    // Unassigned Team → waiting dashboard; department members → My departments.
-    redirect(
-        user_is_department_scoped($u)
-            ? 'index.php?page=team_departments'
-            : 'index.php?page=team_dashboard'
-    );
+    redirect(team_home_url());
 }
 if ($page === '') {
     redirect('index.php?page=login');
@@ -112,10 +107,8 @@ if (!isset($routes[$page])) {
     if ($cu = current_user()) {
         if (is_admin()) {
             $home = 'index.php?page=admin_dashboard';
-        } elseif (user_is_department_scoped($cu)) {
-            $home = 'index.php?page=team_departments';
         } else {
-            $home = 'index.php?page=team_dashboard';
+            $home = team_home_url();
         }
     }
     $homeLabel = current_user() ? 'Go to dashboard' : 'Sign in';
@@ -168,7 +161,7 @@ if (
     && !team_page_unlocked($cu, $page)
 ) {
     flash('error', 'Your login only shows work and tools for your department.');
-    redirect('index.php?page=team_departments');
+    redirect(team_home_url());
 }
 
 // CSRF: every Admin and Team POST (forms + AJAX) must carry a valid token.

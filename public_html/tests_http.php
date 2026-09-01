@@ -1026,6 +1026,12 @@ if ($r['status'] >= 300 && $r['status'] < 400
 // Dept-scoped finder can open Filter; cannot open Extracting
 req('GET', $base . '/index.php?page=logout');
 $r = login_post($base, 'finder', 'DeptTest9x');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashboard')) {
+    pass('finder login goes to Your work');
+} else {
+    fail('finder login loc=' . $loc . ' status=' . $r['status']);
+}
 $r = req('GET', $base . '/index.php?page=team_prospect_check');
 if ($r['status'] === 200
     && (str_contains($r['body'], 'Filter') || str_contains($r['body'], 'Paste'))
@@ -1111,7 +1117,7 @@ if ($rStay['status'] === 200
 }
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $loc = location($r);
-if (($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_departments'))
+if (($r['status'] >= 300 && $r['status'] < 400 && (str_contains($loc, 'team_dashboard') || str_contains($loc, 'team_departments')))
     || str_contains($r['body'], 'only shows work')) {
     pass('finder blocked from Website prices');
 } else {
@@ -1119,7 +1125,8 @@ if (($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_depar
 }
 $r = req('GET', $base . '/index.php?page=team_extracting');
 $loc = location($r);
-if (($r['status'] >= 300 && str_contains($loc, 'team_departments')) || str_contains($r['body'], 'only shows')) {
+if (($r['status'] >= 300 && (str_contains($loc, 'team_dashboard') || str_contains($loc, 'team_departments')))
+    || str_contains($r['body'], 'only shows')) {
     pass('finder blocked from Extracting');
 } elseif ($r['status'] >= 300 && $r['status'] < 400) {
     pass('finder blocked from Extracting (redirect)');
@@ -1140,10 +1147,11 @@ $rDash = req('GET', $base . '/index.php?page=team_dashboard');
 if ($rDash['status'] === 200
     && str_contains($rDash['body'], 'Your tools')
     && str_contains($rDash['body'], 'page=team_extracting')
-    && str_contains($rDash['body'], 'Tasks and assignment')) {
-    pass('extractor dashboard tools + department Tasks copy');
+    && str_contains($rDash['body'], 'Find a task or tool')
+    && str_contains($rDash['body'], 'My departments')) {
+    pass('extractor dashboard tools + Find a task or tool');
 } else {
-    fail('extractor dashboard missing tools/Tasks copy status=' . $rDash['status']);
+    fail('extractor dashboard missing tools/search copy status=' . $rDash['status']);
 }
 if ($r['status'] === 200
     && (str_contains($r['body'], 'id="extract-country-search"')
