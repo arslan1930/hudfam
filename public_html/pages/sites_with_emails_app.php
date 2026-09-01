@@ -997,10 +997,11 @@ render_breadcrumbs($crumbs);
           data-show-processing="Pushing sites to Admin…"
           data-conflict-count="<?= (int) $pushConflictCount ?>"
           data-confirm-push-all="<?php
-            $pushAllMsg = 'Push ALL ' . (int) $readyToPush . ' site(s) with emails to Sites with emails - Admin?'
+            $pushAllMsg = 'Push ' . countable_label((int) $readyToPush, 'site', 'sites')
+                . ' with emails to Sites with emails - Admin?'
                 . "\n\nThose rows will leave this Team working copy.";
             if ($pushConflictCount > 0) {
-                $pushAllMsg .= "\n\n" . (int) $pushConflictCount
+                $pushAllMsg .= "\n\n" . countable_label((int) $pushConflictCount, 'site', 'sites')
                     . ' already exist in Admin — Push will MERGE Team emails into empty Admin slots '
                     . '(existing Admin emails are kept; merge fills blanks only).';
             }
@@ -1075,14 +1076,13 @@ render_breadcrumbs($crumbs);
   </div>
 </div>
 <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
-<?php if ($isTeam): ?>
+<?php if ($isTeam && function_exists('guide_sites_with_emails_team')): ?>
+<?= guide_sites_with_emails_team() ?>
 <p class="help">
-  Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-  Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
-  Opened rows stay <strong>highlighted</strong> until you enter an email in that row.
-  Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
+  Edits <strong>autosave</strong>.
+  <strong>Push</strong> when a site has at least one email (same as Push all to Admin).
   <?php if ($pushConflictCount > 0): ?>
-    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before merging Team emails into empty Admin slots (existing Admin emails stay).
+    <?= h(countable_label((int) $pushConflictCount, 'site', 'sites')) ?> already exist in Admin — Push asks before merging into empty Admin slots.
   <?php endif; ?>
 </p>
 <?php elseif ($isAdminAll): ?>
@@ -1161,7 +1161,11 @@ render_sheet_checkpoint_compact(
         <?php if ($sentStats && (int) $sentStats['sent'] > 0): ?>
         <form method="post" action="<?= h($listBase) ?>" class="swe-clear-all-emailed"
               data-swe-clear-all-emailed
-              onsubmit="return confirm(<?= h(json_encode('Clear ALL emailed marks on ' . $countryName . "?\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.", JSON_UNESCAPED_UNICODE)) ?>);">
+              <?= confirm_attrs(
+                  'Clear all emailed marks on ' . $countryName . '?'
+                  . "\n\nYou can resend and track this Admin sheet from scratch.\n\nFinal archive stays unchanged.",
+                  ['title' => 'Clear emailed marks?', 'confirm_label' => 'Clear', 'danger' => true]
+              ) ?>>
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="clear_all_emailed">
           <input type="hidden" name="q" value="<?= h($q) ?>">
@@ -1412,6 +1416,8 @@ render_sheet_checkpoint_compact(
                       data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
                       data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>"
                       data-confirm="<?= h($pushConfirm) ?>"
+                      data-confirm-title="Push to Admin?"
+                      data-confirm-label="Push"
                       title="<?= $hasEmail
                           ? ($willOverwrite ? 'Merge Team emails into empty Admin slots for this site' : 'Push this site to Admin')
                           : 'Add at least one email first' ?>">Push</button>
@@ -1508,13 +1514,29 @@ render_sheet_checkpoint_compact(
       ?>
     </div>
     <?php if ($countryTotal > 0): ?>
+    <?php
+    $sweRemoveAllBody = 'This removes ' . countable_label((int) $countryTotal, 'site', 'sites')
+        . ' from ' . $countryName . '.';
+    if ($isTeam) {
+        $sweRemoveAllBody .= "\n\nSites with emails – Team only.\nExtracting sites are not removed.";
+    } elseif ($sweScope === 'admin') {
+        $sweRemoveAllBody .= "\n\nAdmin working list only. Final archive stays.";
+    } else {
+        $sweRemoveAllBody .= "\n\nFinal archive for this country.";
+    }
+    $sweRemoveAllBody .= "\n\nThis cannot be undone.";
+    ?>
     <form method="post" action="<?= h($listBase) ?>"
           data-show-processing="Removing all sites…"
-          onsubmit="return confirm(<?= h(json_encode('Remove ALL ' . (int) $countryTotal . ' sites from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+          <?= confirm_attrs($sweRemoveAllBody, [
+              'title' => 'Remove all sites?',
+              'confirm_label' => 'Remove',
+              'danger' => true,
+          ]) ?>>
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
-      <button class="btn secondary small danger" type="submit">Remove all</button>
+      <button class="btn danger" type="submit">Remove all</button>
     </form>
     <?php endif; ?>
   </div>
@@ -1573,9 +1595,20 @@ render_sheet_checkpoint_compact(
 <div class="card" id="remove-by-list" style="margin-top:1rem">
   <h2><?= label_with_info('Remove by list', 'Paste site names or upload a 1-column CSV. Matching rows in this country are removed.') ?></h2>
   <p class="help">Paste site names (or 1-column CSV) to remove those rows from <?= h($countryName) ?>.</p>
+  <?php
+    $sweListedBody = 'Remove matching sites from ' . $countryName . '?';
+    if ($isTeam) {
+        $sweListedBody .= "\n\nSites with emails – Team only. Extracting sites are not removed.";
+    }
+    $sweListedBody .= "\n\nThis cannot be undone.";
+    ?>
   <form method="post" action="<?= h($listBase) ?>#remove-by-list" enctype="multipart/form-data"
         data-show-processing="Removing listed sites…"
-        onsubmit="return confirm(<?= h(json_encode('Remove matching sites from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+        <?= confirm_attrs($sweListedBody, [
+            'title' => 'Remove listed sites?',
+            'confirm_label' => 'Remove',
+            'danger' => true,
+        ]) ?>>
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">
     <textarea name="remove_text" class="inventory-box" rows="6" placeholder="site-to-remove.com"></textarea>

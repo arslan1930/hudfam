@@ -244,35 +244,52 @@
     var form = root && root.querySelector('[data-sheet-remove-selected-form]');
     if (!form) return;
     var ids = selectedChecks().map(function (el) { return String(el.value || ''); }).filter(Boolean);
-    if (!ids.length) return;
+    if (!ids.length) {
+      if (window.txfAlert) {
+        window.txfAlert({ title: 'Nothing selected', body: 'Tick a row first.' });
+      }
+      return;
+    }
     var confirmMsg = 'Remove ' + ids.length + ' selected site' + (ids.length === 1 ? '' : 's') + '?';
-    if (!window.confirm(confirmMsg)) return;
-    var idsInput = form.querySelector('[data-sheet-site-ids]');
-    if (idsInput) idsInput.value = ids.join(',');
-    setStatus('Removing selected…', false);
-    showProcessing('Removing selected…');
-    postForm(form).then(function (data) {
-      var removed = (data.removed || []).map(function (r) {
-        return String(r.id != null ? r.id : r);
+    var runRemove = function () {
+      var idsInput = form.querySelector('[data-sheet-site-ids]');
+      if (idsInput) idsInput.value = ids.join(',');
+      setStatus('Removing selected…', false);
+      showProcessing('Removing selected…');
+      postForm(form).then(function (data) {
+        var removed = (data.removed || []).map(function (r) {
+          return String(r.id != null ? r.id : r);
+        });
+        if (!removed.length) removed = ids;
+        removeRowsByIds(removed);
+        applyState(data);
+        var n = typeof data.count === 'number' ? data.count : removed.length;
+        setStatus('Removed ' + n + ' selected site' + (n === 1 ? '' : 's') + '.');
+        var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
+        if (totalLabel && typeof data.site_count === 'number') {
+          totalLabel.textContent = String(data.site_count);
+        }
+        hideProcessing();
+        if (data.redirect) {
+          showProcessing('Loading…');
+          window.location.href = data.redirect;
+        }
+      }).catch(function (err) {
+        hideProcessing();
+        setStatus(err.message || 'Could not remove selected.', true);
       });
-      if (!removed.length) removed = ids;
-      removeRowsByIds(removed);
-      applyState(data);
-      var n = typeof data.count === 'number' ? data.count : removed.length;
-      setStatus('Removed ' + n + ' selected site' + (n === 1 ? '' : 's') + '.');
-      var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
-      if (totalLabel && typeof data.site_count === 'number') {
-        totalLabel.textContent = String(data.site_count);
-      }
-      hideProcessing();
-      if (data.redirect) {
-        showProcessing('Loading…');
-        window.location.href = data.redirect;
-      }
-    }).catch(function (err) {
-      hideProcessing();
-      setStatus(err.message || 'Could not remove selected.', true);
-    });
+    };
+    if (window.txfConfirm) {
+      window.txfConfirm({
+        title: 'Remove selected sites?',
+        body: confirmMsg,
+        confirmLabel: 'Remove',
+        danger: true
+      }).then(function (ok) { if (ok) runRemove(); });
+      return;
+    }
+    if (!window.confirm(confirmMsg)) return;
+    runRemove();
   });
 
   document.addEventListener('keydown', function (e) {

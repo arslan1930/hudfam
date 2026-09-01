@@ -102,7 +102,11 @@ render_breadcrumbs([
             <a class="btn secondary small" href="<?= h($href) ?>">Open sheet</a>
             <?php if ($canClear): ?>
             <form method="post" action="<?= h($hub) ?>" style="display:inline"
-                  onsubmit="return confirm(<?= h(json_encode('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?= confirm_attrs(
+                      'Clear all Semrush site names and comments for ' . $c . '?'
+                      . "\n\nExtracted Sites stay unchanged.\nThis cannot be undone.",
+                      ['title' => 'Clear this country?', 'confirm_label' => 'Clear', 'danger' => true]
+                  ) ?>>
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_country">
               <input type="hidden" name="country" value="<?= h($c) ?>">

@@ -384,7 +384,7 @@ render_breadcrumbs([
         <td class="muted"><?= h((string) ($m['email'] ?: '—')) ?></td>
         <td>
           <form method="post" action="<?= h($deptFolderUrl()) ?>#members"
-                onsubmit="return confirm(<?= h(json_encode($removeMsg, JSON_UNESCAPED_UNICODE)) ?>);"
+                <?= confirm_attrs($removeMsg, ['title' => 'Remove member?', 'confirm_label' => 'Remove', 'danger' => true]) ?>
                 class="inline-form">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="remove_member">
@@ -620,7 +620,7 @@ render_breadcrumbs([
           <td>
             <form method="post" action="<?= h($deptFolderUrl()) ?>"
                   class="inline-form"
-                  onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?= confirm_attrs('Delete this task?', ['title' => 'Delete task?', 'confirm_label' => 'Delete', 'danger' => true]) ?>>
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="delete_task">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">

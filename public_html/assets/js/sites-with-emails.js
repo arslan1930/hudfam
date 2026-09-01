@@ -381,28 +381,47 @@
 
   document.addEventListener('click', function (e) {
     var btn = e.target && e.target.closest ? e.target.closest('[data-sheet-action]') : null;
-    if (!btn || btn.disabled) return;
+    if (!btn || btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
     var kind = String(btn.getAttribute('data-sheet-action') || '');
     var form = document.getElementById('swe-shared-' + kind)
       || document.getElementById('camp-shared-' + kind);
     if (!form) return;
     e.preventDefault();
     var confirmMsg = btn.getAttribute('data-confirm');
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
-    var siteInput = form.querySelector('[name="site_id"]');
-    if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
-    if (kind === 'mark') {
-      var sentInput = form.querySelector('[name="email_sent"]');
-      if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+    var afterConfirm = function () {
+      var siteInput = form.querySelector('[name="site_id"]');
+      if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
+      if (kind === 'mark') {
+        var sentInput = form.querySelector('[name="email_sent"]');
+        if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+      }
+      if (kind === 'push') {
+        form.setAttribute('data-admin-conflict', btn.getAttribute('data-admin-conflict') || '0');
+      }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    };
+    if (!confirmMsg) {
+      afterConfirm();
+      return;
     }
-    if (kind === 'push') {
-      form.setAttribute('data-admin-conflict', btn.getAttribute('data-admin-conflict') || '0');
+    var danger = kind === 'remove' || btn.hasAttribute('data-confirm-danger');
+    var title = btn.getAttribute('data-confirm-title') || '';
+    var label = btn.getAttribute('data-confirm-label') || '';
+    if (window.txfConfirm) {
+      window.txfConfirm({
+        title: title || (kind === 'push' ? 'Push to Admin?' : (danger ? 'Please confirm' : 'Please confirm')),
+        body: confirmMsg,
+        confirmLabel: label || (kind === 'push' ? 'Push' : (danger ? 'Remove' : 'Continue')),
+        danger: danger
+      }).then(function (ok) { if (ok) afterConfirm(); });
+      return;
     }
-    if (typeof form.requestSubmit === 'function') {
-      form.requestSubmit();
-    } else {
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    }
+    if (!window.confirm(confirmMsg)) return;
+    afterConfirm();
   });
 
   if (pushBtn && !pushBtn.disabled) {
@@ -647,30 +666,41 @@
   if (pushAllForm) {
     pushAllForm.addEventListener('submit', function (e) {
       e.preventDefault();
+      var readyN = readyLabel ? parseInt(String(readyLabel.textContent || '0'), 10) || 0 : 0;
+      var countPhrase = readyN === 1 ? '1 site' : (readyN + ' sites');
       var msg = pushAllForm.getAttribute('data-confirm-push-all')
-        || 'Push all sites with emails to Admin? Those rows will leave the Team working copy.';
-      if (readyLabel) {
-        msg = msg.replace(/ALL \d+ site\(s\)/, 'ALL ' + String(readyLabel.textContent || '').trim() + ' site(s)');
+        || ('Push ' + countPhrase + ' with emails to Admin? Those rows will leave the Team working copy.');
+      msg = msg.replace(/\d+ sites? with emails/, countPhrase + ' with emails');
+      var runPush = function () {
+        var overwriteField = document.getElementById('swe-push-confirm-overwrite');
+        if (overwriteField) {
+          var conflicts = parseInt(pushAllForm.getAttribute('data-conflict-count') || '0', 10) || 0;
+          overwriteField.value = conflicts > 0 ? '1' : '0';
+        }
+        var btn = document.getElementById('swe-push-btn');
+        if (btn) btn.disabled = true;
+        setStatus('Saving emails before push…', false, true);
+        showProcessing('Pushing sites to Admin…');
+        flushPendingAutosaves().then(function () {
+          // Native submit skips this listener — avoids a second confirm.
+          HTMLFormElement.prototype.submit.call(pushAllForm);
+        }).catch(function () {
+          hideProcessing();
+          if (btn) btn.disabled = false;
+          setStatus('Could not save emails before push.', true);
+        });
+      };
+      if (window.txfConfirm) {
+        window.txfConfirm({
+          title: 'Push to Admin?',
+          body: msg,
+          confirmLabel: 'Push',
+          danger: false
+        }).then(function (ok) { if (ok) runPush(); });
+        return;
       }
       if (!window.confirm(msg)) return;
-      var overwriteField = document.getElementById('swe-push-confirm-overwrite');
-      if (overwriteField) {
-        var conflicts = parseInt(pushAllForm.getAttribute('data-conflict-count') || '0', 10) || 0;
-        overwriteField.value = conflicts > 0 ? '1' : '0';
-      }
-      var btn = document.getElementById('swe-push-btn');
-      if (btn) btn.disabled = true;
-      setStatus('Saving emails before push…', false, true);
-      showProcessing('Pushing sites to Admin…');
-      flushPendingAutosaves().then(function () {
-        // Native submit skips this listener — avoids a second confirm.
-        // Overlay stays up through the full-page navigation.
-        HTMLFormElement.prototype.submit.call(pushAllForm);
-      }).catch(function () {
-        hideProcessing();
-        if (btn) btn.disabled = false;
-        setStatus('Could not save emails before push.', true);
-      });
+      runPush();
     });
   }
 

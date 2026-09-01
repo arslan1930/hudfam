@@ -900,6 +900,7 @@ foreach ([
     '/asset.php?f=js/nav-shell.js',
     '/asset.php?f=js/sites-with-emails.js',
     '/asset.php?f=js/csrf.js',
+    '/asset.php?f=js/app-confirm.js',
     '/asset.php?f=img/topurlz-logo.png',
 ] as $path) {
     $r = req('GET', $base . $path);
@@ -1222,6 +1223,23 @@ if ($r['status'] === 200
     pass('Team Sites with emails has no Campaign-style bulk import');
 } else {
     fail('Team SWE bulk import leak status=' . ($r['status'] ?? '?'));
+}
+if ($r['status'] === 200
+    && str_contains($r['body'], 'app-confirm.js')
+    && str_contains($r['body'], 'Your work')
+    && !str_contains($r['body'], 'Remove ALL ')
+    && (
+        !str_contains($r['body'], '>Remove all</button>')
+        || (
+            str_contains($r['body'], 'Extracting sites are not removed')
+            && str_contains($r['body'], 'cannot be undone')
+            && str_contains($r['body'], 'data-confirm-danger')
+            && str_contains($r['body'], 'class="btn danger"')
+        )
+    )) {
+    pass('Team SWE in-app confirm + Remove all wipe copy');
+} else {
+    fail('Team SWE confirm/Remove all markup missing');
 }
 $r = req('GET', $base . '/index.php?page=team_admin_emails_search');
 if ($r['status'] === 200

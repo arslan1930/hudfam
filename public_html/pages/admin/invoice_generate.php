@@ -16,13 +16,20 @@ if ($selectedFromSheet) {
 }
 
 $forceNew = (string) (get('new') ?: post('new')) === '1';
-$openInvoices = list_invoices_open_for_append(50);
+$openInvoices = list_invoices_open_for_append(200);
 $preselectExistingId = $forceNew ? 0 : (int) get('existing');
 $preselectFound = false;
 foreach ($openInvoices as $openInv) {
     if ((int) ($openInv['id'] ?? 0) === $preselectExistingId) {
         $preselectFound = true;
         break;
+    }
+}
+if (!$preselectFound && $preselectExistingId > 0) {
+    $candidate = get_invoice($preselectExistingId);
+    if ($candidate && invoice_can_append_orders($candidate)) {
+        array_unshift($openInvoices, $candidate);
+        $preselectFound = true;
     }
 }
 if (!$preselectFound) {

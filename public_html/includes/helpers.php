@@ -285,6 +285,32 @@ function csrf_field(): string
     return '<input type="hidden" name="_csrf" value="' . h(csrf_token()) . '">';
 }
 
+/** 1 site / N sites (or other nouns). */
+function countable_label(int $n, string $one, string $many): string
+{
+    $n = max(0, $n);
+    return $n === 1 ? ('1 ' . $one) : ((string) $n . ' ' . $many);
+}
+
+/**
+ * In-app confirm dialog attributes (assets/js/app-confirm.js).
+ *
+ * @param array{title?:string,confirm_label?:string,danger?:bool} $opts
+ */
+function confirm_attrs(string $body, array $opts = []): string
+{
+    $danger = !empty($opts['danger']);
+    $title = (string) ($opts['title'] ?? 'Please confirm');
+    $label = (string) ($opts['confirm_label'] ?? ($danger ? 'Remove' : 'Continue'));
+    $html = ' data-confirm="' . h($body) . '"'
+        . ' data-confirm-title="' . h($title) . '"'
+        . ' data-confirm-label="' . h($label) . '"';
+    if ($danger) {
+        $html .= ' data-confirm-danger="1"';
+    }
+    return $html;
+}
+
 /** Short “Last saved by Name · YYYY-MM-DD HH:MM” (empty when unknown). */
 function last_writer_label(string $name, string $at): string
 {

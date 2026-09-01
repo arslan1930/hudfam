@@ -204,10 +204,10 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php endif; ?>
     <?php if ($isDraft && !$isManual && !$isPaid): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
-            onsubmit="return confirm(<?= h(json_encode(
+            <?= confirm_attrs(
                 'Mark this invoice as sent for payment? You can still add more unpaid sites until it is paid.',
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+                ['title' => 'Mark as sent?', 'confirm_label' => 'Mark as sent']
+            ) ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_sent">
         <button class="btn" type="submit">Mark as sent</button>
@@ -215,12 +215,12 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php endif; ?>
     <?php if (!$isPaid && !$isDraft): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
-            onsubmit="return confirm(<?= h(json_encode(
+            <?= confirm_attrs(
                 $isManual
                     ? 'Mark this blank invoice as paid?'
                     : 'Mark this invoice as paid? Linked unpaid sheet rows will be marked Paid.',
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+                ['title' => 'Mark as paid?', 'confirm_label' => 'Mark paid']
+            ) ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_paid">
         <button class="btn-paid btn-paid-mark" type="submit">Mark paid</button>
