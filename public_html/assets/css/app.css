@@ -1669,6 +1669,9 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-size: 0.9rem;
   min-width: 0;
   padding-right: 1.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .email-field-clear,
 .swe-email-clear {
@@ -5396,6 +5399,16 @@ textarea:focus-visible {
 .sheet-tool-menu-panel .btn {
   width: 100%;
   justify-content: center;
+}
+.sheet-tool-menu-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sheet-tool-menu-label:first-child {
+  margin-top: 0;
 }
 .sheet-row-more-btn {
   min-width: 2.1rem;

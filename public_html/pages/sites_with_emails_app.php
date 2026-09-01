@@ -1022,30 +1022,38 @@ render_breadcrumbs($crumbs);
     <?php if ($sweScope === 'admin'): ?>
     <?php render_sheet_tool_menu_open('Copy / Open', 'Copy emails or open sites'); ?>
     <div class="swe-copy-group" role="group" aria-label="Copy emails by sent status">
+      <button type="button" class="btn secondary" data-swe-copy-selected-emails disabled
+              title="Copy EMAIL 1–4 from ticked rows on this page (skips empty and invalid)">
+        Copy selected emails (this page)
+      </button>
       <button type="button" class="btn secondary" data-swe-copy-emails
               data-export-url="<?= h($emailsExportUnsentUrl) ?>"
               data-copy-label="not emailed"
-              title="Copy emails from sites not marked emailed yet"
+              title="Copy emails from sites not marked emailed yet — whole country, ignores ticks"
               <?= ($sentStats && (int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
         Copy not emailed
       </button>
       <button type="button" class="btn secondary" data-swe-copy-emails
               data-export-url="<?= h($emailsExportSentUrl) ?>"
               data-copy-label="emailed"
-              title="Copy emails from sites already marked emailed"
+              title="Copy emails from sites already marked emailed — whole country, ignores ticks"
               <?= ($sentStats && (int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
         Copy emailed
       </button>
       <button type="button" class="btn secondary" id="swe_copy_emails" data-swe-copy-emails
               data-export-url="<?= h($emailsExportUrl) ?>"
               data-copy-label="all"
-              title="Copy every email on this Admin country sheet"
+              title="Copy every email on this Admin country sheet — ignores ticks"
               <?= $countryTotal > 0 ? '' : 'disabled' ?>>
         Copy all emails
       </button>
     </div>
     <?php else: ?>
     <?php render_sheet_tool_menu_open('Copy / Open', 'Copy emails or open sites'); ?>
+    <button type="button" class="btn secondary" data-swe-copy-selected-emails disabled
+            title="Copy EMAIL 1–4 from ticked rows on this page (skips empty and invalid)">
+      Copy selected emails (this page)
+    </button>
     <button type="button" class="btn secondary" id="swe_copy_emails" data-swe-copy-emails
             data-export-url="<?= h($emailsExportUrl) ?>"
             data-copy-label="all"

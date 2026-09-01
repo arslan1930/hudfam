@@ -3341,6 +3341,39 @@ try {
             . ' sent=' . json_encode($copySent) . ' all=' . json_encode($copyAll));
     }
 
+    db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email1='good@txfcamp-nl-c.nl, not-an-email, also@txfcamp-nl-c.nl',
+             email2='', email3='', email4=''
+         WHERE sheet_id=? AND domain='txfcamp-nl-c.nl'"
+    )->execute([$nlSheet]);
+    $copyEmailsUnsent = collect_email_campaign_emails($nlSheet, '0');
+    $copyEmailsSent = collect_email_campaign_emails($nlSheet, '1');
+    $copyEmailsAll = collect_email_campaign_emails($nlSheet, null);
+    $hasGoodC = in_array('good@txfcamp-nl-c.nl', $copyEmailsUnsent, true)
+        && in_array('also@txfcamp-nl-c.nl', $copyEmailsUnsent, true);
+    $noBadC = !in_array('not-an-email', $copyEmailsUnsent, true)
+        && !in_array('not-an-email', $copyEmailsAll, true);
+    $aEmail = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $aInSent = $aEmail !== '' && in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsSent), true);
+    $aNotUnsent = $aEmail === '' || !in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsUnsent), true);
+    if ($hasGoodC && $noBadC && $aInSent && $aNotUnsent
+        && in_array('good@txfcamp-nl-c.nl', $copyEmailsAll, true)) {
+        pass('campaign copy emails splits sent vs unsent and skips invalid tokens');
+    } else {
+        fail('copy emails: unsent=' . json_encode($copyEmailsUnsent)
+            . ' sent=' . json_encode($copyEmailsSent) . ' all=' . json_encode($copyEmailsAll)
+            . " aEmail=$aEmail");
+    }
+    db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email1='c-new@txfcamp-nl-c.nl', email2='', email3='', email4=''
+         WHERE sheet_id=? AND domain='txfcamp-nl-c.nl'"
+    )->execute([$nlSheet]);
+
     // Team import: copy into campaign, never delete Team rows; stamp fetched to campaign.
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'");
     $seedTeam = db()->prepare(

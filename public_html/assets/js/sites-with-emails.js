@@ -103,7 +103,8 @@
                 : label === 'emailed' ? ' emailed'
                   : '';
             setStatus(
-              'Copied ' + lines.length + kind + ' email' + (lines.length === 1 ? '' : 's') + '.'
+              'Copied ' + lines.length + kind + ' email' + (lines.length === 1 ? '' : 's')
+                + ' from this country sheet.'
             );
           });
         })

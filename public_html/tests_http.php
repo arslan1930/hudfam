@@ -668,7 +668,13 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
             && str_contains($rSheet['body'], 'href="#camp-fill-gaps"')
             && str_contains($rSheet['body'], 'Mark emailed')
             && str_contains($rSheet['body'], 'Not emailed (')
-            && str_contains($rSheet['body'], 'Search site or email (this page)')
+            && str_contains($rSheet['body'], 'placeholder="Search site or email"')
+            && str_contains($rSheet['body'], 'Copy selected emails (this page)')
+            && str_contains($rSheet['body'], 'data-camp-copy-selected-emails')
+            && str_contains($rSheet['body'], 'Copy all emails')
+            && str_contains($rSheet['body'], 'export=emails')
+            && str_contains($rSheet['body'], 'Copy all domains')
+            && str_contains($rSheet['body'], 'data-camp-copy-domains')
             && str_contains($rSheet['body'], 'id="camp-country-jump"')
             && str_contains($rSheet['body'], 'value="fill_gaps"')
             && str_contains($rSheet['body'], 'Import')
@@ -719,6 +725,9 @@ $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=sites_with_ema
 if ($r['status'] === 200
     && !str_contains($r['body'], 'id="swe-bulk-add"')
     && str_contains($r['body'], 'id="swe-country-jump"')
+    && str_contains($r['body'], 'Copy selected emails (this page)')
+    && str_contains($r['body'], 'data-swe-copy-selected-emails')
+    && str_contains($r['body'], 'Copy all emails')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin working list has no Final bulk import');
 } else {
