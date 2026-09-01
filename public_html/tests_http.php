@@ -1225,7 +1225,7 @@ if ($r['status'] === 200
     fail('Team SWE bulk import leak status=' . ($r['status'] ?? '?'));
 }
 if ($r['status'] === 200
-    && str_contains($r['body'], 'js/app-confirm.js')
+    && str_contains($r['body'], 'app-confirm.js')
     && str_contains($r['body'], 'Your work')
     && !str_contains($r['body'], 'Remove ALL ')
     && (

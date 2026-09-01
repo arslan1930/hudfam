@@ -1105,7 +1105,7 @@ $semrushHubSmoke = file_get_contents($root . '/pages/admin/semrush_research.php'
 $semrushSheetSmoke = file_get_contents($root . '/pages/admin/semrush_sheet.php') ?: '';
 if (!str_contains($semrushHubSmoke, 'confirm_attrs')
     || !str_contains($semrushHubSmoke, 'Extracted Sites stay unchanged')
-    || !str_contains($semrushHubSmoke, 'data-confirm-danger')
+    || !str_contains($semrushHubSmoke, "'danger' => true")
     || str_contains($semrushHubSmoke, "confirm('Clear ALL Semrush")) {
     fail('Admin Semrush hub Clear confirm still uses native confirm()');
 } else {
@@ -1234,7 +1234,7 @@ if (str_contains($sweAppSmoke, "confirm('Clear ALL emailed")
     || str_contains($sweAppSmoke, "confirm('Remove matching sites")
     || str_contains($sweAppSmoke, 'Remove ALL ')
     || !str_contains($sweAppSmoke, 'confirm_attrs')
-    || !str_contains($sweAppSmoke, 'data-confirm-danger')
+    || !str_contains($sweAppSmoke, "'danger' => true")
     || str_contains($campAppSmoke, "confirm('Clear ALL emailed")
     || str_contains($campAppSmoke, "confirm('Import into")
     || str_contains($campAppSmoke, "confirm('Remove <?= h(\$sheetCountry)")
