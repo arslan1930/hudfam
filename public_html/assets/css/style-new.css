@@ -342,6 +342,13 @@ html.ui-v2 #add_unique_btn:not(:disabled) {
   border-color: #67e8f9;
   box-shadow: none;
 }
+html.ui-v2 #filter_submit:disabled {
+  background: #422006;
+  color: #fde68a !important;
+  border-color: #fbbf24;
+  pointer-events: auto;
+  cursor: not-allowed;
+}
 
 /* Our database country sheet — close the Niche/Domain hole, quiet disabled Remove */
 html.ui-v2 .help-details > summary {

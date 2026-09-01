@@ -431,7 +431,7 @@ render_header('Filter & add', 'team');
   if (!countryRoot) return;
   function syncBtn() {
     var hidden = countryRoot.querySelector('[data-typeahead-value]');
-    if (btn) btn.disabled = !(hidden && hidden.value);
+    if (btn) btn.disabled = !(hidden && String(hidden.value || '').trim());
   }
   countryRoot.addEventListener('typeahead:select', function(e){
     syncBtn();
@@ -439,7 +439,10 @@ render_header('Filter & add', 'team');
       window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(e.detail.value);
     }
   });
+  countryRoot.addEventListener('input', syncBtn);
+  countryRoot.addEventListener('change', syncBtn);
   syncBtn();
+  window.addEventListener('load', syncBtn);
 })();
 </script>
 <?= sites_form_script_tag() ?>
