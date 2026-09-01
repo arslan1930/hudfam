@@ -211,6 +211,14 @@ function stylesheet_url(): string
     return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
 }
 
+/** Teal overlay after app.css (Hostinger-safe via asset.php allowlist). */
+function stylesheet_new_url(): string
+{
+    $file = dirname(__DIR__) . '/assets/css/style-new.css';
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=css/style-new.css&v=' . rawurlencode($v));
+}
+
 /** Hostinger-safe JS URL via asset.php allowlist. */
 function script_asset_url(string $f): string
 {

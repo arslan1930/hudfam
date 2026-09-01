@@ -399,6 +399,9 @@ if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_c
     && str_contains($r['body'], 'Username or Admin email')
     && str_contains($r['body'], 'password-toggle.js')
     && str_contains($r['body'], 'Sign in to')
+    && str_contains($r['body'], 'class="ui-v2"')
+    && str_contains($r['body'], 'css/style-new.css')
+    && str_contains($r['body'], 'js/ui-enhancements.js')
     && !str_contains($r['body'], 'Shared site database')
     && !str_contains($r['body'], 'class="app-bar"')) {
     pass('login page');
@@ -880,7 +883,10 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'folder=extr
 $r = req('GET', $base . '/index.php?page=admin_dashboard');
 if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id="app-sidebar"')
     && str_contains($r['body'], 'mobile-page-title') && str_contains($r['body'], 'class="app-bar"')
-    && str_contains($r['body'], 'class="app-footer')) {
+    && str_contains($r['body'], 'class="app-footer')
+    && str_contains($r['body'], 'id="app-main"')
+    && str_contains($r['body'], 'class="ui-skip"')
+    && str_contains($r['body'], 'css/style-new.css')) {
     pass('mobile nav markup');
 } else {
     fail('mobile nav markup missing');
@@ -889,6 +895,7 @@ if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id=
 // Assets
 foreach ([
     '/asset.php?f=css/app.css',
+    '/asset.php?f=css/style-new.css',
     '/asset.php?f=js/nav-shell.js',
     '/asset.php?f=js/sites-with-emails.js',
     '/asset.php?f=js/csrf.js',

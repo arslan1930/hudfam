@@ -8,6 +8,7 @@
  */
 $allowed = [
     'css/app.css' => 'text/css; charset=utf-8',
+    'css/style-new.css' => 'text/css; charset=utf-8',
     'js/sites-form.js' => 'application/javascript; charset=utf-8',
     'js/extract-sites-list.js' => 'application/javascript; charset=utf-8',
     'js/extracted-admin.js' => 'application/javascript; charset=utf-8',
@@ -26,6 +27,7 @@ $allowed = [
     'js/draft-autosave.js' => 'application/javascript; charset=utf-8',
     'js/info-tips.js' => 'application/javascript; charset=utf-8',
     'js/nav-shell.js' => 'application/javascript; charset=utf-8',
+    'js/ui-enhancements.js' => 'application/javascript; charset=utf-8',
     'js/password-toggle.js' => 'application/javascript; charset=utf-8',
     'js/prospect-batch-sheet.js' => 'application/javascript; charset=utf-8',
     'js/prospects-country.js' => 'application/javascript; charset=utf-8',
