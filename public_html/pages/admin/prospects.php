@@ -320,8 +320,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             flash('fade', prospect_duplicates_deleted_message($dup) . '.');
         }
         unset($_SESSION['admin_prospects_add_draft']);
+        $highlightN = count(is_array($result['ids'] ?? null) ? $result['ids'] : []);
+        if ($highlightN < 1) {
+            $highlightN = $insN;
+        }
         redirect(prospect_country_sheet_url($result['country'], [
-            'just_added' => $insN,
+            'just_added' => $highlightN,
             'hash' => 'prospect-sites-card',
         ]));
     } catch (Throwable $e) {
@@ -707,7 +711,7 @@ if (!$inCountry && !$emptyCountry) {
 
     <div class="card" id="add-sites">
       <h2>Add sites</h2>
-      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
+      <p class="help">Paste root domains into one country’s database. Country endings (.at, .pt, …) go to that country; .com stays in the selected folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
       <form method="post" action="index.php?page=admin_prospects#add-sites" id="prospect-add-sites-form"
             data-show-processing="Saving sites…">
         <?= csrf_field() ?>
@@ -1204,7 +1208,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
 <div class="card" id="add-sites">
   <h2>Add sites to <?= h($countryName) ?></h2>
   <p class="help">
-    Paste root domains into this country’s Our database folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.
+    Paste root domains into this country’s Our database folder. Country endings (.at, .pt, …) go to that country; .com stays here. Use <strong>Clean to root domains</strong> for https/paths/subdomains.
     <?php if ($filterCreatedBy > 0): ?>
       New sites join the <strong>whole folder</strong>, not only <?= h($filterCreatedLabel) ?>’s list.
     <?php endif; ?>

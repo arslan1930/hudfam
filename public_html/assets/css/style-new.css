@@ -1051,16 +1051,18 @@ html.ui-v2 tr.is-sheet-selected td,
 html.ui-v2 li.is-sheet-selected,
 html.ui-v2 tbody tr.is-sheet-selected td,
 html.ui-v2 tbody tr.is-sheet-selected:hover td,
-html.ui-v2 tbody tr:nth-child(even).is-sheet-selected td {
-  background: rgba(34, 211, 238, 0.32) !important;
-  box-shadow: inset 4px 0 0 #22d3ee;
+html.ui-v2 tbody tr:nth-child(even).is-sheet-selected td,
+html.ui-v2 .swe-table tr.is-sheet-selected > td,
+html.ui-v2 #prospect-site-table tr.is-sheet-selected td {
+  background: rgba(34, 211, 238, 0.52) !important;
+  box-shadow: inset 5px 0 0 #22d3ee;
   color: #f8fafc;
 }
 html.ui-v2 .swe-table tr.swe-row-opened > td,
 html.ui-v2 .swe-table tr.swe-row-opened:hover > td,
 html.ui-v2 .swe-table tr.swe-row-opened.sheet-search-hit td {
-  background: rgba(56, 189, 248, 0.34) !important;
-  box-shadow: inset 4px 0 0 #38bdf8;
+  background: rgba(56, 189, 248, 0.50) !important;
+  box-shadow: inset 5px 0 0 #38bdf8;
   color: #f8fafc;
 }
 html.ui-v2 .swe-table tr.swe-row-emailed > td,
@@ -1068,14 +1070,14 @@ html.ui-v2 .swe-table tr.swe-row-emailed:hover > td,
 html.ui-v2 .swe-table tr.swe-row-emailed.sheet-search-hit td,
 html.ui-v2 tbody tr.swe-row-emailed > td,
 html.ui-v2 tbody tr:nth-child(even).swe-row-emailed > td {
-  background: rgba(52, 211, 153, 0.30) !important;
-  box-shadow: inset 4px 0 0 #34d399;
+  background: rgba(52, 211, 153, 0.46) !important;
+  box-shadow: inset 5px 0 0 #34d399;
   color: #f8fafc;
 }
 html.ui-v2 .swe-table tr.swe-row-emailed.is-sheet-selected > td,
 html.ui-v2 tbody tr.swe-row-emailed.is-sheet-selected td {
-  background: rgba(34, 211, 238, 0.28) !important;
-  box-shadow: inset 4px 0 0 #22d3ee, inset 0 0 0 1px rgba(52, 211, 153, 0.55);
+  background: rgba(34, 211, 238, 0.50) !important;
+  box-shadow: inset 5px 0 0 #22d3ee, inset 0 0 0 1px rgba(52, 211, 153, 0.7);
   color: #f8fafc;
 }
 html.ui-v2 .sheet-search-hit,
@@ -1088,20 +1090,20 @@ html.ui-v2 .site-price-sheet tr.sheet-search-hit td,
 html.ui-v2 .folder.sheet-search-hit,
 html.ui-v2 .launch-card.sheet-search-hit,
 html.ui-v2 .extracted-plain-item.sheet-search-hit {
-  background: rgba(34, 211, 238, 0.34) !important;
+  background: rgba(34, 211, 238, 0.50) !important;
   outline: 2px solid #22d3ee !important;
   outline-offset: -2px;
   color: #f8fafc;
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.28);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
 }
 html.ui-v2 #prospect-site-table tr.is-just-added td,
 html.ui-v2 #prospect-site-table tr.is-just-added:hover td,
 html.ui-v2 tbody tr.is-just-added td {
-  background: rgba(52, 211, 153, 0.30) !important;
+  background: rgba(52, 211, 153, 0.46) !important;
   color: #f8fafc;
 }
 html.ui-v2 #prospect-site-table tr.is-just-added td:first-child {
-  box-shadow: inset 4px 0 0 #34d399;
+  box-shadow: inset 5px 0 0 #34d399;
 }
 html.ui-v2 .dept-task-mine td {
   background: rgba(52, 211, 153, 0.22) !important;
