@@ -219,11 +219,81 @@ html.ui-v2 button.btn.secondary:hover {
   border-color: #99f6e4;
   filter: none;
 }
-html.ui-v2 .btn.danger,
-html.ui-v2 button.btn.danger {
+html.ui-v2 .btn.danger:not(.secondary),
+html.ui-v2 button.btn.danger:not(.secondary) {
   background: var(--bad);
   border-color: var(--bad);
   filter: none;
+}
+html.ui-v2 .btn.secondary.danger {
+  background: #fff;
+  color: var(--bad) !important;
+  border-color: #e5c5c5;
+  box-shadow: none;
+  filter: none;
+}
+html.ui-v2 .btn:disabled,
+html.ui-v2 button.btn:disabled,
+html.ui-v2 .btn.secondary.danger:disabled {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #9ca3af !important;
+  box-shadow: none;
+  filter: none;
+}
+
+/* Our database country sheet — close the Niche/Domain hole, quiet disabled Remove */
+html.ui-v2 .help-details > summary {
+  padding: 0.55rem 0.9rem;
+}
+html.ui-v2 .prospect-site-toolbar {
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+html.ui-v2 .prospect-site-search-row {
+  gap: 0.55rem !important;
+}
+html.ui-v2 #prospect-site-table {
+  width: 100%;
+}
+html.ui-v2 #prospect-site-table th,
+html.ui-v2 #prospect-site-table td {
+  vertical-align: middle;
+}
+html.ui-v2 #prospect-site-table .prospect-niche-td {
+  width: 13.5rem;
+  max-width: 16rem;
+}
+html.ui-v2 #prospect-site-table .prospect-niche-td .niche-chip-box {
+  width: 100%;
+}
+html.ui-v2 .niche-chip-box.is-compact .niche-chip-control {
+  min-height: 2rem;
+  padding: 0.22rem 0.4rem;
+}
+html.ui-v2 #prospect-site-table .prospect-domain-td {
+  white-space: nowrap;
+}
+html.ui-v2 #prospect-site-table th:nth-child(4),
+html.ui-v2 #prospect-site-table th:nth-child(5),
+html.ui-v2 #prospect-site-table th:nth-child(6),
+html.ui-v2 #prospect-site-table td[data-label="Language"],
+html.ui-v2 #prospect-site-table td[data-label="Added by"],
+html.ui-v2 #prospect-site-table td[data-label="When"] {
+  white-space: nowrap;
+  width: 1%;
+}
+html.ui-v2 .main a.swe-open-site {
+  color: var(--brand-deep);
+  background: #f0faf7;
+  border: 1px solid var(--line);
+  text-decoration: none;
+}
+html.ui-v2 .main a.swe-open-site:hover {
+  color: var(--brand-deep);
+  background: #fff;
+  border-color: var(--brand-2);
+  text-decoration: none;
 }
 
 /* Forms — visual only; names/ids unchanged */
