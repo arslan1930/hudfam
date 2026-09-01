@@ -51,6 +51,24 @@
       statusEl.classList.toggle('is-ok', !isError);
     }
 
+    function fallbackCopy(text, done) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        done();
+      } catch (err) {
+        setStatus('Could not copy.', true);
+      }
+      document.body.removeChild(ta);
+    }
+
     function sourceText() {
       if (!sourceSel) return '';
       var el = document.querySelector(sourceSel);
@@ -208,14 +226,30 @@
       title.appendChild(count);
       col.appendChild(title);
 
-      var ta = document.createElement('textarea');
-      ta.className = 'tld-workspace-list';
-      ta.setAttribute('data-tld-domains', '1');
-      ta.setAttribute('readonly', 'readonly');
-      ta.setAttribute('spellcheck', 'false');
-      ta.rows = Math.min(28, Math.max(8, list.length + 1));
-      ta.value = list.join('\n');
-      col.appendChild(ta);
+      var listEl = document.createElement('div');
+      listEl.className = 'tld-workspace-list';
+      listEl.setAttribute('data-tld-domains', '1');
+      list.forEach(function (domain) {
+        var d = String(domain || '').trim();
+        if (!d) return;
+        var row = document.createElement('div');
+        row.className = 'tld-site-row';
+        row.setAttribute('data-tld-site', d);
+        var name = document.createElement('span');
+        name.className = 'tld-site-name';
+        name.textContent = d;
+        var drop = document.createElement('button');
+        drop.type = 'button';
+        drop.className = 'tld-site-drop';
+        drop.setAttribute('data-tld-drop-site', '1');
+        drop.setAttribute('aria-label', 'Remove ' + d);
+        drop.setAttribute('title', 'Remove ' + d + ' from this list');
+        drop.textContent = '×';
+        row.appendChild(name);
+        row.appendChild(drop);
+        listEl.appendChild(row);
+      });
+      col.appendChild(listEl);
 
       var actions = document.createElement('div');
       actions.className = 'tld-col-actions';
@@ -283,8 +317,8 @@
         form.appendChild(sendBtn);
 
         form.addEventListener('submit', function (e) {
-          var live = col.querySelector('textarea[data-tld-domains]');
-          if (live) domainsTa.value = live.value;
+          var liveList = (preloaded && preloaded[tld]) ? preloaded[tld] : [];
+          domainsTa.value = liveList.join('\n');
           // Refresh country/meta from form at submit time.
           var m = liveMeta();
           var cInput = form.querySelector('input[name="country"]');
@@ -301,21 +335,12 @@
             setStatus('Select a country database first.', true);
             return;
           }
-          var n = String(domainsTa.value || '').split(/\n+/).filter(function (line) {
-            return line.trim();
+          var n = liveList.filter(function (line) {
+            return String(line || '').trim();
           }).length;
           if (!n) {
             e.preventDefault();
             setStatus('This ending list is empty.', true);
-            return;
-          }
-          var suffix = tld === 'other' ? 'other' : ('.' + tld);
-          if (!window.confirm(
-            'Send ' + n + ' ' + suffix + ' site(s) to ' + cInput.value
-              + '?\n\nThese sites already passed Filter unique sites. Already-known sites are skipped again as a safety check.'
-              + '\n\nIf this ending looks wrong for ' + cInput.value + ', you are confirming you still want to add them.'
-          )) {
-            e.preventDefault();
             return;
           }
           var ack = form.querySelector('input[name="confirm_tld_mismatch"]');
@@ -478,37 +503,51 @@
       var col = t.closest('[data-tld-col]');
       if (!col || !root.contains(col)) return;
 
+      if (t.closest('[data-tld-drop-site]')) {
+        e.preventDefault();
+        var row = t.closest('[data-tld-site]');
+        var domain = row ? String(row.getAttribute('data-tld-site') || '').trim() : '';
+        if (!domain) return;
+        var removed = [domain];
+        dropDomainsFromMap(preloaded, removed);
+        dropDomainsFromMap(pristine, removed);
+        stripSharedColumns(removed);
+        try {
+          document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
+            detail: { domains: removed, origin: root }
+          }));
+        } catch (errDrop) { /* ignore */ }
+        var tldNow = col.getAttribute('data-tld-col') || '';
+        if (preloaded && preloaded[tldNow] && preloaded[tldNow].length) {
+          renderRail(preloaded);
+          renderActivePanel(tldNow);
+        } else {
+          activeTld = '';
+          renderGroups(preloaded || {});
+        }
+        setStatus('Removed ' + domain + '.');
+        syncAddAllHidden();
+        return;
+      }
+
       if (t.closest('[data-tld-copy]')) {
         e.preventDefault();
-        var ta = col.querySelector('textarea[data-tld-domains]');
-        var text = ta ? String(ta.value || '') : '';
+        var tldCopy = col.getAttribute('data-tld-col') || '';
+        var copyList = (preloaded && preloaded[tldCopy]) ? preloaded[tldCopy] : [];
+        var text = copyList.join('\n');
         if (!text.trim()) {
           setStatus('List is empty.', true);
           return;
         }
         var done = function () {
-          setStatus('Copied ' + text.split(/\n+/).filter(Boolean).length + ' site(s).');
+          setStatus('Copied ' + copyList.filter(Boolean).length + ' site(s).');
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(done).catch(function () {
-            ta.focus();
-            ta.select();
-            try {
-              document.execCommand('copy');
-              done();
-            } catch (err) {
-              setStatus('Could not copy.', true);
-            }
+            fallbackCopy(text, done);
           });
         } else {
-          ta.focus();
-          ta.select();
-          try {
-            document.execCommand('copy');
-            done();
-          } catch (err2) {
-            setStatus('Could not copy.', true);
-          }
+          fallbackCopy(text, done);
         }
         return;
       }

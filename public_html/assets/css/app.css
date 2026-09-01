@@ -1201,9 +1201,47 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 0.86rem;
   line-height: 1.4;
-  white-space: pre;
-  resize: vertical;
   box-sizing: border-box;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.2rem 0.15rem;
+}
+.tld-site-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.4rem 0.12rem 0.5rem;
+  border-radius: 6px;
+}
+.tld-site-row:hover {
+  background: #f3f4f6;
+}
+.tld-site-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tld-site-drop {
+  flex: 0 0 auto;
+  width: 1.55rem;
+  height: 1.55rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tld-site-drop:hover,
+.tld-site-drop:focus-visible {
+  background: #fee2e2;
+  color: #b42318;
 }
 .tld-col-actions {
   display: flex;

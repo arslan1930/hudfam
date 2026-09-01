@@ -2382,10 +2382,11 @@ if (!str_contains($prospectsLib, "'extract_error'")
 } else {
     ok('Filter add surfaces Extracting insert errors');
 }
-if (!str_contains($prospectCheckT, 'json_encode') || !str_contains($prospectCheckT, 'confirm_tld_mismatch')) {
-    fail('Finding TLD confirm not json_encode-safe');
+if (!str_contains($prospectCheckT, 'confirm_tld_mismatch')
+    || str_contains($prospectCheckT, 'despite the TLD mismatch warning')) {
+    fail('Finding TLD mismatch still uses an OK/Cancel confirm');
 } else {
-    ok('Finding TLD confirm json_encode-safe');
+    ok('Finding TLD mismatch uses checkbox only (no OK/Cancel)');
 }
 
 $extractBatchT = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
@@ -2478,10 +2479,10 @@ if (!str_contains($sweLib, "LEFT(domain, 8) <> '__blank_'")) {
 }
 
 $sweApp = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
-if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'MERGE Team emails')) {
-    fail('SWE UI missing merge-on-conflict confirm');
+if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'merges Team emails')) {
+    fail('SWE UI missing merge-on-conflict (hidden flag, no OK/Cancel)');
 } else {
-    ok('SWE UI merge-on-conflict confirm');
+    ok('SWE UI merge-on-conflict without OK/Cancel');
 }
 if (str_contains($sweApp, 'merge is not available yet') || str_contains($sweLib, 'merge is not available yet')) {
     fail('SWE still says merge is not available');
@@ -2520,6 +2521,14 @@ if (!str_contains($sweJs, 'data-swe-open-track')
     fail('sites-with-emails.js missing Open highlight-until-email tracking');
 } else {
     ok('sites-with-emails.js Open highlight until email');
+}
+if (!str_contains($sweJs, "kind !== 'push'")
+    || str_contains($sweJs, 'if (!window.confirm(msg)) return;')
+    || str_contains($sweApp, 'data-confirm-push-all')
+    || str_contains($sweApp, 'Push ALL ')) {
+    fail('Team Push still shows confirm OK/Cancel');
+} else {
+    ok('Team Push skips confirm dialogs');
 }
 if (!str_contains($sweApp, 'data-swe-open-track')
     || !str_contains($sweApp, 'swe-col-num')
@@ -2846,10 +2855,18 @@ $tldJs = file_get_contents($root . '/assets/js/tld-separate.js') ?: '';
 if (str_contains($tldJs, 'max-height: 18rem') || str_contains($tldJs, 'tld-separate-grid')) {
     // grid may remain as unused legacy class name in comments only — require workspace render
 }
-if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')) {
+if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')
+    || !str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($tldJs, 'tld-site-row')) {
     fail('tld-separate.js missing tab workspace render');
 } else {
     ok('tld-separate.js tab workspace');
+}
+if (str_contains($tldJs, 'If this ending looks wrong')
+    || str_contains($tldJs, 'window.confirm(\n            \'Send ')) {
+    fail('Send this ending still shows OK/Cancel');
+} else {
+    ok('Send this ending skips OK/Cancel');
 }
 if (str_contains($tldJs, "sourceSel !== '#domains'")
     || str_contains($tldJs, 'if (!el || el.readOnly) return')) {
@@ -2886,6 +2903,13 @@ if (str_contains($cssApp, '.tld-workspace-list')
     ok('TLD workspace CSS without scroll cage');
 } else {
     fail('app.css missing TLD workspace no-scroll styles');
+}
+if (!str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($cssApp, '.tld-site-drop')
+    || str_contains($tldJs, "Send ' + n + ' ")) {
+    fail('TLD list missing per-site × or Send still confirms');
+} else {
+    ok('TLD list per-site × and Send without confirm');
 }
 // Paste Separate workspace must sit outside #filter_form (Send form).
 if (!preg_match('/<\/form>\s*.*?data-tld-separate/s', $prospectCheckSf)
