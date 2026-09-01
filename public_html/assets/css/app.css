@@ -4261,12 +4261,6 @@ a.card.stat:focus-visible {
   font-weight: 700;
   white-space: nowrap;
 }
-.invoice-pick-doc {
-  flex: 0 0 auto;
-  padding: 0.7rem 0.85rem 0.7rem 0;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
 .invoice-dest-mode {
   display: flex;
   flex-wrap: wrap;

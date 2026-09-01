@@ -352,7 +352,7 @@ function order_invoice_description(array $row): string
     return 'Article Published -' . "\n" . $url;
 }
 
-/** Google Doc (or other https) URL for the piece — not the live page, not printed on invoices. */
+/** Google Doc (or other https) URL for the piece — not the live page. Processing and Completed only; not shown on invoices. */
 function order_normalize_article_doc_url(string $raw): string
 {
     $url = trim($raw);
@@ -1852,7 +1852,7 @@ function order_pipeline_download_csv(array $rows): void
     fputcsv($out, []);
     fputcsv($out, [
         'Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink',
-        'Owner price', 'Decided price', 'Article doc', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
+        'Owner price', 'Decided price', 'Document URL', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
     ]);
     foreach ($rows as $r) {
         fputcsv($out, [
@@ -1943,7 +1943,7 @@ function order_pipeline_download_month_close(array $rows, string $ym): void
     fputcsv($out, []);
     fputcsv($out, [
         'Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink',
-        'Owner price', 'Decided price', 'Article doc', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
+        'Owner price', 'Decided price', 'Document URL', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status',
     ]);
     foreach ($rows as $r) {
         fputcsv($out, [
@@ -1963,7 +1963,7 @@ function order_pipeline_download_xls(array $rows): void
     header('Pragma: no-cache');
     header('Expires: 0');
     $keys = ['country', 'date', 'admin', 'client', 'site', 'note', 'placement', 'owner', 'decided', 'article_doc_url', 'live_url', 'paid', 'profit', 'month', 'end_month', 'year', 'status'];
-    $heads = ['Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink', 'Owner price', 'Decided price', 'Article doc', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status'];
+    $heads = ['Country', 'Date', 'Admin', 'Client email or name', 'Site', 'Note', 'Banner/Textlink', 'Owner price', 'Decided price', 'Document URL', 'LIVE URL', 'Paid', 'Profit', 'Start month', 'End month', 'Year', 'Status'];
     echo '<html><head><meta charset="utf-8"></head><body>';
     echo '<table border="1" cellpadding="4" cellspacing="0">';
     echo '<tr><th colspan="' . count($heads) . '">Order management</th></tr>';
