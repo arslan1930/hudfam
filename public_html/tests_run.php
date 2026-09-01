@@ -4888,6 +4888,71 @@ try {
         fail('add order did not copy filter country');
     }
 
+    $canonDe = order_canonicalize_country('germany');
+    $canonDemonym = order_canonicalize_country('German');
+    if ($canonDe === 'Germany' && $canonDemonym === 'Germany') {
+        pass('order country canonicalize germany/German');
+    } else {
+        fail('order country canonicalize got ' . $canonDe . '/' . $canonDemonym);
+    }
+    $aliasId = add_order_pipeline_row((int) $adminUser['id'], 'alias-country@example.com', [
+        'country' => 'german',
+        'admin_user_id' => (int) $adminUser['id'],
+    ]);
+    $aliasInserted = get_order_item((int) $aliasId);
+    if ((string) ($aliasInserted['country'] ?? '') === 'Germany') {
+        pass('add order canonicalizes country');
+    } else {
+        fail('add order country=' . (string) ($aliasInserted['country'] ?? ''));
+    }
+    update_order_item((int) $aliasId, 0, [
+        'site_name' => 'txf-country-alias.example',
+        'country' => 'germany',
+        'client_label' => 'alias-country@example.com',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => '2026-08-21',
+        'owner_price' => 10,
+        'decided_price' => 25,
+        'live_url' => '',
+        'order_month' => 8,
+        'order_year' => 2026,
+    ]);
+    $aliasSaved = get_order_item((int) $aliasId);
+    if ((string) ($aliasSaved['country'] ?? '') === 'Germany') {
+        pass('save germany stores Germany');
+    } else {
+        fail('save did not canonicalize country=' . (string) ($aliasSaved['country'] ?? ''));
+    }
+    db()->prepare('UPDATE order_items SET country=? WHERE id=?')->execute(['germany', (int) $aliasId]);
+    $aliasHits = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'country' => 'German',
+        'q' => 'txf-country-alias.example',
+    ]);
+    $foundAlias = false;
+    foreach ($aliasHits as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $aliasId) {
+            $foundAlias = true;
+            break;
+        }
+    }
+    if ($foundAlias) {
+        pass('pipeline country filter matches aliases');
+    } else {
+        fail('pipeline country filter missed alias row');
+    }
+    db()->prepare('UPDATE order_items SET country=? WHERE id=?')->execute(['Germany', (int) $aliasId]);
+    $scopedCountries = list_order_pipeline_countries([
+        'folder' => 'processing',
+        'origin' => 'manual',
+        'admin_id' => (int) $adminUser['id'],
+    ]);
+    if (in_array('Germany', $scopedCountries, true)) {
+        pass('pipeline country list scoped and canonical');
+    } else {
+        fail('pipeline country list missing Germany');
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');

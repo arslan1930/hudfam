@@ -23,7 +23,9 @@
 
   function matches(item, q) {
     if (!q) return true;
-    if (item.value === '') return false;
+    if (item.value === '') {
+      return (item.label + ' all').toLowerCase().indexOf(q) !== -1;
+    }
     var hay = (item.label + ' ' + item.value + ' ' + item.group).toLowerCase();
     return hay.indexOf(q) !== -1;
   }
@@ -164,10 +166,18 @@
         if (list.hidden) render(input.value);
         moveActive(-1);
       } else if (e.key === 'Enter') {
-        if (!list.hidden && activeIdx >= 0 && filtered[activeIdx]) {
-          e.preventDefault();
-          pick(filtered[activeIdx]);
+        e.preventDefault();
+        if (list.hidden) return;
+        var pickIt = (activeIdx >= 0 && filtered[activeIdx]) ? filtered[activeIdx] : null;
+        if (!pickIt) {
+          for (var i = 0; i < filtered.length; i++) {
+            if (!filtered[i].disabled) {
+              pickIt = filtered[i];
+              break;
+            }
+          }
         }
+        if (pickIt) pick(pickIt);
       } else if (e.key === 'Escape') {
         setExpanded(false);
         syncInputFromSelect();

@@ -473,8 +473,9 @@ function invoices_search_sql(string $q): array
         'i.bill_to_name LIKE ?',
         "IFNULL(i.admin_note, '') LIKE ?",
         'i.payment_status LIKE ?',
+        'EXISTS (SELECT 1 FROM invoice_items ii WHERE ii.invoice_id = i.id AND ii.description LIKE ?)',
     ];
-    $params = [$like, $like, $like, $like, $like];
+    $params = [$like, $like, $like, $like, $like, $like];
     $ql = mb_strtolower($q);
     if (preg_match('/\bwaiting\b/u', $ql)) {
         $or[] = "(i.payment_status='unpaid' AND COALESCE(i.work_status, 'done')='done')";

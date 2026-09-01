@@ -3447,6 +3447,15 @@ tr.swe-row-updated {
   margin: 0;
   min-width: 9.5rem;
 }
+.order-filter-field .ss-wrap {
+  flex: 1 1 10rem;
+  min-width: 9.5rem;
+  max-width: 16rem;
+}
+.order-filter-field .ss-input {
+  min-width: 9.5rem;
+}
+.order-filter-bar .sheet-search input[type="search"] {
 .order-filter-bar .sheet-search input[type="search"] {
   width: 16rem;
   max-width: 70vw;
@@ -3952,8 +3961,15 @@ a.card.stat:focus-visible {
   color: #92400e;
   line-height: 1.25;
 }
+.order-sheet tr.sheet-search-hit td {
+  background: #f3f4f6 !important;
+}
+.order-sheet tr.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: -2px;
+}
 .order-sheet .col-month { min-width: 188px; width: 188px; }
-.order-sheet .col-country { min-width: 110px; width: 120px; }
+.order-sheet .col-country { min-width: 140px; width: 148px; }
 .order-sheet .col-date { min-width: 150px; width: 154px; }
 .order-sheet .col-admin { min-width: 140px; width: 148px; }
 .order-sheet .col-client { min-width: 200px; }
@@ -4277,10 +4293,19 @@ a.card.stat:focus-visible {
 }
 .invoice-pick-search {
   width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 .invoice-pick-search input[type="search"] {
   width: 100%;
   max-width: 100%;
+  flex: 1 1 16rem;
+}
+.invoice-item-pick li.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: -2px;
+  background: #f3f4f6;
 }
 .invoice-item-pick {
   list-style: none;
