@@ -4,7 +4,7 @@
  * Restyles existing classes only. Do not rename JS/PHP hooks.
  *
  * Safe rules: no global sidebar-link hover, no smooth scroll,
- * no .ui-enter / opacity:0 on cards, no scale() on table rows.
+ * no hidden cards, no scale() on table rows.
  */
 html.ui-v2 {
   --bg: #070b16;
