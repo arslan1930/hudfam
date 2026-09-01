@@ -4890,10 +4890,11 @@ try {
 
     $canonDe = order_canonicalize_country('germany');
     $canonDemonym = order_canonicalize_country('German');
-    if ($canonDe === 'Germany' && $canonDemonym === 'Germany') {
+    $canonIso = order_canonicalize_country('DE');
+    if ($canonDe === 'Germany' && $canonDemonym === 'Germany' && $canonIso === 'Germany') {
         pass('order country canonicalize germany/German');
     } else {
-        fail('order country canonicalize got ' . $canonDe . '/' . $canonDemonym);
+        fail('order country canonicalize got ' . $canonDe . '/' . $canonDemonym . '/' . $canonIso);
     }
     $aliasId = add_order_pipeline_row((int) $adminUser['id'], 'alias-country@example.com', [
         'country' => 'german',
@@ -4940,6 +4941,24 @@ try {
         pass('pipeline country filter matches aliases');
     } else {
         fail('pipeline country filter missed alias row');
+    }
+    db()->prepare('UPDATE order_items SET country=? WHERE id=?')->execute(['DE', (int) $aliasId]);
+    $isoHits = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'country' => 'Germany',
+        'q' => 'txf-country-alias.example',
+    ]);
+    $foundIso = false;
+    foreach ($isoHits as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $aliasId) {
+            $foundIso = true;
+            break;
+        }
+    }
+    if ($foundIso) {
+        pass('pipeline country filter matches ISO code');
+    } else {
+        fail('pipeline country filter missed ISO DE row');
     }
     db()->prepare('UPDATE order_items SET country=? WHERE id=?')->execute(['Germany', (int) $aliasId]);
     $scopedCountries = list_order_pipeline_countries([

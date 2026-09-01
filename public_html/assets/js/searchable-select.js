@@ -12,6 +12,7 @@
         index: idx,
         value: opt.value,
         label: (opt.textContent || '').trim(),
+        extra: String(opt.getAttribute('data-search') || ''),
         disabled: !!opt.disabled,
         group: opt.parentNode && opt.parentNode.tagName === 'OPTGROUP'
           ? (opt.parentNode.label || '')
@@ -26,7 +27,7 @@
     if (item.value === '') {
       return (item.label + ' all').toLowerCase().indexOf(q) !== -1;
     }
-    var hay = (item.label + ' ' + item.value + ' ' + item.group).toLowerCase();
+    var hay = (item.label + ' ' + item.value + ' ' + item.group + ' ' + item.extra).toLowerCase();
     return hay.indexOf(q) !== -1;
   }
 
@@ -170,12 +171,17 @@
         if (list.hidden) return;
         var pickIt = (activeIdx >= 0 && filtered[activeIdx]) ? filtered[activeIdx] : null;
         if (!pickIt) {
+          var fallback = null;
           for (var i = 0; i < filtered.length; i++) {
-            if (!filtered[i].disabled) {
-              pickIt = filtered[i];
-              break;
+            if (filtered[i].disabled) continue;
+            if (filtered[i].value === '') {
+              if (!fallback) fallback = filtered[i];
+              continue;
             }
+            pickIt = filtered[i];
+            break;
           }
+          if (!pickIt) pickIt = fallback;
         }
         if (pickIt) pick(pickIt);
       } else if (e.key === 'Escape') {

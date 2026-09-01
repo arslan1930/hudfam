@@ -1596,6 +1596,18 @@ function order_canonicalize_country(string $country): string
             return trim((string) $canon['name']);
         }
     }
+    if (function_exists('list_countries')) {
+        $code = strtoupper($country);
+        foreach (list_countries(null, true) as $c) {
+            $rowCode = strtoupper(trim((string) ($c['code'] ?? '')));
+            if ($rowCode !== '' && $rowCode === $code) {
+                $name = trim((string) ($c['name'] ?? ''));
+                if ($name !== '') {
+                    return $name;
+                }
+            }
+        }
+    }
     return $country;
 }
 
@@ -1617,6 +1629,18 @@ function order_country_filter_sql(string $country): array
             if (strcasecmp((string) $mapped, $primary) === 0) {
                 $names[] = (string) $alias;
             }
+        }
+    }
+    if (function_exists('list_countries')) {
+        foreach (list_countries(null, true) as $c) {
+            if (strcasecmp(trim((string) ($c['name'] ?? '')), $primary) !== 0) {
+                continue;
+            }
+            $code = trim((string) ($c['code'] ?? ''));
+            if ($code !== '') {
+                $names[] = $code;
+            }
+            break;
         }
     }
     $lower = [];

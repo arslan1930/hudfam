@@ -512,6 +512,32 @@ $filterCountries = list_order_pipeline_countries([
     'date_from' => $filter['date_from'],
     'date_to' => $filter['date_to'],
 ]);
+$filterCountrySearch = [];
+$orderCountryCanonMap = [];
+try {
+    foreach (list_countries(null, true) as $cRow) {
+        $nm = trim((string) ($cRow['name'] ?? ''));
+        $cd = strtoupper(trim((string) ($cRow['code'] ?? '')));
+        if ($nm !== '') {
+            $filterCountrySearch[mb_strtolower($nm)] = mb_strtolower(trim($nm . ' ' . $cd));
+            $orderCountryCanonMap[mb_strtolower($nm)] = $nm;
+            if ($cd !== '') {
+                $orderCountryCanonMap[mb_strtolower($cd)] = $nm;
+            }
+        }
+    }
+    if (function_exists('country_name_aliases')) {
+        foreach (country_name_aliases() as $alias => $mapped) {
+            $mappedName = $orderCountryCanonMap[mb_strtolower((string) $mapped)] ?? (string) $mapped;
+            if ($mappedName !== '') {
+                $orderCountryCanonMap[mb_strtolower((string) $alias)] = $mappedName;
+            }
+        }
+    }
+} catch (Throwable $e) {
+    $filterCountrySearch = [];
+    $orderCountryCanonMap = [];
+}
 if ($filter['country'] !== '') {
     $haveFilterCountry = false;
     foreach ($filterCountries as $cname) {
@@ -668,8 +694,10 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       <span class="visually-hidden">Country</span>
       <select id="order-filter-country" name="country" data-searchable aria-label="Filter by country" onchange="this.form.submit()">
         <option value="">All countries</option>
-        <?php foreach ($filterCountries as $cname): ?>
-          <option value="<?= h($cname) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
+        <?php foreach ($filterCountries as $cname):
+            $cSearch = $filterCountrySearch[mb_strtolower((string) $cname)] ?? mb_strtolower((string) $cname);
+            ?>
+          <option value="<?= h($cname) ?>" data-search="<?= h($cSearch) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
         <?php endforeach; ?>
       </select>
     </label>
@@ -1728,10 +1756,16 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
     });
   }
+  var countryCanon = <?= json_encode($orderCountryCanonMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   document.querySelectorAll('input[list="order-country-list"]').forEach(function (inp) {
     inp.addEventListener('blur', function () {
       var typed = String(inp.value || '').trim();
       if (!typed) return;
+      var key = typed.toLowerCase();
+      if (countryCanon && countryCanon[key]) {
+        inp.value = countryCanon[key];
+        return;
+      }
       var list = document.getElementById('order-country-list');
       if (!list) return;
       var hit = '';
