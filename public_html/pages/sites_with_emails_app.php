@@ -995,17 +995,7 @@ render_breadcrumbs($crumbs);
     <?php if ($isTeam): ?>
     <form method="post" action="<?= h($listBase) ?>" style="display:inline" id="swe-push-form"
           data-show-processing="Pushing sites to Admin…"
-          data-conflict-count="<?= (int) $pushConflictCount ?>"
-          data-confirm-push-all="<?php
-            $pushAllMsg = 'Push ALL ' . (int) $readyToPush . ' site(s) with emails to Sites with emails - Admin?'
-                . "\n\nThose rows will leave this Team working copy.";
-            if ($pushConflictCount > 0) {
-                $pushAllMsg .= "\n\n" . (int) $pushConflictCount
-                    . ' already exist in Admin — Push will MERGE Team emails into empty Admin slots '
-                    . '(existing Admin emails are kept; merge fills blanks only).';
-            }
-            echo h($pushAllMsg);
-          ?>">
+          data-conflict-count="<?= (int) $pushConflictCount ?>">
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="push_to_admin">
       <input type="hidden" name="confirm_overwrite" value="0" id="swe-push-confirm-overwrite">
@@ -1090,7 +1080,7 @@ render_breadcrumbs($crumbs);
   Opened rows stay <strong>highlighted</strong> until you enter an email in that row.
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
   <?php if ($pushConflictCount > 0): ?>
-    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push asks to confirm before merging Team emails into empty Admin slots (existing Admin emails stay).
+    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push merges Team emails into empty Admin slots (existing Admin emails stay).
   <?php endif; ?>
 </p>
 <?php elseif ($isAdminAll): ?>
@@ -1408,18 +1398,11 @@ render_sheet_checkpoint_compact(
                 Clear up to
               </button>
               <?php endif; ?>
-              <?php if ($isTeam):
-                  $pushConfirm = $willOverwrite
-                      ? 'Push ' . $domain . ' to Admin?' . "\n\n"
-                        . 'This site ALREADY EXISTS in Admin. Push will MERGE Team emails into empty Admin slots '
-                        . '(existing Admin emails are kept).' . "\n\nThis row will leave the Team working copy."
-                      : 'Push ' . $domain . ' to Admin?' . "\n\nThis row will leave the Team working copy.";
-                  ?>
+              <?php if ($isTeam): ?>
               <button class="btn small" type="button"
                       data-sheet-action="push" data-site-id="<?= $sid ?>" data-domain="<?= h($domain) ?>"
                       data-swe-push-btn <?= $hasEmail ? '' : 'disabled' ?>
                       data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>"
-                      data-confirm="<?= h($pushConfirm) ?>"
                       title="<?= $hasEmail
                           ? ($willOverwrite ? 'Merge Team emails into empty Admin slots for this site' : 'Push this site to Admin')
                           : 'Add at least one email first' ?>">Push</button>

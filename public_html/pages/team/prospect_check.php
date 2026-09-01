@@ -584,25 +584,6 @@ render_header('Filter & add', 'team');
         </div>
       </div>
 
-      <?php if (!empty($tldCheck['warn'])): ?>
-      <script>
-      (function(){
-        var form = document.getElementById('add_unique_form');
-        if (!form) return;
-        form.addEventListener('submit', function(e){
-          var box = form.querySelector('input[name=confirm_tld_mismatch]');
-          if (box && !box.checked) {
-            e.preventDefault();
-            alert('Please confirm the country/TLD warning checkbox first, or change the country.');
-            return;
-          }
-          if (!confirm(<?= json_encode('Save ' . count($result['new']) . ' site(s) into ' . $country . ' despite the TLD mismatch warning?', JSON_UNESCAPED_UNICODE) ?>)) {
-            e.preventDefault();
-          }
-        });
-      })();
-      </script>
-      <?php endif; ?>
     <?php else: ?>
       <div class="empty-state">
         <p>No new sites to add — everything you pasted is already in the destination country database(s).</p>

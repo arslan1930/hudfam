@@ -688,7 +688,6 @@
 
     if (form.matches('[data-swe-push]')) {
       e.preventDefault();
-      // User already confirmed via the Push button onclick (includes overwrite warning when needed).
       var overwriteInput = form.querySelector('[data-swe-confirm-overwrite], [name="confirm_overwrite"]');
       if (overwriteInput && form.getAttribute('data-admin-conflict') === '1') {
         overwriteInput.value = '1';
