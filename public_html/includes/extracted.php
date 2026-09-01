@@ -500,7 +500,11 @@ function extracted_url_items_html(array $rows, string $listBase, string $q, int 
             echo render_open_site_anchor($domain, ['class' => 'extracted-open-site']);
         }
         echo '<form method="post" class="extracted-plain-remove" action="' . h($listBase) . '" data-remove-site'
-            . ' onsubmit="return confirm(' . h(json_encode('Remove ' . $domain . '?', JSON_UNESCAPED_UNICODE)) . ');">';
+            . confirm_attrs('Remove ' . $domain . '?', [
+                'title' => 'Remove this URL?',
+                'confirm_label' => 'Remove',
+                'danger' => true,
+            ]) . '>';
         echo function_exists('csrf_field') ? csrf_field() : '';
         echo '<input type="hidden" name="action" value="remove_site">';
         echo '<input type="hidden" name="site_id" value="' . $id . '">';

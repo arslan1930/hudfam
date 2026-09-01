@@ -470,7 +470,8 @@ if ($wantsAjax) {
         'has_rows' => $rows !== [],
         'list_start' => (int) (($pageNum - 1) * $perPage + 1),
         'qs' => $qs,
-        'remove_confirm' => 'Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?',
+        'remove_confirm' => 'This removes ' . countable_label((int) $searchMatchCount, 'site', 'sites')
+            . ' matching “' . $q . '” from ' . $countryName . ".\n\nThis cannot be undone.",
     ];
     $flags = JSON_UNESCAPED_UNICODE;
     if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
@@ -542,9 +543,13 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     id="extracted-remove-matching"
     method="post"
     action="<?= h($listBase) ?>"
-    onsubmit="return confirm(<?= h(json_encode('Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?', JSON_UNESCAPED_UNICODE)) ?>);"
     style="margin-bottom:0.85rem"
     <?= ($q !== '' && $searchMatchCount > 0) ? '' : ' hidden' ?>
+    <?= confirm_attrs(
+        'This removes ' . countable_label((int) $searchMatchCount, 'site', 'sites')
+        . ' matching “' . $q . '” from ' . $countryName . ".\n\nThis cannot be undone.",
+        ['title' => 'Remove matching sites?', 'confirm_label' => 'Remove', 'danger' => true]
+    ) ?>
   >
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_search">
@@ -587,11 +592,15 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       ?>
     </div>
     <form method="post" action="<?= h($listBase) ?>"
-          onsubmit="return confirm(<?= h(json_encode('Remove ALL ' . (int) $countryTotal . ' URLs from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+          <?= confirm_attrs(
+              'This removes ' . countable_label((int) $countryTotal, 'URL', 'URLs')
+              . ' from ' . $countryName . ".\n\nThis cannot be undone.",
+              ['title' => 'Remove all URLs?', 'confirm_label' => 'Remove', 'danger' => true]
+          ) ?>>
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
-      <button class="btn secondary small danger" type="submit">Remove all</button>
+      <button class="btn danger" type="submit">Remove all</button>
     </form>
   </div>
 </div>
@@ -607,7 +616,11 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
     method="post"
     action="<?= h($listBase) ?>#remove-by-list"
     enctype="multipart/form-data"
-    onsubmit="return confirm(<?= h(json_encode('Remove all matching sites from this list in ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);"
+    <?= confirm_attrs(
+        'Remove all matching sites from this list in ' . $countryName . '?'
+        . "\n\nThis cannot be undone.",
+        ['title' => 'Remove listed sites?', 'confirm_label' => 'Remove', 'danger' => true]
+    ) ?>
   >
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">

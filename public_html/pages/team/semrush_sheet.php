@@ -171,7 +171,11 @@ render_breadcrumbs([
   </div>
   <?php if ($canClear): ?>
   <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem"
-        onsubmit="return confirm(<?= h(json_encode('Clear ALL site names and comments for ' . $country . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">
+        <?= confirm_attrs(
+            'Clear all site names and comments for ' . $country . '?'
+            . "\n\nExtracted Sites stay unchanged.\nThis cannot be undone.",
+            ['title' => 'Clear this country?', 'confirm_label' => 'Clear', 'danger' => true]
+        ) ?>>
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="clear_all">
     <button class="btn danger small" type="submit">Clear country</button>
@@ -210,7 +214,7 @@ render_breadcrumbs([
         <div class="semrush-comment-body"><?= nl2br(h((string) $c['body'])) ?></div>
         <?php if ($canDel): ?>
         <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-delete"
-              onsubmit="return confirm(<?= h(json_encode('Delete this comment?', JSON_UNESCAPED_UNICODE)) ?>);">
+              <?= confirm_attrs('Delete this comment?', ['title' => 'Delete comment?', 'confirm_label' => 'Delete', 'danger' => true]) ?>>
           <?= csrf_field() ?>
           <input type="hidden" name="action" value="delete_comment">
           <input type="hidden" name="comment_id" value="<?= $cid ?>">

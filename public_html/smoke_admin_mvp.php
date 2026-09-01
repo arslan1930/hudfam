@@ -49,6 +49,7 @@ $requiredFiles = [
     'assets/js/password-toggle.js',
     'assets/js/prospect-batch-sheet.js',
     'assets/js/stay-scroll.js',
+    'assets/js/app-confirm.js',
     'includes/site_prices.php',
     'pages/admin/site_prices.php',
     'pages/team/site_prices.php',
@@ -63,7 +64,7 @@ foreach ($requiredFiles as $rel) {
 }
 
 $asset = file_get_contents($root . '/asset.php') ?: '';
-foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js', 'js/site-prices.js'] as $key) {
+foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js', 'js/site-prices.js', 'js/app-confirm.js'] as $key) {
     if (!str_contains($asset, $key)) {
         fail("asset.php missing allowlist {$key}");
     } else {
@@ -1102,19 +1103,20 @@ if (!str_contains($extracted, 'Last pushed')
 
 $semrushHubSmoke = file_get_contents($root . '/pages/admin/semrush_research.php') ?: '';
 $semrushSheetSmoke = file_get_contents($root . '/pages/admin/semrush_sheet.php') ?: '';
-if (!str_contains($semrushHubSmoke, 'json_encode')
+if (!str_contains($semrushHubSmoke, 'confirm_attrs')
     || !str_contains($semrushHubSmoke, 'Extracted Sites stay unchanged')
+    || !str_contains($semrushHubSmoke, 'data-confirm-danger')
     || str_contains($semrushHubSmoke, "confirm('Clear ALL Semrush")) {
-    fail('Admin Semrush hub Clear confirm still uses h() inside JS string');
+    fail('Admin Semrush hub Clear confirm still uses native confirm()');
 } else {
-    ok('Admin Semrush hub Clear uses json_encode');
+    ok('Admin Semrush hub Clear uses in-app confirm_attrs');
 }
 if (!str_contains($semrushHubSmoke, 'csrf_field()')
     || !str_contains($semrushSheetSmoke, 'csrf_field()')
-    || !str_contains($semrushSheetSmoke, 'json_encode')) {
-    fail('Admin Semrush missing csrf_field or sheet json_encode confirm');
+    || !str_contains($semrushSheetSmoke, 'confirm_attrs')) {
+    fail('Admin Semrush missing csrf_field or sheet confirm_attrs');
 } else {
-    ok('Admin Semrush csrf_field + sheet json_encode confirm');
+    ok('Admin Semrush csrf_field + sheet in-app confirm');
 }
 if (!str_contains($semrushSheetSmoke, 'semrush_sheet_writer_conflict')
     || !str_contains($semrushSheetSmoke, 'data-writer-at')) {
@@ -1230,20 +1232,23 @@ $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php'
 if (str_contains($sweAppSmoke, "confirm('Clear ALL emailed")
     || str_contains($sweAppSmoke, "confirm('Remove ALL")
     || str_contains($sweAppSmoke, "confirm('Remove matching sites")
-    || !str_contains($sweAppSmoke, 'json_encode')
+    || str_contains($sweAppSmoke, 'Remove ALL ')
+    || !str_contains($sweAppSmoke, 'confirm_attrs')
+    || !str_contains($sweAppSmoke, 'data-confirm-danger')
     || str_contains($campAppSmoke, "confirm('Clear ALL emailed")
     || str_contains($campAppSmoke, "confirm('Import into")
     || str_contains($campAppSmoke, "confirm('Remove <?= h(\$sheetCountry)")
-    || !str_contains($campAppSmoke, "json_encode('Clear ALL emailed marks on '")) {
-    fail('Emails Admin/Final/Campaign confirms still use h() inside JS strings');
+    || !str_contains($campAppSmoke, 'confirm_attrs')) {
+    fail('Emails Admin/Final/Campaign confirms still use native confirm()');
 } else {
-    ok('Emails Admin/Final/Campaign confirms use json_encode');
+    ok('Emails Admin/Final/Campaign confirms use confirm_attrs');
 }
 if (str_contains($campAppSmoke, 'it?\n\nTeam')
-    || !str_contains($campAppSmoke, '"\n\nTeam “fetched to "')) {
-    fail('Campaign delete-project confirm still has single-quoted \\n');
+    || !str_contains($campAppSmoke, 'This deletes all country sheets in the project')
+    || !str_contains($campAppSmoke, 'cannot be undone')) {
+    fail('Campaign delete-project confirm missing wipe copy');
 } else {
-    ok('Campaign delete-project confirm uses real newlines');
+    ok('Campaign delete-project confirm uses wipe copy');
 }
 if (substr_count($campAppSmoke, 'csrf_field()') < 21
     || !str_contains($campAppSmoke, "value=\"create_project\"")
@@ -1252,6 +1257,42 @@ if (substr_count($campAppSmoke, 'csrf_field()') < 21
     fail('Campaign POST forms missing csrf_field');
 } else {
     ok('Campaign csrf_field on POST forms');
+}
+$confirmJsSmoke = file_get_contents($root . '/assets/js/app-confirm.js') ?: '';
+$extractedPageSmoke = file_get_contents($root . '/pages/admin/extracted.php') ?: '';
+$prospectsPageSmoke = file_get_contents($root . '/pages/admin/prospects.php') ?: '';
+$appCssConfirmSmoke = file_get_contents($root . '/assets/css/app.css') ?: '';
+$guidesSmoke = file_get_contents($root . '/includes/guides.php') ?: '';
+if (!str_contains($confirmJsSmoke, 'function txfConfirm')
+    || !str_contains($confirmJsSmoke, 'window.txfConfirm')
+    || !str_contains($confirmJsSmoke, 'data-confirm-danger')
+    || !str_contains($confirmJsSmoke, 'data-txf-confirmed')
+    || !str_contains($helpersSmokeCheck = (file_get_contents($root . '/includes/helpers.php') ?: ''), 'function confirm_attrs')
+    || !str_contains($helpersSmokeCheck, 'function countable_label')
+    || !is_file($root . '/assets/js/app-confirm.js')) {
+    fail('in-app confirm helper / app-confirm.js missing');
+} else {
+    ok('in-app confirm helper + app-confirm.js');
+}
+if (str_contains($sweAppSmoke, 'Remove ALL ')
+    || str_contains($extractedPageSmoke, 'Remove ALL ')
+    || !str_contains($sweAppSmoke, 'Extracting sites are not removed')
+    || !str_contains($sweAppSmoke, 'cannot be undone')
+    || !str_contains($sweAppSmoke, "'title' => 'Remove all sites?'")
+    || !str_contains($sweAppSmoke, 'class="btn danger" type="submit">Remove all')
+    || !str_contains($sweAppSmoke, 'class="btn danger" type="submit">Remove listed sites')
+    || !str_contains($sweAppSmoke, 'guide_sites_with_emails_team')
+    || !str_contains($guidesSmoke, 'function guide_sites_with_emails_team')
+    || !str_contains($sweAppSmoke, 'Add at least one email first')
+    || !str_contains($sweJsSmokeCheck = (file_get_contents($root . '/assets/js/sites-with-emails.js') ?: ''), 'btn.disabled')
+    || !str_contains($appCssConfirmSmoke, 'pointer-events: none')
+    || !str_contains($appCssConfirmSmoke, '.txf-dialog-overlay')
+    || !str_contains($extractedPageSmoke, 'confirm_attrs')
+    || !str_contains($prospectsPageSmoke, 'Also clears Extracting')
+    || !str_contains($campAppSmoke, 'This deletes all country sheets in the project')) {
+    fail('wipe confirms missing grammar, Extracting copy, or filled danger buttons');
+} else {
+    ok('SWE/Extracted/Our DB/Campaign wipe confirms + danger buttons');
 }
 if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
     || !str_contains($sweAppSmoke, '<div class="table-wrap">')
@@ -2985,7 +3026,8 @@ if (str_contains($sheetHistSmoke, 'data-sheet-select title=')
 }
 if (!str_contains($sheetSelJsSmoke, 'getComputedStyle')
     || !str_contains($sheetSelJsSmoke, 'clearHiddenSelection')
-    || !str_contains($sheetSelJsSmoke, 'window.confirm')
+    || !str_contains($sheetSelJsSmoke, 'txfConfirm')
+    || !str_contains($sheetSelJsSmoke, 'Tick a row first')
     || !str_contains($sheetSelJsSmoke, 'sync: syncRemoveButton')) {
     fail('sheet-select-undo.js missing visible-row sync / confirm');
 } else {
@@ -3027,7 +3069,8 @@ if (!str_contains($extractBatchArrows, 'render_undo_redo_arrow_buttons')
 } else {
     ok('Textarea Undo/Redo arrows');
 }
-if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
+if (!str_contains($layoutLoadSmoke, 'js/app-confirm.js')
+    || !str_contains($layoutLoadSmoke, 'id="app-processing"')
     || !str_contains($layoutLoadSmoke, 'hidden aria-busy="false"')
     || str_contains($layoutLoadSmoke, 'classList.add("is-page-loading")')
     || !str_contains($procJsSmoke, 'finishPageLoad')
@@ -3035,14 +3078,15 @@ if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
     || !str_contains($procJsSmoke, 'armDelayedLoading')
     || !str_contains($procJsSmoke, "method === 'get'")
     || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
-    fail('Missing delayed loading overlay or select-remove JS');
+    fail('Missing delayed loading overlay, in-app confirm, or select-remove JS');
 } else {
-    ok('Page loading UI + select/remove JS');
+    ok('Page loading UI + in-app confirm + select/remove JS');
 }
-if (!str_contains($assetFull, 'js/sheet-select-undo.js')) {
-    fail('asset.php missing sheet-select-undo.js allowlist');
+if (!str_contains($assetFull, 'js/sheet-select-undo.js')
+    || !str_contains($assetFull, 'js/app-confirm.js')) {
+    fail('asset.php missing sheet-select-undo.js or app-confirm.js allowlist');
 } else {
-    ok('asset allowlist sheet-select-undo.js');
+    ok('asset allowlist sheet-select-undo.js + app-confirm.js');
 }
 
 $layoutUiSmoke = file_get_contents($root . '/includes/layout.php') ?: '';

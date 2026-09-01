@@ -95,7 +95,10 @@ render_header('Site adding history', 'admin');
     <?php endif; ?>
     <a class="btn secondary" href="index.php?page=admin_prospects">Our database</a>
     <form method="post" action="<?= h($listUrl(['p' => (string) $pageNum])) ?>"
-          onsubmit="return confirm('Attach inventory rows that never got a history day? This does not change Our database.');">
+          <?= confirm_attrs(
+              'Attach inventory rows that never got a history day? This does not change Our database.',
+              ['title' => 'Repair missing days?', 'confirm_label' => 'Repair']
+          ) ?>>
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="repair_missing">
       <button class="btn secondary" type="submit">Repair missing days</button>

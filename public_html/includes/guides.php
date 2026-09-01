@@ -332,6 +332,21 @@ function guide_semrush_team(): string
     );
 }
 
+function guide_sites_with_emails_team(): string
+{
+    return render_page_purpose(
+        'Sites with emails — add emails, then Push',
+        'Working copy for this country. Sites arrive from Extracting Results Push. Add up to 4 emails, then Push to Admin. Remove all on this sheet does not remove Extracting sites.',
+        'Edits autosave. Push on a row needs at least one email (same as Push all to Admin).',
+        [
+            'Open a site with Open on the row, or Open first 10–50 above (Open next continues). Large opens go in batches of 10.',
+            'Opened rows stay highlighted until you enter an email in that row.',
+            'Push one site with its row button, or Push all to Admin for every site that has at least one email.',
+            'Remove all and Remove listed sites cannot be undone. Extracting sites stay.',
+        ]
+    );
+}
+
 function guide_team_departments(): string
 {
     return render_page_purpose(

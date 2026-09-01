@@ -213,7 +213,11 @@ render_header('Site adding history · ' . $batch['batch_date'], 'admin');
 <div class="card">
   <h2>Delete this day</h2>
   <p class="muted">Removes the history day. Our database stays unchanged unless you check the box.</p>
-  <form method="post" action="<?= h($postUrl) ?>" onsubmit="return confirm('Delete this history day? This cannot be undone.');">
+  <form method="post" action="<?= h($postUrl) ?>"
+        <?= confirm_attrs(
+            'Delete this history day? This cannot be undone.',
+            ['title' => 'Delete history day?', 'confirm_label' => 'Delete', 'danger' => true]
+        ) ?>>
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete_batch">
     <label style="font-weight:500">

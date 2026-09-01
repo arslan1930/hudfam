@@ -64,6 +64,7 @@ function render_header(string $title, string $panel = ''): void
     echo 'html.is-page-loading body{overflow:hidden}';
     echo '</style>';
     echo '<noscript><style>html.is-page-loading #app-processing{display:none!important}html.is-page-loading body{overflow:auto}</style></noscript>';
+    echo '<script src="' . h(script_asset_url('js/app-confirm.js')) . '" defer></script>';
     echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
     // Early scroll restore after same-page POST actions (before paint when possible).
     echo '<script>';

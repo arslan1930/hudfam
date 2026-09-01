@@ -336,14 +336,14 @@ render_header('Invoices', 'admin');
                   <span class="invoice-pay-badge" title="Sent — waiting for payment">Waiting</span>
                   <form method="post" class="inline" action="<?= h($listUrl) ?>"
                         data-stay-ajax data-stay-mark-paid
-                        onsubmit="return confirm(<?= h(json_encode(
+                        <?= confirm_attrs(
                             'Confirm this invoice is paid?' . "\n\n"
                             . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
                             . ($manual
                                 ? 'This will mark the blank invoice as Paid.'
                                 : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
-                            JSON_UNESCAPED_UNICODE
-                        )) ?>);">
+                            ['title' => 'Mark as paid?', 'confirm_label' => 'Mark paid']
+                        ) ?>>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="mark_paid">
                     <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
@@ -361,13 +361,13 @@ render_header('Invoices', 'admin');
                   <a class="btn secondary small" href="<?= h(invoice_generate_append_href((int) $inv['id'])) ?>">Add sites</a>
                 <?php endif; ?>
                 <form method="post" class="inline" action="<?= h($listUrl) ?>"
-                      onsubmit="return confirm(<?= h(json_encode(
+                      <?= confirm_attrs(
                           $paid
                               ? ('This invoice is Paid. Delete anyway?' . "\n\n"
                                   . 'Invoice ' . $inv['invoice_number'] . ' will be removed. Linked sheet rows stay Paid.')
                               : ('Delete invoice ' . $inv['invoice_number'] . '?'),
-                          JSON_UNESCAPED_UNICODE
-                      )) ?>);">
+                          ['title' => 'Delete invoice?', 'confirm_label' => 'Delete', 'danger' => true]
+                      ) ?>>
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">

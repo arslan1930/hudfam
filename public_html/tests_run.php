@@ -8250,6 +8250,54 @@ try {
     fail('campaign send batches: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
+// --- SWE Remove all does not delete Extracting ---
+try {
+    if (countable_label(1, 'site', 'sites') === '1 site' && countable_label(2, 'site', 'sites') === '2 sites') {
+        pass('countable_label 1 site / N sites');
+    } else {
+        fail('countable_label grammar: ' . countable_label(1, 'site', 'sites') . ' / ' . countable_label(2, 'site', 'sites'));
+    }
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfwipe-%'");
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfwipe-%'");
+    $wipeBatch = get_or_create_extract_batch('Germany', $teamUser, 'German', 'europe');
+    db()->prepare(
+        'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by) VALUES (?,?,NULL,?)'
+    )->execute([$wipeBatch, 'txfwipe-extract.com', (int) $teamUser['id']]);
+    $saved = save_site_with_emails_row(
+        'Germany',
+        'txfwipe-extract.com',
+        ['wipe@example.com', '', '', ''],
+        $teamUser,
+        null,
+        'team'
+    );
+    $beforeExtract = (int) db()->query(
+        "SELECT COUNT(*) FROM extract_batch_sites WHERE domain='txfwipe-extract.com'"
+    )->fetchColumn();
+    $deleted = delete_sites_with_emails_for_country('Germany', 'team');
+    $afterExtract = (int) db()->query(
+        "SELECT COUNT(*) FROM extract_batch_sites WHERE domain='txfwipe-extract.com'"
+    )->fetchColumn();
+    $afterSwe = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE country='Germany' AND domain='txfwipe-extract.com'"
+    )->fetchColumn();
+    if (!empty($saved['ok']) && $beforeExtract >= 1 && $deleted >= 1 && $afterExtract >= 1 && $afterSwe === 0) {
+        pass('SWE country delete does not remove Extracting sites');
+    } else {
+        fail('SWE country delete vs Extracting: ' . json_encode([
+            'saved' => $saved,
+            'deleted' => $deleted,
+            'beforeExtract' => $beforeExtract,
+            'afterExtract' => $afterExtract,
+            'afterSwe' => $afterSwe,
+        ]));
+    }
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfwipe-%'");
+    db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txfwipe-%'");
+} catch (Throwable $e) {
+    fail('SWE wipe vs Extracting: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
 echo "\n==== SUMMARY ====\n";
 echo 'passed: ' . count($ok) . "\n";
 echo 'failed: ' . count($errors) . "\n";

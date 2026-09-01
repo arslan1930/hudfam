@@ -220,10 +220,13 @@
     if (plural) plural.textContent = n === 1 ? '' : 's';
     if (rmBtn) rmBtn.textContent = 'Remove ' + n + ' matching';
     if (show) {
-      removeForm.setAttribute(
-        'onsubmit',
-        'return confirm(' + JSON.stringify(data.remove_confirm || ('Remove ' + n + ' matching site(s)?')) + ');'
-      );
+      var matchLabel = n === 1 ? '1 site' : (n + ' sites');
+      var matchMsg = data.remove_confirm || ('This removes ' + matchLabel + ' matching this search.\n\nThis cannot be undone.');
+      removeForm.setAttribute('data-confirm', matchMsg);
+      removeForm.setAttribute('data-confirm-title', 'Remove matching sites?');
+      removeForm.setAttribute('data-confirm-label', 'Remove');
+      removeForm.setAttribute('data-confirm-danger', '1');
+      removeForm.removeAttribute('onsubmit');
     }
   }
 

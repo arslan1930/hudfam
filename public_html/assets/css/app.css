@@ -97,6 +97,56 @@ html.is-page-loading,
 html.is-page-loading body {
   cursor: progress;
 }
+
+/* In-app confirm / alert (app-confirm.js) */
+.txf-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(31, 35, 40, 0.42);
+}
+.txf-dialog-overlay[hidden] {
+  display: none !important;
+}
+.txf-dialog {
+  background: #fff;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 12px;
+  padding: 1.2rem 1.3rem 1.1rem;
+  width: min(28rem, 100%);
+  max-width: 100%;
+  box-shadow: 0 14px 36px rgba(31, 41, 55, 0.18);
+}
+.txf-dialog-overlay.is-danger .txf-dialog {
+  border-color: #e5c5c5;
+}
+.txf-dialog-title {
+  margin: 0 0 0.55rem;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--brand-deep, #1f2937);
+}
+.txf-dialog-body {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #374151;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.txf-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.05rem;
+}
+.txf-dialog-actions .btn {
+  min-width: 6.5rem;
+}
 #swe_status.is-loading {
   color: var(--brand-deep, #1f2937);
   border-color: #cfd4da;
@@ -306,6 +356,9 @@ a:hover { text-decoration: underline; }
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+.table-wrap.swe-sheet-wrap {
+  overflow: visible;
 }
 a:focus-visible,
 button:focus-visible,
@@ -1450,7 +1503,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .swe-sheet-table .swe-col-lang { min-width: 5.5rem; width: 8%; }
 .swe-sheet-table .swe-col-email { min-width: 9rem; width: 14%; }
 .swe-sheet-table .swe-col-status { min-width: 6.5rem; width: 8%; }
-.swe-sheet-table .swe-col-actions { min-width: 7rem; width: 10%; }
+.swe-sheet-table .swe-col-actions { min-width: 8.5rem; width: 11%; }
 .swe-col-site { width: 28%; }
 .swe-col-emails { width: auto; }
 .swe-row-form { margin: 0; display: contents; }
@@ -1713,10 +1766,11 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .swe-row-actions {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.32rem;
   align-items: center;
   min-width: 0;
+  position: relative;
 }
 .swe-sheet-table .swe-row-actions .btn {
   width: auto;
@@ -1994,10 +2048,17 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .swe-row-no-email .swe-domain {
   border-color: #f0b4b0;
 }
-.swe-col-actions { width: 7.5rem; }
+.swe-col-actions { width: 8.5rem; }
+.swe-td-actions {
+  overflow: visible;
+  position: relative;
+}
 .swe-row-actions .btn[data-swe-push-btn]:disabled {
-  opacity: 0.45;
+  opacity: 0.38;
   cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.25);
+  box-shadow: none;
 }
 
 /* Departments */
@@ -5384,7 +5445,7 @@ textarea:focus-visible {
   left: auto;
   right: 0;
   min-width: 10.5rem;
-  z-index: 35;
+  z-index: 80;
 }
 .sheet-row-more-panel .btn,
 .sheet-tool-menu-panel .btn {
@@ -5440,6 +5501,11 @@ textarea:focus-visible {
   }
   table.sheet-cards-mobile .swe-row-actions {
     width: 100%;
+    flex-wrap: wrap;
+  }
+  table.sheet-cards-mobile .swe-row-actions .btn[data-swe-push-btn] {
+    flex: 1 1 100%;
+    width: 100%;
   }
   table.sheet-cards-mobile td[data-label="Open"]::before {
     display: none;
@@ -5480,8 +5546,8 @@ textarea:focus-visible {
     width: 12%;
   }
   .swe-sheet-table.is-dense .swe-col-actions {
-    min-width: 6.25rem;
-    width: 8%;
+    min-width: 8.25rem;
+    width: 10%;
   }
   .swe-sheet-table.is-dense .swe-col-status {
     min-width: 5.5rem;
