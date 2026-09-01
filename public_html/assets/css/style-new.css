@@ -706,6 +706,38 @@ html.ui-v2 .extracted-plain-item.sheet-search-hit {
   background: rgba(34, 211, 238, 0.12) !important;
   outline-color: var(--brand);
 }
+html.ui-v2 .dashboard-attention a {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--brand-2);
+}
+html.ui-v2 .dashboard-attention a:hover {
+  background: rgba(34, 211, 238, 0.14);
+  border-color: var(--brand);
+  color: #fff;
+}
+html.ui-v2 .launch-card.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.12);
+  outline-color: var(--brand);
+}
+html.ui-v2 .niche-chip {
+  background: rgba(34, 211, 238, 0.14);
+  border-color: var(--line);
+  color: var(--brand-deep);
+}
+html.ui-v2 {
+  color-scheme: dark;
+}
+html.ui-v2 input:-webkit-autofill,
+html.ui-v2 input:-webkit-autofill:hover,
+html.ui-v2 input:-webkit-autofill:focus,
+html.ui-v2 textarea:-webkit-autofill,
+html.ui-v2 select:-webkit-autofill {
+  -webkit-text-fill-color: #e8f1ff;
+  caret-color: #e8f1ff;
+  box-shadow: 0 0 0 1000px #0b1224 inset;
+  transition: background-color 9999s ease-out;
+}
 
 @media print {
   html.ui-v2 .ui-skip {
