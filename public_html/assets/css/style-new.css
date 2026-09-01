@@ -739,6 +739,178 @@ html.ui-v2 select:-webkit-autofill {
   transition: background-color 9999s ease-out;
 }
 
+/* More leftover light chrome (higher-specificity app.css #fff) */
+html.ui-v2 .alert-box.alert-ok,
+html.ui-v2 .alert-box.alert-error,
+html.ui-v2 .alert-box.alert-fade {
+  background: var(--fx-glass);
+  color: var(--ink);
+}
+html.ui-v2 .tabs a,
+html.ui-v2 .sheet-tabs a {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .tabs a.active,
+html.ui-v2 .sheet-tabs a.active {
+  background: var(--grad-btn);
+  color: #fff;
+  border-color: transparent;
+}
+html.ui-v2 .camp-hub-team-btn,
+html.ui-v2 .camp-hub-count,
+html.ui-v2 .camp-drafts-project-count {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .camp-hub-team-btn:hover {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: var(--brand);
+}
+html.ui-v2 .password-toggle {
+  background: rgba(8, 18, 36, 0.9);
+  color: var(--brand-2);
+  border-color: var(--line);
+}
+html.ui-v2 .password-toggle:hover {
+  background: rgba(34, 211, 238, 0.14);
+}
+html.ui-v2 .info-tip {
+  background: rgba(8, 18, 36, 0.9);
+  color: var(--brand-2);
+  border-color: var(--line);
+}
+html.ui-v2 .info-tip:hover,
+html.ui-v2 .info-tip:focus-visible,
+html.ui-v2 .info-tip.is-open {
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  border-color: var(--brand);
+}
+html.ui-v2 .swe-push-note {
+  background: var(--warn-soft);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--ink);
+}
+html.ui-v2 .swe-push-note.swe-push-blocked,
+html.ui-v2 .swe-no-email-tag,
+html.ui-v2 .domains-paste-attention {
+  background: var(--bad-soft);
+  border-color: rgba(251, 113, 133, 0.4);
+  color: var(--ink);
+}
+html.ui-v2 .dept-task-table .inline-form select,
+html.ui-v2 .inline-form select[name="status"] {
+  background: rgba(2, 6, 23, 0.78);
+  color: var(--ink);
+  border-color: rgba(34, 211, 238, 0.28);
+}
+html.ui-v2 .dept-task-mine td {
+  background: rgba(52, 245, 197, 0.08);
+}
+html.ui-v2 .dept-task-overdue td {
+  background: rgba(251, 113, 133, 0.1);
+}
+html.ui-v2 .order-client-row,
+html.ui-v2 .semrush-comment-list li,
+html.ui-v2 .camp-drafts-project-link,
+html.ui-v2 .camp-admin-drafts-list li,
+html.ui-v2 .ss-list,
+html.ui-v2 table.sheet-cards-mobile tr {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .camp-drafts-project-link:hover {
+  background: rgba(34, 211, 238, 0.1);
+  border-color: var(--brand);
+}
+html.ui-v2 .camp-drafts-project-link.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+html.ui-v2 .camp-draft-card,
+html.ui-v2 .camp-draft-preview,
+html.ui-v2 .camp-draft-editor {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .site-price-country-tabs,
+html.ui-v2 .site-price-country-more-list {
+  background: rgba(8, 18, 36, 0.92);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-note-preview,
+html.ui-v2 .invoice-list-note-form {
+  background: rgba(2, 6, 23, 0.78);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-list-table tr.sheet-search-hit td {
+  background: rgba(34, 211, 238, 0.12) !important;
+}
+html.ui-v2 .btn-paid {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-pay-badge {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-pay-badge.is-paid {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: rgba(52, 245, 197, 0.35);
+}
+html.ui-v2 .invoice-pay-badge.is-draft {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+html.ui-v2 .invoice-pay-badge.is-done {
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  border-color: var(--line);
+}
+html.ui-v2 .badge.agreed,
+html.ui-v2 .badge.completed,
+html.ui-v2 .badge.active,
+html.ui-v2 .badge.replied {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+html.ui-v2 .badge.sent,
+html.ui-v2 .badge.processing {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+html.ui-v2 .badge.rejected,
+html.ui-v2 .badge.blocked {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+html.ui-v2 .badge.draft,
+html.ui-v2 .badge.negotiating,
+html.ui-v2 .badge.skipped,
+html.ui-v2 .badge.paused,
+html.ui-v2 .badge.archived,
+html.ui-v2 .badge.on_hold,
+html.ui-v2 .badge.cancelled {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--muted);
+}
+html.ui-v2 .swe-status-badge.is-archive {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+  border-color: var(--line);
+}
+
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;
