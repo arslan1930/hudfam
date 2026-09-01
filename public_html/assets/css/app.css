@@ -3080,7 +3080,12 @@ tr.swe-row-updated {
 .order-sheet th.col-profit .with-info-label,
 .order-sheet th.col-live .with-info-label,
 .order-sheet th.col-doc .with-info-label,
-.order-sheet th.col-placement .with-info-label {
+.order-sheet th.col-placement .with-info-label,
+.order-sheet th.col-country .with-info-label,
+.order-sheet th.col-admin .with-info-label,
+.order-sheet th.col-client .with-info-label,
+.order-sheet th.col-site .with-info-label,
+.order-sheet th.col-date .with-info-label {
   white-space: nowrap;
   word-break: normal;
 }
@@ -3441,6 +3446,7 @@ tr.swe-row-updated {
 }
 .order-filter-field {
   margin: 0;
+  display: block;
 }
 .order-filter-field select,
 .order-filter-field input[type="date"] {
@@ -3455,7 +3461,6 @@ tr.swe-row-updated {
 .order-filter-field .ss-input {
   min-width: 9.5rem;
 }
-.order-filter-bar .sheet-search input[type="search"] {
 .order-filter-bar .sheet-search input[type="search"] {
   width: 16rem;
   max-width: 70vw;
@@ -4235,16 +4240,23 @@ a.card.stat:focus-visible {
   flex: 1 1 16rem;
   min-width: 12rem;
 }
-.ss-native {
+.ss-wrap .ss-native {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 1px;
+  min-width: 0;
+  max-width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  margin: 0;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .ss-input { width: 100%; }
 .ss-list {

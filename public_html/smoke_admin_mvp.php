@@ -1623,6 +1623,13 @@ if (!str_contains($omCss, '.order-sheet-card')
 } else {
     ok('orders sheet scrolls instead of squeezing');
 }
+if (substr_count($omCss, '.order-filter-bar .sheet-search input[type="search"] {') !== 1
+    || !str_contains($omCss, '.ss-wrap .ss-native')
+    || !str_contains($omCss, 'clip-path: inset(50%)')) {
+    fail('order country filter still shows native select twice');
+} else {
+    ok('order searchable country filter hides native select');
+}
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
     || !str_contains($ordersPage, 'data-orig-live')

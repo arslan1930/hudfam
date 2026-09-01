@@ -929,6 +929,14 @@ if (
 } else {
     fail('versioned asset cache headers status=' . $r['status']);
 }
+if ($r['status'] === 200
+    && str_contains($r['body'], '.ss-wrap .ss-native')
+    && str_contains($r['body'], 'clip-path: inset(50%)')
+    && substr_count($r['body'], '.order-filter-bar .sheet-search input[type="search"] {') === 1) {
+    pass('searchable select CSS hides native select');
+} else {
+    fail('searchable select CSS still shows native select twice');
+}
 
 $jsMtime = (string) (@filemtime(__DIR__ . '/assets/js/sites-form.js') ?: time());
 $r = req('GET', $base . '/asset.php?f=js/sites-form.js&v=' . rawurlencode($jsMtime), [
