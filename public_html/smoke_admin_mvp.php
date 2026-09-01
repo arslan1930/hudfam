@@ -2521,6 +2521,12 @@ if (!str_contains($sweJs, 'data-swe-open-track')
 } else {
     ok('sites-with-emails.js Open highlight until email');
 }
+if (!str_contains($sweJs, "kind !== 'push'")
+    || str_contains($sweJs, 'if (!window.confirm(msg)) return;')) {
+    fail('Team Push still shows confirm OK/Cancel');
+} else {
+    ok('Team Push skips confirm dialogs');
+}
 if (!str_contains($sweApp, 'data-swe-open-track')
     || !str_contains($sweApp, 'swe-col-num')
     || !str_contains($sweApp, 'swe-row-num')
@@ -2846,7 +2852,9 @@ $tldJs = file_get_contents($root . '/assets/js/tld-separate.js') ?: '';
 if (str_contains($tldJs, 'max-height: 18rem') || str_contains($tldJs, 'tld-separate-grid')) {
     // grid may remain as unused legacy class name in comments only — require workspace render
 }
-if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')) {
+if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')
+    || !str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($tldJs, 'tld-site-row')) {
     fail('tld-separate.js missing tab workspace render');
 } else {
     ok('tld-separate.js tab workspace');
@@ -2886,6 +2894,13 @@ if (str_contains($cssApp, '.tld-workspace-list')
     ok('TLD workspace CSS without scroll cage');
 } else {
     fail('app.css missing TLD workspace no-scroll styles');
+}
+if (!str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($cssApp, '.tld-site-drop')
+    || str_contains($tldJs, "Send ' + n + ' ")) {
+    fail('TLD list missing per-site × or Send still confirms');
+} else {
+    ok('TLD list per-site × and Send without confirm');
 }
 // Paste Separate workspace must sit outside #filter_form (Send form).
 if (!preg_match('/<\/form>\s*.*?data-tld-separate/s', $prospectCheckSf)

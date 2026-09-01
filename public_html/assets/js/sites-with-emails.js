@@ -389,7 +389,7 @@
     if (!form) return;
     e.preventDefault();
     var confirmMsg = btn.getAttribute('data-confirm');
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (kind !== 'push' && confirmMsg && !window.confirm(confirmMsg)) return;
     var siteInput = form.querySelector('[name="site_id"]');
     if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
     if (kind === 'mark') {
@@ -648,12 +648,6 @@
   if (pushAllForm) {
     pushAllForm.addEventListener('submit', function (e) {
       e.preventDefault();
-      var msg = pushAllForm.getAttribute('data-confirm-push-all')
-        || 'Push all sites with emails to Admin? Those rows will leave the Team working copy.';
-      if (readyLabel) {
-        msg = msg.replace(/ALL \d+ site\(s\)/, 'ALL ' + String(readyLabel.textContent || '').trim() + ' site(s)');
-      }
-      if (!window.confirm(msg)) return;
       var overwriteField = document.getElementById('swe-push-confirm-overwrite');
       if (overwriteField) {
         var conflicts = parseInt(pushAllForm.getAttribute('data-conflict-count') || '0', 10) || 0;

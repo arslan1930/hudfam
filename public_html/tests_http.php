@@ -946,6 +946,7 @@ if (
     $r['status'] === 200
     && str_contains($r['body'], 'function stripSharedColumns')
     && str_contains($r['body'], 'function domainKey')
+    && str_contains($r['body'], 'data-tld-drop-site')
     && !str_contains($r['body'], "sourceSel !== '#domains'")
 ) {
     pass('tld-separate.js Delete ending strips paste and unique');
