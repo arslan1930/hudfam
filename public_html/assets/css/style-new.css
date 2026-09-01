@@ -128,13 +128,15 @@ html.ui-v2 .nav-section {
   color: #94a3b8;
 }
 html.ui-v2 .sidebar nav a {
+  color: #e2e8f0;
   transition: background var(--ui-ease), box-shadow var(--ui-ease);
 }
 html.ui-v2 .sidebar nav a:hover {
   background: rgba(34, 211, 238, 0.12);
 }
 html.ui-v2 .sidebar nav a.active {
-  background: rgba(34, 211, 238, 0.16);
+  background: rgba(34, 211, 238, 0.2);
+  color: #fff;
   box-shadow: inset 3px 0 0 #22d3ee;
 }
 html.ui-v2 .sidebar .nav-hint {
@@ -168,6 +170,13 @@ html.ui-v2 .app-bar-account a {
 }
 html.ui-v2 .app-bar-logout {
   color: var(--brand-2) !important;
+}
+html.ui-v2 .breadcrumbs,
+html.ui-v2 .breadcrumbs .sep {
+  color: var(--muted);
+}
+html.ui-v2 .breadcrumbs a {
+  color: var(--brand-2);
 }
 
 html.ui-v2 .main {
@@ -280,9 +289,9 @@ html.ui-v2 .btn:active {
 }
 html.ui-v2 .btn.secondary,
 html.ui-v2 button.btn.secondary {
-  background: #1e293b;
-  color: #e2e8f0 !important;
-  border: 1px solid #64748b;
+  background: #334155;
+  color: #f1f5f9 !important;
+  border: 1px solid #94a3b8;
   box-shadow: none;
   filter: none;
 }
@@ -326,8 +335,11 @@ html.ui-v2 .btn.secondary.danger:disabled {
   transform: none;
 }
 
-html.ui-v2 #filter_submit,
-html.ui-v2 #add_unique_btn {
+html.ui-v2 #filter_submit:not(:disabled),
+html.ui-v2 #add_unique_btn:not(:disabled) {
+  background: #22d3ee;
+  color: #083344 !important;
+  border-color: #67e8f9;
   box-shadow: none;
 }
 
@@ -440,10 +452,10 @@ html.ui-v2 input[type="datetime-local"],
 html.ui-v2 input[type="time"],
 html.ui-v2 select,
 html.ui-v2 textarea {
-  background: rgba(2, 6, 23, 0.78);
+  background: #1e293b;
   color: var(--ink);
   border-radius: 10px;
-  border-color: #64748b;
+  border: 1px solid #94a3b8;
   transition: border-color var(--ui-ease), box-shadow var(--ui-ease);
 }
 html.ui-v2 input:not([type]):focus,
@@ -590,17 +602,26 @@ html.ui-v2 .task-presence-dot {
 }
 
 html.ui-v2 .swe-status-badge {
-  border-color: var(--line);
+  background: #334155;
+  color: #e2e8f0;
+  border-color: #64748b;
 }
-html.ui-v2 .swe-status-badge.is-sent {
+html.ui-v2 .swe-status-badge.is-sent,
+html.ui-v2 .swe-status-badge.is-emailed {
   background: var(--ok-soft);
-  color: var(--ok);
-  border-color: rgba(52, 245, 197, 0.35);
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.45);
 }
-html.ui-v2 .swe-status-badge.is-unsent {
+html.ui-v2 .swe-status-badge.is-unsent,
+html.ui-v2 .swe-status-badge.is-open {
   background: var(--warn-soft);
-  color: var(--warn);
-  border-color: rgba(251, 191, 36, 0.4);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+html.ui-v2 .swe-status-badge.is-ready {
+  background: var(--brand-soft);
+  color: #7dd3fc;
+  border-color: rgba(34, 211, 238, 0.4);
 }
 
 html.ui-v2 .pagination a {
@@ -995,9 +1016,89 @@ html.ui-v2 .camp-hub-check {
 }
 html.ui-v2 .camp-hub-field input:not([type]),
 html.ui-v2 .camp-hub-field #new_camp_project {
-  background: rgba(2, 6, 23, 0.78);
+  background: #1e293b;
   color: var(--ink);
-  border-color: #64748b;
+  border-color: #94a3b8;
+}
+
+html.ui-v2 label {
+  color: #e2e8f0;
+}
+html.ui-v2 input[type="checkbox"],
+html.ui-v2 input[type="radio"],
+html.ui-v2 .sheet-check input[type="checkbox"] {
+  accent-color: #22d3ee;
+  width: 1.1rem;
+  height: 1.1rem;
+  outline: 1px solid #94a3b8;
+  outline-offset: 1px;
+  cursor: pointer;
+}
+html.ui-v2 .swe-cell-text,
+html.ui-v2 td[data-label="Language"],
+html.ui-v2 .camp-sheet-table .camp-cell {
+  color: var(--ink);
+}
+html.ui-v2 tbody tr:nth-child(even) td {
+  background: rgba(148, 163, 184, 0.06);
+}
+html.ui-v2 tbody tr.is-sheet-selected td,
+html.ui-v2 tbody tr.swe-row-emailed > td {
+  background: rgba(34, 211, 238, 0.12);
+}
+html.ui-v2 tbody tr.swe-row-emailed > td {
+  background: rgba(74, 222, 128, 0.1);
+}
+html.ui-v2 .sheet-search-hit,
+html.ui-v2 tr.sheet-search-hit td,
+html.ui-v2 .folder.sheet-search-hit,
+html.ui-v2 .launch-card.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.16) !important;
+  outline-color: var(--brand);
+  color: var(--ink);
+}
+html.ui-v2 .camp-add-row > td {
+  background: #1e293b;
+  border-bottom-color: var(--line);
+}
+html.ui-v2 .sites-list-box,
+html.ui-v2 .extracted-plain-list,
+html.ui-v2 .inventory-box,
+html.ui-v2 .unique-sites-preview {
+  background: #1e293b;
+  border: 1px solid #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 .niche-chip-control {
+  background: #1e293b;
+  border-color: #94a3b8;
+}
+html.ui-v2 .sheet-search input[type="search"],
+html.ui-v2 .dashboard-search input[type="search"] {
+  background: #1e293b;
+  border: 1px solid #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 .sidebar-user,
+html.ui-v2 .sidebar-user span {
+  color: #cbd5e1;
+}
+html.ui-v2 .login-wrap .help,
+html.ui-v2 .login-wrap .muted {
+  color: var(--muted);
+}
+html.ui-v2 .login-wrap a {
+  color: #7dd3fc;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+html.ui-v2 .help-details > summary {
+  color: #e2e8f0;
+  cursor: pointer;
+}
+html.ui-v2 .camp-hub-step-num {
+  background: #22d3ee;
+  color: #083344;
 }
 
 @media print {
