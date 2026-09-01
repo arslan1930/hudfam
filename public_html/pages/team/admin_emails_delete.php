@@ -108,7 +108,7 @@ $canCampaigns = team_page_unlocked($user, 'team_email_campaigns');
 
 render_header('Admin emails search', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Admin emails search'],
 ]);
 ?>

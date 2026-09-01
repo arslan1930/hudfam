@@ -15,7 +15,7 @@ $domains = get_prospect_batch_domains($id);
 render_header('Batch ' . $batch['batch_date'], 'team');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Site adding history', 'href' => 'index.php?page=team_prospect_batches'],
     ['label' => $batch['batch_date'] . ' · ' . ($batch['full_name'] ?: $batch['username'])],
 ]); ?>

@@ -13,17 +13,47 @@ if ($deptScoped && $_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('actio
     $status = (string) post('status');
     $task = get_department_task($taskId);
     $back = 'index.php?page=team_dashboard';
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
     if (!$task || !user_in_department($uid, (int) $task['department_id'])) {
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => 'Task not found.']);
+            exit;
+        }
         flash('error', 'Task not found.');
         redirect($back);
     }
     if (!team_can_set_department_task_status($user, $task)) {
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Only the assignee can update this task.']);
+            exit;
+        }
         flash('error', 'Only the assignee can update this task.');
         redirect($back);
     }
     if (!update_department_task_status($taskId, $status)) {
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'Invalid status.']);
+            exit;
+        }
         flash('error', 'Invalid status.');
         redirect($back);
+    }
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => true,
+            'task_id' => $taskId,
+            'status' => $status,
+            'message' => 'Status updated.',
+        ]);
+        exit;
     }
     flash('ok', 'Status updated.');
     redirect($back);
@@ -43,12 +73,9 @@ if ($awaitsDept) {
         <p>No department assigned.</p>
         <p class="muted">
           Ask Admin to add you to a department (Site Finding, Site Extracting, Email Extracting, or Communication).
-          Your tools will appear here after that.
+          Your tools will appear in the sidebar after that.
         </p>
       </div>
-      <p class="actions" style="margin-top:1rem;justify-content:center">
-        <a class="btn secondary" href="index.php?page=team_departments">My departments</a>
-      </p>
     </div>
     <?php render_dashboard_help('team'); ?>
     <?php
@@ -57,7 +84,7 @@ if ($awaitsDept) {
 }
 
 if ($deptScoped) {
-    render_header('Dashboard', 'team');
+    render_header('Your work', 'team');
     ?>
     <div class="topbar">
       <div>
@@ -65,13 +92,14 @@ if ($deptScoped) {
         <p class="muted">
           You are assigned to
           <?= count($myDepartments) ?> department<?= count($myDepartments) === 1 ? '' : 's' ?>.
-          Your tasks and department tools are shown below.
+          Tasks are below. Tools are in the sidebar.
         </p>
       </div>
       <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">
         <label class="sheet-search dashboard-search" for="dashboard-search">
           <span class="visually-hidden">Filter this page</span>
-          <input id="dashboard-search" type="search" placeholder="Find a task or tool…"
+          <input id="dashboard-search" type="search"
+                 placeholder="<?= count($myDepartments) > 1 ? 'Find a task or tool…' : 'Find a task…' ?>"
                  autocomplete="off" spellcheck="false" data-no-draft
                  title="Type to filter · Enter = next match · Shift+Enter = previous">
           <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
@@ -80,7 +108,6 @@ if ($deptScoped) {
       </div>
     </div>
 
-    <?php render_dashboard_help('team'); ?>
     <p class="muted" data-dashboard-search-empty hidden>No matches on this page.</p>
 
     <div class="card">
@@ -115,6 +142,7 @@ if ($deptScoped) {
                 $toolUrl = department_primary_tool_url($slug);
                 $folderUrl = department_folder_url($slug);
                 $openLabel = department_task_open_label($slug);
+                $creatorLabel = department_task_creator_label($t);
                 $rowClass = trim(($mine ? 'dept-task-mine' : '') . ($overdue ? ' dept-task-overdue' : ''));
                 $hay = mb_strtolower(trim(
                     (string) $t['department_name'] . ' '
@@ -129,24 +157,29 @@ if ($deptScoped) {
                 ));
                 ?>
               <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>
-                  data-dashboard-item data-search="<?= h($hay) ?>">
+                  data-dashboard-item data-search="<?= h($hay) ?>"
+                  data-due="<?= h((string) ($t['due_date'] ?? '')) ?>">
                 <td data-label="Department"><?= h((string) $t['department_name']) ?></td>
                 <td data-label="Task">
                   <strong><?= h((string) $t['title']) ?></strong>
-                  <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+                  <?php if ($mine): ?><span class="badge">Yours</span>
+                  <?php elseif ((int) ($t['assigned_to'] ?? 0) < 1): ?><span class="badge">Whole department</span><?php endif; ?>
                   <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
                   <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
                     <div class="help dept-task-notes"><?= nl2br(h((string) $t['notes'])) ?></div>
+                  <?php endif; ?>
+                  <?php if ($creatorLabel !== ''): ?>
+                    <div class="muted dept-task-created">From <?= h($creatorLabel) ?></div>
                   <?php endif; ?>
                 </td>
                 <td class="muted" data-label="Assigned"><?= h($assigneeLabel) ?></td>
                 <td data-label="Status">
                   <?php if ($canSetStatus): ?>
-                  <form method="post" action="index.php?page=team_dashboard" class="inline-form">
+                  <form method="post" action="index.php?page=team_dashboard" class="inline-form" data-stay-ajax>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="set_status">
                     <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">
-                    <select name="status" onchange="this.form.submit()" aria-label="Task status">
+                    <select name="status" data-stay-ajax-change aria-label="Task status">
                       <?php foreach (['open' => 'Open', 'in_progress' => 'In progress', 'done' => 'Done'] as $val => $lab): ?>
                         <option value="<?= h($val) ?>" <?= (string) $t['status'] === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
                       <?php endforeach; ?>
@@ -170,6 +203,9 @@ if ($deptScoped) {
             </tbody>
           </table>
         </div>
+        <?php if (count($myTasks) >= 40): ?>
+          <p class="help">Showing the 40 newest open tasks. Use a department folder to see the rest.</p>
+        <?php endif; ?>
       <?php endif; ?>
     </div>
 
@@ -191,7 +227,7 @@ if ($deptScoped) {
         $toolCards[] = ['team_extracting', 'Extracting sites', 'Sites list + Results + Push'];
     }
     if (!empty($toolSet['team_sites_emails'])) {
-        $toolCards[] = ['team_sites_emails', 'Sites with emails - Team', 'Add emails · Push to Admin'];
+        $toolCards[] = ['team_sites_emails', 'Sites with emails', 'Add emails · Push to Admin'];
     }
     if (!empty($toolSet['team_admin_emails_search'])) {
         $toolCards[] = ['team_admin_emails_search', 'Admin emails search', 'Sites with emails - Admin · all countries'];
@@ -203,7 +239,7 @@ if ($deptScoped) {
         $toolCards[] = ['team_email_campaigns_drafts', 'Campaign drafts', 'Formatted outreach per project · copy for email'];
     }
     ?>
-    <?php if ($toolCards): ?>
+    <?php if ($toolCards && count($myDepartments) > 1): ?>
     <div class="card" style="margin-top:1rem">
       <h2>Your tools</h2>
       <div class="folders">
@@ -222,7 +258,7 @@ if ($deptScoped) {
     <?php if (count($myDepartments) > 1): ?>
     <div class="card" style="margin-top:1rem">
       <h2>Your departments</h2>
-      <p class="muted">Tasks and assignment — tools are in Your tools above.</p>
+      <p class="muted">Tasks and assignment — tools are in the sidebar and Your tools above.</p>
       <div class="folders">
         <?php foreach ($myDepartments as $d):
             $stats = department_stats((int) $d['id']);
@@ -238,6 +274,8 @@ if ($deptScoped) {
       </div>
     </div>
     <?php endif; ?>
+
+    <?php render_dashboard_help('team'); ?>
     <script>
 (function () {
   var input = document.getElementById('dashboard-search');
@@ -345,6 +383,39 @@ if ($deptScoped) {
     if (e.key === 'Enter') {
       e.preventDefault();
       jumpToMatch(e.shiftKey ? -1 : 1);
+    }
+  });
+})();
+(function () {
+  document.addEventListener('stayajax:success', function (e) {
+    var form = e.target;
+    if (!form || !form.closest) return;
+    var row = form.closest('tr[data-dashboard-item]');
+    if (!row) return;
+    var sel = form.querySelector('select[name="status"]');
+    if (!sel) return;
+    if (String(sel.value || '') === 'done') {
+      row.remove();
+      return;
+    }
+    var due = String(row.getAttribute('data-due') || '');
+    var today = new Date();
+    var ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var overdue = (sel.value === 'open' || sel.value === 'in_progress') && due !== '' && due < ymd;
+    row.classList.toggle('dept-task-overdue', overdue);
+    var badge = row.querySelector('[data-overdue-badge]');
+    if (overdue && !badge) {
+      var strong = row.querySelector('td strong');
+      if (strong) {
+        var span = document.createElement('span');
+        span.className = 'badge';
+        span.setAttribute('data-overdue-badge', '');
+        span.textContent = 'Overdue';
+        strong.insertAdjacentElement('afterend', span);
+        strong.insertAdjacentText('afterend', ' ');
+      }
+    } else if (!overdue && badge) {
+      badge.remove();
     }
   });
 })();

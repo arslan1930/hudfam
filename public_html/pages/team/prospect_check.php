@@ -294,7 +294,7 @@ $stepAdd = ($result && $result['new']) ? 'active' : '';
 render_header('Filter & add', 'team');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Filter & add'],
 ]); ?>
 <div class="topbar">

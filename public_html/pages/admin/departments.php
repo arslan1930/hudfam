@@ -68,6 +68,30 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'save_task') {
         $taskId = (int) post('task_id');
         $assigned = (int) post('assigned_to');
+        $confirmSimilar = (string) post('confirm_similar') === '1';
+        if ((string) post('title') !== '' && !$confirmSimilar) {
+            $dup = find_similar_open_department_task(
+                (int) $dept['id'],
+                (string) post('title'),
+                $taskId > 0 ? $taskId : null
+            );
+            if ($dup) {
+                department_task_draft_store([
+                    'department_id' => (int) $dept['id'],
+                    'title' => (string) post('title'),
+                    'notes' => (string) post('notes'),
+                    'status' => (string) post('status'),
+                    'assigned_to' => $assigned,
+                    'due_date' => (string) post('due_date'),
+                    'similar_title' => (string) ($dup['title'] ?? ''),
+                ]);
+                flash(
+                    'error',
+                    'An open task already uses this title: “' . (string) $dup['title'] . '”. Tick Create anyway if you still want another.'
+                );
+                redirect($back);
+            }
+        }
         $result = save_department_task(
             (int) $dept['id'],
             (string) post('title'),
@@ -258,6 +282,16 @@ $editTask = $editTaskId ? get_department_task($editTaskId) : null;
 if ($editTask && (int) $editTask['department_id'] !== $deptId) {
     $editTask = null;
 }
+$taskDraft = department_task_draft_take($deptId);
+$needConfirmSimilar = !$editTask && !empty($taskDraft['similar_title']);
+$similarTitle = (string) ($taskDraft['similar_title'] ?? '');
+$taskForm = [
+    'title' => (string) ($editTask['title'] ?? ($taskDraft['title'] ?? '')),
+    'notes' => (string) ($editTask['notes'] ?? ($taskDraft['notes'] ?? '')),
+    'status' => (string) ($editTask['status'] ?? ($taskDraft['status'] ?? 'open')),
+    'assigned_to' => (int) ($editTask['assigned_to'] ?? ($taskDraft['assigned_to'] ?? 0)),
+    'due_date' => (string) ($editTask['due_date'] ?? ($taskDraft['due_date'] ?? '')),
+];
 // Keep historical assignee visible in the edit dropdown (removed / inactive).
 if ($editTask && (int) ($editTask['assigned_to'] ?? 0) > 0) {
     $editAssigneeId = (int) $editTask['assigned_to'];
@@ -452,17 +486,17 @@ render_breadcrumbs([
       <div class="full" style="grid-column:1/-1">
         <label for="dept_task_title">Task title</label>
         <input id="dept_task_title" name="title" required maxlength="255"
-               value="<?= h((string) ($editTask['title'] ?? '')) ?>"
+               value="<?= h((string) $taskForm['title']) ?>"
                placeholder="What should this department do?">
       </div>
       <div class="full" style="grid-column:1/-1">
         <label for="dept_task_notes">Notes</label>
-        <textarea id="dept_task_notes" name="notes" rows="3" placeholder="Details, links, country, counts…"><?= h((string) ($editTask['notes'] ?? '')) ?></textarea>
+        <textarea id="dept_task_notes" name="notes" rows="3" placeholder="Details, links, country, counts…"><?= h((string) $taskForm['notes']) ?></textarea>
       </div>
       <div>
         <label for="dept_task_assignee">Assign to user</label>
         <select id="dept_task_assignee" name="assigned_to">
-          <option value="0">Whole department</option>
+          <option value="0" <?= (int) $taskForm['assigned_to'] < 1 ? 'selected' : '' ?>>Whole department</option>
           <?php foreach ($assigneeChoices as $m):
               $isMember = in_array((int) $m['id'], $memberIds, true);
               $inactive = (int) ($m['is_active'] ?? 1) !== 1;
@@ -477,7 +511,7 @@ render_breadcrumbs([
               }
               ?>
             <option value="<?= (int) $m['id'] ?>"
-              <?= $editTask && (int) ($editTask['assigned_to'] ?? 0) === (int) $m['id'] ? 'selected' : '' ?>>
+              <?= (int) $taskForm['assigned_to'] === (int) $m['id'] ? 'selected' : '' ?>>
               <?= h($name) ?><?= h($suffix) ?>
             </option>
           <?php endforeach; ?>
@@ -492,7 +526,7 @@ render_breadcrumbs([
         <label for="dept_task_status">Status</label>
         <select id="dept_task_status" name="status">
           <?php
-          $curStatus = (string) ($editTask['status'] ?? 'open');
+          $curStatus = (string) $taskForm['status'];
           foreach (['open' => 'Open', 'in_progress' => 'In progress', 'done' => 'Done'] as $val => $lab):
               ?>
             <option value="<?= h($val) ?>" <?= $curStatus === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
@@ -502,10 +536,16 @@ render_breadcrumbs([
       <div>
         <label for="dept_task_due">Due date</label>
         <input id="dept_task_due" type="date" name="due_date"
-               value="<?= h((string) ($editTask['due_date'] ?? '')) ?>">
+               value="<?= h((string) $taskForm['due_date']) ?>">
       </div>
     </div>
     <p class="actions" style="margin-top:0.85rem">
+      <?php if ($needConfirmSimilar && !$editTask): ?>
+        <label class="help" style="display:flex;align-items:flex-start;gap:0.45rem;margin:0 0 0.65rem">
+          <input type="checkbox" name="confirm_similar" value="1" required>
+          <span>Create anyway — similar open task: <?= h($similarTitle) ?></span>
+        </label>
+      <?php endif; ?>
       <button class="btn" type="submit"><?= $editTask ? 'Update task' : 'Assign task' ?></button>
       <?php if ($editTask): ?>
         <a class="btn secondary" href="<?= h($deptFolderUrl()) ?>">Cancel edit</a>
@@ -554,7 +594,12 @@ render_breadcrumbs([
             <strong><?= h((string) $t['title']) ?></strong>
             <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
-              <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
+              <div class="help dept-task-notes"><?= nl2br(h((string) $t['notes'])) ?></div>
+            <?php endif; ?>
+            <?php
+            $creatorLabel = department_task_creator_label($t);
+            if ($creatorLabel !== ''): ?>
+              <div class="muted dept-task-created">From <?= h($creatorLabel) ?></div>
             <?php endif; ?>
           </td>
           <td><?= h($assignee !== '' ? $assignee : 'Whole department') ?></td>

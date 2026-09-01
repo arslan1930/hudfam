@@ -7059,6 +7059,39 @@ try {
         fail('department primary tool URL helper unexpected');
     }
 
+    $simDept = get_department_by_slug('site_extracting');
+    if ($simDept) {
+        $simSaved = save_department_task(
+            (int) $simDept['id'],
+            'txf-Similar Title',
+            '',
+            'open',
+            null,
+            null,
+            $adminUser
+        );
+        $hit = find_similar_open_department_task((int) $simDept['id'], '  TXF-similar   title ');
+        $self = find_similar_open_department_task(
+            (int) $simDept['id'],
+            'txf-Similar Title',
+            (int) ($simSaved['id'] ?? 0)
+        );
+        if (!empty($simSaved['ok'])
+            && $hit
+            && (int) ($hit['id'] ?? 0) === (int) ($simSaved['id'] ?? 0)
+            && $self === null
+            && department_task_title_key('Extract Sites') === department_task_title_key('extract sites')) {
+            pass('similar open department task title match');
+        } else {
+            fail('similar open department task helper unexpected');
+        }
+        if (!empty($simSaved['id'])) {
+            delete_department_task((int) $simSaved['id']);
+        }
+    } else {
+        fail('site_extracting missing for similar-title helper');
+    }
+
     $day = '2099-01-15';
     $batchDe = get_or_create_prospect_batch(
         (int) $teamUser['id'],

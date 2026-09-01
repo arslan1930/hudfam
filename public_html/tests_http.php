@@ -1145,13 +1145,13 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Extracting')) {
 }
 $rDash = req('GET', $base . '/index.php?page=team_dashboard');
 if ($rDash['status'] === 200
-    && str_contains($rDash['body'], 'Your tools')
+    && str_contains($rDash['body'], 'Your work')
     && str_contains($rDash['body'], 'page=team_extracting')
-    && str_contains($rDash['body'], 'Find a task or tool')
+    && str_contains($rDash['body'], 'Find a task')
     && str_contains($rDash['body'], 'My departments')) {
-    pass('extractor dashboard tools + Find a task or tool');
+    pass('extractor dashboard Your work + Find a task');
 } else {
-    fail('extractor dashboard missing tools/search copy status=' . $rDash['status']);
+    fail('extractor dashboard missing Your work/search copy status=' . $rDash['status']);
 }
 if ($r['status'] === 200
     && (str_contains($r['body'], 'id="extract-country-search"')

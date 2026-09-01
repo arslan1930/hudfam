@@ -301,6 +301,57 @@ function department_task_assignee_label(array $task): string
     return $name !== '' ? $name : 'Assigned';
 }
 
+function department_task_creator_label(array $task): string
+{
+    $name = trim((string) ($task['created_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($task['created_username'] ?? ''));
+    }
+    return $name;
+}
+
+function department_task_title_key(string $title): string
+{
+    $title = preg_replace('/\s+/u', ' ', trim($title)) ?? '';
+    return mb_strtolower($title);
+}
+
+/** Open/in-progress task in this department with the same title (ignoring case/spacing). */
+function find_similar_open_department_task(int $departmentId, string $title, ?int $exceptId = null): ?array
+{
+    $key = department_task_title_key($title);
+    if ($departmentId < 1 || $key === '') {
+        return null;
+    }
+    foreach (list_department_tasks($departmentId) as $task) {
+        if (!in_array((string) ($task['status'] ?? ''), ['open', 'in_progress'], true)) {
+            continue;
+        }
+        if ($exceptId !== null && (int) ($task['id'] ?? 0) === $exceptId) {
+            continue;
+        }
+        if (department_task_title_key((string) ($task['title'] ?? '')) === $key) {
+            return $task;
+        }
+    }
+    return null;
+}
+
+function department_task_draft_store(array $data): void
+{
+    $_SESSION['txf_dept_task_draft'] = $data;
+}
+
+function department_task_draft_take(int $departmentId): array
+{
+    $draft = $_SESSION['txf_dept_task_draft'] ?? null;
+    unset($_SESSION['txf_dept_task_draft']);
+    if (!is_array($draft) || (int) ($draft['department_id'] ?? 0) !== $departmentId) {
+        return [];
+    }
+    return $draft;
+}
+
 /**
  * True when this Team user may open a page (department tool ACL).
  * Admins always true. Waiting (no dept) users only core waiting pages.
@@ -850,11 +901,14 @@ function list_open_tasks_for_user(int $userId, int $limit = 50): array
     $stmt = db()->prepare(
         "SELECT t.*, d.name AS department_name, d.slug AS department_slug,
                 au.username AS assigned_username,
-                au.full_name AS assigned_name
+                au.full_name AS assigned_name,
+                cu.username AS created_username,
+                cu.full_name AS created_name
          FROM department_tasks t
          INNER JOIN departments d ON d.id = t.department_id
          INNER JOIN department_members m ON m.department_id = t.department_id AND m.user_id = ?
          LEFT JOIN users au ON au.id = t.assigned_to
+         LEFT JOIN users cu ON cu.id = t.created_by
          WHERE t.status IN ('open','in_progress') AND d.is_active=1
          ORDER BY FIELD(t.status, 'open', 'in_progress'),
                   t.due_date IS NULL, t.due_date ASC, t.id DESC

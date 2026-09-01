@@ -132,6 +132,24 @@ if ($dept && $_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect($back);
         }
         $assigned = (int) post('assigned_to');
+        if ((string) post('confirm_similar') !== '1') {
+            $dup = find_similar_open_department_task((int) $dept['id'], (string) post('title'));
+            if ($dup) {
+                department_task_draft_store([
+                    'department_id' => (int) $dept['id'],
+                    'title' => (string) post('title'),
+                    'notes' => (string) post('notes'),
+                    'assigned_to' => $assigned,
+                    'due_date' => (string) post('due_date'),
+                    'similar_title' => (string) ($dup['title'] ?? ''),
+                ]);
+                flash(
+                    'error',
+                    'An open task already uses this title: “' . (string) $dup['title'] . '”. Tick Create anyway if you still want another.'
+                );
+                redirect($back);
+            }
+        }
         $result = save_department_task(
             (int) $dept['id'],
             (string) post('title'),
@@ -162,7 +180,7 @@ $showEmailCommShortcuts = $canAdminEmailsSearch || $canSitesEmails || $canCampai
 if (!$dept) {
     render_header('My departments', 'team');
     render_breadcrumbs([
-        ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+        ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
         ['label' => 'My departments'],
     ]);
     ?>
@@ -306,6 +324,15 @@ if ($pageNum > $totalPages) {
 }
 $tasks = array_slice($tasksAll, ($pageNum - 1) * $perPage, $perPage);
 $showDue = department_tasks_have_due_date($tasks);
+$taskDraft = department_task_draft_take((int) $dept['id']);
+$needConfirmSimilar = !empty($taskDraft['similar_title']);
+$similarTitle = (string) ($taskDraft['similar_title'] ?? '');
+$taskForm = [
+    'title' => (string) ($taskDraft['title'] ?? ''),
+    'notes' => (string) ($taskDraft['notes'] ?? ''),
+    'assigned_to' => (int) ($taskDraft['assigned_to'] ?? 0),
+    'due_date' => (string) ($taskDraft['due_date'] ?? ''),
+];
 $stats = department_stats($deptId);
 $isCommunicationDept = (string) $dept['slug'] === 'communication';
 $isEmailExtractingDept = (string) $dept['slug'] === 'email_extracting';
@@ -342,7 +369,7 @@ $deptFolderUrl = static function (array $overrides = []) use ($base, $dept, $sta
 
 render_header((string) $dept['name'], 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'My departments', 'href' => $base],
     ['label' => (string) $dept['name']],
 ]);
@@ -503,33 +530,40 @@ render_breadcrumbs([
       <div class="full" style="grid-column:1/-1">
         <label for="team_dept_task_title">Assign a task</label>
         <input id="team_dept_task_title" name="title" required maxlength="255"
+               value="<?= h((string) $taskForm['title']) ?>"
                placeholder="What should someone in this department do?">
       </div>
       <div class="full" style="grid-column:1/-1">
         <label for="team_dept_task_notes">Notes</label>
-        <textarea id="team_dept_task_notes" name="notes" rows="2" placeholder="Details, links, country, counts…"></textarea>
+        <textarea id="team_dept_task_notes" name="notes" rows="2" placeholder="Details, links, country, counts…"><?= h((string) $taskForm['notes']) ?></textarea>
       </div>
       <div>
         <label for="team_dept_task_assignee">Assign to</label>
         <select id="team_dept_task_assignee" name="assigned_to">
-          <option value="0">Whole department</option>
-          <?php foreach ($deptMembers as $m):
+            <option value="0" <?= (int) $taskForm['assigned_to'] < 1 ? 'selected' : '' ?>>Whole department</option>
+            <?php foreach ($deptMembers as $m):
               $name = trim((string) ($m['full_name'] ?? ''));
               if ($name === '') {
                   $name = (string) ($m['username'] ?? 'teammate');
               }
               ?>
-            <option value="<?= (int) $m['id'] ?>"><?= h($name) ?></option>
+            <option value="<?= (int) $m['id'] ?>" <?= (int) $taskForm['assigned_to'] === (int) $m['id'] ? 'selected' : '' ?>><?= h($name) ?></option>
           <?php endforeach; ?>
         </select>
         <p class="help">Only people already in this department. Admin adds members.</p>
       </div>
       <div>
         <label for="team_dept_task_due">Due date</label>
-        <input id="team_dept_task_due" type="date" name="due_date">
+        <input id="team_dept_task_due" type="date" name="due_date" value="<?= h((string) $taskForm['due_date']) ?>">
       </div>
     </div>
     <p class="actions" style="margin-top:0.85rem">
+      <?php if ($needConfirmSimilar): ?>
+        <label class="help" style="display:flex;align-items:flex-start;gap:0.45rem;margin:0 0 0.65rem">
+          <input type="checkbox" name="confirm_similar" value="1" required>
+          <span>Create anyway — similar open task: <?= h($similarTitle) ?></span>
+        </label>
+      <?php endif; ?>
       <button class="btn" type="submit">Assign task</button>
     </p>
   </form>
@@ -573,10 +607,16 @@ render_breadcrumbs([
         <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?> data-due="<?= h((string) ($t['due_date'] ?? '')) ?>">
           <td data-label="Task">
             <strong><?= h((string) $t['title']) ?></strong>
-            <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
+            <?php if ($mine): ?><span class="badge">Yours</span>
+            <?php elseif ((int) ($t['assigned_to'] ?? 0) < 1): ?><span class="badge">Whole department</span><?php endif; ?>
             <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
               <div class="help dept-task-notes"><?= nl2br(h((string) $t['notes'])) ?></div>
+            <?php endif; ?>
+            <?php
+            $creatorLabel = department_task_creator_label($t);
+            if ($creatorLabel !== ''): ?>
+              <div class="muted dept-task-created">From <?= h($creatorLabel) ?></div>
             <?php endif; ?>
           </td>
           <td data-label="Assigned">

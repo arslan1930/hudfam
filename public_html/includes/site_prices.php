@@ -2631,7 +2631,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
         $pages = $pack['pages'];
         render_header('Website prices · ' . $countryName, $panel);
         render_breadcrumbs([
-            ['label' => 'Dashboard', 'href' => $dashHref],
+            ['label' => $panel === 'admin' ? 'Dashboard' : 'Your work', 'href' => $dashHref],
             ['label' => 'Website prices', 'href' => $hubList],
             ['label' => $countryName],
         ]);
@@ -2737,7 +2737,7 @@ function site_price_run_page(array $user, string $panel = 'admin'): void
 
     render_header('Website prices', $panel);
     render_breadcrumbs([
-        ['label' => 'Dashboard', 'href' => $dashHref],
+        ['label' => $panel === 'admin' ? 'Dashboard' : 'Your work', 'href' => $dashHref],
         ['label' => 'Website prices'],
     ]);
     ?>

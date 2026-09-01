@@ -137,7 +137,7 @@ $visibleCount = count(list_email_campaign_projects(true));
 
 render_header('Campaign search', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Campaign search'],
 ]);
 ?>

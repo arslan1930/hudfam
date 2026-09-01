@@ -26,7 +26,7 @@ $home = is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_das
 render_header('Change password', $panel);
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => $home],
+    ['label' => is_admin() ? 'Dashboard' : 'Your work', 'href' => $home],
     ['label' => 'Change password'],
 ]); ?>
 <div class="topbar">
