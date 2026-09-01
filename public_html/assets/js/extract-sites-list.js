@@ -86,11 +86,94 @@
     if (footerCount) {
       footerCount.textContent = n + ' site' + (n === 1 ? '' : 's');
     }
-    if (countLabel) countLabel.textContent = n + ' site' + (n === 1 ? '' : 's');
+    if (countLabel) {
+      countLabel.textContent = n + ' site' + (n === 1 ? '' : 's');
+    }
     if (copyBtn) copyBtn.disabled = n === 0;
+    shell.setAttribute('data-live-count', String(n));
     syncOpenBulkButton();
     syncOpenContinueButton();
   }
+
+  function applyRemoteList(data, statusMsg) {
+    if (!data || data.domains == null) return;
+    var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
+    applyingHistory = true;
+    ta.value = savedRaw;
+    lastSnapshot = normalizeText(savedRaw);
+    lastSavedText = lastSnapshot;
+    applyingHistory = false;
+    var n = typeof data.site_count === 'number' ? data.site_count : linesOf(ta.value).length;
+    updateCounts(n);
+    if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+    shell.setAttribute('data-live-count', String(n));
+    undoStack = [];
+    redoStack = [];
+    clearOpenBatchState();
+    syncHistoryButtons();
+    if (data.writer_name || data.writer_at) {
+      setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+    }
+    if (statusMsg) setStatus(statusMsg);
+  }
+
+  function liveUrl(action) {
+    var url = String(postUrl || window.location.href);
+    var join = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + join + 'ajax=1&action=' + encodeURIComponent(action);
+  }
+
+  function isDirty() {
+    return normalizeText(ta.value) !== lastSavedText;
+  }
+
+  function pullRemoteList(statusMsg) {
+    return fetch(liveUrl('sites_snapshot'), {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || data.ok === false) return;
+        applyRemoteList(data, statusMsg);
+      });
+  }
+
+  function pollSharedList() {
+    if (document.hidden || saveInFlight) return;
+    fetch(liveUrl('sites_live'), {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || data.ok === false) return;
+        var remoteN = typeof data.site_count === 'number' ? data.site_count : -1;
+        var remoteAt = String(data.writer_at || '');
+        var localAt = String(shell.getAttribute('data-writer-at') || '');
+        var localN = parseInt(String(shell.getAttribute('data-live-count') || ''), 10);
+        if (isNaN(localN)) localN = linesOf(ta.value).length;
+        if (remoteN === localN && remoteAt === localAt) return;
+        if (isDirty()) {
+          setStatus(
+            'Shared list is now ' + remoteN + ' site' + (remoteN === 1 ? '' : 's')
+              + '. Reload or undo your edit so you match your teammate.',
+            true
+          );
+          return;
+        }
+        pullRemoteList(
+          'Shared list updated · ' + remoteN + ' site' + (remoteN === 1 ? '' : 's')
+            + (data.writer_name ? ' · ' + data.writer_name : '')
+        );
+      })
+      .catch(function () { /* ignore */ });
+  }
+
+  window.setInterval(pollSharedList, 4000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) pollSharedList();
+  });
 
   function syncHistoryButtons() {
     if (undoBtn) undoBtn.disabled = undoStack.length === 0;
@@ -261,22 +344,8 @@
           saveAgain = false;
           var data = err.data || {};
           if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
-          if (data.domains != null) {
-            var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
-            applyingHistory = true;
-            ta.value = savedRaw;
-            lastSnapshot = normalizeText(savedRaw);
-            lastSavedText = lastSnapshot;
-            applyingHistory = false;
-            updateCounts();
-          }
-          undoStack = [];
-          redoStack = [];
-          clearOpenBatchState();
-          syncHistoryButtons();
-          if (data.writer_name || data.writer_at) {
-            setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
-          }
+          applyRemoteList(data, err.message || 'Reload to avoid overwriting.');
+          return;
         } else {
           setAutosaveLabel('Save failed');
         }

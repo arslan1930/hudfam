@@ -1061,6 +1061,21 @@ if (!str_contains($extractSitesJs, 'writer_at')
 } else {
     ok('Extracting + Semrush last-writer conflict');
 }
+if (!str_contains($extractSitesJs, 'pollSharedList')
+    || !str_contains($extractSitesJs, 'sites_live')
+    || !str_contains($extractSitesJs, 'sites_snapshot')
+    || !str_contains($extractLibSync, 'function extract_sites_live_meta')
+    || !str_contains($extractLibSync, 'function extract_hub_live_counts')
+    || !str_contains($extractingHub, "action') === 'hub_live'")
+    || !str_contains(file_get_contents($root . '/pages/team/extract_batch.php') ?: '', 'sites_live')
+    || !str_contains($sweAppSmoke = (file_get_contents($root . '/pages/sites_with_emails_app.php') ?: ''), 'live_counts')
+    || !str_contains($sweAppSmoke, 'hub_live')
+    || !str_contains(file_get_contents($root . '/includes/sites_with_emails.php') ?: '', 'function swe_country_live_counts')
+    || !str_contains(file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '', 'pollSharedCounts')) {
+    fail('shared live counts missing on Extracting / Sites with emails');
+} else {
+    ok('shared live counts on Extracting and Sites with emails');
+}
 $sweAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($sweAppSmoke, 'new from Push')
     || !str_contains($sweAppSmoke, 'Last Push')) {

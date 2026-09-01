@@ -1324,4 +1324,45 @@
   if (window.location.hash === '#add-site') {
     openAddRow();
   }
+
+  var liveWrap = document.querySelector('[data-swe-live-url]');
+  var liveUrl = liveWrap ? String(liveWrap.getAttribute('data-swe-live-url') || '') : '';
+  var lastLiveCount = totalLabel ? parseInt(String(totalLabel.textContent || ''), 10) : -1;
+  function sweSheetBusy() {
+    if (document.querySelector('[data-busy="1"]')) return true;
+    var el = document.activeElement;
+    if (el && el.closest && el.closest('[data-swe-row], #swe-add-row, .swe-row-form')) return true;
+    return false;
+  }
+  function pollSharedCounts() {
+    if (!liveUrl || document.hidden) return;
+    fetch(liveUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || data.ok === false) return;
+        var n = typeof data.site_count === 'number' ? data.site_count : lastLiveCount;
+        if (readyLabel && typeof data.ready === 'number') {
+          readyLabel.textContent = String(data.ready);
+        }
+        if (n === lastLiveCount) return;
+        if (totalLabel) totalLabel.textContent = String(n);
+        if (sweSheetBusy()) {
+          setStatus(
+            'Shared list is now ' + n + ' site' + (n === 1 ? '' : 's')
+              + '. Reload when you finish this row so you match your teammate.',
+            false
+          );
+          lastLiveCount = n;
+          return;
+        }
+        window.location.reload();
+      })
+      .catch(function () { /* ignore */ });
+  }
+  if (liveUrl) {
+    window.setInterval(pollSharedCounts, 4000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) pollSharedCounts();
+    });
+  }
 })();

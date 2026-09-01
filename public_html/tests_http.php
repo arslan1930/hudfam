@@ -1198,6 +1198,15 @@ if ($r['status'] === 200 && preg_match('/team_extract_batch&amp;id=(\d+)/', $r['
     pass('extractor Extracting country sheet skipped (no filled batch)');
 }
 
+$rHubLive = req('GET', $base . '/index.php?page=team_extracting&ajax=1&action=hub_live');
+if ($rHubLive['status'] === 200
+    && str_contains($rHubLive['body'], '"ok"')
+    && str_contains($rHubLive['body'], 'site_count')) {
+    pass('extractor Extracting hub live counts JSON');
+} else {
+    fail('extractor Extracting hub live counts JSON missing status=' . ($rHubLive['status'] ?? '?'));
+}
+
 // Email Extracting folder shows tool shortcuts
 req('GET', $base . '/index.php?page=logout');
 $r = login_post($base, 'emailer', 'DeptTest9x');
@@ -1240,6 +1249,14 @@ if ($r['status'] === 200
     pass('Team SWE in-app confirm + Remove all wipe copy');
 } else {
     fail('Team SWE confirm/Remove all markup missing');
+}
+$rSweLive = req('GET', $base . '/index.php?page=team_sites_emails&ajax=1&action=hub_live');
+if ($rSweLive['status'] === 200
+    && str_contains($rSweLive['body'], '"ok"')
+    && str_contains($rSweLive['body'], 'grand_total')) {
+    pass('Team SWE hub live counts JSON');
+} else {
+    fail('Team SWE hub live counts JSON missing status=' . ($rSweLive['status'] ?? '?'));
 }
 $r = req('GET', $base . '/index.php?page=team_admin_emails_search');
 if ($r['status'] === 200

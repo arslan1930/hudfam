@@ -7441,6 +7441,36 @@ try {
         ]));
     }
 
+    $writerConflictAfterAdd = extract_sites_writer_conflict(
+        $idDe,
+        (int) $adminUser['id'],
+        '2000-01-01 00:00:00'
+    );
+    $liveMeta = extract_sites_live_meta($idDe);
+    $hubLive = extract_hub_live_counts();
+    $hubLiveDe = 0;
+    foreach (($hubLive['rows'] ?? []) as $hr) {
+        if ((string) ($hr['country'] ?? '') === 'Germany') {
+            $hubLiveDe = (int) ($hr['site_count'] ?? 0);
+            break;
+        }
+    }
+    if (
+        !empty($writerConflictAfterAdd['conflict'])
+        && (int) ($liveMeta['site_count'] ?? 0) === $rawCnt
+        && $hubLiveDe === $rawCnt
+        && (int) ($hubLive['sites'] ?? 0) >= $rawCnt
+    ) {
+        pass('filter add stamps writer; live snapshot matches teammate hub count');
+    } else {
+        fail('live shared extract counts: ' . json_encode([
+            'conflict' => $writerConflictAfterAdd,
+            'liveMeta' => $liveMeta,
+            'hubLiveDe' => $hubLiveDe,
+            'rawCnt' => $rawCnt,
+        ]));
+    }
+
     $msg = email_campaign_bulk_result_message('Imported file into sheet', [
         'added' => 2,
         'updated' => 1,
