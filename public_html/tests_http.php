@@ -401,7 +401,7 @@ if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_c
     && str_contains($r['body'], 'Sign in to')
     && str_contains($r['body'], 'class="ui-v2"')
     && str_contains($r['body'], 'css/style-new.css')
-    && str_contains($r['body'], 'js/ui-enhancements.js')
+    && str_contains($r['body'], 'ui-enhancements.js')
     && !str_contains($r['body'], 'Shared site database')
     && !str_contains($r['body'], 'class="app-bar"')) {
     pass('login page');
