@@ -105,6 +105,9 @@ if (!str_contains($asset, 'css/style-new.css')
     || !str_contains($uiCss, '.camp-hub-check')
     || !str_contains($uiCss, '.swe-status-badge.is-emailed')
     || !str_contains($uiCss, '.sheet-check input[type="checkbox"]')
+    || !str_contains($uiCss, 'swe-row-opened')
+    || !str_contains($uiCss, 'is-just-added')
+    || !str_contains($uiCss, '.swe-table tr.sheet-search-hit td')
     || str_contains($uiJs, 'preventDefault')
     || str_contains($uiJs, 'IntersectionObserver')
     || str_contains($uiJs, 'data-nav-toggle')
@@ -2994,10 +2997,17 @@ if (!str_contains($prospectsLib, 'function filter_domains_routed_against_prospec
     ok('prospect routed Filter helper');
 }
 if (!str_contains($prospectCheckSf, 'filter_domains_routed_against_prospects')
-    || !str_contains($prospectCheckSf, 'TLD → country')) {
+    || !str_contains($prospectCheckSf, 'TLD → country')
+    || !str_contains($prospectCheckSf, '.pt→Portugal')) {
     fail('Filter & add missing routed Filter/Add path');
 } else {
     ok('Filter & add uses routed per-country de-dupe');
+}
+if (!str_contains($prospectsLib, 'function admin_add_urls_to_database')
+    || !str_contains($prospectsLib, 'route_domains_by_country_tld($domains, $selectedCountry)')) {
+    fail('Admin Add sites missing TLD routing');
+} else {
+    ok('Admin Add sites routes country TLDs');
 }
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {

@@ -304,7 +304,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             redirect(prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites'])));
         }
         if ($insN > 0) {
-            flash('ok', prospect_saved_sites_message($insN, (string) $result['country']));
+            flash(
+                'ok',
+                prospect_saved_sites_message(
+                    $insN,
+                    (string) $result['country'],
+                    is_array($result['by_country'] ?? null) ? $result['by_country'] : []
+                )
+            );
             prospect_store_just_added_ids(is_array($result['ids'] ?? null) ? $result['ids'] : []);
         } else {
             unset($_SESSION['prospect_just_added_ids']);

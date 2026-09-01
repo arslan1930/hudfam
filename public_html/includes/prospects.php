@@ -571,12 +571,20 @@ function prospect_duplicates_deleted_message(int $n): string
 
 /**
  * Success flash after Admin Save to a country folder.
+ *
+ * @param array<string, array<string, mixed>> $byCountry optional TLD-routed insert buckets
  */
-function prospect_saved_sites_message(int $n, string $country): string
+function prospect_saved_sites_message(int $n, string $country, array $byCountry = []): string
 {
     $n = max(0, $n);
-    $country = trim($country);
-    $where = $country !== '' ? ' to ' . $country : '';
+    $phrase = $byCountry !== [] ? prospect_destinations_phrase($byCountry, 'inserted') : '';
+    $multi = $phrase !== '' && str_contains($phrase, ',');
+    if ($multi) {
+        $where = ' (' . $phrase . ')';
+    } else {
+        $country = trim($country);
+        $where = $country !== '' ? ' to ' . $country : '';
+    }
     if ($n === 1) {
         return 'Saved 1 new site' . $where . '. It is at the top of the list.';
     }
@@ -1920,10 +1928,12 @@ function add_prospect_domains(
 }
 
 /**
- * Admin: paste URLs into one country’s database (no uniqueness preview).
- * Duplicates in the paste and domains already in that country are dropped (not updated).
+ * Admin: paste URLs into Our database (no uniqueness preview).
+ * Country TLDs (.at, .pt, .de, …) go to that country folder; generic TLDs (.com)
+ * stay in the selected folder. Duplicates in the paste and domains already in the
+ * destination country are dropped (not updated).
  *
- * @return array{inserted:int,updated:int,duplicated:int,purged:int,total:int,batch_id:int|null,country:string,ids:list<int>}
+ * @return array{inserted:int,updated:int,duplicated:int,purged:int,total:int,batch_id:int|null,country:string,ids:list<int>,by_country:array<string, array{inserted:int,skipped:int}>}
  */
 function admin_add_urls_to_database(string $raw, array $user, string $country, string $language = ''): array
 {
@@ -1936,13 +1946,13 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     }
 
     $canon = require_canonical_country($country);
-    $country = $canon['name'];
+    $selectedCountry = $canon['name'];
     $region = $canon['region'];
     if ($language === '') {
         $language = $canon['language'];
     }
     if (function_exists('normalize_site_language')) {
-        $language = normalize_site_language($language, $country);
+        $language = normalize_site_language($language, $selectedCountry);
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
@@ -1956,27 +1966,26 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
     /** @var list<string> $domains */
     $domains = $parsed['valid'];
 
+    $empty = [
+        'inserted' => 0,
+        'updated' => 0,
+        'duplicated' => $listDuplicates,
+        'purged' => 0,
+        'total' => 0,
+        'batch_id' => null,
+        'country' => $selectedCountry,
+        'ids' => [],
+        'by_country' => [],
+    ];
     if ($domains === []) {
-        return [
-            'inserted' => 0,
-            'updated' => 0,
-            'duplicated' => $listDuplicates,
-            'purged' => 0,
-            'total' => 0,
-            'batch_id' => null,
-            'country' => $country,
-            'ids' => [],
-        ];
+        return $empty;
     }
 
-    $batchId = get_or_create_prospect_batch(
-        (int) $user['id'],
-        $country,
-        $language,
-        $region,
-        '',
-        'Admin Add sites · ' . $country
-    );
+    if (!function_exists('route_domains_by_country_tld')) {
+        require_once __DIR__ . '/geo.php';
+    }
+    $groups = route_domains_by_country_tld($domains, $selectedCountry);
+
     $ins = db()->prepare(
         'INSERT INTO prospect_sites (domain, url, country, language, region, niche, notes, status, created_by)
          VALUES (?,?,?,?,?,?,\'\',\'new\',?)'
@@ -1989,87 +1998,144 @@ function admin_add_urls_to_database(string $raw, array $user, string $country, s
         'SELECT id FROM prospect_sites WHERE country=? AND domain=? LIMIT 1'
     );
 
-    $inserted = 0;
-    /** @var list<int> $insertedIds */
-    $insertedIds = [];
+    $totalInserted = 0;
     $alreadyInDb = 0;
-    db()->beginTransaction();
-    try {
-        $n = 0;
-        foreach ($domains as $domain) {
-            $findId->execute([$country, $domain]);
-            $beforeId = (int) $findId->fetchColumn();
-            if ($beforeId > 0) {
-                $alreadyInDb++;
-                // Duplicate of an existing country folder row — do not keep a second copy.
-                $n++;
-                continue;
-            }
-            try {
-                $siteNiche = prospect_niches_for_new_site($domain, '');
-                $ins->execute([$domain, '', $country, $language, $region, $siteNiche, $user['id']]);
-            } catch (Throwable $e) {
-                // Race / unique key — treat as duplicate.
-                $alreadyInDb++;
-                $n++;
-                continue;
-            }
-            $siteId = (int) db()->lastInsertId();
-            if ($siteId <= 0) {
-                $findId->execute([$country, $domain]);
-                $siteId = (int) $findId->fetchColumn();
-            }
-            if ($siteId > 0) {
-                $inserted++;
-                $insertedIds[] = $siteId;
-                $insItem->execute([$batchId, $domain, $siteId]);
-            } else {
-                $alreadyInDb++;
-            }
-            $n++;
-            if ($n % 250 === 0) {
-                db()->commit();
-                db()->beginTransaction();
-            }
-        }
-        $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
-        $cnt->execute([$batchId]);
-        db()->prepare(
-            'UPDATE prospect_batches SET site_count=?, country=?, language=?, region=?, notes=?, updated_at=NOW() WHERE id=?'
-        )->execute([
-            (int) $cnt->fetchColumn(),
-            $country,
-            $language,
-            $region,
-            'Admin Add sites · ' . $country,
-            $batchId,
-        ]);
-        db()->commit();
-    } catch (Throwable $e) {
-        if (db()->inTransaction()) {
-            db()->rollBack();
-        }
-        throw $e;
-    }
-
     $purged = 0;
-    try {
-        $purged = purge_duplicate_prospect_site_rows($country);
-    } catch (Throwable $e) {
-        // ignore
+    /** @var array<string, array{inserted:int,skipped:int}> $byCountry */
+    $byCountry = [];
+    /** @var array<string, list<int>> $idsByCountry */
+    $idsByCountry = [];
+    $primaryBatchId = null;
+    $selectedBatchId = null;
+
+    foreach ($groups as $destName => $list) {
+        $destCanon = resolve_canonical_country((string) $destName) ?? $canon;
+        $destCountry = $destCanon['name'];
+        $destRegion = $destCountry === $selectedCountry
+            ? $region
+            : (string) ($destCanon['region'] ?? '');
+        $destLanguage = $destCountry === $selectedCountry
+            ? $language
+            : (string) ($destCanon['language'] ?? '');
+        if (function_exists('normalize_site_language')) {
+            $destLanguage = normalize_site_language($destLanguage, $destCountry);
+        }
+
+        $batchId = get_or_create_prospect_batch(
+            (int) $user['id'],
+            $destCountry,
+            $destLanguage,
+            $destRegion,
+            '',
+            'Admin Add sites · ' . $destCountry
+        );
+
+        $inserted = 0;
+        $skipped = 0;
+        /** @var list<int> $insertedIds */
+        $insertedIds = [];
+        db()->beginTransaction();
+        try {
+            $n = 0;
+            foreach ($list as $domain) {
+                $findId->execute([$destCountry, $domain]);
+                $beforeId = (int) $findId->fetchColumn();
+                if ($beforeId > 0) {
+                    $skipped++;
+                    $alreadyInDb++;
+                    $n++;
+                    continue;
+                }
+                try {
+                    $siteNiche = prospect_niches_for_new_site($domain, '');
+                    $ins->execute([$domain, '', $destCountry, $destLanguage, $destRegion, $siteNiche, $user['id']]);
+                } catch (Throwable $e) {
+                    $skipped++;
+                    $alreadyInDb++;
+                    $n++;
+                    continue;
+                }
+                $siteId = (int) db()->lastInsertId();
+                if ($siteId <= 0) {
+                    $findId->execute([$destCountry, $domain]);
+                    $siteId = (int) $findId->fetchColumn();
+                }
+                if ($siteId > 0) {
+                    $inserted++;
+                    $insertedIds[] = $siteId;
+                    $insItem->execute([$batchId, $domain, $siteId]);
+                } else {
+                    $skipped++;
+                    $alreadyInDb++;
+                }
+                $n++;
+                if ($n % 250 === 0) {
+                    db()->commit();
+                    db()->beginTransaction();
+                }
+            }
+            $cnt = db()->prepare('SELECT COUNT(*) FROM prospect_batch_items WHERE batch_id=?');
+            $cnt->execute([$batchId]);
+            db()->prepare(
+                'UPDATE prospect_batches SET site_count=?, country=?, language=?, region=?, notes=?, updated_at=NOW() WHERE id=?'
+            )->execute([
+                (int) $cnt->fetchColumn(),
+                $destCountry,
+                $destLanguage,
+                $destRegion,
+                'Admin Add sites · ' . $destCountry,
+                $batchId,
+            ]);
+            db()->commit();
+        } catch (Throwable $e) {
+            if (db()->inTransaction()) {
+                db()->rollBack();
+            }
+            throw $e;
+        }
+
+        try {
+            $purged += purge_duplicate_prospect_site_rows($destCountry);
+        } catch (Throwable $e) {
+            // ignore
+        }
+
+        $totalInserted += $inserted;
+        $byCountry[$destCountry] = [
+            'inserted' => $inserted,
+            'skipped' => $skipped,
+        ];
+        $idsByCountry[$destCountry] = $insertedIds;
+        if ($inserted > 0 && $primaryBatchId === null) {
+            $primaryBatchId = $batchId;
+        }
+        if ($destCountry === $selectedCountry && $inserted > 0) {
+            $selectedBatchId = $batchId;
+        }
     }
 
-    $duplicated = $listDuplicates + $alreadyInDb + $purged;
+    $insertedDests = [];
+    foreach ($byCountry as $name => $bucket) {
+        if ((int) ($bucket['inserted'] ?? 0) > 0) {
+            $insertedDests[] = $name;
+        }
+    }
+    $redirectCountry = count($insertedDests) === 1 ? $insertedDests[0] : $selectedCountry;
+    $redirectIds = $idsByCountry[$redirectCountry] ?? [];
+    if ($redirectIds === [] && $insertedDests !== []) {
+        $redirectIds = $idsByCountry[$insertedDests[0]] ?? [];
+    }
 
     return [
-        'inserted' => $inserted,
+        'inserted' => $totalInserted,
         'updated' => 0, // legacy key — duplicates are deleted, not updated
-        'duplicated' => $duplicated,
+        'duplicated' => $listDuplicates + $alreadyInDb + $purged,
         'purged' => $purged,
         'total' => count($domains),
-        'batch_id' => $batchId,
-        'country' => $country,
-        'ids' => $insertedIds,
+        'batch_id' => $selectedBatchId ?? $primaryBatchId,
+        'country' => $redirectCountry,
+        'ids' => $redirectIds,
+        'by_country' => $byCountry,
     ];
 }
 

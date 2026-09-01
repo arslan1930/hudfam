@@ -531,7 +531,7 @@ render_header('Filter & add', 'team');
         <textarea id="unique_domains_preview" class="unique-sites-preview" rows="<?= (int) $uniqueRows ?>" readonly data-no-draft><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in their destination country Our database yet
-          (TLD routing: .at→Austria, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
+          (TLD routing: .at→Austria, .pt→Portugal, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
           This leftover is <strong>this Filter run</strong> (your session) — not the shared country total.
           Add merges them into the correct country folders and Extracting Sites lists
           (shared — both teammates see the same folder count after refresh).

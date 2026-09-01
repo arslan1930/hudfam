@@ -522,10 +522,6 @@ html.ui-v2 thead th {
 html.ui-v2 tbody tr:hover td {
   background: rgba(34, 211, 238, 0.06);
 }
-html.ui-v2 tr.is-sheet-selected td,
-html.ui-v2 li.is-sheet-selected {
-  background: rgba(34, 211, 238, 0.12);
-}
 
 /* Alerts — existing .alert-ok / .alert-error / .alert-fade only */
 html.ui-v2 .alert-box {
@@ -749,8 +745,8 @@ html.ui-v2 .swe-checkpoint-rule > h2 {
 html.ui-v2 .prospect-market-toggle:hover {
   background: rgba(34, 211, 238, 0.08);
 }
-html.ui-v2 .swe-table tr.swe-row-emailed > td {
-  background: rgba(52, 245, 197, 0.08);
+html.ui-v2 .swe-table tr.swe-row-opened .swe-row-num {
+  color: #7dd3fc;
 }
 html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"],
 html.ui-v2 .main .swe-row-actions button[form*="-remove-"],
@@ -1049,20 +1045,76 @@ html.ui-v2 .camp-sheet-table .camp-cell {
 html.ui-v2 tbody tr:nth-child(even) td {
   background: rgba(148, 163, 184, 0.06);
 }
+
+/* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
+html.ui-v2 tr.is-sheet-selected td,
+html.ui-v2 li.is-sheet-selected,
 html.ui-v2 tbody tr.is-sheet-selected td,
-html.ui-v2 tbody tr.swe-row-emailed > td {
-  background: rgba(34, 211, 238, 0.12);
+html.ui-v2 tbody tr.is-sheet-selected:hover td,
+html.ui-v2 tbody tr:nth-child(even).is-sheet-selected td {
+  background: rgba(34, 211, 238, 0.32) !important;
+  box-shadow: inset 4px 0 0 #22d3ee;
+  color: #f8fafc;
 }
-html.ui-v2 tbody tr.swe-row-emailed > td {
-  background: rgba(74, 222, 128, 0.1);
+html.ui-v2 .swe-table tr.swe-row-opened > td,
+html.ui-v2 .swe-table tr.swe-row-opened:hover > td,
+html.ui-v2 .swe-table tr.swe-row-opened.sheet-search-hit td {
+  background: rgba(56, 189, 248, 0.34) !important;
+  box-shadow: inset 4px 0 0 #38bdf8;
+  color: #f8fafc;
+}
+html.ui-v2 .swe-table tr.swe-row-emailed > td,
+html.ui-v2 .swe-table tr.swe-row-emailed:hover > td,
+html.ui-v2 .swe-table tr.swe-row-emailed.sheet-search-hit td,
+html.ui-v2 tbody tr.swe-row-emailed > td,
+html.ui-v2 tbody tr:nth-child(even).swe-row-emailed > td {
+  background: rgba(52, 211, 153, 0.30) !important;
+  box-shadow: inset 4px 0 0 #34d399;
+  color: #f8fafc;
+}
+html.ui-v2 .swe-table tr.swe-row-emailed.is-sheet-selected > td,
+html.ui-v2 tbody tr.swe-row-emailed.is-sheet-selected td {
+  background: rgba(34, 211, 238, 0.28) !important;
+  box-shadow: inset 4px 0 0 #22d3ee, inset 0 0 0 1px rgba(52, 211, 153, 0.55);
+  color: #f8fafc;
 }
 html.ui-v2 .sheet-search-hit,
 html.ui-v2 tr.sheet-search-hit td,
+html.ui-v2 .swe-table tr.sheet-search-hit td,
+html.ui-v2 #prospect-site-table tr.sheet-search-hit td,
+html.ui-v2 .extracted-country-table tr.sheet-search-hit td,
+html.ui-v2 .invoice-list-table tr.sheet-search-hit td,
+html.ui-v2 .site-price-sheet tr.sheet-search-hit td,
 html.ui-v2 .folder.sheet-search-hit,
-html.ui-v2 .launch-card.sheet-search-hit {
-  background: rgba(34, 211, 238, 0.16) !important;
-  outline-color: var(--brand);
-  color: var(--ink);
+html.ui-v2 .launch-card.sheet-search-hit,
+html.ui-v2 .extracted-plain-item.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.34) !important;
+  outline: 2px solid #22d3ee !important;
+  outline-offset: -2px;
+  color: #f8fafc;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.28);
+}
+html.ui-v2 #prospect-site-table tr.is-just-added td,
+html.ui-v2 #prospect-site-table tr.is-just-added:hover td,
+html.ui-v2 tbody tr.is-just-added td {
+  background: rgba(52, 211, 153, 0.30) !important;
+  color: #f8fafc;
+}
+html.ui-v2 #prospect-site-table tr.is-just-added td:first-child {
+  box-shadow: inset 4px 0 0 #34d399;
+}
+html.ui-v2 .dept-task-mine td {
+  background: rgba(52, 211, 153, 0.22) !important;
+  box-shadow: inset 4px 0 0 #34d399;
+  color: #f8fafc;
+}
+html.ui-v2 .dept-task-overdue td {
+  background: rgba(248, 113, 113, 0.26) !important;
+  box-shadow: inset 4px 0 0 #f87171;
+  color: #f8fafc;
+}
+html.ui-v2 .tld-site-row:hover {
+  background: rgba(34, 211, 238, 0.18);
 }
 html.ui-v2 .camp-add-row > td {
   background: #1e293b;
