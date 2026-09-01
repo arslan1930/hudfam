@@ -186,6 +186,7 @@ if (
 
 if (str_contains($procJs, "method === 'get'")
     && str_contains($procJs, 'GET forms do')
+    && str_contains($procJs, '(?:export|download)=')
     && str_contains($draftJs, 'Restore already wrote localStorage')
     && str_contains($draftJs, 'restoreBannerVisible')
     && str_contains($draftJs, 'saveForm(form, index, true)')

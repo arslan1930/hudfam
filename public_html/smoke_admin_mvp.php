@@ -3093,6 +3093,7 @@ if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
     || !str_contains($procJsSmoke, 'NAV_DELAY_MS')
     || !str_contains($procJsSmoke, 'armDelayedLoading')
     || !str_contains($procJsSmoke, "method === 'get'")
+    || !str_contains($procJsSmoke, '(?:export|download)=')
     || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
     fail('Missing delayed loading overlay or select-remove JS');
 } else {
