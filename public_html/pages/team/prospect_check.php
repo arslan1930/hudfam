@@ -206,7 +206,9 @@ try {
         } else {
             // Filter: route by TLD, drop sites already in each destination country.
             $result = filter_domains_routed_against_prospects($domains, $country);
-            $raw = implode("\n", $result['new']);
+            // Keep the paste box as the submitted list. Unique leftovers belong
+            // only in the “New unique sites only” card (not a second copy here).
+            $raw = implode("\n", $domains);
             $skippedN = count($result['existing']);
             $uniqueN = count($result['new']);
             prospect_filter_gate_set($country, $result['new']);
@@ -506,7 +508,7 @@ render_header('Filter & add', 'team');
   <div class="card panel-ok">
     <h2>New unique sites only</h2>
     <?php if ($result['new']): ?>
-      <form method="post" id="add_unique_form">
+      <form method="post" id="add_unique_form" data-no-draft>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="add_new">
         <input type="hidden" name="country" value="<?= h($country) ?>">
@@ -520,9 +522,10 @@ render_header('Filter & add', 'team');
           if (count($result['new']) > 5000) {
               $uniquePreview .= "\n… +" . (count($result['new']) - 5000) . ' more';
           }
+          $uniqueRows = max(4, min(16, count($result['new']) + 1));
         ?>
         <?= render_hidden_multiline('domains', $uniqueText) ?>
-        <textarea id="unique_domains_preview" class="inventory-box" rows="10" readonly><?= h($uniquePreview) ?></textarea>
+        <textarea id="unique_domains_preview" class="unique-sites-preview" rows="<?= (int) $uniqueRows ?>" readonly data-no-draft><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in their destination country Our database yet
           (TLD routing: .at→Austria, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
@@ -581,25 +584,6 @@ render_header('Filter & add', 'team');
         </div>
       </div>
 
-      <?php if (!empty($tldCheck['warn'])): ?>
-      <script>
-      (function(){
-        var form = document.getElementById('add_unique_form');
-        if (!form) return;
-        form.addEventListener('submit', function(e){
-          var box = form.querySelector('input[name=confirm_tld_mismatch]');
-          if (box && !box.checked) {
-            e.preventDefault();
-            alert('Please confirm the country/TLD warning checkbox first, or change the country.');
-            return;
-          }
-          if (!confirm(<?= json_encode('Save ' . count($result['new']) . ' site(s) into ' . $country . ' despite the TLD mismatch warning?', JSON_UNESCAPED_UNICODE) ?>)) {
-            e.preventDefault();
-          }
-        });
-      })();
-      </script>
-      <?php endif; ?>
     <?php else: ?>
       <div class="empty-state">
         <p>No new sites to add — everything you pasted is already in the destination country database(s).</p>

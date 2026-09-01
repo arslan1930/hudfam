@@ -94,6 +94,97 @@
       : 'Select all ' + n + ' matching rows on this page';
   }
 
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        if (!document.execCommand('copy')) reject(new Error('Copy failed'));
+        else resolve();
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
+  function selectedRows() {
+    return selectedChecks().map(rowOfCheck).filter(Boolean);
+  }
+
+  function splitEmailTokens(raw) {
+    var text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!text) return [];
+    return text.split(/[\n,;]+|\s+/).map(function (part) {
+      return String(part || '').trim().replace(/^<|>$/g, '');
+    }).filter(Boolean);
+  }
+
+  function isValidEmailToken(v) {
+    var s = String(v || '').trim();
+    return s !== '' && s.indexOf('@') !== -1;
+  }
+
+  function collectSelectedEmails() {
+    var rows = selectedRows();
+    var emails = [];
+    var seen = {};
+    var none = 0;
+    rows.forEach(function (row) {
+      var found = 0;
+      Array.prototype.forEach.call(row.querySelectorAll('[data-swe-email]'), function (input) {
+        splitEmailTokens(input.value).forEach(function (e) {
+          if (!isValidEmailToken(e)) return;
+          found++;
+          var key = e.toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          emails.push(e);
+        });
+      });
+      if (found < 1) none++;
+    });
+    return { emails: emails, sites: rows.length, none: none };
+  }
+
+  function collectSelectedDomains() {
+    var rows = selectedRows();
+    var domains = [];
+    var seen = {};
+    var none = 0;
+    rows.forEach(function (row) {
+      var input = row.querySelector('.swe-domain, [name="domain"]');
+      var d = String((input && input.value) || '').trim();
+      if (!d) {
+        none++;
+        return;
+      }
+      var key = d.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      domains.push(d);
+    });
+    return { domains: domains, sites: rows.length, none: none };
+  }
+
+  function syncCopySelectedButtons(c) {
+    document.querySelectorAll(
+      '[data-camp-copy-selected-emails], [data-swe-copy-selected-emails], [data-camp-copy-selected-domains]'
+    ).forEach(function (btn) {
+      btn.disabled = c < 1;
+    });
+  }
+
   function syncRemoveButton() {
     clearHiddenSelection();
     var vis = visibleChecks();
@@ -115,9 +206,15 @@
     }
     var selectAll = root ? root.querySelector('[data-sheet-select-all]') : null;
     if (selectAll) {
-      selectAll.title = title;
-      selectAll.setAttribute('aria-label', title);
+      var allOn = n > 0 && c === n;
+      selectAll.textContent = allOn ? 'Unselect all' : 'Select all';
+      var selectTitle = allOn
+        ? 'Unselect all matching rows on this page'
+        : 'Select all matching rows on this page';
+      selectAll.title = selectTitle;
+      selectAll.setAttribute('aria-label', selectTitle);
     }
+    syncCopySelectedButtons(c);
   }
 
   function markRowSelected(el, on) {
@@ -300,6 +397,9 @@
   window.SheetSelectUndo = {
     applyState: applyState,
     sync: syncRemoveButton,
+    selectedRows: selectedRows,
+    collectSelectedEmails: collectSelectedEmails,
+    collectSelectedDomains: collectSelectedDomains,
     syncPageStatus: function (shown, filtering) {
       var el = document.querySelector('[data-sheet-page-status]');
       if (!el) return;
@@ -341,6 +441,56 @@
     if (t && t.closest && t.closest('details.sheet-row-more, details.sheet-tool-menu')) return;
     document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
       d.open = false;
+    });
+  });
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest
+      ? e.target.closest('[data-camp-copy-selected-emails], [data-swe-copy-selected-emails], [data-camp-copy-selected-domains]')
+      : null;
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    var wantDomains = btn.hasAttribute('data-camp-copy-selected-domains');
+    if (selectedChecks().length < 1) {
+      setStatus('Tick a row first.', true);
+      return;
+    }
+    if (wantDomains) {
+      var domainPick = collectSelectedDomains();
+      if (!domainPick.domains.length) {
+        setStatus('No valid domains on the selected sites.', true);
+        return;
+      }
+      copyText(domainPick.domains.join('\n')).then(function () {
+        var n = domainPick.domains.length;
+        var m = domainPick.sites;
+        var msg = 'Copied ' + n + ' domain' + (n === 1 ? '' : 's')
+          + ' from ' + m + ' selected site' + (m === 1 ? '' : 's') + ' on this page.';
+        if (domainPick.none > 0) {
+          msg += ' · ' + domainPick.none + ' had none';
+        }
+        setStatus(msg);
+      }).catch(function () {
+        setStatus('Copy failed.', true);
+      });
+      return;
+    }
+    var pick = collectSelectedEmails();
+    if (!pick.emails.length) {
+      setStatus('No valid emails on the selected sites.', true);
+      return;
+    }
+    copyText(pick.emails.join('\n')).then(function () {
+      var n = pick.emails.length;
+      var m = pick.sites;
+      var msg = 'Copied ' + n + ' email' + (n === 1 ? '' : 's')
+        + ' from ' + m + ' selected site' + (m === 1 ? '' : 's') + ' on this page.';
+      if (pick.none > 0) {
+        msg += ' · ' + pick.none + ' had none';
+      }
+      setStatus(msg);
+    }).catch(function () {
+      setStatus('Copy failed.', true);
     });
   });
 

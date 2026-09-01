@@ -51,6 +51,24 @@
       statusEl.classList.toggle('is-ok', !isError);
     }
 
+    function fallbackCopy(text, done) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        done();
+      } catch (err) {
+        setStatus('Could not copy.', true);
+      }
+      document.body.removeChild(ta);
+    }
+
     function sourceText() {
       if (!sourceSel) return '';
       var el = document.querySelector(sourceSel);
@@ -200,7 +218,7 @@
       var title = document.createElement('h3');
       title.className = 'tld-workspace-title';
       var label = document.createElement('span');
-      label.textContent = tld === 'other' ? '(other)' : ('.' + tld);
+      label.textContent = endingLabel(tld);
       var count = document.createElement('span');
       count.className = 'tld-count';
       count.textContent = list.length + ' site' + (list.length === 1 ? '' : 's');
@@ -208,14 +226,30 @@
       title.appendChild(count);
       col.appendChild(title);
 
-      var ta = document.createElement('textarea');
-      ta.className = 'tld-workspace-list';
-      ta.setAttribute('data-tld-domains', '1');
-      ta.setAttribute('readonly', 'readonly');
-      ta.setAttribute('spellcheck', 'false');
-      ta.rows = Math.min(28, Math.max(8, list.length + 1));
-      ta.value = list.join('\n');
-      col.appendChild(ta);
+      var listEl = document.createElement('div');
+      listEl.className = 'tld-workspace-list';
+      listEl.setAttribute('data-tld-domains', '1');
+      list.forEach(function (domain) {
+        var d = String(domain || '').trim();
+        if (!d) return;
+        var row = document.createElement('div');
+        row.className = 'tld-site-row';
+        row.setAttribute('data-tld-site', d);
+        var name = document.createElement('span');
+        name.className = 'tld-site-name';
+        name.textContent = d;
+        var drop = document.createElement('button');
+        drop.type = 'button';
+        drop.className = 'tld-site-drop';
+        drop.setAttribute('data-tld-drop-site', '1');
+        drop.setAttribute('aria-label', 'Remove ' + d);
+        drop.setAttribute('title', 'Remove ' + d + ' from this list');
+        drop.textContent = '×';
+        row.appendChild(name);
+        row.appendChild(drop);
+        listEl.appendChild(row);
+      });
+      col.appendChild(listEl);
 
       var actions = document.createElement('div');
       actions.className = 'tld-col-actions';
@@ -283,8 +317,8 @@
         form.appendChild(sendBtn);
 
         form.addEventListener('submit', function (e) {
-          var live = col.querySelector('textarea[data-tld-domains]');
-          if (live) domainsTa.value = live.value;
+          var liveList = (preloaded && preloaded[tld]) ? preloaded[tld] : [];
+          domainsTa.value = liveList.join('\n');
           // Refresh country/meta from form at submit time.
           var m = liveMeta();
           var cInput = form.querySelector('input[name="country"]');
@@ -301,21 +335,12 @@
             setStatus('Select a country database first.', true);
             return;
           }
-          var n = String(domainsTa.value || '').split(/\n+/).filter(function (line) {
-            return line.trim();
+          var n = liveList.filter(function (line) {
+            return String(line || '').trim();
           }).length;
           if (!n) {
             e.preventDefault();
             setStatus('This ending list is empty.', true);
-            return;
-          }
-          var suffix = tld === 'other' ? 'other' : ('.' + tld);
-          if (!window.confirm(
-            'Send ' + n + ' ' + suffix + ' site(s) to ' + cInput.value
-              + '?\n\nThese sites already passed Filter unique sites. Already-known sites are skipped again as a safety check.'
-              + '\n\nIf this ending looks wrong for ' + cInput.value + ', you are confirming you still want to add them.'
-          )) {
-            e.preventDefault();
             return;
           }
           var ack = form.querySelector('input[name="confirm_tld_mismatch"]');
@@ -335,6 +360,34 @@
       panel.hidden = false;
     }
 
+    function endingLabel(tld) {
+      return tld === 'other' ? '(other)' : ('.' + tld);
+    }
+
+    function removeEnding(tld) {
+      var removed = (preloaded && preloaded[tld]) ? preloaded[tld].slice() : [];
+      if (preloaded && preloaded[tld]) {
+        delete preloaded[tld];
+      }
+      if (pristine && pristine[tld]) {
+        delete pristine[tld];
+      }
+      stripSharedColumns(removed);
+      try {
+        document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
+          detail: { domains: removed, origin: root }
+        }));
+      } catch (err3) { /* ignore */ }
+      activeTld = '';
+      renderGroups(preloaded || {});
+      if (!orderedKeys(preloaded || {}).length) {
+        setStatus('All endings removed.');
+      } else {
+        setStatus('Ending deleted.');
+      }
+      syncAddAllHidden();
+    }
+
     function renderRail(groups) {
       if (!rail) return;
       rail.innerHTML = '';
@@ -346,12 +399,23 @@
       }
       keys.forEach(function (tld) {
         var list = groups[tld] || [];
+        var item = document.createElement('div');
+        item.className = 'tld-rail-item';
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'tld-rail-btn' + (tld === activeTld ? ' is-active' : '');
         btn.setAttribute('data-tld-tab', tld);
-        btn.textContent = (tld === 'other' ? '(other)' : ('.' + tld)) + ' (' + list.length + ')';
-        rail.appendChild(btn);
+        btn.textContent = endingLabel(tld) + ' (' + list.length + ')';
+        var drop = document.createElement('button');
+        drop.type = 'button';
+        drop.className = 'tld-rail-drop';
+        drop.setAttribute('data-tld-drop-ending', tld);
+        drop.setAttribute('aria-label', 'Remove ' + endingLabel(tld));
+        drop.setAttribute('title', 'Remove ' + endingLabel(tld) + ' from this list');
+        drop.textContent = '\u00d7';
+        item.appendChild(btn);
+        item.appendChild(drop);
+        rail.appendChild(item);
       });
       rail.hidden = false;
       if (workspace) workspace.hidden = false;
@@ -466,6 +530,15 @@
       var t = e.target;
       if (!t || !t.closest) return;
 
+      var dropEnding = t.closest('[data-tld-drop-ending]');
+      if (dropEnding && root.contains(dropEnding)) {
+        e.preventDefault();
+        var tldChip = dropEnding.getAttribute('data-tld-drop-ending') || '';
+        if (!tldChip) return;
+        removeEnding(tldChip);
+        return;
+      }
+
       var tab = t.closest('[data-tld-tab]');
       if (tab && root.contains(tab)) {
         e.preventDefault();
@@ -478,37 +551,51 @@
       var col = t.closest('[data-tld-col]');
       if (!col || !root.contains(col)) return;
 
+      if (t.closest('[data-tld-drop-site]')) {
+        e.preventDefault();
+        var row = t.closest('[data-tld-site]');
+        var domain = row ? String(row.getAttribute('data-tld-site') || '').trim() : '';
+        if (!domain) return;
+        var removed = [domain];
+        dropDomainsFromMap(preloaded, removed);
+        dropDomainsFromMap(pristine, removed);
+        stripSharedColumns(removed);
+        try {
+          document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
+            detail: { domains: removed, origin: root }
+          }));
+        } catch (errDrop) { /* ignore */ }
+        var tldNow = col.getAttribute('data-tld-col') || '';
+        if (preloaded && preloaded[tldNow] && preloaded[tldNow].length) {
+          renderRail(preloaded);
+          renderActivePanel(tldNow);
+        } else {
+          activeTld = '';
+          renderGroups(preloaded || {});
+        }
+        setStatus('Removed ' + domain + '.');
+        syncAddAllHidden();
+        return;
+      }
+
       if (t.closest('[data-tld-copy]')) {
         e.preventDefault();
-        var ta = col.querySelector('textarea[data-tld-domains]');
-        var text = ta ? String(ta.value || '') : '';
+        var tldCopy = col.getAttribute('data-tld-col') || '';
+        var copyList = (preloaded && preloaded[tldCopy]) ? preloaded[tldCopy] : [];
+        var text = copyList.join('\n');
         if (!text.trim()) {
           setStatus('List is empty.', true);
           return;
         }
         var done = function () {
-          setStatus('Copied ' + text.split(/\n+/).filter(Boolean).length + ' site(s).');
+          setStatus('Copied ' + copyList.filter(Boolean).length + ' site(s).');
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(done).catch(function () {
-            ta.focus();
-            ta.select();
-            try {
-              document.execCommand('copy');
-              done();
-            } catch (err) {
-              setStatus('Could not copy.', true);
-            }
+            fallbackCopy(text, done);
           });
         } else {
-          ta.focus();
-          ta.select();
-          try {
-            document.execCommand('copy');
-            done();
-          } catch (err2) {
-            setStatus('Could not copy.', true);
-          }
+          fallbackCopy(text, done);
         }
         return;
       }
@@ -516,31 +603,11 @@
       if (t.closest('[data-tld-delete]')) {
         e.preventDefault();
         var tld = col.getAttribute('data-tld-col') || '';
-        var label = tld === 'other' ? '(other)' : ('.' + tld);
+        var label = endingLabel(tld);
         if (!window.confirm('Delete the ' + label + ' list from this view? (Does not change the country database.)')) {
           return;
         }
-        var removed = (preloaded && preloaded[tld]) ? preloaded[tld].slice() : [];
-        if (preloaded && preloaded[tld]) {
-          delete preloaded[tld];
-        }
-        if (pristine && pristine[tld]) {
-          delete pristine[tld];
-        }
-        stripSharedColumns(removed);
-        try {
-          document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
-            detail: { domains: removed, origin: root }
-          }));
-        } catch (err3) { /* ignore */ }
-        activeTld = '';
-        renderGroups(preloaded || {});
-        if (!orderedKeys(preloaded || {}).length) {
-          setStatus('All endings removed.');
-        } else {
-          setStatus('Ending deleted.');
-        }
-        syncAddAllHidden();
+        removeEnding(tld);
       }
     });
   }

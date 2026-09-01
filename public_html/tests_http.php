@@ -399,6 +399,9 @@ if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && str_c
     && str_contains($r['body'], 'Username or Admin email')
     && str_contains($r['body'], 'password-toggle.js')
     && str_contains($r['body'], 'Sign in to')
+    && str_contains($r['body'], 'class="ui-v2"')
+    && str_contains($r['body'], 'css/style-new.css')
+    && !str_contains($r['body'], 'ui-enhancements.js')
     && !str_contains($r['body'], 'Shared site database')
     && !str_contains($r['body'], 'class="app-bar"')) {
     pass('login page');
@@ -668,7 +671,15 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
             && str_contains($rSheet['body'], 'href="#camp-fill-gaps"')
             && str_contains($rSheet['body'], 'Mark emailed')
             && str_contains($rSheet['body'], 'Not emailed (')
-            && str_contains($rSheet['body'], 'Search site or email (this page)')
+            && str_contains($rSheet['body'], 'placeholder="Search site or email"')
+            && str_contains($rSheet['body'], 'Copy selected emails (this page)')
+            && str_contains($rSheet['body'], 'data-camp-copy-selected-emails')
+            && str_contains($rSheet['body'], 'Copy all emails')
+            && str_contains($rSheet['body'], 'export=emails')
+            && str_contains($rSheet['body'], 'export=csv')
+            && str_contains($rSheet['body'], 'Download CSV / Excel')
+            && str_contains($rSheet['body'], 'Copy all domains')
+            && str_contains($rSheet['body'], 'data-camp-copy-domains')
             && str_contains($rSheet['body'], 'id="camp-country-jump"')
             && str_contains($rSheet['body'], 'value="fill_gaps"')
             && str_contains($rSheet['body'], 'Import')
@@ -719,6 +730,9 @@ $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=sites_with_ema
 if ($r['status'] === 200
     && !str_contains($r['body'], 'id="swe-bulk-add"')
     && str_contains($r['body'], 'id="swe-country-jump"')
+    && str_contains($r['body'], 'Copy selected emails (this page)')
+    && str_contains($r['body'], 'data-swe-copy-selected-emails')
+    && str_contains($r['body'], 'Copy all emails')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin working list has no Final bulk import');
 } else {
@@ -880,7 +894,10 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'folder=extr
 $r = req('GET', $base . '/index.php?page=admin_dashboard');
 if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id="app-sidebar"')
     && str_contains($r['body'], 'mobile-page-title') && str_contains($r['body'], 'class="app-bar"')
-    && str_contains($r['body'], 'class="app-footer')) {
+    && str_contains($r['body'], 'class="app-footer')
+    && str_contains($r['body'], 'id="app-main"')
+    && str_contains($r['body'], 'class="ui-skip"')
+    && str_contains($r['body'], 'css/style-new.css')) {
     pass('mobile nav markup');
 } else {
     fail('mobile nav markup missing');
@@ -889,6 +906,7 @@ if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id=
 // Assets
 foreach ([
     '/asset.php?f=css/app.css',
+    '/asset.php?f=css/style-new.css',
     '/asset.php?f=js/nav-shell.js',
     '/asset.php?f=js/sites-with-emails.js',
     '/asset.php?f=js/csrf.js',
@@ -935,6 +953,9 @@ if (
     $r['status'] === 200
     && str_contains($r['body'], 'function stripSharedColumns')
     && str_contains($r['body'], 'function domainKey')
+    && str_contains($r['body'], 'data-tld-drop-site')
+    && str_contains($r['body'], 'data-tld-drop-ending')
+    && !str_contains($r['body'], 'If this ending looks wrong')
     && !str_contains($r['body'], "sourceSel !== '#domains'")
 ) {
     pass('tld-separate.js Delete ending strips paste and unique');
@@ -1079,7 +1100,12 @@ $rFilt = req('POST', $base . '/index.php?page=team_prospect_check', [
 if ($rFilt['status'] === 200
     && str_contains($rFilt['body'], $stayDe)
     && str_contains($rFilt['body'], $stayAt)
-    && str_contains($rFilt['body'], 'Send this ending')) {
+    && str_contains($rFilt['body'], 'Send this ending')
+    && str_contains($rFilt['body'], 'id="add_unique_form"')
+    && str_contains($rFilt['body'], 'id="unique_domains_preview"')
+    && str_contains($rFilt['body'], 'unique-sites-preview')
+    && str_contains($rFilt['body'], 'data-no-draft')
+    && !str_contains($rFilt['body'], 'id="unique_domains_preview" class="inventory-box"')) {
     pass('finder Filter unique keeps mixed TLDs');
 } else {
     fail('finder Filter unique status=' . $rFilt['status']);
@@ -1249,7 +1275,10 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')) {
     fail('comms blocked from Campaign search status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
-if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')
+    && str_contains($r['body'], 'class="camp-draft-form"')
+    && str_contains($r['body'], 'data-no-draft')
+    && !str_contains($r['body'], 'Fatal error')) {
     pass('comms can open Campaign drafts');
 } else {
     fail('comms blocked from Campaign drafts status=' . $r['status']);

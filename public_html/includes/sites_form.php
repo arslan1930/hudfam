@@ -179,6 +179,7 @@ function render_clearable_email_input(string $name, string $value = '', array $o
         . ' class="' . h(trim('email-field-input ' . $extraClass)) . '"'
         . ' value="' . h($value) . '"'
         . ($placeholder !== '' ? ' placeholder="' . h($placeholder) . '"' : '')
+        . ($has ? ' title="' . h(trim($value)) . '"' : '')
         . ($inputAria !== '' ? ' aria-label="' . h($inputAria) . '"' : '')
         . ' spellcheck="false" autocomplete="off"'
         . ' data-email-input'

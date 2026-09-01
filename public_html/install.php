@@ -16,8 +16,9 @@ $justInstalled = false;
 if (file_exists(__DIR__ . '/config.php')) {
     http_response_code(403);
     header('Content-Type: text/html; charset=utf-8');
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Install locked</title>';
-    echo '<link rel="stylesheet" href="asset.php?f=css/app.css"></head><body><div class="login-wrap"><div class="login-card">';
+    echo '<!DOCTYPE html><html lang="en" class="ui-v2"><head><meta charset="utf-8"><title>Install locked</title>';
+    echo '<link rel="stylesheet" href="asset.php?f=css/app.css">';
+    echo '<link rel="stylesheet" href="asset.php?f=css/style-new.css"></head><body><div class="login-wrap"><div class="login-card">';
     echo '<h1>Install locked</h1>';
     echo '<p>This site already has <code>config.php</code>. Installer will not run again.</p>';
     echo '<p class="help"><strong>Delete <code>install.php</code></strong> from the server now.</p>';
@@ -152,13 +153,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ui-v2">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install TechxForm</title>
   <link rel="stylesheet" href="asset.php?f=css/app.css">
   <link rel="stylesheet" href="assets/css/app.css">
+  <link rel="stylesheet" href="asset.php?f=css/style-new.css">
+  <link rel="stylesheet" href="assets/css/style-new.css">
 </head>
 <body>
 <div class="login-wrap">
