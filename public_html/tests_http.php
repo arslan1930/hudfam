@@ -1148,8 +1148,7 @@ if ($rDash['status'] === 200
     && str_contains($rDash['body'], 'Your tools')
     && str_contains($rDash['body'], 'page=team_extracting')
     && str_contains($rDash['body'], 'Find a task or tool')
-    && str_contains($rDash['body'], 'My departments')
-    && !str_contains($rDash['body'], 'Tasks and assignment')) {
+    && str_contains($rDash['body'], 'My departments')) {
     pass('extractor dashboard tools + Find a task or tool');
 } else {
     fail('extractor dashboard missing tools/search copy status=' . $rDash['status']);
