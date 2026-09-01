@@ -673,6 +673,8 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
             && str_contains($rSheet['body'], 'data-camp-copy-selected-emails')
             && str_contains($rSheet['body'], 'Copy all emails')
             && str_contains($rSheet['body'], 'export=emails')
+            && str_contains($rSheet['body'], 'export=csv')
+            && str_contains($rSheet['body'], 'Download CSV / Excel')
             && str_contains($rSheet['body'], 'Copy all domains')
             && str_contains($rSheet['body'], 'data-camp-copy-domains')
             && str_contains($rSheet['body'], 'id="camp-country-jump"')
@@ -1088,7 +1090,12 @@ $rFilt = req('POST', $base . '/index.php?page=team_prospect_check', [
 if ($rFilt['status'] === 200
     && str_contains($rFilt['body'], $stayDe)
     && str_contains($rFilt['body'], $stayAt)
-    && str_contains($rFilt['body'], 'Send this ending')) {
+    && str_contains($rFilt['body'], 'Send this ending')
+    && str_contains($rFilt['body'], 'id="add_unique_form"')
+    && str_contains($rFilt['body'], 'id="unique_domains_preview"')
+    && str_contains($rFilt['body'], 'unique-sites-preview')
+    && str_contains($rFilt['body'], 'data-no-draft')
+    && !str_contains($rFilt['body'], 'id="unique_domains_preview" class="inventory-box"')) {
     pass('finder Filter unique keeps mixed TLDs');
 } else {
     fail('finder Filter unique status=' . $rFilt['status']);
@@ -1258,7 +1265,10 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')) {
     fail('comms blocked from Campaign search status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
-if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')
+    && str_contains($r['body'], 'class="camp-draft-form"')
+    && str_contains($r['body'], 'data-no-draft')
+    && !str_contains($r['body'], 'Fatal error')) {
     pass('comms can open Campaign drafts');
 } else {
     fail('comms blocked from Campaign drafts status=' . $r['status']);

@@ -1106,6 +1106,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   min-height: 280px;
   white-space: pre;
 }
+.unique-sites-preview {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  min-height: 0;
+  white-space: pre;
+  resize: vertical;
+}
 .tld-separate-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -3829,6 +3837,20 @@ a.card.stat:focus-visible {
   white-space: nowrap;
   border: 0;
 }
+/* Form controls ignore clip/1px height (rows + global textarea width/padding). */
+textarea.visually-hidden,
+input.visually-hidden,
+textarea[hidden],
+.camp-draft-textarea-sync {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+}
 .order-sheet-card {
   max-width: 100%;
   min-width: 0;
@@ -5258,7 +5280,7 @@ textarea:focus-visible {
   color: var(--muted);
 }
 .camp-draft-textarea-sync {
-  display: none;
+  display: none !important;
 }
 .camp-admin-drafts-list {
   list-style: none;

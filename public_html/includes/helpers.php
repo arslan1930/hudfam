@@ -146,9 +146,11 @@ function render_hidden_multiline(string $name, string $value, array $opts = []):
     $id = trim((string) ($opts['id'] ?? ''));
     $extraClass = trim((string) ($opts['class'] ?? ''));
     $class = trim('visually-hidden ' . $extraClass);
+    // hidden + display:none: clip-based .visually-hidden does not hide <textarea>
+    // (UA rows/min-size ignore height:1px), which stacked extra boxes in Filter & add.
     return '<textarea name="' . h($name) . '"'
         . ($id !== '' ? ' id="' . h($id) . '"' : '')
-        . ' class="' . h($class) . '" aria-hidden="true" tabindex="-1">'
+        . ' class="' . h($class) . '" hidden aria-hidden="true" tabindex="-1">'
         . h($value)
         . '</textarea>';
 }

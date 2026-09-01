@@ -176,6 +176,8 @@ if (
     && str_contains($draftJs, 'just_added')
     && str_contains($draftJs, 'prospect-add-sites-form')
     && str_contains($draftJs, 'Restore already wrote localStorage')
+    && str_contains($draftJs, 'camp-draft-textarea-sync')
+    && str_contains($draftJs, "el.classList.contains('visually-hidden')")
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
@@ -3360,13 +3362,46 @@ try {
     )->fetchColumn();
     $aInSent = $aEmail !== '' && in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsSent), true);
     $aNotUnsent = $aEmail === '' || !in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsUnsent), true);
-    if ($hasGoodC && $noBadC && $aInSent && $aNotUnsent
+    if (    $hasGoodC && $noBadC && $aInSent && $aNotUnsent
         && in_array('good@txfcamp-nl-c.nl', $copyEmailsAll, true)) {
         pass('campaign copy emails splits sent vs unsent and skips invalid tokens');
     } else {
         fail('copy emails: unsent=' . json_encode($copyEmailsUnsent)
             . ' sent=' . json_encode($copyEmailsSent) . ' all=' . json_encode($copyEmailsAll)
             . " aEmail=$aEmail");
+    }
+
+    $csvUnsent = collect_email_campaign_csv_rows($nlSheet, '0');
+    $csvSentRows = collect_email_campaign_csv_rows($nlSheet, '1');
+    $csvAllRows = collect_email_campaign_csv_rows($nlSheet, null);
+    $csvC = null;
+    $csvCInSent = false;
+    $csvAInSent = false;
+    foreach ($csvUnsent as $row) {
+        if (($row[0] ?? '') === 'txfcamp-nl-c.nl') {
+            $csvC = $row;
+        }
+    }
+    foreach ($csvSentRows as $row) {
+        if (($row[0] ?? '') === 'txfcamp-nl-c.nl') {
+            $csvCInSent = true;
+        }
+        if (($row[0] ?? '') === 'txfcamp-nl-a.nl') {
+            $csvAInSent = true;
+        }
+    }
+    $csvJoined = $csvC ? strtolower(implode(' ', $csvC)) : '';
+    if ($csvC
+        && str_contains($csvJoined, 'good@txfcamp-nl-c.nl')
+        && str_contains($csvJoined, 'also@txfcamp-nl-c.nl')
+        && !str_contains($csvJoined, 'not-an-email')
+        && $csvAInSent
+        && !$csvCInSent
+        && count($csvAllRows) >= 2) {
+        pass('campaign csv rows keep site+emails and honor emailed filter');
+    } else {
+        fail('campaign csv: unsent=' . json_encode($csvUnsent)
+            . ' sent=' . json_encode($csvSentRows) . ' all=' . json_encode($csvAllRows));
     }
     db()->prepare(
         "UPDATE email_campaign_rows

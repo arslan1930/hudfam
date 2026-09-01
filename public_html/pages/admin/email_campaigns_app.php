@@ -62,6 +62,13 @@ if ($sheetId > 0) {
         }
         stream_email_campaign_emails_plain($sheetId, $sentExport);
     }
+    if ((string) get('export') === 'csv') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_csv($sheetId, $sentExport);
+    }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
@@ -519,6 +526,10 @@ if ($sheetId > 0) {
     $emailsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=emails';
     $emailsExportUnsentUrl = $emailsExportUrl . '&sent=0';
     $emailsExportSentUrl = $emailsExportUrl . '&sent=1';
+    $csvUrl = $campBase . '&sheet=' . $sheetId . '&export=csv';
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $csvUrl .= '&sent=' . $sentFilter;
+    }
     $qs = http_build_query(array_filter([
         'page' => 'admin_emails_data',
         'folder' => 'email_campaigns',
@@ -771,6 +782,10 @@ if ($sheetId > 0) {
             <?php endif; ?>
           </div>
           <?php render_sheet_tool_menu_close(); ?>
+          <a class="btn secondary" href="<?= h($csvUrl) ?>"
+             title="Download this country sheet as CSV (opens in Excel). Whole sheet<?= $sentFilter === '0' ? ' · not emailed only' : ($sentFilter === '1' ? ' · emailed only' : '') ?>, ignores ticks.">
+            Download CSV / Excel
+          </a>
         </div>
         <div class="actions">
           <button type="button" class="btn small" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
@@ -1905,7 +1920,7 @@ if ($projectIdParam > 0) {
           <?php endif; ?>
 
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" style="margin-top:1rem"
-                autocomplete="off" data-show-processing="Saving draft…">
+                autocomplete="off" data-no-draft data-show-processing="Saving draft…">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="save_draft">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">

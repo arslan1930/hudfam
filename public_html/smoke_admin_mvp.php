@@ -929,6 +929,8 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, "typeahead::")
     || !str_contains($draftJsSmoke, 'typeahead:select')
     || !str_contains($draftJsSmoke, 'Typed country')
+    || !str_contains($draftJsSmoke, 'camp-draft-textarea-sync')
+    || !str_contains($draftJsSmoke, "el.classList.contains('visually-hidden')")
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -1487,10 +1489,14 @@ if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
 }
 if (!str_contains($campLibSmoke, 'function collect_email_campaign_emails')
     || !str_contains($campLibSmoke, 'function stream_email_campaign_emails_plain')
+    || !str_contains($campLibSmoke, 'function collect_email_campaign_csv_rows')
+    || !str_contains($campLibSmoke, 'function stream_email_campaign_csv')
     || !str_contains($campAppSmoke, 'Copy selected emails (this page)')
     || !str_contains($campAppSmoke, 'data-camp-copy-selected-emails')
     || !str_contains($campAppSmoke, 'data-camp-copy-domains')
     || !str_contains($campAppSmoke, 'export=emails')
+    || !str_contains($campAppSmoke, 'export=csv')
+    || !str_contains($campAppSmoke, 'Download CSV / Excel')
     || !str_contains($campAppSmoke, 'data-camp-copy-emails')
     || !str_contains($campAppSmoke, 'Copy all emails')
     || !str_contains($campAppSmoke, 'Copy not emailed emails')
@@ -2596,6 +2602,16 @@ if (!str_contains($campLib, 'data-camp-open-drafts')
     ok('campaign search Open drafts deep-link');
 }
 $campDraftJs = file_get_contents($root . '/assets/js/email-campaign-drafts.js') ?: '';
+$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($campDraftsTeam, 'class="camp-draft-form"')
+    || !str_contains($campDraftsTeam, 'data-no-draft')
+    || !str_contains($campApp, 'data-no-draft data-show-processing="Saving draft')
+    || !str_contains($cssApp, '.camp-draft-textarea-sync')
+    || !str_contains($cssApp, 'display: none !important')) {
+    fail('Save draft forms still bind device drafts / sync textarea can show');
+} else {
+    ok('Save draft forms skip device autosave; sync textarea stays hidden');
+}
 if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
     || !str_contains($campDraftJs, 'expandTokens')
     || !str_contains($campDraftJs, 'data-camp-draft-token')) {
@@ -2853,7 +2869,17 @@ if (!str_contains($prospectCheckSf, 'data-source="#domains"')
 } else {
     ok('Filter Separate all paste + unique sources');
 }
-$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($prospectCheckSf, 'id="add_unique_form"')
+    || !str_contains($prospectCheckSf, 'data-no-draft')
+    || !str_contains($prospectCheckSf, 'unique-sites-preview')
+    || str_contains($prospectCheckSf, 'id="unique_domains_preview" class="inventory-box"')
+    || !str_contains($helpers, "hidden aria-hidden")
+    || !str_contains($cssApp, 'textarea.visually-hidden')
+    || !str_contains($cssApp, '.unique-sites-preview')) {
+    fail('Filter unique card still shows hidden domain boxes / inventory-box preview');
+} else {
+    ok('Filter unique card hides POST textareas and sizes preview to the list');
+}
 if (str_contains($cssApp, '.tld-workspace-list')
     && str_contains($cssApp, 'No max-height scroll cage')) {
     ok('TLD workspace CSS without scroll cage');
