@@ -229,8 +229,10 @@ render_header('Extracting · ' . $country, 'team');
       <div class="domains-paste-head">
         <label for="sites_list_text">Sites (root domains)</label>
           <div class="sites-list-actions">
-            <?php render_undo_redo_arrow_buttons('sites_undo_btn', 'sites_redo_btn'); ?>
-            <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
+            <div class="sites-list-edit-group" role="group" aria-label="Copy and undo Sites list">
+              <?php render_undo_redo_arrow_buttons('sites_undo_btn', 'sites_redo_btn'); ?>
+              <button type="button" class="btn secondary small" id="sites_copy_all">Copy all</button>
+            </div>
             <div class="swe-open-group" data-extract-open-group role="group" aria-label="Open and remove sites in new tabs">
               <label class="visually-hidden" for="extract-open-count">How many sites to open and remove</label>
               <select id="extract-open-count" class="swe-open-count" data-extract-open-count

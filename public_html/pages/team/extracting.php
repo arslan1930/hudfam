@@ -24,7 +24,8 @@ render_header('Extracting sites', 'team');
     <h1>Extracting sites</h1>
     <p class="muted">
       Shared waiting list per country — both teammates see the same shared <strong>Sites</strong> count after you reload
-      (it is not your Filter leftover). Open a country to extract. Site Finding adds new unique sites.
+      (it is not your Filter leftover). Open a country, then use <strong>Open &amp; remove</strong> on that country’s Sites list.
+      Site Finding adds new unique sites.
     </p>
     <?php if ($waitCountries > 0): ?>
       <p class="muted" data-extract-hub-total>

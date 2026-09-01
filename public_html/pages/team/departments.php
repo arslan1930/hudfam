@@ -305,6 +305,7 @@ if ($pageNum > $totalPages) {
     $pageNum = $totalPages;
 }
 $tasks = array_slice($tasksAll, ($pageNum - 1) * $perPage, $perPage);
+$showDue = department_tasks_have_due_date($tasks);
 $stats = department_stats($deptId);
 $isCommunicationDept = (string) $dept['slug'] === 'communication';
 $isEmailExtractingDept = (string) $dept['slug'] === 'email_extracting';
@@ -550,13 +551,13 @@ render_breadcrumbs([
   </div>
   <?php else: ?>
   <div class="table-wrap">
-    <table class="dept-task-table">
+    <table class="dept-task-table sheet-cards-mobile">
       <thead>
         <tr>
           <th>Task</th>
           <th>Assigned</th>
           <th>Status</th>
-          <th>Due</th>
+          <?php if ($showDue): ?><th>Due</th><?php endif; ?>
         </tr>
       </thead>
       <tbody>
@@ -570,15 +571,15 @@ render_breadcrumbs([
           $canSetStatus = team_can_set_department_task_status($user, $t);
           ?>
         <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?> data-due="<?= h((string) ($t['due_date'] ?? '')) ?>">
-          <td>
+          <td data-label="Task">
             <strong><?= h((string) $t['title']) ?></strong>
             <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
             <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
             <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
-              <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
+              <div class="help dept-task-notes"><?= nl2br(h((string) $t['notes'])) ?></div>
             <?php endif; ?>
           </td>
-          <td>
+          <td data-label="Assigned">
             <?php if ($canAssign): ?>
             <form method="post" action="<?= h($deptFolderUrl()) ?>" class="inline-form" data-stay-ajax>
               <?= csrf_field() ?>
@@ -601,7 +602,7 @@ render_breadcrumbs([
               <?= h($assignee !== '' ? $assignee : 'Whole department') ?>
             <?php endif; ?>
           </td>
-          <td>
+          <td data-label="Status">
             <?php if ($canSetStatus): ?>
             <form method="post" action="<?= h($base) ?>&amp;folder=<?= urlencode((string) $dept['slug']) ?>"
                   class="inline-form" data-stay-ajax>
@@ -618,7 +619,9 @@ render_breadcrumbs([
               <?= h(department_task_status_label((string) $t['status'])) ?>
             <?php endif; ?>
           </td>
-          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+          <?php if ($showDue): ?>
+          <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell data-label="Due"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+          <?php endif; ?>
         </tr>
       <?php endforeach; ?>
       </tbody>

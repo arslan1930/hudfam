@@ -2001,10 +2001,13 @@ if (!str_contains($adminDepts, '<th>Actions</th>')
     ok('admin departments Actions header + filter-preserving POST');
 }
 $teamDepts = file_get_contents($root . '/pages/team/departments.php') ?: '';
-if (!str_contains($teamDepts, 'csrf_field()')) {
-    fail('team departments missing csrf_field');
+if (!str_contains($teamDepts, 'csrf_field()')
+    || !str_contains($teamDepts, 'sheet-cards-mobile')
+    || !str_contains($teamDepts, 'dept-task-notes')
+    || !str_contains($teamDepts, 'department_tasks_have_due_date')) {
+    fail('team departments missing csrf_field, mobile cards, or due-column hide');
 } else {
-    ok('team departments csrf_field');
+    ok('team departments csrf_field + mobile cards + due hide');
 }
 $stayScrollJs = file_get_contents($root . '/assets/js/stay-scroll.js') ?: '';
 if (!preg_match('/var req = postStayAjax\(form\);\s*sel\.disabled = true/s', $stayScrollJs)) {
@@ -2054,10 +2057,14 @@ if (!str_contains($teamDash, "post('action') === 'set_status'")
     || !str_contains($teamDash, 'department_primary_tool_url')
     || !str_contains($teamDash, '>Tasks</a>')
     || !str_contains($teamDash, 'department_task_assignee_label')
-    || !str_contains($teamDash, 'Tasks and assignment')) {
-    fail('team dashboard missing status dropdown CSRF, Filter this page, or tool Open');
+    || !str_contains($teamDash, "count(\$myDepartments) > 1")
+    || !str_contains($teamDash, 'Find a task or tool')
+    || !str_contains($teamDash, 'sheet-cards-mobile')
+    || !str_contains($teamDash, 'dept-task-notes')
+    || !str_contains($teamDash, '>Open</a>')) {
+    fail('team dashboard missing status dropdown CSRF, Find a task or tool, or tool Open');
 } else {
-    ok('team dashboard status dropdown + Filter this page + tool Open');
+    ok('team dashboard status dropdown + Find a task or tool + short Open');
 }
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
@@ -2067,6 +2074,8 @@ foreach ([
     'departments_dashboard_stats',
     'department_primary_tool_url',
     'department_task_assignee_label',
+    'team_home_url',
+    'department_tasks_have_due_date',
 ] as $fn) {
     if (!str_contains($deptLib, "function {$fn}")) {
         fail("departments.php missing {$fn}");
@@ -3117,10 +3126,11 @@ if (!str_contains($extractBatchJump, 'extract-country-jump')
     || !str_contains($extractLibSmoke, 'live_site_count')
     || !str_contains($extractLibSmoke, 'function extract_hub_waiting_summary')
     || !str_contains($extractLibSmoke, 'function extract_hub_row_cues')
-    || !str_contains($extractLibSmoke, 'function extract_hub_stamp')) {
-    fail('Extracting missing country switcher, hub search/cap, or live site count');
+    || !str_contains($extractLibSmoke, 'function extract_hub_stamp')
+    || !str_contains($extractHubSmoke, 'Open &amp; remove')) {
+    fail('Extracting missing country switcher, hub search/cap, live site count, or Open & remove hint');
 } else {
-    ok('Extracting country switcher + hub search cap');
+    ok('Extracting country switcher + hub search cap + Open & remove hint');
 }
 if (!str_contains($extractBatchJump, 'Clean first — Push only sends Ready.')) {
     fail('Extracting Push empty Ready copy missing');
@@ -3284,6 +3294,30 @@ if (!str_contains($extractBatchUi, 'id="extract_push_btn"')
     fail('Extracting Push commit button missing');
 } else {
     ok('Extracting Push is a filled commit button');
+}
+$indexHomeSmoke = file_get_contents($root . '/index.php') ?: '';
+$acctHomeSmoke = file_get_contents($root . '/pages/account_password.php') ?: '';
+if (!str_contains($loginPhp, 'team_home_url()')
+    || !str_contains($indexHomeSmoke, 'team_home_url()')
+    || !str_contains($acctHomeSmoke, 'team_home_url()')
+    || str_contains($loginPhp, 'team_departments')) {
+    fail('Team login/home still sends department members to My departments');
+} else {
+    ok('Team login and home always go to Your work');
+}
+if (substr_count($layoutUiSmoke, "'Sites with emails'") < 2
+    || str_contains($layoutUiSmoke, "'Team',")
+    || str_contains($layoutUiSmoke, 'app-footer-links')) {
+    fail('sidebar still labels Sites with emails as Team, or footer still has account links');
+} else {
+    ok('sidebar Sites with emails + account links not in footer');
+}
+if (!str_contains($cssUi, '.sidebar .nav-group-end { display: none; }')
+    || !str_contains($cssUi, '.dept-task-notes')
+    || !str_contains($extractBatchUi, 'sites-list-edit-group')) {
+    fail('CSS missing desktop-hide of sidebar account links, task note clamp, or Sites list edit group');
+} else {
+    ok('sidebar account desktop-hide + task notes clamp + Sites list groups');
 }
 
 echo $failures === 0 ? "\nAll smoke checks passed.\n" : "\n{$failures} failure(s).\n";

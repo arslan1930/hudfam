@@ -259,12 +259,31 @@ function department_folder_url(string $slug): string
     return 'index.php?page=team_departments&folder=' . rawurlencode($slug);
 }
 
+/** Team landing after login, password change, ACL deny, and 404 home. Always Your work. */
+function team_home_url(): string
+{
+    return 'index.php?page=team_dashboard';
+}
+
+function department_tasks_have_due_date(array $tasks): bool
+{
+    foreach ($tasks as $task) {
+        if (!is_array($task)) {
+            continue;
+        }
+        if (trim((string) ($task['due_date'] ?? '')) !== '') {
+            return true;
+        }
+    }
+    return false;
+}
+
 function department_task_open_label(string $slug): string
 {
     return match ($slug) {
         'site_finding' => 'Open Filter & add',
         'site_extracting' => 'Open Extracting sites',
-        'email_extracting' => 'Open Team emails',
+        'email_extracting' => 'Open Sites with emails',
         'communication' => 'Open Campaign search',
         default => 'Open',
     };

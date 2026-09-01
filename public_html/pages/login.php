@@ -3,12 +3,7 @@ if (current_user()) {
     if (is_admin()) {
         redirect('index.php?page=admin_dashboard');
     }
-    $u = current_user();
-    redirect(
-        user_is_department_scoped($u)
-            ? 'index.php?page=team_departments'
-            : 'index.php?page=team_dashboard'
-    );
+    redirect(team_home_url());
 }
 $error = '';
 $userName = '';
@@ -26,12 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (is_admin()) {
             redirect('index.php?page=admin_dashboard');
         }
-        $u = current_user();
-        redirect(
-            user_is_department_scoped($u)
-                ? 'index.php?page=team_departments'
-                : 'index.php?page=team_dashboard'
-        );
+        redirect(team_home_url());
     } else {
         login_throttle_note_failure($userName);
         $error = 'Invalid username or password.';

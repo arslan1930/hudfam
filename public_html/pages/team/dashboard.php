@@ -71,7 +71,7 @@ if ($deptScoped) {
       <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">
         <label class="sheet-search dashboard-search" for="dashboard-search">
           <span class="visually-hidden">Filter this page</span>
-          <input id="dashboard-search" type="search" placeholder="Filter this page…"
+          <input id="dashboard-search" type="search" placeholder="Find a task or tool…"
                  autocomplete="off" spellcheck="false" data-no-draft
                  title="Type to filter · Enter = next match · Shift+Enter = previous">
           <span class="sheet-search-meta muted" data-dashboard-search-meta hidden></span>
@@ -90,16 +90,18 @@ if ($deptScoped) {
           <p>No open tasks right now.</p>
           <p class="muted">When Admin assigns work to your department, it appears here.</p>
         </div>
-      <?php else: ?>
+      <?php else:
+        $showDue = department_tasks_have_due_date($myTasks);
+        ?>
         <div class="table-wrap">
-          <table class="dept-task-table">
+          <table class="dept-task-table sheet-cards-mobile">
             <thead>
               <tr>
                 <th>Department</th>
                 <th>Task</th>
                 <th>Assigned</th>
                 <th>Status</th>
-                <th>Due</th>
+                <?php if ($showDue): ?><th>Due</th><?php endif; ?>
                 <th></th>
               </tr>
             </thead>
@@ -128,17 +130,17 @@ if ($deptScoped) {
                 ?>
               <tr<?= $rowClass !== '' ? ' class="' . h($rowClass) . '"' : '' ?>
                   data-dashboard-item data-search="<?= h($hay) ?>">
-                <td><?= h((string) $t['department_name']) ?></td>
-                <td>
+                <td data-label="Department"><?= h((string) $t['department_name']) ?></td>
+                <td data-label="Task">
                   <strong><?= h((string) $t['title']) ?></strong>
                   <?php if ($mine): ?><span class="badge">Yours</span><?php endif; ?>
                   <?php if ($overdue): ?><span class="badge" data-overdue-badge>Overdue</span><?php endif; ?>
                   <?php if (trim((string) ($t['notes'] ?? '')) !== ''): ?>
-                    <div class="help"><?= nl2br(h((string) $t['notes'])) ?></div>
+                    <div class="help dept-task-notes"><?= nl2br(h((string) $t['notes'])) ?></div>
                   <?php endif; ?>
                 </td>
-                <td class="muted"><?= h($assigneeLabel) ?></td>
-                <td>
+                <td class="muted" data-label="Assigned"><?= h($assigneeLabel) ?></td>
+                <td data-label="Status">
                   <?php if ($canSetStatus): ?>
                   <form method="post" action="index.php?page=team_dashboard" class="inline-form">
                     <?= csrf_field() ?>
@@ -154,10 +156,12 @@ if ($deptScoped) {
                     <?= h(department_task_status_label((string) $t['status'])) ?>
                   <?php endif; ?>
                 </td>
-                <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
-                <td>
+                <?php if ($showDue): ?>
+                <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-label="Due"><?= h((string) ($t['due_date'] ?: '—')) ?></td>
+                <?php endif; ?>
+                <td data-label="Open">
                   <div class="dept-task-actions">
-                    <a class="btn secondary small" href="<?= h($toolUrl) ?>" title="<?= h($openLabel) ?>"><?= h($openLabel) ?></a>
+                    <a class="btn secondary small" href="<?= h($toolUrl) ?>" title="<?= h($openLabel) ?>">Open</a>
                     <a class="muted" href="<?= h($folderUrl) ?>">Tasks</a>
                   </div>
                 </td>
@@ -215,7 +219,7 @@ if ($deptScoped) {
     </div>
     <?php endif; ?>
 
-    <?php if ($myDepartments): ?>
+    <?php if (count($myDepartments) > 1): ?>
     <div class="card" style="margin-top:1rem">
       <h2>Your departments</h2>
       <p class="muted">Tasks and assignment — tools are in Your tools above.</p>

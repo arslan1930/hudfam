@@ -7,7 +7,7 @@ ensure_email_campaign_schema();
 
 if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
     flash('error', 'This tool is for Communication Team members.');
-    redirect('index.php?page=team_departments');
+    redirect(team_home_url());
 }
 
 $base = 'index.php?page=team_email_campaigns';

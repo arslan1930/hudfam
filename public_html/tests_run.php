@@ -7050,7 +7050,10 @@ try {
         && str_contains($otherTool, 'team_departments')
         && str_contains($otherTool, 'folder=unknown_dept')
         && department_task_open_label('site_extracting') === 'Open Extracting sites'
-        && department_task_assignee_label(['assigned_to' => 0]) === 'Whole department') {
+        && department_task_assignee_label(['assigned_to' => 0]) === 'Whole department'
+        && team_home_url() === 'index.php?page=team_dashboard'
+        && department_tasks_have_due_date([]) === false
+        && department_tasks_have_due_date([['due_date' => ''], ['due_date' => '2099-01-01']]) === true) {
         pass('department primary tool URLs + assignee label');
     } else {
         fail('department primary tool URL helper unexpected');

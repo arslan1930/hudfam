@@ -5,6 +5,6 @@
 $user = require_team();
 if (!team_page_unlocked($user, 'team_site_prices')) {
     flash('error', 'Your login only shows work and tools for your department.');
-    redirect('index.php?page=team_departments');
+    redirect(team_home_url());
 }
 site_price_run_page($user, 'team');
