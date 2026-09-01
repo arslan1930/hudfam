@@ -3013,6 +3013,7 @@ if (!str_contains($prospectCheckSf, 'route-dest-list')
     || !str_contains($uiCss, 'route-dest-list')
     || !str_contains($uiCss, 'sites-open-panel')
     || !str_contains($uiCss, 'sites-list-row:hover')
+    || !str_contains($uiCss, '#swe_status')
     || !str_contains($prospectCheckSf, '.pt→Portugal')) {
     fail('Team Filter unique missing destination list or leftover light Sites list styles');
 } else {

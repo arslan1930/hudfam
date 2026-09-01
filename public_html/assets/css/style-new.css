@@ -458,7 +458,8 @@ html.ui-v2 input[type="tel"],
 html.ui-v2 input[type="datetime-local"],
 html.ui-v2 input[type="time"],
 html.ui-v2 select,
-html.ui-v2 textarea {
+html.ui-v2 textarea,
+html.ui-v2 input[type="file"] {
   background: #1e293b;
   color: var(--ink);
   border-radius: 10px;
@@ -831,10 +832,26 @@ html.ui-v2 .main .swe-row-actions button[form*="remove"]:hover {
   background: var(--bad-soft) !important;
   border-color: var(--bad) !important;
 }
+html.ui-v2 #swe_status,
+html.ui-v2 #prospect_copy_status,
+html.ui-v2 .camp-status,
+html.ui-v2 .camp-status:not([hidden]) {
+  background: #1e293b;
+  border-color: #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 #swe_status.is-ok,
+html.ui-v2 .camp-status.is-ok {
+  background: var(--ok-soft);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #86efac;
+}
+html.ui-v2 #swe_status.is-error,
+html.ui-v2 #prospect_copy_status.is-error,
 html.ui-v2 .camp-status.is-error {
   background: var(--bad-soft);
-  border-color: rgba(251, 113, 133, 0.4);
-  color: var(--bad);
+  border-color: rgba(251, 113, 133, 0.45);
+  color: #fecaca;
 }
 html.ui-v2 .extracted-plain-item.sheet-search-hit {
   background: rgba(34, 211, 238, 0.12) !important;
