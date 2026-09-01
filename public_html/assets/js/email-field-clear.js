@@ -10,9 +10,15 @@
     var wrap = input.closest('.email-field, .swe-email-field');
     if (!wrap) return;
     var btn = wrap.querySelector('[data-email-clear], [data-swe-email-clear]');
-    var has = String(input.value || '').trim() !== '';
+    var val = String(input.value || '').trim();
+    var has = val !== '';
     wrap.classList.toggle('has-value', has);
     if (btn) btn.hidden = !has;
+    if (has) {
+      input.title = val;
+    } else {
+      input.removeAttribute('title');
+    }
   }
 
   function syncAll(root) {

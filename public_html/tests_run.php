@@ -176,6 +176,8 @@ if (
     && str_contains($draftJs, 'just_added')
     && str_contains($draftJs, 'prospect-add-sites-form')
     && str_contains($draftJs, 'Restore already wrote localStorage')
+    && str_contains($draftJs, 'camp-draft-textarea-sync')
+    && str_contains($draftJs, "el.classList.contains('visually-hidden')")
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
@@ -184,6 +186,7 @@ if (
 
 if (str_contains($procJs, "method === 'get'")
     && str_contains($procJs, 'GET forms do')
+    && str_contains($procJs, '(?:export|download)=')
     && str_contains($draftJs, 'Restore already wrote localStorage')
     && str_contains($draftJs, 'restoreBannerVisible')
     && str_contains($draftJs, 'saveForm(form, index, true)')
@@ -3340,6 +3343,72 @@ try {
         fail('copy domains: unsent=' . json_encode($copyUnsent)
             . ' sent=' . json_encode($copySent) . ' all=' . json_encode($copyAll));
     }
+
+    db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email1='good@txfcamp-nl-c.nl, not-an-email, also@txfcamp-nl-c.nl',
+             email2='', email3='', email4=''
+         WHERE sheet_id=? AND domain='txfcamp-nl-c.nl'"
+    )->execute([$nlSheet]);
+    $copyEmailsUnsent = collect_email_campaign_emails($nlSheet, '0');
+    $copyEmailsSent = collect_email_campaign_emails($nlSheet, '1');
+    $copyEmailsAll = collect_email_campaign_emails($nlSheet, null);
+    $hasGoodC = in_array('good@txfcamp-nl-c.nl', $copyEmailsUnsent, true)
+        && in_array('also@txfcamp-nl-c.nl', $copyEmailsUnsent, true);
+    $noBadC = !in_array('not-an-email', $copyEmailsUnsent, true)
+        && !in_array('not-an-email', $copyEmailsAll, true);
+    $aEmail = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $aInSent = $aEmail !== '' && in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsSent), true);
+    $aNotUnsent = $aEmail === '' || !in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsUnsent), true);
+    if (    $hasGoodC && $noBadC && $aInSent && $aNotUnsent
+        && in_array('good@txfcamp-nl-c.nl', $copyEmailsAll, true)) {
+        pass('campaign copy emails splits sent vs unsent and skips invalid tokens');
+    } else {
+        fail('copy emails: unsent=' . json_encode($copyEmailsUnsent)
+            . ' sent=' . json_encode($copyEmailsSent) . ' all=' . json_encode($copyEmailsAll)
+            . " aEmail=$aEmail");
+    }
+
+    $csvUnsent = collect_email_campaign_csv_rows($nlSheet, '0');
+    $csvSentRows = collect_email_campaign_csv_rows($nlSheet, '1');
+    $csvAllRows = collect_email_campaign_csv_rows($nlSheet, null);
+    $csvC = null;
+    $csvCInSent = false;
+    $csvAInSent = false;
+    foreach ($csvUnsent as $row) {
+        if (($row[0] ?? '') === 'txfcamp-nl-c.nl') {
+            $csvC = $row;
+        }
+    }
+    foreach ($csvSentRows as $row) {
+        if (($row[0] ?? '') === 'txfcamp-nl-c.nl') {
+            $csvCInSent = true;
+        }
+        if (($row[0] ?? '') === 'txfcamp-nl-a.nl') {
+            $csvAInSent = true;
+        }
+    }
+    $csvJoined = $csvC ? strtolower(implode(' ', $csvC)) : '';
+    if ($csvC
+        && str_contains($csvJoined, 'good@txfcamp-nl-c.nl')
+        && str_contains($csvJoined, 'also@txfcamp-nl-c.nl')
+        && !str_contains($csvJoined, 'not-an-email')
+        && $csvAInSent
+        && !$csvCInSent
+        && count($csvAllRows) >= 2) {
+        pass('campaign csv rows keep site+emails and honor emailed filter');
+    } else {
+        fail('campaign csv: unsent=' . json_encode($csvUnsent)
+            . ' sent=' . json_encode($csvSentRows) . ' all=' . json_encode($csvAllRows));
+    }
+    db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email1='c-new@txfcamp-nl-c.nl', email2='', email3='', email4=''
+         WHERE sheet_id=? AND domain='txfcamp-nl-c.nl'"
+    )->execute([$nlSheet]);
 
     // Team import: copy into campaign, never delete Team rows; stamp fetched to campaign.
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'");

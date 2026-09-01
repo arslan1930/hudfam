@@ -148,7 +148,7 @@
     if (typeof data.unsent === 'number' && unsentLabel) {
       unsentLabel.textContent = String(data.unsent);
     }
-    document.querySelectorAll('[data-camp-copy-domains]').forEach(function (btn) {
+    document.querySelectorAll('[data-camp-copy-domains], [data-camp-copy-emails]').forEach(function (btn) {
       var label = String(btn.getAttribute('data-copy-label') || 'all');
       if (label === 'not emailed') {
         btn.disabled = !(typeof data.unsent === 'number' && data.unsent > 0);
@@ -745,8 +745,10 @@
     });
   }
 
-  function bindCopyDomainsButton(btn) {
+  function bindCopyPlainButton(btn, kind) {
     if (!btn) return;
+    var noun = kind === 'email' ? 'email' : 'domain';
+    var nouns = kind === 'email' ? 'emails' : 'domains';
     btn.addEventListener('click', function () {
       var url = btn.getAttribute('data-export-url');
       if (!url) return;
@@ -754,33 +756,35 @@
       var wasDisabled = btn.disabled;
       btn.disabled = true;
       var loading =
-        label === 'not emailed' ? 'Loading not-emailed domains…'
-          : label === 'emailed' ? 'Loading emailed domains…'
-            : 'Loading domains…';
+        label === 'not emailed' ? 'Loading not-emailed ' + nouns + '…'
+          : label === 'emailed' ? 'Loading emailed ' + nouns + '…'
+            : 'Loading ' + nouns + '…';
       setStatus(loading, false, true);
       showProcessing(loading);
       fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/plain' } })
         .then(function (res) {
-          if (!res.ok) throw new Error('Could not load domains.');
+          if (!res.ok) throw new Error('Could not load ' + nouns + '.');
           return res.text();
         })
         .then(function (text) {
           text = String(text || '').replace(/\r\n/g, '\n').trim();
           if (!text) {
             throw new Error(
-              label === 'not emailed' ? 'No not-emailed domains to copy.'
-                : label === 'emailed' ? 'No emailed domains to copy.'
-                  : 'No domains to copy yet.'
+              label === 'not emailed' ? 'No not-emailed ' + nouns + ' to copy.'
+                : label === 'emailed' ? 'No emailed ' + nouns + ' to copy.'
+                  : 'No ' + nouns + ' to copy yet.'
             );
           }
           var lines = text.split('\n').filter(Boolean);
           return copyText(text).then(function () {
-            var kind =
+            var kindLabel =
               label === 'not emailed' ? ' not-emailed'
                 : label === 'emailed' ? ' emailed'
                   : '';
             setStatus(
-              'Copied ' + lines.length + kind + ' domain' + (lines.length === 1 ? '' : 's') + '.'
+              'Copied ' + lines.length + kindLabel + ' '
+                + (lines.length === 1 ? noun : nouns)
+                + ' from this country sheet.'
             );
           });
         })
@@ -794,5 +798,12 @@
     });
   }
 
+  function bindCopyDomainsButton(btn) {
+    bindCopyPlainButton(btn, 'domain');
+  }
+
   document.querySelectorAll('[data-camp-copy-domains]').forEach(bindCopyDomainsButton);
+  document.querySelectorAll('[data-camp-copy-emails]').forEach(function (btn) {
+    bindCopyPlainButton(btn, 'email');
+  });
 })();
