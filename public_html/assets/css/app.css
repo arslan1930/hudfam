@@ -2033,6 +2033,10 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   overflow: hidden;
   margin-top: 0.2rem;
 }
+.dept-task-created {
+  font-size: 0.82rem;
+  margin-top: 0.15rem;
+}
 .dept-due-overdue { color: var(--bad); font-weight: 650; }
 .dept-add-member select { min-width: 16rem; max-width: 100%; }
 .dept-task-form textarea { width: 100%; min-height: 4.5rem; }

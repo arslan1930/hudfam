@@ -153,14 +153,10 @@ function guide_extracting(): string
         'Each country has its own batch with two boxes: Sites list and Extracting Results.',
         'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
         [
-            'Teammate uses Filter & add and saves new unique sites.',
-            'Those sites appear here under Sites list for that country (editable textarea; edits autosave). The country count is shared — both teammates see the same number after you reload this list.',
-            'Sites list tools: Copy, Undo, Redo, and Open & remove first 10–50 (opens tabs and takes those sites off the list; Open next continues from the new top in batches of 10). Undo restores them while you stay on this page.',
-            'Paste into Extracting Results → Clean to root domains (Ready vs Needs attention) → Push uses Ready only. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country.',
-            'Sites list is filled only with domains that were unique in that country’s Our database after Filter & add (TLD-routed).',
-            'Extracting is the waiting list. It shrinks when you Push Results, Open & remove, delete lines in Sites, or Admin removes the same domains from Our database. Filter & add of unique sites puts them back at the top.',
-            'Empty countries hide on this list (and are removed after 1 hour) until Filter & add brings them back. Our database can still be larger — it keeps everything.',
-            'Add emails in Team, then Push to Admin. Final keeps archive copies; Campaign sheets are separate.',
+            'Open a country. Sites list tools: Copy, Undo, Redo, and Open & remove first 10–50 (Open next continues from the new top). Undo restores them while you stay on this page.',
+            'Paste Extracting Results → Clean to root domains → Push Ready only. Country TLDs route; .com/.net/.eu stay in the selected country.',
+            'Extracting is the waiting list. It shrinks when you Push, Open & remove, delete lines, or Admin removes the same domains from Our database.',
+            'Add emails in Sites with emails, then Push to Admin.',
         ]
     );
 }

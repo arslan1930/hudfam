@@ -2058,13 +2058,15 @@ if (!str_contains($teamDash, "post('action') === 'set_status'")
     || !str_contains($teamDash, '>Tasks</a>')
     || !str_contains($teamDash, 'department_task_assignee_label')
     || !str_contains($teamDash, "count(\$myDepartments) > 1")
-    || !str_contains($teamDash, 'Find a task or tool')
+    || !str_contains($teamDash, 'Find a task')
+    || !str_contains($teamDash, 'data-stay-ajax')
     || !str_contains($teamDash, 'sheet-cards-mobile')
     || !str_contains($teamDash, 'dept-task-notes')
+    || !str_contains($teamDash, 'Whole department')
     || !str_contains($teamDash, '>Open</a>')) {
-    fail('team dashboard missing status dropdown CSRF, Find a task or tool, or tool Open');
+    fail('team dashboard missing status dropdown CSRF, Find a task, or tool Open');
 } else {
-    ok('team dashboard status dropdown + Find a task or tool + short Open');
+    ok('team dashboard status dropdown + Find a task + short Open');
 }
 
 $deptLib = file_get_contents($root . '/includes/departments.php') ?: '';
@@ -2076,6 +2078,8 @@ foreach ([
     'department_task_assignee_label',
     'team_home_url',
     'department_tasks_have_due_date',
+    'find_similar_open_department_task',
+    'department_task_creator_label',
 ] as $fn) {
     if (!str_contains($deptLib, "function {$fn}")) {
         fail("departments.php missing {$fn}");
@@ -2263,6 +2267,7 @@ foreach ([
     'prospect_site_rows_html Niche before Domain, no Status',
     'edit keeps historical assignee after remove',
     'department primary tool URLs + assignee label',
+    'similar open department task title match',
 ] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing Departments coverage: {$needle}");
@@ -3127,7 +3132,8 @@ if (!str_contains($extractBatchJump, 'extract-country-jump')
     || !str_contains($extractLibSmoke, 'function extract_hub_waiting_summary')
     || !str_contains($extractLibSmoke, 'function extract_hub_row_cues')
     || !str_contains($extractLibSmoke, 'function extract_hub_stamp')
-    || !str_contains($extractHubSmoke, 'Open &amp; remove')) {
+    || !str_contains($extractHubSmoke, 'Open &amp; remove')
+    || !str_contains($extractHubSmoke, 'sheet-cards-mobile')) {
     fail('Extracting missing country switcher, hub search/cap, live site count, or Open & remove hint');
 } else {
     ok('Extracting country switcher + hub search cap + Open & remove hint');
@@ -3306,11 +3312,13 @@ if (!str_contains($loginPhp, 'team_home_url()')
     ok('Team login and home always go to Your work');
 }
 if (substr_count($layoutUiSmoke, "'Sites with emails'") < 2
+    || substr_count($layoutUiSmoke, "'Admin emails search'") < 2
+    || !str_contains($layoutUiSmoke, "['Your work'")
     || str_contains($layoutUiSmoke, "'Team',")
     || str_contains($layoutUiSmoke, 'app-footer-links')) {
     fail('sidebar still labels Sites with emails as Team, or footer still has account links');
 } else {
-    ok('sidebar Sites with emails + account links not in footer');
+    ok('sidebar Your work, Sites with emails, Admin emails search');
 }
 if (!str_contains($cssUi, '.sidebar .nav-group-end { display: none; }')
     || !str_contains($cssUi, '.dept-task-notes')

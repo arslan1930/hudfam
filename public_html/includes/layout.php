@@ -145,7 +145,7 @@ function render_header(string $title, string $panel = ''): void
             // Department members: tasks + tools for their departments.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Your assigned tasks and tools'],
+                    'team_dashboard' => ['Your work', 'Your assigned tasks and tools'],
                     'team_departments' => ['My departments', 'Only departments you belong to'],
                 ],
             ];
@@ -177,9 +177,12 @@ function render_header(string $title, string $panel = ''): void
                     ];
                 }
                 if (!empty($toolSet['team_semrush_research'])) {
+                    $semrushHint = (function_exists('team_can_clear_semrush_country') && team_can_clear_semrush_country($user))
+                        ? 'From Extracting Push · edit, comment, clear country'
+                        : 'From Extracting Push · edit, comment';
                     $groups['Main']['team_semrush_research'] = [
                         'Semrush Research',
-                        'From Extracting Push · edit, comment, clear country',
+                        $semrushHint,
                     ];
                 }
                 if (!empty($toolSet['team_site_prices'])) {
@@ -202,7 +205,7 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if (!empty($toolSet['team_admin_emails_search'])) {
                     $groups['Main']['team_admin_emails_search'] = [
-                        'Admin search',
+                        'Admin emails search',
                         'Admin sheet · all countries',
                     ];
                 }
@@ -223,7 +226,7 @@ function render_header(string $title, string $panel = ''): void
             // Team login with no department yet — no tools until Admin assigns one.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Waiting for department assignment'],
+                    'team_dashboard' => ['Your work', 'Waiting for department assignment'],
                     'team_departments' => ['My departments', 'Ask Admin to assign you'],
                 ],
             ];
@@ -231,13 +234,13 @@ function render_header(string $title, string $panel = ''): void
             // Admin browsing Team UI (or non-scoped): full tool set.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Overview'],
+                    'team_dashboard' => ['Your work', 'Overview'],
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
                     'team_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails', 'Add emails · Push to Admin'],
-                    'team_admin_emails_search' => ['Admin search', 'Admin sheet · all countries'],
+                    'team_admin_emails_search' => ['Admin emails search', 'Admin sheet · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Campaign sheets · all countries'],
                     'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],

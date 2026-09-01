@@ -112,7 +112,7 @@ if ($total < 1 && !$isAdmin) {
 
 render_header('Semrush · ' . $country, 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Semrush Research', 'href' => $hub],
     ['label' => $country],
 ]);

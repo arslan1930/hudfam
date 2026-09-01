@@ -146,7 +146,7 @@ $hasDraftVars = $draftVars['domain'] !== '' || $draftVars['country'] !== ''
 
 render_header('Campaign drafts', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Campaign drafts'],
 ]);
 ?>

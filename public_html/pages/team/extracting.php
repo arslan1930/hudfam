@@ -16,16 +16,14 @@ $waitCountries = (int) ($wait['countries'] ?? 0);
 render_header('Extracting sites', 'team');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Extracting sites'],
 ]); ?>
 <div class="topbar">
   <div>
     <h1>Extracting sites</h1>
     <p class="muted">
-      Shared waiting list per country — both teammates see the same shared <strong>Sites</strong> count after you reload
-      (it is not your Filter leftover). Open a country, then use <strong>Open &amp; remove</strong> on that country’s Sites list.
-      Site Finding adds new unique sites.
+      Shared waiting list per country. Open a country, then use <strong>Open &amp; remove</strong> on that country’s shared Sites list.
     </p>
     <?php if ($waitCountries > 0): ?>
       <p class="muted" data-extract-hub-total>
@@ -56,7 +54,7 @@ render_header('Extracting sites', 'team');
     </label>
   </div>
   <div class="table-wrap">
-  <table>
+  <table class="sheet-cards-mobile">
     <thead>
       <tr>
         <th>Country</th>
@@ -83,8 +81,8 @@ render_header('Extracting sites', 'team');
         $badgeClass = !empty($cues['stale']) ? 'sent' : 'agreed';
         ?>
       <tr data-extract-country-row data-search="<?= h($hay) ?>">
-        <td><strong><?= h($bCountry) ?></strong></td>
-        <td>
+        <td data-label="Country"><strong><?= h($bCountry) ?></strong></td>
+        <td data-label="Sites">
           <span class="extract-hub-cues">
             <span class="badge <?= h($badgeClass) ?>"><?= (int) $siteN ?></span>
             <?php if (!empty($cues['large'])): ?>
@@ -97,10 +95,10 @@ render_header('Extracting sites', 'team');
             <?php endif; ?>
           </span>
         </td>
-        <td class="muted"><?= $updatedStamp !== '' ? h($updatedStamp) : '—' ?></td>
-        <td class="muted"><?= $writerLabel !== '' ? h($writerLabel) : '—' ?></td>
-        <td class="muted"><?= $pushStamp !== '' ? h($pushStamp) : '—' ?></td>
-        <td><a class="btn secondary small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
+        <td class="muted" data-label="Updated"><?= $updatedStamp !== '' ? h($updatedStamp) : '—' ?></td>
+        <td class="muted" data-label="Last saved"><?= $writerLabel !== '' ? h($writerLabel) : '—' ?></td>
+        <td class="muted" data-label="Last Push"><?= $pushStamp !== '' ? h($pushStamp) : '—' ?></td>
+        <td data-label="Open"><a class="btn secondary small" href="index.php?page=team_extract_batch&amp;id=<?= (int) $b['id'] ?>">Open</a></td>
       </tr>
     <?php endforeach; ?>
     </tbody>

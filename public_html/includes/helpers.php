@@ -542,7 +542,7 @@ function render_glossary(string $panel, bool $showTitle = true): void
         echo '<div><dt>Filter &amp; add</dt><dd>Paste a list → duplicates are removed privately → save only new unique sites. Our database lists stay hidden.</dd></div>';
         echo '<div><dt>Extracting sites</dt><dd>Per-country Sites list + Extracting Results. Open it from Your work or the sidebar. Appears after teammates add sites.</dd></div>';
         echo '<div><dt>Sites with emails</dt><dd>From Extracting Results Push → add emails → Push to Admin.</dd></div>';
-        echo '<div><dt>Admin search</dt><dd>Super search Admin across all countries.</dd></div>';
+        echo '<div><dt>Admin emails search</dt><dd>Super search Admin across all countries.</dd></div>';
         echo '<div><dt>Campaign search</dt><dd>Super search Campaign sheets across all countries. Drafts are copy-paste into your email client.</dd></div>';
         echo '<div><dt>Site adding history</dt><dd>Sites you added, saved by day.</dd></div>';
         echo '<div><dt>Your job</dt><dd>Use only the tools for your department. Existing country lists stay private to Admin.</dd></div>';

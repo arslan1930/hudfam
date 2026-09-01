@@ -528,7 +528,7 @@ if (!$inCountry) {
             ['label' => $sweLabel],
         ]
         : [
-            ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+            ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
             ['label' => $sweLabel],
         ];
     render_breadcrumbs($crumbs);
@@ -919,7 +919,7 @@ $crumbs = $isAdmin
         ['label' => $countryName],
     ]
     : [
-        ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+        ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
         ['label' => $sweLabel, 'href' => $sweBase],
         ['label' => $countryName],
     ];

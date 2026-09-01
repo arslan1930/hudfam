@@ -36,7 +36,7 @@ $folders = list_semrush_country_rows();
 
 render_header('Semrush Research', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Semrush Research'],
 ]);
 ?>

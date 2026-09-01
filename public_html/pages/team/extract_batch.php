@@ -157,7 +157,7 @@ if (count($domains) < 1) {
 render_header('Extracting · ' . $country, 'team');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Extracting sites', 'href' => 'index.php?page=team_extracting'],
     ['label' => $country],
 ]); ?>

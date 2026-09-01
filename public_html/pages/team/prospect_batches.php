@@ -44,7 +44,7 @@ try {
 render_header('Site adding history', 'team');
 ?>
 <?php render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Site adding history'],
 ]); ?>
 <div class="topbar">
