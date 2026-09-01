@@ -81,22 +81,23 @@ $helpersCss = file_get_contents($root . '/includes/helpers.php') ?: '';
 $uiCss = file_get_contents($root . '/assets/css/style-new.css') ?: '';
 $uiJs = file_get_contents($root . '/assets/js/ui-enhancements.js') ?: '';
 if (!str_contains($asset, 'css/style-new.css')
-    || !str_contains($asset, 'js/ui-enhancements.js')
     || !str_contains($helpersCss, 'function stylesheet_new_url')
-    || !str_contains($layout, 'stylesheet_new_url()')
-    || !str_contains($layout, 'js/ui-enhancements.js')
+    || !str_contains($layout, 'stylesheet_new_url')
+    || str_contains($layout, "script_asset_url('js/ui-enhancements.js')")
     || !str_contains($layout, 'class="ui-v2"')
     || !str_contains($layout, 'id="app-main"')
     || !str_contains($layout, 'class="ui-skip"')
     || !str_contains($uiCss, 'html.ui-v2')
     || !str_contains($uiCss, '--brand: #0f766e')
     || str_contains($uiCss, '.crystal')
-    || !str_contains($uiJs, '__TXF_UI_ENHANCE__')
+    || str_contains($uiCss, '.ui-enter')
+    || str_contains($uiJs, 'preventDefault')
+    || str_contains($uiJs, 'IntersectionObserver')
     || str_contains($uiJs, 'data-nav-toggle')
     || str_contains($uiJs, 'addEventListener(\'submit\'')) {
     fail('teal UI overlay missing or it rebinds nav/forms');
 } else {
-    ok('teal UI overlay after app.css (nav/forms untouched)');
+    ok('teal UI overlay is CSS-only (no #link interceptor)');
 }
 if (!str_contains($layout, 'Site adding history')) {
     fail('layout missing Site adding history label');

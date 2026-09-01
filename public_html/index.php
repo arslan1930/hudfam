@@ -115,7 +115,9 @@ if (!isset($routes[$page])) {
     echo '<!DOCTYPE html><html lang="en" class="ui-v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
         . '<title>Page not found · TechxForm</title>'
         . '<link rel="stylesheet" href="' . h(stylesheet_url()) . '">'
-        . '<link rel="stylesheet" href="' . h(stylesheet_new_url()) . '">'
+        . (function_exists('stylesheet_new_url')
+            ? '<link rel="stylesheet" href="' . h(stylesheet_new_url()) . '">'
+            : '')
         . '</head><body class="auth-body"><div class="auth-card" style="max-width:28rem;margin:3rem auto;padding:1.5rem">'
         . '<h1>Page not found</h1>'
         . '<p class="muted">That link is missing or was renamed.</p>'

@@ -299,17 +299,6 @@ html.ui-v2 .task-presence-dot {
   background: var(--ok);
 }
 
-/* Optional enter animation from ui-enhancements.js */
-html.ui-v2 .ui-enter {
-  opacity: 0;
-  transform: translateY(8px);
-}
-html.ui-v2 .ui-enter.ui-in {
-  opacity: 1;
-  transform: none;
-  transition: opacity 280ms ease, transform 280ms ease;
-}
-
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;

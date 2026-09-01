@@ -46,7 +46,7 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
-    $cssNew = stylesheet_new_url();
+    $cssNew = function_exists('stylesheet_new_url') ? stylesheet_new_url() : '';
     $logo = brand_logo_url();
 
     echo '<!DOCTYPE html><html lang="en" class="ui-v2"><head><meta charset="utf-8">';
@@ -60,7 +60,9 @@ function render_header(string $title, string $panel = ''): void
     }
     // app.css via asset.php, then teal overlay (style-new.css). Do not also load /assets/css/*.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
-    echo '<link rel="stylesheet" href="' . h($cssNew) . '">';
+    if ($cssNew !== '') {
+        echo '<link rel="stylesheet" href="' . h($cssNew) . '">';
+    }
     echo '<style>';
     echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(31,35,40,.42)}';
     echo 'html.is-page-loading body{overflow:hidden}';
@@ -356,7 +358,7 @@ function render_footer(string $panel = ''): void
         // Login / forgot / reset / verify: Show password (logged-in pages load it above).
         echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
     }
-    echo '<script src="' . h(script_asset_url('js/ui-enhancements.js')) . '" defer></script>';
+    // Overlay is CSS-only. Do not load the old overlay script (it intercepted Fill gaps / Paste links).
     echo '</body></html>';
 }
 
