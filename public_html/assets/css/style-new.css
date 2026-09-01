@@ -295,6 +295,29 @@ html.ui-v2 .main a.swe-open-site:hover {
   border-color: var(--brand-2);
   text-decoration: none;
 }
+html.ui-v2 .sheet-tool-menu-panel {
+  min-width: 19rem;
+  border-color: var(--line);
+}
+html.ui-v2 .tld-rail-btn.is-active {
+  border-color: var(--brand-2);
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+}
+html.ui-v2 .tld-site-drop,
+html.ui-v2 .tld-rail-drop {
+  color: var(--brand-2);
+  background: #f0faf7;
+  border-color: var(--line);
+}
+html.ui-v2 .tld-site-drop:hover,
+html.ui-v2 .tld-site-drop:focus-visible,
+html.ui-v2 .tld-rail-drop:hover,
+html.ui-v2 .tld-rail-drop:focus-visible {
+  background: #fee2e2;
+  color: var(--bad);
+  border-color: #fecaca;
+}
 
 /* Forms — visual only; names/ids unchanged */
 html.ui-v2 input[type="text"],

@@ -1148,6 +1148,15 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   position: sticky;
   top: 0.5rem;
 }
+.tld-rail-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0.2rem;
+}
+.tld-rail-item .tld-rail-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .tld-rail-btn {
   appearance: none;
   border: 1px solid var(--line);
@@ -1168,6 +1177,26 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   border-color: var(--brand, #2563eb);
   background: var(--brand-soft, rgba(37, 99, 235, 0.1));
   color: var(--brand, #2563eb);
+}
+.tld-rail-drop {
+  flex: 0 0 auto;
+  width: 1.7rem;
+  min-height: 1.7rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tld-rail-drop:hover,
+.tld-rail-drop:focus-visible {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #b42318;
 }
 .tld-separate-panel {
   min-width: 0;
@@ -1226,15 +1255,16 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 }
 .tld-site-drop {
   flex: 0 0 auto;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 1.7rem;
+  height: 1.7rem;
   margin: 0;
   padding: 0;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: transparent;
-  color: #6b7280;
-  font-size: 1.15rem;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 1.2rem;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
 }
@@ -5439,7 +5469,9 @@ textarea:focus-visible {
   z-index: 40;
   top: calc(100% + 0.3rem);
   left: 0;
-  min-width: 14.5rem;
+  min-width: 18.5rem;
+  max-height: min(70vh, 32rem);
+  overflow: auto;
   padding: 0.5rem;
   background: #fff;
   border: 1px solid var(--line);

@@ -2932,11 +2932,14 @@ if (str_contains($cssApp, '.tld-workspace-list')
     fail('app.css missing TLD workspace no-scroll styles');
 }
 if (!str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($tldJs, 'data-tld-drop-ending')
+    || !str_contains($tldJs, 'tld-rail-drop')
     || !str_contains($cssApp, '.tld-site-drop')
+    || !str_contains($cssApp, '.tld-rail-drop')
     || str_contains($tldJs, "Send ' + n + ' ")) {
-    fail('TLD list missing per-site × or Send still confirms');
+    fail('TLD list missing per-site × / ending × or Send still confirms');
 } else {
-    ok('TLD list per-site × and Send without confirm');
+    ok('TLD list per-site ×, ending ×, and Send without confirm');
 }
 // Paste Separate workspace must sit outside #filter_form (Send form).
 if (!preg_match('/<\/form>\s*.*?data-tld-separate/s', $prospectCheckSf)

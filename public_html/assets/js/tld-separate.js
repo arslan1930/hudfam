@@ -218,7 +218,7 @@
       var title = document.createElement('h3');
       title.className = 'tld-workspace-title';
       var label = document.createElement('span');
-      label.textContent = tld === 'other' ? '(other)' : ('.' + tld);
+      label.textContent = endingLabel(tld);
       var count = document.createElement('span');
       count.className = 'tld-count';
       count.textContent = list.length + ' site' + (list.length === 1 ? '' : 's');
@@ -360,6 +360,34 @@
       panel.hidden = false;
     }
 
+    function endingLabel(tld) {
+      return tld === 'other' ? '(other)' : ('.' + tld);
+    }
+
+    function removeEnding(tld) {
+      var removed = (preloaded && preloaded[tld]) ? preloaded[tld].slice() : [];
+      if (preloaded && preloaded[tld]) {
+        delete preloaded[tld];
+      }
+      if (pristine && pristine[tld]) {
+        delete pristine[tld];
+      }
+      stripSharedColumns(removed);
+      try {
+        document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
+          detail: { domains: removed, origin: root }
+        }));
+      } catch (err3) { /* ignore */ }
+      activeTld = '';
+      renderGroups(preloaded || {});
+      if (!orderedKeys(preloaded || {}).length) {
+        setStatus('All endings removed.');
+      } else {
+        setStatus('Ending deleted.');
+      }
+      syncAddAllHidden();
+    }
+
     function renderRail(groups) {
       if (!rail) return;
       rail.innerHTML = '';
@@ -371,12 +399,23 @@
       }
       keys.forEach(function (tld) {
         var list = groups[tld] || [];
+        var item = document.createElement('div');
+        item.className = 'tld-rail-item';
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'tld-rail-btn' + (tld === activeTld ? ' is-active' : '');
         btn.setAttribute('data-tld-tab', tld);
-        btn.textContent = (tld === 'other' ? '(other)' : ('.' + tld)) + ' (' + list.length + ')';
-        rail.appendChild(btn);
+        btn.textContent = endingLabel(tld) + ' (' + list.length + ')';
+        var drop = document.createElement('button');
+        drop.type = 'button';
+        drop.className = 'tld-rail-drop';
+        drop.setAttribute('data-tld-drop-ending', tld);
+        drop.setAttribute('aria-label', 'Remove ' + endingLabel(tld));
+        drop.setAttribute('title', 'Remove ' + endingLabel(tld) + ' from this list');
+        drop.textContent = '\u00d7';
+        item.appendChild(btn);
+        item.appendChild(drop);
+        rail.appendChild(item);
       });
       rail.hidden = false;
       if (workspace) workspace.hidden = false;
@@ -491,6 +530,15 @@
       var t = e.target;
       if (!t || !t.closest) return;
 
+      var dropEnding = t.closest('[data-tld-drop-ending]');
+      if (dropEnding && root.contains(dropEnding)) {
+        e.preventDefault();
+        var tldChip = dropEnding.getAttribute('data-tld-drop-ending') || '';
+        if (!tldChip) return;
+        removeEnding(tldChip);
+        return;
+      }
+
       var tab = t.closest('[data-tld-tab]');
       if (tab && root.contains(tab)) {
         e.preventDefault();
@@ -555,31 +603,11 @@
       if (t.closest('[data-tld-delete]')) {
         e.preventDefault();
         var tld = col.getAttribute('data-tld-col') || '';
-        var label = tld === 'other' ? '(other)' : ('.' + tld);
+        var label = endingLabel(tld);
         if (!window.confirm('Delete the ' + label + ' list from this view? (Does not change the country database.)')) {
           return;
         }
-        var removed = (preloaded && preloaded[tld]) ? preloaded[tld].slice() : [];
-        if (preloaded && preloaded[tld]) {
-          delete preloaded[tld];
-        }
-        if (pristine && pristine[tld]) {
-          delete pristine[tld];
-        }
-        stripSharedColumns(removed);
-        try {
-          document.dispatchEvent(new CustomEvent('txf-tld-ending-removed', {
-            detail: { domains: removed, origin: root }
-          }));
-        } catch (err3) { /* ignore */ }
-        activeTld = '';
-        renderGroups(preloaded || {});
-        if (!orderedKeys(preloaded || {}).length) {
-          setStatus('All endings removed.');
-        } else {
-          setStatus('Ending deleted.');
-        }
-        syncAddAllHidden();
+        removeEnding(tld);
       }
     });
   }
