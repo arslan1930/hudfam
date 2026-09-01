@@ -970,7 +970,7 @@ function add_order_item(?int $clientId = null, string $siteName = '', ?int $mont
     $adminId = (int) ($extra['admin_user_id'] ?? 0);
     $adminId = $adminId > 0 ? $adminId : null;
     $orderDate = normalize_order_date($extra['order_date'] ?? '') ?: date('Y-m-d');
-    $country = trim((string) ($extra['country'] ?? ''));
+    $country = order_canonicalize_country(trim((string) ($extra['country'] ?? '')));
     $wpId = (int) ($extra['site_price_row_id'] ?? 0);
     $stage = strtolower(trim((string) ($extra['order_stage'] ?? 'processing')));
     if ($stage !== 'completed') {
@@ -1110,7 +1110,7 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $siteName,
         $note,
         $placement,
-        trim((string) ($data['country'] ?? '')),
+        order_canonicalize_country(trim((string) ($data['country'] ?? ''))),
         $month,
         $endMonth,
         $year,
@@ -1499,8 +1499,11 @@ function order_pipeline_where_sql(array $opts = []): array
     }
     $country = trim((string) ($opts['country'] ?? ''));
     if ($country !== '') {
-        $where[] = 'i.country = ?';
-        $params[] = $country;
+        [$countrySql, $countryParams] = order_country_filter_sql($country);
+        if ($countrySql !== '') {
+            $where[] = $countrySql;
+            $params = array_merge($params, $countryParams);
+        }
     }
     $adminId = (int) ($opts['admin_id'] ?? 0);
     if ($adminId > 0) {
@@ -1580,23 +1583,112 @@ function list_order_pipeline_rows(array $opts = []): array
     return $stmt->fetchAll();
 }
 
-/** @return list<string> */
-function list_order_pipeline_countries(): array
+/** Canonical catalog country name, or the trimmed original when unknown. */
+function order_canonicalize_country(string $country): string
 {
-    ensure_order_schema();
-    $rows = db()->query(
-        "SELECT DISTINCT country FROM order_items
-         WHERE row_type='site' AND TRIM(country) <> ''
-         ORDER BY country ASC"
-    )->fetchAll(PDO::FETCH_COLUMN);
-    $out = [];
-    foreach ($rows as $name) {
-        $name = trim((string) $name);
-        if ($name !== '') {
-            $out[] = $name;
+    $country = trim($country);
+    if ($country === '') {
+        return '';
+    }
+    if (function_exists('resolve_canonical_country')) {
+        $canon = resolve_canonical_country($country);
+        if (is_array($canon) && trim((string) ($canon['name'] ?? '')) !== '') {
+            return trim((string) $canon['name']);
         }
     }
-    return $out;
+    if (function_exists('list_countries')) {
+        $code = strtoupper($country);
+        foreach (list_countries(null, true) as $c) {
+            $rowCode = strtoupper(trim((string) ($c['code'] ?? '')));
+            if ($rowCode !== '' && $rowCode === $code) {
+                $name = trim((string) ($c['name'] ?? ''));
+                if ($name !== '') {
+                    return $name;
+                }
+            }
+        }
+    }
+    return $country;
+}
+
+/**
+ * SQL fragment so Germany matches germany / DE / German stored on older rows.
+ *
+ * @return array{0:string,1:list<string>}
+ */
+function order_country_filter_sql(string $country): array
+{
+    $country = trim($country);
+    if ($country === '') {
+        return ['', []];
+    }
+    $primary = order_canonicalize_country($country);
+    $names = [$primary, $country];
+    if (function_exists('country_name_aliases')) {
+        foreach (country_name_aliases() as $alias => $mapped) {
+            if (strcasecmp((string) $mapped, $primary) === 0) {
+                $names[] = (string) $alias;
+            }
+        }
+    }
+    if (function_exists('list_countries')) {
+        foreach (list_countries(null, true) as $c) {
+            if (strcasecmp(trim((string) ($c['name'] ?? '')), $primary) !== 0) {
+                continue;
+            }
+            $code = trim((string) ($c['code'] ?? ''));
+            if ($code !== '') {
+                $names[] = $code;
+            }
+            break;
+        }
+    }
+    $lower = [];
+    foreach ($names as $n) {
+        $n = mb_strtolower(trim((string) $n));
+        if ($n !== '') {
+            $lower[$n] = $n;
+        }
+    }
+    $vals = array_values($lower);
+    if ($vals === []) {
+        return ['', []];
+    }
+    $placeholders = implode(',', array_fill(0, count($vals), '?'));
+    return ['LOWER(TRIM(i.country)) IN (' . $placeholders . ')', $vals];
+}
+
+/** @return list<string> */
+function list_order_pipeline_countries(array $opts = []): array
+{
+    ensure_order_schema();
+    $opts['country'] = '';
+    $opts['q'] = '';
+    [$whereSql, $params] = order_pipeline_where_sql($opts);
+    $stmt = db()->prepare(
+        'SELECT DISTINCT TRIM(i.country) AS country
+         FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id'
+        . $whereSql
+    );
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    $seen = [];
+    $out = [];
+    foreach ($rows as $name) {
+        $label = order_canonicalize_country((string) $name);
+        if ($label === '') {
+            continue;
+        }
+        $key = mb_strtolower($label);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $label;
+    }
+    natcasesort($out);
+    return array_values($out);
 }
 
 /**

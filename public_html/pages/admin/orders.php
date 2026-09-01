@@ -30,6 +30,9 @@ $filter = [
     'date_to' => (string) get('date_to'),
     'status' => (string) get('status'),
 ];
+if ($filter['country'] !== '') {
+    $filter['country'] = order_canonicalize_country($filter['country']);
+}
 if ($isProcessing) {
     $filter['status'] = 'all';
     $origin = function_exists('order_pipeline_pick_processing_origin')
@@ -501,18 +504,68 @@ if ($isCompleted && $items && function_exists('order_items_on_open_invoices')) {
     }
     $openInvoicesByOrder = order_items_on_open_invoices($pageIds);
 }
-$filterCountries = list_order_pipeline_countries();
+$filterCountries = list_order_pipeline_countries([
+    'folder' => $folder,
+    'origin' => $isProcessing ? $origin : '',
+    'status' => $filter['status'],
+    'admin_id' => $filter['admin_id'],
+    'date_from' => $filter['date_from'],
+    'date_to' => $filter['date_to'],
+]);
+$filterCountrySearch = [];
+$orderCountryCanonMap = [];
+try {
+    foreach (list_countries(null, true) as $cRow) {
+        $nm = trim((string) ($cRow['name'] ?? ''));
+        $cd = strtoupper(trim((string) ($cRow['code'] ?? '')));
+        if ($nm !== '') {
+            $filterCountrySearch[mb_strtolower($nm)] = mb_strtolower(trim($nm . ' ' . $cd));
+            $orderCountryCanonMap[mb_strtolower($nm)] = $nm;
+            if ($cd !== '') {
+                $orderCountryCanonMap[mb_strtolower($cd)] = $nm;
+            }
+        }
+    }
+    if (function_exists('country_name_aliases')) {
+        foreach (country_name_aliases() as $alias => $mapped) {
+            $mappedName = $orderCountryCanonMap[mb_strtolower((string) $mapped)] ?? (string) $mapped;
+            if ($mappedName !== '') {
+                $orderCountryCanonMap[mb_strtolower((string) $alias)] = $mappedName;
+            }
+        }
+    }
+} catch (Throwable $e) {
+    $filterCountrySearch = [];
+    $orderCountryCanonMap = [];
+}
+if ($filter['country'] !== '') {
+    $haveFilterCountry = false;
+    foreach ($filterCountries as $cname) {
+        if (strcasecmp((string) $cname, $filter['country']) === 0) {
+            $haveFilterCountry = true;
+            break;
+        }
+    }
+    if (!$haveFilterCountry) {
+        $filterCountries[] = $filter['country'];
+        natcasesort($filterCountries);
+        $filterCountries = array_values($filterCountries);
+    }
+}
 $clientCatalog = list_order_pipeline_client_labels();
+$chipCountOpts = [
+    'folder' => $folder,
+];
 $originCounts = ['wp' => 0, 'leftover' => 0, 'manual' => 0, 'all' => 0];
 if ($isProcessing) {
     foreach (['wp', 'leftover', 'manual', 'all'] as $okey) {
-        $originCounts[$okey] = count_order_pipeline_rows(array_merge($listOpts, ['origin' => $okey]));
+        $originCounts[$okey] = count_order_pipeline_rows(array_merge($chipCountOpts, ['origin' => $okey]));
     }
 }
 $completedStatusCounts = ['all' => 0, 'unpaid' => 0, 'paid' => 0];
 if ($isCompleted) {
     foreach (['all', 'unpaid', 'paid'] as $sk) {
-        $completedStatusCounts[$sk] = count_order_pipeline_rows(array_merge($listOpts, ['status' => $sk]));
+        $completedStatusCounts[$sk] = count_order_pipeline_rows(array_merge($chipCountOpts, ['status' => $sk]));
     }
 }
 $admins = order_admin_options();
@@ -635,20 +688,25 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <label class="sheet-search" for="order-sheet-search" style="margin:0">
       <span class="visually-hidden">Search orders</span>
       <input id="order-sheet-search" type="search" name="q" value="<?= h($filter['q']) ?>"
-             placeholder="<?= $isCompleted ? 'Site, client, country, admin, doc' : 'Search site, client, country, admin, doc…' ?>" autocomplete="off" spellcheck="false" data-no-draft>
+             placeholder="<?= $isCompleted ? 'Site, client, country, admin, doc' : 'Search site, client, country, admin, doc…' ?>"
+             autocomplete="off" spellcheck="false" data-no-draft
+             title="Type to match this page · Enter = next hit · Ctrl+Enter = all pages">
+      <span class="sheet-search-meta muted" data-order-search-meta hidden></span>
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Country</span>
-      <select name="country" aria-label="Filter by country" onchange="this.form.submit()">
+      <select id="order-filter-country" name="country" data-searchable aria-label="Filter by country" onchange="this.form.submit()">
         <option value="">All countries</option>
-        <?php foreach ($filterCountries as $cname): ?>
-          <option value="<?= h($cname) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
+        <?php foreach ($filterCountries as $cname):
+            $cSearch = $filterCountrySearch[mb_strtolower((string) $cname)] ?? mb_strtolower((string) $cname);
+            ?>
+          <option value="<?= h($cname) ?>" data-search="<?= h($cSearch) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
         <?php endforeach; ?>
       </select>
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Admin</span>
-      <select name="admin_id" aria-label="Filter by admin" onchange="this.form.submit()">
+      <select id="order-filter-admin" name="admin_id" data-searchable aria-label="Filter by admin" onchange="this.form.submit()">
         <option value="">All admins</option>
         <?php foreach ($admins as $aRow):
             $aid = (int) $aRow['id'];
@@ -892,6 +950,13 @@ if ($compactUnpaidStats && !$showPagingStats) {
           </td>
         </tr>
       <?php endif; ?>
+      <?php if ($items): ?>
+        <tr data-order-search-empty hidden>
+          <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
+            No rows on this page match that search. Search still looks at all pages.
+          </td>
+        </tr>
+      <?php endif; ?>
       <?php
       $siteIndex = ($pageNum - 1) * $perPage;
       foreach ($items as $row):
@@ -919,9 +984,24 @@ if ($compactUnpaidStats && !$showPagingStats) {
           $canPush = $isCompleted && order_row_ready_for_invoice($row) && empty($openInvoicesByOrder[$id]);
           $openInv = $openInvoicesByOrder[$id] ?? null;
           $canComplete = $isProcessing && order_row_ready_for_complete($row);
+          $rowAdmin = $adminById[$rowAdminId] ?? [];
+          $rowAdminLabel = trim((string) ($rowAdmin['full_name'] ?? ''));
+          if ($rowAdminLabel === '') {
+              $rowAdminLabel = trim((string) ($rowAdmin['username'] ?? ($row['admin_username'] ?? '')));
+          }
+          $rowSearch = mb_strtolower(trim(implode(' ', [
+              (string) ($row['country'] ?? ''),
+              (string) ($row['site_name'] ?? ''),
+              (string) ($row['site_note'] ?? ''),
+              (string) ($row['client_label'] ?? ''),
+              $rowAdminLabel,
+              (string) ($row['live_url'] ?? ''),
+              (string) ($row['article_doc_url'] ?? ''),
+              $placement,
+          ])));
       ?>
         <tr class="order-row<?= $done ? ' is-completed' : '' ?><?= $paid ? ' is-paid' : '' ?><?= $isPlacement ? ' is-placement' : '' ?>"
-            data-row id="row-<?= $id ?>"<?= $openInv ? ' data-on-invoice="1"' : '' ?>>
+            data-row id="row-<?= $id ?>" data-search="<?= h($rowSearch) ?>"<?= $openInv ? ' data-on-invoice="1"' : '' ?>>
           <td class="col-check">
             <div class="order-check-pair">
               <input type="checkbox" value="<?= $id ?>" data-copy-check data-no-draft
@@ -1653,6 +1733,53 @@ function omConfirmRemove(btn) {
   if (actionEl) actionEl.value = 'delete_row';
   return true;
 }
+</script>
+<?= searchable_select_script_tag() ?>
+<?= sheet_search_jump_script_tag() ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.SheetSearchJump) {
+    SheetSearchJump.bind({
+      input: '#order-sheet-search',
+      rows: '[data-row]',
+      meta: '[data-order-search-meta]',
+      empty: '[data-order-search-empty]'
+    });
+  }
+  var sheetForm = document.getElementById('order-sheet-form');
+  if (sheetForm) {
+    sheetForm.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      var t = e.target;
+      if (!t) return;
+      var tag = (t.tagName || '').toUpperCase();
+      if (tag === 'TEXTAREA' || tag === 'BUTTON') return;
+      var type = String(t.type || '').toLowerCase();
+      if (type === 'submit' || type === 'button' || type === 'checkbox' || type === 'radio') return;
+      e.preventDefault();
+    });
+  }
+  var countryCanon = <?= json_encode($orderCountryCanonMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  document.querySelectorAll('input[list="order-country-list"]').forEach(function (inp) {
+    inp.addEventListener('blur', function () {
+      var typed = String(inp.value || '').trim();
+      if (!typed) return;
+      var key = typed.toLowerCase();
+      if (countryCanon && countryCanon[key]) {
+        inp.value = countryCanon[key];
+        return;
+      }
+      var list = document.getElementById('order-country-list');
+      if (!list) return;
+      var hit = '';
+      Array.prototype.forEach.call(list.options, function (opt) {
+        var v = String(opt.value || '').trim();
+        if (v && v.toLowerCase() === typed.toLowerCase()) hit = v;
+      });
+      if (hit) inp.value = hit;
+    });
+  });
+});
 </script>
 <?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>

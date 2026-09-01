@@ -186,8 +186,9 @@ render_header('Invoices', 'admin');
       <input type="hidden" name="filter" value="<?= h($invoiceFilter) ?>">
       <label class="visually-hidden" for="invoice-search">Search invoices</label>
       <input id="invoice-search" type="search" name="q" value="<?= h($invoiceQ) ?>"
-             placeholder="Invoice no., bill as, or note" autocomplete="off" spellcheck="false" data-no-draft
-             title="Search invoice number, bill as, or note">
+             placeholder="Invoice no., bill as, note, or line" autocomplete="off" spellcheck="false" data-no-draft
+             title="Type to match this page · Enter = next hit · Ctrl+Enter = all pages">
+      <span class="sheet-search-meta muted" data-invoice-search-meta hidden></span>
       <button class="btn secondary small" type="submit">Search</button>
       <?php if ($invoiceQ !== ''): ?>
         <a class="btn secondary small" href="<?= h(invoice_list_query([
@@ -262,6 +263,11 @@ render_header('Invoices', 'admin');
           </tr>
         </thead>
         <tbody>
+        <tr data-invoice-search-empty hidden>
+          <td colspan="7" class="muted" style="padding:1rem">
+            No invoices on this page match that search. Search still looks at all pages.
+          </td>
+        </tr>
         <?php foreach ($invoices as $inv): ?>
           <?php
             $paid = invoice_is_paid($inv);
@@ -496,4 +502,16 @@ render_header('Invoices', 'admin');
     </script>
   <?php endif; ?>
 </section>
+<?= sheet_search_jump_script_tag() ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.SheetSearchJump) return;
+  SheetSearchJump.bind({
+    input: '#invoice-search',
+    rows: '[data-invoice-row]',
+    meta: '[data-invoice-search-meta]',
+    empty: '[data-invoice-search-empty]'
+  });
+});
+</script>
 <?php render_footer('admin'); ?>

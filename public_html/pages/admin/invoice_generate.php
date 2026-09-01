@@ -255,7 +255,9 @@ render_header('Generate invoice', 'admin');
         <label class="sheet-search invoice-pick-search" for="invoice-pick-search" style="margin:0 0 0.65rem;display:flex">
           <span class="visually-hidden">Filter unpaid LIVE rows</span>
           <input id="invoice-pick-search" type="search" placeholder="Filter by site, email, country…"
-                 autocomplete="off" spellcheck="false" data-no-draft>
+                 autocomplete="off" spellcheck="false" data-no-draft
+                 title="Type to match this list · Enter = next hit">
+          <span class="sheet-search-meta muted" data-invoice-pick-search-meta hidden></span>
         </label>
         <label class="invoice-check-all">
           <input type="checkbox" id="toggle-all-items" <?= $precheck ? 'checked' : '' ?>>
@@ -669,7 +671,12 @@ render_header('Generate invoice', 'admin');
     });
   });
   if (existSelect) existSelect.addEventListener('change', applySearch);
-  if (existSearch) existSearch.addEventListener('input', applyExistingSearch);
+  if (existSearch) {
+    existSearch.addEventListener('input', applyExistingSearch);
+    existSearch.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  }
   if (form) {
     form.addEventListener('submit', function (e) {
       if (destMode() !== 'existing') return;
@@ -696,5 +703,20 @@ render_header('Generate invoice', 'admin');
   }
   applyDest();
 })();
+</script>
+<?= sheet_search_jump_script_tag() ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.SheetSearchJump) return;
+  SheetSearchJump.bind({
+    input: '#invoice-pick-search',
+    rows: '[data-invoice-pick-row]',
+    hideNonMatches: false,
+    meta: '[data-invoice-pick-search-meta]',
+    isVisible: function (row) {
+      return !row.hidden && row.style.display !== 'none';
+    }
+  });
+});
 </script>
 <?php render_footer('admin'); ?>

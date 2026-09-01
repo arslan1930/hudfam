@@ -3080,7 +3080,12 @@ tr.swe-row-updated {
 .order-sheet th.col-profit .with-info-label,
 .order-sheet th.col-live .with-info-label,
 .order-sheet th.col-doc .with-info-label,
-.order-sheet th.col-placement .with-info-label {
+.order-sheet th.col-placement .with-info-label,
+.order-sheet th.col-country .with-info-label,
+.order-sheet th.col-admin .with-info-label,
+.order-sheet th.col-client .with-info-label,
+.order-sheet th.col-site .with-info-label,
+.order-sheet th.col-date .with-info-label {
   white-space: nowrap;
   word-break: normal;
 }
@@ -3441,10 +3446,19 @@ tr.swe-row-updated {
 }
 .order-filter-field {
   margin: 0;
+  display: block;
 }
 .order-filter-field select,
 .order-filter-field input[type="date"] {
   margin: 0;
+  min-width: 9.5rem;
+}
+.order-filter-field .ss-wrap {
+  flex: 1 1 10rem;
+  min-width: 9.5rem;
+  max-width: 16rem;
+}
+.order-filter-field .ss-input {
   min-width: 9.5rem;
 }
 .order-filter-bar .sheet-search input[type="search"] {
@@ -3952,8 +3966,15 @@ a.card.stat:focus-visible {
   color: #92400e;
   line-height: 1.25;
 }
+.order-sheet tr.sheet-search-hit td {
+  background: #f3f4f6 !important;
+}
+.order-sheet tr.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: -2px;
+}
 .order-sheet .col-month { min-width: 188px; width: 188px; }
-.order-sheet .col-country { min-width: 110px; width: 120px; }
+.order-sheet .col-country { min-width: 140px; width: 148px; }
 .order-sheet .col-date { min-width: 150px; width: 154px; }
 .order-sheet .col-admin { min-width: 140px; width: 148px; }
 .order-sheet .col-client { min-width: 200px; }
@@ -4219,16 +4240,25 @@ a.card.stat:focus-visible {
   flex: 1 1 16rem;
   min-width: 12rem;
 }
-.ss-native {
+.ss-wrap > select.ss-native,
+.ss-wrap .ss-native {
   position: absolute;
+  left: 0;
+  top: 0;
+  display: none !important;
   width: 1px;
+  min-width: 0;
+  max-width: 1px;
   height: 1px;
   padding: 0;
-  margin: -1px;
+  margin: 0;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .ss-input { width: 100%; }
 .ss-list {
@@ -4277,10 +4307,19 @@ a.card.stat:focus-visible {
 }
 .invoice-pick-search {
   width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 .invoice-pick-search input[type="search"] {
   width: 100%;
   max-width: 100%;
+  flex: 1 1 16rem;
+}
+.invoice-item-pick li.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: -2px;
+  background: #f3f4f6;
 }
 .invoice-item-pick {
   list-style: none;

@@ -12,6 +12,7 @@
         index: idx,
         value: opt.value,
         label: (opt.textContent || '').trim(),
+        extra: String(opt.getAttribute('data-search') || ''),
         disabled: !!opt.disabled,
         group: opt.parentNode && opt.parentNode.tagName === 'OPTGROUP'
           ? (opt.parentNode.label || '')
@@ -23,8 +24,10 @@
 
   function matches(item, q) {
     if (!q) return true;
-    if (item.value === '') return false;
-    var hay = (item.label + ' ' + item.value + ' ' + item.group).toLowerCase();
+    if (item.value === '') {
+      return (item.label + ' all').toLowerCase().indexOf(q) !== -1;
+    }
+    var hay = (item.label + ' ' + item.value + ' ' + item.group + ' ' + item.extra).toLowerCase();
     return hay.indexOf(q) !== -1;
   }
 
@@ -37,6 +40,7 @@
     select.parentNode.insertBefore(wrap, select);
     wrap.appendChild(select);
     select.classList.add('ss-native');
+    select.hidden = true;
     select.tabIndex = -1;
     select.setAttribute('aria-hidden', 'true');
 
@@ -164,10 +168,23 @@
         if (list.hidden) render(input.value);
         moveActive(-1);
       } else if (e.key === 'Enter') {
-        if (!list.hidden && activeIdx >= 0 && filtered[activeIdx]) {
-          e.preventDefault();
-          pick(filtered[activeIdx]);
+        e.preventDefault();
+        if (list.hidden) return;
+        var pickIt = (activeIdx >= 0 && filtered[activeIdx]) ? filtered[activeIdx] : null;
+        if (!pickIt) {
+          var fallback = null;
+          for (var i = 0; i < filtered.length; i++) {
+            if (filtered[i].disabled) continue;
+            if (filtered[i].value === '') {
+              if (!fallback) fallback = filtered[i];
+              continue;
+            }
+            pickIt = filtered[i];
+            break;
+          }
+          if (!pickIt) pickIt = fallback;
         }
+        if (pickIt) pick(pickIt);
       } else if (e.key === 'Escape') {
         setExpanded(false);
         syncInputFromSelect();

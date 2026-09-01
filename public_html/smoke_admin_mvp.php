@@ -54,6 +54,7 @@ $requiredFiles = [
     'pages/admin/site_prices.php',
     'pages/team/site_prices.php',
     'assets/js/site-prices.js',
+    'assets/js/sheet-search-jump.js',
 ];
 foreach ($requiredFiles as $rel) {
     if (!is_file($root . '/' . $rel)) {
@@ -64,7 +65,7 @@ foreach ($requiredFiles as $rel) {
 }
 
 $asset = file_get_contents($root . '/asset.php') ?: '';
-foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js', 'js/site-prices.js', 'js/app-confirm.js'] as $key) {
+foreach (['js/password-toggle.js', 'js/prospect-batch-sheet.js', 'js/stay-scroll.js', 'js/niche-chips.js', 'js/site-prices.js', 'js/app-confirm.js', 'js/sheet-search-jump.js'] as $key) {
     if (!str_contains($asset, $key)) {
         fail("asset.php missing allowlist {$key}");
     } else {
@@ -201,7 +202,7 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
 } else {
     ok('invoices.php Bill as column');
 }
-if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
+if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, note, or line')
     || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
     || !str_contains($invoicesAdminPage, 'Waiting invoices')
     || !str_contains($invoicesAdminPage, 'Completed unpaid')
@@ -883,7 +884,7 @@ if (!str_contains($adminSemrush, 'semrush_sheet_url($dest, true)')
 }
 
 $helpers = file_get_contents($root . '/includes/helpers.php') ?: '';
-foreach (['csrf_token', 'csrf_field', 'csrf_token_valid', 'require_csrf'] as $fn) {
+foreach (['csrf_token', 'csrf_field', 'csrf_token_valid', 'require_csrf', 'searchable_select_script_tag', 'sheet_search_jump_script_tag'] as $fn) {
     if (!str_contains($helpers, "function {$fn}")) {
         fail("helpers missing {$fn}");
     } else {
@@ -1572,7 +1573,14 @@ if (!str_contains($ordersPage, 'id="order-filter-bar"')
     || !str_contains($ordersPage, 'name="admin_id"')
     || !str_contains($ordersPage, 'name="date_from"')
     || !str_contains($ordersPage, 'name="date_to"')
-    || !str_contains($ordersPage, 'name="status"')) {
+    || !str_contains($ordersPage, 'name="status"')
+    || !str_contains($ordersPage, 'chipCountOpts')
+    || !str_contains($ordersPage, 'data-searchable')
+    || !str_contains($ordersPage, 'id="order-filter-country"')
+    || !str_contains($ordersPage, 'data-search="')
+    || !str_contains($ordersPage, 'SheetSearchJump.bind')
+    || !str_contains($ordersPage, 'sheet_search_jump_script_tag')
+    || !str_contains($ordersPage, 'searchable_select_script_tag')) {
     fail('orders missing filter bar searches');
 } else {
     ok('orders filter bar searches');
@@ -1615,6 +1623,14 @@ if (!str_contains($omCss, '.order-sheet-card')
     fail('orders sheet still squeezes into the viewport');
 } else {
     ok('orders sheet scrolls instead of squeezing');
+}
+if (substr_count($omCss, '.order-filter-bar .sheet-search input[type="search"] {') !== 1
+    || !str_contains($omCss, '.ss-wrap > select.ss-native')
+    || !str_contains($omCss, 'display: none !important')
+    || !str_contains($omCss, 'clip-path: inset(50%)')) {
+    fail('order country filter still shows native select twice');
+} else {
+    ok('order searchable country filter hides native select');
 }
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
@@ -1773,7 +1789,7 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt', 'list_order_pipeline_ids', 'list_order_pipeline_client_labels', 'order_invoice_generate_push_cta', 'order_wp_sheet_url', 'normalize_order_pipeline_origin', 'order_pipeline_pick_processing_origin', 'order_normalize_article_doc_url'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt', 'list_order_pipeline_ids', 'list_order_pipeline_client_labels', 'order_invoice_generate_push_cta', 'order_wp_sheet_url', 'normalize_order_pipeline_origin', 'order_pipeline_pick_processing_origin', 'order_normalize_article_doc_url', 'order_canonicalize_country', 'order_country_filter_sql'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
@@ -1783,6 +1799,7 @@ ok('orders helpers for OM-1–4');
 $invoicesLib = file_get_contents($root . '/includes/invoices.php') ?: '';
 if (!str_contains($invoicesLib, 'function count_invoices')
     || !str_contains($invoicesLib, 'function invoices_search_sql')
+    || !str_contains($invoicesLib, 'EXISTS (SELECT 1 FROM invoice_items ii')
     || !str_contains($invoicesLib, 'function invoices_where_sql')
     || !str_contains($invoicesLib, 'function count_invoices_by_work_status')
     || !str_contains($invoicesLib, 'function count_invoices_unpaid')
@@ -1815,7 +1832,7 @@ if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event omits document URL', 'invoice append event omits document URL', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'order country canonicalize germany/German', 'save germany stores Germany', 'pipeline country filter matches aliases', 'pipeline country filter matches ISO code', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event omits document URL', 'invoice append event omits document URL', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1860,6 +1877,12 @@ if (!is_file($root . '/assets/js/searchable-select.js')) {
     fail('missing assets/js/searchable-select.js');
 } else {
     ok('file assets/js/searchable-select.js');
+}
+$ssJs = file_get_contents($root . '/assets/js/searchable-select.js') ?: '';
+if (!str_contains($ssJs, 'select.hidden = true')) {
+    fail('searchable-select.js does not hide the native select');
+} else {
+    ok('searchable-select.js hides native select');
 }
 $assetInvGen = file_get_contents($root . '/asset.php') ?: '';
 if (!str_contains($assetInvGen, 'js/searchable-select.js')) {
@@ -1913,6 +1936,20 @@ if (!str_contains($invoicesListCsrf, 'Add sites')
     fail('invoices list missing Add sites on waiting bills');
 } else {
     ok('invoices list Add sites on waiting unpaid');
+}
+if (!str_contains($invoicesListCsrf, 'SheetSearchJump.bind')
+    || !str_contains($invoicesListCsrf, 'data-invoice-row')
+    || !str_contains($invoicesListCsrf, 'sheet_search_jump_script_tag')) {
+    fail('invoices list missing live search jump');
+} else {
+    ok('invoices list live search jump');
+}
+if (!str_contains($invoiceGenerate, 'SheetSearchJump.bind')
+    || !str_contains($invoiceGenerate, 'hideNonMatches: false')
+    || !str_contains($invoiceGenerate, "if (e.key === 'Enter') e.preventDefault()")) {
+    fail('invoice_generate missing pick jump / existing-search Enter guard');
+} else {
+    ok('invoice_generate pick jump + existing-search Enter guard');
 }
 if (!str_contains($invoiceViewCsrf, 'invoice-print-toolbar')
     || str_contains($invoiceViewCsrf, 'onload="window.print()"')

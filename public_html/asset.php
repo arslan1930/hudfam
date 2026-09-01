@@ -35,6 +35,7 @@ $allowed = [
     'js/csrf.js' => 'application/javascript; charset=utf-8',
     'js/tld-separate.js' => 'application/javascript; charset=utf-8',
     'js/searchable-select.js' => 'application/javascript; charset=utf-8',
+    'js/sheet-search-jump.js' => 'application/javascript; charset=utf-8',
     'js/site-prices.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',
     'img/topurlz-logo.svg' => 'image/svg+xml',

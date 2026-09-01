@@ -607,6 +607,8 @@ if ($rUnpaidList['status'] === 200
 }
 if ($r['status'] === 200
     && str_contains($r['body'], 'All invoices')
+    && str_contains($r['body'], 'id="invoice-search"')
+    && str_contains($r['body'], 'SheetSearchJump.bind')
     && !str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin invoices all stays reachable');
@@ -637,6 +639,8 @@ if ($r['status'] === 200
     && $genCopy
     && $groupOff
     && $addExisting
+    && str_contains($r['body'], 'SheetSearchJump.bind')
+    && str_contains($r['body'], 'invoice-existing-search')
     && !str_contains($r['body'], 'invoice-pick-doc')
     && !str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Fatal error')) {
@@ -791,7 +795,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'om-folder-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client', 'Document URL'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'om-folder-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client', 'Document URL', 'data-searchable', 'id="order-filter-country"', 'SheetSearchJump.bind', 'data-search='];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
@@ -817,6 +821,8 @@ if ($r['status'] === 200
     && str_contains($r['body'], 'Clearing the live URL also clears Paid')
     && str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Article doc')
+    && str_contains($r['body'], 'SheetSearchJump.bind')
+    && str_contains($r['body'], 'data-searchable')
     && (str_contains($r['body'], 'Push unpaid') || str_contains($r['body'], 'Generate invoice') || str_contains($r['body'], 'none ticked') || str_contains($r['body'], 'Already on invoice'))) {
     pass('admin orders completed copy/download');
 } else {
@@ -901,6 +907,7 @@ foreach ([
     '/asset.php?f=js/sites-with-emails.js',
     '/asset.php?f=js/csrf.js',
     '/asset.php?f=js/app-confirm.js',
+    '/asset.php?f=js/sheet-search-jump.js',
     '/asset.php?f=img/topurlz-logo.png',
 ] as $path) {
     $r = req('GET', $base . $path);
@@ -921,6 +928,15 @@ if (
     pass('versioned asset immutable cache');
 } else {
     fail('versioned asset cache headers status=' . $r['status']);
+}
+if ($r['status'] === 200
+    && str_contains($r['body'], '.ss-wrap > select.ss-native')
+    && str_contains($r['body'], 'display: none !important')
+    && str_contains($r['body'], 'clip-path: inset(50%)')
+    && substr_count($r['body'], '.order-filter-bar .sheet-search input[type="search"] {') === 1) {
+    pass('searchable select CSS hides native select');
+} else {
+    fail('searchable select CSS still shows native select twice');
 }
 
 $jsMtime = (string) (@filemtime(__DIR__ . '/assets/js/sites-form.js') ?: time());

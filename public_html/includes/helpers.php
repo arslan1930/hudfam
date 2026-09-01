@@ -223,6 +223,16 @@ function script_asset_url(string $f): string
     return app_url('asset.php?f=' . rawurlencode($f) . '&v=' . rawurlencode($v));
 }
 
+function searchable_select_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/searchable-select.js')) . '" defer></script>';
+}
+
+function sheet_search_jump_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/sheet-search-jump.js')) . '" defer></script>';
+}
+
 function redirect(string $path): void
 {
     header('Location: ' . $path);
