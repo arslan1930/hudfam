@@ -4240,10 +4240,12 @@ a.card.stat:focus-visible {
   flex: 1 1 16rem;
   min-width: 12rem;
 }
+.ss-wrap > select.ss-native,
 .ss-wrap .ss-native {
   position: absolute;
   left: 0;
   top: 0;
+  display: none !important;
   width: 1px;
   min-width: 0;
   max-width: 1px;

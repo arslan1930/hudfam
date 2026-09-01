@@ -40,6 +40,7 @@
     select.parentNode.insertBefore(wrap, select);
     wrap.appendChild(select);
     select.classList.add('ss-native');
+    select.hidden = true;
     select.tabIndex = -1;
     select.setAttribute('aria-hidden', 'true');
 

@@ -553,16 +553,19 @@ if ($filter['country'] !== '') {
     }
 }
 $clientCatalog = list_order_pipeline_client_labels();
+$chipCountOpts = [
+    'folder' => $folder,
+];
 $originCounts = ['wp' => 0, 'leftover' => 0, 'manual' => 0, 'all' => 0];
 if ($isProcessing) {
     foreach (['wp', 'leftover', 'manual', 'all'] as $okey) {
-        $originCounts[$okey] = count_order_pipeline_rows(array_merge($listOpts, ['origin' => $okey]));
+        $originCounts[$okey] = count_order_pipeline_rows(array_merge($chipCountOpts, ['origin' => $okey]));
     }
 }
 $completedStatusCounts = ['all' => 0, 'unpaid' => 0, 'paid' => 0];
 if ($isCompleted) {
     foreach (['all', 'unpaid', 'paid'] as $sk) {
-        $completedStatusCounts[$sk] = count_order_pipeline_rows(array_merge($listOpts, ['status' => $sk]));
+        $completedStatusCounts[$sk] = count_order_pipeline_rows(array_merge($chipCountOpts, ['status' => $sk]));
     }
 }
 $admins = order_admin_options();

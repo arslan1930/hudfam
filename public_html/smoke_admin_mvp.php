@@ -1574,6 +1574,7 @@ if (!str_contains($ordersPage, 'id="order-filter-bar"')
     || !str_contains($ordersPage, 'name="date_from"')
     || !str_contains($ordersPage, 'name="date_to"')
     || !str_contains($ordersPage, 'name="status"')
+    || !str_contains($ordersPage, 'chipCountOpts')
     || !str_contains($ordersPage, 'data-searchable')
     || !str_contains($ordersPage, 'id="order-filter-country"')
     || !str_contains($ordersPage, 'data-search="')
@@ -1624,7 +1625,8 @@ if (!str_contains($omCss, '.order-sheet-card')
     ok('orders sheet scrolls instead of squeezing');
 }
 if (substr_count($omCss, '.order-filter-bar .sheet-search input[type="search"] {') !== 1
-    || !str_contains($omCss, '.ss-wrap .ss-native')
+    || !str_contains($omCss, '.ss-wrap > select.ss-native')
+    || !str_contains($omCss, 'display: none !important')
     || !str_contains($omCss, 'clip-path: inset(50%)')) {
     fail('order country filter still shows native select twice');
 } else {
@@ -1875,6 +1877,12 @@ if (!is_file($root . '/assets/js/searchable-select.js')) {
     fail('missing assets/js/searchable-select.js');
 } else {
     ok('file assets/js/searchable-select.js');
+}
+$ssJs = file_get_contents($root . '/assets/js/searchable-select.js') ?: '';
+if (!str_contains($ssJs, 'select.hidden = true')) {
+    fail('searchable-select.js does not hide the native select');
+} else {
+    ok('searchable-select.js hides native select');
 }
 $assetInvGen = file_get_contents($root . '/asset.php') ?: '';
 if (!str_contains($assetInvGen, 'js/searchable-select.js')) {
