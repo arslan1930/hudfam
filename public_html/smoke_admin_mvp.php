@@ -1597,13 +1597,13 @@ if (!str_contains($ordersPage, '<span>Copy</span>')
 } else {
     ok('orders Copy vs Complete labels, WP link, confirm stay');
 }
-if (!str_contains($ordersPage, 'Article doc')
+if (!str_contains($ordersPage, 'Document URL')
     || !str_contains($ordersPage, 'name="article_doc_url')
     || !str_contains($ordersPage, 'col-doc')
     || !str_contains($ordersPage, '$colspan = 16')) {
-    fail('orders missing Article doc column');
+    fail('orders missing Document URL column');
 } else {
-    ok('orders Article doc column');
+    ok('orders Document URL column');
 }
 if (str_contains($ordersPage, 'if ($isProcessing):') && str_contains($ordersPage, 'Push to invoice')
     && str_contains($ordersPage, 'if ($isCompleted):')) {
@@ -1756,7 +1756,7 @@ if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event snapshots article doc', 'invoice append event snapshots article doc', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event omits document URL', 'invoice append event omits document URL', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }
@@ -1875,13 +1875,17 @@ if (!str_contains($invoiceViewCsrf, 'invoice-om-links')
 if (!str_contains($invoiceViewCsrf, 'invoice-history')
     || !str_contains($invoiceViewCsrf, 'list_invoice_events')
     || !str_contains($invoiceViewCsrf, 'No history yet')
-    || !str_contains($invoiceViewCsrf, 'Article doc')
+    || str_contains($invoiceViewCsrf, '<th>Article doc</th>')
+    || str_contains($invoiceViewCsrf, '<th>Document URL</th>')
+    || str_contains($invoiceViewCsrf, 'snapDoc')
+    || str_contains($invoiceViewCsrf, 'omDoc')
+    || str_contains($invoiceGenerate, 'invoice-pick-doc')
     || !str_contains($invoicesLib, 'CREATE TABLE IF NOT EXISTS invoice_events')
     || !str_contains($invoicesLib, 'function invoice_ensure_events_table')
     || !str_contains($ordersLib, 'function order_ensure_article_doc_column')) {
-    fail('invoice view missing History / Article doc');
+    fail('invoice view History still shows Document URL');
 } else {
-    ok('invoice view History and Article doc');
+    ok('invoice view History without Document URL');
 }
 $schemaSqlLate = file_get_contents($root . '/sql/schema.sql') ?: '';
 if (!str_contains($schemaSqlLate, 'article_doc_url VARCHAR(500)')

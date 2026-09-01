@@ -4984,22 +4984,23 @@ try {
             'vat_note' => '',
         ], build_invoice_lines_from_orders($docReady, false), (int) $adminUser['id']);
         $createdHasDoc = false;
+        $createdOmitsDoc = false;
         foreach (list_invoice_events((int) $docInvId) as $ev) {
             if (($ev['event_type'] ?? '') !== 'created') {
                 continue;
             }
             foreach ((array) (($ev['payload_data'] ?? [])['rows'] ?? []) as $snap) {
                 if ((int) ($snap['order_item_id'] ?? 0) === (int) $docId
-                    && str_contains((string) ($snap['article_doc_url'] ?? ''), 'txf-doc-abc')
                     && str_contains((string) ($snap['live_url'] ?? ''), 'article-doc-live')) {
-                    $createdHasDoc = true;
+                    $createdOmitsDoc = trim((string) ($snap['article_doc_url'] ?? '')) === '';
+                    $createdHasDoc = str_contains((string) ($snap['article_doc_url'] ?? ''), 'txf-doc-abc');
                 }
             }
         }
-        if ($createdHasDoc) {
-            pass('invoice created event snapshots article doc');
+        if ($createdOmitsDoc && !$createdHasDoc) {
+            pass('invoice created event omits document URL');
         } else {
-            fail('invoice created event missing article doc snapshot');
+            fail('invoice created event still snapshots document URL');
         }
 
         $docAppendId = add_order_pipeline_row((int) $adminUser['id'], 'doc-buyer@example.com');
@@ -5019,6 +5020,7 @@ try {
         $docAppendMarked = order_mark_completed((int) $docAppendId, 'https://example.com/article-doc-append', (int) $adminUser['id']);
         $docAppendReady = list_invoiceable_order_items_by_ids([(int) $docAppendId]);
         $appendHasDoc = false;
+        $appendOmitsDoc = false;
         if (!empty($docAppendMarked['ok']) && count($docAppendReady) === 1) {
             append_orders_to_invoice(
                 (int) $docInvId,
@@ -5030,17 +5032,17 @@ try {
                     continue;
                 }
                 foreach ((array) (($ev['payload_data'] ?? [])['rows'] ?? []) as $snap) {
-                    if ((int) ($snap['order_item_id'] ?? 0) === (int) $docAppendId
-                        && str_contains((string) ($snap['article_doc_url'] ?? ''), 'txf-doc-append')) {
-                        $appendHasDoc = true;
+                    if ((int) ($snap['order_item_id'] ?? 0) === (int) $docAppendId) {
+                        $appendOmitsDoc = trim((string) ($snap['article_doc_url'] ?? '')) === '';
+                        $appendHasDoc = str_contains((string) ($snap['article_doc_url'] ?? ''), 'txf-doc-append');
                     }
                 }
             }
         }
-        if ($appendHasDoc) {
-            pass('invoice append event snapshots article doc');
+        if ($appendOmitsDoc && !$appendHasDoc) {
+            pass('invoice append event omits document URL');
         } else {
-            fail('invoice append event missing article doc snapshot');
+            fail('invoice append event still snapshots document URL');
         }
     }
 

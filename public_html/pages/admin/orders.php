@@ -850,7 +850,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
           <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?></th>
           <th class="col-price"><?= label_with_info('Owner', 'Owner price — what you pay the site owner / publisher.') ?></th>
           <th class="col-price"><?= label_with_info('Decided', 'Decided price — what the client pays you. Profit = Decided − Owner.') ?></th>
-          <th class="col-doc"><?= label_with_info('Article doc', 'Google Doc for the piece that was or will be published. Not the live page. Internal only — not printed on the invoice.') ?></th>
+          <th class="col-doc"><?= label_with_info('Document URL', 'Google Doc for the piece that was or will be published. Not the live page. Shown on Processing and Completed only — not on invoices.') ?></th>
           <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?></th>
           <th class="col-paid"><?= $isProcessing
               ? label_with_info('Complete', 'Mark this row completed after the live URL is filled. Moves it to Completed orders and sets Website prices to Completed.')
@@ -1016,7 +1016,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
             <div class="open-site-cell order-doc-cell" data-open-site-cell>
               <input class="cell-input" type="text" name="article_doc_url[<?= $id ?>]"
                      value="<?= h((string) ($row['article_doc_url'] ?? '')) ?>"
-                     placeholder="Google Doc URL" autocomplete="off"
+                     placeholder="Document URL" autocomplete="off"
                      data-open-site-host>
               <?= render_open_site_anchor((string) ($row['article_doc_url'] ?? ''), ['class' => 'order-open-site', 'label' => 'Open']) ?>
             </div>

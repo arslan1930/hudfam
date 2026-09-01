@@ -568,6 +568,9 @@ if ($invViewId > 0) {
         && (str_contains($rView['body'], 'Mark paid') || str_contains($rView['body'], 'Paid'))
         && str_contains($rView['body'], 'History')
         && str_contains($rView['body'], 'invoice-history')
+        && !str_contains($rView['body'], 'Article doc')
+        && !str_contains($rView['body'], 'Document URL')
+        && !str_contains($rView['body'], 'invoice-pick-doc')
         && !str_contains($rView['body'], 'Fatal error')) {
         pass('admin invoice open bill');
     } else {
@@ -595,6 +598,7 @@ if ($rUnpaidList['status'] === 200
     && str_contains($rUnpaidList['body'], 'Completed unpaid')
     && str_contains($rUnpaidList['body'], 'admin_invoices&amp;filter=unpaid')
     && str_contains($rUnpaidList['body'], 'help-details page-purpose')
+    && !str_contains($rUnpaidList['body'], 'Document URL')
     && !str_contains($rUnpaidList['body'], '>Clear</a>')
     && !str_contains($rUnpaidList['body'], 'Fatal error')) {
     pass('admin invoices unpaid working view');
@@ -603,6 +607,7 @@ if ($rUnpaidList['status'] === 200
 }
 if ($r['status'] === 200
     && str_contains($r['body'], 'All invoices')
+    && !str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin invoices all stays reachable');
 } else {
@@ -632,6 +637,8 @@ if ($r['status'] === 200
     && $genCopy
     && $groupOff
     && $addExisting
+    && !str_contains($r['body'], 'invoice-pick-doc')
+    && !str_contains($r['body'], 'Document URL')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('admin invoice generate none ticked');
 } else {
@@ -784,7 +791,7 @@ if ($r['status'] === 200 && !$sheetBad
 }
 
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
-$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'om-folder-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client', 'Article doc'];
+$omCopyNeedles = ['Copy selected sites (this page)', 'Copy selected live URLs (this page)', 'Copy all live URLs', 'Download .txt', 'data-copy-check', 'Mark completed', '+ Add order', 'order-client-list', '<span>Copy</span>', '<span>Complete</span>', 'Left tick', 'With live URL', 'Need a country on every ticked row before completing', 'om-origin-tabs', 'om-folder-tabs', 'Leftover', 'Added here', 'All Processing', 'Fill LIVE URL, country, and client', 'Document URL'];
 $omCopyBad = [];
 foreach ($omCopyNeedles as $n) {
     if (!str_contains($r['body'], $n)) {
@@ -808,7 +815,8 @@ if ($r['status'] === 200
     && str_contains($r['body'], 'Mark paid')
     && str_contains($r['body'], 'data-orig-live')
     && str_contains($r['body'], 'Clearing the live URL also clears Paid')
-    && str_contains($r['body'], 'Article doc')
+    && str_contains($r['body'], 'Document URL')
+    && !str_contains($r['body'], 'Article doc')
     && (str_contains($r['body'], 'Push unpaid') || str_contains($r['body'], 'Generate invoice') || str_contains($r['body'], 'none ticked') || str_contains($r['body'], 'Already on invoice'))) {
     pass('admin orders completed copy/download');
 } else {

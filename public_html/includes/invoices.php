@@ -600,10 +600,11 @@ function list_invoice_linked_order_items(int $invoiceId): array
 }
 
 /**
- * Snapshot OM rows at bill time: site, LIVE URL, article doc, decided price.
+ * Snapshot OM rows at bill time: site, LIVE URL, decided price.
+ * Document URL stays on Order management (Processing / Completed), not on invoices.
  *
  * @param list<int|string> $orderIds
- * @return list<array{order_item_id:int,site_name:string,live_url:string,article_doc_url:string,decided_price:?float}>
+ * @return list<array{order_item_id:int,site_name:string,live_url:string,decided_price:?float}>
  */
 function invoice_snapshot_order_rows(array $orderIds): array
 {
@@ -631,7 +632,6 @@ function invoice_snapshot_order_rows(array $orderIds): array
                     'order_item_id' => $id,
                     'site_name' => '',
                     'live_url' => '',
-                    'article_doc_url' => '',
                     'decided_price' => null,
                 ];
                 continue;
@@ -641,7 +641,6 @@ function invoice_snapshot_order_rows(array $orderIds): array
                 'order_item_id' => $id,
                 'site_name' => (string) ($item['site_name'] ?? ''),
                 'live_url' => (string) ($item['live_url'] ?? ''),
-                'article_doc_url' => (string) ($item['article_doc_url'] ?? ''),
                 'decided_price' => ($decided !== null && $decided !== '') ? (float) $decided : null,
             ];
         }

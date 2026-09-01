@@ -410,8 +410,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
         <tr>
           <th>Site</th>
           <th>LIVE URL</th>
-          <th>Article doc</th>
-          <th></th>
+          <th>Completed</th>
         </tr>
       </thead>
       <tbody>
@@ -420,7 +419,6 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
             $omId = (int) ($omRow['id'] ?? 0);
             $omSite = trim((string) ($omRow['site_name'] ?? ''));
             $omLive = trim((string) ($omRow['live_url'] ?? ''));
-            $omDoc = trim((string) ($omRow['article_doc_url'] ?? ''));
             $omHref = 'index.php?page=admin_orders&folder=completed';
             if ($omSite !== '') {
                 $omHref .= '&q=' . rawurlencode($omSite);
@@ -434,11 +432,6 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
             <?php else: ?>
               —
             <?php endif; ?></td>
-            <td><?php if ($omDoc !== ''): ?>
-              <a href="<?= h($omDoc) ?>" target="_blank" rel="noopener">Open</a>
-            <?php else: ?>
-              —
-            <?php endif; ?></td>
             <td><a class="btn secondary small" href="<?= h($omHref) ?>">Completed</a></td>
           </tr>
         <?php endforeach; ?>
@@ -448,7 +441,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 </section>
 <?php endif; ?>
 <section class="card no-print invoice-history">
-  <h2><?= label_with_info('History', 'Who changed this invoice and which sites were on it then. Article doc and LIVE URL are internal — they do not print on the bill.') ?></h2>
+  <h2><?= label_with_info('History', 'Who changed this invoice and which sites were on it then. LIVE URL is internal — it does not print on the bill.') ?></h2>
   <?php if (!$invoiceEvents): ?>
     <p class="muted">No history yet.</p>
   <?php else: ?>
@@ -478,15 +471,11 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
                   <?php
                     $snapSite = trim((string) ($snap['site_name'] ?? ''));
                     $snapLive = trim((string) ($snap['live_url'] ?? ''));
-                    $snapDoc = trim((string) ($snap['article_doc_url'] ?? ''));
                   ?>
                   <li>
                     <strong><?= h($snapSite !== '' ? $snapSite : 'Site') ?></strong>
                     <?php if ($snapLive !== ''): ?>
                       · LIVE <a href="<?= h($snapLive) ?>" target="_blank" rel="noopener">Open</a>
-                    <?php endif; ?>
-                    <?php if ($snapDoc !== ''): ?>
-                      · Article doc <a href="<?= h($snapDoc) ?>" target="_blank" rel="noopener">Open</a>
                     <?php endif; ?>
                   </li>
                 <?php endforeach; ?>
