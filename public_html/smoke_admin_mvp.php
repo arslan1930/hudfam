@@ -2874,6 +2874,7 @@ if (!str_contains($prospectCheckSf, 'id="add_unique_form"')
     || !str_contains($prospectCheckSf, 'unique-sites-preview')
     || str_contains($prospectCheckSf, 'id="unique_domains_preview" class="inventory-box"')
     || !str_contains($helpers, "hidden aria-hidden")
+    || !str_contains($helpers, 'style="display:none"')
     || !str_contains($cssApp, 'textarea.visually-hidden')
     || !str_contains($cssApp, '.unique-sites-preview')) {
     fail('Filter unique card still shows hidden domain boxes / inventory-box preview');
