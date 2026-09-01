@@ -3009,6 +3009,15 @@ if (!str_contains($prospectsLib, 'function admin_add_urls_to_database')
 } else {
     ok('Admin Add sites routes country TLDs');
 }
+if (!str_contains($prospectCheckSf, 'route-dest-list')
+    || !str_contains($uiCss, 'route-dest-list')
+    || !str_contains($uiCss, 'sites-open-panel')
+    || !str_contains($uiCss, 'sites-list-row:hover')
+    || !str_contains($prospectCheckSf, '.pt→Portugal')) {
+    fail('Team Filter unique missing destination list or leftover light Sites list styles');
+} else {
+    ok('Team Filter unique destination list + Sites list overlay');
+}
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {
     fail('geo.php missing group_domains_by_tld');

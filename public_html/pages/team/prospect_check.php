@@ -302,7 +302,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Filter unique sites</strong> routes by TLD (.at→Austria, .ch→Switzerland, …) and removes duplicates in each destination Our database → Add puts unique sites into those country folders and Extracting Sites lists. Separate before Filter can only Copy/Delete.</p>
+    <p class="muted">Paste sites → <strong>Filter unique sites</strong> routes by TLD (.at→Austria, .pt→Portugal, .com stays in the selected country) and removes duplicates in each destination Our database → Add puts unique sites into those country folders and Extracting Sites lists. Separate before Filter can only Copy/Delete.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -528,6 +528,25 @@ render_header('Filter & add', 'team');
           $uniqueRows = max(4, min(16, count($result['new']) + 1));
         ?>
         <?= render_hidden_multiline('domains', $uniqueText) ?>
+        <?php
+          $destBits = [];
+          foreach (($result['by_country'] ?? []) as $destName => $bucket) {
+              $nDest = count($bucket['new'] ?? []);
+              if ($nDest > 0) {
+                  $destBits[] = ['name' => (string) $destName, 'n' => $nDest];
+              }
+          }
+        ?>
+        <?php if ($destBits): ?>
+          <ul class="route-dest-list" aria-label="Where unique sites will be saved">
+            <?php foreach ($destBits as $row): ?>
+              <li>
+                <strong><?= h($row['name']) ?></strong>
+                <span><?= (int) $row['n'] ?> unique site<?= $row['n'] === 1 ? '' : 's' ?></span>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
         <textarea id="unique_domains_preview" class="unique-sites-preview" rows="<?= (int) $uniqueRows ?>" readonly data-no-draft><?= h($uniquePreview) ?></textarea>
         <p class="help">
           These are <strong>not</strong> in their destination country Our database yet
@@ -540,7 +559,8 @@ render_header('Filter & add', 'team');
         <?php if (!empty($tldCheck['warn'])): ?>
           <label class="tld-confirm">
             <input type="checkbox" name="confirm_tld_mismatch" value="1" required>
-            I confirm these sites belong in <strong><?= h($country) ?></strong> (or I accept saving them there anyway).
+            I understand country endings still go to their own folders
+            (.at→Austria, .pt→Portugal, .com stays in <?= h($country) ?>). Continue adding.
           </label>
         <?php endif; ?>
         <?php
