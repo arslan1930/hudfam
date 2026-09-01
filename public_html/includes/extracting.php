@@ -212,6 +212,9 @@ function add_domains_to_extract_sites(
         }
     }
     refresh_extract_batch_site_count($batchId);
+    if ($added > 0) {
+        stamp_extract_sites_writer($batchId, $uid);
+    }
 
     return ['batch_id' => $batchId, 'added' => $added, 'failed' => $failed, 'error' => $failMsg];
 }
@@ -562,7 +565,7 @@ function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $ad
  * @param list<string> $domains
  * @return list<array{domain:string,prospect_site_id:?int,added_by:?int}>
  */
-function remove_extract_batch_domains(int $batchId, array $domains): array
+function remove_extract_batch_domains(int $batchId, array $domains, ?int $actorId = null): array
 {
     ensure_extract_schema();
     $wanted = [];
@@ -593,6 +596,14 @@ function remove_extract_batch_domains(int $batchId, array $domains): array
     );
     $del->execute($params);
     refresh_extract_batch_site_count($batchId);
+    $stampId = $actorId;
+    if (($stampId === null || $stampId < 1) && function_exists('current_user')) {
+        $u = current_user();
+        $stampId = (int) ($u['id'] ?? 0) ?: null;
+    }
+    if ($stampId) {
+        stamp_extract_sites_writer($batchId, $stampId);
+    }
 
     $out = [];
     foreach ($removed as $row) {
@@ -697,17 +708,95 @@ function count_extract_batches(): int
 
 function extract_request_wants_json(): bool
 {
-    if ((string) ($_POST['ajax'] ?? '') === '1') {
+    if ((string) ($_POST['ajax'] ?? '') === '1' || (string) ($_GET['ajax'] ?? '') === '1') {
         return true;
     }
     $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
     return str_contains($accept, 'application/json');
 }
 
+/**
+ * Live shared Sites-list meta so two teammates see the same count without a full reload.
+ *
+ * @return array{ok:bool,error?:string,site_count?:int,writer_at?:string,writer_name?:string}
+ */
+function extract_sites_live_meta(int $batchId): array
+{
+    $batch = get_extract_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Batch not found.'];
+    }
+    $cnt = db()->prepare('SELECT COUNT(*) FROM extract_batch_sites WHERE batch_id=?');
+    $cnt->execute([$batchId]);
+    $name = trim((string) (($batch['sites_writer_name'] ?? '') !== ''
+        ? $batch['sites_writer_name']
+        : ($batch['sites_writer_username'] ?? '')));
+
+    return [
+        'ok' => true,
+        'site_count' => (int) $cnt->fetchColumn(),
+        'writer_at' => (string) ($batch['sites_writer_at'] ?? ''),
+        'writer_name' => $name,
+    ];
+}
+
+/**
+ * @return array{ok:bool,error?:string,site_count?:int,writer_at?:string,writer_name?:string,domains?:list<string>}
+ */
+function extract_sites_snapshot(int $batchId): array
+{
+    $meta = extract_sites_live_meta($batchId);
+    if (empty($meta['ok'])) {
+        return $meta;
+    }
+    $meta['domains'] = get_extract_batch_domains($batchId);
+
+    return $meta;
+}
+
+/**
+ * Hub country counts (live COUNT, same number for every teammate).
+ *
+ * @return array{ok:bool,rows:list<array{id:int,country:string,site_count:int}>,sites:int,countries:int}
+ */
+function extract_hub_live_counts(): array
+{
+    $batches = list_extract_batches(2000);
+    $rows = [];
+    foreach ($batches as $b) {
+        if (!is_array($b)) {
+            continue;
+        }
+        $rows[] = [
+            'id' => (int) ($b['id'] ?? 0),
+            'country' => (string) ($b['country'] ?? ''),
+            'site_count' => (int) ($b['site_count'] ?? 0),
+        ];
+    }
+    $sum = extract_hub_waiting_summary($batches);
+
+    return [
+        'ok' => true,
+        'rows' => $rows,
+        'sites' => (int) ($sum['sites'] ?? 0),
+        'countries' => (int) ($sum['countries'] ?? 0),
+    ];
+}
+
 function extract_json_response(array $payload, int $status = 200): void
 {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    header('Cache-Control: no-store');
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        http_response_code(500);
+        echo '{"ok":false,"error":"Could not encode response."}';
+        exit;
+    }
+    echo $json;
     exit;
 }

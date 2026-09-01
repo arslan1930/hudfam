@@ -5,12 +5,25 @@ ensure_extract_schema();
 $id = (int) (get('id') ?: 0);
 $batch = $id > 0 ? get_extract_batch($id) : null;
 if (!$batch) {
+    if ((string) get('ajax') === '1') {
+        extract_json_response(['ok' => false, 'error' => 'Batch not found.'], 404);
+    }
     flash('error', 'That country batch is not available yet. Waiting for sites from the team mate.');
     redirect('index.php?page=team_extracting');
 }
 
 $resultsText = (string) ($batch['results_text'] ?? '');
 $country = (string) $batch['country'];
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string) get('ajax') === '1') {
+    $liveAction = (string) get('action');
+    if ($liveAction === 'sites_live') {
+        extract_json_response(extract_sites_live_meta($id));
+    }
+    if ($liveAction === 'sites_snapshot') {
+        extract_json_response(extract_sites_snapshot($id));
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
@@ -107,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if ($pushedDomains !== []) {
-                remove_extract_batch_domains($id, $pushedDomains);
+                remove_extract_batch_domains($id, $pushedDomains, (int) ($user['id'] ?? 0) ?: null);
                 refresh_extract_batch_site_count($id);
             }
         }
@@ -225,6 +238,7 @@ render_header('Extracting · ' . $country, 'team');
       data-batch-id="<?= (int) $id ?>"
       data-post-url="index.php?page=team_extract_batch&amp;id=<?= (int) $id ?>"
       data-writer-at="<?= h((string) ($batch['sites_writer_at'] ?? '')) ?>"
+      data-live-count="<?= (int) count($domains) ?>"
     >
       <div class="domains-paste-head">
         <label for="sites_list_text">Sites (root domains)</label>

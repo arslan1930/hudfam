@@ -2,6 +2,10 @@
 $user = require_team();
 ensure_extract_schema();
 
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string) get('ajax') === '1' && (string) get('action') === 'hub_live') {
+    extract_json_response(extract_hub_live_counts());
+}
+
 $batches = [];
 try {
     $batches = list_extract_batches(2000);
@@ -27,10 +31,10 @@ render_header('Extracting sites', 'team');
     </p>
     <?php if ($waitCountries > 0): ?>
       <p class="muted" data-extract-hub-total>
-        <strong><?= h(number_format($waitSites)) ?></strong>
+        <strong data-extract-hub-sites><?= h(number_format($waitSites)) ?></strong>
         site<?= $waitSites === 1 ? '' : 's' ?> waiting
-        · <?= (int) $waitCountries ?> <?= $waitCountries === 1 ? 'country' : 'countries' ?>
-        <span class="help">(all countries on this list)</span>
+        · <span data-extract-hub-countries><?= (int) $waitCountries ?></span> <?= $waitCountries === 1 ? 'country' : 'countries' ?>
+        <span class="help">(all countries on this list · live for every teammate)</span>
       </p>
     <?php endif; ?>
   </div>
@@ -80,11 +84,11 @@ render_header('Extracting sites', 'team');
         $hay = mb_strtolower($bCountry . ' ' . $siteN . ' sites ' . $writerName);
         $badgeClass = !empty($cues['stale']) ? 'sent' : 'agreed';
         ?>
-      <tr data-extract-country-row data-search="<?= h($hay) ?>">
+      <tr data-extract-country-row data-batch-id="<?= (int) $b['id'] ?>" data-site-count="<?= (int) $siteN ?>" data-search="<?= h($hay) ?>">
         <td data-label="Country"><strong><?= h($bCountry) ?></strong></td>
         <td data-label="Sites">
           <span class="extract-hub-cues">
-            <span class="badge <?= h($badgeClass) ?>"><?= (int) $siteN ?></span>
+            <span class="badge <?= h($badgeClass) ?>" data-extract-hub-count><?= (int) $siteN ?></span>
             <?php if (!empty($cues['large'])): ?>
               <span class="badge extract-large">Large</span>
             <?php endif; ?>
@@ -142,4 +146,63 @@ render_header('Extracting sites', 'team');
   </div>
 </div>
 <?php endif; ?>
+<script>
+(function () {
+  var url = 'index.php?page=team_extracting&ajax=1&action=hub_live';
+  function fmt(n) {
+    n = parseInt(n, 10) || 0;
+    return n.toLocaleString();
+  }
+  function poll() {
+    if (document.hidden) return;
+    fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || data.ok === false) return;
+        var rows = data.rows || [];
+        var haveTable = document.querySelector('[data-extract-country-row]');
+        if (!haveTable && rows.length) {
+          window.location.reload();
+          return;
+        }
+        if (haveTable && !rows.length) {
+          window.location.reload();
+          return;
+        }
+        var byId = {};
+        rows.forEach(function (r) { byId[String(r.id)] = r; });
+        var seen = 0;
+        var missing = false;
+        document.querySelectorAll('[data-extract-country-row]').forEach(function (row) {
+          var id = String(row.getAttribute('data-batch-id') || '');
+          var hit = byId[id];
+          if (!hit) {
+            missing = true;
+            return;
+          }
+          seen++;
+          var n = parseInt(hit.site_count, 10) || 0;
+          var badge = row.querySelector('[data-extract-hub-count]');
+          if (badge && String(badge.textContent) !== String(n)) {
+            badge.textContent = String(n);
+            row.setAttribute('data-site-count', String(n));
+          }
+        });
+        if (missing || seen !== rows.length) {
+          window.location.reload();
+          return;
+        }
+        var sitesEl = document.querySelector('[data-extract-hub-sites]');
+        var countriesEl = document.querySelector('[data-extract-hub-countries]');
+        if (sitesEl) sitesEl.textContent = fmt(data.sites);
+        if (countriesEl) countriesEl.textContent = String(data.countries || 0);
+      })
+      .catch(function () { /* ignore */ });
+  }
+  window.setInterval(poll, 4000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) poll();
+  });
+})();
+</script>
 <?php render_footer('team'); ?>

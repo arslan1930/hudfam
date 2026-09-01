@@ -465,8 +465,29 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+if ($inCountry && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+    && (string) get('ajax') === '1' && (string) get('action') === 'live_counts') {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo json_encode(swe_country_live_counts($sheet, $sweScope), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+
 // --- Country list ---
 if (!$inCountry) {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+        && (string) get('ajax') === '1' && (string) get('action') === 'hub_live') {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode(swe_hub_live_counts($sweScope), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
     if ($sweScope === 'admin' && function_exists('swe_admin_clear_visit_since')) {
         swe_admin_clear_visit_since($sweUser);
     }
@@ -557,13 +578,14 @@ if (!$inCountry) {
             Working list from Team Push · emailed checkpoint here · also synced to Final ·
           <?php endif; ?>
         </p>
-        <p class="muted">
-          <strong><?= count($countryRows) ?></strong>
+        <p class="muted" data-swe-hub-summary
+           data-swe-hub-live-url="<?= h($sweBase . '&ajax=1&action=hub_live') ?>">
+          <strong data-swe-hub-countries><?= count($countryRows) ?></strong>
           countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?>
-          · <strong><?= (int) $grandTotal ?></strong>
+          · <strong data-swe-hub-sites><?= (int) $grandTotal ?></strong>
           site<?= (int) $grandTotal === 1 ? '' : 's' ?>
           <?php if (!$isAdminAll || (int) $emailSites !== (int) $grandTotal): ?>
-            · <strong><?= (int) $emailSites ?></strong>
+            · <strong data-swe-hub-emails><?= (int) $emailSites ?></strong>
             with email<?= (int) $emailSites === 1 ? '' : 's' ?>
           <?php endif; ?>
           <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
@@ -694,7 +716,7 @@ if (!$inCountry) {
             $hay = mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
             $newN = (int) ($adminNewByCountry[$cName] ?? 0);
             ?>
-          <tr data-swe-country-row data-search="<?= h($hay) ?>">
+          <tr data-swe-country-row data-country="<?= h($cName) ?>" data-search="<?= h($hay) ?>">
             <td>
               <a class="extracted-country-link" href="<?= h($openHref) ?>">
                 <?= h($cName) ?>
@@ -712,12 +734,12 @@ if (!$inCountry) {
               <?php endif; ?>
             </td>
             <td class="num">
-              <a class="extracted-country-count" href="<?= h($openHref) ?>" title="Open <?= h($cName) ?>">
+              <a class="extracted-country-count" href="<?= h($openHref) ?>" title="Open <?= h($cName) ?>" data-swe-hub-total>
                 <?= (int) $r['total'] ?>
               </a>
             </td>
             <?php if ($showWithEmailsCol): ?>
-            <td class="num muted"><?= (int) $r['with_emails'] ?></td>
+            <td class="num muted" data-swe-hub-with-emails><?= (int) $r['with_emails'] ?></td>
             <?php endif; ?>
             <?php if ($isTeam):
                 $lp = trim((string) ($r['last_pushed_at'] ?? ''));
@@ -817,6 +839,56 @@ if (!$inCountry) {
       input.addEventListener('input', function () { matchIndex = -1; filter(); });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? -1 : 1); }
+      });
+    })();
+    (function () {
+      var summary = document.querySelector('[data-swe-hub-live-url]');
+      var url = summary ? String(summary.getAttribute('data-swe-hub-live-url') || '') : '';
+      if (!url) return;
+      function poll() {
+        if (document.hidden) return;
+        fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (!data || data.ok === false) return;
+            var rows = data.rows || [];
+            var have = document.querySelectorAll('[data-swe-country-row]');
+            if (!have.length && rows.length) {
+              window.location.reload();
+              return;
+            }
+            if (have.length && !rows.length) {
+              window.location.reload();
+              return;
+            }
+            var byCountry = {};
+            rows.forEach(function (r) { byCountry[String(r.country || '')] = r; });
+            var missing = false;
+            have.forEach(function (row) {
+              var name = String(row.getAttribute('data-country') || '');
+              var hit = byCountry[name];
+              if (!hit) { missing = true; return; }
+              var tot = row.querySelector('[data-swe-hub-total]');
+              var withEl = row.querySelector('[data-swe-hub-with-emails]');
+              if (tot) tot.textContent = String(hit.total);
+              if (withEl) withEl.textContent = String(hit.with_emails);
+            });
+            if (missing || have.length !== rows.length) {
+              window.location.reload();
+              return;
+            }
+            var cEl = document.querySelector('[data-swe-hub-countries]');
+            var sEl = document.querySelector('[data-swe-hub-sites]');
+            var eEl = document.querySelector('[data-swe-hub-emails]');
+            if (cEl) cEl.textContent = String(rows.length);
+            if (sEl) sEl.textContent = String(data.grand_total || 0);
+            if (eEl) eEl.textContent = String(data.email_sites || 0);
+          })
+          .catch(function () { /* ignore */ });
+      }
+      window.setInterval(poll, 4000);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) poll();
       });
     })();
     </script>
@@ -950,7 +1022,7 @@ render_breadcrumbs($crumbs);
         $sweLabel . ' country'
     );
     ?>
-    <p class="muted">
+    <p class="muted" data-swe-live-url="<?= h($listBase . '&ajax=1&action=live_counts') ?>">
       <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
       <?= $q !== '' || $sentFilter !== '' || $rowFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
       · <?= (int) $perPage ?> per page

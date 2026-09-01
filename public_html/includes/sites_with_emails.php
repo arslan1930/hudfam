@@ -1066,6 +1066,50 @@ function list_sites_with_emails_country_rows(string $scope = 'team'): array
 }
 
 /**
+ * Live country totals — same number for every teammate on this scope.
+ *
+ * @return array{ok:bool,site_count:int,ready:int}
+ */
+function swe_country_live_counts(string $country, string $scope = 'team'): array
+{
+    $scope = swe_normalize_scope($scope);
+    return [
+        'ok' => true,
+        'site_count' => count_sites_with_emails_for_country($country, $scope),
+        'ready' => $scope === 'team' ? count_sites_with_emails_ready_to_push($country) : 0,
+    ];
+}
+
+/**
+ * @return array{ok:bool,rows:list<array{country:string,total:int,with_emails:int}>,grand_total:int,email_sites:int}
+ */
+function swe_hub_live_counts(string $scope = 'team'): array
+{
+    $rows = list_sites_with_emails_country_rows($scope);
+    $out = [];
+    $grand = 0;
+    $emails = 0;
+    foreach ($rows as $r) {
+        $total = (int) ($r['total'] ?? 0);
+        $with = (int) ($r['with_emails'] ?? 0);
+        $out[] = [
+            'country' => (string) ($r['country'] ?? ''),
+            'total' => $total,
+            'with_emails' => $with,
+        ];
+        $grand += $total;
+        $emails += $with;
+    }
+
+    return [
+        'ok' => true,
+        'rows' => $out,
+        'grand_total' => $grand,
+        'email_sites' => $emails,
+    ];
+}
+
+/**
  * Country names in this Sites-with-emails scope for the title switcher (A–Z).
  *
  * @return list<array{value:string,label:string}>
