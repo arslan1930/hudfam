@@ -146,11 +146,14 @@ function render_hidden_multiline(string $name, string $value, array $opts = []):
     $id = trim((string) ($opts['id'] ?? ''));
     $extraClass = trim((string) ($opts['class'] ?? ''));
     $class = trim('visually-hidden ' . $extraClass);
-    return '<textarea name="' . h($name) . '"'
+    // Wrap + inline display:none. Clip-based .visually-hidden does not hide
+    // <textarea> (UA rows + global textarea width/padding paint a visible box).
+    return '<div hidden style="display:none" aria-hidden="true">'
+        . '<textarea name="' . h($name) . '"'
         . ($id !== '' ? ' id="' . h($id) . '"' : '')
-        . ' class="' . h($class) . '" aria-hidden="true" tabindex="-1">'
+        . ' class="' . h($class) . '" hidden aria-hidden="true" tabindex="-1" style="display:none">'
         . h($value)
-        . '</textarea>';
+        . '</textarea></div>';
 }
 
 /**

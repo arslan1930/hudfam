@@ -552,6 +552,146 @@ function stream_email_campaign_domains_plain(int $sheetId, ?string $sentFilter =
 }
 
 /**
+ * Unique campaign-sheet emails (EMAIL 1–4), oldest first.
+ * $sentFilter: null/'' = all, '0' = not emailed, '1' = emailed.
+ * Packed cells are split; invalid tokens (no @) are skipped.
+ *
+ * @return list<string>
+ */
+function collect_email_campaign_emails(int $sheetId, ?string $sentFilter = null): array
+{
+    ensure_email_campaign_schema();
+    $where = ['sheet_id = ?', "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $stmt = db()->prepare(
+        'SELECT email1, email2, email3, email4 FROM email_campaign_rows
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id ASC'
+    );
+    $stmt->execute($params);
+    $out = [];
+    $seen = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $slots = function_exists('email_slots_from_row')
+            ? email_slots_from_row($row)
+            : [
+                (string) ($row['email1'] ?? ''),
+                (string) ($row['email2'] ?? ''),
+                (string) ($row['email3'] ?? ''),
+                (string) ($row['email4'] ?? ''),
+            ];
+        foreach ($slots as $e) {
+            $e = trim((string) $e);
+            if ($e === '' || !str_contains($e, '@')) {
+                continue;
+            }
+            $key = mb_strtolower($e);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $e;
+        }
+    }
+    return $out;
+}
+
+function stream_email_campaign_emails_plain(int $sheetId, ?string $sentFilter = null): void
+{
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    foreach (collect_email_campaign_emails($sheetId, $sentFilter) as $email) {
+        echo $email, "\n";
+    }
+    exit;
+}
+
+/**
+ * Campaign country sheet rows for CSV/Excel (Site + EMAIL 1–4).
+ * $sentFilter: null/'' = all, '0' = not emailed, '1' = emailed.
+ *
+ * @return list<array{0:string,1:string,2:string,3:string,4:string}>
+ */
+function collect_email_campaign_csv_rows(int $sheetId, ?string $sentFilter = null): array
+{
+    ensure_email_campaign_schema();
+    $where = ['sheet_id = ?', "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $stmt = db()->prepare(
+        'SELECT domain, email1, email2, email3, email4 FROM email_campaign_rows
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id ASC'
+    );
+    $stmt->execute($params);
+    $out = [];
+    $seen = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $d = trim((string) ($row['domain'] ?? ''));
+        if ($d === '') {
+            continue;
+        }
+        $key = mb_strtolower($d);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $slots = function_exists('email_slots_from_row')
+            ? email_slots_from_row($row)
+            : [
+                (string) ($row['email1'] ?? ''),
+                (string) ($row['email2'] ?? ''),
+                (string) ($row['email3'] ?? ''),
+                (string) ($row['email4'] ?? ''),
+            ];
+        $out[] = [
+            $d,
+            (string) ($slots[0] ?? ''),
+            (string) ($slots[1] ?? ''),
+            (string) ($slots[2] ?? ''),
+            (string) ($slots[3] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function stream_email_campaign_csv(int $sheetId, ?string $sentFilter = null): void
+{
+    $sheet = get_email_campaign_sheet($sheetId);
+    $country = $sheet ? email_campaign_sheet_country($sheet) : 'campaign';
+    $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $country) ?: 'campaign';
+    $suffix = match ($sentFilter) {
+        '0' => '-not-emailed',
+        '1' => '-emailed',
+        default => '',
+    };
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    header('Content-Disposition: attachment; filename="' . $safe . '-campaign-sites' . $suffix . '.csv"');
+
+    $out = fopen('php://output', 'wb');
+    if ($out === false) {
+        exit;
+    }
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Site name', 'Email 1', 'Email 2', 'Email 3', 'Email 4']);
+    foreach (collect_email_campaign_csv_rows($sheetId, $sentFilter) as $row) {
+        fputcsv($out, $row);
+    }
+    fclose($out);
+    exit;
+}
+
+/**
  * One-time: group legacy country sheets into projects by project_name,
  * then allow the same country under different projects.
  */

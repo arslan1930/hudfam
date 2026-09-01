@@ -60,6 +60,11 @@
       return true;
     }
     if (el.getAttribute('data-no-draft') !== null) return true;
+    if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') return true;
+    if (el.classList && (el.classList.contains('visually-hidden') || el.classList.contains('camp-draft-textarea-sync'))) {
+      return true;
+    }
+    if (el.readOnly || el.disabled) return true;
     var name = el.name;
     if (name === 'action' || name === 'item_id' || name === 'csrf' || name === '_csrf' || name === 'password') {
       return true;
@@ -288,7 +293,7 @@
     if (form.hasAttribute('hidden') || form.hidden) return false;
     // Action-only forms (hidden fields + button) have nothing useful to draft.
     var editable = form.querySelector(
-      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]), textarea, select'
+      'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]):not(.visually-hidden):not([hidden]), textarea:not([hidden]):not(.visually-hidden):not(.camp-draft-textarea-sync), select'
     );
     return !!editable;
   }

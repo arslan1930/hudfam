@@ -202,6 +202,11 @@
       if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0 || href.indexOf('mailto:') === 0) {
         return;
       }
+      // CSV / .txt / email-list exports stay on this page (attachment). Overlay would stick.
+      var resolved = String(a.href || href);
+      if (/(?:[?&])(?:export|download)=/i.test(href) || /(?:[?&])(?:export|download)=/i.test(resolved)) {
+        return;
+      }
       var url = sameOriginUrl(a.href);
       if (!shouldShowNav(url)) return;
       armDelayedLoading('Loading…');

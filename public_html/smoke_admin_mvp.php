@@ -929,6 +929,8 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, "typeahead::")
     || !str_contains($draftJsSmoke, 'typeahead:select')
     || !str_contains($draftJsSmoke, 'Typed country')
+    || !str_contains($draftJsSmoke, 'camp-draft-textarea-sync')
+    || !str_contains($draftJsSmoke, "el.classList.contains('visually-hidden')")
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -1484,6 +1486,39 @@ if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
     fail('campaigns missing copy-not-emailed domains / Team fetch stamp');
 } else {
     ok('campaign copy not-emailed domains + Team fetch stamps');
+}
+if (!str_contains($campLibSmoke, 'function collect_email_campaign_emails')
+    || !str_contains($campLibSmoke, 'function stream_email_campaign_emails_plain')
+    || !str_contains($campLibSmoke, 'function collect_email_campaign_csv_rows')
+    || !str_contains($campLibSmoke, 'function stream_email_campaign_csv')
+    || !str_contains($campAppSmoke, 'Copy selected emails (this page)')
+    || !str_contains($campAppSmoke, 'data-camp-copy-selected-emails')
+    || !str_contains($campAppSmoke, 'data-camp-copy-domains')
+    || !str_contains($campAppSmoke, 'export=emails')
+    || !str_contains($campAppSmoke, 'export=csv')
+    || !str_contains($campAppSmoke, 'Download CSV / Excel')
+    || !str_contains($campAppSmoke, 'data-camp-copy-emails')
+    || !str_contains($campAppSmoke, 'Copy all emails')
+    || !str_contains($campAppSmoke, 'Copy not emailed emails')
+    || !str_contains($campAppSmoke, 'Domains (this country)')
+    || !str_contains($campAppSmoke, 'Emails (this country)')
+    || !str_contains($campAppSmoke, 'This page (ticked rows)')
+    || !str_contains($campAppSmoke, 'Copy domains or emails')
+    || preg_match('/>Select</', $campAppSmoke)
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '', 'data-camp-copy-emails')) {
+    fail('campaigns missing copy selected emails / export emails by status');
+} else {
+    ok('campaign copy selected emails + export emails by status');
+}
+$sweCopySmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+if (!str_contains($sweCopySmoke, 'Copy selected emails (this page)')
+    || !str_contains($sweCopySmoke, 'data-swe-copy-selected-emails')
+    || !str_contains($sweCopySmoke, 'Copy all emails')
+    || !str_contains($sweCopySmoke, 'Copy not emailed')
+    || !str_contains($sweCopySmoke, 'Copy emailed')) {
+    fail('Admin Emails missing Copy selected emails (this page) or lost whole-sheet copy');
+} else {
+    ok('Admin Emails Copy selected emails (this page) + Copy all emails');
 }
 if (!str_contains($campLibSmoke, 'Never copies emailed flags')
     || !str_contains($campLibSmoke, 'Never set email_sent here')
@@ -2567,6 +2602,16 @@ if (!str_contains($campLib, 'data-camp-open-drafts')
     ok('campaign search Open drafts deep-link');
 }
 $campDraftJs = file_get_contents($root . '/assets/js/email-campaign-drafts.js') ?: '';
+$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($campDraftsTeam, 'class="camp-draft-form"')
+    || !str_contains($campDraftsTeam, 'data-no-draft')
+    || !str_contains($campApp, 'data-no-draft data-show-processing="Saving draft')
+    || !str_contains($cssApp, '.camp-draft-textarea-sync')
+    || !str_contains($cssApp, 'display: none !important')) {
+    fail('Save draft forms still bind device drafts / sync textarea can show');
+} else {
+    ok('Save draft forms skip device autosave; sync textarea stays hidden');
+}
 if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
     || !str_contains($campDraftJs, 'expandTokens')
     || !str_contains($campDraftJs, 'data-camp-draft-token')) {
@@ -2824,7 +2869,18 @@ if (!str_contains($prospectCheckSf, 'data-source="#domains"')
 } else {
     ok('Filter Separate all paste + unique sources');
 }
-$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($prospectCheckSf, 'id="add_unique_form"')
+    || !str_contains($prospectCheckSf, 'data-no-draft')
+    || !str_contains($prospectCheckSf, 'unique-sites-preview')
+    || str_contains($prospectCheckSf, 'id="unique_domains_preview" class="inventory-box"')
+    || !str_contains($helpers, "hidden aria-hidden")
+    || !str_contains($helpers, 'style="display:none"')
+    || !str_contains($cssApp, 'textarea.visually-hidden')
+    || !str_contains($cssApp, '.unique-sites-preview')) {
+    fail('Filter unique card still shows hidden domain boxes / inventory-box preview');
+} else {
+    ok('Filter unique card hides POST textareas and sizes preview to the list');
+}
 if (str_contains($cssApp, '.tld-workspace-list')
     && str_contains($cssApp, 'No max-height scroll cage')) {
     ok('TLD workspace CSS without scroll cage');
@@ -2974,10 +3030,17 @@ if (!str_contains($sheetHistSmoke, 'function render_sheet_edit_toolbar')
     ok('sheet history toolbar helpers');
 }
 if (str_contains($sheetHistSmoke, 'data-sheet-select title=')
-    || preg_match('/>Select</', $sheetHistSmoke)) {
+    || preg_match('/>Select</', $sheetHistSmoke)
+    || preg_match('/>Select</', $sheetSelJsSmoke)) {
     fail('sheet toolbar still has extra Select button (keep Select all only)');
 } else {
     ok('sheet toolbar has Select all without extra Select');
+}
+if (!str_contains($sheetSelJsSmoke, "textContent = allOn ? 'Unselect all' : 'Select all'")
+    || !str_contains($sheetSelJsSmoke, 'Unselect all')) {
+    fail('sheet-select-undo.js missing Unselect all label');
+} else {
+    ok('Select all toggles to Unselect all');
 }
 if (!str_contains($sheetSelJsSmoke, 'getComputedStyle')
     || !str_contains($sheetSelJsSmoke, 'clearHiddenSelection')
@@ -3030,6 +3093,7 @@ if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
     || !str_contains($procJsSmoke, 'NAV_DELAY_MS')
     || !str_contains($procJsSmoke, 'armDelayedLoading')
     || !str_contains($procJsSmoke, "method === 'get'")
+    || !str_contains($procJsSmoke, '(?:export|download)=')
     || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
     fail('Missing delayed loading overlay or select-remove JS');
 } else {
@@ -3091,7 +3155,8 @@ if (!str_contains($sweUi, 'is-dense')
 $campLibSmokeUx = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 if (!str_contains($campUi, 'href="#camp-fill-gaps"')
     || !str_contains($campUi, 'Not emailed (')
-    || !str_contains($campUi, 'Search site or email (this page)')
+    || !str_contains($campUi, 'placeholder="Search site or email"')
+    || str_contains($campUi, 'placeholder="Search site or email (this page)"')
     || substr_count($campUi, 'id="camp-add-toggle"') !== 1
     || !str_contains($campLibSmokeUx, 'function email_campaign_default_language')
     || !str_contains($campLibSmokeUx, 'function email_campaign_fill_blank_row_languages')

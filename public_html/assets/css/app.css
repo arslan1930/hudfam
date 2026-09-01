@@ -1106,6 +1106,14 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   min-height: 280px;
   white-space: pre;
 }
+.unique-sites-preview {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  min-height: 0;
+  white-space: pre;
+  resize: vertical;
+}
 .tld-separate-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1669,6 +1677,9 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   font-size: 0.9rem;
   min-width: 0;
   padding-right: 1.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .email-field-clear,
 .swe-email-clear {
@@ -3826,6 +3837,20 @@ a.card.stat:focus-visible {
   white-space: nowrap;
   border: 0;
 }
+/* Form controls ignore clip/1px height (rows + global textarea width/padding). */
+textarea.visually-hidden,
+input.visually-hidden,
+textarea[hidden],
+.camp-draft-textarea-sync {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+}
 .order-sheet-card {
   max-width: 100%;
   min-width: 0;
@@ -5255,7 +5280,7 @@ textarea:focus-visible {
   color: var(--muted);
 }
 .camp-draft-textarea-sync {
-  display: none;
+  display: none !important;
 }
 .camp-admin-drafts-list {
   list-style: none;
@@ -5396,6 +5421,16 @@ textarea:focus-visible {
 .sheet-tool-menu-panel .btn {
   width: 100%;
   justify-content: center;
+}
+.sheet-tool-menu-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sheet-tool-menu-label:first-child {
+  margin-top: 0;
 }
 .sheet-row-more-btn {
   min-width: 2.1rem;

@@ -55,6 +55,20 @@ if ($sheetId > 0) {
         }
         stream_email_campaign_domains_plain($sheetId, $sentExport);
     }
+    if ((string) get('export') === 'emails') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_emails_plain($sheetId, $sentExport);
+    }
+    if ((string) get('export') === 'csv') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_csv($sheetId, $sentExport);
+    }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
@@ -509,6 +523,13 @@ if ($sheetId > 0) {
     $domainsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=domains';
     $domainsExportUnsentUrl = $domainsExportUrl . '&sent=0';
     $domainsExportSentUrl = $domainsExportUrl . '&sent=1';
+    $emailsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=emails';
+    $emailsExportUnsentUrl = $emailsExportUrl . '&sent=0';
+    $emailsExportSentUrl = $emailsExportUrl . '&sent=1';
+    $csvUrl = $campBase . '&sheet=' . $sheetId . '&export=csv';
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $csvUrl .= '&sent=' . $sentFilter;
+    }
     $qs = http_build_query(array_filter([
         'page' => 'admin_emails_data',
         'folder' => 'email_campaigns',
@@ -671,28 +692,64 @@ if ($sheetId > 0) {
             </form>
             <?php endif; ?>
           </p>
-          <?php render_sheet_tool_menu_open('Copy', 'Copy domains by emailed status'); ?>
+          <?php render_sheet_tool_menu_open('Copy', 'Copy domains or emails'); ?>
+          <p class="sheet-tool-menu-label muted">This page (ticked rows)</p>
+          <div class="swe-copy-group" role="group" aria-label="Copy ticked rows on this page">
+            <button type="button" class="btn secondary small" data-camp-copy-selected-emails disabled
+                    title="Copy EMAIL 1–4 from ticked rows on this page (skips empty and invalid)">
+              Copy selected emails (this page)
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-selected-domains disabled
+                    title="Copy site names from ticked rows on this page">
+              Copy selected domains (this page)
+            </button>
+          </div>
+          <p class="sheet-tool-menu-label muted">Domains (this country)</p>
           <div class="swe-copy-group" role="group" aria-label="Copy domains by sent status">
             <button type="button" class="btn secondary small" data-camp-copy-domains
                     data-export-url="<?= h($domainsExportUnsentUrl) ?>"
                     data-copy-label="not emailed"
-                    title="Copy site names that are not marked emailed yet"
+                    title="Copy site names that are not marked emailed yet — whole country, ignores ticks"
                     <?= ((int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
               Copy not emailed domains
             </button>
             <button type="button" class="btn secondary small" data-camp-copy-domains
                     data-export-url="<?= h($domainsExportSentUrl) ?>"
                     data-copy-label="emailed"
-                    title="Copy site names already marked emailed"
+                    title="Copy site names already marked emailed — whole country, ignores ticks"
                     <?= ((int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
               Copy emailed domains
             </button>
             <button type="button" class="btn secondary small" data-camp-copy-domains
                     data-export-url="<?= h($domainsExportUrl) ?>"
                     data-copy-label="all"
-                    title="Copy every site name on this campaign country sheet"
+                    title="Copy every site name on this campaign country sheet — ignores ticks"
                     <?= ((int) $filledCount > 0) ? '' : 'disabled' ?>>
               Copy all domains
+            </button>
+          </div>
+          <p class="sheet-tool-menu-label muted">Emails (this country)</p>
+          <div class="swe-copy-group" role="group" aria-label="Copy emails by sent status">
+            <button type="button" class="btn secondary small" data-camp-copy-emails
+                    data-export-url="<?= h($emailsExportUnsentUrl) ?>"
+                    data-copy-label="not emailed"
+                    title="Copy emails from sites not marked emailed yet — whole country, ignores ticks"
+                    <?= ((int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
+              Copy not emailed emails
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-emails
+                    data-export-url="<?= h($emailsExportSentUrl) ?>"
+                    data-copy-label="emailed"
+                    title="Copy emails from sites already marked emailed — whole country, ignores ticks"
+                    <?= ((int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
+              Copy emailed emails
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-emails
+                    data-export-url="<?= h($emailsExportUrl) ?>"
+                    data-copy-label="all"
+                    title="Copy every email on this campaign country sheet — ignores ticks"
+                    <?= ((int) $filledCount > 0) ? '' : 'disabled' ?>>
+              Copy all emails
             </button>
           </div>
           <?php render_sheet_tool_menu_close(); ?>
@@ -725,6 +782,10 @@ if ($sheetId > 0) {
             <?php endif; ?>
           </div>
           <?php render_sheet_tool_menu_close(); ?>
+          <a class="btn secondary" href="<?= h($csvUrl) ?>"
+             title="Download this country sheet as CSV (opens in Excel). Whole sheet<?= $sentFilter === '0' ? ' · not emailed only' : ($sentFilter === '1' ? ' · emailed only' : '') ?>, ignores ticks.">
+            Download CSV / Excel
+          </a>
         </div>
         <div class="actions">
           <button type="button" class="btn small" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
@@ -738,7 +799,7 @@ if ($sheetId > 0) {
           ?>
           <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
             <span class="visually-hidden">Search sites and emails</span>
-            <input id="swe-row-search" type="search" placeholder="Search site or email (this page)"
+            <input id="swe-row-search" type="search" placeholder="Search site or email"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
                    <?= $filledCount < 1 && $q === '' && $sentFilter === '' && $batchFilter < 1 ? 'disabled' : '' ?>
                    title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
@@ -1859,7 +1920,7 @@ if ($projectIdParam > 0) {
           <?php endif; ?>
 
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" style="margin-top:1rem"
-                autocomplete="off" data-show-processing="Saving draft…">
+                autocomplete="off" data-no-draft data-show-processing="Saving draft…">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="save_draft">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
