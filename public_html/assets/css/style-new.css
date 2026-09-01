@@ -597,6 +597,116 @@ html.ui-v2 .messages li.error {
   border-color: rgba(251, 113, 133, 0.4);
 }
 
+/* Leftover light surfaces hardcoded in app.css */
+html.ui-v2 .folder,
+html.ui-v2 .launch-card,
+html.ui-v2 .panel-guide,
+html.ui-v2 .panel-guide-card,
+html.ui-v2 .panel-guide-flow,
+html.ui-v2 .workflow li,
+html.ui-v2 .swe-checkpoint-rule {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .panel-muted {
+  background: rgba(8, 18, 36, 0.4);
+  border-color: var(--line);
+}
+html.ui-v2 .step.active {
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  border-color: var(--brand);
+}
+html.ui-v2 .draft-restore-banner,
+html.ui-v2 .draft-status {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: 0 0 18px rgba(96, 165, 250, 0.16);
+}
+html.ui-v2 .draft-restore-banner__text strong {
+  color: var(--brand-2);
+}
+html.ui-v2 .draft-restore-banner__text span {
+  color: var(--muted);
+}
+html.ui-v2 .app-footer,
+html.ui-v2 .project-credit {
+  background: rgba(8, 18, 36, 0.88);
+  border-top-color: var(--line);
+  color: var(--muted);
+}
+html.ui-v2 .app-footer-who,
+html.ui-v2 .app-footer-who strong {
+  color: var(--ink);
+}
+html.ui-v2 .sites-list-box,
+html.ui-v2 .extracted-plain-list,
+html.ui-v2 .inventory-box,
+html.ui-v2 .unique-sites-preview {
+  background: rgba(2, 6, 23, 0.72);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .sites-list-row.is-selected {
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--brand-deep);
+}
+html.ui-v2 .pagination,
+html.ui-v2 .card .pagination {
+  border-top-color: var(--line);
+}
+html.ui-v2 .pagination a,
+html.ui-v2 .card .pagination a,
+html.ui-v2 .pagination .is-current {
+  background: rgba(8, 18, 36, 0.8);
+  border-color: var(--line);
+  color: var(--brand-2);
+}
+html.ui-v2 .pagination a:hover,
+html.ui-v2 .card .pagination a:hover {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: var(--brand);
+}
+html.ui-v2 .tld-warn,
+html.ui-v2 .tld-confirm {
+  background: var(--warn-soft);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--ink);
+}
+html.ui-v2 .swe-checkpoint-rule > h2 {
+  color: var(--ok);
+}
+html.ui-v2 .prospect-market-toggle:hover {
+  background: rgba(34, 211, 238, 0.08);
+}
+html.ui-v2 .swe-table tr.swe-row-emailed > td {
+  background: rgba(52, 245, 197, 0.08);
+}
+html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"],
+html.ui-v2 .main .swe-row-actions button[form*="-remove-"],
+html.ui-v2 .main .swe-row-actions button[form*="remove"] {
+  background: transparent !important;
+  color: var(--bad) !important;
+  border-color: rgba(251, 113, 133, 0.5) !important;
+}
+html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"]:hover,
+html.ui-v2 .main .swe-row-actions button[form*="-remove-"]:hover,
+html.ui-v2 .main .swe-row-actions button[form*="remove"]:hover {
+  background: var(--bad-soft) !important;
+  border-color: var(--bad) !important;
+}
+html.ui-v2 .camp-status.is-error {
+  background: var(--bad-soft);
+  border-color: rgba(251, 113, 133, 0.4);
+  color: var(--bad);
+}
+html.ui-v2 .extracted-plain-item.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.12) !important;
+  outline-color: var(--brand);
+}
+
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;
