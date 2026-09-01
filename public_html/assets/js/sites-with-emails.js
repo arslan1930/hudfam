@@ -1355,6 +1355,7 @@
           lastLiveCount = n;
           return;
         }
+        lastLiveCount = n;
         window.location.reload();
       })
       .catch(function () { /* ignore */ });

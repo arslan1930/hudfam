@@ -2,7 +2,7 @@
 $user = require_team();
 ensure_extract_schema();
 
-if ((string) get('ajax') === '1' && (string) get('action') === 'hub_live') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string) get('ajax') === '1' && (string) get('action') === 'hub_live') {
     extract_json_response(extract_hub_live_counts());
 }
 
@@ -172,11 +172,12 @@ render_header('Extracting sites', 'team');
         var byId = {};
         rows.forEach(function (r) { byId[String(r.id)] = r; });
         var seen = 0;
+        var missing = false;
         document.querySelectorAll('[data-extract-country-row]').forEach(function (row) {
           var id = String(row.getAttribute('data-batch-id') || '');
           var hit = byId[id];
           if (!hit) {
-            window.location.reload();
+            missing = true;
             return;
           }
           seen++;
@@ -187,7 +188,7 @@ render_header('Extracting sites', 'team');
             row.setAttribute('data-site-count', String(n));
           }
         });
-        if (seen !== rows.length) {
+        if (missing || seen !== rows.length) {
           window.location.reload();
           return;
         }

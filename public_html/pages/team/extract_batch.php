@@ -5,6 +5,9 @@ ensure_extract_schema();
 $id = (int) (get('id') ?: 0);
 $batch = $id > 0 ? get_extract_batch($id) : null;
 if (!$batch) {
+    if ((string) get('ajax') === '1') {
+        extract_json_response(['ok' => false, 'error' => 'Batch not found.'], 404);
+    }
     flash('error', 'That country batch is not available yet. Waiting for sites from the team mate.');
     redirect('index.php?page=team_extracting');
 }
@@ -12,7 +15,7 @@ if (!$batch) {
 $resultsText = (string) ($batch['results_text'] ?? '');
 $country = (string) $batch['country'];
 
-if ((string) get('ajax') === '1') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string) get('ajax') === '1') {
     $liveAction = (string) get('action');
     if ($liveAction === 'sites_live') {
         extract_json_response(extract_sites_live_meta($id));

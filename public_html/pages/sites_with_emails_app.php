@@ -465,19 +465,27 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-if ($inCountry && (string) get('ajax') === '1' && (string) get('action') === 'live_counts') {
+if ($inCountry && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+    && (string) get('ajax') === '1' && (string) get('action') === 'live_counts') {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
-    echo json_encode(swe_country_live_counts($sheet, $sweScope));
+    echo json_encode(swe_country_live_counts($sheet, $sweScope), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
 
 // --- Country list ---
 if (!$inCountry) {
-    if ((string) get('ajax') === '1' && (string) get('action') === 'hub_live') {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+        && (string) get('ajax') === '1' && (string) get('action') === 'hub_live') {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
-        echo json_encode(swe_hub_live_counts($sweScope));
+        echo json_encode(swe_hub_live_counts($sweScope), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
     if ($sweScope === 'admin' && function_exists('swe_admin_clear_visit_since')) {

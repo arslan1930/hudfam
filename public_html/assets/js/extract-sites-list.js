@@ -135,6 +135,18 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data || data.ok === false) return;
+        // Re-check after the round-trip so a poll started while idle cannot
+        // wipe a list the user started editing (or that autosave is writing).
+        if (saveInFlight) return;
+        if (isDirty()) {
+          var n = typeof data.site_count === 'number' ? data.site_count : linesOf(ta.value).length;
+          setStatus(
+            'Shared list is now ' + n + ' site' + (n === 1 ? '' : 's')
+              + '. Reload or undo your edit so you match your teammate.',
+            true
+          );
+          return;
+        }
         applyRemoteList(data, statusMsg);
       });
   }
@@ -148,6 +160,7 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data || data.ok === false) return;
+        if (saveInFlight) return;
         var remoteN = typeof data.site_count === 'number' ? data.site_count : -1;
         var remoteAt = String(data.writer_at || '');
         var localAt = String(shell.getAttribute('data-writer-at') || '');

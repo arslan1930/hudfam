@@ -785,8 +785,18 @@ function extract_hub_live_counts(): array
 
 function extract_json_response(array $payload, int $status = 200): void
 {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    header('Cache-Control: no-store');
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        http_response_code(500);
+        echo '{"ok":false,"error":"Could not encode response."}';
+        exit;
+    }
+    echo $json;
     exit;
 }
