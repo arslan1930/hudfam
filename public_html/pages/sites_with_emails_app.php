@@ -1076,7 +1076,7 @@ render_breadcrumbs($crumbs);
   </div>
 </div>
 <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
-<?php if ($isTeam): ?>
+<?php if ($isTeam && function_exists('guide_sites_with_emails_team')): ?>
 <?= guide_sites_with_emails_team() ?>
 <p class="help">
   Edits <strong>autosave</strong>.

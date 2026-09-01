@@ -5213,6 +5213,7 @@ try {
                 && abs((float) ($afterInv['total_amount'] ?? 0) - ($beforeTotal + 18)) < 0.011
                 && (string) ($afterInv['invoice_number'] ?? '') === $beforeNum
                 && invoice_is_draft($afterInv)
+                && invoice_can_append_orders($beforeDraft)
                 && invoice_can_append_orders($afterInv)
                 && in_array((int) $draftId, $openDraftIds, true);
         }

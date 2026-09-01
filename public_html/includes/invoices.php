@@ -386,18 +386,38 @@ function list_invoices_open_for_append(int $limit = 50): array
 {
     ensure_invoice_schema();
     $limit = max(1, min(200, $limit));
-    $sql = "SELECT i.*,
+    $select = "SELECT i.*,
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
          FROM invoices i
-         WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
-         ORDER BY CASE WHEN COALESCE(i.work_status, 'done') = 'draft' THEN 1 ELSE 0 END,
-                  i.invoice_date DESC, i.id DESC
-         LIMIT " . $limit;
+         WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'";
     try {
-        return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $waiting = db()->query(
+            $select . " AND COALESCE(i.work_status, 'done') <> 'draft'
+             ORDER BY i.invoice_date DESC, i.id DESC
+             LIMIT " . $limit
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $drafts = db()->query(
+            $select . " AND COALESCE(i.work_status, 'done') = 'draft'
+             ORDER BY i.invoice_date DESC, i.id DESC
+             LIMIT " . $limit
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Throwable $e) {
         return [];
     }
+    $draftCount = count($drafts);
+    if ($draftCount < 1) {
+        return array_slice($waiting, 0, $limit);
+    }
+    // Waiting first (so bill-as match prefers a sent unpaid bill), but always
+    // keep recent drafts pickable — otherwise 50+ waiting bills hide a new draft.
+    $reserve = min($draftCount, max(5, (int) floor($limit / 5)), $limit);
+    $waitingTake = min(count($waiting), $limit - $reserve);
+    $draftTake = min($draftCount, $limit - $waitingTake);
+
+    return array_merge(
+        array_slice($waiting, 0, $waitingTake),
+        array_slice($drafts, 0, $draftTake)
+    );
 }
 
 /**
