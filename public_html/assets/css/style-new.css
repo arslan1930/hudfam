@@ -121,7 +121,7 @@ html.ui-v2 .sidebar .brand {
   color: #fff;
 }
 html.ui-v2 .sidebar-role {
-  color: rgba(232, 241, 255, 0.78);
+  color: #cbd5e1;
 }
 html.ui-v2 .nav-group-label,
 html.ui-v2 .nav-section {
@@ -234,7 +234,7 @@ html.ui-v2 .stat strong {
 }
 html.ui-v2 a.card.stat[href*="unpaid"] strong,
 html.ui-v2 a.card.stat[href*="filter=unpaid"] strong {
-  color: var(--warn);
+  color: var(--bad);
 }
 html.ui-v2 .step.active {
   border-color: var(--brand);
@@ -837,8 +837,9 @@ html.ui-v2 .camp-hub-team-btn.is-off .camp-hub-team-dot {
   background: #64748b;
 }
 html.ui-v2 .camp-hub-row-actions button.btn.secondary {
-  color: var(--bad) !important;
-  border-color: rgba(248, 113, 113, 0.55);
+  color: #fecaca !important;
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
 }
 html.ui-v2 .camp-hub-row-actions button.btn.secondary:hover {
   background: var(--bad-soft);
