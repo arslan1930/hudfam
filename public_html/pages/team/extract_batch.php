@@ -286,7 +286,7 @@ render_header('Extracting · ' . $country, 'team');
     <p class="help">
       Paste extracted sites, <strong>Clean to root domains</strong> if needed, then <strong>Push</strong>.
       <strong>Push uses the Ready list only</strong> (Needs attention stays aside).
-      Country TLDs auto-route (<strong>.de</strong>→Germany, <strong>.at</strong>→Austria, <strong>.ch</strong>→Switzerland, …).
+      Country TLDs auto-route (<strong>.de</strong>→Germany, <strong>.at</strong>→Austria, <strong>.pt</strong>→Portugal, <strong>.ch</strong>→Switzerland, …).
       Generic TLDs (<strong>.com</strong>, <strong>.net</strong>, <strong>.eu</strong>, …) stay in <strong><?= h($country) ?></strong>.
       Sites go to Extracted Sites + Sites with emails - Team in each destination country.
     </p>
