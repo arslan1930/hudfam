@@ -58,7 +58,7 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
-    // app.css via asset.php, then teal overlay (style-new.css). Do not also load /assets/css/*.
+    // app.css via asset.php, then UI overlay (style-new.css). Do not also load /assets/css/*.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
     if ($cssNew !== '') {
         echo '<link rel="stylesheet" href="' . h($cssNew) . '">';
