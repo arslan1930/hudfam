@@ -202,7 +202,7 @@ if (!str_contains($invoicesAdminPage, '<th>Bill as</th>')) {
 } else {
     ok('invoices.php Bill as column');
 }
-if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, or note')
+if (!str_contains($invoicesAdminPage, 'Invoice no., bill as, note, or line')
     || !str_contains($invoicesAdminPage, 'This invoice is Paid. Delete anyway?')
     || !str_contains($invoicesAdminPage, 'Waiting invoices')
     || !str_contains($invoicesAdminPage, 'Completed unpaid')
