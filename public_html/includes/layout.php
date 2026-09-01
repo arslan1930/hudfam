@@ -66,6 +66,7 @@ function render_header(string $title, string $panel = ''): void
     echo '<style>';
     echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(31,35,40,.42)}';
     echo 'html.is-page-loading body{overflow:hidden}';
+    echo '.ui-skip{position:absolute;left:-9999px}';
     echo '</style>';
     echo '<noscript><style>html.is-page-loading #app-processing{display:none!important}html.is-page-loading body{overflow:auto}</style></noscript>';
     echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';

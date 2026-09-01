@@ -41,20 +41,19 @@ html.ui-v2 {
   }
 }
 
-html.ui-v2 {
-  scroll-behavior: smooth;
-}
-
 html.ui-v2 body {
   background: var(--grad-page);
   color: var(--ink);
 }
 
-html.ui-v2 a {
+/* Do not restyle sidebar / mobile Menu links — a global html.ui-v2 + hover
+   on every anchor was beating .sidebar .brand:hover (logo text went dark). */
+html.ui-v2 .main a,
+html.ui-v2 .login-wrap a {
   color: var(--brand);
 }
-
-html.ui-v2 a:hover {
+html.ui-v2 .main a:hover,
+html.ui-v2 .login-wrap a:hover {
   color: var(--brand-deep);
 }
 
@@ -241,7 +240,13 @@ html.ui-v2 textarea {
   border-color: var(--line);
   transition: border-color var(--ui-ease), box-shadow var(--ui-ease);
 }
-html.ui-v2 input:focus,
+html.ui-v2 input[type="text"]:focus,
+html.ui-v2 input[type="password"]:focus,
+html.ui-v2 input[type="email"]:focus,
+html.ui-v2 input[type="search"]:focus,
+html.ui-v2 input[type="number"]:focus,
+html.ui-v2 input[type="url"]:focus,
+html.ui-v2 input[type="date"]:focus,
 html.ui-v2 select:focus,
 html.ui-v2 textarea:focus {
   border-color: var(--brand-2);
