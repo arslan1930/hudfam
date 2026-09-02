@@ -5157,6 +5157,45 @@ try {
         fail('OM sheet date save clobbered or ignored the calendar day');
     }
 
+    $sortOld = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'admin_user_id' => (int) $adminUser['id'],
+    ]);
+    $sortNew = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'admin_user_id' => (int) $adminUser['id'],
+    ]);
+    $oldDomain = 'txfom-sort-old-' . substr(sha1((string) $sortOld), 0, 8) . '.com';
+    $newDomain = 'txfom-sort-new-' . substr(sha1((string) $sortNew), 0, 8) . '.com';
+    db()->prepare('UPDATE order_items SET site_name=?, order_date=? WHERE id=?')->execute([$oldDomain, '2020-01-15', (int) $sortOld]);
+    db()->prepare('UPDATE order_items SET site_name=?, order_date=? WHERE id=?')->execute([$newDomain, '2026-08-01', (int) $sortNew]);
+    $idList = list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'all', 'q' => 'txfom-sort-']);
+    $idPos = [];
+    foreach ($idList as $i => $hit) {
+        $idPos[(int) ($hit['id'] ?? 0)] = $i;
+    }
+    $dateList = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'date_from' => '2020-01-01',
+        'date_to' => '2020-12-31',
+        'q' => $oldDomain,
+    ]);
+    $foundOldInDate = false;
+    foreach ($dateList as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $sortOld) {
+            $foundOldInDate = true;
+            break;
+        }
+    }
+    if (isset($idPos[(int) $sortNew], $idPos[(int) $sortOld])
+        && $idPos[(int) $sortNew] < $idPos[(int) $sortOld]
+        && $foundOldInDate
+        && str_contains(order_pipeline_list_order_sql([]), 'i.id DESC')
+        && str_contains(order_pipeline_list_order_sql(['date_from' => '2020-01-01']), 'order_date')) {
+        pass('OM sheet keeps id order unless a date filter is on');
+    } else {
+        fail('OM sheet sort still jumps rows when the date changes');
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');

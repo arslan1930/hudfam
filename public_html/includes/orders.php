@@ -1621,6 +1621,20 @@ function order_pipeline_where_sql(array $opts = []): array
     return [' WHERE ' . implode(' AND ', $where), $params];
 }
 
+/**
+ * Sheet order. Date-range filters sort by day; otherwise newest id first so
+ * editing a date does not jump the row off the current page.
+ */
+function order_pipeline_list_order_sql(array $opts = []): string
+{
+    $dateFrom = normalize_order_date($opts['date_from'] ?? '');
+    $dateTo = normalize_order_date($opts['date_to'] ?? '');
+    if ($dateFrom || $dateTo) {
+        return ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+    }
+    return ' ORDER BY i.id DESC';
+}
+
 function count_order_pipeline_rows(array $opts = []): int
 {
     ensure_order_schema();
@@ -1660,7 +1674,7 @@ function list_order_pipeline_rows(array $opts = []): array
          LEFT JOIN users u ON u.id = i.admin_user_id
          LEFT JOIN site_price_rows spr ON spr.id = i.site_price_row_id"
         . $whereSql
-        . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+        . order_pipeline_list_order_sql($opts);
     if ($limit > 0) {
         $sql .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
     }
@@ -1729,7 +1743,7 @@ function list_order_pipeline_ids(array $opts = [], int $limit = 0): array
     $sql = 'SELECT i.id FROM order_items i
          LEFT JOIN users u ON u.id = i.admin_user_id'
         . $whereSql
-        . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+        . order_pipeline_list_order_sql($opts);
     if ($limit > 0) {
         $sql .= ' LIMIT ' . $limit;
     }

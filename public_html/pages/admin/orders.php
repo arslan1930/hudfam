@@ -1441,9 +1441,34 @@ if ($compactUnpaidStats && !$showPagingStats) {
   var saveTimer = null;
   var savePromise = Promise.resolve();
   var SAVE_DEBOUNCE_MS = 450;
+  var dirtyRowIds = {};
   var isDraftIgnored = function (el) {
     return !!(el && el.closest && el.closest('[data-no-draft]'));
   };
+  function markRowDirty(el) {
+    var row = el && el.closest ? el.closest('[data-row]') : null;
+    var id = row ? String(row.getAttribute('id') || '').replace(/^row-/, '') : '';
+    if (id) dirtyRowIds[id] = true;
+  }
+  function disableCleanRows() {
+    var restored = [];
+    var has = false;
+    Object.keys(dirtyRowIds).forEach(function (k) { if (dirtyRowIds[k]) has = true; });
+    if (!has) return restored;
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var id = String(row.getAttribute('id') || '').replace(/^row-/, '');
+      if (dirtyRowIds[id]) return;
+      row.querySelectorAll('input, select, textarea').forEach(function (el) {
+        if (el.disabled) return;
+        el.disabled = true;
+        restored.push(el);
+      });
+    });
+    return restored;
+  }
+  function restoreCleanRows(restored) {
+    (restored || []).forEach(function (el) { el.disabled = false; });
+  }
 
   function pad2(n) {
     n = parseInt(n, 10);
@@ -1517,7 +1542,9 @@ if ($compactUnpaidStats && !$showPagingStats) {
     });
     saving = true;
     setSaveStatus('Saving…');
+    var restored = disableCleanRows();
     var fd = new FormData(form);
+    restoreCleanRows(restored);
     fd.set('action', 'save_sheet');
     fd.set('ajax', '1');
     fd.set('item_id', '');
@@ -1544,6 +1571,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
         return flushAutosave();
       }
       dirty = false;
+      dirtyRowIds = {};
       var n = data && typeof data.saved === 'number' ? data.saved : 0;
       setSaveStatus('Saved' + (n ? ' · ' + n + ' row' + (n === 1 ? '' : 's') : ''));
       try {
@@ -1564,6 +1592,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
       saving = false;
       dirty = true;
       setSaveStatus((err && err.message) || 'Could not save — click Save sheet.', true);
+      if (saveQueued) {
+        saveQueued = false;
+        flushAutosave();
+      }
     });
     return savePromise;
   }
@@ -1860,6 +1892,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
   form.addEventListener('input', function (e) {
     if (isDraftIgnored(e.target)) return;
     var t = e.target;
+    markRowDirty(t);
     var row = t && t.closest ? t.closest('[data-row]') : null;
     if (row && t && t.getAttribute && t.getAttribute('data-order-date') !== null) {
       syncMonthYearFromDate(row);
@@ -1869,6 +1902,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
   form.addEventListener('change', function (e) {
     if (isDraftIgnored(e.target)) return;
     var t = e.target;
+    markRowDirty(t);
     var row = t && t.closest ? t.closest('[data-row]') : null;
     if (row && t && t.getAttribute) {
       if (t.getAttribute('data-order-date') !== null) syncMonthYearFromDate(row);
@@ -1890,7 +1924,9 @@ if ($compactUnpaidStats && !$showPagingStats) {
   window.addEventListener('pagehide', function () {
     if (submitting || (!dirty && !saving)) return;
     try {
+      var restored = disableCleanRows();
       var fd = new FormData(form);
+      restoreCleanRows(restored);
       fd.set('action', 'save_sheet');
       fd.set('ajax', '1');
       fd.set('item_id', '');
@@ -1898,6 +1934,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
       if (navigator.sendBeacon) {
         navigator.sendBeacon(form.getAttribute('action') || window.location.href, fd);
         dirty = false;
+        dirtyRowIds = {};
       }
     } catch (err) { /* ignore */ }
   });
