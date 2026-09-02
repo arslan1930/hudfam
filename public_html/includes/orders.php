@@ -477,12 +477,43 @@ function order_admin_display_name(array $row): string
 /** @return list<array<string,mixed>> */
 function order_admin_options(): array
 {
+    $byId = [];
     if (function_exists('list_admin_users')) {
-        return list_admin_users(true);
+        foreach (list_admin_users(true) as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $row;
+            }
+        }
+    } else {
+        foreach (db()->query(
+            "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
+        )->fetchAll() as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $row;
+            }
+        }
     }
-    return db()->query(
-        "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
-    )->fetchAll();
+    try {
+        $assigned = db()->query(
+            "SELECT u.* FROM users u
+             INNER JOIN (
+               SELECT DISTINCT admin_user_id FROM order_items
+               WHERE row_type = 'site' AND admin_user_id IS NOT NULL
+             ) i ON u.id = i.admin_user_id
+             ORDER BY u.full_name, u.username"
+        )->fetchAll();
+        foreach ($assigned as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0 && !isset($byId[$id])) {
+                $byId[$id] = $row;
+            }
+        }
+    } catch (Throwable $e) {
+        // order_items may not exist yet
+    }
+    return array_values($byId);
 }
 
 function order_profit($ownerPrice, $decidedPrice): float

@@ -5196,6 +5196,39 @@ try {
         fail('OM sheet sort still jumps rows when the date changes');
     }
 
+    $teamAssigned = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'admin_user_id' => (int) $teamUser['id'],
+    ]);
+    db()->prepare('UPDATE order_items SET site_name=?, admin_user_id=? WHERE id=?')->execute([
+        'txfom-team-admin-' . (int) $teamAssigned . '.com',
+        (int) $teamUser['id'],
+        (int) $teamAssigned,
+    ]);
+    $pickerHasTeam = false;
+    foreach (order_admin_options() as $opt) {
+        if ((int) ($opt['id'] ?? 0) === (int) $teamUser['id']) {
+            $pickerHasTeam = true;
+            break;
+        }
+    }
+    $teamHits = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'admin_id' => (int) $teamUser['id'],
+    ]);
+    $foundTeamHit = false;
+    foreach ($teamHits as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $teamAssigned) {
+            $foundTeamHit = true;
+            break;
+        }
+    }
+    if ($pickerHasTeam && $foundTeamHit) {
+        pass('OM admin picker includes teammates who own orders');
+    } else {
+        fail('OM admin picker hid teammate assignee ' . (int) $teamUser['id']);
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');

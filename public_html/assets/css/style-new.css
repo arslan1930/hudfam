@@ -1187,8 +1187,8 @@ html.ui-v2 .order-row.is-completed .col-live .cell-input {
 html.ui-v2 .profit-pos { color: var(--ok); }
 html.ui-v2 .profit-neg { color: var(--bad); }
 
-html.ui-v2 label {
-  color: #e2e8f0;
+html.ui-v2 .order-filter-label {
+  color: #94a3b8;
 }
 html.ui-v2 input[type="checkbox"],
 html.ui-v2 input[type="radio"],
