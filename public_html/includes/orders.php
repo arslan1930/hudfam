@@ -1489,24 +1489,33 @@ function normalize_order_pipeline_origin($origin): string
 }
 
 /**
- * Processing sheet tab. Explicit origin= is kept. Missing origin opens the first
- * non-empty tab (Website prices Processing, then Leftover, then Added here).
+ * Processing sheet tab. Explicit origin= is kept when that tab still has rows
+ * for the current filters. An empty pinned tab (Admin/date/search) jumps to the
+ * first origin that still matches. Missing origin opens the first non-empty tab
+ * (Website prices Processing, then Leftover, then Added here).
  *
  * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string} $countOpts
  */
 function order_pipeline_pick_processing_origin(string $rawOrigin, array $countOpts = []): string
 {
     $raw = strtolower(trim($rawOrigin));
-    if (in_array($raw, ['wp', 'leftover', 'manual', 'all'], true)) {
-        return $raw;
-    }
+    $explicit = in_array($raw, ['wp', 'leftover', 'manual', 'all'], true);
     $base = $countOpts;
     $base['folder'] = 'processing';
     unset($base['origin'], $base['status']);
+    if ($explicit && $raw === 'all') {
+        return 'all';
+    }
+    if ($explicit && count_order_pipeline_rows(array_merge($base, ['origin' => $raw])) > 0) {
+        return $raw;
+    }
     foreach (['wp', 'leftover', 'manual'] as $key) {
         if (count_order_pipeline_rows(array_merge($base, ['origin' => $key])) > 0) {
             return $key;
         }
+    }
+    if ($explicit) {
+        return $raw;
     }
     $plain = ['folder' => 'processing'];
     foreach (['wp', 'leftover', 'manual'] as $key) {

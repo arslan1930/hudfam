@@ -3996,7 +3996,7 @@ textarea[hidden],
 }
 .order-sheet .col-month { min-width: 188px; width: 188px; }
 .order-sheet .col-country { min-width: 168px; width: 180px; }
-.order-sheet .col-date { min-width: 150px; width: 154px; overflow: visible; }
+.order-sheet .col-date { min-width: 168px; width: 176px; overflow: visible; }
 .order-sheet .col-admin { min-width: 196px; width: 212px; overflow: visible; }
 .order-sheet .col-date .cell-input,
 .order-sheet .col-admin .cell-select {

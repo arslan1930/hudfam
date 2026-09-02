@@ -5964,13 +5964,16 @@ try {
     }
     $pickWp = order_pipeline_pick_processing_origin('', ['q' => $originWpDomain]);
     $pickMan = order_pipeline_pick_processing_origin('', ['q' => $manOriginDomain]);
-    $pickStay = order_pipeline_pick_processing_origin('wp', ['q' => $manOriginDomain]);
+    $pickJump = order_pipeline_pick_processing_origin('wp', ['q' => $manOriginDomain]);
+    $pickKeep = order_pipeline_pick_processing_origin('wp', ['q' => $originWpDomain]);
     $pickExpl = order_pipeline_pick_processing_origin('manual', ['q' => $originWpDomain]);
-    if ($pickWp === 'wp' && $pickMan === 'manual' && $pickStay === 'wp' && $pickExpl === 'manual') {
+    $pickAll = order_pipeline_pick_processing_origin('all', ['q' => $manOriginDomain]);
+    if ($pickWp === 'wp' && $pickMan === 'manual' && $pickJump === 'manual' && $pickKeep === 'wp'
+        && $pickExpl === 'wp' && $pickAll === 'all') {
         pass('Processing default origin follows non-empty tab');
     } else {
         fail('Processing default origin: wp=' . $pickWp . ' man=' . $pickMan
-            . ' stay=' . $pickStay . ' expl=' . $pickExpl);
+            . ' jump=' . $pickJump . ' keep=' . $pickKeep . ' expl=' . $pickExpl . ' all=' . $pickAll);
     }
 
     $restoreDomain = 'txfom-restore-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';

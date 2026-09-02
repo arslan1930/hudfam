@@ -931,6 +931,10 @@ html.ui-v2 .niche-chip {
 html.ui-v2 {
   color-scheme: dark;
 }
+html.ui-v2 input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.9;
+}
 html.ui-v2 input:-webkit-autofill,
 html.ui-v2 input:-webkit-autofill:hover,
 html.ui-v2 input:-webkit-autofill:focus,

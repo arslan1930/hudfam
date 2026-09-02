@@ -146,8 +146,16 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
 };
 
 $renderOmFolderTabs = static function (string $currentFolder, int $procN, int $compN, int $unpaidN) use ($ordersQs): void {
-    $procHref = $ordersQs(['folder' => 'processing', 'p' => 1, 'origin' => '', 'status' => 'all']);
-    $compHref = $ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid']);
+    $clearSheet = [
+        'q' => '',
+        'country' => '',
+        'admin_id' => 0,
+        'date_from' => '',
+        'date_to' => '',
+        'p' => 1,
+    ];
+    $procHref = $ordersQs(array_merge($clearSheet, ['folder' => 'processing', 'origin' => '', 'status' => 'all']));
+    $compHref = $ordersQs(array_merge($clearSheet, ['folder' => 'completed', 'status' => 'unpaid']));
     $procOn = $currentFolder === 'processing';
     $compOn = $currentFolder === 'completed';
     ?>
@@ -248,9 +256,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('New orders are added in the Processing folder.');
             }
             $saveCurrent();
+            $newAdminId = $filter['admin_id'] > 0
+                ? $filter['admin_id']
+                : ($filter['admin_id'] < 0 ? 0 : (int) ($user['id'] ?? 0));
             add_order_pipeline_row((int) ($user['id'] ?? 0), '', [
                 'country' => $filter['country'],
-                'admin_user_id' => $filter['admin_id'] > 0 ? $filter['admin_id'] : (int) ($user['id'] ?? 0),
+                'admin_user_id' => $newAdminId,
             ]);
             flash('ok', 'New order row added.');
             // Drop search/status/date filters so the blank row is not hidden.
@@ -694,11 +705,11 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </label>
     <label class="order-filter-field">
       <span class="order-filter-label">From</span>
-      <input type="date" name="date_from" value="<?= h($filter['date_from']) ?>" aria-label="From date" data-no-draft>
+      <input type="date" name="date_from" value="<?= h($filter['date_from']) ?>" aria-label="From date" autocomplete="off" data-no-draft>
     </label>
     <label class="order-filter-field">
       <span class="order-filter-label">To</span>
-      <input type="date" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" data-no-draft>
+      <input type="date" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" autocomplete="off" data-no-draft>
     </label>
     <div class="order-filter-actions">
       <button class="btn secondary small" type="submit">Search</button>
@@ -972,20 +983,22 @@ if ($compactUnpaidStats && !$showPagingStats) {
           $isPlacement = $placement !== '';
           $monthVal = (int) ($row['order_month'] ?? 0);
           $endMonthVal = (int) ($row['period_end_month'] ?? 0);
-          $yearVal = (int) ($row['order_year'] ?: date('Y'));
-          if ($yearVal < 2018) {
-              $yearVal = 2018;
-          }
+          $yearVal = (int) ($row['order_year'] ?? 0);
           $orderDate = order_date_effective($row);
           $rowAdminId = (int) ($row['admin_user_id'] ?? 0);
-          if ($monthVal < 1 && $orderDate !== '') {
-              $monthVal = (int) substr($orderDate, 5, 2);
-          }
-          if ($yearVal < 2018 && $orderDate !== '') {
-              $yearVal = (int) substr($orderDate, 0, 4);
-              if ($yearVal < 2018) {
-                  $yearVal = 2018;
+          if ($orderDate !== '') {
+              if ($monthVal < 1) {
+                  $monthVal = (int) substr($orderDate, 5, 2);
               }
+              if ($yearVal < 2018) {
+                  $yearVal = (int) substr($orderDate, 0, 4);
+              }
+          }
+          if ($yearVal < 2018) {
+              $yearVal = (int) date('Y');
+          }
+          if ($yearVal < 2018) {
+              $yearVal = 2018;
           }
           $canPush = $isCompleted && order_row_ready_for_invoice($row) && empty($openInvoicesByOrder[$id]);
           $openInv = $openInvoicesByOrder[$id] ?? null;
