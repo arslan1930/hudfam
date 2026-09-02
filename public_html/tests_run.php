@@ -5110,6 +5110,53 @@ try {
         fail('order sheet incomplete autosave failed');
     }
 
+    save_order_sheet_rows(
+        0,
+        [(int) $autoId => 'autosave-site.com'],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => 'Germany'],
+        [(int) $autoId => 9],
+        [(int) $autoId => ''],
+        [(int) $autoId => 2026],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => (int) $adminUser['id']],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        true
+    );
+    $keptDate = get_order_item((int) $autoId);
+    save_order_sheet_rows(
+        0,
+        [(int) $autoId => 'autosave-site.com'],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => 'Germany'],
+        [(int) $autoId => 9],
+        [(int) $autoId => ''],
+        [(int) $autoId => 2026],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => (int) $adminUser['id']],
+        [(int) $autoId => '2026-04-18'],
+        [(int) $autoId => ''],
+        true
+    );
+    $alignedDate = get_order_item((int) $autoId);
+    if ($keptDate && (string) ($keptDate['order_date'] ?? '') === '2026-03-15'
+        && $alignedDate && (string) ($alignedDate['order_date'] ?? '') === '2026-04-18'
+        && (int) ($alignedDate['order_month'] ?? 0) === 4
+        && (int) ($alignedDate['order_year'] ?? 0) === 2026) {
+        pass('OM sheet date save keeps existing day and aligns month');
+    } else {
+        fail('OM sheet date save clobbered or ignored the calendar day');
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');

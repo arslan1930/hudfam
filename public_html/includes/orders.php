@@ -1114,6 +1114,13 @@ function update_order_item(int $itemId, int $clientId, array $data, bool $allowI
     if ($year < 2000 || $year > 2100) {
         $year = (int) date('Y');
     }
+    $postedDate = array_key_exists('order_date', $data)
+        ? normalize_order_date($data['order_date'])
+        : null;
+    if ($postedDate) {
+        $month = (int) substr($postedDate, 5, 2);
+        $year = (int) substr($postedDate, 0, 4);
+    }
     $placement = normalize_placement_type($data['placement_type'] ?? '');
     if ($placement === '') {
         $endMonth = null;
@@ -1191,9 +1198,9 @@ function update_order_item(int $itemId, int $clientId, array $data, bool $allowI
         $sets[] = 'admin_user_id=?';
         $params[] = $adminId > 0 ? $adminId : null;
     }
-    if (array_key_exists('order_date', $data)) {
+    if ($postedDate) {
         $sets[] = 'order_date=?';
-        $params[] = normalize_order_date($data['order_date']) ?: date('Y-m-d');
+        $params[] = $postedDate;
     }
     if (array_key_exists('article_doc_url', $data) && order_has_article_doc_column()) {
         $sets[] = 'article_doc_url=?';
