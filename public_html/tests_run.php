@@ -5005,6 +5005,64 @@ try {
         fail('add order did not copy filter country');
     }
 
+    $autoId = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'country' => 'Germany',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => '2026-03-15',
+    ]);
+    $autoSaved = save_order_sheet_rows(
+        0,
+        [(int) $autoId => 'autosave-site.com'],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => 'Germany'],
+        [(int) $autoId => 3],
+        [(int) $autoId => ''],
+        [(int) $autoId => 2026],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => 'https://example.com/autosave-live'],
+        [(int) $autoId => ''],
+        [(int) $autoId => (int) $adminUser['id']],
+        [(int) $autoId => '2026-03-15'],
+        [(int) $autoId => ''],
+        true
+    );
+    $autoRow = get_order_item((int) $autoId);
+    $strictThrew = false;
+    try {
+        save_order_sheet_rows(
+            0,
+            [(int) $autoId => 'autosave-site.com'],
+            [(int) $autoId => ''],
+            [(int) $autoId => ''],
+            [(int) $autoId => 'Germany'],
+            [(int) $autoId => 3],
+            [(int) $autoId => ''],
+            [(int) $autoId => 2026],
+            [(int) $autoId => ''],
+            [(int) $autoId => ''],
+            [(int) $autoId => 'https://example.com/autosave-live'],
+            [(int) $autoId => ''],
+            [(int) $autoId => (int) $adminUser['id']],
+            [(int) $autoId => '2026-03-15'],
+            [(int) $autoId => ''],
+            false
+        );
+    } catch (Throwable $e) {
+        $strictThrew = true;
+    }
+    if ($autoSaved === 1
+        && $autoRow
+        && (string) ($autoRow['live_url'] ?? '') === 'https://example.com/autosave-live'
+        && (string) ($autoRow['order_date'] ?? '') === '2026-03-15'
+        && (int) ($autoRow['order_month'] ?? 0) === 3
+        && $strictThrew) {
+        pass('order sheet autosave allows incomplete LIVE rows');
+    } else {
+        fail('order sheet incomplete autosave failed');
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');

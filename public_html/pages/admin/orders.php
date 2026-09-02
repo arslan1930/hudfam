@@ -216,11 +216,12 @@ $postedFields = static function (): array {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
+    $wantsJson = (string) ($_POST['ajax'] ?? '') === '1';
     try {
         [$sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls] = $postedFields();
-        $saveCurrent = static function () use ($sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls): int {
+        $saveCurrent = static function (bool $allowIncomplete = false) use ($sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls): int {
             return save_order_sheet_rows(
-                0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls
+                0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls, $allowIncomplete
             );
         };
 
@@ -245,7 +246,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]) . '#sheet-bottom');
         }
         if ($action === 'save_sheet') {
-            $n = $saveCurrent();
+            $n = $saveCurrent($wantsJson);
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true, 'saved' => $n]);
+                exit;
+            }
             flash('ok', 'Saved ' . $n . ' row' . ($n === 1 ? '' : 's') . '.');
             redirect($ordersQs());
         }
@@ -405,6 +411,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(invoice_generate_href_for_orders($ready, $matchId));
         }
     } catch (Throwable $e) {
+        if ($wantsJson && $action === 'save_sheet') {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            exit;
+        }
         flash('error', $e->getMessage());
         redirect($ordersQs());
     }
@@ -639,7 +651,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Country</span>
-      <select name="country" aria-label="Filter by country" onchange="this.form.submit()">
+      <select name="country" aria-label="Filter by country">
         <option value="">All countries</option>
         <?php foreach ($filterCountries as $cname): ?>
           <option value="<?= h($cname) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
@@ -648,7 +660,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Admin</span>
-      <select name="admin_id" aria-label="Filter by admin" onchange="this.form.submit()">
+      <select name="admin_id" aria-label="Filter by admin">
         <option value="">All admins</option>
         <?php foreach ($admins as $aRow):
             $aid = (int) $aRow['id'];
@@ -773,7 +785,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
 </div>
 
 <form method="post" id="order-sheet-form" class="card order-sheet-card"
-      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>">
+      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>" data-server-autosave>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
@@ -790,9 +802,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
       <h2 style="margin:0" class="with-info-heading"><?= label_with_info(
           $isProcessing ? 'Processing sheet' : 'Completed sheet',
           $isProcessing
-              ? 'Fill country, date, admin, client, prices, and LIVE URL. Tick rows with a live URL, then Mark completed. Saving a live URL does not complete the row.'
-              : 'Tick unpaid completed rows, then Push to invoice. Mark paid after payment. Website prices is not updated from this folder.'
+              ? 'Fill country, date, admin, client, prices, and LIVE URL. Tick rows with a live URL, then Mark completed. Saving a live URL does not complete the row. Edits save automatically when you leave a cell.'
+              : 'Tick unpaid completed rows, then Push to invoice. Mark paid after payment. Website prices is not updated from this folder. Edits save automatically when you leave a cell.'
       ) ?></h2>
+      <p class="muted" id="order-autosave-status" style="margin:0.2rem 0 0" hidden></p>
     </div>
     <div class="actions">
       <?php if ($isProcessing): ?>
@@ -948,7 +961,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
           </td>
           <td class="col-date">
             <input class="cell-input" type="date" name="order_date[<?= $id ?>]"
-                   value="<?= h($orderDate) ?>" aria-label="Order date">
+                   value="<?= h($orderDate) ?>" aria-label="Order date" data-order-date>
           </td>
           <td class="col-admin">
             <?php
@@ -965,7 +978,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
               }
             ?>
             <select class="cell-input cell-select" name="admin_user_id[<?= $id ?>]" aria-label="Admin"
-                    title="<?= h($adminTitle) ?>">
+                    title="<?= h($adminTitle) ?>" data-order-admin>
               <?php foreach ($adminById as $aid => $aRow):
                   $alabel = trim((string) ($aRow['full_name'] ?? ''));
                   if ($alabel === '') {
@@ -1083,13 +1096,14 @@ if ($compactUnpaidStats && !$showPagingStats) {
           </td>
           <td class="col-month">
             <div class="month-year-cell">
-              <select class="cell-input cell-select" name="order_month[<?= $id ?>]" aria-label="<?= $isPlacement ? 'Start month' : 'Month' ?>">
+              <select class="cell-input cell-select" name="order_month[<?= $id ?>]" aria-label="<?= $isPlacement ? 'Start month' : 'Month' ?>"
+                      data-order-month>
                 <option value=""><?= $isPlacement ? 'Start' : 'Month' ?></option>
                 <?php foreach ($months as $num => $label): ?>
                   <option value="<?= (int) $num ?>" <?= $monthVal === (int) $num ? 'selected' : '' ?>><?= h($label) ?></option>
                 <?php endforeach; ?>
               </select>
-              <select class="cell-input cell-select cell-year" name="order_year[<?= $id ?>]" aria-label="Year">
+              <select class="cell-input cell-select cell-year" name="order_year[<?= $id ?>]" aria-label="Year" data-order-year>
                 <?php foreach ($yearOptions as $y): ?>
                   <option value="<?= (int) $y ?>" <?= $yearVal === (int) $y ? 'selected' : '' ?>><?= (int) $y ?></option>
                 <?php endforeach; ?>
@@ -1346,9 +1360,149 @@ if ($compactUnpaidStats && !$showPagingStats) {
   var form = document.getElementById('order-sheet-form');
   var dirty = false;
   var submitting = false;
+  var saving = false;
+  var saveQueued = false;
+  var saveTimer = null;
+  var savePromise = Promise.resolve();
+  var SAVE_DEBOUNCE_MS = 450;
   var isDraftIgnored = function (el) {
     return !!(el && el.closest && el.closest('[data-no-draft]'));
   };
+
+  function pad2(n) {
+    n = parseInt(n, 10);
+    if (isNaN(n) || n < 0) n = 0;
+    return (n < 10 ? '0' : '') + n;
+  }
+  function setSaveStatus(msg, isError) {
+    var el = document.getElementById('order-autosave-status');
+    if (!el) return;
+    el.hidden = !msg;
+    el.textContent = msg || '';
+    el.style.color = isError ? '#a32020' : '';
+  }
+  function ensureYearOption(sel, year) {
+    if (!sel) return;
+    var y = String(year);
+    var found = false;
+    Array.prototype.forEach.call(sel.options, function (opt) {
+      if (String(opt.value) === y) found = true;
+    });
+    if (!found) {
+      var opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      sel.appendChild(opt);
+    }
+    sel.value = y;
+  }
+  function syncMonthYearFromDate(row) {
+    var dateEl = row.querySelector('[data-order-date]');
+    var monthEl = row.querySelector('[data-order-month]');
+    var yearEl = row.querySelector('[data-order-year]');
+    if (!dateEl || !monthEl || !yearEl) return;
+    var raw = String(dateEl.value || '').trim();
+    var m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return;
+    var year = parseInt(m[1], 10);
+    var month = parseInt(m[2], 10);
+    if (year >= 2018 && year <= 2100) ensureYearOption(yearEl, year);
+    if (month >= 1 && month <= 12) monthEl.value = String(month);
+  }
+  function syncDateFromMonthYear(row) {
+    var dateEl = row.querySelector('[data-order-date]');
+    var monthEl = row.querySelector('[data-order-month]');
+    var yearEl = row.querySelector('[data-order-year]');
+    if (!dateEl || !monthEl || !yearEl) return;
+    var year = parseInt(yearEl.value, 10);
+    var month = parseInt(monthEl.value, 10);
+    if (!year || month < 1 || month > 12) return;
+    var parts = String(dateEl.value || '').split('-');
+    var day = parseInt(parts[2], 10) || 1;
+    var last = new Date(year, month, 0).getDate();
+    if (day > last) day = last;
+    if (day < 1) day = 1;
+    dateEl.value = year + '-' + pad2(month) + '-' + pad2(day);
+  }
+  function flushAutosave() {
+    if (saveTimer) {
+      window.clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    if (!form || submitting) return Promise.resolve();
+    if (saving) {
+      saveQueued = true;
+      return savePromise;
+    }
+    if (!dirty) return Promise.resolve();
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var dateEl = row.querySelector('[data-order-date]');
+      if (dateEl && String(dateEl.value || '').trim()) syncMonthYearFromDate(row);
+    });
+    saving = true;
+    setSaveStatus('Saving…');
+    var fd = new FormData(form);
+    fd.set('action', 'save_sheet');
+    fd.set('ajax', '1');
+    fd.set('item_id', '');
+    fd.set('restore_wp', '');
+    savePromise = fetch(form.getAttribute('action') || window.location.href, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error((data && data.error) || 'Could not save');
+        }
+        return data;
+      }, function () {
+        throw new Error('Could not save');
+      });
+    }).then(function (data) {
+      saving = false;
+      if (saveQueued) {
+        saveQueued = false;
+        dirty = true;
+        return flushAutosave();
+      }
+      dirty = false;
+      var n = data && typeof data.saved === 'number' ? data.saved : 0;
+      setSaveStatus('Saved' + (n ? ' · ' + n + ' row' + (n === 1 ? '' : 's') : ''));
+      try {
+        var drop = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('txf-draft:v1:') === 0 && k.indexOf('admin_orders') !== -1) drop.push(k);
+        }
+        drop.forEach(function (k) { localStorage.removeItem(k); });
+        var banner = document.getElementById('draft-restore-banner');
+        if (banner) banner.hidden = true;
+        form.querySelectorAll('[data-draft-status]').forEach(function (el) {
+          el.hidden = true;
+          el.textContent = '';
+        });
+      } catch (err) { /* ignore */ }
+    }).catch(function (err) {
+      saving = false;
+      dirty = true;
+      setSaveStatus((err && err.message) || 'Could not save — click Save sheet.', true);
+    });
+    return savePromise;
+  }
+  function scheduleAutosave(immediate) {
+    if (!form || submitting) return;
+    dirty = true;
+    if (saveTimer) window.clearTimeout(saveTimer);
+    if (immediate) {
+      saveTimer = null;
+      flushAutosave();
+      return;
+    }
+    setSaveStatus('Saving…');
+    saveTimer = window.setTimeout(flushAutosave, SAVE_DEBOUNCE_MS);
+  }
 
   function setCopyStatus(msg, isError) {
     var el = document.getElementById('order-copy-status');
@@ -1629,17 +1783,107 @@ if ($compactUnpaidStats && !$showPagingStats) {
 
   form.addEventListener('input', function (e) {
     if (isDraftIgnored(e.target)) return;
-    dirty = true;
+    var t = e.target;
+    var row = t && t.closest ? t.closest('[data-row]') : null;
+    if (row && t && t.getAttribute && t.getAttribute('data-order-date') !== null) {
+      syncMonthYearFromDate(row);
+    }
+    scheduleAutosave(false);
   }, true);
   form.addEventListener('change', function (e) {
     if (isDraftIgnored(e.target)) return;
-    dirty = true;
+    var t = e.target;
+    var row = t && t.closest ? t.closest('[data-row]') : null;
+    if (row && t && t.getAttribute) {
+      if (t.getAttribute('data-order-date') !== null) syncMonthYearFromDate(row);
+      else if (t.getAttribute('data-order-month') !== null || t.getAttribute('data-order-year') !== null) {
+        syncDateFromMonthYear(row);
+      }
+      if (t.getAttribute('data-order-admin') !== null) {
+        t.title = (t.options[t.selectedIndex] && t.options[t.selectedIndex].text) || '';
+      }
+    }
+    scheduleAutosave(true);
   }, true);
   window.addEventListener('beforeunload', function (e) {
-    if (!dirty || submitting) return;
+    if (saveTimer) flushAutosave();
+    if ((!dirty && !saving) || submitting) return;
     e.preventDefault();
     e.returnValue = '';
   });
+  window.addEventListener('pagehide', function () {
+    if (submitting || (!dirty && !saving)) return;
+    try {
+      var fd = new FormData(form);
+      fd.set('action', 'save_sheet');
+      fd.set('ajax', '1');
+      fd.set('item_id', '');
+      fd.set('restore_wp', '');
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(form.getAttribute('action') || window.location.href, fd);
+        dirty = false;
+      }
+    } catch (err) { /* ignore */ }
+  });
+  function leaveAfterSave(e, href) {
+    if (!href) return false;
+    if (!dirty && !saving && !saveTimer) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+      window.AppProcessing.hideAll();
+    }
+    flushAutosave().then(function () {
+      if (dirty) return;
+      window.location.href = href;
+    });
+    return true;
+  }
+  document.addEventListener('click', function (e) {
+    if (!form || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    if (a.hasAttribute('download')) return;
+    var tgt = String(a.getAttribute('target') || '');
+    if (tgt && tgt !== '_self') return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0 || href.indexOf('mailto:') === 0) {
+      return;
+    }
+    if (/(?:[?&])(?:export|download)=/i.test(href) || /(?:[?&])(?:export|download)=/i.test(String(a.href || href))) {
+      return;
+    }
+    leaveAfterSave(e, a.href);
+  }, true);
+  var filterBar = document.getElementById('order-filter-bar');
+  function submitFilterAfterSave() {
+    if (!filterBar) return;
+    HTMLFormElement.prototype.submit.call(filterBar);
+  }
+  if (filterBar) {
+    filterBar.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t || !t.name) return;
+      if (t.name !== 'country' && t.name !== 'admin_id' && t.name !== 'date_from' && t.name !== 'date_to') return;
+      if (!dirty && !saving && !saveTimer) {
+        submitFilterAfterSave();
+        return;
+      }
+      flushAutosave().then(function () {
+        if (dirty) return;
+        submitFilterAfterSave();
+      });
+    });
+    filterBar.addEventListener('submit', function (e) {
+      if (!dirty && !saving && !saveTimer) return;
+      e.preventDefault();
+      flushAutosave().then(function () {
+        if (dirty) return;
+        submitFilterAfterSave();
+      });
+    });
+  }
   refresh();
 })();
 function omConfirmRemove(btn) {

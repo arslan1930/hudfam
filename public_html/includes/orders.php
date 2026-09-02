@@ -1042,7 +1042,7 @@ function add_order_year_end(int $clientId, int $endingYear): int
 /**
  * @param array{site_name?:string,site_note?:string,placement_type?:string,country?:string,order_month?:mixed,period_end_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string,article_doc_url?:string} $data
  */
-function update_order_item(int $itemId, int $clientId, array $data): void
+function update_order_item(int $itemId, int $clientId, array $data, bool $allowIncomplete = false): void
 {
     ensure_order_schema();
     $month = (int) ($data['order_month'] ?? 0);
@@ -1071,7 +1071,8 @@ function update_order_item(int $itemId, int $clientId, array $data): void
     $decidedPrice = parse_money($data['decided_price'] ?? 0);
 
     // LIVE URL means the order is complete — price fields must not be empty.
-    if ($liveUrl !== '') {
+    // Ajax autosave skips this so typing a live URL and clicking another cell still persists.
+    if ($liveUrl !== '' && !$allowIncomplete) {
         $ownerRaw = trim((string) ($data['owner_price'] ?? ''));
         $decidedRaw = trim((string) ($data['decided_price'] ?? ''));
         if ($ownerRaw === '' || $decidedRaw === '') {
@@ -1183,7 +1184,8 @@ function save_order_sheet_rows(
     array $clientLabels = [],
     array $adminIds = [],
     array $dates = [],
-    array $articleDocUrls = []
+    array $articleDocUrls = [],
+    bool $allowIncomplete = false
 ): int {
     ensure_order_schema();
     $saved = 0;
@@ -1216,7 +1218,7 @@ function save_order_sheet_rows(
         if (array_key_exists($id, $articleDocUrls) || array_key_exists((string) $id, $articleDocUrls)) {
             $data['article_doc_url'] = $articleDocUrls[$id] ?? '';
         }
-        update_order_item($itemId, $clientId, $data);
+        update_order_item($itemId, $clientId, $data, $allowIncomplete);
         $saved++;
     }
     return $saved;
