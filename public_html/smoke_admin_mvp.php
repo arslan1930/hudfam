@@ -1593,7 +1593,8 @@ if (!str_contains($ordersPage, 'id="order-filter-bar"')
     || !str_contains($ordersPage, 'Unassigned')
     || !str_contains($ordersPage, 'filters off')
     || !str_contains($ordersPage, 'order_date_effective')
-    || !str_contains($ordersPage, 'order_pipeline_parse_admin_filter')) {
+    || !str_contains($ordersPage, 'order_pipeline_parse_admin_filter')
+    || !str_contains($ordersPage, "<?php\n              \$adminTitle = '';")) {
     fail('orders missing filter bar searches');
 } else {
     ok('orders filter bar searches');

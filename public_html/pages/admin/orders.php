@@ -1022,6 +1022,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
                    value="<?= h($orderDate) ?>" aria-label="Order date" data-order-date>
           </td>
           <td class="col-admin">
+            <?php
               $adminTitle = '';
               if ($rowAdminId < 1) {
                   $adminTitle = 'Unassigned';
