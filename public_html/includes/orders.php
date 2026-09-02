@@ -410,6 +410,61 @@ function normalize_order_date($value): ?string
     return sprintf('%04d-%02d-%02d', $year, $month, $day);
 }
 
+function order_pipeline_parse_admin_filter($raw): int
+{
+    $raw = strtolower(trim((string) $raw));
+    if ($raw === 'unassigned' || $raw === '-1') {
+        return -1;
+    }
+    return max(0, (int) $raw);
+}
+
+function order_pipeline_admin_filter_query(int $adminId): string
+{
+    if ($adminId < 0) {
+        return 'unassigned';
+    }
+    return $adminId > 0 ? (string) $adminId : '';
+}
+
+function order_date_effective(array $row): string
+{
+    $d = trim((string) ($row['order_date'] ?? ''));
+    if (normalize_order_date($d)) {
+        return $d;
+    }
+    $created = (string) ($row['created_at'] ?? '');
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $created, $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+function order_wp_admin_user_id(array $wp): int
+{
+    $managed = (int) ($wp['managed_by'] ?? 0);
+    if ($managed > 0) {
+        return $managed;
+    }
+    return max(0, (int) ($wp['created_by'] ?? 0));
+}
+
+function order_backfill_pipeline_admin_from_website_prices(): void
+{
+    try {
+        db()->exec(
+            "UPDATE order_items i
+             INNER JOIN site_price_rows s ON s.id = i.site_price_row_id
+             SET i.admin_user_id = COALESCE(NULLIF(s.managed_by, 0), NULLIF(s.created_by, 0))
+             WHERE i.row_type = 'site'
+               AND i.admin_user_id IS NULL
+               AND COALESCE(NULLIF(s.managed_by, 0), NULLIF(s.created_by, 0)) IS NOT NULL"
+        );
+    } catch (Throwable $e) {
+        // Website prices table may not exist yet
+    }
+}
+
 function order_admin_display_name(array $row): string
 {
     $name = trim((string) ($row['admin_full_name'] ?? ''));
@@ -543,6 +598,7 @@ function order_sync_from_site_price_row(int $sitePriceRowId): void
         'site_price_row_id' => $sitePriceRowId,
         'owner_price' => order_owner_price_from_price_note((string) ($wp['price_note'] ?? '')),
         'order_stage' => 'processing',
+        'admin_user_id' => order_wp_admin_user_id($wp),
     ]);
 }
 
@@ -566,6 +622,7 @@ function order_reconcile_processing_from_website_prices(): void
             // best-effort — a bad Website prices row must not block the folder
         }
     }
+    order_backfill_pipeline_admin_from_website_prices();
 }
 
 /**
@@ -1451,6 +1508,12 @@ function order_pipeline_pick_processing_origin(string $rawOrigin, array $countOp
             return $key;
         }
     }
+    $plain = ['folder' => 'processing'];
+    foreach (['wp', 'leftover', 'manual'] as $key) {
+        if (count_order_pipeline_rows(array_merge($plain, ['origin' => $key])) > 0) {
+            return $key;
+        }
+    }
     return 'wp';
 }
 
@@ -1505,18 +1568,26 @@ function order_pipeline_where_sql(array $opts = []): array
         $params[] = $country;
     }
     $adminId = (int) ($opts['admin_id'] ?? 0);
-    if ($adminId > 0) {
+    if ($adminId < 0) {
+        $where[] = 'i.admin_user_id IS NULL';
+    } elseif ($adminId > 0) {
         $where[] = 'i.admin_user_id = ?';
         $params[] = $adminId;
     }
+    $dateExpr = 'COALESCE(i.order_date, DATE(i.created_at))';
     $dateFrom = normalize_order_date($opts['date_from'] ?? '');
+    $dateTo = normalize_order_date($opts['date_to'] ?? '');
+    if ($dateFrom && $dateTo && $dateFrom > $dateTo) {
+        $tmp = $dateFrom;
+        $dateFrom = $dateTo;
+        $dateTo = $tmp;
+    }
     if ($dateFrom) {
-        $where[] = 'i.order_date >= ?';
+        $where[] = $dateExpr . ' >= ?';
         $params[] = $dateFrom;
     }
-    $dateTo = normalize_order_date($opts['date_to'] ?? '');
     if ($dateTo) {
-        $where[] = 'i.order_date <= ?';
+        $where[] = $dateExpr . ' <= ?';
         $params[] = $dateTo;
     }
     $status = (string) ($opts['status'] ?? 'all');

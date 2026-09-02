@@ -5005,6 +5005,53 @@ try {
         fail('add order did not copy filter country');
     }
 
+    if (order_pipeline_parse_admin_filter('') === 0
+        && order_pipeline_parse_admin_filter('unassigned') === -1
+        && order_pipeline_parse_admin_filter('-1') === -1
+        && order_pipeline_parse_admin_filter('12') === 12
+        && order_pipeline_admin_filter_query(-1) === 'unassigned') {
+        pass('OM admin filter unassigned token');
+    } else {
+        fail('OM admin filter unassigned token failed');
+    }
+    $nullAdminId = add_order_pipeline_row(0, '', ['country' => 'Germany']);
+    db()->prepare('UPDATE order_items SET admin_user_id=NULL, order_date=NULL WHERE id=?')->execute([(int) $nullAdminId]);
+    $nullRow = get_order_item((int) $nullAdminId) ?: [];
+    $unassignedHits = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'admin_id' => -1,
+    ]);
+    $foundUnassigned = false;
+    foreach ($unassignedHits as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $nullAdminId) {
+            $foundUnassigned = true;
+            break;
+        }
+    }
+    $effDate = order_date_effective($nullRow);
+    $byCreatedDay = [];
+    if ($effDate !== '') {
+        $byCreatedDay = list_order_pipeline_rows([
+            'folder' => 'processing',
+            'origin' => 'all',
+            'date_from' => $effDate,
+            'date_to' => $effDate,
+        ]);
+    }
+    $foundByCreatedDay = false;
+    foreach ($byCreatedDay as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $nullAdminId) {
+            $foundByCreatedDay = true;
+            break;
+        }
+    }
+    if ($foundUnassigned && $effDate !== '' && $foundByCreatedDay) {
+        pass('OM unassigned admin and COALESCE date filter');
+    } else {
+        fail('OM unassigned admin or empty date filter missed row ' . $nullAdminId);
+    }
+
     $autoId = add_order_pipeline_row((int) $adminUser['id'], '', [
         'country' => 'Germany',
         'admin_user_id' => (int) $adminUser['id'],
@@ -5693,6 +5740,11 @@ try {
         pass('WP Processing syncs to OM Processing');
     } else {
         fail('WP Processing did not create a Processing OM row');
+    }
+    if ($omFromWp && (int) ($omFromWp['admin_user_id'] ?? 0) === (int) $adminUser['id']) {
+        pass('WP Processing copies created/managed admin onto OM');
+    } else {
+        fail('WP Processing OM row missing admin_user_id');
     }
     $wpRowHtmlTeam = render_site_price_sheet_row(get_site_price_row((int) $wpFoldId) ?: [], $teamUser);
     $wpCols = db()->query('SHOW COLUMNS FROM site_price_rows')->fetchAll(PDO::FETCH_COLUMN);

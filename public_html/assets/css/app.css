@@ -3459,6 +3459,16 @@ tr.swe-row-updated {
 }
 .order-filter-field {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+.order-filter-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  line-height: 1.2;
 }
 .order-filter-field select,
 .order-filter-field input[type="date"] {

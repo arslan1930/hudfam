@@ -25,11 +25,28 @@ if ($isProcessing) {
 $filter = [
     'q' => trim((string) get('q')),
     'country' => trim((string) get('country')),
-    'admin_id' => max(0, (int) get('admin_id')),
+    'admin_id' => order_pipeline_parse_admin_filter(get('admin_id')),
     'date_from' => (string) get('date_from'),
     'date_to' => (string) get('date_to'),
     'status' => (string) get('status'),
 ];
+$dateFromNorm = normalize_order_date($filter['date_from']);
+$dateToNorm = normalize_order_date($filter['date_to']);
+if ($dateFromNorm) {
+    $filter['date_from'] = $dateFromNorm;
+} else {
+    $filter['date_from'] = '';
+}
+if ($dateToNorm) {
+    $filter['date_to'] = $dateToNorm;
+} else {
+    $filter['date_to'] = '';
+}
+if ($filter['date_from'] !== '' && $filter['date_to'] !== '' && $filter['date_from'] > $filter['date_to']) {
+    $swap = $filter['date_from'];
+    $filter['date_from'] = $filter['date_to'];
+    $filter['date_to'] = $swap;
+}
 if ($isProcessing) {
     $filter['status'] = 'all';
     $origin = function_exists('order_pipeline_pick_processing_origin')
@@ -89,8 +106,9 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
         }
     }
     $adminId = (int) ($params['admin_id'] ?? 0);
-    if ($adminId > 0) {
-        $bits[] = 'admin_id=' . $adminId;
+    $adminQ = order_pipeline_admin_filter_query($adminId);
+    if ($adminQ !== '') {
+        $bits[] = 'admin_id=' . rawurlencode($adminQ);
     }
     if ($folderName === 'completed') {
         $st = (string) ($params['status'] ?? 'unpaid');
@@ -597,7 +615,7 @@ foreach ($items as $row) {
 
 $colspan = 16;
 $placementOptions = order_placement_options();
-$filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] > 0
+$filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] !== 0
     || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '';
 $tabProcessingCount = count_order_pipeline_rows(['folder' => 'processing']);
 $tabCompletedCount = count_order_pipeline_rows(['folder' => 'completed']);
@@ -650,7 +668,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
              placeholder="<?= $isCompleted ? 'Site, client, country, admin, doc' : 'Search site, client, country, admin, doc…' ?>" autocomplete="off" spellcheck="false" data-no-draft>
     </label>
     <label class="order-filter-field">
-      <span class="visually-hidden">Country</span>
+      <span class="order-filter-label">Country</span>
       <select name="country" aria-label="Filter by country">
         <option value="">All countries</option>
         <?php foreach ($filterCountries as $cname): ?>
@@ -659,9 +677,10 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       </select>
     </label>
     <label class="order-filter-field">
-      <span class="visually-hidden">Admin</span>
+      <span class="order-filter-label">Admin</span>
       <select name="admin_id" aria-label="Filter by admin">
         <option value="">All admins</option>
+        <option value="unassigned" <?= $filter['admin_id'] < 0 ? 'selected' : '' ?>>Unassigned</option>
         <?php foreach ($admins as $aRow):
             $aid = (int) $aRow['id'];
             $alabel = trim((string) ($aRow['full_name'] ?? ''));
@@ -674,11 +693,11 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
       </select>
     </label>
     <label class="order-filter-field">
-      <span class="visually-hidden">From date</span>
+      <span class="order-filter-label">From</span>
       <input type="date" name="date_from" value="<?= h($filter['date_from']) ?>" aria-label="From date" data-no-draft>
     </label>
     <label class="order-filter-field">
-      <span class="visually-hidden">To date</span>
+      <span class="order-filter-label">To</span>
       <input type="date" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" data-no-draft>
     </label>
     <div class="order-filter-actions">
@@ -877,9 +896,43 @@ if ($compactUnpaidStats && !$showPagingStats) {
       <?php if (!$items): ?>
         <tr>
           <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
-            <?= $filtersOn
-                ? 'No orders match this filter.'
-                : ($isProcessing
+            <?php
+            if ($filtersOn) {
+                $filterBits = [];
+                if ($filter['q'] !== '') {
+                    $filterBits[] = 'search “' . $filter['q'] . '”';
+                }
+                if ($filter['country'] !== '') {
+                    $filterBits[] = 'country ' . $filter['country'];
+                }
+                if ($filter['admin_id'] < 0) {
+                    $filterBits[] = 'Unassigned admin';
+                } elseif ($filter['admin_id'] > 0) {
+                    $adminName = '';
+                    if (isset($adminById[$filter['admin_id']])) {
+                        $adminName = trim((string) ($adminById[$filter['admin_id']]['full_name'] ?? ''));
+                        if ($adminName === '') {
+                            $adminName = (string) ($adminById[$filter['admin_id']]['username'] ?? '');
+                        }
+                    }
+                    $filterBits[] = 'admin ' . ($adminName !== '' ? $adminName : ('#' . $filter['admin_id']));
+                }
+                if ($filter['date_from'] !== '' || $filter['date_to'] !== '') {
+                    $filterBits[] = 'dates ' . ($filter['date_from'] !== '' ? $filter['date_from'] : '…')
+                        . '–' . ($filter['date_to'] !== '' ? $filter['date_to'] : '…');
+                }
+                $folderTotal = $isProcessing ? (int) $tabProcessingCount : (int) $tabCompletedCount;
+                echo 'No orders match this filter';
+                if ($filterBits) {
+                    echo ' (' . h(implode(', ', $filterBits)) . ')';
+                }
+                echo '.';
+                if ($folderTotal > 0) {
+                    echo ' ' . ($isProcessing ? 'Processing' : 'Completed') . ' has ' . $folderTotal
+                        . ' order' . ($folderTotal === 1 ? '' : 's') . ' with filters off.';
+                }
+            } else {
+                echo $isProcessing
                     ? ($origin === 'leftover'
                         ? 'No leftover Processing orders. Website prices Processing and Added here are other tabs.'
                         : ($origin === 'manual'
@@ -891,7 +944,9 @@ if ($compactUnpaidStats && !$showPagingStats) {
                         ? 'No unpaid completed orders to bill. Open All to see Paid, or mark Processing rows completed.'
                         : ($filter['status'] === 'paid'
                             ? 'No paid completed orders.'
-                            : 'No completed orders yet — mark processing rows completed with a live URL.'))) ?>
+                            : 'No completed orders yet — mark processing rows completed with a live URL.'));
+            }
+            ?>
             <?php if ($filtersOn): ?>
               <a href="<?= h($ordersQs([
                   'q' => '',
@@ -921,13 +976,16 @@ if ($compactUnpaidStats && !$showPagingStats) {
           if ($yearVal < 2018) {
               $yearVal = 2018;
           }
-          $orderDate = (string) ($row['order_date'] ?? '');
-          if ($orderDate === '') {
-              $orderDate = date('Y-m-d');
-          }
+          $orderDate = order_date_effective($row);
           $rowAdminId = (int) ($row['admin_user_id'] ?? 0);
-          if ($rowAdminId < 1) {
-              $rowAdminId = (int) ($user['id'] ?? 0);
+          if ($monthVal < 1 && $orderDate !== '') {
+              $monthVal = (int) substr($orderDate, 5, 2);
+          }
+          if ($yearVal < 2018 && $orderDate !== '') {
+              $yearVal = (int) substr($orderDate, 0, 4);
+              if ($yearVal < 2018) {
+                  $yearVal = 2018;
+              }
           }
           $canPush = $isCompleted && order_row_ready_for_invoice($row) && empty($openInvoicesByOrder[$id]);
           $openInv = $openInvoicesByOrder[$id] ?? null;
@@ -964,21 +1022,25 @@ if ($compactUnpaidStats && !$showPagingStats) {
                    value="<?= h($orderDate) ?>" aria-label="Order date" data-order-date>
           </td>
           <td class="col-admin">
-            <?php
               $adminTitle = '';
-              foreach ($adminById as $aid => $aRow) {
-                  if ((int) $aid !== $rowAdminId) {
-                      continue;
+              if ($rowAdminId < 1) {
+                  $adminTitle = 'Unassigned';
+              } else {
+                  foreach ($adminById as $aid => $aRow) {
+                      if ((int) $aid !== $rowAdminId) {
+                          continue;
+                      }
+                      $adminTitle = trim((string) ($aRow['full_name'] ?? ''));
+                      if ($adminTitle === '') {
+                          $adminTitle = (string) ($aRow['username'] ?? '');
+                      }
+                      break;
                   }
-                  $adminTitle = trim((string) ($aRow['full_name'] ?? ''));
-                  if ($adminTitle === '') {
-                      $adminTitle = (string) ($aRow['username'] ?? '');
-                  }
-                  break;
               }
             ?>
             <select class="cell-input cell-select" name="admin_user_id[<?= $id ?>]" aria-label="Admin"
                     title="<?= h($adminTitle) ?>" data-order-admin>
+              <option value="" <?= $rowAdminId < 1 ? 'selected' : '' ?>>Unassigned</option>
               <?php foreach ($adminById as $aid => $aRow):
                   $alabel = trim((string) ($aRow['full_name'] ?? ''));
                   if ($alabel === '') {
