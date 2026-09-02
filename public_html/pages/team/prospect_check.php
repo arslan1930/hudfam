@@ -216,23 +216,31 @@ try {
             foreach (($result['by_country'] ?? []) as $dest => $bucket) {
                 $n = count($bucket['new'] ?? []);
                 if ($n > 0) {
-                    $routeBits[] = $n . ' → ' . $dest;
+                    $routeBits[] = $n . ' unique → ' . $dest . ' Extracting';
                 }
             }
+            $existPhrase = prospect_destinations_phrase($result['by_country'] ?? [], 'existing');
             if ($uniqueN > 0) {
-                $msg = 'Filtered (TLD → country): removed ' . $skippedN
-                    . ' already in destination database(s) · ' . $uniqueN
+                $msg = 'Filtered (TLD → country): ' . $uniqueN
                     . ' unique site(s) ready to add (this Filter run)';
                 if ($routeBits) {
                     $msg .= ' (' . implode(', ', $routeBits) . ')';
                 }
+                if ($skippedN > 0) {
+                    $msg .= ' · removed ' . $skippedN . ' already in destination database(s)';
+                    if ($existPhrase !== '') {
+                        $msg .= ' (' . $existPhrase . ' — not sent to Extracting)';
+                    }
+                }
                 flash('ok', $msg . '.');
             } else {
-                flash(
-                    'ok',
-                    'Filtered (TLD → country): all ' . $skippedN
-                    . ' domain(s) are already in the destination country database(s). Nothing new to add.'
-                );
+                $msg = 'Filtered (TLD → country): all ' . $skippedN
+                    . ' domain(s) are already in the destination country database(s)';
+                if ($existPhrase !== '') {
+                    $msg .= ' (' . $existPhrase . ')';
+                }
+                $msg .= '. Nothing new to Extracting.';
+                flash('ok', $msg);
             }
             // refresh private count after filter (domains stay hidden from teammates)
             $old = list_prospect_domain_names(1, $country);
@@ -302,7 +310,7 @@ render_header('Filter & add', 'team');
 <div class="topbar">
   <div>
     <h1>Filter &amp; add<?= $country !== '' ? ' · ' . h($country) : '' ?></h1>
-    <p class="muted">Paste sites → <strong>Filter unique sites</strong> routes by TLD (.at→Austria, .ch→Switzerland, …) and removes duplicates in each destination Our database → Add puts unique sites into those country folders and Extracting Sites lists. Separate before Filter can only Copy/Delete.</p>
+    <p class="muted page-lead">Paste → <strong>Filter unique sites</strong> → Add. .pt→Portugal, .at→Austria, .com stays here.</p>
   </div>
   <div class="actions">
     <?php if ($country !== ''): ?>
@@ -323,8 +331,8 @@ render_header('Filter & add', 'team');
 
 <ul class="steps">
   <li class="step <?= $stepPaste ?>"><span class="num">1</span> Country + paste</li>
-  <li class="step <?= $stepFilter ?>"><span class="num">2</span> Filter (remove known)</li>
-  <li class="step <?= $stepAdd ?>"><span class="num">3</span> Add new only</li>
+  <li class="step <?= $stepFilter ?>"><span class="num">2</span> Filter unique</li>
+  <li class="step <?= $stepAdd ?>"><span class="num">3</span> Add to Extracting</li>
 </ul>
 
 <form method="post" id="filter_form">
@@ -335,39 +343,40 @@ render_header('Filter & add', 'team');
     <div class="form-grid">
       <?= render_country_typeahead($country, [
           'id' => 'country',
-          'label' => 'Country database',
+          'label' => 'Country',
           'attrs' => 'data-fill-language="#language" data-fill-region="select[name=region]" data-reload-on-select="1"',
       ]) ?>
       <div class="full">
-        <p class="help" style="margin:0">
-          Starting folder for generic TLDs (.com, .net, .eu). Country endings (.at, .ch, …) route to their own folders.
-          Existing Our database URLs stay hidden. Filter leftover unique is this session; Extracting country totals are shared.
-        </p>
+        <p class="help" style="margin:0">Starting folder. .com stays here. .pt→Portugal, .at→Austria, .ch→Switzerland.</p>
       </div>
       <input type="hidden" name="language" id="language" value="<?= h($language) ?>">
-      <div><label>Region</label>
-        <select name="region">
-          <option value="">—</option>
-          <?php foreach (regions() as $k => $v): ?>
-            <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-      <div class="full">
-        <label for="niche_q">Niche</label>
-        <?= render_niche_chip_box($niche, [
-            'name' => 'niche',
-            'id' => 'niche',
-            'placeholder' => 'Type a niche, Enter to add',
-        ]) ?>
-        <p class="help">English niches. Type to add, × to remove. A site can have more than one.</p>
-      </div>
-      <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
     </div>
+    <details class="help-details filter-optional">
+      <summary>Niche, region, notes (optional)</summary>
+      <div class="help-details-body form-grid">
+        <div><label>Region</label>
+          <select name="region">
+            <option value="">—</option>
+            <?php foreach (regions() as $k => $v): ?>
+              <option value="<?= h($k) ?>" <?= $region === $k ? 'selected' : '' ?>><?= h($v) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="full">
+          <label for="niche_q">Niche</label>
+          <?= render_niche_chip_box($niche, [
+              'name' => 'niche',
+              'id' => 'niche',
+              'placeholder' => 'Type a niche, Enter to add',
+          ]) ?>
+        </div>
+        <div class="full"><label>Notes</label><textarea name="notes" rows="2"><?= h($notes) ?></textarea></div>
+      </div>
+    </details>
   </div>
 
   <div class="card box-panel">
-    <h2>Paste new sites</h2>
+    <h2>Paste sites</h2>
     <?= render_domains_paste_field('domains', $raw, [
         'id' => 'domains',
         'label' => 'Root domains',
@@ -383,7 +392,7 @@ render_header('Filter & add', 'team');
             <?= $country === '' ? 'disabled' : '' ?>
             title="<?= $country === ''
                 ? 'Select a country first'
-                : 'Remove sites already in this country and show unique only' ?>">
+                : 'Check each destination Our database (not only ' . h($country) . ') and show unique only' ?>">
       Filter unique sites
     </button>
   </div>
@@ -412,8 +421,7 @@ render_header('Filter & add', 'team');
       Separate all
     </button>
     <span class="muted" style="font-size:0.88rem">
-      One ending at a time — Copy or Delete only. <?= h($sendBtnLabel) ?> appears after
-      <strong>Filter unique sites</strong>
+      Split by ending (.es, .com, …). Copy or Delete now — <?= h($sendBtnLabel) ?> after Filter unique sites
     </span>
     <p class="help tld-separate-status" data-tld-status hidden></p>
   </div>
@@ -431,7 +439,7 @@ render_header('Filter & add', 'team');
   if (!countryRoot) return;
   function syncBtn() {
     var hidden = countryRoot.querySelector('[data-typeahead-value]');
-    if (btn) btn.disabled = !(hidden && hidden.value);
+    if (btn) btn.disabled = !(hidden && String(hidden.value || '').trim());
   }
   countryRoot.addEventListener('typeahead:select', function(e){
     syncBtn();
@@ -439,7 +447,10 @@ render_header('Filter & add', 'team');
       window.location = 'index.php?page=team_prospect_check&country=' + encodeURIComponent(e.detail.value);
     }
   });
+  countryRoot.addEventListener('input', syncBtn);
+  countryRoot.addEventListener('change', syncBtn);
   syncBtn();
+  window.addEventListener('load', syncBtn);
 })();
 </script>
 <?= sites_form_script_tag() ?>
@@ -447,25 +458,35 @@ render_header('Filter & add', 'team');
 <?= niche_chips_script_tag() ?>
 
 <?php if ($result): ?>
+<?php $routeRows = prospect_route_check_rows($result['by_country'] ?? []); ?>
 <div class="card">
-  <h2>Results · <?= h($country) ?></h2>
-  <p class="muted" style="margin:0">
-    Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in destination country database(s) <strong><?= count($result['existing']) ?></strong> ·
-    Unique this Filter <strong><?= count($result['new']) ?></strong>
-    <?php
-      $routeSummary = [];
-      foreach (($result['by_country'] ?? []) as $dest => $bucket) {
-          $n = count($bucket['new'] ?? []);
-          if ($n > 0) {
-              $routeSummary[] = $n . ' → ' . $dest;
-          }
-      }
-      if ($routeSummary):
-    ?>
-      · <?= h(implode(', ', $routeSummary)) ?>
-    <?php endif; ?>
+  <h2>Results · each destination Our database</h2>
+  <p class="muted route-check-meta">
+    <span>From <strong><?= h($country) ?></strong></span>
+    <span>Pasted <strong><?= (int) $result['total_input'] ?></strong></span>
+    <span>Unique this Filter <strong><?= count($result['new']) ?></strong></span>
+    <span>Already known <strong><?= count($result['existing']) ?></strong></span>
   </p>
+  <?php if ($routeRows): ?>
+    <ul class="route-check-list" aria-label="Per destination uniqueness check">
+      <?php foreach ($routeRows as $row): ?>
+        <li class="<?= (int) $row['new'] > 0 ? 'is-new' : 'is-skip' ?>">
+          <strong><?= h($row['name']) ?></strong>
+          <span>
+            <?php if ((int) $row['new'] > 0): ?>
+              <?= (int) $row['new'] ?> unique → Extracting
+            <?php else: ?>
+              0 unique
+            <?php endif; ?>
+            <?php if ((int) $row['existing'] > 0): ?>
+              · <?= (int) $row['existing'] ?> already in Our database — not sent to Extracting
+            <?php endif; ?>
+          </span>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+    <p class="help" style="margin:0.65rem 0 0">Already-known URLs stay hidden. They are not sent to Extracting.</p>
+  <?php endif; ?>
 </div>
 
 <?php if (!empty($tldCheck['warn'])): ?>
@@ -485,27 +506,7 @@ render_header('Filter & add', 'team');
 </div>
 <?php endif; ?>
 
-<div class="grid two-box">
-  <div class="card panel-muted">
-    <h2>Already known (skipped)</h2>
-    <?php if ($result['existing']): ?>
-      <?php $existPhrase = prospect_destinations_phrase($result['by_country'] ?? [], 'existing'); ?>
-      <div class="empty-state" style="min-height:10rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
-        <p class="muted" style="margin:0;max-width:20rem">
-          <strong><?= count($result['existing']) ?></strong> site<?= count($result['existing']) === 1 ? '' : 's' ?>
-          from your paste already exist in destination country database(s)<?php
-            if ($existPhrase !== '') {
-                echo ' (' . h($existPhrase) . ')';
-            }
-          ?> and were skipped.<br>
-          Existing country URLs stay hidden for privacy.
-        </p>
-      </div>
-    <?php else: ?>
-      <div class="empty-state"><p>Nothing skipped — all pasted domains are new for their destination countries.</p></div>
-    <?php endif; ?>
-  </div>
-  <div class="card panel-ok">
+<div class="card panel-ok">
     <h2>New unique sites only</h2>
     <?php if ($result['new']): ?>
       <form method="post" id="add_unique_form" data-no-draft>
@@ -525,19 +526,35 @@ render_header('Filter & add', 'team');
           $uniqueRows = max(4, min(16, count($result['new']) + 1));
         ?>
         <?= render_hidden_multiline('domains', $uniqueText) ?>
+        <?php
+          $destBits = [];
+          foreach (($result['by_country'] ?? []) as $destName => $bucket) {
+              $nDest = count($bucket['new'] ?? []);
+              if ($nDest > 0) {
+                  $destBits[] = ['name' => (string) $destName, 'n' => $nDest];
+              }
+          }
+        ?>
+        <?php if ($destBits): ?>
+          <ul class="route-dest-list" aria-label="Where unique sites will be saved">
+            <?php foreach ($destBits as $row): ?>
+              <li>
+                <strong><?= h($row['name']) ?></strong>
+                <span><?= (int) $row['n'] ?> unique → Extracting</span>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
         <textarea id="unique_domains_preview" class="unique-sites-preview" rows="<?= (int) $uniqueRows ?>" readonly data-no-draft><?= h($uniquePreview) ?></textarea>
         <p class="help">
-          These are <strong>not</strong> in their destination country Our database yet
-          (TLD routing: .at→Austria, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
-          This leftover is <strong>this Filter run</strong> (your session) — not the shared country total.
-          Add merges them into the correct country folders and Extracting Sites lists
-          (shared — both teammates see the same folder count after refresh).
-          Or <strong>Separate all</strong> below to Send/Add one domain ending at a time.
+          New for this Filter run — not already in the destination Our database (.pt→Portugal, .at→Austria, .com stays in <?= h($country) ?>).
+          Add sends them to Extracting. Or Separate all to send one ending at a time.
         </p>
         <?php if (!empty($tldCheck['warn'])): ?>
           <label class="tld-confirm">
             <input type="checkbox" name="confirm_tld_mismatch" value="1" required>
-            I confirm these sites belong in <strong><?= h($country) ?></strong> (or I accept saving them there anyway).
+            I understand country endings still go to their own folders
+            (.at→Austria, .pt→Portugal, .com stays in <?= h($country) ?>). Continue adding.
           </label>
         <?php endif; ?>
         <?php
@@ -574,7 +591,7 @@ render_header('Filter & add', 'team');
             Separate all
           </button>
           <span class="muted" style="font-size:0.88rem">
-            One ending at a time — Copy, Delete, or <?= h($sendBtnLabel) ?> (passed Filter unique sites)
+            Copy, Delete, or <?= h($sendBtnLabel) ?> — one ending at a time
           </span>
           <p class="help tld-separate-status" data-tld-status hidden></p>
         </div>
@@ -591,7 +608,6 @@ render_header('Filter & add', 'team');
       </div>
     <?php endif; ?>
   </div>
-</div>
 <?php endif; ?>
 <script src="<?= h(script_asset_url('js/tld-separate.js')) ?>" defer></script>
 <?php render_footer('team'); ?>

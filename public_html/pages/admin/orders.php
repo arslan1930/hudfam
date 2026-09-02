@@ -943,14 +943,29 @@ if ($compactUnpaidStats && !$showPagingStats) {
             <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
                    value="<?= h((string) ($row['country'] ?? '')) ?>"
                    list="order-country-list"
-                   placeholder="Country…" autocomplete="off">
+                   placeholder="Country…" autocomplete="off"
+                   title="<?= h((string) ($row['country'] ?? '')) ?>">
           </td>
           <td class="col-date">
             <input class="cell-input" type="date" name="order_date[<?= $id ?>]"
                    value="<?= h($orderDate) ?>" aria-label="Order date">
           </td>
           <td class="col-admin">
-            <select class="cell-input cell-select" name="admin_user_id[<?= $id ?>]" aria-label="Admin">
+            <?php
+              $adminTitle = '';
+              foreach ($adminById as $aid => $aRow) {
+                  if ((int) $aid !== $rowAdminId) {
+                      continue;
+                  }
+                  $adminTitle = trim((string) ($aRow['full_name'] ?? ''));
+                  if ($adminTitle === '') {
+                      $adminTitle = (string) ($aRow['username'] ?? '');
+                  }
+                  break;
+              }
+            ?>
+            <select class="cell-input cell-select" name="admin_user_id[<?= $id ?>]" aria-label="Admin"
+                    title="<?= h($adminTitle) ?>">
               <?php foreach ($adminById as $aid => $aRow):
                   $alabel = trim((string) ($aRow['full_name'] ?? ''));
                   if ($alabel === '') {

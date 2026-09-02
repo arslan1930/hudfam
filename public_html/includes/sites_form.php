@@ -228,12 +228,8 @@ function render_domains_paste_field(
         . ' placeholder="' . h($placeholder) . '" data-domains-input spellcheck="false">'
         . h($value) . '</textarea>';
     $html .= '<p class="help" style="margin-top:0.5rem">'
-        . 'Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>. '
-        . 'Hyphens and multi-part TLDs are OK. One per line (or commas). '
-        . '<strong>Clean to root domains</strong> fixes <code>https</code>/paths/subdomains into the Ready list; '
-        . 'lines it cannot fix move to <strong>Needs attention</strong> ('
-        . h((string) ($opts['ready_use'] ?? 'Push uses Ready only'))
-        . ').</p>';
+        . 'One root domain per line (example.com). Paste (or <strong>Clean to root domains</strong>) strips https/paths; leftovers go to Needs attention.'
+        . '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
     $html .= '<div class="domains-paste-attention" data-domains-attention-wrap hidden>';
     $html .= '<label for="' . h($attentionId) . '">Needs attention</label>';

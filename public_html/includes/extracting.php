@@ -686,6 +686,22 @@ function save_extract_batch_results(int $batchId, string $resultsText): void
     )->execute([$resultsText, $batchId]);
 }
 
+/**
+ * Ready roots to keep in Extracting Results after Push.
+ * https/paths/www/subdomains become apex domains. If nothing is Ready, keep the
+ * original paste so the person can still edit.
+ */
+function extract_results_text_for_persist(string $raw): string
+{
+    $parsed = function_exists('parse_extracted_sites_input')
+        ? parse_extracted_sites_input($raw)
+        : (function_exists('parse_domain_list_strict') ? parse_domain_list_strict($raw) : null);
+    if (!is_array($parsed) || ($parsed['valid'] ?? []) === []) {
+        return $raw;
+    }
+    return (string) $parsed['valid_text'];
+}
+
 function count_extract_batches(): int
 {
     ensure_extract_schema();

@@ -3463,7 +3463,7 @@ tr.swe-row-updated {
 .order-filter-field select,
 .order-filter-field input[type="date"] {
   margin: 0;
-  min-width: 9.5rem;
+  min-width: 13rem;
 }
 .order-filter-bar .sheet-search input[type="search"] {
   width: 16rem;
@@ -3985,9 +3985,9 @@ textarea[hidden],
   line-height: 1.25;
 }
 .order-sheet .col-month { min-width: 188px; width: 188px; }
-.order-sheet .col-country { min-width: 110px; width: 120px; }
+.order-sheet .col-country { min-width: 168px; width: 180px; }
 .order-sheet .col-date { min-width: 150px; width: 154px; }
-.order-sheet .col-admin { min-width: 140px; width: 148px; }
+.order-sheet .col-admin { min-width: 196px; width: 212px; }
 .order-sheet .col-client { min-width: 200px; }
 .order-sheet .col-site { min-width: 188px; }
 .order-sheet .col-placement { min-width: 148px; width: 152px; }

@@ -526,7 +526,14 @@ try {
     if (prospect_saved_sites_message(1, 'United States') === 'Saved 1 new site to United States. It is at the top of the list.'
         && str_contains(prospect_saved_sites_message(30, 'United States'), 'Saved 30 new sites to United States')
         && !str_contains(prospect_saved_sites_message(30, 'United States'), 'site(s)')
-        && str_contains(prospect_country_sheet_url('Germany', ['just_added' => 30]), 'just_added=30')) {
+        && str_contains(prospect_country_sheet_url('Germany', ['just_added' => 30]), 'just_added=30')
+        && str_contains(
+            prospect_saved_sites_message(3, 'Austria', [
+                'Austria' => ['inserted' => 1],
+                'Portugal' => ['inserted' => 2],
+            ]),
+            'Austria 1, Portugal 2'
+        )) {
         pass('prospect_saved_sites_message grammar + just_added URL');
     } else {
         fail('prospect_saved_sites_message');
@@ -1680,7 +1687,31 @@ try {
         && prospect_destinations_phrase([], 'new') === '') {
         pass('prospect destination phrase + names');
     } else {
-        fail('dest phrase unexpected: ' . json_encode([$phraseNew, $phraseExist, $phraseIns, $names]));
+        fail('destination phrase unexpected: ' . json_encode([
+            $phraseNew, $phraseExist, $phraseIns, $names,
+        ]));
+    }
+    $checkRows = prospect_route_check_rows([
+        'Portugal' => ['new' => ['a.pt', 'b.pt'], 'existing' => ['old.pt']],
+        'Austria' => ['new' => [], 'existing' => ['wien.at', 'graz.at']],
+        'Germany' => ['new' => ['c.de'], 'existing' => []],
+    ]);
+    $byName = [];
+    foreach ($checkRows as $row) {
+        $byName[$row['name']] = $row;
+    }
+    if (
+        (int) ($byName['Portugal']['new'] ?? 0) === 2
+        && (int) ($byName['Portugal']['existing'] ?? 0) === 1
+        && (int) ($byName['Austria']['new'] ?? 0) === 0
+        && (int) ($byName['Austria']['existing'] ?? 0) === 2
+        && (int) ($byName['Germany']['new'] ?? 0) === 1
+        && (int) ($byName['Germany']['existing'] ?? 0) === 0
+        && prospect_route_check_rows([]) === []
+    ) {
+        pass('prospect route check rows (unique vs skipped per destination)');
+    } else {
+        fail('route check rows unexpected: ' . json_encode($checkRows));
     }
 } catch (Throwable $e) {
     fail('dest phrase: ' . $e->getMessage());
@@ -1754,6 +1785,20 @@ try {
         fail("team swe txfpush-* count=$swe");
     }
 
+    $keepHttps = "https://www.txfkeep-dup.de/path\nwww.txfkeep-dup.de\ntxfkeep-dup.de";
+    $keepPersist = extract_results_text_for_persist($keepHttps);
+    if ($keepPersist === 'txfkeep-dup.de') {
+        pass('extract persist Ready roots strip https/www/path');
+    } else {
+        fail('extract persist Ready unexpected: ' . json_encode($keepPersist));
+    }
+    $keepJunk = extract_results_text_for_persist("!!! not a site\n###");
+    if (str_contains($keepJunk, '!!! not a site')) {
+        pass('extract persist keeps unfixable paste when nothing is Ready');
+    } else {
+        fail('extract persist dropped unfixable paste: ' . json_encode($keepJunk));
+    }
+
     // Push auto-route: country TLDs → own folders; generic TLDs stay in selected country.
     // Also mirrors site names into Semrush Research (append + skip duplicates).
     db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
@@ -1814,7 +1859,10 @@ try {
         && country_for_push_domain('shop.eu', 'France') === 'France'
         && country_for_push_domain('praza.gal', 'France') === 'Spain'
         && country_for_push_domain('comunidad.madrid', 'France') === 'Spain'
-        && country_for_push_domain('berria.eus', 'France') === 'Spain';
+        && country_for_push_domain('berria.eus', 'France') === 'Spain'
+        && country_for_push_domain('shop.pt', 'Austria') === 'Portugal'
+        && country_for_push_domain('loja.com.pt', 'Austria') === 'Portugal'
+        && country_for_push_domain('shop.at', 'Portugal') === 'Austria';
     if ((int) ($routePush['inserted'] ?? 0) >= 5
         && $inDe === 4 // .com + .net + .eu + .de
         && $inAt === 1
@@ -7425,6 +7473,63 @@ try {
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfroute-add-%'");
 } catch (Throwable $e) {
     fail('routed filter/add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Admin Add from Austria: .pt → Portugal, .at/.com stay in Austria ---
+try {
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfpt-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfpt-%'");
+
+    $ptAdd = admin_add_urls_to_database(
+        "txfpt-wien.at\ntxfpt-lisboa.pt\ntxfpt-global.com",
+        $adminUser,
+        'Austria',
+        'German'
+    );
+    $ptInPt = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Portugal' AND domain='txfpt-lisboa.pt'"
+    )->fetchColumn();
+    $ptInAt = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain='txfpt-lisboa.pt'"
+    )->fetchColumn();
+    $atInAt = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain IN ('txfpt-wien.at','txfpt-global.com')"
+    )->fetchColumn();
+    $ptInAtWrong = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain LIKE 'txfpt-%.pt'"
+    )->fetchColumn();
+    $filterPt = filter_domains_routed_against_prospects(
+        ['txfpt-filter.pt', 'txfpt-wien.at'],
+        'Austria'
+    );
+
+    if (
+        (int) ($ptAdd['inserted'] ?? 0) === 3
+        && $ptInPt === 1
+        && $ptInAt === 0
+        && $atInAt === 2
+        && $ptInAtWrong === 0
+        && (int) (($ptAdd['by_country']['Portugal']['inserted'] ?? 0)) === 1
+        && (int) (($ptAdd['by_country']['Austria']['inserted'] ?? 0)) === 2
+        && in_array('txfpt-filter.pt', $filterPt['by_country']['Portugal']['new'] ?? [], true)
+        && !in_array('txfpt-filter.pt', $filterPt['by_country']['Austria']['new'] ?? [], true)
+    ) {
+        pass('Admin Add / Filter from Austria routes .pt to Portugal');
+    } else {
+        fail('Austria .pt routing: ' . json_encode([
+            'add' => $ptAdd,
+            'ptInPt' => $ptInPt,
+            'ptInAt' => $ptInAt,
+            'atInAt' => $atInAt,
+            'ptInAtWrong' => $ptInAtWrong,
+            'filter' => $filterPt,
+        ]));
+    }
+
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfpt-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfpt-%'");
+} catch (Throwable $e) {
+    fail('Austria .pt routing: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Shared Extracting country count (two users) + live hub COUNT ---

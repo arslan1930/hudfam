@@ -497,8 +497,8 @@
         status.hidden = false;
         status.classList.add('domains-paste-warn');
         status.textContent = parsed.dirty + ' line'
-          + (parsed.dirty === 1 ? '' : 's')
-          + ' still have https/paths/subdomains — click Clean to root domains.';
+          + (parsed.dirty === 1 ? ' still has' : 's still have')
+          + ' https/paths/subdomains — click Clean to root domains.';
         return;
       }
       status.hidden = true;
@@ -515,11 +515,20 @@
       }, 120);
     }
 
+    function autoCleanIfNeeded() {
+      var parsed = parseDomains(ta.value);
+      if (parsed.dirty > 0 || parsed.invalid.length > 0) {
+        applyCleanToTextarea(ta, status, root);
+        return;
+      }
+      updateStatus();
+    }
+
     ta.addEventListener('input', scheduleStatus);
     ta.addEventListener('paste', function () {
-      setTimeout(updateStatus, 0);
+      setTimeout(autoCleanIfNeeded, 0);
     });
-    updateStatus();
+    autoCleanIfNeeded();
 
     var form = ta.closest('form');
     if (form && !form.__domainsPasteGuard) {

@@ -88,7 +88,7 @@ if (!str_contains($asset, 'css/style-new.css')
     || !str_contains($layout, 'id="app-main"')
     || !str_contains($layout, 'class="ui-skip"')
     || !str_contains($uiCss, 'html.ui-v2')
-    || !str_contains($uiCss, '--brand: #0f766e')
+    || !str_contains($uiCss, '--brand: #22d3ee')
     || str_contains($uiCss, "html.ui-v2 a:hover")
     || str_contains($uiCss, 'scroll-behavior: smooth')
     || str_contains($uiCss, '.crystal')
@@ -96,6 +96,18 @@ if (!str_contains($asset, 'css/style-new.css')
     || !str_contains($uiCss, '.btn.danger:not(.secondary)')
     || !str_contains($uiCss, '#prospect-site-table .prospect-niche-td')
     || !str_contains($uiCss, '.main a.swe-open-site')
+    || !str_contains($uiCss, '.draft-restore-banner')
+    || !str_contains($uiCss, '.dashboard-attention a')
+    || !str_contains($uiCss, '.niche-chip')
+    || !str_contains($uiCss, '.password-toggle')
+    || !str_contains($uiCss, '.sheet-tabs a')
+    || !str_contains($uiCss, 'input:not([type])')
+    || !str_contains($uiCss, '.camp-hub-check')
+    || !str_contains($uiCss, '.swe-status-badge.is-emailed')
+    || !str_contains($uiCss, '.sheet-check input[type="checkbox"]')
+    || !str_contains($uiCss, 'swe-row-opened')
+    || !str_contains($uiCss, 'is-just-added')
+    || !str_contains($uiCss, '.swe-table tr.sheet-search-hit td')
     || str_contains($uiJs, 'preventDefault')
     || str_contains($uiJs, 'IntersectionObserver')
     || str_contains($uiJs, 'data-nav-toggle')
@@ -1619,6 +1631,20 @@ if (!str_contains($omCss, '.order-sheet-card')
 } else {
     ok('orders sheet scrolls instead of squeezing');
 }
+if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
+    || !str_contains($omCss, '.order-sheet .col-admin { min-width: 196px')
+    || !str_contains($omCss, 'min-width: 13rem')) {
+    fail('orders country/admin columns still too narrow to read');
+} else {
+    ok('orders country/admin columns fit Netherlands / admin emails');
+}
+if (!str_contains($uiCss, '.orders-summary-item')
+    || !str_contains($uiCss, '.order-sheet tfoot td')
+    || !str_contains($uiCss, '.order-check-head')) {
+    fail('overlay missing Order management leftover-light restyle');
+} else {
+    ok('overlay restyles Order management summary + Page totals');
+}
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
     || !str_contains($ordersPage, 'data-orig-live')
@@ -2985,10 +3011,33 @@ if (!str_contains($prospectsLib, 'function filter_domains_routed_against_prospec
     ok('prospect routed Filter helper');
 }
 if (!str_contains($prospectCheckSf, 'filter_domains_routed_against_prospects')
-    || !str_contains($prospectCheckSf, 'TLD → country')) {
+    || !str_contains($prospectCheckSf, 'TLD → country')
+    || !str_contains($prospectCheckSf, '.pt→Portugal')) {
     fail('Filter & add missing routed Filter/Add path');
 } else {
     ok('Filter & add uses routed per-country de-dupe');
+}
+if (!str_contains($prospectsLib, 'function admin_add_urls_to_database')
+    || !str_contains($prospectsLib, 'route_domains_by_country_tld($domains, $selectedCountry)')) {
+    fail('Admin Add sites missing TLD routing');
+} else {
+    ok('Admin Add sites routes country TLDs');
+}
+if (!str_contains($prospectCheckSf, 'route-dest-list')
+    || !str_contains($prospectCheckSf, 'route-check-list')
+    || !str_contains($prospectCheckSf, 'not sent to Extracting')
+    || !str_contains($prospectCheckSf, 'each destination Our database')
+    || !str_contains($uiCss, 'route-dest-list')
+    || !str_contains($uiCss, 'route-check-list')
+    || !str_contains($uiCss, 'invoice-doc')
+    || !str_contains($uiCss, 'site-price-row[data-tint="yellow"]')
+    || !str_contains($uiCss, 'sites-open-panel')
+    || !str_contains($uiCss, 'sites-list-row:hover')
+    || !str_contains($uiCss, '#swe_status')
+    || !str_contains($prospectCheckSf, '.pt→Portugal')) {
+    fail('Team Filter unique missing destination list or leftover light Sites list styles');
+} else {
+    ok('Team Filter unique destination list + Sites list overlay');
 }
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {
@@ -3032,6 +3081,13 @@ if (!str_contains($sitesFormJs, 'readyText')
     fail('sites-form.js missing Ready/attention split');
 } else {
     ok('sites-form.js Ready/attention clean split');
+}
+if (!str_contains($sitesFormJs, 'autoCleanIfNeeded')
+    || !str_contains($sitesFormJs, 'still has')
+    || !str_contains($sitesFormJs, 'still have')) {
+    fail('sites-form.js missing paste auto-clean / dirty grammar');
+} else {
+    ok('sites-form.js paste auto-clean + dirty grammar');
 }
 if (!str_contains($sitesFormJs, 'PLATFORM_PUBLIC_SUFFIXES')
     || !str_contains($sitesFormJs, 'vercel.app')) {
@@ -3262,13 +3318,21 @@ if (!str_contains($extractBatchJump, 'Clean first — Push only sends Ready.')) 
 } else {
     ok('Extracting Push empty Ready copy');
 }
+if (!str_contains($extractLibSmoke, 'function extract_results_text_for_persist')
+    || !str_contains($extractBatchJump, 'extract_results_text_for_persist')) {
+    fail('Extracting Push missing persist Ready roots helper');
+} else {
+    ok('Extracting Push persists cleaned Ready roots');
+}
 if (!str_contains($semrushHubSmoke, 'Filled from Extracting Push; Clear is Site Finding / Admin.')) {
     fail('Semrush hub missing ownership line');
 } else {
     ok('Semrush hub ownership line');
 }
 if (!str_contains($prospectsLib, 'function prospect_destinations_phrase')
+    || !str_contains($prospectsLib, 'function prospect_route_check_rows')
     || !str_contains($prospectCheckSf, 'prospect_destinations_phrase')
+    || !str_contains($prospectCheckSf, 'prospect_route_check_rows')
     || !str_contains($prospectCheckSf, 'Add ')
     || !str_contains($prospectCheckSf, 'unique site')
     || str_contains($prospectCheckSf, 'Country database (private)')
