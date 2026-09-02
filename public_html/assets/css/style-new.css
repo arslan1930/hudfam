@@ -255,9 +255,20 @@ html.ui-v2 .step.done {
   color: var(--ok);
   border-color: rgba(74, 222, 128, 0.45);
 }
-html.ui-v2 .empty-state {
-  background: rgba(8, 18, 36, 0.35);
-  border-color: var(--line);
+html.ui-v2 .page-lead {
+  max-width: 40rem;
+}
+html.ui-v2 .filter-optional {
+  margin: 0.85rem 0 0;
+}
+html.ui-v2 .filter-optional > summary {
+  font-weight: 650;
+}
+html.ui-v2 .route-check-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0 0 0.75rem;
 }
 
 /* Primary CTAs — keep .btn .secondary .danger .small .large .block */

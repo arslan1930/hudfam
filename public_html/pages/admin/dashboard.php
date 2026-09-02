@@ -146,7 +146,7 @@ render_header('Dashboard', 'admin');
 <div class="topbar">
   <div>
     <h1><?= label_with_info('Admin dashboard', 'Home for Our database, Extracted Sites, Emails data, departments, orders, and invoices.') ?></h1>
-    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — inventory, emails, departments, and office tools.</p>
+    <p class="muted">Hello <?= h($user['full_name'] ?: $user['username']) ?> — pick a tool below.</p>
   </div>
   <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">
     <label class="sheet-search dashboard-search" for="dashboard-search">

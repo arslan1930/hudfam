@@ -90,9 +90,7 @@ if ($deptScoped) {
       <div>
         <h1>Your work</h1>
         <p class="muted">
-          You are assigned to
-          <?= count($myDepartments) ?> department<?= count($myDepartments) === 1 ? '' : 's' ?>.
-          Tasks are below. Tools are in the sidebar.
+          Tasks below. Tools are in the sidebar.
         </p>
       </div>
       <div class="actions" style="align-items:center;flex-wrap:wrap;gap:0.55rem">

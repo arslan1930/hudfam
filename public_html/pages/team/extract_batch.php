@@ -186,8 +186,7 @@ render_header('Extracting · ' . $country, 'team');
     ?>
     <p class="muted">
       <span id="sites_count_label"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
-      in this country’s <strong>shared</strong> Sites list
-      (both teammates see the same number after refresh)
+      on this shared list
     </p>
   </div>
   <div class="actions">
@@ -203,18 +202,20 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>① Sites list</h2>
     <p class="help">
-      Sites waiting to extract for <strong><?= h($country) ?></strong> — this list is <strong>shared</strong>.
-      Changes <strong>autosave</strong> in real time.
-      <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page.
-      Use <strong>Open &amp; remove first 10–50</strong> to visit sites in new tabs and take them off this list
-      (batches of 10 — <strong>Open next</strong> continues from the new top).
-      <strong>Undo</strong> puts them back while you stay on this page.
-      If emptied, this page stays open; the country hides when you return to Extracting sites,
-      and the row is removed after <strong>1 hour</strong> unless new sites are added (new sites appear at the top).
-      Our database can be larger — it keeps everything.
-      Extracting shrinks when you Push Results, Open &amp; remove, delete lines here,
-      or Admin removes the same domains from Our database.
+      Shared list for <strong><?= h($country) ?></strong> — autosaves.
+      <strong>Open &amp; remove</strong> first 10–50 to work a batch (Undo puts them back).
     </p>
+    <details class="help-details">
+      <summary>Sites list details</summary>
+      <div class="help-details-body">
+        <p class="help" style="margin:0">
+          Changes autosave. Undo/Redo work while you stay on this page.
+          Open next continues from the new top. If emptied, this page stays open;
+          the country hides on Extracting sites and is removed after 1 hour unless new sites are added.
+          Extracting shrinks when you Push, Open &amp; remove, delete lines, or Admin removes the same domains from Our database.
+        </p>
+      </div>
+    </details>
 
     <?php
       $serverSitesText = implode("\n", $domains);
@@ -284,11 +285,8 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>② Extracting Results</h2>
     <p class="help">
-      Paste extracted sites, <strong>Clean to root domains</strong> if needed, then <strong>Push</strong>.
-      <strong>Push uses the Ready list only</strong> (Needs attention stays aside).
-      Country TLDs auto-route (<strong>.de</strong>→Germany, <strong>.at</strong>→Austria, <strong>.pt</strong>→Portugal, <strong>.ch</strong>→Switzerland, …).
-      Generic TLDs (<strong>.com</strong>, <strong>.net</strong>, <strong>.eu</strong>, …) stay in <strong><?= h($country) ?></strong>.
-      Sites go to Extracted Sites + Sites with emails - Team in each destination country.
+      Paste extracted sites, <strong>Clean to root domains</strong> if needed, then <strong>Push</strong> Ready only.
+      .pt→Portugal, .at→Austria, .ch→Switzerland; .com stays in <strong><?= h($country) ?></strong>.
     </p>
     <form method="post" id="extract_results_form">
       <?= csrf_field() ?>
