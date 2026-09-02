@@ -1687,7 +1687,31 @@ try {
         && prospect_destinations_phrase([], 'new') === '') {
         pass('prospect destination phrase + names');
     } else {
-        fail('dest phrase unexpected: ' . json_encode([$phraseNew, $phraseExist, $phraseIns, $names]));
+        fail('destination phrase unexpected: ' . json_encode([
+            $phraseNew, $phraseExist, $phraseIns, $names,
+        ]));
+    }
+    $checkRows = prospect_route_check_rows([
+        'Portugal' => ['new' => ['a.pt', 'b.pt'], 'existing' => ['old.pt']],
+        'Austria' => ['new' => [], 'existing' => ['wien.at', 'graz.at']],
+        'Germany' => ['new' => ['c.de'], 'existing' => []],
+    ]);
+    $byName = [];
+    foreach ($checkRows as $row) {
+        $byName[$row['name']] = $row;
+    }
+    if (
+        (int) ($byName['Portugal']['new'] ?? 0) === 2
+        && (int) ($byName['Portugal']['existing'] ?? 0) === 1
+        && (int) ($byName['Austria']['new'] ?? 0) === 0
+        && (int) ($byName['Austria']['existing'] ?? 0) === 2
+        && (int) ($byName['Germany']['new'] ?? 0) === 1
+        && (int) ($byName['Germany']['existing'] ?? 0) === 0
+        && prospect_route_check_rows([]) === []
+    ) {
+        pass('prospect route check rows (unique vs skipped per destination)');
+    } else {
+        fail('route check rows unexpected: ' . json_encode($checkRows));
     }
 } catch (Throwable $e) {
     fail('dest phrase: ' . $e->getMessage());

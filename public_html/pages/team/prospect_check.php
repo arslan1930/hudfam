@@ -216,23 +216,29 @@ try {
             foreach (($result['by_country'] ?? []) as $dest => $bucket) {
                 $n = count($bucket['new'] ?? []);
                 if ($n > 0) {
-                    $routeBits[] = $n . ' → ' . $dest;
+                    $routeBits[] = $n . ' unique → ' . $dest . ' Extracting';
                 }
             }
+            $existPhrase = prospect_destinations_phrase($result['by_country'] ?? [], 'existing');
             if ($uniqueN > 0) {
-                $msg = 'Filtered (TLD → country): removed ' . $skippedN
-                    . ' already in destination database(s) · ' . $uniqueN
-                    . ' unique site(s) ready to add (this Filter run)';
+                $msg = 'Filtered (TLD → country): each destination Our database was checked. Removed '
+                    . $skippedN . ' already in destination database(s)';
+                if ($existPhrase !== '') {
+                    $msg .= ' (' . $existPhrase . ' — not sent to Extracting)';
+                }
+                $msg .= ' · ' . $uniqueN . ' unique site(s) ready to add (this Filter run)';
                 if ($routeBits) {
                     $msg .= ' (' . implode(', ', $routeBits) . ')';
                 }
                 flash('ok', $msg . '.');
             } else {
-                flash(
-                    'ok',
-                    'Filtered (TLD → country): all ' . $skippedN
-                    . ' domain(s) are already in the destination country database(s). Nothing new to add.'
-                );
+                $msg = 'Filtered (TLD → country): all ' . $skippedN
+                    . ' domain(s) are already in the destination country database(s)';
+                if ($existPhrase !== '') {
+                    $msg .= ' (' . $existPhrase . ')';
+                }
+                $msg .= '. Nothing new to Extracting.';
+                flash('ok', $msg);
             }
             // refresh private count after filter (domains stay hidden from teammates)
             $old = list_prospect_domain_names(1, $country);
@@ -383,7 +389,7 @@ render_header('Filter & add', 'team');
             <?= $country === '' ? 'disabled' : '' ?>
             title="<?= $country === ''
                 ? 'Select a country first'
-                : 'Remove sites already in this country and show unique only' ?>">
+                : 'Check each destination Our database (not only ' . h($country) . ') and show unique only' ?>">
       Filter unique sites
     </button>
   </div>
@@ -450,25 +456,37 @@ render_header('Filter & add', 'team');
 <?= niche_chips_script_tag() ?>
 
 <?php if ($result): ?>
+<?php $routeRows = prospect_route_check_rows($result['by_country'] ?? []); ?>
 <div class="card">
-  <h2>Results · <?= h($country) ?></h2>
-  <p class="muted" style="margin:0">
+  <h2>Results · each destination Our database</h2>
+  <p class="muted" style="margin:0 0 0.75rem">
+    Started from <strong><?= h($country) ?></strong> (generic TLDs stay here).
+    Filter checks <strong>Austria against Austria</strong>, Portugal against Portugal, and so on —
+    not only this folder.
     Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
-    Already in destination country database(s) <strong><?= count($result['existing']) ?></strong> ·
-    Unique this Filter <strong><?= count($result['new']) ?></strong>
-    <?php
-      $routeSummary = [];
-      foreach (($result['by_country'] ?? []) as $dest => $bucket) {
-          $n = count($bucket['new'] ?? []);
-          if ($n > 0) {
-              $routeSummary[] = $n . ' → ' . $dest;
-          }
-      }
-      if ($routeSummary):
-    ?>
-      · <?= h(implode(', ', $routeSummary)) ?>
-    <?php endif; ?>
+    unique this Filter <strong><?= count($result['new']) ?></strong> ·
+    already in destination Our database(s) <strong><?= count($result['existing']) ?></strong>.
+    Only unique sites go to Extracting.
   </p>
+  <?php if ($routeRows): ?>
+    <ul class="route-check-list" aria-label="Per destination uniqueness check">
+      <?php foreach ($routeRows as $row): ?>
+        <li class="<?= (int) $row['new'] > 0 ? 'is-new' : 'is-skip' ?>">
+          <strong><?= h($row['name']) ?></strong>
+          <span>
+            <?php if ((int) $row['new'] > 0): ?>
+              <?= (int) $row['new'] ?> unique → Extracting
+            <?php else: ?>
+              0 unique — nothing to Extracting
+            <?php endif; ?>
+            <?php if ((int) $row['existing'] > 0): ?>
+              · <?= (int) $row['existing'] ?> already in Our database (not sent)
+            <?php endif; ?>
+          </span>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  <?php endif; ?>
 </div>
 
 <?php if (!empty($tldCheck['warn'])): ?>
@@ -491,19 +509,24 @@ render_header('Filter & add', 'team');
 <div class="grid two-box">
   <div class="card panel-muted">
     <h2>Already known (skipped)</h2>
-    <?php if ($result['existing']): ?>
-      <?php $existPhrase = prospect_destinations_phrase($result['by_country'] ?? [], 'existing'); ?>
-      <div class="empty-state" style="min-height:10rem;display:flex;align-items:center;justify-content:center;text-align:center;padding:1.25rem">
-        <p class="muted" style="margin:0;max-width:20rem">
-          <strong><?= count($result['existing']) ?></strong> site<?= count($result['existing']) === 1 ? '' : 's' ?>
-          from your paste already exist in destination country database(s)<?php
-            if ($existPhrase !== '') {
-                echo ' (' . h($existPhrase) . ')';
-            }
-          ?> and were skipped.<br>
-          Existing country URLs stay hidden for privacy.
-        </p>
-      </div>
+    <?php
+      $skipRows = [];
+      foreach ($routeRows as $row) {
+          if ((int) $row['existing'] > 0) {
+              $skipRows[] = $row;
+          }
+      }
+    ?>
+    <?php if ($skipRows): ?>
+      <ul class="route-skip-list" aria-label="Destinations that already have these sites">
+        <?php foreach ($skipRows as $row): ?>
+          <li>
+            <strong><?= h($row['name']) ?></strong>
+            <span><?= (int) $row['existing'] ?> already in Our database — not sent to Extracting</span>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+      <p class="help" style="margin:0.7rem 0 0">Existing country URLs stay hidden for privacy. Those sites will not go to Extracting.</p>
     <?php else: ?>
       <div class="empty-state"><p>Nothing skipped — all pasted domains are new for their destination countries.</p></div>
     <?php endif; ?>
@@ -542,7 +565,7 @@ render_header('Filter & add', 'team');
             <?php foreach ($destBits as $row): ?>
               <li>
                 <strong><?= h($row['name']) ?></strong>
-                <span><?= (int) $row['n'] ?> unique site<?= $row['n'] === 1 ? '' : 's' ?></span>
+                <span><?= (int) $row['n'] ?> unique → Extracting</span>
               </li>
             <?php endforeach; ?>
           </ul>
@@ -551,8 +574,9 @@ render_header('Filter & add', 'team');
         <p class="help">
           These are <strong>not</strong> in their destination country Our database yet
           (TLD routing: .at→Austria, .pt→Portugal, .ch→Switzerland, .com stays in <?= h($country) ?>, …).
+          Each destination was checked in the backend — already-present sites stay in the skipped card and never go to Extracting.
           This leftover is <strong>this Filter run</strong> (your session) — not the shared country total.
-          Add merges them into the correct country folders and Extracting Sites lists
+          Add merges unique sites into the correct country folders and Extracting Sites lists
           (shared — both teammates see the same folder count after refresh).
           Or <strong>Separate all</strong> below to Send/Add one domain ending at a time.
         </p>

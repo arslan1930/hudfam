@@ -1230,6 +1230,41 @@ function filter_domains_routed_against_prospects(array $domains, string $selecte
 }
 
 /**
+ * Per-destination Filter unique vs already-in-Our-database counts.
+ * Existing URLs are counts only (never listed).
+ *
+ * @param array<string, array<string, mixed>> $byCountry
+ * @return list<array{name:string,new:int,existing:int,new_list:list<string>}>
+ */
+function prospect_route_check_rows(array $byCountry): array
+{
+    $rows = [];
+    foreach ($byCountry as $dest => $bucket) {
+        $name = trim((string) $dest);
+        if ($name === '' || !is_array($bucket)) {
+            continue;
+        }
+        $newList = isset($bucket['new']) && is_array($bucket['new'])
+            ? array_values($bucket['new'])
+            : [];
+        $existN = isset($bucket['existing']) && is_array($bucket['existing'])
+            ? count($bucket['existing'])
+            : (int) ($bucket['skipped'] ?? 0);
+        $newN = count($newList);
+        if ($newN < 1 && $existN < 1) {
+            continue;
+        }
+        $rows[] = [
+            'name' => $name,
+            'new' => $newN,
+            'existing' => $existN,
+            'new_list' => $newList,
+        ];
+    }
+    return $rows;
+}
+
+/**
  * Destination-country phrase from Filter / Add buckets (not the selected folder alone).
  *
  * @param array<string, array<string, mixed>> $byCountry

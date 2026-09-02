@@ -3010,7 +3010,13 @@ if (!str_contains($prospectsLib, 'function admin_add_urls_to_database')
     ok('Admin Add sites routes country TLDs');
 }
 if (!str_contains($prospectCheckSf, 'route-dest-list')
+    || !str_contains($prospectCheckSf, 'route-check-list')
+    || !str_contains($prospectCheckSf, 'not sent to Extracting')
+    || !str_contains($prospectCheckSf, 'each destination Our database')
     || !str_contains($uiCss, 'route-dest-list')
+    || !str_contains($uiCss, 'route-check-list')
+    || !str_contains($uiCss, 'invoice-doc')
+    || !str_contains($uiCss, 'site-price-row[data-tint="yellow"]')
     || !str_contains($uiCss, 'sites-open-panel')
     || !str_contains($uiCss, 'sites-list-row:hover')
     || !str_contains($uiCss, '#swe_status')
@@ -3297,7 +3303,9 @@ if (!str_contains($semrushHubSmoke, 'Filled from Extracting Push; Clear is Site 
     ok('Semrush hub ownership line');
 }
 if (!str_contains($prospectsLib, 'function prospect_destinations_phrase')
+    || !str_contains($prospectsLib, 'function prospect_route_check_rows')
     || !str_contains($prospectCheckSf, 'prospect_destinations_phrase')
+    || !str_contains($prospectCheckSf, 'prospect_route_check_rows')
     || !str_contains($prospectCheckSf, 'Add ')
     || !str_contains($prospectCheckSf, 'unique site')
     || str_contains($prospectCheckSf, 'Country database (private)')

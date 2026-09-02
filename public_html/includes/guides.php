@@ -139,7 +139,7 @@ function guide_filter_add(): string
         'Select country → Paste → Filter unique sites (TLD route + per-country de-dupe) → Add or Separate. Extractors only see unique sites per country Sites list.',
         [
             'Select an existing country database (Germany, Spain, …) as the starting folder for generic TLDs.',
-            'Paste root domains and Filter unique sites — .at/.ch/… go to Austria/Switzerland/… and duplicates in those Our databases are removed.',
+            'Paste root domains and Filter unique sites — .at/.ch/… go to Austria/Switzerland/… and each destination Our database is checked on its own (filtering from Portugal still checks Austria for .at). Sites already in that folder never go to Extracting.',
             'Add only the remaining unique sites — that leftover is this Filter run (your session), not the shared country total. Each destination folder and Extracting Sites list are shared — both teammates see the same country count after refresh. Separate before Filter is Copy/Delete only.',
             'If Admin later removes those sites from Our database, they also leave Extracting. Filter unique and Add again to put them back at the top of Extracting.',
         ]

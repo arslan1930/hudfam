@@ -250,6 +250,11 @@ html.ui-v2 .step.active {
   color: var(--brand-deep);
   background: var(--brand-soft);
 }
+html.ui-v2 .step.done {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.45);
+}
 html.ui-v2 .empty-state {
   background: rgba(8, 18, 36, 0.35);
   border-color: var(--line);
@@ -752,18 +757,23 @@ html.ui-v2 .badge.extract-large {
   background: var(--brand-soft);
   color: #7dd3fc;
 }
-html.ui-v2 .route-dest-list {
+html.ui-v2 .route-dest-list,
+html.ui-v2 .route-check-list,
+html.ui-v2 .route-skip-list {
   list-style: none;
   margin: 0 0 0.7rem;
   padding: 0;
   display: grid;
   gap: 0.4rem;
 }
-html.ui-v2 .route-dest-list li {
+html.ui-v2 .route-dest-list li,
+html.ui-v2 .route-check-list li,
+html.ui-v2 .route-skip-list li {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
   align-items: baseline;
+  flex-wrap: wrap;
   background: rgba(34, 211, 238, 0.14);
   border: 1px solid rgba(34, 211, 238, 0.35);
   border-left: 4px solid #22d3ee;
@@ -771,8 +781,21 @@ html.ui-v2 .route-dest-list li {
   padding: 0.45rem 0.75rem;
   color: #f8fafc;
 }
-html.ui-v2 .route-dest-list li strong {
+html.ui-v2 .route-dest-list li strong,
+html.ui-v2 .route-check-list li strong,
+html.ui-v2 .route-skip-list li strong {
   color: #fff;
+}
+html.ui-v2 .route-check-list li.is-skip,
+html.ui-v2 .route-skip-list li {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.4);
+  border-left-color: #94a3b8;
+}
+html.ui-v2 .route-check-list li.is-new {
+  background: rgba(52, 211, 153, 0.14);
+  border-color: rgba(52, 211, 153, 0.4);
+  border-left-color: #34d399;
 }
 html.ui-v2 tr.swe-row-new td {
   animation: fx-swe-row-flash 1.4s ease-out 1;
@@ -1131,6 +1154,49 @@ html.ui-v2 .camp-sheet-table .camp-cell {
 }
 html.ui-v2 tbody tr:nth-child(even) td {
   background: rgba(148, 163, 184, 0.06);
+}
+
+/* Invoice paper stays white (even-row overlay must not tint it). */
+html.ui-v2 .invoice-preview-wrap {
+  background: #0f172a;
+}
+html.ui-v2 .invoice-doc,
+html.ui-v2 .invoice-doc-logohead,
+html.ui-v2 .invoice-doc thead th {
+  background: #fff !important;
+  color: #111827;
+  box-shadow: none;
+}
+html.ui-v2 .invoice-doc tbody tr td,
+html.ui-v2 .invoice-doc tbody tr:nth-child(even) td,
+html.ui-v2 .invoice-doc tbody tr:hover td,
+html.ui-v2 .invoice-doc-table tbody tr td,
+html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td,
+html.ui-v2 .invoice-doc-table tbody tr:hover td {
+  background: #fff !important;
+  color: #111827 !important;
+  box-shadow: none;
+}
+html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td {
+  background: #f8fafc !important;
+}
+
+/* Publisher row tints must beat zebra overlay. */
+html.ui-v2 .site-price-row[data-tint="yellow"] td,
+html.ui-v2 .site-price-add[data-tint="yellow"] td {
+  background: rgba(253, 230, 138, 0.28) !important;
+}
+html.ui-v2 .site-price-row[data-tint="pink"] td,
+html.ui-v2 .site-price-add[data-tint="pink"] td {
+  background: rgba(254, 205, 211, 0.28) !important;
+}
+html.ui-v2 .site-price-row[data-tint="blue"] td,
+html.ui-v2 .site-price-add[data-tint="blue"] td {
+  background: rgba(191, 219, 254, 0.28) !important;
+}
+html.ui-v2 .site-price-row[data-tint="green"] td,
+html.ui-v2 .site-price-add[data-tint="green"] td {
+  background: rgba(187, 247, 208, 0.28) !important;
 }
 
 /* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
