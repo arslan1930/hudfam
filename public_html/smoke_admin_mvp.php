@@ -1631,6 +1631,20 @@ if (!str_contains($omCss, '.order-sheet-card')
 } else {
     ok('orders sheet scrolls instead of squeezing');
 }
+if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
+    || !str_contains($omCss, '.order-sheet .col-admin { min-width: 196px')
+    || !str_contains($omCss, 'min-width: 13rem')) {
+    fail('orders country/admin columns still too narrow to read');
+} else {
+    ok('orders country/admin columns fit Netherlands / admin emails');
+}
+if (!str_contains($uiCss, '.orders-summary-item')
+    || !str_contains($uiCss, '.order-sheet tfoot td')
+    || !str_contains($uiCss, '.order-check-head')) {
+    fail('overlay missing Order management leftover-light restyle');
+} else {
+    ok('overlay restyles Order management summary + Page totals');
+}
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
     || !str_contains($ordersPage, 'data-orig-live')

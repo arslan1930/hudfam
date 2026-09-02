@@ -1145,6 +1145,44 @@ html.ui-v2 .camp-hub-field #new_camp_project {
   border-color: #94a3b8;
 }
 
+/* Order management — leftover white summary cards / Page totals bar / clipped cells */
+html.ui-v2 .orders-summary-item {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+html.ui-v2 .orders-summary-item strong {
+  color: var(--ink);
+}
+html.ui-v2 .orders-summary-done {
+  background: var(--ok-soft);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+html.ui-v2 .order-sheet th {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+html.ui-v2 .order-sheet tfoot td {
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--ink);
+}
+html.ui-v2 .order-check-head {
+  color: #cbd5e1;
+}
+html.ui-v2 .site-cell .cell-note {
+  background: rgba(2, 6, 23, 0.55);
+  color: var(--muted);
+}
+html.ui-v2 .order-row.is-placement .col-live .cell-input,
+html.ui-v2 .order-row.is-completed .col-live .cell-input {
+  background: rgba(2, 6, 23, 0.85);
+  border-color: rgba(34, 211, 238, 0.35);
+  color: var(--ink);
+}
+html.ui-v2 .profit-pos { color: var(--ok); }
+html.ui-v2 .profit-neg { color: var(--bad); }
+
 html.ui-v2 label {
   color: #e2e8f0;
 }
