@@ -264,10 +264,7 @@ render_header('Extracting · ' . $country, 'team');
         placeholder="Waiting for sites from the team mate"
       ><?= h($serverSitesText) ?></textarea>
       <p class="help" style="margin-top:0.5rem">
-        Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>.
-        Hyphens and multi-part TLDs are OK.
-        One per line (or commas). Autosave normalizes <code>https</code>/paths to root domains;
-        invalid lines are removed so this box matches the saved list.
+        One root domain per line. Autosave strips https/paths; invalid lines are dropped.
       </p>
       <p class="muted" style="margin:0.35rem 0 0">
         <span id="sites_footer_count"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
