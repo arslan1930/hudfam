@@ -1785,6 +1785,20 @@ try {
         fail("team swe txfpush-* count=$swe");
     }
 
+    $keepHttps = "https://www.txfkeep-dup.de/path\nwww.txfkeep-dup.de\ntxfkeep-dup.de";
+    $keepPersist = extract_results_text_for_persist($keepHttps);
+    if ($keepPersist === 'txfkeep-dup.de') {
+        pass('extract persist Ready roots strip https/www/path');
+    } else {
+        fail('extract persist Ready unexpected: ' . json_encode($keepPersist));
+    }
+    $keepJunk = extract_results_text_for_persist("!!! not a site\n###");
+    if (str_contains($keepJunk, '!!! not a site')) {
+        pass('extract persist keeps unfixable paste when nothing is Ready');
+    } else {
+        fail('extract persist dropped unfixable paste: ' . json_encode($keepJunk));
+    }
+
     // Push auto-route: country TLDs → own folders; generic TLDs stay in selected country.
     // Also mirrors site names into Semrush Research (append + skip duplicates).
     db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");

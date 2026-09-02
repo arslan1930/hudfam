@@ -228,7 +228,7 @@ function render_domains_paste_field(
         . ' placeholder="' . h($placeholder) . '" data-domains-input spellcheck="false">'
         . h($value) . '</textarea>';
     $html .= '<p class="help" style="margin-top:0.5rem">'
-        . 'One root domain per line (example.com). <strong>Clean to root domains</strong> strips https/paths; leftovers go to Needs attention.'
+        . 'One root domain per line (example.com). Paste (or <strong>Clean to root domains</strong>) strips https/paths; leftovers go to Needs attention.'
         . '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
     $html .= '<div class="domains-paste-attention" data-domains-attention-wrap hidden>';

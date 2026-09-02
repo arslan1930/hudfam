@@ -3068,6 +3068,13 @@ if (!str_contains($sitesFormJs, 'readyText')
 } else {
     ok('sites-form.js Ready/attention clean split');
 }
+if (!str_contains($sitesFormJs, 'autoCleanIfNeeded')
+    || !str_contains($sitesFormJs, 'still has')
+    || !str_contains($sitesFormJs, 'still have')) {
+    fail('sites-form.js missing paste auto-clean / dirty grammar');
+} else {
+    ok('sites-form.js paste auto-clean + dirty grammar');
+}
 if (!str_contains($sitesFormJs, 'PLATFORM_PUBLIC_SUFFIXES')
     || !str_contains($sitesFormJs, 'vercel.app')) {
     fail('sites-form.js missing platform public suffixes');
@@ -3296,6 +3303,12 @@ if (!str_contains($extractBatchJump, 'Clean first — Push only sends Ready.')) 
     fail('Extracting Push empty Ready copy missing');
 } else {
     ok('Extracting Push empty Ready copy');
+}
+if (!str_contains($extractLibSmoke, 'function extract_results_text_for_persist')
+    || !str_contains($extractBatchJump, 'extract_results_text_for_persist')) {
+    fail('Extracting Push missing persist Ready roots helper');
+} else {
+    ok('Extracting Push persists cleaned Ready roots');
 }
 if (!str_contains($semrushHubSmoke, 'Filled from Extracting Push; Clear is Site Finding / Admin.')) {
     fail('Semrush hub missing ownership line');

@@ -153,7 +153,7 @@ function guide_extracting(): string
         'Open a country. Work the Sites list, then paste results and Push.',
         [
             'Sites list: Copy, Undo, Redo, and Open & remove first 10–50. Undo restores them while you stay on this page.',
-            'Paste Extracting Results → Clean to root domains → Push Ready. .pt→Portugal, .at→Austria, .com stays in the selected country.',
+            'Paste Extracting Results — https/paths clean to roots automatically — then Push Ready. .pt→Portugal, .at→Austria, .com stays in the selected country.',
             'Extracting shrinks when you Push, Open & remove, delete lines, or Admin removes the same domains from Our database.',
         ]
     );

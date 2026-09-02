@@ -70,8 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'push_results') {
         $resultsText = (string) post('results_text');
-        // Keep draft text on the batch while validating / if push fails partially.
-        save_extract_batch_results($id, $resultsText);
+        // Persist Ready roots (https/paths cleaned). Keep the original paste only
+        // when nothing could be cleaned, so the person can still edit.
+        $persistText = extract_results_text_for_persist($resultsText);
+        save_extract_batch_results($id, $persistText);
         try {
             $pushed = push_extract_results_to_extracted(
                 $resultsText,
@@ -94,14 +96,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             redirect('index.php?page=team_extract_batch&id=' . $id);
         }
-        // Only clear Results when something new was inserted; keep paste if only duplicates.
+        // Only clear Results when something new was inserted; keep Ready roots if only duplicates.
         if ((int) $pushed['inserted'] > 0) {
             save_extract_batch_results($id, '');
-            // Remove successfully pushed domains from this country's Sites list.
+            // Remove pushed roots from this country's Sites list (inserted + already there).
             $pushedDomains = [];
-            $rawLines = preg_split('/\R+/', $resultsText) ?: [];
-            foreach ($rawLines as $line) {
-                $d = normalize_domain(trim((string) $line));
+            foreach (($pushed['domains'] ?? []) as $d) {
+                $d = trim((string) $d);
                 if ($d !== '') {
                     $pushedDomains[] = $d;
                 }
@@ -282,7 +283,8 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>② Extracting Results</h2>
     <p class="help">
-      Paste extracted sites, <strong>Clean to root domains</strong> if needed, then <strong>Push</strong> Ready only.
+      Paste extracted sites — https/paths/subdomains clean to roots automatically
+      (or click <strong>Clean to root domains</strong>). Then <strong>Push</strong> Ready only.
       .pt→Portugal, .at→Austria, .ch→Switzerland; .com stays in <strong><?= h($country) ?></strong>.
     </p>
     <form method="post" id="extract_results_form">
