@@ -214,18 +214,14 @@
     true
   );
 
-  window.addEventListener('pageshow', function (ev) {
-    navArmed = false;
-    clearNavTimer();
-    if (ev.persisted) {
-      hideAll();
-    }
+  window.addEventListener('pageshow', function () {
+    hideAll();
   });
 
-  window.addEventListener('pagehide', function () {
-    if (navArmed) {
-      return;
-    }
+  // Cancelled leave (dirty beforeunload) never fires pageshow. Drop the overlay
+  // so "Loading…" cannot stick after the user stays on the page.
+  window.addEventListener('beforeunload', function () {
+    hideAll();
   });
 
   function onReady() {
