@@ -785,7 +785,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
 </div>
 
 <form method="post" id="order-sheet-form" class="card order-sheet-card"
-      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>">
+      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>" data-server-autosave>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
@@ -1435,6 +1435,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
       return savePromise;
     }
     if (!dirty) return Promise.resolve();
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var dateEl = row.querySelector('[data-order-date]');
+      if (dateEl && String(dateEl.value || '').trim()) syncMonthYearFromDate(row);
+    });
     saving = true;
     setSaveStatus('Saving…');
     var fd = new FormData(form);
@@ -1466,6 +1470,20 @@ if ($compactUnpaidStats && !$showPagingStats) {
       dirty = false;
       var n = data && typeof data.saved === 'number' ? data.saved : 0;
       setSaveStatus('Saved' + (n ? ' · ' + n + ' row' + (n === 1 ? '' : 's') : ''));
+      try {
+        var drop = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('txf-draft:v1:') === 0 && k.indexOf('admin_orders') !== -1) drop.push(k);
+        }
+        drop.forEach(function (k) { localStorage.removeItem(k); });
+        var banner = document.getElementById('draft-restore-banner');
+        if (banner) banner.hidden = true;
+        form.querySelectorAll('[data-draft-status]').forEach(function (el) {
+          el.hidden = true;
+          el.textContent = '';
+        });
+      } catch (err) { /* ignore */ }
     }).catch(function (err) {
       saving = false;
       dirty = true;
@@ -1765,6 +1783,11 @@ if ($compactUnpaidStats && !$showPagingStats) {
 
   form.addEventListener('input', function (e) {
     if (isDraftIgnored(e.target)) return;
+    var t = e.target;
+    var row = t && t.closest ? t.closest('[data-row]') : null;
+    if (row && t && t.getAttribute && t.getAttribute('data-order-date') !== null) {
+      syncMonthYearFromDate(row);
+    }
     scheduleAutosave(false);
   }, true);
   form.addEventListener('change', function (e) {
@@ -1802,8 +1825,22 @@ if ($compactUnpaidStats && !$showPagingStats) {
       }
     } catch (err) { /* ignore */ }
   });
+  function leaveAfterSave(e, href) {
+    if (!href) return false;
+    if (!dirty && !saving && !saveTimer) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+      window.AppProcessing.hideAll();
+    }
+    flushAutosave().then(function () {
+      if (dirty) return;
+      window.location.href = href;
+    });
+    return true;
+  }
   document.addEventListener('click', function (e) {
-    if (!form || e.defaultPrevented || e.button !== 0) return;
+    if (!form || e.button !== 0) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
     if (!a) return;
@@ -1817,16 +1854,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     if (/(?:[?&])(?:export|download)=/i.test(href) || /(?:[?&])(?:export|download)=/i.test(String(a.href || href))) {
       return;
     }
-    if (!dirty && !saving && !saveTimer) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
-      window.AppProcessing.hideAll();
-    }
-    flushAutosave().then(function () {
-      if (dirty) return;
-      window.location.href = a.href;
-    });
+    leaveAfterSave(e, a.href);
   }, true);
   var filterBar = document.getElementById('order-filter-bar');
   function submitFilterAfterSave() {

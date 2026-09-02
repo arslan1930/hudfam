@@ -970,6 +970,7 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, 'Typed country')
     || !str_contains($draftJsSmoke, 'camp-draft-textarea-sync')
     || !str_contains($draftJsSmoke, "el.classList.contains('visually-hidden')")
+    || !str_contains($draftJsSmoke, 'data-server-autosave')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -1793,6 +1794,7 @@ if (!str_contains($orderSheet, "fd.set('ajax', '1')")
     || !str_contains($orderSheet, '$wantsJson')
     || !str_contains($orderSheet, 'syncMonthYearFromDate')
     || !str_contains($orderSheet, 'submitFilterAfterSave')
+    || !str_contains($orderSheet, 'data-server-autosave')
     || !str_contains($orderSheet, 'data-order-admin')
     || !str_contains($orderSheet, 'data-order-date')) {
     fail('order sheet missing server autosave');

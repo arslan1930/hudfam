@@ -282,6 +282,7 @@
     // Row sheets already autosave their own way — binding hundreds of forms lags scrolling/typing.
     if (form.hasAttribute('data-swe-save')) return false;
     if (form.hasAttribute('data-stay-ajax')) return false;
+    if (form.hasAttribute('data-server-autosave')) return false;
     if (form.hasAttribute('data-swe-mark')
       || form.hasAttribute('data-swe-mark-upto')
       || form.hasAttribute('data-swe-clear-upto')
