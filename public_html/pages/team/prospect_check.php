@@ -464,7 +464,7 @@ render_header('Filter & add', 'team');
     Filter checks <strong>Austria against Austria</strong>, Portugal against Portugal, and so on —
     not only this folder.
     Pasted <strong><?= (int) $result['total_input'] ?></strong> ·
-    unique this Filter <strong><?= count($result['new']) ?></strong> ·
+    Unique this Filter <strong><?= count($result['new']) ?></strong> ·
     already in destination Our database(s) <strong><?= count($result['existing']) ?></strong>.
     Only unique sites go to Extracting.
   </p>
