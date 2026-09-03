@@ -1364,6 +1364,72 @@ html.ui-v2 .camp-hub-step-num {
   color: #083344;
 }
 
+/* Admin emails search + Campaign search — leftover light fieldset / suggest / dashed split */
+html.ui-v2 .swe-admin-delete-selected {
+  border-top: 1px solid var(--line);
+}
+html.ui-v2 .swe-admin-delete-panel,
+html.ui-v2 .camp-action-fieldset {
+  background: rgba(2, 6, 23, 0.62);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .camp-action-choice {
+  color: var(--ink);
+  border-radius: 8px;
+}
+html.ui-v2 .camp-action-choice:hover {
+  background: rgba(34, 211, 238, 0.12);
+}
+html.ui-v2 .swe-admin-delete-domain {
+  color: var(--brand-2);
+}
+html.ui-v2 .swe-admin-delete-suggest {
+  background: rgba(8, 18, 36, 0.96);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+html.ui-v2 .swe-admin-delete-item:hover,
+html.ui-v2 .swe-admin-delete-item.is-active {
+  background: rgba(34, 211, 238, 0.14);
+}
+html.ui-v2 .swe-admin-delete-item-meta {
+  color: var(--muted);
+}
+html.ui-v2 .swe-admin-delete-match {
+  color: #083344;
+  background: #22d3ee;
+}
+html.ui-v2 .page-purpose {
+  background: var(--fx-glass);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem 0.6rem;
+}
+html.ui-v2 .page-purpose > summary {
+  color: var(--ink);
+}
+html.ui-v2 .page-purpose-title {
+  color: var(--ink);
+}
+
+/* Table hovers in app.css are more specific than tbody tr:hover td */
+html.ui-v2 .extracted-country-table tbody tr:hover td,
+html.ui-v2 .camp-hub-table tbody tr:hover td,
+html.ui-v2 .invoice-list-table tbody tr:hover td,
+html.ui-v2 #swe-country-table tbody tr[data-swe-country-row]:hover td {
+  background: rgba(34, 211, 238, 0.08);
+}
+html.ui-v2 .site-price-add td {
+  background: #1e293b;
+}
+html.ui-v2 .site-price-history-row td {
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--ink);
+}
+
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;
