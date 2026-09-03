@@ -87,7 +87,7 @@ $wpNew = 0;
 $wpTotal = 0;
 $wpOk = true;
 try {
-    $omStats = order_management_dashboard_stats();
+    $omStats = order_management_dashboard_stats((int) ($user['id'] ?? 0));
     $orderRowCount = (int) ($omStats['orders'] ?? 0);
     $orderUnpaidLive = (int) ($omStats['unpaid_live'] ?? 0);
 } catch (Throwable $e) {
@@ -200,7 +200,7 @@ render_dashboard_help('admin');
   render_admin_dashboard_stat(
       'Unpaid LIVE',
       ['ok' => $omOk, 'n' => $orderUnpaidLive],
-      'index.php?page=admin_orders&folder=completed&status=unpaid',
+      'index.php?page=admin_orders&folder=completed&status=unpaid&admin_id=' . (int) ($user['id'] ?? 0),
       'Live placements not marked paid'
   );
   render_admin_dashboard_stat(

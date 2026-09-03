@@ -5005,6 +5005,61 @@ try {
         fail('add order did not copy filter country');
     }
 
+    $prevGet = $_GET;
+    $prevPost = $_POST;
+    $_GET = [];
+    $_POST = [];
+    $defaultMine = order_pipeline_profile_admin_id(11);
+    $_GET['admin_id'] = '0';
+    $explicitAll = order_pipeline_profile_admin_id(11);
+    $_GET['admin_id'] = '22';
+    $explicitOne = order_pipeline_profile_admin_id(11);
+    $_GET = $prevGet;
+    $_POST = $prevPost;
+    if ($defaultMine === 11 && $explicitAll === 0 && $explicitOne === 22) {
+        pass('OM admin filter defaults to the signed-in profile');
+    } else {
+        fail('OM admin profile default mine=' . $defaultMine . ' all=' . $explicitAll . ' one=' . $explicitOne);
+    }
+
+    $tag = 'txfom-proc-' . bin2hex(random_bytes(3));
+    $admin2Id = (int) db()->query("SELECT id FROM users WHERE username='admin2' AND role='admin' LIMIT 1")->fetchColumn();
+    $adminId = (int) $adminUser['id'];
+    $procA = 0;
+    $procB = 0;
+    if ($admin2Id > 0) {
+        $oidA = add_order_pipeline_row($adminId, $tag . '-a@example.com', [
+            'country' => 'Germany',
+            'admin_user_id' => $adminId,
+        ]);
+        update_order_item((int) $oidA, 0, [
+            'site_name' => $tag . '-a.com',
+            'country' => 'Germany',
+            'client_label' => $tag . '-a@example.com',
+            'admin_user_id' => $adminId,
+        ]);
+        $procA = 1;
+        $oidB = add_order_pipeline_row($admin2Id, $tag . '-b@example.com', [
+            'country' => 'Germany',
+            'admin_user_id' => $admin2Id,
+        ]);
+        update_order_item((int) $oidB, 0, [
+            'site_name' => $tag . '-b.com',
+            'country' => 'Germany',
+            'client_label' => $tag . '-b@example.com',
+            'admin_user_id' => $admin2Id,
+        ]);
+        $procB = 1;
+    }
+    $nProcA = count_order_pipeline_rows(['folder' => 'processing', 'q' => $tag, 'admin_id' => $adminId]);
+    $nProcB = count_order_pipeline_rows(['folder' => 'processing', 'q' => $tag, 'admin_id' => $admin2Id]);
+    $nProcAll = count_order_pipeline_rows(['folder' => 'processing', 'q' => $tag, 'admin_id' => 0]);
+    if ($admin2Id > 0 && $procA === 1 && $procB === 1 && $nProcA === 1 && $nProcB === 1 && $nProcAll === 2) {
+        pass('Processing counts stay split per admin profile');
+    } else {
+        fail('OM processing split a=' . $nProcA . '/' . $procA . ' b=' . $nProcB . '/' . $procB . ' all=' . $nProcAll);
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');
