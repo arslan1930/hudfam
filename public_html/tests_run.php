@@ -2821,7 +2821,11 @@ try {
     $noHiddenCard = !str_contains($barHtml, 'data-project-id="' . $barHidden . '"')
         && !str_contains($barHtml, 'TXF Bar Hidden');
     $hasSearchJs = str_contains($barHtml, 'email-campaign-search.js');
-    if ($hasAlphaCard && $hasBetaCard && $noHiddenCard && $hasSearchJs) {
+    $hasCopyFirst = str_contains($barHtml, 'data-camp-copy-emails')
+        && str_contains($barHtml, 'camp-cleanup-details')
+        && str_contains($barHtml, 'Search all projects')
+        && str_contains($barHtml, 'data-camp-mark-sent');
+    if ($hasAlphaCard && $hasBetaCard && $noHiddenCard && $hasSearchJs && $hasCopyFirst) {
         pass('Communication search HTML wires one card + suggest URL per visible project');
     } else {
         fail('bar HTML: ' . json_encode([
@@ -2829,6 +2833,7 @@ try {
             'beta' => $hasBetaCard,
             'hidden_absent' => $noHiddenCard,
             'js' => $hasSearchJs,
+            'copy_first' => $hasCopyFirst,
             'len' => strlen($barHtml),
         ]));
     }
@@ -2836,6 +2841,62 @@ try {
     delete_email_campaign_project($barAlpha);
     delete_email_campaign_project($barBeta);
     delete_email_campaign_project($barHidden);
+
+    foreach (['TXF UK Alias'] as $pn) {
+        $oldP = get_email_campaign_project_by_name($pn);
+        if ($oldP) {
+            delete_email_campaign_project((int) $oldP['id']);
+        }
+    }
+    db()->exec("DELETE FROM email_campaign_sheets WHERE name='United Kingdom'");
+    $ukPid = create_email_campaign_project('TXF UK Alias', (int) $adminUser['id'], true);
+    $ukSheet = create_email_campaign_sheet(
+        'United Kingdom',
+        (int) $adminUser['id'],
+        'TXF UK Alias',
+        true
+    );
+    upsert_email_campaign_row($ukSheet, 'txfcamp-britain.com', [
+        'email1' => 'hello@txfcamp-britain.com',
+        'email2' => '',
+        'email3' => '',
+        'email4' => '',
+    ]);
+    $ukRow = db()->query(
+        "SELECT id FROM email_campaign_rows WHERE sheet_id=" . (int) $ukSheet
+        . " AND domain='txfcamp-britain.com' LIMIT 1"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $ukHits = search_email_campaign_suggestions_for_project($ukPid, 'uk', 10);
+    $oneChar = search_email_campaign_suggestions_for_project($ukPid, 'u', 10);
+    $ukDomains = array_map(static fn ($h) => (string) ($h['domain'] ?? ''), $ukHits);
+    set_email_campaign_row_email_sent($ukSheet, (int) ($ukRow['id'] ?? 0), true, $adminUser);
+    $sentHits = search_email_campaign_suggestions_for_project($ukPid, 'txfcamp-britain', 10);
+    $fillQs = email_campaign_drafts_fill_query([
+        'domain' => 'txfcamp-britain.com',
+        'country' => 'United Kingdom',
+        'language' => 'English',
+        'name' => '',
+    ]);
+    $aliasTerms = email_campaign_search_country_terms('uk');
+    if (email_campaign_suggest_min_len() === 2
+        && $oneChar === []
+        && in_array('txfcamp-britain.com', $ukDomains, true)
+        && $aliasTerms === ['united kingdom']
+        && (int) (($sentHits[0]['email_sent'] ?? 0)) === 1
+        && str_contains($fillQs, 'domain=txfcamp-britain.com')
+        && str_contains($fillQs, 'country=United%20Kingdom')) {
+        pass('Campaign search 2-char UK alias + emailed flag + fill query');
+    } else {
+        fail('campaign search alias/sent/fill: ' . json_encode([
+            'min' => email_campaign_suggest_min_len(),
+            'one' => $oneChar,
+            'uk' => $ukHits,
+            'sent' => $sentHits,
+            'alias' => $aliasTerms,
+            'fill' => $fillQs,
+        ]));
+    }
+    delete_email_campaign_project($ukPid);
 
     // Communication / Admin project drafts (categories + one-click copy library).
     foreach (['TXF Drafts Alpha', 'TXF Drafts Hidden'] as $pn) {

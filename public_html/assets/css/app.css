@@ -2185,6 +2185,10 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   border-radius: 4px;
   padding: 0.15rem 0.4rem;
 }
+.swe-admin-delete-match.is-emailed {
+  color: #2f4f35;
+  background: var(--ok-soft);
+}
 .swe-admin-delete-panel {
   display: grid;
   grid-template-columns: minmax(10rem, 1fr) minmax(14rem, 1.4fr);
@@ -5050,9 +5054,26 @@ table.extracted-country-table th {
 /* Communication search cards */
 .camp-search-card {
   border-left: 3px solid var(--brand);
+  overflow: visible;
 }
 .camp-search-card > h2 {
   margin-bottom: 0.25rem;
+}
+.camp-search-card-all {
+  border-left-color: var(--brand-2, var(--brand));
+}
+.camp-search-primary {
+  align-items: center;
+}
+.camp-cleanup-details {
+  margin-top: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+}
+.camp-cleanup-details > summary {
+  cursor: pointer;
+  font-weight: 650;
 }
 .camp-action-fieldset {
   background: #fafbfc;
@@ -5167,6 +5188,11 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 0.35rem;
 }
+.camp-drafts-nav input[type="search"],
+.camp-drafts-toolbar input[type="search"] {
+  width: 100%;
+  max-width: 22rem;
+}
 .camp-drafts-project-link {
   display: flex;
   align-items: center;
@@ -5207,6 +5233,28 @@ textarea:focus-visible {
 }
 .camp-drafts-filters {
   margin-top: 0.65rem;
+}
+.camp-drafts-toolbar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 6;
+  background: #fff;
+  padding-bottom: 0.35rem;
+}
+.camp-fill-banner {
+  margin: 0.55rem 0 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #eef6ff;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  font-weight: 650;
+}
+.camp-draft-card.is-filtered-out {
+  display: none;
 }
 .camp-drafts-grid {
   display: grid;

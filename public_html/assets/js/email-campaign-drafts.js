@@ -634,8 +634,8 @@
             setStatus(
               card,
               hasImg
-                ? 'Copied “' + title + '” with images — paste into your email client.'
-                : 'Copied “' + title + '” with formatting — paste into your email client.'
+                ? 'Copied HTML for “' + title + '” with images — paste into Gmail/Outlook. Use Copy plain if paste looks empty.'
+                : 'Copied HTML for “' + title + '” — paste into Gmail/Outlook. Use Copy plain if paste looks empty.'
             );
             var prev = btn.textContent;
             btn.textContent = 'Copied';
@@ -739,7 +739,37 @@
     });
   }
 
+  function initDraftFilters() {
+    var draftQ = document.querySelector('[data-camp-drafts-q]');
+    var cards = document.querySelectorAll('[data-camp-draft-card]');
+    if (draftQ && cards.length) {
+      draftQ.addEventListener('input', function () {
+        var q = String(draftQ.value || '').trim().toLowerCase();
+        cards.forEach(function (card) {
+          var title = String((card.querySelector('.camp-draft-title') || {}).textContent || '');
+          var subject = String((card.querySelector('[data-camp-draft-subject-label]') || {}).textContent || '');
+          var preview = String((card.querySelector('[data-camp-draft-preview]') || {}).textContent || '');
+          var hay = (title + ' ' + subject + ' ' + preview).toLowerCase();
+          card.classList.toggle('is-filtered-out', q !== '' && hay.indexOf(q) === -1);
+        });
+      });
+    }
+    var projectQ = document.querySelector('[data-camp-drafts-project-filter]');
+    var links = document.querySelectorAll('[data-camp-drafts-project-name]');
+    if (projectQ && links.length) {
+      projectQ.addEventListener('input', function () {
+        var q = String(projectQ.value || '').trim().toLowerCase();
+        links.forEach(function (link) {
+          var name = String(link.getAttribute('data-camp-drafts-project-name') || '').toLowerCase();
+          var li = link.closest('li');
+          if (li) li.hidden = q !== '' && name.indexOf(q) === -1;
+        });
+      });
+    }
+  }
+
   initEditors();
   initCopyButtons();
   initTokenButtons();
+  initDraftFilters();
 })();

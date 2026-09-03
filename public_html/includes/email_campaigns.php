@@ -4168,11 +4168,54 @@ function search_email_campaign_suggestions_all(string $q, int $limit = 20): arra
     return search_email_campaign_suggestions_scoped($q, $limit, null, null, true);
 }
 
+/** Minimum characters before live Campaign search suggestions run. */
+function email_campaign_suggest_min_len(): int
+{
+    return 2;
+}
+
+/**
+ * Extra country names to search when $q is an alias (uk → United Kingdom).
+ *
+ * @return list<string>
+ */
+function email_campaign_search_country_terms(string $q): array
+{
+    $q = trim(mb_strtolower($q));
+    if ($q === '' || !function_exists('country_name_aliases')) {
+        return [];
+    }
+    $aliases = country_name_aliases();
+    if (!isset($aliases[$q])) {
+        return [];
+    }
+    $canon = mb_strtolower(trim((string) $aliases[$q]));
+    return $canon !== '' && $canon !== $q ? [$canon] : [];
+}
+
+/**
+ * Query string for Open-drafts fill-from-site (domain/country/language/name).
+ *
+ * @param array{domain?:string,country?:string,language?:string,name?:string} $vars
+ */
+function email_campaign_drafts_fill_query(array $vars): string
+{
+    $out = '';
+    foreach (['domain', 'country', 'language', 'name'] as $k) {
+        $v = trim((string) ($vars[$k] ?? ''));
+        if ($v !== '') {
+            $out .= '&' . rawurlencode($k) . '=' . rawurlencode($v);
+        }
+    }
+    return $out;
+}
+
 /**
  * @param array<string,mixed> $row
  * @return array{
  *   id:int,sheet_id:int,domain:string,country:string,language:string,project_id:int,
- *   project_name:string,emails:list<string>,match_type:string,matched_value:string,label:string
+ *   project_name:string,emails:list<string>,match_type:string,matched_value:string,label:string,
+ *   email_sent:int
  * }
  */
 function email_campaign_suggestion_from_row(array $row, string $q): array
@@ -4229,6 +4272,7 @@ function email_campaign_suggestion_from_row(array $row, string $q): array
         'match_type' => $matchType,
         'matched_value' => $matched,
         'label' => $domain . ' · ' . $emailPreview . ' · ' . $country . ' · ' . $project,
+        'email_sent' => (int) ($row['email_sent'] ?? 0) === 1 ? 1 : 0,
     ];
 }
 
@@ -4247,7 +4291,7 @@ function search_email_campaign_suggestions_scoped(
 ): array {
     ensure_email_campaign_schema();
     $q = trim(mb_strtolower($q));
-    if ($q === '' || mb_strlen($q) < 3) {
+    if ($q === '' || mb_strlen($q) < email_campaign_suggest_min_len()) {
         return [];
     }
     if ($sheetId !== null) {
@@ -4287,6 +4331,7 @@ function search_email_campaign_suggestions_scoped(
     }
 
     $select = "SELECT r.id, r.sheet_id, r.domain, r.country, r.language, r.email1, r.email2, r.email3, r.email4,
+                   r.email_sent,
                    s.name AS sheet_country, s.project_name, s.project_id,
                    p.name AS project_title
             FROM email_campaign_rows r
@@ -4320,7 +4365,8 @@ function search_email_campaign_suggestions_scoped(
         $take($stmt);
     }
 
-    if (count($out) < $limit) {
+    $useEmailContains = $emailQ || mb_strlen($q) >= 3;
+    if ($useEmailContains && count($out) < $limit) {
         $remain = $limit - count($out);
         $notIn = '';
         $params = [$contains, $contains, $contains, $contains];
@@ -4358,8 +4404,16 @@ function search_email_campaign_suggestions_scoped(
 
     if (!$emailQ && count($out) < $limit) {
         $remain = $limit - count($out);
+        $needles = array_values(array_unique(array_merge([$q], email_campaign_search_country_terms($q))));
+        $likeParts = [];
+        $likeParams = [];
+        foreach ($needles as $term) {
+            $like = '%' . $term . '%';
+            $likeParts[] = 's.name LIKE ? OR s.project_name LIKE ? OR p.name LIKE ? OR r.country LIKE ?';
+            array_push($likeParams, $like, $like, $like, $like);
+        }
         $notIn = '';
-        $params = [$contains, $contains, $contains];
+        $params = $likeParams;
         if ($seen !== []) {
             $placeholders = implode(',', array_fill(0, count($seen), '?'));
             $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
@@ -4369,7 +4423,7 @@ function search_email_campaign_suggestions_scoped(
         }
         $params = array_merge($params, $scopeParams);
         $sql = $select . '
-          AND (s.name LIKE ? OR s.project_name LIKE ? OR p.name LIKE ?)
+          AND (' . implode(' OR ', $likeParts) . ')
           ' . $notIn . $scopeSql . '
         ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
         LIMIT ' . (int) $remain;
@@ -4378,7 +4432,7 @@ function search_email_campaign_suggestions_scoped(
         $take($stmt);
     }
 
-    if (!$emailQ && count($out) < $limit) {
+    if (!$emailQ && mb_strlen($q) >= 3 && count($out) < $limit) {
         $remain = $limit - count($out);
         $params = [$contains, $prefix];
         $notIn = '';
@@ -4661,6 +4715,22 @@ function render_email_campaign_super_search(
         return;
     }
 
+    if (count($projects) > 1 && ($onlyProjectId === null || $onlyProjectId < 1)) {
+        render_email_campaign_search_card([
+            'uid' => 'camp-project-all',
+            'title' => 'Search all projects',
+            'tip' => 'Searches every Communication-visible project at once. Copy emails, then open drafts. Remove from sheet stays under Remove from sheet.',
+            'help' => count($projects) . ' projects · type 2+ characters · copy emails first, then paste a draft in your email client (this app does not send mail)',
+            'placeholder' => 'Type site or email across all projects…',
+            'suggest_url' => $postBase . '&ajax=suggest',
+            'post_url' => $postBase,
+            'drafts_url' => 'index.php?page=team_email_campaigns_drafts',
+            'project_id' => 0,
+            'sheet_name' => 'all projects',
+            'class' => 'camp-search-card-all',
+        ]);
+    }
+
     foreach ($projects as $p) {
         $pid = (int) $p['id'];
         $project = (string) $p['name'];
@@ -4670,45 +4740,76 @@ function render_email_campaign_super_search(
         $countryPreview = $countries !== []
             ? implode(', ', array_slice($countries, 0, 6)) . (count($countries) > 6 ? '…' : '')
             : 'no countries yet';
-        $uid = 'camp-project-' . $pid;
-        $suggestUrl = $postBase . '&ajax=suggest&project_id=' . $pid;
-        ?>
-  <div class="card camp-search-card" style="margin-bottom:1rem"
+        render_email_campaign_search_card([
+            'uid' => 'camp-project-' . $pid,
+            'title' => $project,
+            'tip' => 'Project search bar. Copy emails for outreach, then Open drafts for site. Remove from sheet updates that country’s campaign sheet. Removing the last email also deletes the site row.',
+            'help' => (int) $countryCount . ' countr' . ($countryCount === 1 ? 'y' : 'ies')
+                . ' (' . $countryPreview . ') · '
+                . $sites . ' site' . ($sites === 1 ? '' : 's')
+                . ' · type 2+ characters',
+            'placeholder' => 'Type site or email in ' . $project . '…',
+            'suggest_url' => $postBase . '&ajax=suggest&project_id=' . $pid,
+            'post_url' => $postBase,
+            'drafts_url' => 'index.php?page=team_email_campaigns_drafts&project=' . $pid,
+            'project_id' => $pid,
+            'sheet_name' => $project,
+        ]);
+    }
+    echo '<script src="' . h(script_asset_url('js/email-campaign-search.js')) . '" defer></script>';
+}
+
+/**
+ * @param array{
+ *   uid:string,title:string,tip:string,help:string,placeholder:string,
+ *   suggest_url:string,post_url:string,drafts_url:string,project_id:int,sheet_name:string,class?:string
+ * } $opts
+ */
+function render_email_campaign_search_card(array $opts): void
+{
+    $uid = (string) ($opts['uid'] ?? 'camp-search');
+    $title = (string) ($opts['title'] ?? 'Search');
+    $tip = (string) ($opts['tip'] ?? '');
+    $help = (string) ($opts['help'] ?? '');
+    $placeholder = (string) ($opts['placeholder'] ?? 'Type site or email…');
+    $suggestUrl = (string) ($opts['suggest_url'] ?? '');
+    $postUrl = (string) ($opts['post_url'] ?? '');
+    $draftsUrl = (string) ($opts['drafts_url'] ?? 'index.php?page=team_email_campaigns_drafts');
+    $projectId = (int) ($opts['project_id'] ?? 0);
+    $sheetName = (string) ($opts['sheet_name'] ?? $title);
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    ?>
+  <div class="card camp-search-card<?= $extraClass !== '' ? ' ' . h($extraClass) : '' ?>" style="margin-bottom:1rem"
        data-camp-search
-       data-project-id="<?= $pid ?>"
-       data-sheet-name="<?= h($project) ?>"
+       data-project-id="<?= $projectId ?>"
+       data-sheet-name="<?= h($sheetName) ?>"
        data-suggest-url="<?= h($suggestUrl) ?>"
-       data-post-url="<?= h($postBase) ?>"
-       data-drafts-url="index.php?page=team_email_campaigns_drafts&amp;project=<?= $pid ?>">
+       data-post-url="<?= h($postUrl) ?>"
+       data-drafts-url="<?= h($draftsUrl) ?>">
     <?= csrf_field() ?>
-    <noscript><p class="help muted">JavaScript is required to search and update these results.</p></noscript>
-    <h2 style="margin-top:0"><?= label_with_info(
-        $project,
-        'Project search bar. Searches site + emails across every country Admin added to this project. Delete both or remove only email — updates the corresponding country sheet. Removing the last email also deletes the site row.'
-    ) ?></h2>
-    <p class="help muted" style="margin-top:0">
-      <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
-      (<?= h($countryPreview) ?>) ·
-      <?= $sites ?> site<?= $sites === 1 ? '' : 's' ?> ·
-      search whole project · delete updates that country’s sheet
-    </p>
-    <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions across all countries in this project. Site name and emails always appear together; country is shown so you know which sheet will be updated.') ?></label>
+    <noscript><p class="help muted">JavaScript is required to search and copy these results.</p></noscript>
+    <h2 style="margin-top:0"><?= label_with_info($title, $tip) ?></h2>
+    <p class="help muted" style="margin-top:0"><?= h($help) ?></p>
+    <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions. Type 2+ characters. Site name and emails appear together; country shows which sheet a copy or remove will use.') ?></label>
     <div class="swe-admin-delete-search">
       <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-camp-q
-             placeholder="Type site or email in <?= h($project) ?>…"
+             placeholder="<?= h($placeholder) ?>"
              autocomplete="off" spellcheck="false" data-no-draft
-             title="Type to search this whole project · Arrow keys · Enter to select / confirm">
+             title="Type 2+ characters · Arrow keys · Enter to select · Escape to clear">
       <ul class="swe-admin-delete-suggest" data-camp-suggest hidden></ul>
     </div>
     <p class="help camp-status" data-camp-status hidden></p>
     <div class="swe-admin-delete-selected" data-camp-selected hidden>
       <h3 style="margin-top:1rem">Selected</h3>
-      <p class="help">Site name and emails stay together. Action updates that country’s sheet inside this project.</p>
+      <p class="help">Copy emails, then open drafts and paste into your email client. This app does not send mail.</p>
       <div class="swe-admin-delete-panel">
         <div>
           <div class="muted" style="font-size:0.82rem">Site name</div>
           <div class="swe-admin-delete-domain" data-camp-sel-domain></div>
           <div class="muted" data-camp-sel-country style="margin-top:0.25rem"></div>
+          <p class="camp-sel-sent" data-camp-sel-sent hidden>
+            <span class="swe-status-badge is-emailed">Emailed</span>
+          </p>
         </div>
         <div>
           <div class="muted" style="font-size:0.82rem;margin-bottom:0.35rem">Emails</div>
@@ -4716,34 +4817,40 @@ function render_email_campaign_super_search(
           <p class="help" data-camp-no-emails hidden>No emails on this site.</p>
         </div>
       </div>
-      <fieldset class="camp-action-fieldset">
-        <legend class="visually-hidden">Update action</legend>
-        <label class="camp-action-choice">
-          <input type="radio" name="camp_action_<?= h($uid) ?>" value="row" data-camp-mode checked>
-          Delete both (site name + all emails)
-        </label>
-        <label class="camp-action-choice">
-          <input type="radio" name="camp_action_<?= h($uid) ?>" value="email" data-camp-mode>
-          Remove only email
-        </label>
-        <div class="camp-email-pick" data-camp-email-pick hidden>
-          <label class="muted" style="font-size:0.82rem" for="camp-email-select-<?= h($uid) ?>">Which email</label>
-          <select id="camp-email-select-<?= h($uid) ?>" data-camp-email-select></select>
-        </div>
-      </fieldset>
-      <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
-        <button type="button" class="btn danger" data-camp-apply>Update (Enter)</button>
-        <a class="btn secondary" data-camp-open-drafts href="#" hidden
-           title="Open Campaign drafts with this site filled into {domain}/{country} tokens">
+      <div class="actions camp-search-primary" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
+        <button type="button" class="btn" data-camp-copy-emails title="Copy all emails on this site">Copy emails</button>
+        <a class="btn" data-camp-open-drafts href="#" hidden
+           title="Open Campaign drafts with {domain} / {country} / {language} filled">
           Open drafts for site
         </a>
+        <button type="button" class="btn secondary" data-camp-mark-sent>Mark emailed</button>
         <button type="button" class="btn secondary" data-camp-clear>Clear selection</button>
       </div>
+      <details class="camp-cleanup-details">
+        <summary>Remove from sheet</summary>
+        <p class="help">Cleanup only. Removing the last email also deletes the site row.</p>
+        <fieldset class="camp-action-fieldset">
+          <legend class="visually-hidden">Remove action</legend>
+          <label class="camp-action-choice">
+            <input type="radio" name="camp_action_<?= h($uid) ?>" value="row" data-camp-mode checked>
+            Delete both (site name + all emails)
+          </label>
+          <label class="camp-action-choice">
+            <input type="radio" name="camp_action_<?= h($uid) ?>" value="email" data-camp-mode>
+            Remove only email
+          </label>
+          <div class="camp-email-pick" data-camp-email-pick hidden>
+            <label class="muted" style="font-size:0.82rem" for="camp-email-select-<?= h($uid) ?>">Which email</label>
+            <select id="camp-email-select-<?= h($uid) ?>" data-camp-email-select></select>
+          </div>
+        </fieldset>
+        <div class="actions" style="margin-top:0.65rem">
+          <button type="button" class="btn danger" data-camp-apply>Remove</button>
+        </div>
+      </details>
     </div>
   </div>
-        <?php
-    }
-    echo '<script src="' . h(script_asset_url('js/email-campaign-search.js')) . '" defer></script>';
+    <?php
 }
 
 /**

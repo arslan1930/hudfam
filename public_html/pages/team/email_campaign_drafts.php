@@ -14,6 +14,13 @@ if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
 $base = 'index.php?page=team_email_campaigns_drafts';
 $categories = email_campaign_draft_categories();
 $actorId = (int) ($user['id'] ?? 0);
+$draftVars = [
+    'domain' => trim((string) get('domain')),
+    'country' => trim((string) get('country')),
+    'language' => trim((string) get('language')),
+    'name' => trim((string) get('name')),
+];
+$fillQuery = email_campaign_drafts_fill_query($draftVars);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
@@ -23,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($returnCat !== '' && isset($categories[$returnCat])) {
         $back .= '&category=' . rawurlencode($returnCat);
     }
+    $back .= $fillQuery;
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
     $json = static function (array $payload, int $code = 200) use ($wantsJson, $back): void {
@@ -134,15 +142,18 @@ $formAction = $base . '&project=' . $projectId;
 if ($filterCategory !== '') {
     $formAction .= '&category=' . rawurlencode($filterCategory);
 }
+$formAction .= $fillQuery;
 
-$draftVars = [
-    'domain' => trim((string) get('domain')),
-    'country' => trim((string) get('country')),
-    'language' => trim((string) get('language')),
-    'name' => trim((string) get('name')),
-];
 $hasDraftVars = $draftVars['domain'] !== '' || $draftVars['country'] !== ''
     || $draftVars['language'] !== '' || $draftVars['name'] !== '';
+$clearFillHref = $base . '&project=' . $projectId;
+if ($filterCategory !== '') {
+    $clearFillHref .= '&category=' . rawurlencode($filterCategory);
+}
+$tokenDefs = email_campaign_draft_token_defs();
+if ($draftVars['name'] === '') {
+    unset($tokenDefs['name']);
+}
 
 render_header('Campaign drafts', 'team');
 render_breadcrumbs([
@@ -152,10 +163,11 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Campaign drafts', 'Reusable outreach text for Communication Team. Optional subject + tokens ({domain}, {country}, …). Format with bold/italic/images. Copy (or Copy plain) for your email client.') ?></h1>
+    <h1><?= label_with_info('Campaign drafts', 'Reusable outreach text for Communication Team. Copy (keeps formatting for Gmail/Outlook) or Copy plain. This app does not send mail. Tokens: {domain} {site} {country} {language}.') ?></h1>
     <p class="muted">
       <?= count($projects) ?> project<?= count($projects) === 1 ? '' : 's' ?> shared by Admin ·
-      format replies / offers / follow-ups · <strong>Copy</strong> keeps formatting for paste
+      format replies / offers / follow-ups · <strong>Copy</strong> keeps formatting ·
+      use <strong>Copy plain</strong> if paste looks empty
     </p>
   </div>
   <div class="actions">
@@ -181,6 +193,9 @@ endif;
   <aside class="card camp-drafts-nav">
     <h2 style="margin:0 0 0.65rem">Projects</h2>
     <p class="help" style="margin-top:0">Pick a project to open its drafts.</p>
+    <label class="visually-hidden" for="camp-drafts-project-filter">Filter projects</label>
+    <input id="camp-drafts-project-filter" type="search" data-camp-drafts-project-filter
+           placeholder="Filter projects…" autocomplete="off" spellcheck="false" data-no-draft>
     <ul class="camp-drafts-project-list">
       <?php foreach ($projects as $p):
           $pid = (int) $p['id'];
@@ -189,17 +204,12 @@ endif;
           if ($filterCategory !== '') {
               $href .= '&category=' . rawurlencode($filterCategory);
           }
-          if ($hasDraftVars) {
-              foreach ($draftVars as $vk => $vv) {
-                  if ($vv !== '') {
-                      $href .= '&' . rawurlencode($vk) . '=' . rawurlencode($vv);
-                  }
-              }
-          }
+          $href .= $fillQuery;
           $active = $pid === $projectId;
           ?>
         <li>
-          <a class="camp-drafts-project-link<?= $active ? ' is-active' : '' ?>" href="<?= h($href) ?>">
+          <a class="camp-drafts-project-link<?= $active ? ' is-active' : '' ?>" href="<?= h($href) ?>"
+             data-camp-drafts-project-name="<?= h((string) $p['name']) ?>">
             <span class="camp-drafts-project-name"><?= h((string) $p['name']) ?></span>
             <span class="camp-drafts-project-count"><?= (int) $count ?></span>
           </a>
@@ -214,20 +224,26 @@ endif;
     $draftCount = count($drafts);
     ?>
     <div class="card">
-      <div class="invoice-list-toolbar swe-list-toolbar">
+      <div class="invoice-list-toolbar swe-list-toolbar camp-drafts-toolbar">
         <div>
           <h2 style="margin:0"><?= h($projectName) ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             <?= (int) $draftCount ?> draft<?= (int) $draftCount === 1 ? '' : 's' ?>
             <?= $filterCategory !== '' ? ' in “' . h(email_campaign_draft_category_label($filterCategory)) . '”' : '' ?>.
-            Copy keeps bold / italic / underline / headings / lists / links for paste into your mail client.
-            Tokens: <code>{domain}</code> <code>{site}</code> <code>{country}</code> <code>{language}</code> <code>{name}</code>.
-            <?php if ($hasDraftVars): ?>
-              · Filling from site
-              <?= $draftVars['domain'] !== '' ? '<strong>' . h($draftVars['domain']) . '</strong>' : '' ?>
-              <?= $draftVars['country'] !== '' ? ' · ' . h($draftVars['country']) : '' ?>
-            <?php endif; ?>
+            Copy keeps formatting for Gmail / Outlook — use Copy plain if paste looks empty.
+            Tokens: <code>{domain}</code> <code>{site}</code> <code>{country}</code> <code>{language}</code>.
+            Delete is only for the creator or Admin.
+            This app does not send mail.
           </p>
+          <?php if ($hasDraftVars): ?>
+          <p class="camp-fill-banner" data-camp-fill-banner>
+            Filling from site
+            <?= $draftVars['domain'] !== '' ? '<strong>' . h($draftVars['domain']) . '</strong>' : '' ?>
+            <?= $draftVars['country'] !== '' ? ' · ' . h($draftVars['country']) : '' ?>
+            <?= $draftVars['language'] !== '' ? ' · ' . h($draftVars['language']) : '' ?>
+            <a class="btn secondary small" href="<?= h($clearFillHref) ?>" data-camp-fill-clear>Clear</a>
+          </p>
+          <?php endif; ?>
           <p class="swe-sent-filters camp-drafts-filters">
             <?php
             $catLinks = ['' => 'All'] + $categories;
@@ -236,10 +252,17 @@ endif;
                 if ($slug !== '') {
                     $href .= '&category=' . rawurlencode($slug);
                 }
+                $href .= $fillQuery;
                 $active = $filterCategory === (string) $slug;
                 ?>
               <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
             <?php endforeach; ?>
+          </p>
+          <p style="margin:0.55rem 0 0">
+            <label class="visually-hidden" for="camp-drafts-q">Search drafts</label>
+            <input id="camp-drafts-q" type="search" data-camp-drafts-q
+                   placeholder="Search draft titles and text…"
+                   autocomplete="off" spellcheck="false" data-no-draft>
           </p>
         </div>
         <div class="actions">
@@ -268,13 +291,6 @@ endif;
             $canMoveDown = $di < ($draftTotal - 1)
                 && (string) ($drafts[$di + 1]['category'] ?? '') === $cat;
             $editHref = $formAction . '&edit=' . $did . '#camp-draft-form';
-            if ($hasDraftVars) {
-                foreach ($draftVars as $vk => $vv) {
-                    if ($vv !== '') {
-                        $editHref .= '&' . rawurlencode($vk) . '=' . rawurlencode($vv);
-                    }
-                }
-            }
             ?>
           <article class="camp-draft-card" data-camp-draft-card data-draft-id="<?= $did ?>"
                    data-camp-draft-subject="<?= h($subject) ?>"
@@ -303,7 +319,7 @@ endif;
             <?php endif; ?>
             <div class="camp-draft-card-actions actions">
               <button type="button" class="btn small" data-camp-draft-copy
-                      title="Copy with formatting for email paste">Copy</button>
+                      title="Copy HTML for Gmail / Outlook. Use Copy plain if paste looks empty.">Copy</button>
               <button type="button" class="btn secondary small" data-camp-draft-copy-plain
                       title="Copy plain text only (reliable in any email client)">Copy plain</button>
               <a class="btn secondary small" href="<?= h($editHref) ?>">Edit</a>
@@ -340,6 +356,8 @@ endif;
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
                 <button class="btn danger small" type="submit">Delete</button>
               </form>
+              <?php else: ?>
+              <span class="help muted">Creator or Admin can delete</span>
               <?php endif; ?>
             </div>
             <p class="help camp-draft-copy-status" data-camp-draft-status hidden></p>
@@ -356,8 +374,9 @@ endif;
       </h2>
       <p class="help" style="margin-top:0">
         Format with <strong>bold</strong>, <em>italic</em>, <u>underline</u>, headings, lists, links, and images.
-        Paste a screenshot or use <strong>Image</strong> (auto-compressed).
-        <strong>Copy</strong> keeps formatting and pictures for Gmail / Outlook.
+        Paste a screenshot or use <strong>Image</strong> (auto-compressed). Remote image URLs are stripped — paste the picture itself.
+        <strong>Copy</strong> on a card keeps HTML for Gmail / Outlook; use <strong>Copy plain</strong> if paste looks empty.
+        This app does not send mail.
       </p>
       <form method="post" action="<?= h($formAction) ?>" class="camp-draft-form" autocomplete="off"
             data-no-draft
@@ -393,7 +412,7 @@ endif;
                    data-camp-draft-subject-input>
             <p class="help" style="margin:0.3rem 0 0">
               Insert token:
-              <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
+              <?php foreach ($tokenDefs as $tok => $tokLabel): ?>
                 <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
                         data-camp-draft-token-target="camp_draft_subject"
                         title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
@@ -404,7 +423,7 @@ endif;
             <label for="camp_draft_body">Draft text</label>
             <p class="help" style="margin:0 0 0.4rem">
               Tokens in body:
-              <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
+              <?php foreach ($tokenDefs as $tok => $tokLabel): ?>
                 <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
                         data-camp-draft-token-target="body"
                         title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
@@ -415,7 +434,7 @@ endif;
                 'camp_draft_body',
                 'body',
                 (string) ($editDraft['body'] ?? ''),
-                ['placeholder' => "Hi {name},\n\nWe’d love to feature {domain}…\n\nBest,"]
+                ['placeholder' => "Hi,\n\nWe’d love to feature {domain}…\n\nBest,"]
             );
             ?>
           </div>

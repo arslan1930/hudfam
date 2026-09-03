@@ -1269,7 +1269,9 @@ if ($r['status'] >= 300 || str_contains($r['body'], 'only shows') || str_contain
 req('GET', $base . '/index.php?page=logout');
 $r = login_post($base, 'comms', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_email_campaigns');
-if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')
+    && str_contains($r['body'], 'Copy emails')
+    && str_contains($r['body'], 'Remove from sheet')) {
     pass('comms can open Campaign search');
 } else {
     fail('comms blocked from Campaign search status=' . $r['status']);
@@ -1278,6 +1280,7 @@ $r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
 if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')
     && str_contains($r['body'], 'class="camp-draft-form"')
     && str_contains($r['body'], 'data-no-draft')
+    && str_contains($r['body'], 'data-camp-drafts-q')
     && !str_contains($r['body'], 'Fatal error')) {
     pass('comms can open Campaign drafts');
 } else {
