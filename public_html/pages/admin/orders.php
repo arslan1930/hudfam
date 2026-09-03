@@ -216,11 +216,12 @@ $postedFields = static function (): array {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
+    $wantsJson = (string) ($_POST['ajax'] ?? '') === '1';
     try {
         [$sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls] = $postedFields();
-        $saveCurrent = static function () use ($sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls): int {
+        $saveCurrent = static function (bool $allowIncomplete = false) use ($sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls): int {
             return save_order_sheet_rows(
-                0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls
+                0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls, $allowIncomplete
             );
         };
 
@@ -245,7 +246,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]) . '#sheet-bottom');
         }
         if ($action === 'save_sheet') {
-            $n = $saveCurrent();
+            $n = $saveCurrent($wantsJson);
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true, 'saved' => $n]);
+                exit;
+            }
             flash('ok', 'Saved ' . $n . ' row' . ($n === 1 ? '' : 's') . '.');
             redirect($ordersQs());
         }
@@ -405,6 +411,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(invoice_generate_href_for_orders($ready, $matchId));
         }
     } catch (Throwable $e) {
+        if ($wantsJson && $action === 'save_sheet') {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+            exit;
+        }
         flash('error', $e->getMessage());
         redirect($ordersQs());
     }
@@ -639,7 +651,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Country</span>
-      <select name="country" aria-label="Filter by country" onchange="this.form.submit()">
+      <select name="country" aria-label="Filter by country">
         <option value="">All countries</option>
         <?php foreach ($filterCountries as $cname): ?>
           <option value="<?= h($cname) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
@@ -648,7 +660,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     </label>
     <label class="order-filter-field">
       <span class="visually-hidden">Admin</span>
-      <select name="admin_id" aria-label="Filter by admin" onchange="this.form.submit()">
+      <select name="admin_id" aria-label="Filter by admin">
         <option value="">All admins</option>
         <?php foreach ($admins as $aRow):
             $aid = (int) $aRow['id'];
@@ -773,7 +785,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
 </div>
 
 <form method="post" id="order-sheet-form" class="card order-sheet-card"
-      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>">
+      action="<?= h($ordersQs()) ?>" data-folder="<?= h($folder) ?>" data-server-autosave>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_sheet" id="sheet-action">
   <input type="hidden" name="folder" value="<?= h($folder) ?>">
@@ -824,6 +836,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     <?php endif; ?>
   </p>
   <p class="muted" id="order-copy-status" style="margin:0.35rem 0 0" hidden></p>
+  <p class="muted" id="order-autosave-status" style="margin:0.2rem 0 0">Edits save when you leave a cell.</p>
 
   <div class="order-sheet-scroll">
     <table class="order-sheet">
@@ -965,7 +978,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
               }
             ?>
             <select class="cell-input cell-select" name="admin_user_id[<?= $id ?>]" aria-label="Admin"
-                    title="<?= h($adminTitle) ?>">
+                    data-order-admin title="<?= h($adminTitle) ?>">
               <?php foreach ($adminById as $aid => $aRow):
                   $alabel = trim((string) ($aRow['full_name'] ?? ''));
                   if ($alabel === '') {
@@ -1346,9 +1359,128 @@ if ($compactUnpaidStats && !$showPagingStats) {
   var form = document.getElementById('order-sheet-form');
   var dirty = false;
   var submitting = false;
+  var saving = false;
+  var saveQueued = false;
+  var saveTimer = null;
+  var savePromise = Promise.resolve();
+  var SAVE_DEBOUNCE_MS = 450;
+  var dirtyRowIds = {};
   var isDraftIgnored = function (el) {
     return !!(el && el.closest && el.closest('[data-no-draft]'));
   };
+  function markRowDirty(el) {
+    var row = el && el.closest ? el.closest('[data-row]') : null;
+    var id = row ? String(row.getAttribute('id') || '').replace(/^row-/, '') : '';
+    if (id) dirtyRowIds[id] = true;
+  }
+  function disableCleanRows() {
+    var restored = [];
+    var has = false;
+    Object.keys(dirtyRowIds).forEach(function (k) { if (dirtyRowIds[k]) has = true; });
+    if (!has) return restored;
+    document.querySelectorAll('[data-row]').forEach(function (row) {
+      var id = String(row.getAttribute('id') || '').replace(/^row-/, '');
+      if (dirtyRowIds[id]) return;
+      row.querySelectorAll('input, select, textarea').forEach(function (el) {
+        if (el.disabled) return;
+        el.disabled = true;
+        restored.push(el);
+      });
+    });
+    return restored;
+  }
+  function restoreCleanRows(restored) {
+    (restored || []).forEach(function (el) { el.disabled = false; });
+  }
+  function setSaveStatus(msg, isError) {
+    var el = document.getElementById('order-autosave-status');
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = msg || 'Edits save when you leave a cell.';
+    el.style.color = isError ? '#f87171' : '';
+  }
+  function flushAutosave() {
+    if (saveTimer) {
+      window.clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    if (!form || submitting) return Promise.resolve();
+    if (saving) {
+      saveQueued = true;
+      return savePromise;
+    }
+    if (!dirty) return Promise.resolve();
+    saving = true;
+    setSaveStatus('Saving…');
+    var restored = disableCleanRows();
+    var fd = new FormData(form);
+    restoreCleanRows(restored);
+    fd.set('action', 'save_sheet');
+    fd.set('ajax', '1');
+    fd.set('item_id', '');
+    fd.set('restore_wp', '');
+    savePromise = fetch(form.getAttribute('action') || window.location.href, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error((data && data.error) || 'Could not save');
+        }
+        return data;
+      }, function () {
+        throw new Error('Could not save');
+      });
+    }).then(function (data) {
+      saving = false;
+      if (saveQueued) {
+        saveQueued = false;
+        dirty = true;
+        return flushAutosave();
+      }
+      dirty = false;
+      dirtyRowIds = {};
+      var n = data && typeof data.saved === 'number' ? data.saved : 0;
+      setSaveStatus('Saved' + (n ? ' · ' + n + ' row' + (n === 1 ? '' : 's') : ''));
+      try {
+        var drop = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('txf-draft:v1:') === 0 && k.indexOf('admin_orders') !== -1) drop.push(k);
+        }
+        drop.forEach(function (k) { localStorage.removeItem(k); });
+        var banner = document.getElementById('draft-restore-banner');
+        if (banner) banner.hidden = true;
+        form.querySelectorAll('[data-draft-status]').forEach(function (el) {
+          el.hidden = true;
+          el.textContent = '';
+        });
+      } catch (err) { /* ignore */ }
+    }).catch(function (err) {
+      saving = false;
+      dirty = true;
+      setSaveStatus((err && err.message) || 'Could not save — click Save sheet.', true);
+      if (saveQueued) {
+        saveQueued = false;
+        flushAutosave();
+      }
+    });
+    return savePromise;
+  }
+  function scheduleAutosave(immediate) {
+    if (!form || submitting) return;
+    dirty = true;
+    if (saveTimer) window.clearTimeout(saveTimer);
+    if (immediate) {
+      saveTimer = null;
+      flushAutosave();
+      return;
+    }
+    setSaveStatus('Saving…');
+    saveTimer = window.setTimeout(flushAutosave, SAVE_DEBOUNCE_MS);
+  }
 
   function setCopyStatus(msg, isError) {
     var el = document.getElementById('order-copy-status');
@@ -1628,18 +1760,117 @@ if ($compactUnpaidStats && !$showPagingStats) {
   }
 
   form.addEventListener('input', function (e) {
-    if (isDraftIgnored(e.target)) return;
-    dirty = true;
+    var t = e.target;
+    if (isDraftIgnored(t)) return;
+    if (t && (t.type === 'checkbox' || t.type === 'radio')) return;
+    if (t && t.name === 'item_ids[]') return;
+    markRowDirty(t);
+    scheduleAutosave(false);
   }, true);
   form.addEventListener('change', function (e) {
-    if (isDraftIgnored(e.target)) return;
-    dirty = true;
+    var t = e.target;
+    if (isDraftIgnored(t)) return;
+    if (t && (t.type === 'checkbox' || t.type === 'radio')) return;
+    if (t && t.name === 'item_ids[]') return;
+    markRowDirty(t);
+    if (t && t.getAttribute && t.getAttribute('data-order-admin') !== null) {
+      t.title = (t.options[t.selectedIndex] && t.options[t.selectedIndex].text) || '';
+    }
+    scheduleAutosave(true);
+  }, true);
+  form.addEventListener('focusout', function (e) {
+    var t = e.target;
+    if (isDraftIgnored(t)) return;
+    if (!dirty) return;
+    if (t && t.closest && t.closest('[data-row]')) {
+      flushAutosave();
+    }
   }, true);
   window.addEventListener('beforeunload', function (e) {
-    if (!dirty || submitting) return;
+    if (saveTimer) flushAutosave();
+    if ((!dirty && !saving) || submitting) return;
     e.preventDefault();
     e.returnValue = '';
   });
+  window.addEventListener('pagehide', function () {
+    if (submitting || (!dirty && !saving)) return;
+    try {
+      var restored = disableCleanRows();
+      var fd = new FormData(form);
+      restoreCleanRows(restored);
+      fd.set('action', 'save_sheet');
+      fd.set('ajax', '1');
+      fd.set('item_id', '');
+      fd.set('restore_wp', '');
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(form.getAttribute('action') || window.location.href, fd);
+        dirty = false;
+        dirtyRowIds = {};
+      }
+    } catch (err) { /* ignore */ }
+  });
+  function leaveAfterSave(e, href) {
+    if (!href) return false;
+    if (!dirty && !saving && !saveTimer) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+      window.AppProcessing.hideAll();
+    }
+    flushAutosave().then(function () {
+      if (dirty) return;
+      window.location.href = href;
+    });
+    return true;
+  }
+  document.addEventListener('click', function (e) {
+    if (!form || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    if (a.hasAttribute('download')) return;
+    var tgt = String(a.getAttribute('target') || '');
+    if (tgt && tgt !== '_self') return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0 || href.indexOf('mailto:') === 0) {
+      return;
+    }
+    if (/(?:[?&])(?:export|download)=/i.test(href) || /(?:[?&])(?:export|download)=/i.test(String(a.href || href))) {
+      return;
+    }
+    leaveAfterSave(e, a.href);
+  }, true);
+  var filterBar = document.getElementById('order-filter-bar');
+  function submitFilterAfterSave() {
+    if (!filterBar) return;
+    if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+      window.AppProcessing.hideAll();
+    }
+    HTMLFormElement.prototype.submit.call(filterBar);
+  }
+  if (filterBar) {
+    filterBar.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t || !t.name) return;
+      if (t.name !== 'country' && t.name !== 'admin_id') return;
+      if (!dirty && !saving && !saveTimer) {
+        submitFilterAfterSave();
+        return;
+      }
+      flushAutosave().then(function () {
+        if (dirty) return;
+        submitFilterAfterSave();
+      });
+    });
+    filterBar.addEventListener('submit', function (e) {
+      if (!dirty && !saving && !saveTimer) return;
+      e.preventDefault();
+      flushAutosave().then(function () {
+        if (dirty) return;
+        submitFilterAfterSave();
+      });
+    });
+  }
   refresh();
 })();
 function omConfirmRemove(btn) {

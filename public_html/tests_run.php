@@ -178,6 +178,7 @@ if (
     && str_contains($draftJs, 'Restore already wrote localStorage')
     && str_contains($draftJs, 'camp-draft-textarea-sync')
     && str_contains($draftJs, "el.classList.contains('visually-hidden')")
+    && str_contains($draftJs, 'data-server-autosave')
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
@@ -5005,6 +5006,93 @@ try {
         fail('add order did not copy filter country');
     }
 
+    $saniaName = 'sania.teqnowebs';
+    $saniaHash = password_hash('TeamTest9x', PASSWORD_DEFAULT);
+    db()->prepare(
+        "INSERT INTO users (username,password_hash,full_name,email,role,must_change_password,is_active)
+         VALUES (?,?,?,?, 'team', 0, 1)
+         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), is_active=1, role='team'"
+    )->execute([$saniaName, $saniaHash, '', 'sania@test.local']);
+    $saniaId = (int) db()->query('SELECT id FROM users WHERE username=' . db()->quote($saniaName))->fetchColumn();
+    $arslanId = (int) $adminUser['id'];
+    $adminOpts = order_admin_options();
+    $optIds = [];
+    foreach ($adminOpts as $optRow) {
+        $optIds[(int) ($optRow['id'] ?? 0)] = true;
+    }
+    $switchId = add_order_pipeline_row($arslanId, 'anna@example.com', [
+        'country' => 'netherland',
+        'admin_user_id' => $saniaId,
+    ]);
+    update_order_item((int) $switchId, 0, [
+        'site_name' => 'brummensnieuws.nl',
+        'country' => 'netherland',
+        'client_label' => 'Anna',
+        'admin_user_id' => $saniaId,
+        'live_url' => 'https://example.com/sania-live',
+        'owner_price' => '',
+        'decided_price' => '',
+    ], true);
+    update_order_item((int) $switchId, 0, [
+        'site_name' => 'brummensnieuws.nl',
+        'country' => 'netherland',
+        'client_label' => 'Anna',
+        'admin_user_id' => $arslanId,
+        'live_url' => 'https://example.com/sania-live',
+        'owner_price' => '',
+        'decided_price' => '',
+    ], true);
+    $afterArslan = get_order_item((int) $switchId);
+    update_order_item((int) $switchId, 0, [
+        'site_name' => 'brummensnieuws.nl',
+        'country' => 'netherland',
+        'client_label' => 'Anna',
+        'admin_user_id' => $saniaId,
+        'live_url' => 'https://example.com/sania-live',
+        'owner_price' => '',
+        'decided_price' => '',
+    ], true);
+    $afterSania = get_order_item((int) $switchId);
+    $byUsername = order_normalize_admin_user_id($saniaName);
+    $badAdmin = false;
+    try {
+        order_normalize_admin_user_id(99999991);
+    } catch (InvalidArgumentException $e) {
+        $badAdmin = str_contains($e->getMessage(), 'Admin list');
+    }
+    $incompleteThrew = false;
+    try {
+        update_order_item((int) $switchId, 0, [
+            'site_name' => 'brummensnieuws.nl',
+            'country' => 'netherland',
+            'client_label' => 'Anna',
+            'admin_user_id' => $arslanId,
+            'live_url' => 'https://example.com/sania-live',
+            'owner_price' => '',
+            'decided_price' => '',
+        ], false);
+    } catch (InvalidArgumentException $e) {
+        $incompleteThrew = str_contains($e->getMessage(), 'Decided price');
+    }
+    if ($saniaId > 0
+        && !empty($optIds[$saniaId])
+        && !empty($optIds[$arslanId])
+        && (int) ($afterArslan['admin_user_id'] ?? 0) === $arslanId
+        && (int) ($afterSania['admin_user_id'] ?? 0) === $saniaId
+        && $byUsername === $saniaId
+        && $badAdmin
+        && $incompleteThrew) {
+        pass('order admin picker includes teammates and Sania↔Arslan saves');
+    } else {
+        fail('order admin Sania↔Arslan: sania=' . $saniaId
+            . ' opts=' . (int) !empty($optIds[$saniaId])
+            . ' arslan=' . (int) ($afterArslan['admin_user_id'] ?? 0)
+            . ' back=' . (int) ($afterSania['admin_user_id'] ?? 0)
+            . ' name=' . (int) $byUsername
+            . ' bad=' . (int) $badAdmin
+            . ' incomplete=' . (int) $incompleteThrew);
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');
@@ -5953,6 +6041,16 @@ try {
         pass('Team cannot use OM or invoices');
     } else {
         fail('Team OM/invoice ACL leak');
+    }
+    if (str_contains($ordersPhpSrc, 'data-server-autosave')
+        && str_contains($ordersPhpSrc, 'id="order-autosave-status"')
+        && str_contains($ordersPhpSrc, "fd.set('ajax', '1')")
+        && str_contains($ordersPhpSrc, 'disableCleanRows')
+        && str_contains($ordersPhpSrc, 'data-order-admin')
+        && function_exists('order_normalize_admin_user_id')) {
+        pass('OM sheet autosave + admin id normalize');
+    } else {
+        fail('OM missing autosave or admin id normalize');
     }
 
     $uniqUrls = order_live_urls_from_rows([

@@ -970,6 +970,7 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, 'Typed country')
     || !str_contains($draftJsSmoke, 'camp-draft-textarea-sync')
     || !str_contains($draftJsSmoke, "el.classList.contains('visually-hidden')")
+    || !str_contains($draftJsSmoke, 'data-server-autosave')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -1653,6 +1654,25 @@ if (!str_contains($ordersPage, 'Need a country on every ticked row before comple
     fail('orders missing complete/push country-client checks or LIVE clear confirm');
 } else {
     ok('orders complete/push require country+client + LIVE clear confirm');
+}
+if (!str_contains($ordersPage, 'data-server-autosave')
+    || !str_contains($ordersPage, 'id="order-autosave-status"')
+    || !str_contains($ordersPage, "fd.set('ajax', '1')")
+    || !str_contains($ordersPage, 'disableCleanRows')
+    || !str_contains($ordersPage, 'data-order-admin')
+    || !str_contains($ordersPage, 'leaveAfterSave')) {
+    fail('orders missing per-row autosave');
+} else {
+    ok('orders autosave edited rows when leaving a cell');
+}
+$ordersInc = file_get_contents($root . '/includes/orders.php') ?: '';
+if (!str_contains($ordersInc, 'function order_normalize_admin_user_id')
+    || !str_contains($ordersInc, 'list_team_users')
+    || !str_contains($ordersInc, 'Pick someone from the Admin list')
+    || !str_contains($ordersInc, 'bool $allowIncomplete = false')) {
+    fail('orders admin picker missing teammates / id normalize');
+} else {
+    ok('orders admin picker includes teammates and normalizes ids');
 }
 if (!str_contains($ordersPage, 'Copy selected sites (this page)')
     || !str_contains($ordersPage, 'Copy selected live URLs (this page)')
