@@ -1606,8 +1606,8 @@ if (!str_contains($ordersPage, 'push_invoice') || !str_contains($ordersPage, 'Pu
 } else {
     ok('orders push to invoice');
 }
-if (!str_contains($ordersPage, "folder=processing")
-    || !str_contains($ordersPage, "folder=completed")
+if (!str_contains($ordersPage, "\$ordersQs(['folder' => 'processing', 'p' => 1])")
+    || !str_contains($ordersPage, "\$ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid'])")
     || !str_contains($ordersPage, 'id="om-folders"')
     || !str_contains($ordersPage, 'Completed orders')
     || !str_contains($ordersPage, 'use ($filter, $perPage, $pageNum, $folder, $origin)')
