@@ -850,9 +850,9 @@ if ($rUnpaidOm['status'] === 200
 }
 $omBody = (string) ($rUnpaidOm['body'] ?? '');
 $tabOk = (bool) preg_match('/data-om-folder-tab="completed"[^>]*>\s*Completed \((\d+)(?: · (\d+) unpaid)?\)/s', $omBody, $tabM);
-$unpaidOk = (bool) preg_match('/>Unpaid \((\d+)\)/', $omBody, $uM);
-$paidOk = (bool) preg_match('/>Paid \((\d+)\)/', $omBody, $pM);
-$allOk = (bool) preg_match('/>All \((\d+)\)/', $omBody, $aM);
+$unpaidOk = (bool) preg_match('/>\s*Unpaid \((\d+)\)/', $omBody, $uM);
+$paidOk = (bool) preg_match('/>\s*Paid \((\d+)\)/', $omBody, $pM);
+$allOk = (bool) preg_match('/>\s*All \((\d+)\)/', $omBody, $aM);
 $profileSelected = (bool) preg_match('/name="admin_id"[\s\S]*?<option value="([1-9][0-9]*)" selected/s', $omBody, $selM);
 $tabN = (int) ($tabM[1] ?? -1);
 $tabUnpaid = isset($tabM[2]) ? (int) $tabM[2] : 0;
