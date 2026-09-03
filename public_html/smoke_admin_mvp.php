@@ -1590,11 +1590,14 @@ if (!str_contains($ordersPage, 'id="order-filter-bar"')
     || !str_contains($ordersPage, 'name="date_to"')
     || !str_contains($ordersPage, 'order-filter-label')
     || !str_contains($ordersPage, 'value="unassigned"')
+    || !str_contains($ordersPage, 'value="mine"')
     || !str_contains($ordersPage, 'Unassigned')
     || !str_contains($ordersPage, 'filters off')
-    || !str_contains($ordersPage, 'order_date_effective')
+    || !str_contains($ordersPage, 'order_date_stored')
     || !str_contains($ordersPage, 'order_pipeline_parse_admin_filter')
-    || !str_contains($ordersPage, "<?php\n              \$adminTitle = '';")
+    || !str_contains($ordersPage, 'order_person_label')
+    || !str_contains($ordersPage, 'order-needs-summary')
+    || !str_contains($ordersPage, 'data-date-display')
     || !str_contains($ordersPage, "\$filter['admin_id'] < 0 ? 0")
     || !str_contains($ordersPage, "'admin_id' => 0")
     || !str_contains($ordersPage, '(int) ($row[\'order_year\'] ?? 0)')) {
@@ -1625,7 +1628,7 @@ if (!str_contains($ordersPage, "folder=processing")
     || !str_contains($ordersPage, 'Added here')
     || !str_contains($ordersPage, 'Leftover')
     || !str_contains($ordersPage, 'order_pipeline_pick_processing_origin')
-    || !str_contains($ordersPage, "'origin' => ''")
+    || !str_contains($ordersPage, "'origin' => 'all'")
     || str_contains($ordersPage, 'orders from Website prices Processing')) {
     fail('orders missing Processing/Completed hub folders');
 } else {
@@ -1643,6 +1646,9 @@ if (!str_contains($omCss, '.order-sheet-card')
 }
 if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
     || !str_contains($omCss, '.order-sheet .col-admin { min-width: 196px')
+    || !str_contains($omCss, 'left: 7.4rem')
+    || !str_contains($omCss, 'min-width: 9rem')
+    || !str_contains($omCss, '.order-needs-chip')
     || !str_contains($omCss, 'min-width: 13rem')) {
     fail('orders country/admin columns still too narrow to read');
 } else {
@@ -1827,7 +1833,7 @@ if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
 }
 
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
-foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt', 'list_order_pipeline_ids', 'list_order_pipeline_client_labels', 'order_invoice_generate_push_cta', 'order_wp_sheet_url', 'normalize_order_pipeline_origin', 'order_pipeline_pick_processing_origin', 'order_normalize_article_doc_url', 'order_pipeline_parse_admin_filter', 'order_date_effective', 'order_backfill_pipeline_admin_from_website_prices', 'order_pipeline_list_order_sql'] as $omFn) {
+foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt', 'list_order_pipeline_ids', 'list_order_pipeline_client_labels', 'order_invoice_generate_push_cta', 'order_wp_sheet_url', 'normalize_order_pipeline_origin', 'order_pipeline_pick_processing_origin', 'order_normalize_article_doc_url', 'order_pipeline_parse_admin_filter', 'order_date_effective', 'order_date_stored', 'order_date_display', 'order_person_label', 'order_row_needs', 'order_pipeline_admin_counts', 'order_pipeline_resolve_admin_filter', 'order_backfill_pipeline_admin_from_website_prices', 'order_pipeline_list_order_sql'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
         fail("orders.php missing {$omFn}");
     }
@@ -1869,7 +1875,7 @@ if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'OM admin filter unassigned token', 'OM unassigned admin and COALESCE date filter', 'order sheet autosave allows incomplete LIVE rows', 'OM sheet date save keeps existing day and aligns month', 'OM sheet keeps id order unless a date filter is on', 'OM admin picker includes teammates who own orders', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'WP Processing copies created/managed admin onto OM', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event snapshots article doc', 'invoice append event snapshots article doc', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'OM admin filter unassigned token', 'OM unassigned admin and COALESCE date filter', 'order sheet autosave allows incomplete LIVE rows', 'OM sheet date save keeps existing day and aligns month', 'OM sheet keeps id order unless a date filter is on', 'OM admin picker includes teammates who own orders', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'WP Processing copies created/managed admin onto OM', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event snapshots article doc', 'invoice append event snapshots article doc', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'OM unset date display names and needs', 'OM admin filter counts include All and Unassigned', 'Processing default origin follows non-empty tab'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

@@ -5008,8 +5008,11 @@ try {
     if (order_pipeline_parse_admin_filter('') === 0
         && order_pipeline_parse_admin_filter('unassigned') === -1
         && order_pipeline_parse_admin_filter('-1') === -1
+        && order_pipeline_parse_admin_filter('mine') === -2
         && order_pipeline_parse_admin_filter('12') === 12
-        && order_pipeline_admin_filter_query(-1) === 'unassigned') {
+        && order_pipeline_admin_filter_query(-1) === 'unassigned'
+        && order_pipeline_admin_filter_query(-2) === 'mine'
+        && order_pipeline_resolve_admin_filter(-2, 7) === 7) {
         pass('OM admin filter unassigned token');
     } else {
         fail('OM admin filter unassigned token failed');
@@ -5050,6 +5053,37 @@ try {
         pass('OM unassigned admin and COALESCE date filter');
     } else {
         fail('OM unassigned admin or empty date filter missed row ' . $nullAdminId);
+    }
+    $unsetDateId = add_order_pipeline_row((int) $adminUser['id'], '', ['country' => 'Germany']);
+    $unsetDateRow = get_order_item((int) $unsetDateId) ?: [];
+    if (order_date_stored($unsetDateRow) === ''
+        && order_date_display('2026-09-02') === '2 Sep 2026'
+        && order_person_label(['full_name' => 'sania.teqnowebs', 'username' => 'admin']) === 'Sania'
+        && order_person_label(['full_name' => '', 'username' => 'marcus.lee']) === 'Marcus'
+        && order_row_needs(['country' => '', 'client_label' => '', 'live_url' => '']) === ['country', 'client', 'LIVE URL']
+        && order_row_needs(['country' => 'Germany', 'client_label' => 'a@b.c', 'live_url' => 'https://x.test']) === []) {
+        pass('OM unset date display names and needs');
+    } else {
+        fail('OM unset date / person label / needs helpers');
+    }
+    $adminCountMap = order_pipeline_admin_counts([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'q' => 'txf-om-count-' . (int) $nullAdminId,
+    ]);
+    db()->prepare('UPDATE order_items SET site_name=? WHERE id=?')->execute([
+        'txf-om-count-' . (int) $nullAdminId . '.com',
+        (int) $nullAdminId,
+    ]);
+    $adminCountMap = order_pipeline_admin_counts([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'q' => 'txf-om-count-' . (int) $nullAdminId,
+    ]);
+    if ((int) ($adminCountMap[0] ?? 0) >= 1 && (int) ($adminCountMap[-1] ?? 0) >= 1) {
+        pass('OM admin filter counts include All and Unassigned');
+    } else {
+        fail('OM admin counts missed unassigned row');
     }
 
     $autoId = add_order_pipeline_row((int) $adminUser['id'], '', [
@@ -5855,7 +5889,8 @@ try {
     }
     $copiedPublisherInbox = $omFromWp && str_contains((string) ($omFromWp['client_label'] ?? ''), 'publisher-inbox');
     if ($omFromWp && $foundProc && !$foundCompEarly && !$copiedPublisherInbox
-        && parse_money($omFromWp['owner_price'] ?? 0) === 42.0) {
+        && parse_money($omFromWp['owner_price'] ?? 0) === 42.0
+        && order_date_stored($omFromWp) === '') {
         pass('WP Processing syncs to OM Processing');
     } else {
         fail('WP Processing did not create a Processing OM row');
@@ -6081,17 +6116,18 @@ try {
     } else {
         fail('Processing origin filter mismatch');
     }
+    $pickEmpty = order_pipeline_pick_processing_origin('', []);
     $pickWp = order_pipeline_pick_processing_origin('', ['q' => $originWpDomain]);
     $pickMan = order_pipeline_pick_processing_origin('', ['q' => $manOriginDomain]);
     $pickJump = order_pipeline_pick_processing_origin('wp', ['q' => $manOriginDomain]);
     $pickKeep = order_pipeline_pick_processing_origin('wp', ['q' => $originWpDomain]);
     $pickExpl = order_pipeline_pick_processing_origin('manual', ['q' => $originWpDomain]);
     $pickAll = order_pipeline_pick_processing_origin('all', ['q' => $manOriginDomain]);
-    if ($pickWp === 'wp' && $pickMan === 'manual' && $pickJump === 'manual' && $pickKeep === 'wp'
+    if ($pickEmpty === 'all' && $pickWp === 'all' && $pickMan === 'all' && $pickJump === 'manual' && $pickKeep === 'wp'
         && $pickExpl === 'wp' && $pickAll === 'all') {
         pass('Processing default origin follows non-empty tab');
     } else {
-        fail('Processing default origin: wp=' . $pickWp . ' man=' . $pickMan
+        fail('Processing default origin: empty=' . $pickEmpty . ' wp=' . $pickWp . ' man=' . $pickMan
             . ' jump=' . $pickJump . ' keep=' . $pickKeep . ' expl=' . $pickExpl . ' all=' . $pickAll);
     }
 
@@ -6280,6 +6316,11 @@ try {
         && str_contains($ordersPhpSrc, "['folder' => 'completed'")
         && str_contains($ordersPhpSrc, 'No leftover Processing orders')
         && str_contains($ordersPhpSrc, 'order_row_ready_for_complete')
+        && str_contains($ordersPhpSrc, 'order-needs-summary')
+        && str_contains($ordersPhpSrc, 'data-needs')
+        && str_contains($ordersPhpSrc, 'data-date-display')
+        && str_contains($ordersPhpSrc, 'value="mine"')
+        && str_contains($ordersPhpSrc, 'order_date_stored')
         && str_contains($ordersPhpSrc, 'Need a country on every ticked row before completing')
         && str_contains($ordersPhpSrc, 'Need a client email or name on every ticked row before completing')
         && str_contains($ordersPhpSrc, 'data-orig-live')

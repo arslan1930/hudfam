@@ -416,21 +416,41 @@ function order_pipeline_parse_admin_filter($raw): int
     if ($raw === 'unassigned' || $raw === '-1') {
         return -1;
     }
+    if ($raw === 'mine') {
+        return -2;
+    }
     return max(0, (int) $raw);
 }
 
 function order_pipeline_admin_filter_query(int $adminId): string
 {
-    if ($adminId < 0) {
+    if ($adminId === -1) {
         return 'unassigned';
+    }
+    if ($adminId === -2) {
+        return 'mine';
     }
     return $adminId > 0 ? (string) $adminId : '';
 }
 
-function order_date_effective(array $row): string
+function order_pipeline_resolve_admin_filter(int $adminId, int $viewerId): int
+{
+    if ($adminId === -2) {
+        return max(0, $viewerId);
+    }
+    return $adminId;
+}
+
+function order_date_stored(array $row): string
 {
     $d = trim((string) ($row['order_date'] ?? ''));
-    if (normalize_order_date($d)) {
+    return normalize_order_date($d) ? $d : '';
+}
+
+function order_date_effective(array $row): string
+{
+    $d = order_date_stored($row);
+    if ($d !== '') {
         return $d;
     }
     $created = (string) ($row['created_at'] ?? '');
@@ -438,6 +458,52 @@ function order_date_effective(array $row): string
         return $m[1];
     }
     return '';
+}
+
+function order_date_display(?string $iso): string
+{
+    $d = normalize_order_date($iso ?? '');
+    if (!$d) {
+        return '';
+    }
+    $dt = DateTime::createFromFormat('Y-m-d', $d);
+    return $dt ? $dt->format('j M Y') : '';
+}
+
+function order_person_label(array $row): string
+{
+    $name = trim((string) ($row['full_name'] ?? $row['admin_full_name'] ?? ''));
+    $user = trim((string) ($row['username'] ?? $row['admin_username'] ?? ''));
+    $raw = $name !== '' ? $name : $user;
+    if ($raw === '') {
+        return '';
+    }
+    if (str_contains($raw, '@')) {
+        $local = (string) strstr($raw, '@', true);
+        $raw = $local !== '' ? $local : $raw;
+    }
+    if (preg_match('/^[a-z0-9]+[._-][a-z0-9._-]+$/i', $raw)) {
+        $first = explode('.', str_replace('_', '.', $raw), 2)[0];
+        if ($first !== '') {
+            return ucfirst(strtolower($first));
+        }
+    }
+    return $raw;
+}
+
+function order_row_needs(array $row): array
+{
+    $need = [];
+    if (trim((string) ($row['country'] ?? '')) === '') {
+        $need[] = 'country';
+    }
+    if (trim((string) ($row['client_label'] ?? '')) === '') {
+        $need[] = 'client';
+    }
+    if (trim((string) ($row['live_url'] ?? '')) === '') {
+        $need[] = 'LIVE URL';
+    }
+    return $need;
 }
 
 function order_wp_admin_user_id(array $wp): int
@@ -467,11 +533,7 @@ function order_backfill_pipeline_admin_from_website_prices(): void
 
 function order_admin_display_name(array $row): string
 {
-    $name = trim((string) ($row['admin_full_name'] ?? ''));
-    if ($name !== '') {
-        return $name;
-    }
-    return trim((string) ($row['admin_username'] ?? ''));
+    return order_person_label($row);
 }
 
 /** @return list<array<string,mixed>> */
@@ -514,6 +576,38 @@ function order_admin_options(): array
         // order_items may not exist yet
     }
     return array_values($byId);
+}
+
+/**
+ * Admin filter counts for the current sheet (folder/origin/search/dates, not admin).
+ * Keys: 0 = all, -1 = unassigned, user id => n.
+ *
+ * @param array{q?:string,country?:string,date_from?:string,date_to?:string,status?:string,folder?:string,origin?:string} $opts
+ * @return array<int,int>
+ */
+function order_pipeline_admin_counts(array $opts = []): array
+{
+    $opts['admin_id'] = 0;
+    [$whereSql, $params] = order_pipeline_where_sql($opts);
+    $stmt = db()->prepare(
+        'SELECT i.admin_user_id, COUNT(*) AS n FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id'
+        . $whereSql
+        . ' GROUP BY i.admin_user_id'
+    );
+    $stmt->execute($params);
+    $out = [0 => 0, -1 => 0];
+    foreach ($stmt->fetchAll() as $row) {
+        $n = (int) ($row['n'] ?? 0);
+        $out[0] += $n;
+        $aid = (int) ($row['admin_user_id'] ?? 0);
+        if ($aid < 1) {
+            $out[-1] += $n;
+        } else {
+            $out[$aid] = ($out[$aid] ?? 0) + $n;
+        }
+    }
+    return $out;
 }
 
 function order_profit($ownerPrice, $decidedPrice): float
@@ -1057,7 +1151,7 @@ function add_order_item(?int $clientId = null, string $siteName = '', ?int $mont
     }
     $adminId = (int) ($extra['admin_user_id'] ?? 0);
     $adminId = $adminId > 0 ? $adminId : null;
-    $orderDate = normalize_order_date($extra['order_date'] ?? '') ?: date('Y-m-d');
+    $orderDate = normalize_order_date($extra['order_date'] ?? '');
     $country = trim((string) ($extra['country'] ?? ''));
     $wpId = (int) ($extra['site_price_row_id'] ?? 0);
     $stage = strtolower(trim((string) ($extra['order_stage'] ?? 'processing')));
@@ -1528,9 +1622,8 @@ function normalize_order_pipeline_origin($origin): string
 
 /**
  * Processing sheet tab. Explicit origin= is kept when that tab still has rows
- * for the current filters. An empty pinned tab (Admin/date/search) jumps to the
- * first origin that still matches. Missing origin opens the first non-empty tab
- * (Website prices Processing, then Leftover, then Added here).
+ * for the current filters. An empty pinned tab jumps to the first origin that
+ * still matches. Missing origin opens All Processing.
  *
  * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string} $countOpts
  */
@@ -1541,10 +1634,10 @@ function order_pipeline_pick_processing_origin(string $rawOrigin, array $countOp
     $base = $countOpts;
     $base['folder'] = 'processing';
     unset($base['origin'], $base['status']);
-    if ($explicit && $raw === 'all') {
+    if (!$explicit || $raw === 'all') {
         return 'all';
     }
-    if ($explicit && count_order_pipeline_rows(array_merge($base, ['origin' => $raw])) > 0) {
+    if (count_order_pipeline_rows(array_merge($base, ['origin' => $raw])) > 0) {
         return $raw;
     }
     foreach (['wp', 'leftover', 'manual'] as $key) {
@@ -1552,16 +1645,7 @@ function order_pipeline_pick_processing_origin(string $rawOrigin, array $countOp
             return $key;
         }
     }
-    if ($explicit) {
-        return $raw;
-    }
-    $plain = ['folder' => 'processing'];
-    foreach (['wp', 'leftover', 'manual'] as $key) {
-        if (count_order_pipeline_rows(array_merge($plain, ['origin' => $key])) > 0) {
-            return $key;
-        }
-    }
-    return 'wp';
+    return $raw;
 }
 
 /**
@@ -1879,7 +1963,7 @@ function add_order_pipeline_row(?int $adminUserId, string $clientLabel = '', arr
     return add_order_item(null, '', null, null, [
         'admin_user_id' => $adminId,
         'client_label' => $clientLabel,
-        'order_date' => date('Y-m-d'),
+        'order_date' => normalize_order_date($extra['order_date'] ?? ''),
         'country' => (string) ($extra['country'] ?? ''),
     ]);
 }

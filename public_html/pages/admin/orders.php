@@ -53,11 +53,11 @@ if ($isProcessing) {
         ? order_pipeline_pick_processing_origin($rawOrigin, [
             'q' => $filter['q'],
             'country' => $filter['country'],
-            'admin_id' => $filter['admin_id'],
+            'admin_id' => order_pipeline_resolve_admin_filter($filter['admin_id'], (int) ($user['id'] ?? 0)),
             'date_from' => $filter['date_from'],
             'date_to' => $filter['date_to'],
         ])
-        : (in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'wp');
+        : (in_array($rawOrigin, ['wp', 'leftover', 'manual', 'all'], true) ? $rawOrigin : 'all');
 } elseif ($isCompleted) {
     if ($filter['status'] === '' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $filter['status'] = (string) ($_POST['status'] ?? '');
@@ -154,7 +154,7 @@ $renderOmFolderTabs = static function (string $currentFolder, int $procN, int $c
         'date_to' => '',
         'p' => 1,
     ];
-    $procHref = $ordersQs(array_merge($clearSheet, ['folder' => 'processing', 'origin' => '', 'status' => 'all']));
+    $procHref = $ordersQs(array_merge($clearSheet, ['folder' => 'processing', 'origin' => 'all', 'status' => 'all']));
     $compHref = $ordersQs(array_merge($clearSheet, ['folder' => 'completed', 'status' => 'unpaid']));
     $procOn = $currentFolder === 'processing';
     $compOn = $currentFolder === 'completed';
@@ -162,11 +162,13 @@ $renderOmFolderTabs = static function (string $currentFolder, int $procN, int $c
 <nav class="invoice-list-chips om-folder-tabs" id="om-folder-tabs" aria-label="Order folders">
   <a class="btn secondary<?= $procOn ? ' active-soft' : '' ?>"
      href="<?= h($procHref) ?>"<?= $procOn ? ' aria-current="page"' : '' ?>
+     title="All Processing. This count ignores search, country, admin, and dates."
      data-om-folder-tab="processing">
     Processing (<?= (int) $procN ?>)
   </a>
   <a class="btn secondary<?= $compOn ? ' active-soft' : '' ?>"
      href="<?= h($compHref) ?>"<?= $compOn ? ' aria-current="page"' : '' ?>
+     title="All Completed. This count ignores search, country, admin, and dates."
      data-om-folder-tab="completed">
     Completed (<?= (int) $compN ?><?= $unpaidN > 0 ? ' · ' . (int) $unpaidN . ' unpaid' : '' ?>)
   </a>
@@ -177,7 +179,7 @@ $renderOmFolderTabs = static function (string $currentFolder, int $procN, int $c
 $listOpts = [
     'q' => $filter['q'],
     'country' => $filter['country'],
-    'admin_id' => $filter['admin_id'],
+    'admin_id' => order_pipeline_resolve_admin_filter($filter['admin_id'], (int) ($user['id'] ?? 0)),
     'date_from' => $filter['date_from'],
     'date_to' => $filter['date_to'],
     'status' => $filter['status'],
@@ -256,9 +258,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('New orders are added in the Processing folder.');
             }
             $saveCurrent();
-            $newAdminId = $filter['admin_id'] > 0
-                ? $filter['admin_id']
-                : ($filter['admin_id'] < 0 ? 0 : (int) ($user['id'] ?? 0));
+            $newAdminId = $filter['admin_id'] === -2
+                ? (int) ($user['id'] ?? 0)
+                : ($filter['admin_id'] > 0
+                    ? $filter['admin_id']
+                    : ($filter['admin_id'] < 0 ? 0 : (int) ($user['id'] ?? 0)));
             add_order_pipeline_row((int) ($user['id'] ?? 0), '', [
                 'country' => $filter['country'],
                 'admin_user_id' => $newAdminId,
@@ -576,6 +580,28 @@ foreach ($items as $row) {
         ];
     }
 }
+$adminCounts = order_pipeline_admin_counts(array_merge($listOpts, ['admin_id' => 0]));
+$mineCount = (int) ($adminCounts[$viewerId] ?? 0);
+$pageNeedCountry = 0;
+$pageNeedClient = 0;
+$pageNeedLive = 0;
+$pageReady = 0;
+foreach ($items as $row) {
+    $needs = order_row_needs($row);
+    if (!$needs) {
+        $pageReady++;
+    } else {
+        if (in_array('country', $needs, true)) {
+            $pageNeedCountry++;
+        }
+        if (in_array('client', $needs, true)) {
+            $pageNeedClient++;
+        }
+        if (in_array('LIVE URL', $needs, true)) {
+            $pageNeedLive++;
+        }
+    }
+}
 
 $countryCatalog = [];
 try {
@@ -690,26 +716,27 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <label class="order-filter-field">
       <span class="order-filter-label">Admin</span>
       <select name="admin_id" aria-label="Filter by admin">
-        <option value="">All admins</option>
-        <option value="unassigned" <?= $filter['admin_id'] < 0 ? 'selected' : '' ?>>Unassigned</option>
+        <option value="">All (<?= (int) ($adminCounts[0] ?? 0) ?>)</option>
+        <?php if ($viewerId > 0): ?>
+          <option value="mine" <?= $filter['admin_id'] === -2 ? 'selected' : '' ?>>Mine (<?= (int) $mineCount ?>)</option>
+        <?php endif; ?>
+        <option value="unassigned" <?= $filter['admin_id'] === -1 ? 'selected' : '' ?>>Unassigned (<?= (int) ($adminCounts[-1] ?? 0) ?>)</option>
         <?php foreach ($admins as $aRow):
             $aid = (int) $aRow['id'];
-            $alabel = trim((string) ($aRow['full_name'] ?? ''));
-            if ($alabel === '') {
-                $alabel = (string) ($aRow['username'] ?? '');
-            }
+            $alabel = order_person_label($aRow);
+            $n = (int) ($adminCounts[$aid] ?? 0);
             ?>
-          <option value="<?= $aid ?>" <?= $filter['admin_id'] === $aid ? 'selected' : '' ?>><?= h($alabel) ?></option>
+          <option value="<?= $aid ?>" <?= $filter['admin_id'] === $aid ? 'selected' : '' ?>><?= h($alabel) ?> (<?= $n ?>)</option>
         <?php endforeach; ?>
       </select>
     </label>
     <label class="order-filter-field">
       <span class="order-filter-label">From</span>
-      <input type="date" name="date_from" value="<?= h($filter['date_from']) ?>" aria-label="From date" autocomplete="off" data-no-draft>
+      <input type="date" lang="en-GB" name="date_from" value="<?= h($filter['date_from']) ?>" aria-label="From date" autocomplete="off" data-no-draft>
     </label>
     <label class="order-filter-field">
       <span class="order-filter-label">To</span>
-      <input type="date" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" autocomplete="off" data-no-draft>
+      <input type="date" lang="en-GB" name="date_to" value="<?= h($filter['date_to']) ?>" aria-label="To date" autocomplete="off" data-no-draft>
     </label>
     <div class="order-filter-actions">
       <button class="btn secondary small" type="submit">Search</button>
@@ -731,10 +758,10 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 <nav class="invoice-list-chips om-origin-tabs" id="om-origin-tabs" aria-label="Processing origin">
   <?php
     $originLabels = [
+        'all' => 'All Processing',
         'wp' => 'Website prices Processing',
         'leftover' => 'Leftover',
         'manual' => 'Added here',
-        'all' => 'All Processing',
     ];
     foreach ($originLabels as $okey => $olabel):
         $ohref = $ordersQs(['origin' => $okey, 'p' => 1]);
@@ -835,7 +862,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
               ? 'Fill country, date, admin, client, prices, and LIVE URL. Tick rows with a live URL, then Mark completed. Saving a live URL does not complete the row. Edits save automatically when you leave a cell.'
               : 'Tick unpaid completed rows, then Push to invoice. Mark paid after payment. Website prices is not updated from this folder. Edits save automatically when you leave a cell.'
       ) ?></h2>
-      <p class="muted" id="order-autosave-status" style="margin:0.2rem 0 0" hidden></p>
+      <p class="muted" id="order-autosave-status" style="margin:0.2rem 0 0">Edits save when you leave a cell.</p>
     </div>
     <div class="actions">
       <?php if ($isProcessing): ?>
@@ -856,7 +883,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
         </span>
         <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='push_invoice'">Push to invoice</button>
       <?php endif; ?>
-      <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
+      <button class="btn secondary small" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     </div>
   </div>
   <p class="<?= $isCompleted ? 'order-check-hint order-check-hint-bill' : 'muted order-check-hint' ?>" style="margin:0.35rem 0 0">
@@ -867,6 +894,14 @@ if ($compactUnpaidStats && !$showPagingStats) {
     <?php endif; ?>
   </p>
   <p class="muted" id="order-copy-status" style="margin:0.35rem 0 0" hidden></p>
+  <?php if ($isProcessing && $siteCount > 0): ?>
+  <p class="order-needs-summary" style="margin:0.45rem 0 0">
+    This page: <strong><?= (int) $pageReady ?></strong> ready
+    · <?= (int) $pageNeedCountry ?> need country
+    · <?= (int) $pageNeedClient ?> need client
+    · <?= (int) $pageNeedLive ?> need LIVE URL
+  </p>
+  <?php endif; ?>
 
   <div class="order-sheet-scroll">
     <table class="order-sheet">
@@ -886,8 +921,8 @@ if ($compactUnpaidStats && !$showPagingStats) {
           </th>
           <th class="col-num">#</th>
           <th class="col-country"><?= label_with_info('Country', 'Country name for this order.') ?></th>
-          <th class="col-date"><?= label_with_info('Date', 'Order date.') ?></th>
-          <th class="col-admin"><?= label_with_info('Admin', 'Which admin this order belongs to.') ?></th>
+          <th class="col-date"><?= label_with_info('Date', 'Calendar day for this order. Shown as day month year. Leave empty until you set it — it does not default to today.') ?></th>
+          <th class="col-admin"><?= label_with_info('Admin', 'Who this order belongs to.') ?></th>
           <th class="col-client"><?= label_with_info('Client email or name', 'Free text — email or a short name. No client folder or extra details required.') ?></th>
           <th class="col-site"><?= label_with_info('Site name', 'Website or domain for this row (e.g. site.com).') ?></th>
           <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?></th>
@@ -916,21 +951,20 @@ if ($compactUnpaidStats && !$showPagingStats) {
                 if ($filter['country'] !== '') {
                     $filterBits[] = 'country ' . $filter['country'];
                 }
-                if ($filter['admin_id'] < 0) {
+                if ($filter['admin_id'] === -2) {
+                    $filterBits[] = 'Mine';
+                } elseif ($filter['admin_id'] === -1) {
                     $filterBits[] = 'Unassigned admin';
                 } elseif ($filter['admin_id'] > 0) {
-                    $adminName = '';
-                    if (isset($adminById[$filter['admin_id']])) {
-                        $adminName = trim((string) ($adminById[$filter['admin_id']]['full_name'] ?? ''));
-                        if ($adminName === '') {
-                            $adminName = (string) ($adminById[$filter['admin_id']]['username'] ?? '');
-                        }
-                    }
+                    $adminName = isset($adminById[$filter['admin_id']])
+                        ? order_person_label($adminById[$filter['admin_id']])
+                        : '';
                     $filterBits[] = 'admin ' . ($adminName !== '' ? $adminName : ('#' . $filter['admin_id']));
                 }
                 if ($filter['date_from'] !== '' || $filter['date_to'] !== '') {
-                    $filterBits[] = 'dates ' . ($filter['date_from'] !== '' ? $filter['date_from'] : '…')
-                        . '–' . ($filter['date_to'] !== '' ? $filter['date_to'] : '…');
+                    $fromLabel = order_date_display($filter['date_from']) ?: ($filter['date_from'] !== '' ? $filter['date_from'] : '…');
+                    $toLabel = order_date_display($filter['date_to']) ?: ($filter['date_to'] !== '' ? $filter['date_to'] : '…');
+                    $filterBits[] = 'dates ' . $fromLabel . '–' . $toLabel;
                 }
                 $folderTotal = $isProcessing ? (int) $tabProcessingCount : (int) $tabCompletedCount;
                 echo 'No orders match this filter';
@@ -984,7 +1018,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
           $monthVal = (int) ($row['order_month'] ?? 0);
           $endMonthVal = (int) ($row['period_end_month'] ?? 0);
           $yearVal = (int) ($row['order_year'] ?? 0);
-          $orderDate = order_date_effective($row);
+          $orderDate = order_date_stored($row);
+          $orderDateLabel = $orderDate !== '' ? order_date_display($orderDate) : 'Unset';
+          $rowNeeds = $isProcessing ? order_row_needs($row) : [];
+          $rowNeedsLabel = $rowNeeds ? ('Needs ' . implode(', ', $rowNeeds)) : 'Ready';
           $rowAdminId = (int) ($row['admin_user_id'] ?? 0);
           if ($orderDate !== '') {
               if ($monthVal < 1) {
@@ -1029,37 +1066,28 @@ if ($compactUnpaidStats && !$showPagingStats) {
                    list="order-country-list"
                    placeholder="Country…" autocomplete="off"
                    title="<?= h((string) ($row['country'] ?? '')) ?>">
+            <?php if ($isProcessing): ?>
+              <span class="order-needs-chip<?= $rowNeeds ? ' is-missing' : ' is-ready' ?>"
+                    data-needs title="<?= h($rowNeedsLabel) ?>"><?= h($rowNeedsLabel) ?></span>
+            <?php endif; ?>
           </td>
           <td class="col-date">
-            <input class="cell-input" type="date" name="order_date[<?= $id ?>]"
-                   value="<?= h($orderDate) ?>" aria-label="Order date" data-order-date>
+            <input class="cell-input" type="date" lang="en-GB" name="order_date[<?= $id ?>]"
+                   value="<?= h($orderDate) ?>" aria-label="Order date"
+                   placeholder="Unset" data-order-date>
+            <span class="order-date-display muted" data-date-display><?= h($orderDateLabel) ?></span>
           </td>
           <td class="col-admin">
             <?php
-              $adminTitle = '';
-              if ($rowAdminId < 1) {
-                  $adminTitle = 'Unassigned';
-              } else {
-                  foreach ($adminById as $aid => $aRow) {
-                      if ((int) $aid !== $rowAdminId) {
-                          continue;
-                      }
-                      $adminTitle = trim((string) ($aRow['full_name'] ?? ''));
-                      if ($adminTitle === '') {
-                          $adminTitle = (string) ($aRow['username'] ?? '');
-                      }
-                      break;
-                  }
-              }
+              $adminTitle = $rowAdminId < 1
+                  ? 'Unassigned'
+                  : (isset($adminById[$rowAdminId]) ? order_person_label($adminById[$rowAdminId]) : '');
             ?>
             <select class="cell-input cell-select" name="admin_user_id[<?= $id ?>]" aria-label="Admin"
                     title="<?= h($adminTitle) ?>" data-order-admin>
               <option value="" <?= $rowAdminId < 1 ? 'selected' : '' ?>>Unassigned</option>
               <?php foreach ($adminById as $aid => $aRow):
-                  $alabel = trim((string) ($aRow['full_name'] ?? ''));
-                  if ($alabel === '') {
-                      $alabel = (string) ($aRow['username'] ?? '');
-                  }
+                  $alabel = order_person_label($aRow);
                   ?>
                 <option value="<?= (int) $aid ?>" <?= $rowAdminId === (int) $aid ? 'selected' : '' ?>><?= h($alabel) ?></option>
               <?php endforeach; ?>
@@ -1250,7 +1278,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     <?php endforeach; ?>
   </datalist>
   <div class="actions-sticky">
-    <button class="btn large" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
+    <button class="btn secondary small" type="submit" onclick="document.getElementById('sheet-action').value='save_sheet'">Save sheet</button>
     <?php if ($isProcessing): ?>
       <button class="btn" type="submit" onclick="document.getElementById('sheet-action').value='mark_completed'">Mark completed</button>
       <button class="btn secondary" type="submit" onclick="document.getElementById('sheet-action').value='add_row'">+ Add order</button>
@@ -1381,6 +1409,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     document.querySelectorAll('[data-row]').forEach(function (row) {
       syncPlacementRow(row);
       syncPushCheck(row);
+      updateNeedsChip(row);
       sites++;
       var o = num((row.querySelector('[data-owner]') || {}).value);
       var d = num((row.querySelector('[data-decided]') || {}).value);
@@ -1478,9 +1507,37 @@ if ($compactUnpaidStats && !$showPagingStats) {
   function setSaveStatus(msg, isError) {
     var el = document.getElementById('order-autosave-status');
     if (!el) return;
-    el.hidden = !msg;
-    el.textContent = msg || '';
+    el.hidden = false;
+    el.textContent = msg || 'Edits save when you leave a cell.';
     el.style.color = isError ? '#a32020' : '';
+  }
+  function formatDateDisplay(iso) {
+    var m = String(iso || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return 'Unset';
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var month = parseInt(m[2], 10);
+    var day = parseInt(m[3], 10);
+    if (month < 1 || month > 12) return 'Unset';
+    return day + ' ' + months[month - 1] + ' ' + m[1];
+  }
+  function updateDateDisplay(row) {
+    var dateEl = row.querySelector('[data-order-date]');
+    var out = row.querySelector('[data-date-display]');
+    if (!dateEl || !out) return;
+    out.textContent = formatDateDisplay(dateEl.value);
+  }
+  function updateNeedsChip(row) {
+    var chip = row.querySelector('[data-needs]');
+    if (!chip) return;
+    var missing = [];
+    if (!String((row.querySelector('[name^="country"]') || {}).value || '').trim()) missing.push('country');
+    if (!String((row.querySelector('[name^="client_label"]') || {}).value || '').trim()) missing.push('client');
+    if (!String((row.querySelector('[data-live]') || {}).value || '').trim()) missing.push('LIVE URL');
+    var label = missing.length ? ('Needs ' + missing.join(', ')) : 'Ready';
+    chip.textContent = label;
+    chip.title = label;
+    chip.classList.toggle('is-missing', missing.length > 0);
+    chip.classList.toggle('is-ready', missing.length === 0);
   }
   function ensureYearOption(sel, year) {
     if (!sel) return;
@@ -1509,6 +1566,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     var month = parseInt(m[2], 10);
     if (year >= 2018 && year <= 2100) ensureYearOption(yearEl, year);
     if (month >= 1 && month <= 12) monthEl.value = String(month);
+    updateDateDisplay(row);
   }
   function syncDateFromMonthYear(row) {
     var dateEl = row.querySelector('[data-order-date]');
@@ -1524,6 +1582,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     if (day > last) day = last;
     if (day < 1) day = 1;
     dateEl.value = year + '-' + pad2(month) + '-' + pad2(day);
+    updateDateDisplay(row);
   }
   function flushAutosave() {
     if (saveTimer) {
@@ -1896,6 +1955,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
     var row = t && t.closest ? t.closest('[data-row]') : null;
     if (row && t && t.getAttribute && t.getAttribute('data-order-date') !== null) {
       syncMonthYearFromDate(row);
+      updateDateDisplay(row);
     }
     scheduleAutosave(false);
   }, true);
@@ -1905,8 +1965,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
     markRowDirty(t);
     var row = t && t.closest ? t.closest('[data-row]') : null;
     if (row && t && t.getAttribute) {
-      if (t.getAttribute('data-order-date') !== null) syncMonthYearFromDate(row);
-      else if (t.getAttribute('data-order-month') !== null || t.getAttribute('data-order-year') !== null) {
+      if (t.getAttribute('data-order-date') !== null) {
+        syncMonthYearFromDate(row);
+        updateDateDisplay(row);
+      } else if (t.getAttribute('data-order-month') !== null || t.getAttribute('data-order-year') !== null) {
         syncDateFromMonthYear(row);
       }
       if (t.getAttribute('data-order-admin') !== null) {

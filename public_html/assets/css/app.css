@@ -3960,8 +3960,35 @@ textarea[hidden],
   vertical-align: middle;
   border-bottom: 1px solid var(--line);
 }
-.order-sheet .col-num { width: 2.2rem; text-align: center; }
-.order-sheet .col-check { width: 5.2rem; text-align: center; }
+.order-sheet .col-num { width: 2.2rem; min-width: 2.2rem; text-align: center; }
+.order-sheet .col-check { width: 5.2rem; min-width: 5.2rem; text-align: center; }
+.order-sheet th.col-check,
+.order-sheet td.col-check {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
+}
+.order-sheet th.col-num,
+.order-sheet td.col-num {
+  position: sticky;
+  left: 5.2rem;
+  z-index: 3;
+  background: #fff;
+}
+.order-sheet th.col-country,
+.order-sheet td.col-country {
+  position: sticky;
+  left: 7.4rem;
+  z-index: 3;
+  background: #fff;
+  box-shadow: 6px 0 8px -6px rgba(15, 23, 42, 0.28);
+}
+.order-sheet th.col-check,
+.order-sheet th.col-num,
+.order-sheet th.col-country {
+  z-index: 5;
+}
 .order-check-heads,
 .order-check-pair { display: flex; gap: 0.45rem; align-items: flex-end; justify-content: center; }
 .order-check-head {
@@ -4003,6 +4030,26 @@ textarea[hidden],
   width: 100%;
   max-width: 100%;
 }
+.order-date-display {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  margin-top: 0.18rem;
+}
+.order-needs-chip {
+  display: block;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  margin-top: 0.22rem;
+  font-weight: 650;
+  white-space: normal;
+}
+.order-needs-chip.is-missing { color: #b45309; }
+.order-needs-chip.is-ready { color: #15803d; }
+.order-needs-summary {
+  font-size: 0.88rem;
+  color: #374151;
+}
 .order-sheet .col-client { min-width: 200px; }
 .order-sheet .col-site { min-width: 188px; }
 .order-sheet .col-placement { min-width: 148px; width: 152px; }
@@ -4025,7 +4072,7 @@ textarea[hidden],
   background: #fff;
   border-style: solid;
 }
-.order-sheet .col-price { width: 7.5rem; min-width: 7.2rem; white-space: nowrap; }
+.order-sheet .col-price { width: 9.2rem; min-width: 9rem; white-space: nowrap; }
 .order-sheet tfoot .col-price,
 .order-sheet tfoot .col-profit {
   text-align: right;
