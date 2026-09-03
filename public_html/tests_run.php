@@ -178,10 +178,19 @@ if (
     && str_contains($draftJs, 'Restore already wrote localStorage')
     && str_contains($draftJs, 'camp-draft-textarea-sync')
     && str_contains($draftJs, "el.classList.contains('visually-hidden')")
+    && str_contains($draftJs, 'data-server-autosave')
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
     fail('draft autosave / sheet / presence CSRF wiring');
+}
+
+if (str_contains($indexSrc, "str_starts_with(\$page, 'admin_')")
+    && str_contains($indexSrc, 'Admin access required. You were sent to the Team panel.')
+    && str_contains($indexSrc, "(\$cu['role'] ?? '') !== 'admin'")) {
+    pass('admin_* routes blocked for Team at the front door');
+} else {
+    fail('index.php missing admin-only gate for admin_* pages');
 }
 
 if (str_contains($procJs, "method === 'get'")
@@ -5005,6 +5014,203 @@ try {
         fail('add order did not copy filter country');
     }
 
+    $saniaName = 'sania.teqnowebs';
+    $saniaHash = password_hash('TeamTest9x', PASSWORD_DEFAULT);
+    db()->prepare(
+        "INSERT INTO users (username,password_hash,full_name,email,role,must_change_password,is_active)
+         VALUES (?,?,?,?, 'team', 0, 1)
+         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), is_active=1, role='team', full_name=VALUES(full_name)"
+    )->execute([$saniaName, $saniaHash, 'Sania', 'sania@test.local']);
+    $saniaId = (int) db()->query('SELECT id FROM users WHERE username=' . db()->quote($saniaName))->fetchColumn();
+    $arslanId = (int) $adminUser['id'];
+    $switchId = add_order_pipeline_row($arslanId, 'anna@example.com', [
+        'country' => 'netherland',
+        'admin_user_id' => $saniaId,
+    ]);
+    $adminOpts = order_admin_options();
+    $optIds = [];
+    foreach ($adminOpts as $optRow) {
+        $optIds[(int) ($optRow['id'] ?? 0)] = true;
+    }
+    $strayName = 'txf-om-no-admin';
+    db()->prepare(
+        "INSERT INTO users (username,password_hash,full_name,email,role,must_change_password,is_active)
+         VALUES (?,?,?,?, 'team', 0, 1)
+         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), is_active=1, role='team'"
+    )->execute([$strayName, $saniaHash, 'No Orders', 'txf-om-no-admin@test.local']);
+    $strayId = (int) db()->query('SELECT id FROM users WHERE username=' . db()->quote($strayName))->fetchColumn();
+    $optsAfterStray = order_admin_options();
+    $strayListed = false;
+    foreach ($optsAfterStray as $optRow) {
+        if ((int) ($optRow['id'] ?? 0) === $strayId) {
+            $strayListed = true;
+            break;
+        }
+    }
+    update_order_item((int) $switchId, 0, [
+        'site_name' => 'brummensnieuws.nl',
+        'country' => 'netherland',
+        'client_label' => 'Anna',
+        'admin_user_id' => $saniaId,
+        'live_url' => 'https://example.com/sania-live',
+        'owner_price' => '',
+        'decided_price' => '',
+    ], true);
+    update_order_item((int) $switchId, 0, [
+        'site_name' => 'brummensnieuws.nl',
+        'country' => 'netherland',
+        'client_label' => 'Anna',
+        'admin_user_id' => $arslanId,
+        'live_url' => 'https://example.com/sania-live',
+        'owner_price' => '',
+        'decided_price' => '',
+    ], true);
+    $afterArslan = get_order_item((int) $switchId);
+    update_order_item((int) $switchId, 0, [
+        'site_name' => 'brummensnieuws.nl',
+        'country' => 'netherland',
+        'client_label' => 'Anna',
+        'admin_user_id' => $saniaId,
+        'live_url' => 'https://example.com/sania-live',
+        'owner_price' => '',
+        'decided_price' => '',
+    ], true);
+    $afterSania = get_order_item((int) $switchId);
+    $byUsername = order_normalize_admin_user_id($saniaName);
+    $badAdmin = false;
+    try {
+        order_normalize_admin_user_id(99999991);
+    } catch (InvalidArgumentException $e) {
+        $badAdmin = str_contains($e->getMessage(), 'Admin list');
+    }
+    $incompleteThrew = false;
+    try {
+        update_order_item((int) $switchId, 0, [
+            'site_name' => 'brummensnieuws.nl',
+            'country' => 'netherland',
+            'client_label' => 'Anna',
+            'admin_user_id' => $arslanId,
+            'live_url' => 'https://example.com/sania-live',
+            'owner_price' => '',
+            'decided_price' => '',
+        ], false);
+    } catch (InvalidArgumentException $e) {
+        $incompleteThrew = str_contains($e->getMessage(), 'Decided price');
+    }
+    if ($saniaId > 0
+        && !empty($optIds[$saniaId])
+        && !empty($optIds[$arslanId])
+        && !$strayListed
+        && (int) ($afterArslan['admin_user_id'] ?? 0) === $arslanId
+        && (int) ($afterSania['admin_user_id'] ?? 0) === $saniaId
+        && $byUsername === $saniaId
+        && $badAdmin
+        && $incompleteThrew) {
+        pass('order admin picker is admins-only and Sania↔Arslan still saves');
+    } else {
+        fail('order admin Sania↔Arslan: sania=' . $saniaId
+            . ' opts=' . (int) !empty($optIds[$saniaId])
+            . ' stray=' . (int) $strayListed
+            . ' arslan=' . (int) ($afterArslan['admin_user_id'] ?? 0)
+            . ' back=' . (int) ($afterSania['admin_user_id'] ?? 0)
+            . ' name=' . (int) $byUsername
+            . ' bad=' . (int) $badAdmin
+            . ' incomplete=' . (int) $incompleteThrew);
+    }
+
+    $prevGet = $_GET;
+    $prevPost = $_POST;
+    $_GET = [];
+    $_POST = [];
+    $defaultMine = order_pipeline_profile_admin_id(11);
+    $_GET['admin_id'] = '0';
+    $explicitAll = order_pipeline_profile_admin_id(11);
+    $_GET['admin_id'] = '22';
+    $explicitOne = order_pipeline_profile_admin_id(11);
+    $_GET = $prevGet;
+    $_POST = $prevPost;
+    if ($defaultMine === 11 && $explicitAll === 0 && $explicitOne === 22) {
+        pass('OM admin filter defaults to the signed-in profile');
+    } else {
+        fail('OM admin profile default mine=' . $defaultMine . ' all=' . $explicitAll . ' one=' . $explicitOne);
+    }
+
+    $tag = 'txfom-split-' . bin2hex(random_bytes(3));
+    $admin2Id = (int) db()->query("SELECT id FROM users WHERE username='admin2' AND role='admin' LIMIT 1")->fetchColumn();
+    $madeA = 0;
+    $madeB = 0;
+    if ($admin2Id > 0) {
+        for ($i = 1; $i <= 3; $i++) {
+            $oid = add_order_pipeline_row($arslanId, 'split-a@example.com', [
+                'country' => 'Germany',
+                'admin_user_id' => $arslanId,
+            ]);
+            update_order_item((int) $oid, 0, [
+                'site_name' => $tag . '-a' . $i . '.com',
+                'country' => 'Germany',
+                'client_label' => 'split-a@example.com',
+                'admin_user_id' => $arslanId,
+                'owner_price' => 1,
+                'decided_price' => 2,
+                'live_url' => 'https://example.com/' . $tag . '-a' . $i,
+                'order_month' => 9,
+                'order_year' => 2026,
+            ]);
+            $marked = order_mark_completed((int) $oid, 'https://example.com/' . $tag . '-a' . $i, $arslanId);
+            if (!empty($marked['ok'])) {
+                $madeA++;
+            }
+        }
+        for ($i = 1; $i <= 7; $i++) {
+            $oid = add_order_pipeline_row($admin2Id, 'split-b@example.com', [
+                'country' => 'Germany',
+                'admin_user_id' => $admin2Id,
+            ]);
+            update_order_item((int) $oid, 0, [
+                'site_name' => $tag . '-b' . $i . '.com',
+                'country' => 'Germany',
+                'client_label' => 'split-b@example.com',
+                'admin_user_id' => $admin2Id,
+                'owner_price' => 1,
+                'decided_price' => 2,
+                'live_url' => 'https://example.com/' . $tag . '-b' . $i,
+                'order_month' => 9,
+                'order_year' => 2026,
+            ]);
+            $marked = order_mark_completed((int) $oid, 'https://example.com/' . $tag . '-b' . $i, $admin2Id);
+            if (!empty($marked['ok'])) {
+                $madeB++;
+            }
+        }
+    }
+    $nA = count_order_pipeline_rows(['folder' => 'completed', 'q' => $tag, 'admin_id' => $arslanId]);
+    $nB = count_order_pipeline_rows(['folder' => 'completed', 'q' => $tag, 'admin_id' => $admin2Id]);
+    $nAll = count_order_pipeline_rows(['folder' => 'completed', 'q' => $tag, 'admin_id' => 0]);
+    if ($admin2Id > 0 && $madeA === 3 && $madeB === 7 && $nA === 3 && $nB === 7 && $nAll === 10) {
+        pass('Completed counts stay split per admin profile');
+    } else {
+        fail('OM profile split a=' . $nA . '/' . $madeA . ' b=' . $nB . '/' . $madeB . ' all=' . $nAll);
+    }
+    $dashA = order_management_dashboard_stats($arslanId);
+    $dashB = order_management_dashboard_stats($admin2Id);
+    $dashAll = order_management_dashboard_stats(0);
+    $expectA = count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => $arslanId]);
+    $expectB = count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => $admin2Id]);
+    $unpaidA = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid', 'admin_id' => $arslanId]);
+    if ($admin2Id > 0
+        && (int) ($dashA['completed'] ?? -1) === $expectA
+        && (int) ($dashB['completed'] ?? -1) === $expectB
+        && (int) ($dashA['unpaid_live'] ?? -1) === $unpaidA
+        && (int) ($dashA['admin_id'] ?? -1) === $arslanId
+        && (int) ($dashAll['completed'] ?? 0) >= $expectA
+        && (int) ($dashAll['completed'] ?? 0) >= $expectB) {
+        pass('dashboard OM stats follow each admin profile');
+    } else {
+        fail('dashboard OM stats mixed a=' . (int) ($dashA['completed'] ?? -1)
+            . ' b=' . (int) ($dashB['completed'] ?? -1)
+            . ' all=' . (int) ($dashAll['completed'] ?? -1));
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');
@@ -5953,6 +6159,24 @@ try {
         pass('Team cannot use OM or invoices');
     } else {
         fail('Team OM/invoice ACL leak');
+    }
+    if (str_contains($ordersPhpSrc, 'data-server-autosave')
+        && str_contains($ordersPhpSrc, 'id="order-autosave-status"')
+        && str_contains($ordersPhpSrc, "fd.set('ajax', '1')")
+        && str_contains($ordersPhpSrc, 'disableCleanRows')
+        && str_contains($ordersPhpSrc, 'data-order-admin')
+        && function_exists('order_normalize_admin_user_id')) {
+        pass('OM sheet autosave + admin id normalize');
+    } else {
+        fail('OM missing autosave or admin id normalize');
+    }
+    $dashPhpSrc = file_get_contents(__DIR__ . '/pages/admin/dashboard.php') ?: '';
+    if (str_contains($ordersPhpSrc, 'order_pipeline_profile_admin_id')
+        && str_contains($ordersPhpSrc, "count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => \$filter['admin_id']])")
+        && str_contains($dashPhpSrc, "order_management_dashboard_stats((int) (\$user['id'] ?? 0))")) {
+        pass('OM counts stay on the signed-in admin profile');
+    } else {
+        fail('OM profile counts still mix admins');
     }
 
     $uniqUrls = order_live_urls_from_rows([

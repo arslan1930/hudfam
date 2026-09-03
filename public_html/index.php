@@ -126,6 +126,17 @@ if (!isset($routes[$page])) {
     exit;
 }
 
+// Order management, invoices, Users, and other admin_* routes stay Admin-only.
+$cu = current_user();
+if (
+    $cu
+    && ($cu['role'] ?? '') !== 'admin'
+    && str_starts_with($page, 'admin_')
+) {
+    flash('error', 'Admin access required. You were sent to the Team panel.');
+    redirect('index.php?page=team_dashboard');
+}
+
 // Must change weak/default password before using the app.
 $cu = current_user();
 if ($cu && user_must_change_password($cu)) {

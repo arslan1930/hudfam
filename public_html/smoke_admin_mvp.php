@@ -970,6 +970,7 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, 'Typed country')
     || !str_contains($draftJsSmoke, 'camp-draft-textarea-sync')
     || !str_contains($draftJsSmoke, "el.classList.contains('visually-hidden')")
+    || !str_contains($draftJsSmoke, 'data-server-autosave')
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -1605,8 +1606,8 @@ if (!str_contains($ordersPage, 'push_invoice') || !str_contains($ordersPage, 'Pu
 } else {
     ok('orders push to invoice');
 }
-if (!str_contains($ordersPage, "folder=processing")
-    || !str_contains($ordersPage, "folder=completed")
+if (!str_contains($ordersPage, "\$ordersQs(['folder' => 'processing', 'p' => 1])")
+    || !str_contains($ordersPage, "\$ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid'])")
     || !str_contains($ordersPage, 'id="om-folders"')
     || !str_contains($ordersPage, 'Completed orders')
     || !str_contains($ordersPage, 'use ($filter, $perPage, $pageNum, $folder, $origin)')
@@ -1653,6 +1654,37 @@ if (!str_contains($ordersPage, 'Need a country on every ticked row before comple
     fail('orders missing complete/push country-client checks or LIVE clear confirm');
 } else {
     ok('orders complete/push require country+client + LIVE clear confirm');
+}
+if (!str_contains($ordersPage, 'data-server-autosave')
+    || !str_contains($ordersPage, 'id="order-autosave-status"')
+    || !str_contains($ordersPage, "fd.set('ajax', '1')")
+    || !str_contains($ordersPage, 'disableCleanRows')
+    || !str_contains($ordersPage, 'data-order-admin')
+    || !str_contains($ordersPage, 'leaveAfterSave')) {
+    fail('orders missing per-row autosave');
+} else {
+    ok('orders autosave edited rows when leaving a cell');
+}
+$ordersInc = file_get_contents($root . '/includes/orders.php') ?: '';
+$indexAcl = file_get_contents($root . '/index.php') ?: '';
+if (!str_contains($ordersInc, 'function order_normalize_admin_user_id')
+    || str_contains($ordersInc, 'list_team_users')
+    || !str_contains($ordersInc, 'Pick someone from the Admin list')
+    || !str_contains($ordersInc, 'bool $allowIncomplete = false')
+    || !str_contains($indexAcl, "str_starts_with(\$page, 'admin_')")
+    || !str_contains($indexAcl, 'Admin access required. You were sent to the Team panel.')) {
+    fail('orders admin picker / admin-only ACL missing');
+} else {
+    ok('orders Admin picker is admins-only; team cannot open admin pages');
+}
+if (!str_contains($ordersPage, "count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => \$filter['admin_id']])")
+    || !str_contains($ordersPage, 'order_pipeline_profile_admin_id')
+    || !str_contains($ordersInc, 'function order_pipeline_profile_admin_id')
+    || !str_contains($ordersPage, "\$bits[] = 'admin_id=' . \$adminId")
+    || !str_contains($ordersPage, "\$ordersQs(['folder' => 'processing', 'p' => 1])")) {
+    fail('orders folder tabs still mix every admin into one count');
+} else {
+    ok('orders folder tabs count the selected admin only');
 }
 if (!str_contains($ordersPage, 'Copy selected sites (this page)')
     || !str_contains($ordersPage, 'Copy selected live URLs (this page)')
@@ -1794,8 +1826,9 @@ if (!str_contains($orderSheet, 'unpaid LIVE') && !str_contains($orderSheet, 'unp
 }
 
 $dashboardPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
-if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
-    || !str_contains($dashboardPage, 'unpaid LIVE')) {
+if (!str_contains($dashboardPage, 'order_management_dashboard_stats((int) ($user[\'id\'] ?? 0))')
+    || !str_contains($dashboardPage, 'unpaid LIVE')
+    || !str_contains($dashboardPage, 'folder=completed&status=unpaid&admin_id=')) {
     fail('dashboard missing order unpaid LIVE stats');
 } else {
     ok('dashboard order unpaid LIVE stats');
@@ -1844,7 +1877,7 @@ if (!str_contains($invoicesLib, 'AND TRIM(country) <> \'\'')
 }
 
 $testsFull = file_get_contents($root . '/tests_run.php') ?: '';
-foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event snapshots article doc', 'invoice append event snapshots article doc', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab'] as $needle) {
+foreach (['mark paid without LIVE', 'unpaid LIVE count', 'archived client hidden', 'order_management_dashboard_stats', 'clearing LIVE also clears paid', 'order clients SQL limit/offset', 'invoices SQL limit/offset', 'invoice draft count helper', 'invoice unpaid-done count helper', 'invoice list filter draft', 'invoice list filter unpaid', 'invoice list filter paid', 'invoice list client_id excludes blanks', 'invoice generate option unpaid LIVE', 'pipeline sheet filters', 'pipeline invoice without client folder', 'normalize_order_date keeps calendar day', 'add order keeps filter country', 'invoice display bill as', 'invoice save bill as header', 'WP Processing syncs to OM Processing', 'complete without live URL rejected', 'complete without client rejected', 'complete without country rejected', 'invoice without country rejected', 'Team cannot use OM or invoices', 'filling LIVE URL does not auto-complete', 'copy live URLs unique first-seen', 'txt/copy uses folder + filter', 'OM copy UI on Processing and Completed', 'WP leaving Processing keeps OM row in Processing', 'Processing origin wp leftover manual all', 'restoring WP Processing recreates OM row', 'Push unpaid CTA ticks current-filter ids or honest label', 'OM Open in Website prices URL + status label', 'OM sheet Copy/Complete labels, confirm, WP link, client typeahead', 'mixed bill-as blocked', 'generate empty stats match invoiceable', 'generate pick cap', 'invoice linked OM rows', 'article doc URL saved and kept after complete', 'invoice created event snapshots article doc', 'invoice append event snapshots article doc', 'invoice waiting match, labels, aging', 'OM month close bounds and totals', 'invoice search Waiting/Draft labels', 'Processing default origin follows non-empty tab', 'Completed counts stay split per admin profile', 'dashboard OM stats follow each admin profile'] as $needle) {
     if (!str_contains($testsFull, $needle)) {
         fail("tests_run.php missing OM coverage: {$needle}");
     }

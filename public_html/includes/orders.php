@@ -419,15 +419,112 @@ function order_admin_display_name(array $row): string
     return trim((string) ($row['admin_username'] ?? ''));
 }
 
-/** @return list<array<string,mixed>> */
+function order_admin_option_label(array $row): string
+{
+    $name = trim((string) ($row['full_name'] ?? $row['admin_full_name'] ?? ''));
+    if ($name !== '') {
+        return $name;
+    }
+    return trim((string) ($row['username'] ?? $row['admin_username'] ?? ''));
+}
+
+/**
+ * Admin accounts, plus anyone already assigned on an order row.
+ * Team logins are not listed unless they already own a row (so Sania ↔ Arslan still works).
+ * Order management itself stays Admin-only via require_admin().
+ *
+ * @return list<array<string,mixed>>
+ */
 function order_admin_options(): array
 {
+    $byId = [];
+    $add = static function (array $row) use (&$byId): void {
+        $id = (int) ($row['id'] ?? 0);
+        if ($id > 0 && !isset($byId[$id])) {
+            $byId[$id] = $row;
+        }
+    };
     if (function_exists('list_admin_users')) {
-        return list_admin_users(true);
+        foreach (list_admin_users(true) as $row) {
+            $add($row);
+        }
+    } else {
+        foreach (db()->query(
+            "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
+        )->fetchAll() as $row) {
+            $add($row);
+        }
     }
-    return db()->query(
-        "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
-    )->fetchAll();
+    try {
+        $assigned = db()->query(
+            "SELECT u.* FROM users u
+             INNER JOIN (
+               SELECT DISTINCT admin_user_id FROM order_items
+               WHERE row_type = 'site' AND admin_user_id IS NOT NULL
+             ) i ON u.id = i.admin_user_id
+             ORDER BY u.full_name, u.username"
+        )->fetchAll();
+        foreach ($assigned as $row) {
+            $add($row);
+        }
+    } catch (Throwable $e) {
+        // order_items may not exist yet
+    }
+    $list = array_values($byId);
+    usort($list, static function (array $a, array $b): int {
+        $roleA = (string) ($a['role'] ?? '');
+        $roleB = (string) ($b['role'] ?? '');
+        if ($roleA === 'admin' && $roleB !== 'admin') {
+            return -1;
+        }
+        if ($roleB === 'admin' && $roleA !== 'admin') {
+            return 1;
+        }
+        return strcasecmp(order_admin_option_label($a), order_admin_option_label($b));
+    });
+    return $list;
+}
+
+/**
+ * Resolve a posted Admin cell to a real users.id (or null).
+ * Accepts a numeric id, then an exact username, then a unique full name.
+ *
+ * @param mixed $raw
+ */
+function order_normalize_admin_user_id($raw): ?int
+{
+    if (is_array($raw)) {
+        $raw = reset($raw);
+    }
+    $raw = trim((string) $raw);
+    if ($raw === '' || $raw === '0') {
+        return null;
+    }
+    if (preg_match('/^-?\d+$/', $raw)) {
+        $id = (int) $raw;
+        if ($id < 1) {
+            return null;
+        }
+        $stmt = db()->prepare('SELECT id FROM users WHERE id=? LIMIT 1');
+        $stmt->execute([$id]);
+        if ((int) $stmt->fetchColumn() === $id) {
+            return $id;
+        }
+        throw new InvalidArgumentException('That person is not in Users. Pick someone from the Admin list.');
+    }
+    $stmt = db()->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+    $stmt->execute([$raw]);
+    $id = (int) $stmt->fetchColumn();
+    if ($id > 0) {
+        return $id;
+    }
+    $stmt = db()->prepare('SELECT id FROM users WHERE full_name = ? ORDER BY id ASC');
+    $stmt->execute([$raw]);
+    $hits = $stmt->fetchAll();
+    if (count($hits) === 1) {
+        return (int) ($hits[0]['id'] ?? 0) ?: null;
+    }
+    throw new InvalidArgumentException('Could not assign that admin. Pick someone from the Admin list.');
 }
 
 function order_profit($ownerPrice, $decidedPrice): float
@@ -837,22 +934,25 @@ function count_order_client_unpaid_live(int $clientId): int
     return (int) $stmt->fetchColumn();
 }
 
-/** Dashboard/order list aggregates for the pipeline sheet. */
-function order_management_dashboard_stats(): array
+/** Dashboard/order list aggregates for the pipeline sheet.
+ * Pass the signed-in admin id so each profile sees its own orders. 0 = every admin.
+ */
+function order_management_dashboard_stats(int $adminId = 0): array
 {
     ensure_order_schema();
-    $orders = (int) db()->query(
-        "SELECT COUNT(*) FROM order_items WHERE row_type = 'site'"
-    )->fetchColumn();
-    $processing = count_order_pipeline_rows(['folder' => 'processing']);
-    $completed = count_order_pipeline_rows(['folder' => 'completed']);
-    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+    $adminId = max(0, $adminId);
+    $opts = $adminId > 0 ? ['admin_id' => $adminId] : [];
+    $orders = count_order_pipeline_rows($opts);
+    $processing = count_order_pipeline_rows(['folder' => 'processing'] + $opts);
+    $completed = count_order_pipeline_rows(['folder' => 'completed'] + $opts);
+    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid'] + $opts);
     return [
         'orders' => $orders,
         'clients' => $orders,
         'processing' => $processing,
         'completed' => $completed,
         'unpaid_live' => $unpaidLive,
+        'admin_id' => $adminId,
     ];
 }
 
@@ -1040,9 +1140,9 @@ function add_order_year_end(int $clientId, int $endingYear): int
 }
 
 /**
- * @param array{site_name?:string,site_note?:string,placement_type?:string,country?:string,order_month?:mixed,period_end_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string,article_doc_url?:string} $data
+ * @param array{site_name?:string,site_note?:string,placement_type?:string,country?:string,order_month?:mixed,period_end_month?:mixed,order_year?:mixed,owner_price?:mixed,decided_price?:mixed,live_url?:string,article_doc_url?:string,admin_user_id?:mixed} $data
  */
-function update_order_item(int $itemId, int $clientId, array $data): void
+function update_order_item(int $itemId, int $clientId, array $data, bool $allowIncomplete = false): void
 {
     ensure_order_schema();
     $month = (int) ($data['order_month'] ?? 0);
@@ -1071,7 +1171,8 @@ function update_order_item(int $itemId, int $clientId, array $data): void
     $decidedPrice = parse_money($data['decided_price'] ?? 0);
 
     // LIVE URL means the order is complete — price fields must not be empty.
-    if ($liveUrl !== '') {
+    // Ajax autosave skips this so changing Admin (or typing a live URL) still persists.
+    if ($liveUrl !== '' && !$allowIncomplete) {
         $ownerRaw = trim((string) ($data['owner_price'] ?? ''));
         $decidedRaw = trim((string) ($data['decided_price'] ?? ''));
         if ($ownerRaw === '' || $decidedRaw === '') {
@@ -1129,9 +1230,9 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $params[] = $label;
     }
     if (array_key_exists('admin_user_id', $data)) {
-        $adminId = (int) $data['admin_user_id'];
+        $adminId = order_normalize_admin_user_id($data['admin_user_id']);
         $sets[] = 'admin_user_id=?';
-        $params[] = $adminId > 0 ? $adminId : null;
+        $params[] = $adminId;
     }
     if (array_key_exists('order_date', $data)) {
         $sets[] = 'order_date=?';
@@ -1149,7 +1250,15 @@ function update_order_item(int $itemId, int $clientId, array $data): void
         $sql .= ' AND client_id=?';
         $params[] = $clientId;
     }
-    db()->prepare($sql)->execute($params);
+    try {
+        db()->prepare($sql)->execute($params);
+    } catch (PDOException $e) {
+        $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
+        if ($sqlState === '23000' && array_key_exists('admin_user_id', $data)) {
+            throw new InvalidArgumentException('Could not assign that admin. Pick someone from the Admin list.');
+        }
+        throw $e;
+    }
     if ($clientId > 0) {
         db()->prepare('UPDATE order_clients SET updated_at=NOW() WHERE id=?')->execute([$clientId]);
     }
@@ -1183,7 +1292,8 @@ function save_order_sheet_rows(
     array $clientLabels = [],
     array $adminIds = [],
     array $dates = [],
-    array $articleDocUrls = []
+    array $articleDocUrls = [],
+    bool $allowIncomplete = false
 ): int {
     ensure_order_schema();
     $saved = 0;
@@ -1216,7 +1326,7 @@ function save_order_sheet_rows(
         if (array_key_exists($id, $articleDocUrls) || array_key_exists((string) $id, $articleDocUrls)) {
             $data['article_doc_url'] = $articleDocUrls[$id] ?? '';
         }
-        update_order_item($itemId, $clientId, $data);
+        update_order_item($itemId, $clientId, $data, $allowIncomplete);
         $saved++;
     }
     return $saved;
@@ -1417,6 +1527,23 @@ function get_order_item(int $id): ?array
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     return $row ?: null;
+}
+
+/**
+ * Admin filter for Order management.
+ * Missing admin_id → the signed-in admin (each profile sees their own orders).
+ * admin_id=0 (All admins) → every order.
+ */
+function order_pipeline_profile_admin_id(int $viewerId): int
+{
+    if (!array_key_exists('admin_id', $_GET) && !array_key_exists('admin_id', $_POST)) {
+        return max(0, $viewerId);
+    }
+    $raw = array_key_exists('admin_id', $_GET) ? $_GET['admin_id'] : ($_POST['admin_id'] ?? '');
+    if (is_array($raw)) {
+        $raw = reset($raw);
+    }
+    return max(0, (int) $raw);
 }
 
 /**
