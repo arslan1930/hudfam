@@ -539,6 +539,34 @@ html.ui-v2 thead th {
 html.ui-v2 tbody tr:hover td {
   background: rgba(34, 211, 238, 0.06);
 }
+html.ui-v2 #swe-country-table tbody tr[data-swe-country-row]:hover td,
+html.ui-v2 #swe-country-table tbody tr[data-swe-country-row]:nth-child(even):hover td {
+  background: rgba(34, 211, 238, 0.12);
+}
+html.ui-v2 #swe-country-table tr.sheet-search-hit td,
+html.ui-v2 #swe-country-table tr.sheet-search-hit:hover td,
+html.ui-v2 #swe-country-table tbody tr.sheet-search-hit:nth-child(even) td {
+  background: rgba(34, 211, 238, 0.28) !important;
+  color: #e2e8f0;
+}
+html.ui-v2 .swe-country-new {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+html.ui-v2 .extracted-country-count {
+  background: rgba(34, 211, 238, 0.16);
+  color: #e2e8f0;
+}
+html.ui-v2 .extracted-country-table tfoot th,
+html.ui-v2 .extracted-country-table tfoot td {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+html.ui-v2 .extracted-country-table td.swe-country-emails {
+  color: #e2e8f0;
+}
 
 /* Alerts — existing .alert-ok / .alert-error / .alert-fade only */
 html.ui-v2 .alert-box {

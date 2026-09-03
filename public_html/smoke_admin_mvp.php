@@ -1301,11 +1301,27 @@ if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
     || !str_contains($sweAppSmoke, 'data-no-draft')
     || !str_contains($sweAppSmoke, 'emptyCatalogCountries')
     || !str_contains($sweAppSmoke, '$finalOpenerHtml')
+    || !str_contains($sweAppSmoke, 'swe-folder-chips')
+    || !str_contains($sweAppSmoke, 'data-swe-new-only')
+    || !str_contains($sweAppSmoke, 'Enter opens')
+    || !str_contains($sweAppSmoke, "\$sweAdminHubLabel . ' · ' . \$sweLabel")
+    || !str_contains($sweAppSmoke, 'swe-country-open')
+    || !str_contains($sweAppSmoke, '<tfoot>')
+    || !str_contains($sweLibSmoke, 'function swe_country_search_hay')
     || str_contains($sweAppSmoke, 'keeps copies after emailed/remove')
     || str_contains($sweAppSmoke, 'Open a folder below')) {
     fail('SWE country list missing table-wrap or Final add-site copy');
 } else {
     ok('SWE country list table-wrap + Final add-site copy');
+}
+$sweCssSmoke = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($sweCssSmoke, '--swe-country-row-hover')
+    || !str_contains($sweCssSmoke, 'swe-country-open')
+    || !str_contains($uiCss, '#swe-country-table tbody tr[data-swe-country-row]:hover td')
+    || !str_contains($uiCss, 'html.ui-v2 .swe-country-new')) {
+    fail('SWE country list missing dark hover / +new chip overlay');
+} else {
+    ok('SWE country list dark hover + new chips');
 }
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
     || !str_contains($sweLibSmoke, 'skipped_full_slots')
