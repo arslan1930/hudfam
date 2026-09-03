@@ -446,7 +446,7 @@ if ($isHub) {
 <?= guide_orders() ?>
 <?php $renderOmFolderTabs('', (int) $processingCount, (int) $completedCount, (int) $unpaidCompleted); ?>
 <div class="launch-cards om-folder-cards" id="om-folders">
-  <a class="launch-card" href="index.php?page=admin_orders&amp;folder=processing" data-om-folder="processing">
+  <a class="launch-card" href="<?= h($ordersQs(['folder' => 'processing', 'p' => 1])) ?>" data-om-folder="processing">
     <h2>Processing</h2>
     <p><strong class="om-folder-count"><?= (int) $processingCount ?></strong> in Processing.
       <?= (int) $processingWp ?> still in Website prices Processing ·
@@ -454,7 +454,7 @@ if ($isHub) {
       <?= (int) $processingManual ?> added here.
       Fill OM fields, then mark completed with a live URL.</p>
   </a>
-  <a class="launch-card" href="index.php?page=admin_orders&amp;folder=completed" data-om-folder="completed">
+  <a class="launch-card" href="<?= h($ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid'])) ?>" data-om-folder="completed">
     <h2>Completed orders</h2>
     <p><strong class="om-folder-count"><?= (int) $completedCount ?></strong> completed<?= $unpaidCompleted > 0 ? ' · ' . (int) $unpaidCompleted . ' unpaid' : '' ?>. Push unpaid rows to an invoice. Paid stays in this folder.</p>
   </a>

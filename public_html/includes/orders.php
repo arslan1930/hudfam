@@ -934,22 +934,25 @@ function count_order_client_unpaid_live(int $clientId): int
     return (int) $stmt->fetchColumn();
 }
 
-/** Dashboard/order list aggregates for the pipeline sheet. */
-function order_management_dashboard_stats(): array
+/** Dashboard/order list aggregates for the pipeline sheet.
+ * Pass the signed-in admin id so each profile sees its own orders. 0 = every admin.
+ */
+function order_management_dashboard_stats(int $adminId = 0): array
 {
     ensure_order_schema();
-    $orders = (int) db()->query(
-        "SELECT COUNT(*) FROM order_items WHERE row_type = 'site'"
-    )->fetchColumn();
-    $processing = count_order_pipeline_rows(['folder' => 'processing']);
-    $completed = count_order_pipeline_rows(['folder' => 'completed']);
-    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+    $adminId = max(0, $adminId);
+    $opts = $adminId > 0 ? ['admin_id' => $adminId] : [];
+    $orders = count_order_pipeline_rows($opts);
+    $processing = count_order_pipeline_rows(['folder' => 'processing'] + $opts);
+    $completed = count_order_pipeline_rows(['folder' => 'completed'] + $opts);
+    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid'] + $opts);
     return [
         'orders' => $orders,
         'clients' => $orders,
         'processing' => $processing,
         'completed' => $completed,
         'unpaid_live' => $unpaidLive,
+        'admin_id' => $adminId,
     ];
 }
 

@@ -5191,6 +5191,25 @@ try {
     } else {
         fail('OM profile split a=' . $nA . '/' . $madeA . ' b=' . $nB . '/' . $madeB . ' all=' . $nAll);
     }
+    $dashA = order_management_dashboard_stats($arslanId);
+    $dashB = order_management_dashboard_stats($admin2Id);
+    $dashAll = order_management_dashboard_stats(0);
+    $expectA = count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => $arslanId]);
+    $expectB = count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => $admin2Id]);
+    $unpaidA = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid', 'admin_id' => $arslanId]);
+    if ($admin2Id > 0
+        && (int) ($dashA['completed'] ?? -1) === $expectA
+        && (int) ($dashB['completed'] ?? -1) === $expectB
+        && (int) ($dashA['unpaid_live'] ?? -1) === $unpaidA
+        && (int) ($dashA['admin_id'] ?? -1) === $arslanId
+        && (int) ($dashAll['completed'] ?? 0) >= $expectA
+        && (int) ($dashAll['completed'] ?? 0) >= $expectB) {
+        pass('dashboard OM stats follow each admin profile');
+    } else {
+        fail('dashboard OM stats mixed a=' . (int) ($dashA['completed'] ?? -1)
+            . ' b=' . (int) ($dashB['completed'] ?? -1)
+            . ' all=' . (int) ($dashAll['completed'] ?? -1));
+    }
 
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
@@ -6150,6 +6169,14 @@ try {
         pass('OM sheet autosave + admin id normalize');
     } else {
         fail('OM missing autosave or admin id normalize');
+    }
+    $dashPhpSrc = file_get_contents(__DIR__ . '/pages/admin/dashboard.php') ?: '';
+    if (str_contains($ordersPhpSrc, 'order_pipeline_profile_admin_id')
+        && str_contains($ordersPhpSrc, "count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => \$filter['admin_id']])")
+        && str_contains($dashPhpSrc, "order_management_dashboard_stats((int) (\$user['id'] ?? 0))")) {
+        pass('OM counts stay on the signed-in admin profile');
+    } else {
+        fail('OM profile counts still mix admins');
     }
 
     $uniqUrls = order_live_urls_from_rows([

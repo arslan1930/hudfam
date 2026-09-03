@@ -473,7 +473,7 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting &gt; 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting &gt; 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing', 'admin_orders&amp;folder=completed&amp;status=unpaid&amp;admin_id='],
         'admin_prospects' => ['Our database', 'Markets', 'What is this?', 'show empty countries', 'Super search', 'Add sites'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
@@ -847,6 +847,27 @@ if ($rUnpaidOm['status'] === 200
     pass('admin orders completed unpaid working view');
 } else {
     fail('admin orders completed unpaid working view status=' . ($rUnpaidOm['status'] ?? '?'));
+}
+$omBody = (string) ($rUnpaidOm['body'] ?? '');
+$tabOk = (bool) preg_match('/data-om-folder-tab="completed"[^>]*>\s*Completed \((\d+)(?: · (\d+) unpaid)?\)/s', $omBody, $tabM);
+$unpaidOk = (bool) preg_match('/>Unpaid \((\d+)\)/', $omBody, $uM);
+$paidOk = (bool) preg_match('/>Paid \((\d+)\)/', $omBody, $pM);
+$allOk = (bool) preg_match('/>All \((\d+)\)/', $omBody, $aM);
+$profileSelected = (bool) preg_match('/name="admin_id"[\s\S]*?<option value="([1-9][0-9]*)" selected/s', $omBody, $selM);
+$tabN = (int) ($tabM[1] ?? -1);
+$tabUnpaid = isset($tabM[2]) ? (int) $tabM[2] : 0;
+$subUnpaid = (int) ($uM[1] ?? -1);
+$subPaid = (int) ($pM[1] ?? -1);
+$subAll = (int) ($aM[1] ?? -1);
+if ($tabOk && $unpaidOk && $paidOk && $allOk && $profileSelected
+    && $tabN === $subAll
+    && $tabUnpaid === $subUnpaid
+    && $subAll === $subUnpaid + $subPaid) {
+    pass('admin orders completed tab matches the signed-in admin');
+} else {
+    fail('admin orders completed tab mixed tab=' . $tabN . ' all=' . $subAll
+        . ' unpaid=' . $tabUnpaid . '/' . $subUnpaid . ' paid=' . $subPaid
+        . ' profile=' . (int) $profileSelected);
 }
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&copy=live_urls');
 $copyJson = json_decode($r['body'], true);
