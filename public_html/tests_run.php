@@ -6340,6 +6340,10 @@ try {
         && str_contains($ordersPhpSrc, 'id="om-origin-tabs"')
         && str_contains($ordersPhpSrc, 'Added here')
         && str_contains($ordersPhpSrc, 'Leftover')
+        && str_contains($ordersPhpSrc, 'data-searchable')
+        && str_contains($ordersPhpSrc, 'searchable-select.js')
+        && str_contains($ordersPhpSrc, 'order-country-input')
+        && str_contains($ordersPhpSrc, 'id="order-filter-country"')
         && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
         pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
     } else {
@@ -6356,7 +6360,9 @@ try {
         && str_contains($ordersPhpSrc, 'then use <strong>Push to invoice</strong> on this sheet')
         && str_contains($omCssSrc, 'order-filter-bar-completed')
         && str_contains($omCssSrc, 'th.col-price .with-info-label')
-        && str_contains($omCssSrc, 'order-check-hint-bill')) {
+        && str_contains($omCssSrc, 'order-check-hint-bill')
+        && str_contains($omCssSrc, 'order-country-suggest')
+        && str_contains($omCssSrc, 'align-items: flex-end')) {
         pass('OM Completed unpaid sheet UX');
     } else {
         fail('OM Completed unpaid sheet UX missing');

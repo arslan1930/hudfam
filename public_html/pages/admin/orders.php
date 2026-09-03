@@ -615,6 +615,22 @@ try {
 } catch (Throwable $e) {
     $countryCatalog = [];
 }
+$filterCountrySet = [];
+foreach ($filterCountries as $cname) {
+    $filterCountrySet[$cname] = true;
+}
+foreach ($countryCatalog as $cname) {
+    if (!isset($filterCountrySet[$cname])) {
+        $filterCountries[] = $cname;
+        $filterCountrySet[$cname] = true;
+    }
+}
+$curFilterCountry = trim((string) ($filter['country'] ?? ''));
+if ($curFilterCountry !== '' && !isset($filterCountrySet[$curFilterCountry])) {
+    $filterCountries[] = $curFilterCountry;
+}
+natcasesort($filterCountries);
+$filterCountries = array_values($filterCountries);
 
 $months = order_month_names();
 $yearNow = (int) date('Y');
@@ -699,20 +715,20 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
   <?php endif; ?>
   <input type="hidden" name="per" value="<?= (int) $perPage ?>">
   <div class="order-filter-grid">
-    <label class="sheet-search" for="order-sheet-search" style="margin:0">
-      <span class="visually-hidden">Search orders</span>
+    <div class="order-filter-field order-filter-search">
+      <label class="order-filter-label" for="order-sheet-search">Search</label>
       <input id="order-sheet-search" type="search" name="q" value="<?= h($filter['q']) ?>"
              placeholder="<?= $isCompleted ? 'Site, client, country, admin, doc' : 'Search site, client, country, admin, doc…' ?>" autocomplete="off" spellcheck="false" data-no-draft>
-    </label>
-    <label class="order-filter-field">
-      <span class="order-filter-label">Country</span>
-      <select name="country" aria-label="Filter by country">
+    </div>
+    <div class="order-filter-field">
+      <label class="order-filter-label" for="order-filter-country">Country</label>
+      <select id="order-filter-country" name="country" aria-label="Filter by country" data-searchable>
         <option value="">All countries</option>
         <?php foreach ($filterCountries as $cname): ?>
           <option value="<?= h($cname) ?>" <?= $filter['country'] === $cname ? 'selected' : '' ?>><?= h($cname) ?></option>
         <?php endforeach; ?>
       </select>
-    </label>
+    </div>
     <label class="order-filter-field">
       <span class="order-filter-label">Admin</span>
       <select name="admin_id" aria-label="Filter by admin">
@@ -1061,9 +1077,8 @@ if ($compactUnpaidStats && !$showPagingStats) {
           </td>
           <td class="col-num muted"><?= (int) $siteIndex ?></td>
           <td class="col-country">
-            <input class="cell-input cell-hint" type="text" name="country[<?= $id ?>]"
+            <input class="cell-input cell-hint order-country-input" type="text" name="country[<?= $id ?>]"
                    value="<?= h((string) ($row['country'] ?? '')) ?>"
-                   list="order-country-list"
                    placeholder="Country…" autocomplete="off"
                    title="<?= h((string) ($row['country'] ?? '')) ?>">
             <?php if ($isProcessing): ?>
@@ -2063,6 +2078,122 @@ if ($compactUnpaidStats && !$showPagingStats) {
     });
   }
   refresh();
+
+  (function countryTypeahead() {
+    var listEl = document.getElementById('order-country-list');
+    if (!listEl) return;
+    var names = [];
+    var seen = {};
+    listEl.querySelectorAll('option').forEach(function (o) {
+      var v = (o.getAttribute('value') || o.textContent || '').trim();
+      if (!v || seen[v]) return;
+      seen[v] = true;
+      names.push(v);
+    });
+    if (!names.length) return;
+    var menu = document.createElement('div');
+    menu.className = 'order-country-suggest';
+    menu.hidden = true;
+    document.body.appendChild(menu);
+    var activeInput = null;
+    var activeIdx = -1;
+    var matches = [];
+
+    function hide() {
+      menu.hidden = true;
+      menu.innerHTML = '';
+      activeInput = null;
+      activeIdx = -1;
+      matches = [];
+    }
+
+    function filterNames(q) {
+      var qn = String(q || '').trim().toLowerCase();
+      if (!qn) return names.slice(0, 12);
+      return names.filter(function (n) {
+        return n.toLowerCase().indexOf(qn) !== -1;
+      }).slice(0, 12);
+    }
+
+    function position() {
+      if (!activeInput) return;
+      var r = activeInput.getBoundingClientRect();
+      menu.style.left = Math.max(8, r.left) + 'px';
+      menu.style.top = (r.bottom + 4) + 'px';
+      menu.style.minWidth = Math.max(r.width, 160) + 'px';
+    }
+
+    function render() {
+      menu.innerHTML = '';
+      if (!matches.length) {
+        menu.hidden = true;
+        return;
+      }
+      matches.forEach(function (n, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'order-country-suggest-item' + (i === activeIdx ? ' is-active' : '');
+        b.textContent = n;
+        b.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          if (activeInput) {
+            activeInput.value = n;
+            activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+            activeInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          hide();
+        });
+        menu.appendChild(b);
+      });
+      menu.hidden = false;
+      position();
+    }
+
+    document.addEventListener('focusin', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('order-country-input')) return;
+      activeInput = t;
+      matches = filterNames(t.value);
+      activeIdx = matches.length ? 0 : -1;
+      render();
+    });
+    document.addEventListener('input', function (e) {
+      var t = e.target;
+      if (!t || t !== activeInput) return;
+      matches = filterNames(t.value);
+      activeIdx = matches.length ? 0 : -1;
+      render();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (!activeInput || menu.hidden) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = Math.min(matches.length - 1, activeIdx + 1);
+        render();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = Math.max(0, activeIdx - 1);
+        render();
+      } else if (e.key === 'Enter' && activeIdx >= 0 && matches[activeIdx]) {
+        e.preventDefault();
+        activeInput.value = matches[activeIdx];
+        activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        activeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        hide();
+      } else if (e.key === 'Escape') {
+        hide();
+      }
+    });
+    document.addEventListener('focusout', function () {
+      setTimeout(function () {
+        if (activeInput && document.activeElement !== activeInput && !menu.contains(document.activeElement)) {
+          hide();
+        }
+      }, 0);
+    });
+    window.addEventListener('scroll', function () { if (!menu.hidden) position(); }, true);
+    window.addEventListener('resize', function () { if (!menu.hidden) position(); });
+  })();
 })();
 function omConfirmRemove(btn) {
   if (!btn) return false;
@@ -2091,5 +2222,6 @@ function omConfirmRemove(btn) {
   return true;
 }
 </script>
+<script src="<?= h(script_asset_url('js/searchable-select.js')) ?>" defer></script>
 <?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>

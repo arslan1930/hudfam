@@ -1,6 +1,8 @@
 /**
  * Enhance <select data-searchable> into type-to-search comboboxes.
  * Keeps the native <select> in the form for submit + change events.
+ * The option list is portaled to document.body so overflow/filter ancestors
+ * cannot clip it.
  */
 (function () {
   'use strict';
@@ -26,6 +28,33 @@
     if (item.value === '') return false;
     var hay = (item.label + ' ' + item.value + ' ' + item.group).toLowerCase();
     return hay.indexOf(q) !== -1;
+  }
+
+  function firstUsable(filtered) {
+    for (var i = 0; i < filtered.length; i++) {
+      if (!filtered[i].disabled) return filtered[i];
+    }
+    return null;
+  }
+
+  function uniqueTypedMatch(items, typed) {
+    typed = (typed || '').trim().toLowerCase();
+    if (!typed) return null;
+    var exact = [];
+    var prefix = [];
+    var contains = [];
+    items.forEach(function (it) {
+      if (it.disabled) return;
+      var lab = it.label.toLowerCase();
+      var val = String(it.value || '').toLowerCase();
+      if (lab === typed || val === typed) exact.push(it);
+      else if (it.value !== '' && lab.indexOf(typed) === 0) prefix.push(it);
+      else if (it.value !== '' && lab.indexOf(typed) !== -1) contains.push(it);
+    });
+    if (exact.length) return exact[0];
+    if (prefix.length === 1) return prefix[0];
+    if (contains.length === 1) return contains[0];
+    return null;
   }
 
   function enhance(select) {
@@ -61,9 +90,9 @@
     list.className = 'ss-list';
     list.setAttribute('role', 'listbox');
     list.hidden = true;
+    document.body.appendChild(list);
 
     wrap.insertBefore(input, select);
-    wrap.appendChild(list);
 
     var items = optionList(select);
     var activeIdx = -1;
@@ -82,10 +111,21 @@
       }
     }
 
+    function positionList() {
+      var r = input.getBoundingClientRect();
+      list.style.position = 'fixed';
+      list.style.left = Math.max(8, r.left) + 'px';
+      list.style.right = 'auto';
+      list.style.top = (r.bottom + 2) + 'px';
+      list.style.width = Math.max(r.width, 160) + 'px';
+      list.style.zIndex = '90';
+    }
+
     function setExpanded(open) {
       list.hidden = !open;
       input.setAttribute('aria-expanded', open ? 'true' : 'false');
       wrap.classList.toggle('ss-open', open);
+      if (open) positionList();
     }
 
     function render(q) {
@@ -129,10 +169,13 @@
 
     function pick(it) {
       if (!it || it.disabled) return;
+      var changed = select.selectedIndex !== it.index;
       select.selectedIndex = it.index;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
       syncInputFromSelect();
       setExpanded(false);
+      if (changed) {
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
 
     function moveActive(delta) {
@@ -144,6 +187,12 @@
         if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
       });
     }
+
+    function onWinChange() {
+      if (!list.hidden) positionList();
+    }
+    window.addEventListener('scroll', onWinChange, true);
+    window.addEventListener('resize', onWinChange);
 
     input.addEventListener('focus', function () {
       items = optionList(select);
@@ -164,9 +213,11 @@
         if (list.hidden) render(input.value);
         moveActive(-1);
       } else if (e.key === 'Enter') {
-        if (!list.hidden && activeIdx >= 0 && filtered[activeIdx]) {
+        if (!list.hidden) {
           e.preventDefault();
-          pick(filtered[activeIdx]);
+          var chosen = (activeIdx >= 0 && filtered[activeIdx]) ? filtered[activeIdx] : firstUsable(filtered);
+          if (!chosen) chosen = uniqueTypedMatch(items, input.value);
+          if (chosen) pick(chosen);
         }
       } else if (e.key === 'Escape') {
         setExpanded(false);
@@ -177,16 +228,34 @@
     input.addEventListener('blur', function () {
       setTimeout(function () {
         setExpanded(false);
-        // If typed text matches an option exactly, select it; else revert
-        var typed = input.value.trim().toLowerCase();
-        var hit = null;
-        items.forEach(function (it) {
-          if (!it.disabled && it.label.toLowerCase() === typed) hit = it;
-        });
+        items = optionList(select);
+        var typed = input.value.trim();
+        if (!typed) {
+          var empty = null;
+          items.forEach(function (it) {
+            if (!it.disabled && it.value === '') empty = it;
+          });
+          if (empty) pick(empty);
+          else syncInputFromSelect();
+          return;
+        }
+        var hit = uniqueTypedMatch(items, typed);
         if (hit) pick(hit);
         else syncInputFromSelect();
       }, 120);
     });
+
+    var form = select.form;
+    if (form) {
+      form.addEventListener('submit', function () {
+        items = optionList(select);
+        var hit = uniqueTypedMatch(items, input.value);
+        if (hit && select.selectedIndex !== hit.index) {
+          select.selectedIndex = hit.index;
+          syncInputFromSelect();
+        }
+      });
+    }
 
     select.addEventListener('change', syncInputFromSelect);
     syncInputFromSelect();

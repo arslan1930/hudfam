@@ -1584,6 +1584,10 @@ if (!str_contains($newDataSmoke, "section !== 'emails_admin'")
 $ordersPage = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 if (!str_contains($ordersPage, 'id="order-filter-bar"')
     || !str_contains($ordersPage, 'id="order-sheet-search"')
+    || !str_contains($ordersPage, 'id="order-filter-country"')
+    || !str_contains($ordersPage, 'data-searchable')
+    || !str_contains($ordersPage, 'searchable-select.js')
+    || !str_contains($ordersPage, 'order-country-input')
     || !str_contains($ordersPage, 'name="country"')
     || !str_contains($ordersPage, 'name="admin_id"')
     || !str_contains($ordersPage, 'name="date_from"')
@@ -1649,7 +1653,9 @@ if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
     || !str_contains($omCss, 'left: 7.4rem')
     || !str_contains($omCss, 'min-width: 9rem')
     || !str_contains($omCss, '.order-needs-chip')
-    || !str_contains($omCss, 'min-width: 13rem')) {
+    || !str_contains($omCss, 'min-width: 13rem')
+    || !str_contains($omCss, 'align-items: flex-end')
+    || !str_contains($omCss, '.order-country-suggest')) {
     fail('orders country/admin columns still too narrow to read');
 } else {
     ok('orders country/admin columns fit Netherlands / admin emails');
@@ -1657,7 +1663,8 @@ if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
 if (!str_contains($uiCss, '.orders-summary-item')
     || !str_contains($uiCss, '.order-sheet tfoot td')
     || !str_contains($uiCss, '.order-check-head')
-    || !str_contains($uiCss, '.order-filter-label')) {
+    || !str_contains($uiCss, '.order-filter-label')
+    || !str_contains($uiCss, '.order-country-suggest')) {
     fail('overlay missing Order management leftover-light restyle');
 } else {
     ok('overlay restyles Order management summary + Page totals');

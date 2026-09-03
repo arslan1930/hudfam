@@ -1210,8 +1210,34 @@ html.ui-v2 .order-row.is-completed .col-live .cell-input {
 html.ui-v2 .profit-pos { color: var(--ok); }
 html.ui-v2 .profit-neg { color: var(--bad); }
 
+html.ui-v2 .order-filter-bar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 html.ui-v2 .order-filter-label {
   color: #94a3b8;
+}
+html.ui-v2 .ss-input {
+  background: #0f172a !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  color: #e2e8f0 !important;
+}
+html.ui-v2 .ss-option.is-active,
+html.ui-v2 .ss-option:hover {
+  background: rgba(34, 211, 238, 0.12);
+  color: #e2e8f0;
+}
+html.ui-v2 .order-country-suggest {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+html.ui-v2 .order-country-suggest-item {
+  color: #e2e8f0;
+}
+html.ui-v2 .order-country-suggest-item:hover,
+html.ui-v2 .order-country-suggest-item.is-active {
+  background: rgba(34, 211, 238, 0.14);
 }
 html.ui-v2 input[type="checkbox"],
 html.ui-v2 input[type="radio"],
