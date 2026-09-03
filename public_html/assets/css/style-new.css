@@ -1163,6 +1163,10 @@ html.ui-v2 .orders-summary-done {
   background: var(--ok-soft);
   border-color: rgba(74, 222, 128, 0.35);
 }
+html.ui-v2 .order-sheet-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 html.ui-v2 .order-sheet th {
   background: #1e293b;
   color: #cbd5e1;

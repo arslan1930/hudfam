@@ -3932,12 +3932,14 @@ textarea[hidden],
 .order-sheet-card {
   max-width: 100%;
   min-width: 0;
+  width: 100%;
+  overflow: hidden;
 }
 .order-sheet-scroll {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 .order-sheet {
