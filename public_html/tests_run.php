@@ -5005,6 +5005,98 @@ try {
         fail('add order did not copy filter country');
     }
 
+    if (order_pipeline_parse_admin_filter('') === 0
+        && order_pipeline_parse_admin_filter('unassigned') === -1
+        && order_pipeline_parse_admin_filter('-1') === -1
+        && order_pipeline_parse_admin_filter('mine') === -2
+        && order_pipeline_parse_admin_filter('12') === 12
+        && order_pipeline_admin_filter_query(-1) === 'unassigned'
+        && order_pipeline_admin_filter_query(-2) === 'mine'
+        && order_pipeline_resolve_admin_filter(-2, 7) === 7) {
+        pass('OM admin filter unassigned token');
+    } else {
+        fail('OM admin filter unassigned token failed');
+    }
+    [$unassignedSql] = order_pipeline_where_sql(['admin_id' => -1]);
+    [$mineTokenSql] = order_pipeline_where_sql(['admin_id' => -2]);
+    [$mineViewerSql] = order_pipeline_where_sql(['admin_id' => -2, 'viewer_id' => (int) $adminUser['id']]);
+    if (str_contains($unassignedSql, 'admin_user_id IS NULL')
+        && !str_contains($mineTokenSql, 'admin_user_id IS NULL')
+        && str_contains($mineViewerSql, 'admin_user_id = ?')) {
+        pass('OM Mine filter is not Unassigned SQL');
+    } else {
+        fail('OM Mine token still used Unassigned SQL');
+    }
+    $nullAdminId = add_order_pipeline_row(0, '', ['country' => 'Germany']);
+    db()->prepare('UPDATE order_items SET admin_user_id=NULL, order_date=NULL WHERE id=?')->execute([(int) $nullAdminId]);
+    $nullRow = get_order_item((int) $nullAdminId) ?: [];
+    $unassignedHits = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'admin_id' => -1,
+    ]);
+    $foundUnassigned = false;
+    foreach ($unassignedHits as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $nullAdminId) {
+            $foundUnassigned = true;
+            break;
+        }
+    }
+    $effDate = order_date_effective($nullRow);
+    $byCreatedDay = [];
+    if ($effDate !== '') {
+        $byCreatedDay = list_order_pipeline_rows([
+            'folder' => 'processing',
+            'origin' => 'all',
+            'date_from' => $effDate,
+            'date_to' => $effDate,
+        ]);
+    }
+    $foundByCreatedDay = false;
+    foreach ($byCreatedDay as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $nullAdminId) {
+            $foundByCreatedDay = true;
+            break;
+        }
+    }
+    if ($foundUnassigned && $effDate !== '' && $foundByCreatedDay) {
+        pass('OM unassigned admin and COALESCE date filter');
+    } else {
+        fail('OM unassigned admin or empty date filter missed row ' . $nullAdminId);
+    }
+    $unsetDateId = add_order_pipeline_row((int) $adminUser['id'], '', ['country' => 'Germany']);
+    $unsetDateRow = get_order_item((int) $unsetDateId) ?: [];
+    if (order_date_stored($unsetDateRow) === ''
+        && order_date_stored(['order_date' => '2026-09-02 00:00:00']) === '2026-09-02'
+        && order_date_display('2026-09-02') === '2 Sep 2026'
+        && order_person_label(['full_name' => 'sania.teqnowebs', 'username' => 'admin']) === 'Sania'
+        && order_person_label(['full_name' => '', 'username' => 'marcus.lee']) === 'Marcus'
+        && order_row_needs(['country' => '', 'client_label' => '', 'live_url' => '']) === ['country', 'client', 'LIVE URL']
+        && order_row_needs(['country' => 'Germany', 'client_label' => 'a@b.c', 'live_url' => 'https://x.test']) === []) {
+        pass('OM unset date display names and needs');
+    } else {
+        fail('OM unset date / person label / needs helpers');
+    }
+    $adminCountMap = order_pipeline_admin_counts([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'q' => 'txf-om-count-' . (int) $nullAdminId,
+    ]);
+    db()->prepare('UPDATE order_items SET site_name=? WHERE id=?')->execute([
+        'txf-om-count-' . (int) $nullAdminId . '.com',
+        (int) $nullAdminId,
+    ]);
+    $adminCountMap = order_pipeline_admin_counts([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'q' => 'txf-om-count-' . (int) $nullAdminId,
+    ]);
+    if ((int) ($adminCountMap[0] ?? 0) >= 1 && (int) ($adminCountMap[-1] ?? 0) >= 1) {
+        pass('OM admin filter counts include All and Unassigned');
+    } else {
+        fail('OM admin counts missed unassigned row');
+    }
+
     $autoId = add_order_pipeline_row((int) $adminUser['id'], '', [
         'country' => 'Germany',
         'admin_user_id' => (int) $adminUser['id'],
@@ -5061,6 +5153,125 @@ try {
         pass('order sheet autosave allows incomplete LIVE rows');
     } else {
         fail('order sheet incomplete autosave failed');
+    }
+
+    save_order_sheet_rows(
+        0,
+        [(int) $autoId => 'autosave-site.com'],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => 'Germany'],
+        [(int) $autoId => 9],
+        [(int) $autoId => ''],
+        [(int) $autoId => 2026],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => (int) $adminUser['id']],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        true
+    );
+    $keptDate = get_order_item((int) $autoId);
+    save_order_sheet_rows(
+        0,
+        [(int) $autoId => 'autosave-site.com'],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => 'Germany'],
+        [(int) $autoId => 9],
+        [(int) $autoId => ''],
+        [(int) $autoId => 2026],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => ''],
+        [(int) $autoId => (int) $adminUser['id']],
+        [(int) $autoId => '2026-04-18'],
+        [(int) $autoId => ''],
+        true
+    );
+    $alignedDate = get_order_item((int) $autoId);
+    if ($keptDate && (string) ($keptDate['order_date'] ?? '') === '2026-03-15'
+        && $alignedDate && (string) ($alignedDate['order_date'] ?? '') === '2026-04-18'
+        && (int) ($alignedDate['order_month'] ?? 0) === 4
+        && (int) ($alignedDate['order_year'] ?? 0) === 2026) {
+        pass('OM sheet date save keeps existing day and aligns month');
+    } else {
+        fail('OM sheet date save clobbered or ignored the calendar day');
+    }
+
+    $sortOld = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'admin_user_id' => (int) $adminUser['id'],
+    ]);
+    $sortNew = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'admin_user_id' => (int) $adminUser['id'],
+    ]);
+    $oldDomain = 'txfom-sort-old-' . substr(sha1((string) $sortOld), 0, 8) . '.com';
+    $newDomain = 'txfom-sort-new-' . substr(sha1((string) $sortNew), 0, 8) . '.com';
+    db()->prepare('UPDATE order_items SET site_name=?, order_date=? WHERE id=?')->execute([$oldDomain, '2020-01-15', (int) $sortOld]);
+    db()->prepare('UPDATE order_items SET site_name=?, order_date=? WHERE id=?')->execute([$newDomain, '2026-08-01', (int) $sortNew]);
+    $idList = list_order_pipeline_rows(['folder' => 'processing', 'origin' => 'all', 'q' => 'txfom-sort-']);
+    $idPos = [];
+    foreach ($idList as $i => $hit) {
+        $idPos[(int) ($hit['id'] ?? 0)] = $i;
+    }
+    $dateList = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'date_from' => '2020-01-01',
+        'date_to' => '2020-12-31',
+        'q' => $oldDomain,
+    ]);
+    $foundOldInDate = false;
+    foreach ($dateList as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $sortOld) {
+            $foundOldInDate = true;
+            break;
+        }
+    }
+    if (isset($idPos[(int) $sortNew], $idPos[(int) $sortOld])
+        && $idPos[(int) $sortNew] < $idPos[(int) $sortOld]
+        && $foundOldInDate
+        && str_contains(order_pipeline_list_order_sql([]), 'i.id DESC')
+        && str_contains(order_pipeline_list_order_sql(['date_from' => '2020-01-01']), 'order_date')) {
+        pass('OM sheet keeps id order unless a date filter is on');
+    } else {
+        fail('OM sheet sort still jumps rows when the date changes');
+    }
+
+    $teamAssigned = add_order_pipeline_row((int) $adminUser['id'], '', [
+        'admin_user_id' => (int) $teamUser['id'],
+    ]);
+    db()->prepare('UPDATE order_items SET site_name=?, admin_user_id=? WHERE id=?')->execute([
+        'txfom-team-admin-' . (int) $teamAssigned . '.com',
+        (int) $teamUser['id'],
+        (int) $teamAssigned,
+    ]);
+    $pickerHasTeam = false;
+    foreach (order_admin_options() as $opt) {
+        if ((int) ($opt['id'] ?? 0) === (int) $teamUser['id']) {
+            $pickerHasTeam = true;
+            break;
+        }
+    }
+    $teamHits = list_order_pipeline_rows([
+        'folder' => 'processing',
+        'origin' => 'all',
+        'admin_id' => (int) $teamUser['id'],
+    ]);
+    $foundTeamHit = false;
+    foreach ($teamHits as $hit) {
+        if ((int) ($hit['id'] ?? 0) === (int) $teamAssigned) {
+            $foundTeamHit = true;
+            break;
+        }
+    }
+    if ($pickerHasTeam && $foundTeamHit) {
+        pass('OM admin picker includes teammates who own orders');
+    } else {
+        fail('OM admin picker hid teammate assignee ' . (int) $teamUser['id']);
     }
 
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
@@ -5689,10 +5900,16 @@ try {
     }
     $copiedPublisherInbox = $omFromWp && str_contains((string) ($omFromWp['client_label'] ?? ''), 'publisher-inbox');
     if ($omFromWp && $foundProc && !$foundCompEarly && !$copiedPublisherInbox
-        && parse_money($omFromWp['owner_price'] ?? 0) === 42.0) {
+        && parse_money($omFromWp['owner_price'] ?? 0) === 42.0
+        && order_date_stored($omFromWp) === '') {
         pass('WP Processing syncs to OM Processing');
     } else {
         fail('WP Processing did not create a Processing OM row');
+    }
+    if ($omFromWp && (int) ($omFromWp['admin_user_id'] ?? 0) === (int) $adminUser['id']) {
+        pass('WP Processing copies created/managed admin onto OM');
+    } else {
+        fail('WP Processing OM row missing admin_user_id');
     }
     $wpRowHtmlTeam = render_site_price_sheet_row(get_site_price_row((int) $wpFoldId) ?: [], $teamUser);
     $wpCols = db()->query('SHOW COLUMNS FROM site_price_rows')->fetchAll(PDO::FETCH_COLUMN);
@@ -5910,15 +6127,19 @@ try {
     } else {
         fail('Processing origin filter mismatch');
     }
+    $pickEmpty = order_pipeline_pick_processing_origin('', []);
     $pickWp = order_pipeline_pick_processing_origin('', ['q' => $originWpDomain]);
     $pickMan = order_pipeline_pick_processing_origin('', ['q' => $manOriginDomain]);
-    $pickStay = order_pipeline_pick_processing_origin('wp', ['q' => $manOriginDomain]);
+    $pickJump = order_pipeline_pick_processing_origin('wp', ['q' => $manOriginDomain]);
+    $pickKeep = order_pipeline_pick_processing_origin('wp', ['q' => $originWpDomain]);
     $pickExpl = order_pipeline_pick_processing_origin('manual', ['q' => $originWpDomain]);
-    if ($pickWp === 'wp' && $pickMan === 'manual' && $pickStay === 'wp' && $pickExpl === 'manual') {
+    $pickAll = order_pipeline_pick_processing_origin('all', ['q' => $manOriginDomain]);
+    if ($pickEmpty === 'all' && $pickWp === 'all' && $pickMan === 'all' && $pickJump === 'manual' && $pickKeep === 'wp'
+        && $pickExpl === 'wp' && $pickAll === 'all') {
         pass('Processing default origin follows non-empty tab');
     } else {
-        fail('Processing default origin: wp=' . $pickWp . ' man=' . $pickMan
-            . ' stay=' . $pickStay . ' expl=' . $pickExpl);
+        fail('Processing default origin: empty=' . $pickEmpty . ' wp=' . $pickWp . ' man=' . $pickMan
+            . ' jump=' . $pickJump . ' keep=' . $pickKeep . ' expl=' . $pickExpl . ' all=' . $pickAll);
     }
 
     $restoreDomain = 'txfom-restore-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
@@ -6106,6 +6327,11 @@ try {
         && str_contains($ordersPhpSrc, "['folder' => 'completed'")
         && str_contains($ordersPhpSrc, 'No leftover Processing orders')
         && str_contains($ordersPhpSrc, 'order_row_ready_for_complete')
+        && str_contains($ordersPhpSrc, 'order-needs-summary')
+        && str_contains($ordersPhpSrc, 'data-needs')
+        && str_contains($ordersPhpSrc, 'data-date-display')
+        && str_contains($ordersPhpSrc, 'value="mine"')
+        && str_contains($ordersPhpSrc, 'order_date_stored')
         && str_contains($ordersPhpSrc, 'Need a country on every ticked row before completing')
         && str_contains($ordersPhpSrc, 'Need a client email or name on every ticked row before completing')
         && str_contains($ordersPhpSrc, 'data-orig-live')
@@ -6114,6 +6340,10 @@ try {
         && str_contains($ordersPhpSrc, 'id="om-origin-tabs"')
         && str_contains($ordersPhpSrc, 'Added here')
         && str_contains($ordersPhpSrc, 'Leftover')
+        && str_contains($ordersPhpSrc, 'data-searchable')
+        && str_contains($ordersPhpSrc, 'searchable-select.js')
+        && str_contains($ordersPhpSrc, 'order-country-input')
+        && str_contains($ordersPhpSrc, 'id="order-filter-country"')
         && str_contains($ordersPhpSrc, 'order_invoice_generate_push_cta')) {
         pass('OM sheet Copy/Complete labels, confirm, WP link, client typeahead');
     } else {
@@ -6130,7 +6360,9 @@ try {
         && str_contains($ordersPhpSrc, 'then use <strong>Push to invoice</strong> on this sheet')
         && str_contains($omCssSrc, 'order-filter-bar-completed')
         && str_contains($omCssSrc, 'th.col-price .with-info-label')
-        && str_contains($omCssSrc, 'order-check-hint-bill')) {
+        && str_contains($omCssSrc, 'order-check-hint-bill')
+        && str_contains($omCssSrc, 'order-country-suggest')
+        && str_contains($omCssSrc, 'align-items: flex-end')) {
         pass('OM Completed unpaid sheet UX');
     } else {
         fail('OM Completed unpaid sheet UX missing');

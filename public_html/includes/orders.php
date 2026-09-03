@@ -410,24 +410,207 @@ function normalize_order_date($value): ?string
     return sprintf('%04d-%02d-%02d', $year, $month, $day);
 }
 
+function order_pipeline_parse_admin_filter($raw): int
+{
+    $raw = strtolower(trim((string) $raw));
+    if ($raw === 'unassigned' || $raw === '-1') {
+        return -1;
+    }
+    if ($raw === 'mine') {
+        return -2;
+    }
+    return max(0, (int) $raw);
+}
+
+function order_pipeline_admin_filter_query(int $adminId): string
+{
+    if ($adminId === -1) {
+        return 'unassigned';
+    }
+    if ($adminId === -2) {
+        return 'mine';
+    }
+    return $adminId > 0 ? (string) $adminId : '';
+}
+
+function order_pipeline_resolve_admin_filter(int $adminId, int $viewerId): int
+{
+    if ($adminId === -2) {
+        return max(0, $viewerId);
+    }
+    return $adminId;
+}
+
+function order_date_stored(array $row): string
+{
+    $d = trim((string) ($row['order_date'] ?? ''));
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $d, $m)) {
+        $d = $m[1];
+    }
+    return normalize_order_date($d) ?: '';
+}
+
+function order_date_effective(array $row): string
+{
+    $d = order_date_stored($row);
+    if ($d !== '') {
+        return $d;
+    }
+    $created = (string) ($row['created_at'] ?? '');
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $created, $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+function order_date_display(?string $iso): string
+{
+    $d = normalize_order_date($iso ?? '');
+    if (!$d) {
+        return '';
+    }
+    $dt = DateTime::createFromFormat('Y-m-d', $d);
+    return $dt ? $dt->format('j M Y') : '';
+}
+
+function order_person_label(array $row): string
+{
+    $name = trim((string) ($row['full_name'] ?? $row['admin_full_name'] ?? ''));
+    $user = trim((string) ($row['username'] ?? $row['admin_username'] ?? ''));
+    $raw = $name !== '' ? $name : $user;
+    if ($raw === '') {
+        return '';
+    }
+    if (str_contains($raw, '@')) {
+        $local = (string) strstr($raw, '@', true);
+        $raw = $local !== '' ? $local : $raw;
+    }
+    if (preg_match('/^[a-z0-9]+[._-][a-z0-9._-]+$/i', $raw)) {
+        $first = explode('.', str_replace('_', '.', $raw), 2)[0];
+        if ($first !== '') {
+            return ucfirst(strtolower($first));
+        }
+    }
+    return $raw;
+}
+
+function order_row_needs(array $row): array
+{
+    $need = [];
+    if (trim((string) ($row['country'] ?? '')) === '') {
+        $need[] = 'country';
+    }
+    if (trim((string) ($row['client_label'] ?? '')) === '') {
+        $need[] = 'client';
+    }
+    if (trim((string) ($row['live_url'] ?? '')) === '') {
+        $need[] = 'LIVE URL';
+    }
+    return $need;
+}
+
+function order_wp_admin_user_id(array $wp): int
+{
+    $managed = (int) ($wp['managed_by'] ?? 0);
+    if ($managed > 0) {
+        return $managed;
+    }
+    return max(0, (int) ($wp['created_by'] ?? 0));
+}
+
+function order_backfill_pipeline_admin_from_website_prices(): void
+{
+    try {
+        db()->exec(
+            "UPDATE order_items i
+             INNER JOIN site_price_rows s ON s.id = i.site_price_row_id
+             SET i.admin_user_id = COALESCE(NULLIF(s.managed_by, 0), NULLIF(s.created_by, 0))
+             WHERE i.row_type = 'site'
+               AND i.admin_user_id IS NULL
+               AND COALESCE(NULLIF(s.managed_by, 0), NULLIF(s.created_by, 0)) IS NOT NULL"
+        );
+    } catch (Throwable $e) {
+        // Website prices table may not exist yet
+    }
+}
+
 function order_admin_display_name(array $row): string
 {
-    $name = trim((string) ($row['admin_full_name'] ?? ''));
-    if ($name !== '') {
-        return $name;
-    }
-    return trim((string) ($row['admin_username'] ?? ''));
+    return order_person_label($row);
 }
 
 /** @return list<array<string,mixed>> */
 function order_admin_options(): array
 {
+    $byId = [];
     if (function_exists('list_admin_users')) {
-        return list_admin_users(true);
+        foreach (list_admin_users(true) as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $row;
+            }
+        }
+    } else {
+        foreach (db()->query(
+            "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
+        )->fetchAll() as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $byId[$id] = $row;
+            }
+        }
     }
-    return db()->query(
-        "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
-    )->fetchAll();
+    try {
+        $assigned = db()->query(
+            "SELECT u.* FROM users u
+             INNER JOIN (
+               SELECT DISTINCT admin_user_id FROM order_items
+               WHERE row_type = 'site' AND admin_user_id IS NOT NULL
+             ) i ON u.id = i.admin_user_id
+             ORDER BY u.full_name, u.username"
+        )->fetchAll();
+        foreach ($assigned as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0 && !isset($byId[$id])) {
+                $byId[$id] = $row;
+            }
+        }
+    } catch (Throwable $e) {
+        // order_items may not exist yet
+    }
+    return array_values($byId);
+}
+
+/**
+ * Admin filter counts for the current sheet (folder/origin/search/dates, not admin).
+ * Keys: 0 = all, -1 = unassigned, user id => n.
+ *
+ * @param array{q?:string,country?:string,date_from?:string,date_to?:string,status?:string,folder?:string,origin?:string} $opts
+ * @return array<int,int>
+ */
+function order_pipeline_admin_counts(array $opts = []): array
+{
+    $opts['admin_id'] = 0;
+    [$whereSql, $params] = order_pipeline_where_sql($opts);
+    $stmt = db()->prepare(
+        'SELECT i.admin_user_id, COUNT(*) AS n FROM order_items i
+         LEFT JOIN users u ON u.id = i.admin_user_id'
+        . $whereSql
+        . ' GROUP BY i.admin_user_id'
+    );
+    $stmt->execute($params);
+    $out = [0 => 0, -1 => 0];
+    foreach ($stmt->fetchAll() as $row) {
+        $n = (int) ($row['n'] ?? 0);
+        $out[0] += $n;
+        $aid = (int) ($row['admin_user_id'] ?? 0);
+        if ($aid < 1) {
+            $out[-1] += $n;
+        } else {
+            $out[$aid] = ($out[$aid] ?? 0) + $n;
+        }
+    }
+    return $out;
 }
 
 function order_profit($ownerPrice, $decidedPrice): float
@@ -543,6 +726,7 @@ function order_sync_from_site_price_row(int $sitePriceRowId): void
         'site_price_row_id' => $sitePriceRowId,
         'owner_price' => order_owner_price_from_price_note((string) ($wp['price_note'] ?? '')),
         'order_stage' => 'processing',
+        'admin_user_id' => order_wp_admin_user_id($wp),
     ]);
 }
 
@@ -566,6 +750,7 @@ function order_reconcile_processing_from_website_prices(): void
             // best-effort — a bad Website prices row must not block the folder
         }
     }
+    order_backfill_pipeline_admin_from_website_prices();
 }
 
 /**
@@ -969,7 +1154,7 @@ function add_order_item(?int $clientId = null, string $siteName = '', ?int $mont
     }
     $adminId = (int) ($extra['admin_user_id'] ?? 0);
     $adminId = $adminId > 0 ? $adminId : null;
-    $orderDate = normalize_order_date($extra['order_date'] ?? '') ?: date('Y-m-d');
+    $orderDate = normalize_order_date($extra['order_date'] ?? '');
     $country = trim((string) ($extra['country'] ?? ''));
     $wpId = (int) ($extra['site_price_row_id'] ?? 0);
     $stage = strtolower(trim((string) ($extra['order_stage'] ?? 'processing')));
@@ -1057,6 +1242,13 @@ function update_order_item(int $itemId, int $clientId, array $data, bool $allowI
     if ($year < 2000 || $year > 2100) {
         $year = (int) date('Y');
     }
+    $postedDate = array_key_exists('order_date', $data)
+        ? normalize_order_date($data['order_date'])
+        : null;
+    if ($postedDate) {
+        $month = (int) substr($postedDate, 5, 2);
+        $year = (int) substr($postedDate, 0, 4);
+    }
     $placement = normalize_placement_type($data['placement_type'] ?? '');
     if ($placement === '') {
         $endMonth = null;
@@ -1134,9 +1326,9 @@ function update_order_item(int $itemId, int $clientId, array $data, bool $allowI
         $sets[] = 'admin_user_id=?';
         $params[] = $adminId > 0 ? $adminId : null;
     }
-    if (array_key_exists('order_date', $data)) {
+    if ($postedDate) {
         $sets[] = 'order_date=?';
-        $params[] = normalize_order_date($data['order_date']) ?: date('Y-m-d');
+        $params[] = $postedDate;
     }
     if (array_key_exists('article_doc_url', $data) && order_has_article_doc_column()) {
         $sets[] = 'article_doc_url=?';
@@ -1432,26 +1624,31 @@ function normalize_order_pipeline_origin($origin): string
 }
 
 /**
- * Processing sheet tab. Explicit origin= is kept. Missing origin opens the first
- * non-empty tab (Website prices Processing, then Leftover, then Added here).
+ * Processing sheet tab. Explicit origin= is kept when that tab still has rows
+ * for the current filters. An empty pinned tab jumps to the first origin that
+ * still matches. Missing origin opens All Processing.
  *
  * @param array{q?:string,country?:string,admin_id?:int,date_from?:string,date_to?:string} $countOpts
  */
 function order_pipeline_pick_processing_origin(string $rawOrigin, array $countOpts = []): string
 {
     $raw = strtolower(trim($rawOrigin));
-    if (in_array($raw, ['wp', 'leftover', 'manual', 'all'], true)) {
-        return $raw;
-    }
+    $explicit = in_array($raw, ['wp', 'leftover', 'manual', 'all'], true);
     $base = $countOpts;
     $base['folder'] = 'processing';
     unset($base['origin'], $base['status']);
+    if (!$explicit || $raw === 'all') {
+        return 'all';
+    }
+    if (count_order_pipeline_rows(array_merge($base, ['origin' => $raw])) > 0) {
+        return $raw;
+    }
     foreach (['wp', 'leftover', 'manual'] as $key) {
         if (count_order_pipeline_rows(array_merge($base, ['origin' => $key])) > 0) {
             return $key;
         }
     }
-    return 'wp';
+    return $raw;
 }
 
 /**
@@ -1505,18 +1702,29 @@ function order_pipeline_where_sql(array $opts = []): array
         $params[] = $country;
     }
     $adminId = (int) ($opts['admin_id'] ?? 0);
-    if ($adminId > 0) {
+    if ($adminId === -2) {
+        $adminId = (int) ($opts['viewer_id'] ?? 0);
+    }
+    if ($adminId === -1) {
+        $where[] = 'i.admin_user_id IS NULL';
+    } elseif ($adminId > 0) {
         $where[] = 'i.admin_user_id = ?';
         $params[] = $adminId;
     }
+    $dateExpr = 'COALESCE(i.order_date, DATE(i.created_at))';
     $dateFrom = normalize_order_date($opts['date_from'] ?? '');
+    $dateTo = normalize_order_date($opts['date_to'] ?? '');
+    if ($dateFrom && $dateTo && $dateFrom > $dateTo) {
+        $tmp = $dateFrom;
+        $dateFrom = $dateTo;
+        $dateTo = $tmp;
+    }
     if ($dateFrom) {
-        $where[] = 'i.order_date >= ?';
+        $where[] = $dateExpr . ' >= ?';
         $params[] = $dateFrom;
     }
-    $dateTo = normalize_order_date($opts['date_to'] ?? '');
     if ($dateTo) {
-        $where[] = 'i.order_date <= ?';
+        $where[] = $dateExpr . ' <= ?';
         $params[] = $dateTo;
     }
     $status = (string) ($opts['status'] ?? 'all');
@@ -1532,6 +1740,20 @@ function order_pipeline_where_sql(array $opts = []): array
         }
     }
     return [' WHERE ' . implode(' AND ', $where), $params];
+}
+
+/**
+ * Sheet order. Date-range filters sort by day; otherwise newest id first so
+ * editing a date does not jump the row off the current page.
+ */
+function order_pipeline_list_order_sql(array $opts = []): string
+{
+    $dateFrom = normalize_order_date($opts['date_from'] ?? '');
+    $dateTo = normalize_order_date($opts['date_to'] ?? '');
+    if ($dateFrom || $dateTo) {
+        return ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+    }
+    return ' ORDER BY i.id DESC';
 }
 
 function count_order_pipeline_rows(array $opts = []): int
@@ -1573,7 +1795,7 @@ function list_order_pipeline_rows(array $opts = []): array
          LEFT JOIN users u ON u.id = i.admin_user_id
          LEFT JOIN site_price_rows spr ON spr.id = i.site_price_row_id"
         . $whereSql
-        . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+        . order_pipeline_list_order_sql($opts);
     if ($limit > 0) {
         $sql .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
     }
@@ -1642,7 +1864,7 @@ function list_order_pipeline_ids(array $opts = [], int $limit = 0): array
     $sql = 'SELECT i.id FROM order_items i
          LEFT JOIN users u ON u.id = i.admin_user_id'
         . $whereSql
-        . ' ORDER BY COALESCE(i.order_date, DATE(i.created_at)) DESC, i.id DESC';
+        . order_pipeline_list_order_sql($opts);
     if ($limit > 0) {
         $sql .= ' LIMIT ' . $limit;
     }
@@ -1747,7 +1969,7 @@ function add_order_pipeline_row(?int $adminUserId, string $clientLabel = '', arr
     return add_order_item(null, '', null, null, [
         'admin_user_id' => $adminId,
         'client_label' => $clientLabel,
-        'order_date' => date('Y-m-d'),
+        'order_date' => normalize_order_date($extra['order_date'] ?? ''),
         'country' => (string) ($extra['country'] ?? ''),
     ]);
 }

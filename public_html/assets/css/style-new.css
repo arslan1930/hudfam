@@ -931,6 +931,10 @@ html.ui-v2 .niche-chip {
 html.ui-v2 {
   color-scheme: dark;
 }
+html.ui-v2 input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.9;
+}
 html.ui-v2 input:-webkit-autofill,
 html.ui-v2 input:-webkit-autofill:hover,
 html.ui-v2 input:-webkit-autofill:focus,
@@ -1159,9 +1163,23 @@ html.ui-v2 .orders-summary-done {
   background: var(--ok-soft);
   border-color: rgba(74, 222, 128, 0.35);
 }
+html.ui-v2 .order-sheet-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 html.ui-v2 .order-sheet th {
   background: #1e293b;
   color: #cbd5e1;
+}
+html.ui-v2 .order-sheet th.col-check,
+html.ui-v2 .order-sheet th.col-num,
+html.ui-v2 .order-sheet th.col-country {
+  background: #1e293b;
+}
+html.ui-v2 .order-sheet td.col-check,
+html.ui-v2 .order-sheet td.col-num,
+html.ui-v2 .order-sheet td.col-country {
+  background: #0f172a;
 }
 html.ui-v2 .order-sheet tfoot td {
   background: rgba(15, 23, 42, 0.72);
@@ -1171,9 +1189,18 @@ html.ui-v2 .order-check-head {
   color: #cbd5e1;
 }
 html.ui-v2 .site-cell .cell-note {
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(2, 6, 23, 0.7);
   color: var(--muted);
+  border: 1px solid rgba(148, 163, 184, 0.4);
 }
+html.ui-v2 .site-cell .cell-note:focus {
+  background: rgba(15, 23, 42, 0.95);
+  border-style: solid;
+  color: var(--ink);
+}
+html.ui-v2 .order-needs-chip.is-missing { color: #fbbf24; }
+html.ui-v2 .order-needs-chip.is-ready { color: var(--ok); }
+html.ui-v2 .order-needs-summary { color: var(--muted); }
 html.ui-v2 .order-row.is-placement .col-live .cell-input,
 html.ui-v2 .order-row.is-completed .col-live .cell-input {
   background: rgba(2, 6, 23, 0.85);
@@ -1183,8 +1210,34 @@ html.ui-v2 .order-row.is-completed .col-live .cell-input {
 html.ui-v2 .profit-pos { color: var(--ok); }
 html.ui-v2 .profit-neg { color: var(--bad); }
 
-html.ui-v2 label {
+html.ui-v2 .order-filter-bar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html.ui-v2 .order-filter-label {
+  color: #94a3b8;
+}
+html.ui-v2 .ss-input {
+  background: #0f172a !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  color: #e2e8f0 !important;
+}
+html.ui-v2 .ss-option.is-active,
+html.ui-v2 .ss-option:hover {
+  background: rgba(34, 211, 238, 0.12);
   color: #e2e8f0;
+}
+html.ui-v2 .order-country-suggest {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+html.ui-v2 .order-country-suggest-item {
+  color: #e2e8f0;
+}
+html.ui-v2 .order-country-suggest-item:hover,
+html.ui-v2 .order-country-suggest-item.is-active {
+  background: rgba(34, 211, 238, 0.14);
 }
 html.ui-v2 input[type="checkbox"],
 html.ui-v2 input[type="radio"],
@@ -1203,6 +1256,11 @@ html.ui-v2 .camp-sheet-table .camp-cell {
 }
 html.ui-v2 tbody tr:nth-child(even) td {
   background: rgba(148, 163, 184, 0.06);
+}
+html.ui-v2 .order-sheet tbody tr:nth-child(even) td.col-check,
+html.ui-v2 .order-sheet tbody tr:nth-child(even) td.col-num,
+html.ui-v2 .order-sheet tbody tr:nth-child(even) td.col-country {
+  background: #152033;
 }
 
 /* Invoice paper stays white (even-row overlay must not tint it). */
