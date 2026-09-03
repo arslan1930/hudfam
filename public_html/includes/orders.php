@@ -444,7 +444,10 @@ function order_pipeline_resolve_admin_filter(int $adminId, int $viewerId): int
 function order_date_stored(array $row): string
 {
     $d = trim((string) ($row['order_date'] ?? ''));
-    return normalize_order_date($d) ? $d : '';
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $d, $m)) {
+        $d = $m[1];
+    }
+    return normalize_order_date($d) ?: '';
 }
 
 function order_date_effective(array $row): string
@@ -1699,7 +1702,10 @@ function order_pipeline_where_sql(array $opts = []): array
         $params[] = $country;
     }
     $adminId = (int) ($opts['admin_id'] ?? 0);
-    if ($adminId < 0) {
+    if ($adminId === -2) {
+        $adminId = (int) ($opts['viewer_id'] ?? 0);
+    }
+    if ($adminId === -1) {
         $where[] = 'i.admin_user_id IS NULL';
     } elseif ($adminId > 0) {
         $where[] = 'i.admin_user_id = ?';

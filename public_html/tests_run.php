@@ -5017,6 +5017,16 @@ try {
     } else {
         fail('OM admin filter unassigned token failed');
     }
+    [$unassignedSql] = order_pipeline_where_sql(['admin_id' => -1]);
+    [$mineTokenSql] = order_pipeline_where_sql(['admin_id' => -2]);
+    [$mineViewerSql] = order_pipeline_where_sql(['admin_id' => -2, 'viewer_id' => (int) $adminUser['id']]);
+    if (str_contains($unassignedSql, 'admin_user_id IS NULL')
+        && !str_contains($mineTokenSql, 'admin_user_id IS NULL')
+        && str_contains($mineViewerSql, 'admin_user_id = ?')) {
+        pass('OM Mine filter is not Unassigned SQL');
+    } else {
+        fail('OM Mine token still used Unassigned SQL');
+    }
     $nullAdminId = add_order_pipeline_row(0, '', ['country' => 'Germany']);
     db()->prepare('UPDATE order_items SET admin_user_id=NULL, order_date=NULL WHERE id=?')->execute([(int) $nullAdminId]);
     $nullRow = get_order_item((int) $nullAdminId) ?: [];
@@ -5057,6 +5067,7 @@ try {
     $unsetDateId = add_order_pipeline_row((int) $adminUser['id'], '', ['country' => 'Germany']);
     $unsetDateRow = get_order_item((int) $unsetDateId) ?: [];
     if (order_date_stored($unsetDateRow) === ''
+        && order_date_stored(['order_date' => '2026-09-02 00:00:00']) === '2026-09-02'
         && order_date_display('2026-09-02') === '2 Sep 2026'
         && order_person_label(['full_name' => 'sania.teqnowebs', 'username' => 'admin']) === 'Sania'
         && order_person_label(['full_name' => '', 'username' => 'marcus.lee']) === 'Marcus'

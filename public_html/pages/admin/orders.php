@@ -511,7 +511,7 @@ $items = list_order_pipeline_rows($listOpts + [
 $unpaidFilterOpts = [
     'q' => $filter['q'],
     'country' => $filter['country'],
-    'admin_id' => $filter['admin_id'],
+    'admin_id' => order_pipeline_resolve_admin_filter($filter['admin_id'], (int) ($user['id'] ?? 0)),
     'date_from' => $filter['date_from'],
     'date_to' => $filter['date_to'],
     'status' => 'unpaid',
@@ -2034,6 +2034,9 @@ if ($compactUnpaidStats && !$showPagingStats) {
   var filterBar = document.getElementById('order-filter-bar');
   function submitFilterAfterSave() {
     if (!filterBar) return;
+    if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+      window.AppProcessing.hideAll();
+    }
     HTMLFormElement.prototype.submit.call(filterBar);
   }
   if (filterBar) {
