@@ -5011,8 +5011,8 @@ try {
     db()->prepare(
         "INSERT INTO users (username,password_hash,full_name,email,role,must_change_password,is_active)
          VALUES (?,?,?,?, 'team', 0, 1)
-         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), is_active=1, role='team'"
-    )->execute([$saniaName, $saniaHash, '', 'sania@test.local']);
+         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), is_active=1, role='team', full_name=VALUES(full_name)"
+    )->execute([$saniaName, $saniaHash, 'Sania', 'sania@test.local']);
     $saniaId = (int) db()->query('SELECT id FROM users WHERE username=' . db()->quote($saniaName))->fetchColumn();
     $arslanId = (int) $adminUser['id'];
     $adminOpts = order_admin_options();

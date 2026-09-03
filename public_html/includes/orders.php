@@ -501,7 +501,7 @@ function order_admin_options(): array
 
 /**
  * Resolve a posted Admin cell to a real users.id (or null).
- * Accepts a numeric id, or a username / full name if a client posted the visible label.
+ * Accepts a numeric id, then an exact username, then a unique full name.
  *
  * @param mixed $raw
  */
@@ -526,13 +526,17 @@ function order_normalize_admin_user_id($raw): ?int
         }
         throw new InvalidArgumentException('That person is not in Users. Pick someone from the Admin list.');
     }
-    $stmt = db()->prepare(
-        'SELECT id FROM users WHERE username = ? OR full_name = ? ORDER BY (role = \'admin\') DESC, id ASC LIMIT 1'
-    );
-    $stmt->execute([$raw, $raw]);
+    $stmt = db()->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
+    $stmt->execute([$raw]);
     $id = (int) $stmt->fetchColumn();
     if ($id > 0) {
         return $id;
+    }
+    $stmt = db()->prepare('SELECT id FROM users WHERE full_name = ? ORDER BY id ASC');
+    $stmt->execute([$raw]);
+    $hits = $stmt->fetchAll();
+    if (count($hits) === 1) {
+        return (int) ($hits[0]['id'] ?? 0) ?: null;
     }
     throw new InvalidArgumentException('Could not assign that admin. Pick someone from the Admin list.');
 }
