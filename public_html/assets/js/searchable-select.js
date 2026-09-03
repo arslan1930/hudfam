@@ -70,7 +70,7 @@
     select.setAttribute('aria-hidden', 'true');
 
     var input = document.createElement('input');
-    input.type = 'search';
+    input.type = 'text';
     input.className = 'ss-input';
     input.autocomplete = 'off';
     input.spellcheck = false;

@@ -1653,7 +1653,7 @@ if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
     || !str_contains($omCss, 'left: 7.4rem')
     || !str_contains($omCss, 'min-width: 9rem')
     || !str_contains($omCss, '.order-needs-chip')
-    || !str_contains($omCss, 'min-width: 13rem')
+    || !str_contains($omCss, 'min-width: 9.25rem')
     || !str_contains($omCss, 'align-items: flex-end')
     || !str_contains($omCss, '.order-country-suggest')) {
     fail('orders country/admin columns still too narrow to read');

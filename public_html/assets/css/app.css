@@ -3454,8 +3454,8 @@ tr.swe-row-updated {
 }
 .order-filter-grid {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem 0.55rem;
+  flex-wrap: nowrap;
+  gap: 0.4rem 0.5rem;
   align-items: flex-end;
 }
 .order-filter-field {
@@ -3464,6 +3464,10 @@ tr.swe-row-updated {
   flex-direction: column;
   gap: 0.18rem;
   min-width: 0;
+  flex: 1 1 8.75rem;
+}
+.order-filter-search {
+  flex: 1.35 1 11rem;
 }
 .order-filter-label {
   font-size: 0.72rem;
@@ -3475,33 +3479,37 @@ tr.swe-row-updated {
 .order-filter-field select,
 .order-filter-field input[type="date"],
 .order-filter-field .ss-wrap,
-.order-filter-field .ss-input {
+.order-filter-field .ss-input,
+.order-filter-bar .order-filter-search input[type="search"],
+.order-filter-bar .sheet-search input[type="search"] {
   margin: 0;
-  min-width: 13rem;
+  min-width: 0;
+  width: 100%;
+}
+.order-filter-field input[type="date"] {
+  min-width: 9.25rem;
 }
 .order-filter-field .ss-wrap {
   flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
 }
 .order-filter-field .ss-input {
   min-height: 2.35rem;
 }
 .order-filter-bar .order-filter-search input[type="search"],
 .order-filter-bar .sheet-search input[type="search"] {
-  width: 16rem;
-  max-width: 70vw;
-  margin: 0;
   min-height: 2.35rem;
 }
 .order-filter-bar-completed .order-filter-search,
 .order-filter-bar-completed .sheet-search {
-  flex: 1 1 22rem;
-  min-width: 18rem;
+  flex: 1.6 1 14rem;
+  min-width: 0;
 }
 .order-filter-bar-completed .order-filter-search input[type="search"],
 .order-filter-bar-completed .sheet-search input[type="search"] {
   width: 100%;
-  min-width: 18rem;
+  min-width: 0;
   max-width: none;
 }
 .order-filter-actions {
@@ -3509,6 +3517,10 @@ tr.swe-row-updated {
   gap: 0.4rem;
   align-items: flex-end;
   min-height: 2.35rem;
+  flex: 0 0 auto;
+}
+@media (max-width: 720px) {
+  .order-filter-grid { flex-wrap: wrap; }
 }
 .sheet-search {
   display: inline-flex;
@@ -3976,7 +3988,7 @@ textarea[hidden],
 .order-sheet th,
 .order-sheet td {
   padding: 0.4rem 0.35rem;
-  vertical-align: middle;
+  vertical-align: top;
   border-bottom: 1px solid var(--line);
 }
 .order-sheet .col-num { width: 2.2rem; min-width: 2.2rem; max-width: 2.2rem; text-align: center; }
