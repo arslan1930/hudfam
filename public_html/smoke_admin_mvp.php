@@ -104,6 +104,8 @@ if (!str_contains($asset, 'css/style-new.css')
     || !str_contains($uiCss, 'input:not([type])')
     || !str_contains($uiCss, '.camp-hub-check')
     || !str_contains($uiCss, '.swe-status-badge.is-emailed')
+    || !str_contains($uiCss, 'html.ui-v2 .swe-admin-delete-suggest')
+    || !str_contains($uiCss, '.camp-cleanup-details')
     || !str_contains($uiCss, '.sheet-check input[type="checkbox"]')
     || !str_contains($uiCss, 'swe-row-opened')
     || !str_contains($uiCss, 'is-just-added')
@@ -1398,7 +1400,8 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
     || !str_contains($presenceJsSmoke, 'document.hidden')
     || !str_contains($sitesFormJsSmoke, 'function scheduleStatus')
     || !str_contains($campSearchJsSmoke, 'fetchSuggest(q); }, 280')
-    || !str_contains($campSearchJsSmoke, 'q.length < 3')
+    || !str_contains($campSearchJsSmoke, 'q.length < MIN_Q')
+    || !str_contains($campSearchJsSmoke, 'Type \' + MIN_Q + \'+ characters')
     || !str_contains($navJsSmoke, "addEventListener('change'")
     || !str_contains($dashSmoke, 'cached_count_result')
     || !str_contains($geoSmoke, 'SELECT 1 FROM countries LIMIT 1')
@@ -1409,7 +1412,7 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
 }
 if (!str_contains($campLibSmoke, 'csrf_field()')
     || !str_contains($sweLibSmoke, 'csrf_field()')
-    || !str_contains($campLibSmoke, 'JavaScript is required to search and update')
+    || !str_contains($campLibSmoke, 'JavaScript is required to search and copy')
     || !str_contains($sweLibSmoke, 'JavaScript is required to search and update')
     || !str_contains($campSearchJsSmoke, 'payload._csrf')
     || !str_contains($sweDeleteJsSmoke, 'payload._csrf')) {
@@ -2658,15 +2661,28 @@ if (!str_contains($campLib, 'function expand_email_campaign_draft_tokens')
 }
 if (!str_contains($campLib, 'data-camp-open-drafts')
     || !str_contains($campLib, 'data-drafts-url')
-    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-search.js') ?: '', 'syncDraftsLink')) {
-    fail('campaign search missing Open drafts deep-link');
+    || !str_contains($campLib, 'data-camp-copy-emails')
+    || !str_contains($campLib, 'camp-cleanup-details')
+    || !str_contains($campLib, 'Search all projects')
+    || !str_contains($campLib, 'function email_campaign_search_country_terms')
+    || !str_contains($campLib, 'function email_campaign_drafts_fill_query')
+    || !str_contains($campLib, "'email_sent' =>")
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-search.js') ?: '', 'syncDraftsLink')
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-search.js') ?: '', 'copySelectedEmails')
+    || !str_contains(file_get_contents($root . '/pages/team/email_campaigns.php') ?: '', 'mark_email_sent')) {
+    fail('campaign search missing copy-first / emailed / all-projects / Open drafts');
 } else {
-    ok('campaign search Open drafts deep-link');
+    ok('campaign search copy-first + emailed + all-projects + Open drafts');
 }
 $campDraftJs = file_get_contents($root . '/assets/js/email-campaign-drafts.js') ?: '';
 $cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($campDraftsTeam, 'class="camp-draft-form"')
     || !str_contains($campDraftsTeam, 'data-no-draft')
+    || !str_contains($campDraftsTeam, 'data-camp-fill-clear')
+    || !str_contains($campDraftsTeam, 'data-camp-drafts-q')
+    || !str_contains($campDraftsTeam, 'data-camp-drafts-project-filter')
+    || !str_contains($campDraftsTeam, '$href .= $fillQuery')
+    || !str_contains($campDraftsTeam, 'Creator or Admin can delete')
     || !str_contains($campApp, 'data-no-draft data-show-processing="Saving draft')
     || !str_contains($cssApp, '.camp-draft-textarea-sync')
     || !str_contains($cssApp, 'display: none !important')) {
@@ -2676,10 +2692,12 @@ if (!str_contains($campDraftsTeam, 'class="camp-draft-form"')
 }
 if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
     || !str_contains($campDraftJs, 'expandTokens')
-    || !str_contains($campDraftJs, 'data-camp-draft-token')) {
-    fail('email-campaign-drafts.js missing Copy plain / tokens');
+    || !str_contains($campDraftJs, 'data-camp-draft-token')
+    || !str_contains($campDraftJs, 'initDraftFilters')
+    || !str_contains($campDraftJs, 'Use Copy plain if paste looks empty')) {
+    fail('email-campaign-drafts.js missing Copy plain / tokens / filters');
 } else {
-    ok('email-campaign-drafts.js Copy plain + tokens');
+    ok('email-campaign-drafts.js Copy plain + tokens + draft search');
 }
 if (!str_contains($campLib, 'function count_email_campaign_drafts_by_projects')
     || !str_contains($campLib, 'function count_email_campaign_sheets')

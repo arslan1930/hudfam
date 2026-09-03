@@ -277,13 +277,13 @@ function guide_admin_account(): string
 function guide_campaign_search(): string
 {
     return render_page_purpose(
-        'Campaign search — find a site in a project',
-        'One search bar per Admin project shown to Communication Team. Each bar covers every country sheet in that project.',
-        'Type a site or email, pick a result, then delete both or remove only one email. Updates go to that country’s campaign sheet. Removing the last email also deletes the site row.',
+        'Campaign search — find a site, copy emails',
+        'One search bar per Admin project shown to Communication Team (plus Search all projects when there is more than one). Each bar covers every country sheet in that project.',
+        'Type 2+ characters, pick a result, copy emails, then Open drafts for site and paste into your email client. This app does not send mail. Remove from sheet is cleanup only.',
         [
-            'Pick the project search bar Admin shared with Communication Team.',
-            'Search site name or email across all countries in that project.',
-            'Delete both, or remove only email — JavaScript is required to confirm the update.',
+            'Pick a project bar, or Search all projects.',
+            'Copy emails (Enter copies them after a site is selected). Open drafts fills {domain} / {country} / {language}.',
+            'Mark emailed so teammates do not email the same site twice. Remove from sheet stays behind a confirm.',
         ]
     );
 }
@@ -292,11 +292,11 @@ function guide_campaign_drafts(): string
 {
     return render_page_purpose(
         'Campaign drafts — copy outreach for email',
-        'Reusable formatted replies, offers, and follow-ups per Admin project. Optional subject line and tokens such as {domain} and {country}.',
-        'Open a project, write or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Communication Team only — this is not the full Admin campaign editor.',
+        'Reusable formatted replies, offers, and follow-ups per Admin project. Optional subject line and tokens such as {domain} and {country}. This app does not send mail.',
+        'Open a project, pick a draft, then Copy (HTML for Gmail/Outlook) or Copy plain if paste looks empty. Tokens fill from Campaign search when you open drafts for a site.',
         [
             'Choose a project Admin turned on for Communication Team.',
-            'Save drafts with formatting; tokens fill from Campaign search when you open drafts for a site.',
+            'Save drafts with formatting; Open drafts for site fills {domain} / {country} / {language}.',
             'Copy into your email client. Delete is allowed for the creator or Admin.',
         ]
     );

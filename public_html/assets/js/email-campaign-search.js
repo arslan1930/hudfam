@@ -1,5 +1,41 @@
+/**
+ * Communication Team · Campaign search
+ * Copy emails first; remove-from-sheet stays behind confirm.
+ */
 (function () {
   'use strict';
+
+  var MIN_Q = 2;
+
+  function copyText(text) {
+    var value = String(text || '');
+    if (!value) {
+      return Promise.reject(new Error('Nothing to copy'));
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(value);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        if (document.execCommand('copy')) {
+          resolve();
+        } else {
+          reject(new Error('Copy failed'));
+        }
+      } catch (err) {
+        reject(err);
+      } finally {
+        ta.remove();
+      }
+    });
+  }
 
   function initCard(root) {
     var input = root.querySelector('[data-camp-q]');
@@ -9,12 +45,15 @@
     var selDomain = root.querySelector('[data-camp-sel-domain]');
     var selCountry = root.querySelector('[data-camp-sel-country]');
     var selEmails = root.querySelector('[data-camp-sel-emails]');
+    var selSent = root.querySelector('[data-camp-sel-sent]');
     var noEmails = root.querySelector('[data-camp-no-emails]');
     var emailPick = root.querySelector('[data-camp-email-pick]');
     var emailSelect = root.querySelector('[data-camp-email-select]');
     var applyBtn = root.querySelector('[data-camp-apply]');
     var clearBtn = root.querySelector('[data-camp-clear]');
     var draftsLink = root.querySelector('[data-camp-open-drafts]');
+    var copyBtn = root.querySelector('[data-camp-copy-emails]');
+    var markBtn = root.querySelector('[data-camp-mark-sent]');
     var modeInputs = root.querySelectorAll('[data-camp-mode]');
 
     var sheetId = root.getAttribute('data-sheet-id') || '';
@@ -29,6 +68,7 @@
     var selected = null;
     var timer = null;
     var abortCtrl = null;
+    var listPorted = false;
 
     function csrfToken() {
       var field = root.querySelector('input[name="_csrf"]');
@@ -43,16 +83,29 @@
         statusEl.hidden = true;
         statusEl.textContent = '';
         statusEl.classList.remove('is-error');
+        statusEl.classList.remove('is-ok');
         return;
       }
       statusEl.hidden = false;
       statusEl.textContent = msg;
       statusEl.classList.toggle('is-error', !!isError);
+      statusEl.classList.toggle('is-ok', !isError);
     }
 
     function currentMode() {
       var checked = root.querySelector('[data-camp-mode]:checked');
       return checked ? checked.value : 'row';
+    }
+
+    function placeSuggest() {
+      if (!list || list.hidden || !input) return;
+      var r = input.getBoundingClientRect();
+      list.style.position = 'fixed';
+      list.style.left = Math.max(8, r.left) + 'px';
+      list.style.top = (r.bottom + 4) + 'px';
+      list.style.width = Math.max(180, r.width) + 'px';
+      list.style.right = 'auto';
+      list.style.zIndex = '80';
     }
 
     function hideSuggest() {
@@ -82,12 +135,26 @@
       }
     }
 
+    function syncMarkBtn() {
+      if (!markBtn) return;
+      if (!selected) {
+        markBtn.hidden = true;
+        return;
+      }
+      markBtn.hidden = false;
+      markBtn.textContent = selected.emailSent ? 'Undo emailed' : 'Mark emailed';
+    }
+
     function renderSuggest() {
       if (!list) return;
       list.innerHTML = '';
       if (!suggestions.length) {
-        list.hidden = true;
+        hideSuggest();
         return;
+      }
+      if (!listPorted && list.parentNode !== document.body) {
+        document.body.appendChild(list);
+        listPorted = true;
       }
       suggestions.forEach(function (item, idx) {
         var li = document.createElement('li');
@@ -99,15 +166,24 @@
         main.className = 'swe-admin-delete-item-main';
         main.textContent = item.domain;
 
-      var meta = document.createElement('div');
-      meta.className = 'swe-admin-delete-item-meta';
-      var emails = (item.emails || []).join(', ') || '(no emails)';
-      meta.textContent = emails + (item.country ? ' · ' + item.country : '');
+        var meta = document.createElement('div');
+        meta.className = 'swe-admin-delete-item-meta';
+        var emails = (item.emails || []).join(', ') || '(no emails)';
+        var bits = [emails];
+        if (item.country) bits.push(item.country);
+        if (item.project_name && item.project_name !== item.country) bits.push(item.project_name);
+        if (item.email_sent) bits.push('emailed');
+        meta.textContent = bits.join(' · ');
 
-      var tag = document.createElement('span');
-      tag.className = 'swe-admin-delete-match';
-      tag.textContent = item.match_type === 'email' ? 'email'
-        : (item.match_type === 'country' ? 'country' : 'site');
+        var tag = document.createElement('span');
+        tag.className = 'swe-admin-delete-match';
+        tag.textContent = item.email_sent
+          ? 'emailed'
+          : (item.match_type === 'email' ? 'email'
+            : (item.match_type === 'country' ? 'country' : 'site'));
+        if (item.email_sent) {
+          tag.classList.add('is-emailed');
+        }
 
         li.appendChild(main);
         li.appendChild(meta);
@@ -119,6 +195,7 @@
         list.appendChild(li);
       });
       list.hidden = false;
+      placeSuggest();
     }
 
     function syncDraftsLink() {
@@ -130,7 +207,7 @@
       }
       var url = draftsBase;
       var pid = selected.projectId || projectId;
-      if (pid && url.indexOf('project=') === -1) {
+      if (pid && String(pid) !== '0' && url.indexOf('project=') === -1) {
         url += (url.indexOf('?') >= 0 ? '&' : '?') + 'project=' + encodeURIComponent(pid);
       }
       url += (url.indexOf('?') >= 0 ? '&' : '?') + 'domain=' + encodeURIComponent(selected.domain);
@@ -148,6 +225,7 @@
       if (!selectedBox || !selected) {
         if (selectedBox) selectedBox.hidden = true;
         syncDraftsLink();
+        syncMarkBtn();
         return;
       }
       selectedBox.hidden = false;
@@ -158,6 +236,9 @@
         if (selected.country && selected.country !== selected.projectName) bits.push(selected.country);
         selCountry.textContent = bits.join(' · ');
       }
+      if (selSent) {
+        selSent.hidden = !selected.emailSent;
+      }
       if (selEmails) {
         selEmails.innerHTML = '';
         var emails = selected.emails || [];
@@ -167,11 +248,23 @@
           li.className = 'swe-admin-delete-email-row';
           var span = document.createElement('span');
           span.textContent = email;
+          var one = document.createElement('button');
+          one.type = 'button';
+          one.className = 'btn secondary small';
+          one.setAttribute('data-camp-copy-one', email);
+          one.textContent = 'Copy';
+          one.addEventListener('click', function () {
+            copyText(email).then(function () {
+              setStatus('Copied ' + email + ' — paste into your email client.', false);
+            }).catch(function () {
+              setStatus('Could not copy ' + email + '.', true);
+            });
+          });
           li.appendChild(span);
+          li.appendChild(one);
           selEmails.appendChild(li);
         });
       }
-      // Prefer remove-only-email when the match was an email
       if (selected.matchType === 'email' && (selected.emails || []).length) {
         modeInputs.forEach(function (el) {
           if (el.value === 'email') el.checked = true;
@@ -183,6 +276,7 @@
       }
       syncEmailPick();
       syncDraftsLink();
+      syncMarkBtn();
     }
 
     function selectSuggestion(idx) {
@@ -198,7 +292,8 @@
         projectName: item.project_name || sheetName || '',
         emails: (item.emails || []).slice(),
         matchType: item.match_type || 'domain',
-        focusEmail: item.match_type === 'email' ? item.matched_value : null
+        focusEmail: item.match_type === 'email' ? item.matched_value : null,
+        emailSent: !!item.email_sent
       };
       if (input) input.value = item.domain;
       hideSuggest();
@@ -206,7 +301,8 @@
       setStatus(
         'Selected ' + item.domain + ' · ' +
         ((item.emails || []).join(', ') || 'no emails') +
-        '. Choose action, then press Enter to confirm — or Open drafts for site.'
+        (item.email_sent ? ' · already emailed' : '') +
+        '. Copy emails, then Open drafts for site.'
       );
     }
 
@@ -214,9 +310,19 @@
       if (abortCtrl) {
         try { abortCtrl.abort(); } catch (e) {}
       }
-      if (!suggestUrl || q.length < 3) {
+      if (!suggestUrl) {
         suggestions = [];
         hideSuggest();
+        return;
+      }
+      if (q.length < MIN_Q) {
+        suggestions = [];
+        hideSuggest();
+        if (q.length) {
+          setStatus('Type ' + MIN_Q + '+ characters to search.');
+        } else if (!selected) {
+          setStatus('');
+        }
         return;
       }
       abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -231,7 +337,7 @@
           suggestions = (data && data.suggestions) || [];
           activeIndex = suggestions.length ? 0 : -1;
           renderSuggest();
-          if (!suggestions.length && q.length >= 3) {
+          if (!suggestions.length && q.length >= MIN_Q) {
             setStatus('No matches in “' + sheetName + '”.', true);
           } else if (suggestions.length) {
             setStatus(
@@ -267,6 +373,47 @@
           return data;
         });
       });
+    }
+
+    function copySelectedEmails() {
+      if (!selected) return;
+      var emails = selected.emails || [];
+      if (!emails.length) {
+        setStatus('No emails on this site to copy.', true);
+        return;
+      }
+      copyText(emails.join('\n')).then(function () {
+        setStatus(
+          'Copied ' + emails.length + ' email' + (emails.length === 1 ? '' : 's') +
+          ' — paste into your email client, then Open drafts for site.',
+          false
+        );
+      }).catch(function () {
+        setStatus('Could not copy emails.', true);
+      });
+    }
+
+    function toggleEmailed() {
+      if (!selected) return;
+      var sid = String(selected.sheetId || sheetId || '');
+      var next = !selected.emailSent;
+      postAction({
+        ajax: '1',
+        action: 'mark_email_sent',
+        sheet_id: sid,
+        row_id: String(selected.id),
+        email_sent: next ? '1' : '0'
+      })
+        .then(function (data) {
+          selected.emailSent = !!(data.email_sent);
+          renderSelected();
+          setStatus(data.message || (selected.emailSent
+            ? 'Marked ' + selected.domain + ' as emailed.'
+            : 'Cleared emailed mark on ' + selected.domain + '.'));
+        })
+        .catch(function (err) {
+          setStatus(err.message || 'Could not update emailed mark.', true);
+        });
     }
 
     function applyUpdate() {
@@ -379,17 +526,26 @@
           return;
         }
         if (e.key === 'Escape') {
+          e.preventDefault();
+          if (list && !list.hidden) {
+            hideSuggest();
+            return;
+          }
+          selected = null;
+          renderSelected();
+          input.value = '';
+          setStatus('');
           hideSuggest();
           return;
         }
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (!list.hidden && suggestions.length && activeIndex >= 0 && !selected) {
+          if (list && !list.hidden && suggestions.length && activeIndex >= 0 && !selected) {
             selectSuggestion(activeIndex);
             return;
           }
           if (selected) {
-            applyUpdate();
+            copySelectedEmails();
           }
         }
       });
@@ -398,10 +554,15 @@
       });
     }
 
+    window.addEventListener('scroll', placeSuggest, true);
+    window.addEventListener('resize', placeSuggest);
+
     modeInputs.forEach(function (el) {
       el.addEventListener('change', syncEmailPick);
     });
     if (applyBtn) applyBtn.addEventListener('click', applyUpdate);
+    if (copyBtn) copyBtn.addEventListener('click', copySelectedEmails);
+    if (markBtn) markBtn.addEventListener('click', toggleEmailed);
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
         selected = null;

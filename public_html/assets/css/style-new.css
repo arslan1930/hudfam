@@ -1364,6 +1364,49 @@ html.ui-v2 .camp-hub-step-num {
   color: #083344;
 }
 
+html.ui-v2 .swe-admin-delete-suggest {
+  background: rgba(8, 18, 36, 0.96);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+html.ui-v2 .swe-admin-delete-item:hover,
+html.ui-v2 .swe-admin-delete-item.is-active {
+  background: rgba(34, 211, 238, 0.14);
+}
+html.ui-v2 .swe-admin-delete-item-main {
+  color: var(--ink);
+}
+html.ui-v2 .swe-admin-delete-match {
+  color: #083344;
+  background: rgba(34, 211, 238, 0.85);
+}
+html.ui-v2 .swe-admin-delete-match.is-emailed {
+  color: #86efac;
+  background: var(--ok-soft);
+}
+html.ui-v2 .swe-admin-delete-panel,
+html.ui-v2 .camp-action-fieldset,
+html.ui-v2 .camp-cleanup-details,
+html.ui-v2 .camp-fill-banner,
+html.ui-v2 .camp-drafts-toolbar {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .camp-action-choice:hover {
+  background: rgba(34, 211, 238, 0.1);
+}
+html.ui-v2 .swe-admin-delete-selected {
+  border-top-color: var(--line);
+}
+html.ui-v2 .camp-draft-title,
+html.ui-v2 .camp-draft-rich h1,
+html.ui-v2 .camp-draft-rich h2,
+html.ui-v2 .camp-draft-rich h3 {
+  color: var(--ink);
+}
+
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;

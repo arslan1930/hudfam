@@ -130,6 +130,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
     }
 
+    if ($action === 'mark_email_sent') {
+        $sent = (string) post('email_sent') === '1';
+        $result = set_email_campaign_row_email_sent($sid, $rowId, $sent, $user);
+        if (empty($result['ok'])) {
+            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not update emailed mark.')], 400);
+        }
+        $json([
+            'ok' => true,
+            'message' => $sent
+                ? 'Marked ' . (string) ($result['domain'] ?? '') . ' as emailed (' . $projectName . ').'
+                : 'Cleared emailed mark on ' . (string) ($result['domain'] ?? '') . ' (' . $projectName . ').',
+            'domain' => (string) ($result['domain'] ?? ''),
+            'country' => $countryName,
+            'project_name' => $projectName,
+            'email_sent' => !empty($result['email_sent']),
+            'row_id' => $rowId,
+            'sheet_id' => $sid,
+        ]);
+    }
+
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
@@ -143,12 +163,12 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Campaign search', 'One search bar per Admin project shown to Communication Team. Each project can include many countries. Search the whole project, then delete — updates the matching country sheet.') ?></h1>
+    <h1><?= label_with_info('Campaign search', 'Find a site, copy emails, then open drafts and paste into your email client. This app does not send mail. Remove from sheet is cleanup only.') ?></h1>
     <p class="muted">
       <?= (int) $visibleCount ?> project search bar<?= (int) $visibleCount === 1 ? '' : 's' ?>
       from Admin → Emails data → Email campaign data.
-      Each bar covers <strong>all countries</strong> Admin added to that project.
-      Delete both or remove only email — removing the <strong>last</strong> email also deletes the site row.
+      Type <strong>2+ characters</strong> · copy emails · Open drafts for site.
+      Remove from sheet is under each result — removing the <strong>last</strong> email also deletes the site row.
     </p>
   </div>
   <div class="actions">
