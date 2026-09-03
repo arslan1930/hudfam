@@ -86,6 +86,16 @@ try {
     } else {
         fail('list_countries request cache');
     }
+    $spainHay = swe_country_search_hay('Spain', 10);
+    $ukHay = swe_country_search_hay('UK', 3);
+    if (str_contains($spainHay, 'spain')
+        && str_contains($spainHay, 'espana')
+        && str_contains($ukHay, 'united kingdom')
+        && str_contains($ukHay, 'uk')) {
+        pass('SWE country search hay includes aliases');
+    } else {
+        fail('SWE country search hay missing aliases');
+    }
 } catch (Throwable $e) {
     fail('perf helpers: ' . $e->getMessage());
 }

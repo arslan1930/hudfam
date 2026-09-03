@@ -35,6 +35,31 @@ function swe_label(string $scope): string
     };
 }
 
+/** Search haystack for a country folder row (name, aliases, site count). */
+function swe_country_search_hay(string $name, int $total = 0): string
+{
+    $name = trim($name);
+    $parts = [mb_strtolower($name)];
+    if ($total > 0) {
+        $parts[] = (string) $total;
+        $parts[] = 'sites';
+    }
+    if (function_exists('country_name_aliases')) {
+        $aliases = country_name_aliases();
+        $key = mb_strtolower($name);
+        if (isset($aliases[$key])) {
+            $parts[] = mb_strtolower((string) $aliases[$key]);
+        }
+        foreach ($aliases as $alias => $target) {
+            if (strcasecmp((string) $target, $name) === 0) {
+                $parts[] = mb_strtolower((string) $alias);
+            }
+        }
+    }
+    $parts = array_values(array_unique(array_filter($parts, static fn ($p) => $p !== '')));
+    return implode(' ', $parts);
+}
+
 function swe_create_table_sql(string $table): string
 {
     $map = [

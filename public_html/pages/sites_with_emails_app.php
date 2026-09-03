@@ -539,7 +539,7 @@ if (!$inCountry) {
     <div class="topbar">
       <div>
         <h1><?= label_with_info(
-            $sweLabel,
+            $isAdmin ? ($sweAdminHubLabel . ' · ' . $sweLabel) : $sweLabel,
             $isTeam
                 ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
                 : ($isAdminAll
@@ -577,7 +577,7 @@ if (!$inCountry) {
             <form method="post" action="<?= h($sweBase) ?>" style="display:inline">
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="mark_all_countries_seen">
-              <button class="btn secondary" type="submit">Mark all countries seen</button>
+              <button class="btn secondary" type="submit" title="Clear +new badges on this list. Does not change the sites.">Mark all countries seen</button>
             </form>
           <?php endif; ?>
           <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
@@ -591,6 +591,16 @@ if (!$inCountry) {
         <?php endif; ?>
       </div>
     </div>
+
+    <?php if ($isAdmin): ?>
+    <nav class="invoice-list-chips swe-folder-chips" aria-label="Emails data folders">
+      <a class="btn secondary small<?= $sweScope === 'admin' ? ' active-soft' : '' ?>"
+         href="<?= h($sweAdminHub) ?>&amp;folder=sites_with_emails"<?= $sweScope === 'admin' ? ' aria-current="page"' : '' ?>>Admin</a>
+      <a class="btn secondary small<?= $sweScope === 'admin_all' ? ' active-soft' : '' ?>"
+         href="<?= h($sweAdminHub) ?>&amp;folder=all_sites_with_emails"<?= $sweScope === 'admin_all' ? ' aria-current="page"' : '' ?>>Final</a>
+      <a class="btn secondary small" href="<?= h($sweAdminHub) ?>&amp;folder=email_campaigns">Campaign</a>
+    </nav>
+    <?php endif; ?>
 
     <?php
     $finalOpenerHtml = '';
@@ -654,20 +664,25 @@ if (!$inCountry) {
 
     <div class="card">
       <?php if ($countryRows): ?>
-      <div class="invoice-list-toolbar" style="margin-bottom:0.75rem">
+      <div class="invoice-list-toolbar swe-country-toolbar" style="margin-bottom:0.75rem">
         <h2 style="margin:0"><?= label_with_info(
             'By country',
             $isAdminAll
                 ? 'Open a folder to see its archive and paste or import. Each country name or Open goes to that sheet.'
-                : 'Open a country to see its sites and emails. Counts show how many sites have at least one email.'
+                : 'Open a country to see its sites and emails. With emails is sites that have at least one address. Type to filter; Enter opens the highlighted country.'
         ) ?></h2>
-        <label class="sheet-search swe-country-search" for="swe-country-search">
-          <span class="visually-hidden">Search countries</span>
-          <input id="swe-country-search" type="search" placeholder="Search country name…"
-                 autocomplete="off" spellcheck="false" data-no-draft
-                 title="Type a country name · Enter = next match">
-          <span class="sheet-search-meta muted" data-swe-country-search-meta hidden></span>
-        </label>
+        <div class="swe-country-tools">
+          <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
+            <button type="button" class="btn secondary small" data-swe-new-only aria-pressed="false">New only</button>
+          <?php endif; ?>
+          <label class="sheet-search swe-country-search" for="swe-country-search">
+            <span class="visually-hidden">Search countries</span>
+            <input id="swe-country-search" type="search" placeholder="Search country name…"
+                   autocomplete="off" spellcheck="false" data-no-draft
+                   title="Type a country name · ↑↓ to move · Enter opens">
+            <span class="sheet-search-meta muted" data-swe-country-search-meta hidden></span>
+          </label>
+        </div>
       </div>
       <?php if ($isAdminAll): ?>
       <p class="help" style="margin:0 0 0.65rem">Open a folder. Adding a site on that sheet also creates the Admin working-list row.</p>
@@ -679,22 +694,24 @@ if (!$inCountry) {
             <th>Country</th>
             <th class="num">Sites</th>
             <?php if ($showWithEmailsCol): ?>
-            <th class="num">With emails</th>
+            <th class="num"><?= label_with_info('With emails', 'Sites that have at least one email. Same as Sites when every row arrived from Team Push with emails.') ?></th>
             <?php endif; ?>
             <?php if ($isTeam): ?>
             <th>Last Push</th>
             <?php endif; ?>
-            <th><span class="visually-hidden">Open</span></th>
+            <th class="swe-country-open"><span class="visually-hidden">Open</span></th>
           </tr>
         </thead>
         <tbody>
         <?php foreach ($countryRows as $r):
             $cName = (string) $r['country'];
             $openHref = $sweBase . '&country=' . rawurlencode($cName);
-            $hay = mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
+            $hay = function_exists('swe_country_search_hay')
+                ? swe_country_search_hay($cName, (int) $r['total'])
+                : mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
             $newN = (int) ($adminNewByCountry[$cName] ?? 0);
             ?>
-          <tr data-swe-country-row data-search="<?= h($hay) ?>">
+          <tr data-swe-country-row data-search="<?= h($hay) ?>" data-new="<?= $newN > 0 ? '1' : '0' ?>">
             <td>
               <a class="extracted-country-link" href="<?= h($openHref) ?>">
                 <?= h($cName) ?>
@@ -717,7 +734,7 @@ if (!$inCountry) {
               </a>
             </td>
             <?php if ($showWithEmailsCol): ?>
-            <td class="num muted"><?= (int) $r['with_emails'] ?></td>
+            <td class="num swe-country-emails"><?= (int) $r['with_emails'] ?></td>
             <?php endif; ?>
             <?php if ($isTeam):
                 $lp = trim((string) ($r['last_pushed_at'] ?? ''));
@@ -734,15 +751,28 @@ if (!$inCountry) {
               <?php endif; ?>
             </td>
             <?php endif; ?>
-            <td class="num">
+            <td class="swe-country-open">
               <a class="btn secondary small" href="<?= h($openHref) ?>">Open</a>
             </td>
           </tr>
         <?php endforeach; ?>
           <tr class="sheet-search-empty" data-swe-country-search-empty hidden>
-            <td colspan="<?= (int) $countryTableCols ?>" class="muted">No countries match your search.</td>
+            <td colspan="<?= (int) $countryTableCols ?>" class="muted">No countries match.</td>
           </tr>
         </tbody>
+        <tfoot>
+          <tr>
+            <th><?= count($countryRows) ?> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?></th>
+            <td class="num"><?= (int) $grandTotal ?></td>
+            <?php if ($showWithEmailsCol): ?>
+            <td class="num swe-country-emails"><?= (int) $emailSites ?></td>
+            <?php endif; ?>
+            <?php if ($isTeam): ?>
+            <td></td>
+            <?php endif; ?>
+            <td class="swe-country-open"></td>
+          </tr>
+        </tfoot>
       </table>
       </div>
       <?php else: ?>
@@ -775,49 +805,116 @@ if (!$inCountry) {
         });
       });
       var input = document.getElementById('swe-country-search');
-      if (!input) return;
       var matchRows = [], matchIndex = -1;
       var meta = document.querySelector('[data-swe-country-search-meta]');
       var empty = document.querySelector('[data-swe-country-search-empty]');
+      var newOnlyBtn = document.querySelector('[data-swe-new-only]');
+      var newOnly = false;
+
       function clearHits() {
         document.querySelectorAll('#swe-country-table .sheet-search-hit').forEach(function (el) {
           el.classList.remove('sheet-search-hit');
         });
       }
+
+      function paintHit() {
+        clearHits();
+        if (matchIndex < 0 || !matchRows[matchIndex]) return;
+        var row = matchRows[matchIndex];
+        row.classList.add('sheet-search-hit');
+        row.scrollIntoView({ block: 'nearest' });
+      }
+
+      function openHit() {
+        if (matchIndex < 0 || !matchRows[matchIndex]) return;
+        var a = matchRows[matchIndex].querySelector('a.extracted-country-link');
+        if (a && a.href) window.location.href = a.href;
+      }
+
       function filter() {
-        var q = String(input.value || '').trim().toLowerCase();
-        matchRows = []; clearHits();
+        var q = String(input ? input.value : '').trim().toLowerCase();
+        matchRows = [];
+        clearHits();
         var shown = 0;
         document.querySelectorAll('[data-swe-country-row]').forEach(function (row) {
-          var hit = !q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1;
+          var hayHit = !q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1;
+          var newHit = !newOnly || row.getAttribute('data-new') === '1';
+          var hit = hayHit && newHit;
           row.hidden = !hit;
-          if (hit) { shown++; if (q) matchRows.push(row); }
+          if (hit) {
+            shown++;
+            matchRows.push(row);
+          }
         });
-        if (empty) empty.hidden = !(q && shown === 0);
+        if (empty) empty.hidden = shown !== 0;
+        if (!q && !newOnly) {
+          matchIndex = -1;
+          clearHits();
+        } else if (matchRows.length) {
+          if (matchIndex < 0 || matchIndex >= matchRows.length) matchIndex = 0;
+          paintHit();
+        } else {
+          matchIndex = -1;
+        }
         if (meta) {
-          if (!q) { meta.hidden = true; meta.textContent = ''; matchIndex = -1; return; }
+          if (!q && !newOnly) {
+            meta.hidden = true;
+            meta.textContent = '';
+            return;
+          }
           meta.hidden = false;
-          meta.textContent = !matchRows.length ? '0 · Enter = next'
-            : (matchIndex >= 0 ? (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next'
-              : matchRows.length + ' matches · Enter = next');
+          if (!matchRows.length) {
+            meta.textContent = '0 matches';
+          } else if (q) {
+            meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length
+              + (matchRows.length === 1 ? ' · Enter opens' : ' · ↑↓ · Enter opens');
+          } else {
+            meta.textContent = matchRows.length + ' with new';
+          }
         }
       }
-      function jump(dir) {
-        if (!String(input.value || '').trim()) return;
-        filter();
-        if (!matchRows.length) return;
-        matchIndex = matchIndex < 0 ? (dir > 0 ? 0 : matchRows.length - 1)
+
+      function move(dir) {
+        if (!matchRows.length) {
+          filter();
+          if (!matchRows.length) return;
+        }
+        matchIndex = matchIndex < 0
+          ? (dir > 0 ? 0 : matchRows.length - 1)
           : (matchIndex + dir + matchRows.length) % matchRows.length;
-        var row = matchRows[matchIndex];
-        clearHits();
-        row.classList.add('sheet-search-hit');
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        if (meta) meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
+        paintHit();
+        if (meta && matchRows.length) {
+          meta.hidden = false;
+          meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter opens';
+        }
       }
-      input.addEventListener('input', function () { matchIndex = -1; filter(); });
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? -1 : 1); }
-      });
+
+      if (newOnlyBtn) {
+        newOnlyBtn.addEventListener('click', function () {
+          newOnly = !newOnly;
+          newOnlyBtn.setAttribute('aria-pressed', newOnly ? 'true' : 'false');
+          newOnlyBtn.classList.toggle('active-soft', newOnly);
+          matchIndex = -1;
+          filter();
+        });
+      }
+      if (input) {
+        input.addEventListener('input', function () { matchIndex = -1; filter(); });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+          else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (matchIndex < 0) filter();
+            openHit();
+          } else if (e.key === 'Escape') {
+            input.value = '';
+            matchIndex = -1;
+            filter();
+            input.blur();
+          }
+        });
+      }
     })();
     </script>
     <?php
