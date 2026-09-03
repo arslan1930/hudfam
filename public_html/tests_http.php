@@ -1021,6 +1021,13 @@ if ($r['status'] >= 300 && $r['status'] < 400
 } else {
     fail('unassigned teammate opened Filter status=' . $r['status'] . ' loc=' . $loc);
 }
+$r = req('GET', $base . '/index.php?page=admin_orders&folder=processing');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashboard')) {
+    pass('teammate blocked from Order management');
+} else {
+    fail('teammate OM page status=' . $r['status'] . ' loc=' . $loc);
+}
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&copy=live_urls');
 $loc = location($r);
 if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashboard')) {

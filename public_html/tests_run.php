@@ -185,6 +185,14 @@ if (
     fail('draft autosave / sheet / presence CSRF wiring');
 }
 
+if (str_contains($indexSrc, "str_starts_with(\$page, 'admin_')")
+    && str_contains($indexSrc, 'Admin access required. You were sent to the Team panel.')
+    && str_contains($indexSrc, "(\$cu['role'] ?? '') !== 'admin'")) {
+    pass('admin_* routes blocked for Team at the front door');
+} else {
+    fail('index.php missing admin-only gate for admin_* pages');
+}
+
 if (str_contains($procJs, "method === 'get'")
     && str_contains($procJs, 'GET forms do')
     && str_contains($procJs, '(?:export|download)=')
@@ -5015,15 +5023,30 @@ try {
     )->execute([$saniaName, $saniaHash, 'Sania', 'sania@test.local']);
     $saniaId = (int) db()->query('SELECT id FROM users WHERE username=' . db()->quote($saniaName))->fetchColumn();
     $arslanId = (int) $adminUser['id'];
+    $switchId = add_order_pipeline_row($arslanId, 'anna@example.com', [
+        'country' => 'netherland',
+        'admin_user_id' => $saniaId,
+    ]);
     $adminOpts = order_admin_options();
     $optIds = [];
     foreach ($adminOpts as $optRow) {
         $optIds[(int) ($optRow['id'] ?? 0)] = true;
     }
-    $switchId = add_order_pipeline_row($arslanId, 'anna@example.com', [
-        'country' => 'netherland',
-        'admin_user_id' => $saniaId,
-    ]);
+    $strayName = 'txf-om-no-admin';
+    db()->prepare(
+        "INSERT INTO users (username,password_hash,full_name,email,role,must_change_password,is_active)
+         VALUES (?,?,?,?, 'team', 0, 1)
+         ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash), is_active=1, role='team'"
+    )->execute([$strayName, $saniaHash, 'No Orders', 'txf-om-no-admin@test.local']);
+    $strayId = (int) db()->query('SELECT id FROM users WHERE username=' . db()->quote($strayName))->fetchColumn();
+    $optsAfterStray = order_admin_options();
+    $strayListed = false;
+    foreach ($optsAfterStray as $optRow) {
+        if ((int) ($optRow['id'] ?? 0) === $strayId) {
+            $strayListed = true;
+            break;
+        }
+    }
     update_order_item((int) $switchId, 0, [
         'site_name' => 'brummensnieuws.nl',
         'country' => 'netherland',
@@ -5077,15 +5100,17 @@ try {
     if ($saniaId > 0
         && !empty($optIds[$saniaId])
         && !empty($optIds[$arslanId])
+        && !$strayListed
         && (int) ($afterArslan['admin_user_id'] ?? 0) === $arslanId
         && (int) ($afterSania['admin_user_id'] ?? 0) === $saniaId
         && $byUsername === $saniaId
         && $badAdmin
         && $incompleteThrew) {
-        pass('order admin picker includes teammates and Sania↔Arslan saves');
+        pass('order admin picker is admins-only and Sania↔Arslan still saves');
     } else {
         fail('order admin Sania↔Arslan: sania=' . $saniaId
             . ' opts=' . (int) !empty($optIds[$saniaId])
+            . ' stray=' . (int) $strayListed
             . ' arslan=' . (int) ($afterArslan['admin_user_id'] ?? 0)
             . ' back=' . (int) ($afterSania['admin_user_id'] ?? 0)
             . ' name=' . (int) $byUsername

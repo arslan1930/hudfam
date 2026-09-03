@@ -1666,13 +1666,16 @@ if (!str_contains($ordersPage, 'data-server-autosave')
     ok('orders autosave edited rows when leaving a cell');
 }
 $ordersInc = file_get_contents($root . '/includes/orders.php') ?: '';
+$indexAcl = file_get_contents($root . '/index.php') ?: '';
 if (!str_contains($ordersInc, 'function order_normalize_admin_user_id')
-    || !str_contains($ordersInc, 'list_team_users')
+    || str_contains($ordersInc, 'list_team_users')
     || !str_contains($ordersInc, 'Pick someone from the Admin list')
-    || !str_contains($ordersInc, 'bool $allowIncomplete = false')) {
-    fail('orders admin picker missing teammates / id normalize');
+    || !str_contains($ordersInc, 'bool $allowIncomplete = false')
+    || !str_contains($indexAcl, "str_starts_with(\$page, 'admin_')")
+    || !str_contains($indexAcl, 'Admin access required. You were sent to the Team panel.')) {
+    fail('orders admin picker / admin-only ACL missing');
 } else {
-    ok('orders admin picker includes teammates and normalizes ids');
+    ok('orders Admin picker is admins-only; team cannot open admin pages');
 }
 if (!str_contains($ordersPage, 'Copy selected sites (this page)')
     || !str_contains($ordersPage, 'Copy selected live URLs (this page)')

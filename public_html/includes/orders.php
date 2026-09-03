@@ -429,8 +429,9 @@ function order_admin_option_label(array $row): string
 }
 
 /**
- * Admins, teammates, and anyone already assigned on an order row.
- * Teammates like Sania must be in the picker so Sania ↔ Arslan does not post a missing id.
+ * Admin accounts, plus anyone already assigned on an order row.
+ * Team logins are not listed unless they already own a row (so Sania ↔ Arslan still works).
+ * Order management itself stays Admin-only via require_admin().
  *
  * @return list<array<string,mixed>>
  */
@@ -452,21 +453,6 @@ function order_admin_options(): array
             "SELECT * FROM users WHERE role='admin' AND is_active=1 ORDER BY full_name, username"
         )->fetchAll() as $row) {
             $add($row);
-        }
-    }
-    if (function_exists('list_team_users')) {
-        foreach (list_team_users(true) as $row) {
-            $add($row);
-        }
-    } else {
-        try {
-            foreach (db()->query(
-                "SELECT * FROM users WHERE role='team' AND is_active=1 ORDER BY full_name, username"
-            )->fetchAll() as $row) {
-                $add($row);
-            }
-        } catch (Throwable $e) {
-            // users.role may not include team yet
         }
     }
     try {
