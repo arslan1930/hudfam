@@ -1435,6 +1435,12 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   text-align: right;
   white-space: nowrap;
 }
+#swe-country-table {
+  width: 100%;
+}
+.table-wrap:has(#swe-country-table) {
+  overflow-x: hidden;
+}
 .extracted-country-table td.swe-country-emails {
   font-variant-numeric: tabular-nums;
   font-weight: 650;

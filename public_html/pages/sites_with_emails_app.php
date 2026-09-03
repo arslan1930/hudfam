@@ -694,7 +694,7 @@ if (!$inCountry) {
             <th>Country</th>
             <th class="num">Sites</th>
             <?php if ($showWithEmailsCol): ?>
-            <th class="num"><?= label_with_info('With emails', 'Sites that have at least one email. Same as Sites when every row arrived from Team Push with emails.') ?></th>
+            <th class="num" title="Sites that have at least one email. Same as Sites when every row arrived from Team Push with emails.">With emails</th>
             <?php endif; ?>
             <?php if ($isTeam): ?>
             <th>Last Push</th>
