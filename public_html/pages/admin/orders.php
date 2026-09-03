@@ -25,7 +25,7 @@ if ($isProcessing) {
 $filter = [
     'q' => trim((string) get('q')),
     'country' => trim((string) get('country')),
-    'admin_id' => max(0, (int) get('admin_id')),
+    'admin_id' => order_pipeline_profile_admin_id((int) ($user['id'] ?? 0)),
     'date_from' => (string) get('date_from'),
     'date_to' => (string) get('date_to'),
     'status' => (string) get('status'),
@@ -89,9 +89,7 @@ $ordersQs = static function (array $overrides = []) use ($filter, $perPage, $pag
         }
     }
     $adminId = (int) ($params['admin_id'] ?? 0);
-    if ($adminId > 0) {
-        $bits[] = 'admin_id=' . $adminId;
-    }
+    $bits[] = 'admin_id=' . $adminId;
     if ($folderName === 'completed') {
         $st = (string) ($params['status'] ?? 'unpaid');
         if (!in_array($st, ['all', 'unpaid', 'paid'], true)) {
@@ -411,12 +409,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($isHub) {
-    $processingCount = count_order_pipeline_rows(['folder' => 'processing']);
-    $processingWp = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'wp']);
-    $processingLeftover = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'leftover']);
-    $processingManual = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'manual']);
-    $completedCount = count_order_pipeline_rows(['folder' => 'completed']);
-    $unpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+    $processingCount = count_order_pipeline_rows(['folder' => 'processing', 'admin_id' => $filter['admin_id']]);
+    $processingWp = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'wp', 'admin_id' => $filter['admin_id']]);
+    $processingLeftover = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'leftover', 'admin_id' => $filter['admin_id']]);
+    $processingManual = count_order_pipeline_rows(['folder' => 'processing', 'origin' => 'manual', 'admin_id' => $filter['admin_id']]);
+    $completedCount = count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => $filter['admin_id']]);
+    $unpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid', 'admin_id' => $filter['admin_id']]);
     render_header('Order management', 'admin');
     render_breadcrumbs([
         ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
@@ -436,7 +434,7 @@ if ($isHub) {
 <?= guide_orders() ?>
 <?php $renderOmFolderTabs('', (int) $processingCount, (int) $completedCount, (int) $unpaidCompleted); ?>
 <div class="launch-cards om-folder-cards" id="om-folders">
-  <a class="launch-card" href="index.php?page=admin_orders&amp;folder=processing" data-om-folder="processing">
+  <a class="launch-card" href="<?= h($ordersQs(['folder' => 'processing', 'p' => 1])) ?>" data-om-folder="processing">
     <h2>Processing</h2>
     <p><strong class="om-folder-count"><?= (int) $processingCount ?></strong> in Processing.
       <?= (int) $processingWp ?> still in Website prices Processing ·
@@ -444,7 +442,7 @@ if ($isHub) {
       <?= (int) $processingManual ?> added here.
       Fill OM fields, then mark completed with a live URL.</p>
   </a>
-  <a class="launch-card" href="index.php?page=admin_orders&amp;folder=completed" data-om-folder="completed">
+  <a class="launch-card" href="<?= h($ordersQs(['folder' => 'completed', 'p' => 1, 'status' => 'unpaid'])) ?>" data-om-folder="completed">
     <h2>Completed orders</h2>
     <p><strong class="om-folder-count"><?= (int) $completedCount ?></strong> completed<?= $unpaidCompleted > 0 ? ' · ' . (int) $unpaidCompleted . ' unpaid' : '' ?>. Push unpaid rows to an invoice. Paid stays in this folder.</p>
   </a>
@@ -585,11 +583,12 @@ foreach ($items as $row) {
 
 $colspan = 16;
 $placementOptions = order_placement_options();
-$filtersOn = $filter['q'] !== '' || $filter['country'] !== '' || $filter['admin_id'] > 0
+$filtersOn = $filter['q'] !== '' || $filter['country'] !== ''
+    || (int) $filter['admin_id'] !== (int) ($user['id'] ?? 0)
     || trim($filter['date_from']) !== '' || trim($filter['date_to']) !== '';
-$tabProcessingCount = count_order_pipeline_rows(['folder' => 'processing']);
-$tabCompletedCount = count_order_pipeline_rows(['folder' => 'completed']);
-$tabUnpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+$tabProcessingCount = count_order_pipeline_rows(['folder' => 'processing', 'admin_id' => $filter['admin_id']]);
+$tabCompletedCount = count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => $filter['admin_id']]);
+$tabUnpaidCompleted = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid', 'admin_id' => $filter['admin_id']]);
 
 render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
 ?>
@@ -649,7 +648,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
     <label class="order-filter-field">
       <span class="visually-hidden">Admin</span>
       <select name="admin_id" aria-label="Filter by admin" onchange="this.form.submit()">
-        <option value="">All admins</option>
+        <option value="0" <?= $filter['admin_id'] < 1 ? 'selected' : '' ?>>All admins</option>
         <?php foreach ($admins as $aRow):
             $aid = (int) $aRow['id'];
             $alabel = trim((string) ($aRow['full_name'] ?? ''));
@@ -675,7 +674,7 @@ render_header($isProcessing ? 'Processing' : 'Completed orders', 'admin');
         <a class="btn secondary small" href="<?= h($ordersQs([
             'q' => '',
             'country' => '',
-            'admin_id' => 0,
+            'admin_id' => (int) ($user['id'] ?? 0),
             'date_from' => '',
             'date_to' => '',
             'p' => 1,
@@ -883,7 +882,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
               <a href="<?= h($ordersQs([
                   'q' => '',
                   'country' => '',
-                  'admin_id' => 0,
+                  'admin_id' => (int) ($user['id'] ?? 0),
                   'date_from' => '',
                   'date_to' => '',
                   'p' => 1,

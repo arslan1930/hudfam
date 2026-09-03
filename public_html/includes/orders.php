@@ -837,22 +837,25 @@ function count_order_client_unpaid_live(int $clientId): int
     return (int) $stmt->fetchColumn();
 }
 
-/** Dashboard/order list aggregates for the pipeline sheet. */
-function order_management_dashboard_stats(): array
+/** Dashboard/order list aggregates for the pipeline sheet.
+ * Pass the signed-in admin id so each profile sees its own orders. 0 = every admin.
+ */
+function order_management_dashboard_stats(int $adminId = 0): array
 {
     ensure_order_schema();
-    $orders = (int) db()->query(
-        "SELECT COUNT(*) FROM order_items WHERE row_type = 'site'"
-    )->fetchColumn();
-    $processing = count_order_pipeline_rows(['folder' => 'processing']);
-    $completed = count_order_pipeline_rows(['folder' => 'completed']);
-    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid']);
+    $adminId = max(0, $adminId);
+    $opts = $adminId > 0 ? ['admin_id' => $adminId] : [];
+    $orders = count_order_pipeline_rows($opts);
+    $processing = count_order_pipeline_rows(['folder' => 'processing'] + $opts);
+    $completed = count_order_pipeline_rows(['folder' => 'completed'] + $opts);
+    $unpaidLive = count_order_pipeline_rows(['folder' => 'completed', 'status' => 'unpaid'] + $opts);
     return [
         'orders' => $orders,
         'clients' => $orders,
         'processing' => $processing,
         'completed' => $completed,
         'unpaid_live' => $unpaidLive,
+        'admin_id' => $adminId,
     ];
 }
 
@@ -1417,6 +1420,23 @@ function get_order_item(int $id): ?array
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     return $row ?: null;
+}
+
+/**
+ * Admin filter for Order management.
+ * Missing admin_id → the signed-in admin (each profile sees their own orders).
+ * admin_id=0 (All admins) → every order.
+ */
+function order_pipeline_profile_admin_id(int $viewerId): int
+{
+    if (!array_key_exists('admin_id', $_GET) && !array_key_exists('admin_id', $_POST)) {
+        return max(0, $viewerId);
+    }
+    $raw = array_key_exists('admin_id', $_GET) ? $_GET['admin_id'] : ($_POST['admin_id'] ?? '');
+    if (is_array($raw)) {
+        $raw = reset($raw);
+    }
+    return max(0, (int) $raw);
 }
 
 /**
