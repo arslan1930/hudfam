@@ -1677,6 +1677,14 @@ if (!str_contains($ordersInc, 'function order_normalize_admin_user_id')
 } else {
     ok('orders Admin picker is admins-only; team cannot open admin pages');
 }
+if (!str_contains($ordersPage, "count_order_pipeline_rows(['folder' => 'completed', 'admin_id' => \$filter['admin_id']])")
+    || !str_contains($ordersPage, 'order_pipeline_profile_admin_id')
+    || !str_contains($ordersInc, 'function order_pipeline_profile_admin_id')
+    || !str_contains($ordersPage, "\$bits[] = 'admin_id=' . \$adminId")) {
+    fail('orders folder tabs still mix every admin into one count');
+} else {
+    ok('orders folder tabs count the selected admin only');
+}
 if (!str_contains($ordersPage, 'Copy selected sites (this page)')
     || !str_contains($ordersPage, 'Copy selected live URLs (this page)')
     || !str_contains($ordersPage, 'Copy all live URLs')

@@ -5118,6 +5118,80 @@ try {
             . ' incomplete=' . (int) $incompleteThrew);
     }
 
+    $prevGet = $_GET;
+    $prevPost = $_POST;
+    $_GET = [];
+    $_POST = [];
+    $defaultMine = order_pipeline_profile_admin_id(11);
+    $_GET['admin_id'] = '0';
+    $explicitAll = order_pipeline_profile_admin_id(11);
+    $_GET['admin_id'] = '22';
+    $explicitOne = order_pipeline_profile_admin_id(11);
+    $_GET = $prevGet;
+    $_POST = $prevPost;
+    if ($defaultMine === 11 && $explicitAll === 0 && $explicitOne === 22) {
+        pass('OM admin filter defaults to the signed-in profile');
+    } else {
+        fail('OM admin profile default mine=' . $defaultMine . ' all=' . $explicitAll . ' one=' . $explicitOne);
+    }
+
+    $tag = 'txfom-split-' . bin2hex(random_bytes(3));
+    $admin2Id = (int) db()->query("SELECT id FROM users WHERE username='admin2' AND role='admin' LIMIT 1")->fetchColumn();
+    $madeA = 0;
+    $madeB = 0;
+    if ($admin2Id > 0) {
+        for ($i = 1; $i <= 3; $i++) {
+            $oid = add_order_pipeline_row($arslanId, 'split-a@example.com', [
+                'country' => 'Germany',
+                'admin_user_id' => $arslanId,
+            ]);
+            update_order_item((int) $oid, 0, [
+                'site_name' => $tag . '-a' . $i . '.com',
+                'country' => 'Germany',
+                'client_label' => 'split-a@example.com',
+                'admin_user_id' => $arslanId,
+                'owner_price' => 1,
+                'decided_price' => 2,
+                'live_url' => 'https://example.com/' . $tag . '-a' . $i,
+                'order_month' => 9,
+                'order_year' => 2026,
+            ]);
+            $marked = order_mark_completed((int) $oid, 'https://example.com/' . $tag . '-a' . $i, $arslanId);
+            if (!empty($marked['ok'])) {
+                $madeA++;
+            }
+        }
+        for ($i = 1; $i <= 7; $i++) {
+            $oid = add_order_pipeline_row($admin2Id, 'split-b@example.com', [
+                'country' => 'Germany',
+                'admin_user_id' => $admin2Id,
+            ]);
+            update_order_item((int) $oid, 0, [
+                'site_name' => $tag . '-b' . $i . '.com',
+                'country' => 'Germany',
+                'client_label' => 'split-b@example.com',
+                'admin_user_id' => $admin2Id,
+                'owner_price' => 1,
+                'decided_price' => 2,
+                'live_url' => 'https://example.com/' . $tag . '-b' . $i,
+                'order_month' => 9,
+                'order_year' => 2026,
+            ]);
+            $marked = order_mark_completed((int) $oid, 'https://example.com/' . $tag . '-b' . $i, $admin2Id);
+            if (!empty($marked['ok'])) {
+                $madeB++;
+            }
+        }
+    }
+    $nA = count_order_pipeline_rows(['folder' => 'completed', 'q' => $tag, 'admin_id' => $arslanId]);
+    $nB = count_order_pipeline_rows(['folder' => 'completed', 'q' => $tag, 'admin_id' => $admin2Id]);
+    $nAll = count_order_pipeline_rows(['folder' => 'completed', 'q' => $tag, 'admin_id' => 0]);
+    if ($admin2Id > 0 && $madeA === 3 && $madeB === 7 && $nA === 3 && $nB === 7 && $nAll === 10) {
+        pass('Completed counts stay split per admin profile');
+    } else {
+        fail('OM profile split a=' . $nA . '/' . $madeA . ' b=' . $nB . '/' . $madeB . ' all=' . $nAll);
+    }
+
     $docNormJs = order_normalize_article_doc_url('javascript:alert(1)');
     $docNormBare = order_normalize_article_doc_url('docs.google.com/document/d/txf-doc-abc');
     $docNormFull = order_normalize_article_doc_url('https://docs.google.com/document/d/ok');

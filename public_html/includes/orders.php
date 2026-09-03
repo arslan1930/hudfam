@@ -1527,6 +1527,23 @@ function get_order_item(int $id): ?array
 }
 
 /**
+ * Admin filter for Order management.
+ * Missing admin_id → the signed-in admin (each profile sees their own orders).
+ * admin_id=0 (All admins) → every order.
+ */
+function order_pipeline_profile_admin_id(int $viewerId): int
+{
+    if (!array_key_exists('admin_id', $_GET) && !array_key_exists('admin_id', $_POST)) {
+        return max(0, $viewerId);
+    }
+    $raw = array_key_exists('admin_id', $_GET) ? $_GET['admin_id'] : ($_POST['admin_id'] ?? '');
+    if (is_array($raw)) {
+        $raw = reset($raw);
+    }
+    return max(0, (int) $raw);
+}
+
+/**
  * Processing origin: wp (still in Website prices Processing), leftover (linked, WP left Processing),
  * manual (no Website prices link), or all. Omit / unknown → all so existing callers keep every Processing row.
  */
