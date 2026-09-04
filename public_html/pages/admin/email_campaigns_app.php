@@ -9,6 +9,7 @@
 ensure_email_campaign_schema();
 ensure_sites_with_emails_schema();
 seed_countries_if_empty(db());
+ensure_email_campaign_office_proposal_drafts();
 
 $campBase = $base . '&folder=email_campaigns';
 $sheetId = isset($sheetId) ? (int) $sheetId : (int) get('sheet');

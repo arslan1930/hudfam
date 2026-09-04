@@ -1249,10 +1249,25 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')) {
     fail('comms blocked from Campaign search status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
-if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')
+    && str_contains($r['body'], 'Office proposals · English')
+    && str_contains($r['body'], 'data-camp-draft-search')
+    && str_contains($r['body'], 'First outreach · requesting · A')
+    && str_contains($r['body'], '3 articles · ask group rate · B')
+    && str_contains($r['body'], 'Best regards')
+    && !str_contains($r['body'], 'Rehan')
+    && !str_contains($r['body'], 'TeqnoWebs')) {
     pass('comms can open Campaign drafts');
 } else {
     fail('comms blocked from Campaign drafts status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('sample'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Sample · they asked for an example · A')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search filters cards');
+} else {
+    fail('comms Campaign drafts search did not filter');
 }
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];

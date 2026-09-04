@@ -2574,6 +2574,23 @@ if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
 } else {
     ok('email-campaign-drafts.js Copy plain + tokens');
 }
+$campOffice = file_get_contents($root . '/includes/email_campaign_office_proposals.php') ?: '';
+if (!str_contains($campLib, 'email_campaign_office_proposals.php')
+    || !str_contains($campOffice, 'function email_campaign_office_proposal_catalog')
+    || !str_contains($campOffice, 'Office proposals · English')
+    || !str_contains($campOffice, 'Best regards')
+    || str_contains($campOffice, 'Rehan')
+    || str_contains($campOffice, 'TeqnoWebs')
+    || !str_contains($campDraftsTeam, 'data-camp-draft-search')
+    || !str_contains($campDraftsTeam, 'ensure_email_campaign_office_proposal_drafts')
+    || !str_contains($campDraftsTeam, 'data-camp-draft-haystack')
+    || !str_contains($campDraftJs, 'initDraftSearch')
+    || !str_contains($campLib, 'd.title LIKE ?')
+    || !str_contains($campApp, 'ensure_email_campaign_office_proposal_drafts')) {
+    fail('campaign office English proposals + search missing');
+} else {
+    ok('campaign office English proposals + draft search');
+}
 if (!str_contains($campLib, 'function count_email_campaign_drafts_by_projects')
     || !str_contains($campLib, 'function count_email_campaign_sheets')
     || !str_contains($campLib, 'function count_email_campaign_projects')

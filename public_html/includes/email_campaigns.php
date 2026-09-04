@@ -4974,7 +4974,7 @@ function get_email_campaign_draft(int $draftId): ?array
 /**
  * @return list<array<string,mixed>>
  */
-function list_email_campaign_drafts(int $projectId, ?string $category = null): array
+function list_email_campaign_drafts(int $projectId, ?string $category = null, string $q = ''): array
 {
     ensure_email_campaign_schema();
     if ($projectId < 1) {
@@ -4993,6 +4993,14 @@ function list_email_campaign_drafts(int $projectId, ?string $category = null): a
     if ($category !== null && $category !== '') {
         $sql .= ' AND d.category=?';
         $params[] = normalize_email_campaign_draft_category($category);
+    }
+    $q = trim($q);
+    if ($q !== '') {
+        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
+        $sql .= ' AND (d.title LIKE ? OR d.subject LIKE ? OR d.body LIKE ?)';
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
     }
     $sql .= ' ORDER BY d.category ASC, d.sort_order ASC, d.title ASC, d.id ASC';
     $stmt = db()->prepare($sql);
@@ -5250,3 +5258,5 @@ function delete_email_campaign_draft(int $projectId, int $draftId, ?array $actor
         'title' => (string) ($draft['title'] ?? 'Draft'),
     ];
 }
+
+require_once __DIR__ . '/email_campaign_office_proposals.php';

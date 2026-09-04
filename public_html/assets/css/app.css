@@ -5115,6 +5115,19 @@ textarea:focus-visible {
 .camp-drafts-filters {
   margin-top: 0.65rem;
 }
+.camp-drafts-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+.camp-drafts-search .sheet-search {
+  min-width: 12rem;
+  max-width: 18rem;
+}
+.camp-drafts-search input[type="search"] {
+  width: 100%;
+}
 .camp-drafts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

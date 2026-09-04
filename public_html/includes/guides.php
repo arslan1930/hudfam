@@ -294,12 +294,12 @@ function guide_campaign_drafts(): string
 {
     return render_page_purpose(
         'Campaign drafts — copy outreach for email',
-        'Reusable formatted replies, offers, and follow-ups per Admin project. Optional subject line and tokens such as {domain} and {country}.',
-        'Open a project, write or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Communication Team only — this is not the full Admin campaign editor.',
+        'Reusable formatted replies, offers, and follow-ups per Admin project. Office proposals · English is a ready library with A / B / C wordings. Optional subject line and tokens such as {domain} and {country}.',
+        'Open a project, search or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Add your own name under Best regards. Communication Team only — this is not the full Admin campaign editor.',
         [
-            'Choose a project Admin turned on for Communication Team.',
-            'Save drafts with formatting; tokens fill from Campaign search when you open drafts for a site.',
-            'Copy into your email client. Delete is allowed for the creator or Admin.',
+            'Open Office proposals · English (or another project Admin turned on for Communication Team).',
+            'Search by title or text (sample, discount, invoice, A / B / C), or use category chips.',
+            'Copy into your email client, then add your name. Delete is allowed for the creator or Admin.',
         ]
     );
 }
