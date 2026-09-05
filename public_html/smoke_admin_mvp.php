@@ -1720,7 +1720,8 @@ if (!str_contains($uiCss, '.orders-summary-item')
 if (!str_contains($uiCss, 'table.sheet-cards-mobile tr.site-price-row[data-tint="yellow"]')
     || !str_contains($uiCss, '.sheet-country-jump select')
     || !str_contains($uiCss, '.camp-country-jump select')
-    || !str_contains($uiCss, '.page-purpose-title')) {
+    || !str_contains($uiCss, '.page-purpose-title')
+    || !str_contains($uiCss, 'html.ui-v2 .site-price-status.is-color-green')) {
     fail('overlay missing leftover-light mobile tints / country jump / page purpose');
 } else {
     ok('overlay leftover-light mobile tints + country jump + page purpose');

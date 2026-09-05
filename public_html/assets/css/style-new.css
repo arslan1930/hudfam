@@ -1354,6 +1354,41 @@ html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint] td {
   background: transparent !important;
 }
 
+html.ui-v2 .site-price-status.is-color-green {
+  background-color: rgba(74, 222, 128, 0.18);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: var(--ok);
+}
+html.ui-v2 .site-price-status.is-color-blue {
+  background-color: rgba(96, 165, 250, 0.18);
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #93c5fd;
+}
+html.ui-v2 .site-price-status.is-color-rose {
+  background-color: rgba(251, 113, 133, 0.16);
+  border-color: rgba(251, 113, 133, 0.4);
+  color: var(--bad);
+}
+html.ui-v2 .site-price-status.is-color-teal {
+  background-color: rgba(45, 212, 191, 0.16);
+  border-color: rgba(45, 212, 191, 0.4);
+  color: #5eead4;
+}
+html.ui-v2 .site-price-status.is-color-brown {
+  background-color: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: var(--warn);
+}
+html.ui-v2 .site-price-status.is-color-grey {
+  background-color: rgba(148, 163, 184, 0.16);
+  border-color: var(--line);
+  color: var(--muted);
+}
+html.ui-v2 .site-price-status option {
+  background: #1e293b;
+  color: var(--ink);
+}
+
 /* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
 html.ui-v2 tr.is-sheet-selected td,
 html.ui-v2 li.is-sheet-selected,
