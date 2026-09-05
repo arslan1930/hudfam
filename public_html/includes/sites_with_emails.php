@@ -317,6 +317,28 @@ function delete_sites_with_emails_admin_all_by_domain(string $country, string $d
     )->execute([$country, $domain]);
 }
 
+/**
+ * Canonical token stored when a site has no address (row is kept).
+ */
+function no_email_token(): string
+{
+    return 'none';
+}
+
+/**
+ * Team/Admin type "none" (also n/a, no email) when a site has no address.
+ * This is not a sendable email — Copy and Campaign skip it.
+ */
+function is_no_email_marker(string $value): bool
+{
+    $t = strtolower(trim($value));
+    if ($t === '') {
+        return false;
+    }
+    $compact = preg_replace('/[\s_\-]+/', '', $t) ?? $t;
+    return in_array($compact, ['none', 'na', 'n/a', 'noemail'], true);
+}
+
 function normalize_email_value(string $email): string
 {
     $email = strtolower(trim($email));
@@ -328,6 +350,9 @@ function normalize_email_value(string $email): string
     if ($email === '') {
         return '';
     }
+    if (is_no_email_marker($email)) {
+        return no_email_token();
+    }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return '';
     }
@@ -335,6 +360,65 @@ function normalize_email_value(string $email): string
         return '';
     }
     return $email;
+}
+
+/**
+ * True for a real mailbox (not empty, not the none marker).
+ */
+function email_slot_is_real(string $value): bool
+{
+    $n = normalize_email_value($value);
+    return $n !== '' && $n !== no_email_token();
+}
+
+/**
+ * True when a slot has either a real email or the none marker.
+ */
+function email_slot_is_occupied(string $value): bool
+{
+    return normalize_email_value($value) !== '';
+}
+
+/**
+ * @param array<int|string,mixed> $rowOrSlots email1–4 row or 0–3 slot list
+ * @return array{0:string,1:string,2:string,3:string}
+ */
+function email_slot_values(array $rowOrSlots): array
+{
+    if (array_key_exists('email1', $rowOrSlots) || array_key_exists('email2', $rowOrSlots)) {
+        return [
+            (string) ($rowOrSlots['email1'] ?? ''),
+            (string) ($rowOrSlots['email2'] ?? ''),
+            (string) ($rowOrSlots['email3'] ?? ''),
+            (string) ($rowOrSlots['email4'] ?? ''),
+        ];
+    }
+    return [
+        (string) ($rowOrSlots[0] ?? ''),
+        (string) ($rowOrSlots[1] ?? ''),
+        (string) ($rowOrSlots[2] ?? ''),
+        (string) ($rowOrSlots[3] ?? ''),
+    ];
+}
+
+function email_slots_have_real(array $rowOrSlots): bool
+{
+    foreach (email_slot_values($rowOrSlots) as $raw) {
+        if (email_slot_is_real($raw)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function email_slots_have_occupancy(array $rowOrSlots): bool
+{
+    foreach (email_slot_values($rowOrSlots) as $raw) {
+        if (email_slot_is_occupied($raw)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -397,6 +481,7 @@ function normalize_email_slots(array $emails, bool $strict = false): array
     $out = ['', '', '', ''];
     $i = 0;
     $seen = [];
+    $seenNone = false;
     /** @var list<string> $skippedInvalid */
     $skippedInvalid = [];
     foreach (flatten_email_inputs($emails) as $raw) {
@@ -419,12 +504,20 @@ function normalize_email_slots(array $emails, bool $strict = false): array
             }
             continue;
         }
+        if ($n === no_email_token()) {
+            $seenNone = true;
+            continue;
+        }
         if (isset($seen[$n])) {
             continue;
         }
         $seen[$n] = true;
         $out[$i] = $n;
         $i++;
+    }
+    // Keep the site with canonical "none" only when there is no real address.
+    if ($i === 0 && $seenNone) {
+        $out[0] = no_email_token();
     }
     return ['ok' => true, 'slots' => $out, 'skipped_invalid' => $skippedInvalid];
 }
@@ -657,17 +750,27 @@ function merge_swe_email_slots_prefer_admin_stats(array $adminSlots, array $team
 {
     $out = ['', '', '', ''];
     $seen = [];
+    $adminHadMarker = false;
     for ($i = 0; $i < 4; $i++) {
         $e = trim((string) ($adminSlots[$i] ?? ''));
+        if (is_no_email_marker($e) || strtolower($e) === no_email_token()) {
+            $adminHadMarker = true;
+            $e = '';
+        }
         $out[$i] = $e;
         if ($e !== '') {
             $seen[strtolower($e)] = true;
         }
     }
     $droppedEmails = [];
+    $teamHadMarker = false;
     foreach ($teamSlots as $raw) {
         $e = trim((string) $raw);
         if ($e === '') {
+            continue;
+        }
+        if (is_no_email_marker($e) || strtolower($e) === no_email_token()) {
+            $teamHadMarker = true;
             continue;
         }
         $key = strtolower($e);
@@ -687,6 +790,9 @@ function merge_swe_email_slots_prefer_admin_stats(array $adminSlots, array $team
             $droppedEmails[] = $e;
         }
     }
+    if (!email_slots_have_real($out) && ($adminHadMarker || $teamHadMarker)) {
+        $out[0] = no_email_token();
+    }
     return [
         'slots' => $out,
         'dropped' => count($droppedEmails),
@@ -695,7 +801,7 @@ function merge_swe_email_slots_prefer_admin_stats(array $adminSlots, array $team
 }
 
 /**
- * Team → Admin: push one site row (must have at least one email), then remove it from Team.
+ * Team → Admin: push one site row (email or "none"), then remove it from Team.
  * When Admin already has the domain, require $confirmOverwrite (UI confirm) then merge
  * Team emails into empty Admin slots only (never wipe filled Admin emails).
  *
@@ -738,9 +844,8 @@ function push_one_site_with_emails_team_to_admin(
     }
 
     $slots = email_slots_from_row($row);
-    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
-    if (!$hasEmail) {
-        return ['ok' => false, 'error' => 'Add at least one email before pushing this site.'];
+    if (!email_slots_have_occupancy($slots)) {
+        return ['ok' => false, 'error' => 'Add at least one email, or type none when the site has no address, before pushing this site.'];
     }
 
     $adminSel = db()->prepare(
@@ -853,7 +958,7 @@ function push_one_site_with_emails_team_to_admin(
 }
 
 /**
- * Team → Admin: copy rows that have at least one email into the admin archive,
+ * Team → Admin: copy rows that have an email or "none" into the admin archive,
  * then remove those rows from the Team working copy (sites without emails stay).
  * When any domain already exists in Admin, require $confirmOverwrite then merge
  * Team emails into empty Admin slots only (existing Admin emails are kept).
@@ -933,8 +1038,7 @@ function push_sites_with_emails_team_to_admin(
     $pushedDomains = [];
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
         $slots = email_slots_from_row($row);
-        $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
-        if (!$hasEmail) {
+        if (!email_slots_have_occupancy($slots)) {
             $skippedEmpty++;
             continue;
         }
@@ -1041,7 +1145,10 @@ function list_sites_with_emails_country_rows(string $scope = 'team'): array
                    MAX(language) AS language,
                    COUNT(*) AS total,
                    SUM(
-                     CASE WHEN email1<>'' OR email2<>'' OR email3<>'' OR email4<>'' THEN 1 ELSE 0 END
+                     CASE WHEN (email1<>'' AND email1<>'none')
+                            OR (email2<>'' AND email2<>'none')
+                            OR (email3<>'' AND email3<>'none')
+                            OR (email4<>'' AND email4<>'none') THEN 1 ELSE 0 END
                    ) AS with_emails,
                    MAX(updated_at) AS last_pushed_at
             FROM {$table}
@@ -1735,11 +1842,12 @@ function save_site_with_emails_row(
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
-    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    $hasOccupancy = email_slots_have_occupancy($slots);
     $scopeNorm = swe_normalize_scope($scope);
 
-    // Admin: clearing the last email removes from Admin working list; Final keeps last copy.
-    if (!$hasEmail && $id !== null && $id > 0 && ($scopeNorm === 'admin' || $origScope === 'admin_all')) {
+    // Admin: clearing every email box removes from Admin working list; Final keeps last copy.
+    // Typing "none" occupies Email 1 so the site row is kept.
+    if (!$hasOccupancy && $id !== null && $id > 0 && ($scopeNorm === 'admin' || $origScope === 'admin_all')) {
         $existing = get_site_with_emails($id, 'admin');
         if (!$existing || (string) $existing['country'] !== $country) {
             return ['ok' => false, 'error' => 'Row not found in this country.'];
@@ -1788,8 +1896,8 @@ function save_site_with_emails_row(
         return ['ok' => true, 'id' => $id, 'row_deleted' => false, 'domain' => $domain];
     }
 
-    if (!$hasEmail && $scopeNorm !== 'team') {
-        return ['ok' => false, 'error' => 'Add at least one email — each Admin site must have email data.'];
+    if (!$hasOccupancy && $scopeNorm !== 'team') {
+        return ['ok' => false, 'error' => 'Add at least one email, or type none when the site has no address.'];
     }
 
     $uid = (int) ($user['id'] ?? 0) ?: null;
@@ -1867,7 +1975,7 @@ function sites_with_emails_bulk_result_message(string $prefix, array $result): s
 
 /**
  * Paste / import lines into All sites with emails - Final (same formats as Campaign).
- * Each site needs at least one email. Writes Admin working list then syncs Final.
+ * Each site needs an email or "none". Writes Admin working list then syncs Final.
  * Identical emails → skip; different emails → replace. No Campaign exclusion set.
  *
  * @return array{
@@ -1953,12 +2061,11 @@ function paste_sites_with_emails_rows(
             }
             /** @var array{0:string,1:string,2:string,3:string} $slots */
             $slots = $norm['slots'] ?? ['', '', '', ''];
-            $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
-            if (!$hasEmail) {
+            if (!email_slots_have_occupancy($slots)) {
                 $skippedEmpty++;
                 $skipped++;
                 if (count($errors) < 25) {
-                    $errors[] = $domainRaw . ': Add at least one email — each Admin site must have email data.';
+                    $errors[] = $domainRaw . ': Add at least one email, or type none when the site has no address.';
                 }
                 continue;
             }
@@ -2233,7 +2340,7 @@ function collect_sites_with_emails_all_emails(
         $slots = email_slots_from_row($row);
         foreach ($slots as $e) {
             $e = trim((string) $e);
-            if ($e === '') {
+            if ($e === '' || !email_slot_is_real($e)) {
                 continue;
             }
             $key = mb_strtolower($e);

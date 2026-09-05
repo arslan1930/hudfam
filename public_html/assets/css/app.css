@@ -1671,10 +1671,10 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   color: #2f4f35;
   border-color: #c5d9bd;
 }
-.swe-status-badge.is-ready {
-  background: #eef0f3;
-  color: #334155;
-  border-color: #d7dbe2;
+.swe-status-badge.is-no-email {
+  background: #f4efe6;
+  color: #6b4f2a;
+  border-color: #e4d2a8;
 }
 .swe-status-badge.is-open {
   background: var(--warn-soft);

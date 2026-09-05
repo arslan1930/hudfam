@@ -125,7 +125,9 @@
     var emails = Array.prototype.map.call(row.querySelectorAll('[data-swe-email]'), function (el) {
       return String(el.value || '').trim().toLowerCase();
     });
-    var hasEmail = emails.some(function (e) { return e !== ''; });
+    var hasEmail = emails.some(function (e) {
+      return e !== '' && e.indexOf('@') !== -1;
+    });
     row.setAttribute('data-search', [domain, lang].concat(emails).filter(Boolean).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
     // Checkpoint sheets use Emailed / Not emailed — do not overwrite from email readiness.
