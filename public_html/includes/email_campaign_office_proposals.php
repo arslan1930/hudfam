@@ -1079,6 +1079,179 @@ I am following up with the writers so we can send the three articles as promptly
 Thank you for waiting.',
             ],
         ],
+        [
+            'title' => '3 articles · counter €50',
+            'category' => 'offer',
+            'sad' => true,
+            'bodies' => [
+                'Hello,
+thank you for your email. I appreciate your willingness to cooperate.
+
+I understand your previous offer, but I would like to kindly reiterate my proposal. I can pay €50 per article, so €150 for the publication of three articles :( Our advertising budget is very, very limited.
+
+The content we will provide is 100% unique, fresh, and well-written in Danish, prepared for your readers so that it adds real value to your website.
+
+I hope we can find a mutually beneficial arrangement. We can pay by PayPal or bank transfer immediately after publication, or within 24 hours.
+
+Looking forward to your response.',
+                'Hello,
+thank you. I am grateful you are still open to working with us.
+
+I have to ask once more, with respect: would €50 per article be possible (€150 for the three publications)? This is what our advertising budget can manage :(
+
+The three articles would be original, written in Danish, and tailored to your audience — unique, fresh, and well-written, not copied.
+
+If you can accept this, we will proceed quickly and pay right after publication, or within 24 hours, by PayPal or bank transfer.
+
+I hope this meets your expectations.',
+                'Hello,
+thank you for your reply.
+
+I understand your rate, and I do not want to undervalue your website. At the same time, our advertising budget is extremely limited :( The most I can offer for three articles is €150 in total (€50 each).
+
+The content will be 100% unique and well-written in Danish for your readers.
+
+If this is acceptable, I would be delighted to continue. Please let me know.',
+            ],
+        ],
+        [
+            'title' => 'Homepage text link or banner · 1 year',
+            'category' => 'offer',
+            'sad' => true,
+            'bodies' => [
+                'Hello,
+thank you for your email. I appreciate your willingness to cooperate.
+
+I understand your previous offer, but I would like to reiterate my proposal. I can pay €50 per article and €150 for the publication of 3 articles :( The content I will provide is 100% unique, fresh and well-written in Danish.
+
+Regarding the placement of a text link on the website for one year, I can offer €80. Regarding the banner / text link on the website, I can only offer €80 as well :( It is important that the placement is visible on the homepage only, and not on other pages of the site.
+
+I hope we can find a mutually beneficial arrangement. Please let me know if this meets your expectations.
+
+Looking forward to your response.',
+                'Hello,
+thank you.
+
+I am also interested in placing only a text link or a banner on the website for one year. I can only pay €120 for a banner / text link :( Our advertising budget is very limited.
+
+Here is an example of a text link: [attach the textlink image]
+
+You can place it on the homepage only, so it is not visible on any other pages of the website. The admin may choose the exact place on the homepage.
+
+Let me know if we can collaborate. That would be very kind of you.',
+                'Hello,
+thank you for your time.
+
+Besides the articles, I would also like to ask if a small homepage placement might be possible for one year: a text link or a banner.
+
+I can only offer €80 for this :( because our advertising budget is very limited. The important point is that it should be visible on the main page / homepage only — not on any other pages.
+
+We can pay by PayPal or bank transfer after it is live, or within 24 hours.
+
+I hope we can work something out.',
+            ],
+        ],
+        [
+            'title' => 'Banner not possible · text link or logo',
+            'category' => 'offer',
+            'sad' => false,
+            'bodies' => [
+                'Hello,
+thank you for letting me know.
+
+I fully understand if a banner, or a large banner, is not possible on your website.
+
+In that case, would you be so kind as to place only a text link on the homepage for one year? If a text link is also not possible, we would be grateful if you could place just our logo.
+
+It should be visible on the homepage only, not on other pages. You may choose the place.
+
+I hope this is easier for you. Please let me know what you can do.',
+                'Hello,
+thank you. I understand the limitation.
+
+If you cannot place a banner, I would like to kindly ask for a text link only, on the homepage, for one year.
+
+If even a text link is not possible, a small logo on the homepage would also be perfectly fine for us.
+
+The main point is that it remains on the homepage only, not on inner pages.
+
+Please tell me what you are able to offer. I would be very grateful.',
+                'Hello,
+thank you for explaining.
+
+We do not need a large banner. A text link would be enough. If that is not possible either, please just place our logo on the homepage.
+
+Homepage only — not visible on other pages of the site. One year.
+
+I hope this can work for you.',
+            ],
+        ],
+        [
+            'title' => 'Banner size · we can make any size or logo',
+            'category' => 'offer',
+            'sad' => false,
+            'bodies' => [
+                'Hello,
+thank you for your question.
+
+The banner can be a small square banner, or you may choose whatever size you can place. Please let me know the size that works for your homepage, and we will prepare a new banner for you.
+
+You can also place only our logo if that is easier. We are ok with that.
+
+It should be visible on the homepage only, not on other pages, for one year.
+
+Looking forward to your reply.',
+                'Hello,
+thank you.
+
+Please tell me the size you can accept on the homepage. We can prepare a small square banner, or any other size you prefer.
+
+If a banner is difficult, you may place only our logo, or a text link. We are flexible.
+
+Homepage only, for one year.',
+                'Hello,
+thank you for asking about the size.
+
+We can follow your format: a small square, a smaller banner, or only a logo. If you send the width and height you can use, we will make a new file for you.
+
+A text link is also fine if that is simpler.
+
+Please keep it on the homepage only, not on other pages.',
+            ],
+        ],
+        [
+            'title' => 'Where to place · any homepage spot including footer',
+            'category' => 'offer',
+            'sad' => false,
+            'bodies' => [
+                'Hello,
+thank you for your message.
+
+If there is little space, that is ok. You may place it anywhere on the homepage — even in the footer. We are ok with that.
+
+The main point is that it should be visible on the main page / homepage only, and not on any other pages of the website. You can choose the place so that it does not appear on inner pages.
+
+We can place this for one year.
+
+Please let me know if this works for you.',
+                'Hello,
+thank you.
+
+You do not need to find a large space. Any place on the homepage is fine for us, including the footer.
+
+We only ask that it is not visible on other pages of the site — homepage only, for one year. You may choose the position in the way that is easiest for you.
+
+I hope this helps.',
+                'Hello,
+thank you for asking where to put it.
+
+Please choose any spot on the homepage that you prefer. The footer is also perfectly acceptable.
+
+The important rule is only this: homepage / main page only, not the rest of the website.
+
+One year. We will follow your layout.',
+            ],
+        ],
     ];
     $items = [];
     $sort = 0;

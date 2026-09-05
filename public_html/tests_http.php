@@ -1269,6 +1269,15 @@ if ($r['status'] === 200
 } else {
     fail('comms Campaign drafts search did not filter');
 }
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('homepage'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Homepage text link or banner · 1 year · A')
+    && str_contains($r['body'], 'Where to place · any homepage spot including footer · A')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search homepage banner cards');
+} else {
+    fail('comms Campaign drafts homepage search did not filter');
+}
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];
 $teamBad = [];
