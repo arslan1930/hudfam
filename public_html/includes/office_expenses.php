@@ -833,7 +833,7 @@ function office_expense_save_month(int $monthId, int $actorId): void
         'save_month',
         'Saved ' . office_expense_month_label((string) $month['bill_month'])
             . ' · ' . $n . ' payment' . ($n === 1 ? '' : 's')
-            . ' · ' . office_expense_format_amount_map(['eur' => $totalEur, 'pkr' => $totalPkr], true),
+            . ' · ' . office_expense_format_amount_map(['eur' => $totalEur, 'pkr' => $totalPkr]),
         ['status' => 'open'],
         ['status' => 'saved', 'total' => $totalEur, 'total_pkr' => $totalPkr, 'count' => $n]
     );

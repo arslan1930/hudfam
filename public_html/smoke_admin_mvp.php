@@ -2053,6 +2053,7 @@ if (!str_contains($invoiceGenerate, 'invoice-legacy-client')
 }
 if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
     || !str_contains($invoicesLib, 'function list_invoices_open_for_append')
+    || !str_contains($invoicesLib, 'AND COALESCE(i.work_status, \'done\') = \'draft\'')
     || !str_contains($invoicesLib, 'function invoice_is_sent_for_payment')
     || !str_contains($invoicesLib, 'function invoice_can_append_orders')
     || !str_contains($invoicesLib, 'function mark_invoice_sent')
@@ -3138,7 +3139,8 @@ if (!str_contains($testsSf, 'gate subtract leaves remaining unique')) {
 $sitesFormJs = file_get_contents($root . '/assets/js/sites-form.js') ?: '';
 $sitesFormPhp = file_get_contents($root . '/includes/sites_form.php') ?: '';
 if (!str_contains($sitesFormPhp, 'data-domains-attention')
-    || !str_contains($sitesFormPhp, 'Clean to root domains')) {
+    || !str_contains($sitesFormPhp, 'Clean to root domains')
+    || !str_contains($sitesFormPhp, "opts['ready_use']")) {
     fail('sites_form missing Ready/Needs attention Clean UI');
 } else {
     ok('Clean Ready / Needs attention markup');

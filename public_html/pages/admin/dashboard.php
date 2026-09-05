@@ -147,7 +147,7 @@ $invoiceWaitingAgedCount = !empty($invoiceWaitingAged['ok']) ? (int) $invoiceWai
 $oeLabel = 'Monthly office bill — salaries, rent, grocery, internet, other. Euro or PKR.';
 if ($oeOk) {
     $oeAmount = function_exists('office_expense_format_amount_map')
-        ? office_expense_format_amount_map($oeStats['by_currency'] ?? ['eur' => $oeTotal, 'pkr' => $oeStats['total_pkr'] ?? 0], true)
+        ? office_expense_format_amount_map($oeStats['by_currency'] ?? ['eur' => $oeTotal, 'pkr' => $oeStats['total_pkr'] ?? 0])
         : (function_exists('office_expense_format_amount')
             ? office_expense_format_amount($oeTotal)
             : number_format($oeTotal, 2));

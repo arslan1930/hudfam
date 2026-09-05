@@ -291,7 +291,7 @@ render_header('Office expenses', 'admin');
   <div class="office-expense-totals" id="office-expense-totals">
     <div>
       <h3>Totals</h3>
-      <p class="office-expense-grand"><strong><?= h(office_expense_format_amount_map($totals['by_currency'] ?? [], true)) ?></strong>
+      <p class="office-expense-grand"><strong><?= h(office_expense_format_amount_map($totals['by_currency'] ?? [])) ?></strong>
         <span class="muted"><?= (int) $totals['count'] ?> payment<?= (int) $totals['count'] === 1 ? '' : 's' ?></span></p>
     </div>
     <div>
