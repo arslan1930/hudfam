@@ -298,7 +298,7 @@ function guide_campaign_drafts(): string
         'Open a project, search or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Add your own name under Best regards. Communication Team only — this is not the full Admin campaign editor.',
         [
             'Open Office proposals · English (or another project Admin turned on for Communication Team).',
-            'Search by country (Italy, Germany), sample, discount, invoice, or A / B / C, or use category chips.',
+            'Search by country (Italy, Germany), niche, sample, discount, invoice, or A / B / C, or use category chips.',
             'Copy into your email client, then add your name. Delete is allowed for the creator or Admin.',
         ]
     );
