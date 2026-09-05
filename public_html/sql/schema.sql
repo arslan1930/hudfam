@@ -490,7 +490,7 @@ CREATE TABLE IF NOT EXISTS invoice_events (
 -- Office expenses: Admin-only monthly office bills
 CREATE TABLE IF NOT EXISTS office_expense_months (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  year_month CHAR(7) NOT NULL,
+  bill_month CHAR(7) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'open',
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   row_count INT NOT NULL DEFAULT 0,
@@ -499,7 +499,7 @@ CREATE TABLE IF NOT EXISTS office_expense_months (
   saved_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_office_expense_month (year_month),
+  UNIQUE KEY uniq_office_expense_month (bill_month),
   INDEX (status),
   CONSTRAINT fk_oem_saved_by FOREIGN KEY (saved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

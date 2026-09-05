@@ -33,7 +33,7 @@ function office_expense_normalize_year_month($value): string
     if (preg_match('/^(\d{4})-(\d{2})$/', $v, $m)) {
         $year = (int) $m[1];
         $month = (int) $m[2];
-        if ($year >= 2000 && $year <= 2100 && $month >= 1 && $month <= 12) {
+        if ($year >= 1990 && $year <= 2100 && $month >= 1 && $month <= 12) {
             return sprintf('%04d-%02d', $year, $month);
         }
     }
@@ -113,7 +113,7 @@ function ensure_office_expense_schema(): void
 
     $monthSql = "CREATE TABLE IF NOT EXISTS office_expense_months (
           id INT AUTO_INCREMENT PRIMARY KEY,
-          year_month CHAR(7) NOT NULL,
+          bill_month CHAR(7) NOT NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'open',
           total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           row_count INT NOT NULL DEFAULT 0,
@@ -122,7 +122,7 @@ function ensure_office_expense_schema(): void
           saved_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          UNIQUE KEY uniq_office_expense_month (year_month),
+          UNIQUE KEY uniq_office_expense_month (bill_month),
           INDEX (status)";
     try {
         $pdo->exec(
@@ -228,7 +228,7 @@ function office_expense_get_month_by_ym(string $ym): ?array
         'SELECT m.*, u.full_name AS saved_by_full_name, u.username AS saved_by_username
          FROM office_expense_months m
          LEFT JOIN users u ON u.id = m.saved_by
-         WHERE m.year_month = ? LIMIT 1'
+         WHERE m.bill_month = ? LIMIT 1'
     );
     $stmt->execute([$ym]);
     $row = $stmt->fetch();
@@ -244,7 +244,7 @@ function office_expense_get_or_create_month(string $ym): array
         return $existing;
     }
     db()->prepare(
-        "INSERT INTO office_expense_months (year_month, status, total_amount, row_count)
+        "INSERT INTO office_expense_months (bill_month, status, total_amount, row_count)
          VALUES (?, 'open', 0.00, 0)"
     )->execute([$ym]);
     $created = office_expense_get_month((int) db()->lastInsertId());
@@ -265,7 +265,7 @@ function office_expense_list_months(): array
         'SELECT m.*, u.full_name AS saved_by_full_name, u.username AS saved_by_username
          FROM office_expense_months m
          LEFT JOIN users u ON u.id = m.saved_by
-         ORDER BY m.year_month DESC'
+         ORDER BY m.bill_month DESC'
     )->fetchAll() ?: [];
 }
 
@@ -544,7 +544,7 @@ function office_expense_add_row(int $monthId, array $data, int $actorId): int
         throw new RuntimeException('Month not found.');
     }
     office_expense_assert_open($month);
-    $payload = office_expense_normalize_payload($data, (string) $month['year_month']);
+    $payload = office_expense_normalize_payload($data, (string) $month['bill_month']);
     $maxStmt = db()->prepare('SELECT COALESCE(MAX(sort_order), 0) FROM office_expense_rows WHERE month_id = ?');
     $maxStmt->execute([$monthId]);
     $max = (int) $maxStmt->fetchColumn();
@@ -594,7 +594,7 @@ function office_expense_update_row(int $rowId, array $data, int $actorId): void
         throw new RuntimeException('Month not found.');
     }
     office_expense_assert_open($month);
-    $payload = office_expense_normalize_payload($data, (string) $month['year_month']);
+    $payload = office_expense_normalize_payload($data, (string) $month['bill_month']);
     $old = office_expense_row_public($row);
     $new = office_expense_row_public(array_merge($row, $payload, ['id' => $rowId]));
     $changes = [];
@@ -695,7 +695,7 @@ function office_expense_save_month(int $monthId, int $actorId): void
         null,
         $actorId,
         'save_month',
-        'Saved ' . office_expense_month_label((string) $month['year_month'])
+        'Saved ' . office_expense_month_label((string) $month['bill_month'])
             . ' · ' . $n . ' payment' . ($n === 1 ? '' : 's')
             . ' · ' . office_expense_format_amount($total),
         ['status' => 'open'],
@@ -723,7 +723,7 @@ function office_expense_reopen_month(int $monthId, int $actorId): void
         null,
         $actorId,
         'reopen_month',
-        'Reopened ' . office_expense_month_label((string) $month['year_month']),
+        'Reopened ' . office_expense_month_label((string) $month['bill_month']),
         ['status' => 'saved'],
         ['status' => 'open']
     );
@@ -775,7 +775,7 @@ function office_expense_month_jumper_options(string $currentYm): array
     $add($currentYm);
     $add(date('Y-m'));
     foreach (office_expense_list_months() as $row) {
-        $add((string) ($row['year_month'] ?? ''));
+        $add((string) ($row['bill_month'] ?? ''));
     }
     // Nearby months so the jumper can start a new bill without typing.
     for ($i = -2; $i <= 1; $i++) {

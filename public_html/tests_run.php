@@ -8253,10 +8253,16 @@ try {
 // --- Office expenses (Admin monthly ledger) ---
 try {
     ensure_office_expense_schema();
+    db()->exec("DELETE FROM office_expense_rows WHERE description IN ('Office rent January','Payroll','Kitchen','Should fail')");
+    db()->exec(
+        'UPDATE office_expense_months m
+         SET total_amount = (SELECT COALESCE(SUM(r.amount), 0) FROM office_expense_rows r WHERE r.month_id = m.id),
+             row_count = (SELECT COUNT(*) FROM office_expense_rows r WHERE r.month_id = m.id)'
+    );
     $oeMonths = ['1999-01', '1999-02'];
     $oeIds = [];
     foreach ($oeMonths as $oeYm) {
-        $st = db()->prepare('SELECT id FROM office_expense_months WHERE year_month = ?');
+        $st = db()->prepare('SELECT id FROM office_expense_months WHERE bill_month = ?');
         $st->execute([$oeYm]);
         $oid = (int) $st->fetchColumn();
         if ($oid > 0) {
@@ -8269,7 +8275,7 @@ try {
         db()->exec("DELETE FROM office_expense_rows WHERE month_id IN ($in)");
         db()->exec("DELETE FROM office_expense_months WHERE id IN ($in)");
     } else {
-        db()->exec("DELETE FROM office_expense_months WHERE year_month IN ('1999-01','1999-02')");
+        db()->exec("DELETE FROM office_expense_months WHERE bill_month IN ('1999-01','1999-02')");
     }
 
     $admin2row = db()->query("SELECT * FROM users WHERE username='admin2' AND role='admin'")->fetch(PDO::FETCH_ASSOC);
@@ -8297,7 +8303,7 @@ try {
         $janId = (int) $mJan['id'];
         $febId = (int) $mFeb['id'];
         if ($janId > 0 && $febId > 0 && office_expense_month_is_open($mJan)
-            && (string) $mJan['year_month'] === '1999-01') {
+            && (string) $mJan['bill_month'] === '1999-01') {
             pass('office expense months created open');
         } else {
             fail('office expense months: ' . json_encode($mJan));
