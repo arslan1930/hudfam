@@ -90,6 +90,7 @@ $oeOk = true;
 $oeCount = 0;
 $oeTotal = 0.0;
 $oeStatus = 'open';
+$oeStats = [];
 try {
     $omStats = order_management_dashboard_stats();
     $orderRowCount = (int) ($omStats['orders'] ?? 0);
@@ -143,11 +144,13 @@ $teamCount = !empty($team['ok']) ? (int) $team['n'] : 0;
 $invoiceDraftCount = !empty($invoiceDrafts['ok']) ? (int) $invoiceDrafts['n'] : 0;
 $invoiceUnpaidCount = !empty($invoiceUnpaid['ok']) ? (int) $invoiceUnpaid['n'] : 0;
 $invoiceWaitingAgedCount = !empty($invoiceWaitingAged['ok']) ? (int) $invoiceWaitingAged['n'] : 0;
-$oeLabel = 'Monthly office bill — salaries, rent, grocery, internet, other.';
+$oeLabel = 'Monthly office bill — salaries, rent, grocery, internet, other. Euro or PKR.';
 if ($oeOk) {
-    $oeAmount = function_exists('office_expense_format_amount')
-        ? office_expense_format_amount($oeTotal)
-        : number_format($oeTotal, 2);
+    $oeAmount = function_exists('office_expense_format_amount_map')
+        ? office_expense_format_amount_map($oeStats['by_currency'] ?? ['eur' => $oeTotal, 'pkr' => $oeStats['total_pkr'] ?? 0], true)
+        : (function_exists('office_expense_format_amount')
+            ? office_expense_format_amount($oeTotal)
+            : number_format($oeTotal, 2));
     $oeLabel = $oeCount === 0
         ? 'No payments this month yet · open.'
         : (number_format($oeCount) . ' payment' . ($oeCount === 1 ? '' : 's')
@@ -365,7 +368,7 @@ if ($attention):
       <?php endif; ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_office_expenses" data-dashboard-item
-     data-search="office expenses salaries rent grocery internet bills monthly ledger paid by admin">
+     data-search="office expenses salaries rent grocery internet bills monthly ledger paid by admin euro pkr currency">
     <h2>Office expenses</h2>
     <p><?= h($oeLabel) ?></p>
   </a>

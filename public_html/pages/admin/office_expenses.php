@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'category' => (string) post('category'),
                 'description' => (string) post('description'),
                 'amount' => post('amount'),
+                'currency' => (string) post('currency'),
                 'paid_by' => (int) post('paid_by'),
                 'note' => (string) post('note'),
             ], $actorId);
@@ -34,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'category' => (string) post('category'),
                 'description' => (string) post('description'),
                 'amount' => post('amount'),
+                'currency' => (string) post('currency'),
                 'paid_by' => (int) post('paid_by'),
                 'note' => (string) post('note'),
             ], $actorId);
@@ -87,6 +89,9 @@ $formCategory = $editRow
     : 'salary';
 $formDescription = $editRow ? (string) ($editRow['description'] ?? '') : '';
 $formAmount = $editRow ? format_money($editRow['amount'] ?? 0) : '';
+$formCurrency = $editRow
+    ? office_expense_normalize_currency($editRow['currency'] ?? 'eur')
+    : 'eur';
 $formPaidBy = $editRow ? (int) ($editRow['paid_by'] ?? $actorId) : $actorId;
 $formNote = $editRow ? (string) ($editRow['note'] ?? '') : '';
 
@@ -104,8 +109,8 @@ render_header('Office expenses', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Office expenses', 'Shared Admin ledger. Each calendar month is one office bill. Save this month to freeze it; Reopen to edit again.') ?></h1>
-    <p class="muted">Salaries, rent, grocery, internet, and other bills. All Admins can add and edit. Team cannot open this page.</p>
+    <h1><?= label_with_info('Office expenses', 'Shared Admin ledger. Each calendar month is one office bill. Each payment is Euro or PKR. Save this month to freeze it; Reopen to edit again.') ?></h1>
+    <p class="muted">Salaries, rent, grocery, internet, and other bills in Euro or PKR. All Admins can add and edit. Team cannot open this page.</p>
   </div>
   <div class="actions office-expense-month-nav">
     <a class="btn secondary small" href="<?= h(office_expense_page_url($prevYm, $historyAdmin > 0 ? ['history_admin' => $historyAdmin] : [])) ?>"><?= h(office_expense_month_label($prevYm)) ?></a>
@@ -188,6 +193,13 @@ render_header('Office expenses', 'admin');
       <label>Amount
         <input type="number" name="amount" value="<?= h($formAmount) ?>" min="0.01" step="0.01" required placeholder="0.00">
       </label>
+      <label>Currency
+        <select name="currency" required>
+          <?php foreach (office_expense_currencies() as $code => $label): ?>
+            <option value="<?= h($code) ?>"<?= $formCurrency === $code ? ' selected' : '' ?>><?= h($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
       <label>Paid by
         <select name="paid_by" required>
           <?php foreach ($admins as $adm): ?>
@@ -253,7 +265,7 @@ render_header('Office expenses', 'admin');
             <td><?= h((string) ($row['paid_on'] ?? '')) ?></td>
             <td><?= h(office_expense_category_label((string) ($row['category'] ?? 'other'))) ?></td>
             <td><?= h((string) ($row['description'] ?? '')) ?></td>
-            <td class="num"><?= h(office_expense_format_amount($row['amount'] ?? 0)) ?></td>
+            <td class="num"><?= h(office_expense_format_amount($row['amount'] ?? 0, $row['currency'] ?? 'eur')) ?></td>
             <td><?= h($paidName) ?></td>
             <td><?= h($typedBits) ?></td>
             <td><?= h((string) ($row['note'] ?? '')) ?></td>
@@ -279,14 +291,14 @@ render_header('Office expenses', 'admin');
   <div class="office-expense-totals" id="office-expense-totals">
     <div>
       <h3>Totals</h3>
-      <p class="office-expense-grand"><strong><?= h(office_expense_format_amount($totals['grand'])) ?></strong>
+      <p class="office-expense-grand"><strong><?= h(office_expense_format_amount_map($totals['by_currency'] ?? [], true)) ?></strong>
         <span class="muted"><?= (int) $totals['count'] ?> payment<?= (int) $totals['count'] === 1 ? '' : 's' ?></span></p>
     </div>
     <div>
       <h3>By category</h3>
       <ul>
         <?php foreach (office_expense_categories() as $slug => $label): ?>
-          <li><span><?= h($label) ?></span> <span class="num"><?= h(office_expense_format_amount($totals['by_category'][$slug] ?? 0)) ?></span></li>
+          <li><span><?= h($label) ?></span> <span class="num"><?= h(office_expense_format_amount_map($totals['by_category'][$slug] ?? [])) ?></span></li>
         <?php endforeach; ?>
       </ul>
     </div>
@@ -297,7 +309,7 @@ render_header('Office expenses', 'admin');
       <?php else: ?>
         <ul>
           <?php foreach ($totals['by_admin'] as $admTot): ?>
-            <li><span><?= h($admTot['name']) ?></span> <span class="num"><?= h(office_expense_format_amount($admTot['total'])) ?></span></li>
+            <li><span><?= h($admTot['name']) ?></span> <span class="num"><?= h(office_expense_format_amount_map($admTot['by_currency'] ?? [])) ?></span></li>
           <?php endforeach; ?>
         </ul>
       <?php endif; ?>

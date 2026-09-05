@@ -254,12 +254,12 @@ function guide_office_expenses(): string
 {
     return render_page_purpose(
         'Office expenses — monthly office bills',
-        'Shared Admin ledger for money sent out of the office: employee salaries, office rent, office grocery, office internet, and other bills. Team cannot open this page.',
-        'Each calendar month is one bill. Add payments while the month is open. Save this month to freeze it. Reopen if you need to edit. History records who added or changed each payment, and which Admin sent the money.',
+        'Shared Admin ledger for money sent out of the office: employee salaries, office rent, office grocery, office internet, and other bills. Each payment is Euro or PKR. Team cannot open this page.',
+        'Each calendar month is one bill. Add payments while the month is open. Save this month to freeze it. Reopen if you need to edit. History records who added or changed each payment, and which Admin sent the money. Euro and PKR totals stay separate.',
         [
             'Pick the month (defaults to this calendar month). Previous months stay on file.',
-            'Add a payment: date paid, category, description, amount, and which Admin sent the money. Who typed it is stored from your login.',
-            'Totals at the bottom sum the month, each category, and each Admin who sent money.',
+            'Add a payment: date paid, category, description, amount, Euro or PKR, and which Admin sent the money. Who typed it is stored from your login.',
+            'Totals at the bottom sum the month by currency, each category, and each Admin who sent money. PKR and Euro are never mixed.',
             'Save this month when the bill is complete. Payments lock until an Admin reopens the month.',
         ]
     );

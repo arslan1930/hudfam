@@ -27,6 +27,44 @@ function office_expense_normalize_category(string $slug): string
     return isset($cats[$slug]) ? $slug : 'other';
 }
 
+function office_expense_currencies(): array
+{
+    return [
+        'eur' => 'Euro',
+        'pkr' => 'PKR',
+    ];
+}
+
+function office_expense_normalize_currency($value): string
+{
+    $v = strtolower(trim((string) $value));
+    if ($v === 'euro' || $v === '€' || $v === 'eur') {
+        return 'eur';
+    }
+    if ($v === 'pkr' || $v === 'rs' || $v === 'rupee' || $v === 'rupees' || $v === '₨') {
+        return 'pkr';
+    }
+    $cats = office_expense_currencies();
+    return isset($cats[$v]) ? $v : 'eur';
+}
+
+function office_expense_currency_label(string $code): string
+{
+    $list = office_expense_currencies();
+    $code = office_expense_normalize_currency($code);
+    return $list[$code] ?? $list['eur'];
+}
+
+/** @return array<string,float> */
+function office_expense_empty_currency_map(): array
+{
+    $out = [];
+    foreach (array_keys(office_expense_currencies()) as $code) {
+        $out[$code] = 0.0;
+    }
+    return $out;
+}
+
 function office_expense_normalize_year_month($value): string
 {
     $v = trim((string) $value);
@@ -78,12 +116,27 @@ function office_expense_person_name(?string $fullName, ?string $username): strin
     return $name !== '' ? $name : 'Unknown';
 }
 
-function office_expense_format_amount($value): string
+function office_expense_format_amount($value, $currency = 'eur'): string
 {
-    if (function_exists('format_euro')) {
-        return format_euro($value);
+    $n = number_format(parse_money($value), 2, '.', ',');
+    return office_expense_normalize_currency($currency) === 'pkr' ? ('PKR ' . $n) : ('€' . $n);
+}
+
+/** @param array<string,float|int|string> $byCurrency */
+function office_expense_format_amount_map(array $byCurrency, bool $includeZero = false): string
+{
+    $parts = [];
+    foreach (array_keys(office_expense_currencies()) as $code) {
+        $amt = parse_money($byCurrency[$code] ?? 0);
+        if (!$includeZero && $amt == 0.0) {
+            continue;
+        }
+        $parts[] = office_expense_format_amount($amt, $code);
     }
-    return '€' . number_format(parse_money($value), 2, '.', ',');
+    if ($parts === []) {
+        return office_expense_format_amount(0, 'eur');
+    }
+    return implode(' · ', $parts);
 }
 
 function office_expense_page_url(string $ym, array $extra = []): string
@@ -116,6 +169,7 @@ function ensure_office_expense_schema(): void
           bill_month CHAR(7) NOT NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'open',
           total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+          total_pkr DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           row_count INT NOT NULL DEFAULT 0,
           note VARCHAR(255) NOT NULL DEFAULT '',
           saved_at DATETIME NULL,
@@ -141,6 +195,7 @@ function ensure_office_expense_schema(): void
           category VARCHAR(20) NOT NULL DEFAULT 'other',
           description VARCHAR(255) NOT NULL DEFAULT '',
           amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+          currency VARCHAR(8) NOT NULL DEFAULT 'eur',
           paid_by INT NULL,
           note VARCHAR(255) NOT NULL DEFAULT '',
           sort_order INT NOT NULL DEFAULT 0,
@@ -150,7 +205,8 @@ function ensure_office_expense_schema(): void
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX (month_id, paid_on, sort_order, id),
           INDEX (paid_by),
-          INDEX (category)";
+          INDEX (category),
+          INDEX (currency)";
     try {
         $pdo->exec(
             $rowSql . ",
@@ -191,6 +247,34 @@ function ensure_office_expense_schema(): void
         } catch (Throwable $e2) {
             // History is optional — the sheet must still load.
         }
+    }
+
+    try {
+        $rowCols = $pdo->query('SHOW COLUMNS FROM office_expense_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        if (!in_array('currency', $rowCols, true)) {
+            $pdo->exec("ALTER TABLE office_expense_rows ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'eur' AFTER amount");
+        }
+        $idxNames = [];
+        foreach ($pdo->query('SHOW INDEX FROM office_expense_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $idxRow) {
+            $idxNames[] = (string) ($idxRow['Key_name'] ?? '');
+        }
+        if (!in_array('currency', $idxNames, true)) {
+            try {
+                $pdo->exec('ALTER TABLE office_expense_rows ADD INDEX currency (currency)');
+            } catch (Throwable $eIdx) {
+                // Index is optional.
+            }
+        }
+    } catch (Throwable $e) {
+        // Sheet still loads if an old Hostinger grant cannot ALTER rows.
+    }
+    try {
+        $monthCols = $pdo->query('SHOW COLUMNS FROM office_expense_months')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        if (!in_array('total_pkr', $monthCols, true)) {
+            $pdo->exec('ALTER TABLE office_expense_months ADD COLUMN total_pkr DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER total_amount');
+        }
+    } catch (Throwable $e) {
+        // Sheet still loads if an old Hostinger grant cannot ALTER months.
     }
 
     if (function_exists('txf_schema_mark_current')) {
@@ -299,72 +383,115 @@ function office_expense_refresh_month_snapshot(int $monthId): void
         return;
     }
     db()->prepare(
-        'UPDATE office_expense_months m
+        "UPDATE office_expense_months m
          SET total_amount = (
-               SELECT COALESCE(SUM(r.amount), 0) FROM office_expense_rows r WHERE r.month_id = m.id
+               SELECT COALESCE(SUM(r.amount), 0) FROM office_expense_rows r
+               WHERE r.month_id = m.id AND r.currency = 'eur'
+             ),
+             total_pkr = (
+               SELECT COALESCE(SUM(r.amount), 0) FROM office_expense_rows r
+               WHERE r.month_id = m.id AND r.currency = 'pkr'
              ),
              row_count = (
                SELECT COUNT(*) FROM office_expense_rows r WHERE r.month_id = m.id
              )
-         WHERE m.id = ?'
+         WHERE m.id = ?"
     )->execute([$monthId]);
 }
 
 /**
- * @return array{grand:float,count:int,by_category:array<string,float>,by_admin:list<array{user_id:int,name:string,total:float,count:int}>}
+ * @return array{
+ *   grand:float,
+ *   grand_pkr:float,
+ *   count:int,
+ *   by_currency:array<string,float>,
+ *   by_category:array<string,array<string,float>>,
+ *   by_admin:list<array{user_id:int,name:string,count:int,by_currency:array<string,float>}>
+ * }
  */
 function office_expense_totals(int $monthId): array
 {
     ensure_office_expense_schema();
+    $zero = office_expense_empty_currency_map();
     $out = [
         'grand' => 0.0,
+        'grand_pkr' => 0.0,
         'count' => 0,
+        'by_currency' => $zero,
         'by_category' => [],
         'by_admin' => [],
     ];
     foreach (array_keys(office_expense_categories()) as $slug) {
-        $out['by_category'][$slug] = 0.0;
+        $out['by_category'][$slug] = office_expense_empty_currency_map();
     }
     if ($monthId < 1) {
         return $out;
     }
     $sum = db()->prepare(
-        'SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n FROM office_expense_rows WHERE month_id = ?'
+        'SELECT currency, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n
+         FROM office_expense_rows WHERE month_id = ? GROUP BY currency'
     );
     $sum->execute([$monthId]);
-    $sumRow = $sum->fetch() ?: [];
-    $out['grand'] = parse_money($sumRow['total'] ?? 0);
-    $out['count'] = (int) ($sumRow['n'] ?? 0);
+    foreach ($sum->fetchAll() ?: [] as $row) {
+        $cur = office_expense_normalize_currency($row['currency'] ?? 'eur');
+        $out['by_currency'][$cur] += parse_money($row['total'] ?? 0);
+        $out['count'] += (int) ($row['n'] ?? 0);
+    }
+    $out['grand'] = $out['by_currency']['eur'] ?? 0.0;
+    $out['grand_pkr'] = $out['by_currency']['pkr'] ?? 0.0;
 
     $catStmt = db()->prepare(
-        'SELECT category, COALESCE(SUM(amount), 0) AS total FROM office_expense_rows WHERE month_id = ? GROUP BY category'
+        'SELECT category, currency, COALESCE(SUM(amount), 0) AS total
+         FROM office_expense_rows WHERE month_id = ? GROUP BY category, currency'
     );
     $catStmt->execute([$monthId]);
     foreach ($catStmt->fetchAll() ?: [] as $row) {
         $slug = office_expense_normalize_category((string) ($row['category'] ?? 'other'));
-        $out['by_category'][$slug] = parse_money($row['total'] ?? 0);
+        $cur = office_expense_normalize_currency($row['currency'] ?? 'eur');
+        $out['by_category'][$slug][$cur] += parse_money($row['total'] ?? 0);
     }
 
     $admStmt = db()->prepare(
         'SELECT r.paid_by AS user_id,
+                r.currency,
                 COALESCE(SUM(r.amount), 0) AS total,
                 COUNT(*) AS n,
                 u.full_name, u.username
          FROM office_expense_rows r
          LEFT JOIN users u ON u.id = r.paid_by
          WHERE r.month_id = ?
-         GROUP BY r.paid_by, u.full_name, u.username
-         ORDER BY total DESC, u.full_name, u.username'
+         GROUP BY r.paid_by, r.currency, u.full_name, u.username'
     );
     $admStmt->execute([$monthId]);
+    $admins = [];
     foreach ($admStmt->fetchAll() ?: [] as $row) {
-        $out['by_admin'][] = [
-            'user_id' => (int) ($row['user_id'] ?? 0),
-            'name' => office_expense_person_name($row['full_name'] ?? null, $row['username'] ?? null),
-            'total' => parse_money($row['total'] ?? 0),
-            'count' => (int) ($row['n'] ?? 0),
-        ];
+        $uid = (int) ($row['user_id'] ?? 0);
+        $cur = office_expense_normalize_currency($row['currency'] ?? 'eur');
+        if (!isset($admins[$uid])) {
+            $admins[$uid] = [
+                'user_id' => $uid,
+                'name' => office_expense_person_name($row['full_name'] ?? null, $row['username'] ?? null),
+                'count' => 0,
+                'by_currency' => office_expense_empty_currency_map(),
+            ];
+        }
+        $admins[$uid]['by_currency'][$cur] += parse_money($row['total'] ?? 0);
+        $admins[$uid]['count'] += (int) ($row['n'] ?? 0);
     }
+    usort($admins, static function (array $a, array $b): int {
+        $ae = (float) ($a['by_currency']['eur'] ?? 0);
+        $be = (float) ($b['by_currency']['eur'] ?? 0);
+        if ($ae !== $be) {
+            return $be <=> $ae;
+        }
+        $ap = (float) ($a['by_currency']['pkr'] ?? 0);
+        $bp = (float) ($b['by_currency']['pkr'] ?? 0);
+        if ($ap !== $bp) {
+            return $bp <=> $ap;
+        }
+        return strcasecmp((string) $a['name'], (string) $b['name']);
+    });
+    $out['by_admin'] = array_values($admins);
     return $out;
 }
 
@@ -487,6 +614,7 @@ function office_expense_row_public(array $row): array
         'category' => office_expense_normalize_category((string) ($row['category'] ?? 'other')),
         'description' => (string) ($row['description'] ?? ''),
         'amount' => parse_money($row['amount'] ?? 0),
+        'currency' => office_expense_normalize_currency($row['currency'] ?? 'eur'),
         'paid_by' => (int) ($row['paid_by'] ?? 0),
         'note' => (string) ($row['note'] ?? ''),
     ];
@@ -515,6 +643,7 @@ function office_expense_normalize_payload(array $data, string $ym): array
     if ($amount <= 0) {
         throw new RuntimeException('Amount must be greater than 0.');
     }
+    $currency = office_expense_normalize_currency($data['currency'] ?? 'eur');
     $paidBy = (int) ($data['paid_by'] ?? 0);
     $payer = office_expense_admin_user($paidBy, true);
     if (!$payer) {
@@ -529,6 +658,7 @@ function office_expense_normalize_payload(array $data, string $ym): array
         'category' => $category,
         'description' => $description,
         'amount' => $amount,
+        'currency' => $currency,
         'paid_by' => (int) $payer['id'],
         'note' => $note,
         'paid_by_name' => office_expense_person_name($payer['full_name'] ?? null, $payer['username'] ?? null),
@@ -551,14 +681,15 @@ function office_expense_add_row(int $monthId, array $data, int $actorId): int
 
     db()->prepare(
         'INSERT INTO office_expense_rows
-            (month_id, paid_on, category, description, amount, paid_by, note, sort_order, created_by, updated_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?)'
+            (month_id, paid_on, category, description, amount, currency, paid_by, note, sort_order, created_by, updated_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)'
     )->execute([
         $monthId,
         $payload['paid_on'],
         $payload['category'],
         $payload['description'],
         $payload['amount'],
+        $payload['currency'],
         $payload['paid_by'],
         $payload['note'],
         $max + 10,
@@ -573,7 +704,7 @@ function office_expense_add_row(int $monthId, array $data, int $actorId): int
         $actorId,
         'add',
         'Added ' . office_expense_category_label($payload['category']) . ' '
-            . office_expense_format_amount($payload['amount'])
+            . office_expense_format_amount($payload['amount'], $payload['currency'])
             . ' — ' . $payload['description']
             . ' (paid by ' . $payload['paid_by_name'] . ')',
         null,
@@ -598,11 +729,14 @@ function office_expense_update_row(int $rowId, array $data, int $actorId): void
     $old = office_expense_row_public($row);
     $new = office_expense_row_public(array_merge($row, $payload, ['id' => $rowId]));
     $changes = [];
-    foreach (['paid_on', 'category', 'description', 'amount', 'paid_by', 'note'] as $field) {
+    foreach (['paid_on', 'category', 'description', 'amount', 'currency', 'paid_by', 'note'] as $field) {
         if ((string) ($old[$field] ?? '') !== (string) ($new[$field] ?? '')) {
-            if ($field === 'amount') {
-                $changes[] = 'amount ' . office_expense_format_amount($old['amount'])
-                    . ' → ' . office_expense_format_amount($new['amount']);
+            if ($field === 'amount' || $field === 'currency') {
+                if ($field === 'currency' && (string) ($old['amount'] ?? '') !== (string) ($new['amount'] ?? '')) {
+                    continue;
+                }
+                $changes[] = 'amount ' . office_expense_format_amount($old['amount'], $old['currency'] ?? 'eur')
+                    . ' → ' . office_expense_format_amount($new['amount'], $new['currency'] ?? 'eur');
             } elseif ($field === 'category') {
                 $changes[] = 'category ' . office_expense_category_label($old['category'])
                     . ' → ' . office_expense_category_label($new['category']);
@@ -619,13 +753,14 @@ function office_expense_update_row(int $rowId, array $data, int $actorId): void
     }
     db()->prepare(
         'UPDATE office_expense_rows
-         SET paid_on=?, category=?, description=?, amount=?, paid_by=?, note=?, updated_by=?
+         SET paid_on=?, category=?, description=?, amount=?, currency=?, paid_by=?, note=?, updated_by=?
          WHERE id=?'
     )->execute([
         $payload['paid_on'],
         $payload['category'],
         $payload['description'],
         $payload['amount'],
+        $payload['currency'],
         $payload['paid_by'],
         $payload['note'],
         $actorId > 0 ? $actorId : null,
@@ -662,7 +797,7 @@ function office_expense_delete_row(int $rowId, int $actorId): void
         $actorId,
         'delete',
         'Deleted ' . office_expense_category_label($old['category']) . ' '
-            . office_expense_format_amount($old['amount'])
+            . office_expense_format_amount($old['amount'], $old['currency'] ?? 'eur')
             . ' — ' . $old['description'],
         $old,
         null
@@ -684,7 +819,8 @@ function office_expense_save_month(int $monthId, int $actorId): void
     office_expense_refresh_month_snapshot($monthId);
     $month = office_expense_get_month($monthId) ?: $month;
     $n = (int) ($month['row_count'] ?? 0);
-    $total = parse_money($month['total_amount'] ?? 0);
+    $totalEur = parse_money($month['total_amount'] ?? 0);
+    $totalPkr = parse_money($month['total_pkr'] ?? 0);
     db()->prepare(
         "UPDATE office_expense_months
          SET status='saved', saved_at=NOW(), saved_by=?
@@ -697,9 +833,9 @@ function office_expense_save_month(int $monthId, int $actorId): void
         'save_month',
         'Saved ' . office_expense_month_label((string) $month['bill_month'])
             . ' · ' . $n . ' payment' . ($n === 1 ? '' : 's')
-            . ' · ' . office_expense_format_amount($total),
+            . ' · ' . office_expense_format_amount_map(['eur' => $totalEur, 'pkr' => $totalPkr], true),
         ['status' => 'open'],
-        ['status' => 'saved', 'total' => $total, 'count' => $n]
+        ['status' => 'saved', 'total' => $totalEur, 'total_pkr' => $totalPkr, 'count' => $n]
     );
 }
 
@@ -730,7 +866,7 @@ function office_expense_reopen_month(int $monthId, int $actorId): void
 }
 
 /**
- * @return array{ok:bool,year_month:string,status:string,total:float,count:int}
+ * @return array{ok:bool,year_month:string,status:string,total:float,total_pkr:float,count:int,by_currency:array<string,float>}
  */
 function office_expense_current_month_stats(): array
 {
@@ -740,7 +876,9 @@ function office_expense_current_month_stats(): array
         'year_month' => $ym,
         'status' => 'open',
         'total' => 0.0,
+        'total_pkr' => 0.0,
         'count' => 0,
+        'by_currency' => office_expense_empty_currency_map(),
     ];
     try {
         ensure_office_expense_schema();
@@ -748,7 +886,10 @@ function office_expense_current_month_stats(): array
         if ($month) {
             $out['status'] = office_expense_month_is_open($month) ? 'open' : 'saved';
             $out['total'] = parse_money($month['total_amount'] ?? 0);
+            $out['total_pkr'] = parse_money($month['total_pkr'] ?? 0);
             $out['count'] = (int) ($month['row_count'] ?? 0);
+            $out['by_currency']['eur'] = $out['total'];
+            $out['by_currency']['pkr'] = $out['total_pkr'];
         }
     } catch (Throwable $e) {
         $out['ok'] = false;

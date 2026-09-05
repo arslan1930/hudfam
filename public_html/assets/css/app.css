@@ -6563,6 +6563,10 @@ textarea:focus-visible {
   margin: 0;
   font-size: 1.15rem;
 }
+.office-expense-grand strong {
+  display: block;
+  line-height: 1.35;
+}
 .office-expense-grand .muted {
   display: block;
   font-size: 0.85rem;

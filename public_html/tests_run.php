@@ -8495,9 +8495,11 @@ try {
         $cats = office_expense_categories();
         if ($rentId > 0 && $salId > 0
             && abs($tot['grand'] - 2000.50) < 0.001
+            && abs(($tot['grand_pkr'] ?? 0)) < 0.001
+            && abs(($tot['by_currency']['eur'] ?? 0) - 2000.50) < 0.001
             && (int) $tot['count'] === 2
-            && abs(($tot['by_category']['rent'] ?? 0) - 1200.50) < 0.001
-            && abs(($tot['by_category']['salary'] ?? 0) - 800) < 0.001
+            && abs(($tot['by_category']['rent']['eur'] ?? 0) - 1200.50) < 0.001
+            && abs(($tot['by_category']['salary']['eur'] ?? 0) - 800) < 0.001
             && isset($cats['grocery'], $cats['internet'], $cats['other'])
             && count($tot['by_admin']) === 2) {
             pass('office expense add row + totals');
@@ -8611,11 +8613,44 @@ try {
         }
 
         $febTot = office_expense_totals($febId);
-        if ((int) $febTot['count'] === 0 && abs($febTot['grand']) < 0.001) {
+        if ((int) $febTot['count'] === 0 && abs($febTot['grand']) < 0.001
+            && abs($febTot['grand_pkr'] ?? 0) < 0.001) {
             pass('office expense next month starts empty');
         } else {
             fail('office expense Feb not empty: ' . json_encode($febTot));
         }
+
+        $pkrId = office_expense_add_row($janId, [
+            'paid_on' => '1999-01-20',
+            'category' => 'other',
+            'description' => 'PKR stationery',
+            'amount' => '9000',
+            'currency' => 'pkr',
+            'paid_by' => (int) $adminUser['id'],
+        ], (int) $adminUser['id']);
+        $split = office_expense_totals($janId);
+        $pkrRow = office_expense_get_row($pkrId);
+        $pkrFmt = office_expense_format_amount(9000, 'pkr');
+        $mapFmt = office_expense_format_amount_map($split['by_currency'] ?? [], true);
+        if ($pkrId > 0
+            && $pkrRow
+            && office_expense_normalize_currency($pkrRow['currency'] ?? '') === 'pkr'
+            && abs(($split['grand'] ?? 0) - 2050) < 0.001
+            && abs(($split['grand_pkr'] ?? 0) - 9000) < 0.001
+            && abs(($split['by_currency']['pkr'] ?? 0) - 9000) < 0.001
+            && str_starts_with($pkrFmt, 'PKR ')
+            && str_contains($mapFmt, '€')
+            && str_contains($mapFmt, 'PKR ')) {
+            pass('office expense PKR stays separate from Euro');
+        } else {
+            fail('office expense PKR split: ' . json_encode([
+                'row' => $pkrRow,
+                'tot' => $split,
+                'fmt' => $pkrFmt,
+                'map' => $mapFmt,
+            ]));
+        }
+
         $oePurgeTestMonths();
     }
 } catch (Throwable $e) {

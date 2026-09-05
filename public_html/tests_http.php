@@ -480,7 +480,7 @@ foreach (
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order', 'leftover', 'added here'],
         'admin_invoices' => ['Invoice', 'Mark paid', 'invoice-list-chips'],
-        'admin_office_expenses' => ['Office expenses', 'Save this month', 'Employee salaries', 'Office rent', 'Office grocery', 'Office internet'],
+        'admin_office_expenses' => ['Office expenses', 'Save this month', 'Employee salaries', 'Office rent', 'Office grocery', 'Office internet', 'Euro', 'PKR'],
         'admin_users' => ['Users', 'Awaiting assignment', 'Must change password', 'users-office'],
         'account_password' => ['Change password', 'breadcrumbs'],
     ] as $page => $needles
