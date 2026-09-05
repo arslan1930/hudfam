@@ -14,12 +14,12 @@
  * no hidden cards, no scale() on table rows.
  */
 html.ui-v2 {
-  --bg: #0b1018;
-  --bg-2: #111827;
+  --bg: #152033;
+  --bg-2: #1b2535;
   --ink: #f3f6fb;
   --muted: #c5d0dc;
   --line: rgba(148, 163, 184, 0.34);
-  --panel: rgba(17, 24, 39, 0.88);
+  --panel: rgba(30, 41, 59, 0.92);
   --brand: #22d3ee;
   --brand-2: #7dd3fc;
   --brand-deep: #f1f5f9;
@@ -34,14 +34,14 @@ html.ui-v2 {
   --radius: 14px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
   --sans: var(--font);
-  --grad-brand: linear-gradient(180deg, #0b1224 0%, #0f172a 100%);
+  --grad-brand: linear-gradient(180deg, #0f172a 0%, #152033 100%);
   --grad-btn: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
   --grad-page:
     radial-gradient(ellipse at 12% -8%, rgba(34, 211, 238, 0.08), transparent 40%),
-    linear-gradient(180deg, #0b1018 0%, #111827 100%);
+    linear-gradient(180deg, #152033 0%, #1b2535 100%);
   --focus-ring: 0 0 0 3px rgba(34, 211, 238, 0.4);
   --ui-ease: 220ms ease;
-  --fx-glass: rgba(15, 23, 42, 0.82);
+  --fx-glass: rgba(30, 41, 59, 0.90);
   --fx-blur: 10px;
 }
 
@@ -67,8 +67,8 @@ html.ui-v2 body::before {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
   background-size: 56px 48px;
   mask-image: radial-gradient(ellipse at 50% 18%, #000 28%, transparent 78%);
 }
@@ -1229,7 +1229,7 @@ html.ui-v2 tbody tr:nth-child(even) td {
 /* Invoice paper stays the original white letterhead (even-row / thead
    overlay must not darken it). Table headers stay navy, not white. */
 html.ui-v2 .invoice-preview-wrap {
-  background: #0f172a;
+  background: #152033;
 }
 html.ui-v2 .invoice-doc,
 html.ui-v2 .invoice-doc-logohead,
