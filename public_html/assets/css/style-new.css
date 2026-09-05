@@ -1530,11 +1530,14 @@ html.ui-v2 .office-expense-table td {
   color: var(--ink);
 }
 html.ui-v2 .office-expense-table .num {
-  color: var(--brand-2);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 html.ui-v2 .office-expense-table tr.is-editing td {
   background: var(--brand-soft);
+  box-shadow: none;
+}
+html.ui-v2 .office-expense-table tr.is-editing td:first-child {
   box-shadow: inset 4px 0 0 var(--brand);
 }
 html.ui-v2 .office-expense-totals {
