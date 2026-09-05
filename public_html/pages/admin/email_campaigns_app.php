@@ -2045,7 +2045,7 @@ if ($projectIdParam > 0) {
                 <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
                   <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
                           data-camp-draft-token-target="admin_draft_subject"
-                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
+                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?>}</button>
                 <?php endforeach; ?>
               </p>
             </div>
@@ -2087,7 +2087,7 @@ if ($projectIdParam > 0) {
                 <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
                   <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
                           data-camp-draft-token-target="body"
-                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
+                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?>}</button>
                 <?php endforeach; ?>
               </p>
               <?php
