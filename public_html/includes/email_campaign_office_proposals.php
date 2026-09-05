@@ -18,6 +18,191 @@ function email_campaign_office_proposal_sign_off(): string
 }
 
 /**
+ * Latest published-article samples per country (two URLs when the sheet has them).
+ * Picked from the office published-articles sheet by newest year/month/day.
+ *
+ * @return array<string, list<string>>
+ */
+function email_campaign_office_country_published_samples(): array
+{
+    return [
+        'Austria' => [
+            'https://www.kollermedia.at/2026/02/24/pendler-im-berufsverkehr-so-gewinnen-sie-jeden-morgen-wertvolle-zeit',
+            'https://thegap.at/roadtrip-zum-musikfestival-im-ausland-perfekt-planen',
+        ],
+        'Belgium' => [
+            'https://besteautobod.be/blog/uw-auto-optimaal-voorbereiden-op-de-technische-keuring',
+            'https://goodbye.be/blog/hoe-blijf-je-actief-tijdens-het-reizen',
+        ],
+        'Bulgaria' => [
+            'https://tvnovini.bg/oshte/lubopitno/reshavane-na-problemi-s-povredeni-ili-nedostapni-chasti-kakvo-da-pravim-kogato-onlayn-porachkata-se-obarka',
+            'https://boliarinews.bg/2024/05/13/keep-clean-car',
+        ],
+        'Czech Republic' => [
+            'https://www.aktualne.cz/zimni-motorovy-olej-v-cesku/r~efe96780955711f0bb77ac1f6b220ee8',
+        ],
+        'Denmark' => [
+            'https://handyhand.dk/blog/derfor-ender-sa-mange-gor-det-selv-reparationer-med-en-returpakke',
+            'https://festsangetaler.dk/fuldt-passagerantal-kraever-mere-af-bremser-end-de-fleste-tror',
+        ],
+        'Estonia' => [
+            'https://buller.ee/sisuturundus/juhend-auto-pohihoolduse-kohta-uutele-juhtidele-pikaealisuse-ja-tookindluse-tagamine',
+            'https://ralli.ee/voistlusvalmis-sidurid-mis-eristab-voidusoiduautode-sidurid-tavaparastest',
+        ],
+        'Finland' => [
+            'https://ammattilehti.fi/blogi/2026/02/02/50166',
+            'https://www.etlehti.fi/blogit/forbesnewsmag/tien-paalla-valmis-miten-valmistella-auto-pitkan-matkan-ajamiseen',
+        ],
+        'France' => [
+            'https://android-mt.ouest-france.fr/application/la-piece-ne-convenait-pas-et-ca-na-pris-que-deux-minutes-pour-regler-le-probleme',
+            'https://www.autosblog.fr/crochet-dattelage-sur-voiture-moderne-les-erreurs-qui-coutent-cher',
+        ],
+        'Germany' => [
+            'https://velototal.de/2026/04/30/radurlaub-in-den-bergen-richtig-planen-und-sicher-ankommen',
+            'https://www.das-marburger.de/2026/04/24/ist-mein-auto-noch-sicher-diese-warnsignale-sollten-sie-kennen',
+        ],
+        'Greece' => [
+            'https://www.enimerotiko.gr/plus/aytokinito/pos-na-apotrepsete-koina-provlimata-kinitira-aytokinitoy',
+            'https://arta-news.gr/2025/12/09/pos-na-epistrepsete-antallaktika-online-xoris-na-xasete-xrimata-sta-metaforika',
+        ],
+        'Hungary' => [
+            'https://egriugyek.hu/mindenki-ugye/hogyan-vedd-meg-autod-telen-a-rozsdatol-es-gombatol',
+            'https://antropos.hu/a-vegso-utra-valo-felkeszulesi-utmutato-az-auto-keszen-all-a-kalandra',
+        ],
+        'Italy' => [
+            'https://www.savonanews.it/2026/08/20/leggi-notizia/argomenti/economia-1/articolo/perche-in-agosto-le-strade-del-savonese-mettono-a-dura-prova-la-tua-auto.html',
+            'https://ciavula.it/2026/07/pastiglie-dei-freni-quali-tipi-scegliere-per-la-propria-auto',
+        ],
+        'Latvia' => [
+            'https://www.1188.lv/zinas/skaidra-redzejuma-apgusana-ka-uzlabot-redzamibu-brauksanas-laika-lietus-laika/32143',
+            'https://maminuklubs.lv/mazulis/gaisa-spilvenu-siksnas-un-spoguli-bernu-drosibas-nodrosinasana-transportlidzeklos301774',
+        ],
+        'Lithuania' => [
+            'https://www.manokrastas.lt/esminis-reguliarios-technines-prieziuros-vaidmuo-siekiant-isvengti-didesnio-automobilio-remonto',
+            'https://mamoszurnalas.lt/trikdziu-salinimo-vadovas-ka-daryti-kai-automobilis-neuzsiveda',
+        ],
+        'Netherlands' => [
+            'https://www.cranendonck24.nl/artikel/koppeling-langer-laten-meegaan-door-je-rijstijl-aan-te-passen~c910rp',
+            'https://www.valkenswaard24.nl/artikel/remklauw-defect-zorgt-voor-scheeftrekken-tijdens-het-remmen~3srv5b',
+        ],
+        'Norway' => [
+            'https://rakt.no/bil/fem-feil-som-stopper-bilen-din-pa-norske-veier',
+            'https://dailystory.no/kjor-gront-tips-for-a-redusere-bilens-miljopavirkning',
+        ],
+        'Poland' => [
+            'https://www.infoilawa.pl/aktualnosci/item/82006-ile-wytrzyma-sprzeglo-i-jak-sprawic-zeby-sluzylo-jak-najdluzej',
+            'https://extraswiecie.pl/materialy-partnerow/ktore-czesci-samochodowe-zuzywaja-sie-szybciej-podczas-jazdy-miejskiej-i-na-autostradzie-i-dlaczego-kierowcy-czesto-ignoruja-ten-czynnik',
+        ],
+        'Portugal' => [
+            'https://www.ovarnews.pt/porque-os-carros-hibridos-estao-a-ganhar-popularidade-em-ovar-face-aos-eletricos',
+            'https://informatico.pt/blog/ataque-ransomware-seguranca-veiculos-eletricos',
+        ],
+        'Romania' => [
+            'https://www.3szek.ro/load/cikk/163945/hazi-gepkocsijavitas-%E2%80%93-egyszeru-utmutato-autok-javitasahoz-es-karbantartasahoz-beleertve-annak-megerteset-is-hogyan-csereljunk-ki-egy-legszurot-/x',
+            'https://newsbv.ro/prelungirea-calatoriei-sfaturi-esentiale-de-intretinere-auto-diy-diyprelungirea-calatoriei-sfaturi-esentiale-de-intretinere-auto-diy-diy',
+        ],
+        'Slovakia' => [
+            'https://www.news.sk/clanky/auto-moto/5029-filtre-do-auta-a-preco-ich-treba-menit',
+            'https://www.infoglobe.sk/uloha-stieracov-celneho-skla-v-automobiloch-pracovny-modul-a-sposob-vymeny',
+        ],
+        'Spain' => [
+            'https://senderosgr.es/blog/2026/03/14/lo-que-debes-revisar-en-el-coche-antes-de-adentrarte-en-sierra-nevada',
+            'https://www.navarrainformacion.es/2026/01/15/arrancar-tu-diesel-en-invierno-sin-fallos-en-el-pirineo',
+        ],
+        'Sweden' => [
+            'https://accademos.se/blogg/begagnad-bil-utan-dyra-overraskningar-sa-kontrollerar-du-innan-kop',
+            'https://skvallra.se/teknik-prylar/vad-ska-man-kontrollera-fore-en-lang-bilresa-viktiga-tips-for-bilunderhall',
+        ],
+        'Switzerland' => [
+            'https://www.wetter.ch/Gewitter+Starkregen+Sturmboeen+So+bleiben+Autofahrer+auf+der+Strasse+sicher/704888/detail.htm',
+            'https://www.letemps.ch/contenus-partenaires/comment-autodoc-resout-le-defi-europeen-a-longue-traine-des-pieces-automobiles',
+        ],
+        'United Kingdom' => [
+            'https://www.thetraveldaily.co.uk/article/2026/04/25/how-plan-perfect-european-road-trip-without-stress',
+            'https://www.varsity.co.uk/sponsored/the-autodoc-customer-experience-explained-shipping-returns-and-support',
+        ],
+    ];
+}
+
+/**
+ * @param list<string> $urls
+ * @return list<string>
+ */
+function email_campaign_office_country_sample_bodies(string $country, array $urls): array
+{
+    $urls = array_values(array_filter($urls, static fn ($u) => is_string($u) && trim($u) !== ''));
+    $block = implode("\n\n", $urls);
+    $two = count($urls) >= 2;
+    $introA = $two
+        ? "Of course — here are two recent articles we published in {$country}:"
+        : "Of course — here is a recent article we published in {$country}:";
+    $introB = $two
+        ? "You asked for a sample of our published work. These two {$country} articles are recent examples:"
+        : "You asked for a sample of our published work. This {$country} article is a recent example:";
+    $introC = $two
+        ? "Here are two live publications from {$country} so you can see the standard we aim for:"
+        : "Here is a live publication from {$country} so you can see the standard we aim for:";
+
+    return [
+        "Hello,
+thank you so much for your reply. I really appreciate your time.
+
+{$introA}
+
+{$block}
+
+These are only samples of work already live. The article for your website would be written from scratch by a native-speaking author, for your readers, so that it adds real value to your pages.
+
+Our advertising budget is very limited :( so I would be very grateful if you could offer us the most competitive rate you can. We can pay by PayPal or bank transfer immediately after publication, or within 24 hours.
+
+If you could also share your guidelines and whether dofollow links are possible, I would be delighted to proceed.
+
+Awaiting your kind reply.",
+        "Good morning,
+thank you for writing back. That is very kind of you.
+
+{$introB}
+
+{$block}
+
+For your site we would prepare a new, original piece that fits your audience — useful content, not a promotional page.
+
+May I also ask, with respect, for the best discounted price you could offer? Our advertising budget is genuinely very small :( Payment is PayPal or bank transfer, as soon as the article is published, or within 24 hours.
+
+Your guidelines would of course be followed.",
+        "Hello,
+thank you. I am grateful you asked for an example.
+
+{$introC}
+
+{$block}
+
+The text for your website would be written from scratch and meant to help your readers.
+
+Because our budget for this campaign is very, very limited :( I would like to kindly request your most flexible fee. If the price can be a little easier for us, we will confirm quickly and pay immediately after publication, or within 24 hours, by PayPal or bank transfer.
+
+Could you also tell me your requirements and whether the links can be dofollow?",
+    ];
+}
+
+/**
+ * @return list<array{title:string,category:string,sad:bool,bodies:list<string>}>
+ */
+function email_campaign_office_country_sample_groups(): array
+{
+    $groups = [];
+    foreach (email_campaign_office_country_published_samples() as $country => $urls) {
+        $groups[] = [
+            'title' => 'Sample · ' . $country,
+            'category' => 'reply',
+            'sad' => true,
+            'bodies' => email_campaign_office_country_sample_bodies($country, $urls),
+        ];
+    }
+    return $groups;
+}
+
+/**
  * @return list<array{title:string,category:string,sad:bool,sort:int,body:string}>
  */
 function email_campaign_office_proposal_catalog(): array
@@ -1253,6 +1438,7 @@ One year. We will follow your layout.',
             ],
         ],
     ];
+    array_splice($groups, 2, 0, email_campaign_office_country_sample_groups());
     $items = [];
     $sort = 0;
     foreach ($groups as $g) {

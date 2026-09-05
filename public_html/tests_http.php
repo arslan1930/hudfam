@@ -1278,6 +1278,26 @@ if ($r['status'] === 200
 } else {
     fail('comms Campaign drafts homepage search did not filter');
 }
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('Italy'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Sample · Italy · A')
+    && str_contains($r['body'], 'savonanews.it')
+    && str_contains($r['body'], 'ciavula.it')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search Italy sample cards');
+} else {
+    fail('comms Campaign drafts Italy sample search did not filter');
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('Germany'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Sample · Germany · A')
+    && str_contains($r['body'], 'velototal.de')
+    && str_contains($r['body'], 'das-marburger.de')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search Germany sample cards');
+} else {
+    fail('comms Campaign drafts Germany sample search did not filter');
+}
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];
 $teamBad = [];

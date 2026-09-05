@@ -3124,15 +3124,27 @@ try {
     $sampleHits = $officePid > 0 ? list_email_campaign_drafts($officePid, null, 'sample') : [];
     $maxHits = $officePid > 0 ? list_email_campaign_drafts($officePid, 'offer', '€150') : [];
     $homeHits = $officePid > 0 ? list_email_campaign_drafts($officePid, 'offer', 'homepage') : [];
+    $italyHits = $officePid > 0 ? list_email_campaign_drafts($officePid, null, 'Italy') : [];
+    $germanyHits = $officePid > 0 ? list_email_campaign_drafts($officePid, null, 'Germany') : [];
+    $italyHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? '') . "\n" . (string) ($r['body'] ?? ''), $italyHits));
+    $germanyHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? '') . "\n" . (string) ($r['body'] ?? ''), $germanyHits));
     $officeProject = $officePid > 0 ? get_email_campaign_project($officePid) : null;
     if ($catalogBad === []
-        && count($catalog) === 108
+        && count($catalog) === 180
         && $officePid > 0
-        && count($allOffice) >= 108
+        && count($allOffice) >= 180
         && (int) ($seed2['inserted'] ?? -1) === 0
         && count($sampleHits) >= 3
         && count($maxHits) >= 1
         && count($homeHits) >= 3
+        && count($italyHits) >= 3
+        && count($germanyHits) >= 3
+        && str_contains($italyHay, 'Sample · Italy · A')
+        && str_contains($italyHay, 'savonanews.it')
+        && str_contains($italyHay, 'ciavula.it')
+        && str_contains($germanyHay, 'Sample · Germany · A')
+        && str_contains($germanyHay, 'velototal.de')
+        && str_contains($germanyHay, 'das-marburger.de')
         && (string) ($officeProject['name'] ?? '') === email_campaign_office_proposal_project_name()
         && email_campaign_project_team_visible($officeProject ?? [])) {
         pass('office English proposal catalog seed + search');
@@ -3146,6 +3158,8 @@ try {
             'sample' => count($sampleHits),
             'max' => count($maxHits),
             'home' => count($homeHits),
+            'italy' => count($italyHits),
+            'germany' => count($germanyHits),
             'name' => $officeProject['name'] ?? null,
         ]));
     }
