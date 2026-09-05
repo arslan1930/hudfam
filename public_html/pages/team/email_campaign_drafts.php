@@ -16,17 +16,31 @@ $categories = email_campaign_draft_categories();
 $actorId = (int) ($user['id'] ?? 0);
 ensure_email_campaign_office_proposal_drafts();
 
+$parseDfolder = static function (string $raw): int {
+    $raw = trim($raw);
+    if ($raw === 'unfiled' || $raw === 'none') {
+        return -1;
+    }
+    return (int) $raw;
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $projectId = (int) post('project_id');
     $returnCat = trim((string) post('filter_category'));
     $returnQ = trim((string) post('filter_q'));
+    $returnFolder = $parseDfolder((string) post('filter_dfolder'));
     $back = $base . '&project=' . max(0, $projectId);
     if ($returnCat !== '' && isset($categories[$returnCat])) {
         $back .= '&category=' . rawurlencode($returnCat);
     }
     if ($returnQ !== '') {
         $back .= '&q=' . rawurlencode($returnQ);
+    }
+    if ($returnFolder > 0) {
+        $back .= '&dfolder=' . $returnFolder;
+    } elseif ($returnFolder < 0) {
+        $back .= '&dfolder=unfiled';
     }
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
@@ -59,7 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (string) post('category'),
             $draftId,
             $actorId,
-            (string) post('subject')
+            (string) post('subject'),
+            (int) post('folder_id')
         );
         if (empty($result['ok'])) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not save draft.')], 400);
@@ -102,6 +117,8 @@ $projects = list_email_campaign_projects(true);
 $projectId = (int) get('project');
 $filterCategory = trim((string) get('category'));
 $draftQ = trim((string) get('q'));
+$filterFolderRaw = trim((string) get('dfolder'));
+$filterFolderId = $parseDfolder($filterFolderRaw);
 if ($filterCategory !== '' && !isset($categories[$filterCategory])) {
     $filterCategory = '';
 }
@@ -132,14 +149,28 @@ if (!$selectedProject && $projects !== []) {
 }
 
 $projectCountMap = count_email_campaign_drafts_by_projects(
-    array_map(static fn ($p) => (int) $p['id'], $projects)
+    array_map(static fn ($p) => (int) $p['id'], $projects),
+    $actorId
 );
+
+$draftFolders = $selectedProject
+    ? list_email_campaign_draft_folders($projectId, $actorId)
+    : [];
+$visibleFolderIds = [];
+foreach ($draftFolders as $folderRow) {
+    $visibleFolderIds[(int) $folderRow['id']] = true;
+}
+if ($filterFolderId > 0 && !isset($visibleFolderIds[$filterFolderId])) {
+    $filterFolderId = 0;
+}
 
 $drafts = $selectedProject
     ? list_email_campaign_drafts(
         $projectId,
         $filterCategory !== '' ? $filterCategory : null,
-        $draftQ
+        $draftQ,
+        $filterFolderId,
+        $actorId
     )
     : [];
 $editId = (int) get('edit');
@@ -158,13 +189,23 @@ $draftVars = [
 $hasDraftVars = $draftVars['domain'] !== '' || $draftVars['country'] !== ''
     || $draftVars['language'] !== '' || $draftVars['name'] !== '';
 
-$campDraftsHref = static function (int $pid, string $cat = '', string $q = '') use ($base, $draftVars): string {
+$campDraftsHref = static function (
+    int $pid,
+    string $cat = '',
+    string $q = '',
+    int $folderId = 0
+) use ($base, $draftVars): string {
     $href = $base . '&project=' . $pid;
     if ($cat !== '') {
         $href .= '&category=' . rawurlencode($cat);
     }
     if ($q !== '') {
         $href .= '&q=' . rawurlencode($q);
+    }
+    if ($folderId > 0) {
+        $href .= '&dfolder=' . $folderId;
+    } elseif ($folderId < 0) {
+        $href .= '&dfolder=unfiled';
     }
     foreach ($draftVars as $vk => $vv) {
         if ($vv !== '') {
@@ -174,7 +215,8 @@ $campDraftsHref = static function (int $pid, string $cat = '', string $q = '') u
     return $href;
 };
 
-$formAction = $campDraftsHref($projectId, $filterCategory, $draftQ);
+$formAction = $campDraftsHref($projectId, $filterCategory, $draftQ, $filterFolderId);
+$filterFolderParam = $filterFolderId > 0 ? (string) $filterFolderId : ($filterFolderId < 0 ? 'unfiled' : '');
 
 render_header('Campaign drafts', 'team');
 render_breadcrumbs([
@@ -217,7 +259,7 @@ endif;
       <?php foreach ($projects as $p):
           $pid = (int) $p['id'];
           $count = (int) ($projectCountMap[$pid] ?? 0);
-          $href = $campDraftsHref($pid, $filterCategory, $draftQ);
+          $href = $campDraftsHref($pid, $filterCategory, $draftQ, $filterFolderId);
           $active = $pid === $projectId;
           ?>
         <li>
@@ -242,6 +284,20 @@ endif;
           <p class="help" style="margin:0.25rem 0 0">
             <?= (int) $draftCount ?> draft<?= (int) $draftCount === 1 ? '' : 's' ?>
             <?= $filterCategory !== '' ? ' in “' . h(email_campaign_draft_category_label($filterCategory)) . '”' : '' ?>
+            <?php
+            $folderLabel = '';
+            if ($filterFolderId > 0) {
+                foreach ($draftFolders as $folderRow) {
+                    if ((int) $folderRow['id'] === $filterFolderId) {
+                        $folderLabel = (string) $folderRow['name'];
+                        break;
+                    }
+                }
+            } elseif ($filterFolderId < 0) {
+                $folderLabel = 'Unfiled';
+            }
+            ?>
+            <?= $folderLabel !== '' ? ' in folder “' . h($folderLabel) . '”' : '' ?>
             <?= $draftQ !== '' ? ' matching “' . h($draftQ) . '”' : '' ?>.
             Search, then <strong>Copy</strong> or <strong>Copy plain</strong>. Each situation has A / B / C wordings so teammates do not send the same letter.
             Add your own name under <strong>Best regards</strong> before you send.
@@ -252,11 +308,26 @@ endif;
               <?= $draftVars['country'] !== '' ? ' · ' . h($draftVars['country']) : '' ?>
             <?php endif; ?>
           </p>
+          <p class="swe-sent-filters camp-drafts-filters camp-drafts-folder-chips">
+            <?php
+            $folderLinks = [['id' => 0, 'name' => 'All folders']];
+            foreach ($draftFolders as $folderRow) {
+                $folderLinks[] = ['id' => (int) $folderRow['id'], 'name' => (string) $folderRow['name']];
+            }
+            $folderLinks[] = ['id' => -1, 'name' => 'Unfiled'];
+            foreach ($folderLinks as $fl):
+                $fid = (int) $fl['id'];
+                $href = $campDraftsHref($projectId, $filterCategory, $draftQ, $fid);
+                $active = $filterFolderId === $fid;
+                ?>
+              <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h((string) $fl['name']) ?></a>
+            <?php endforeach; ?>
+          </p>
           <p class="swe-sent-filters camp-drafts-filters">
             <?php
             $catLinks = ['' => 'All'] + $categories;
             foreach ($catLinks as $slug => $label):
-                $href = $campDraftsHref($projectId, (string) $slug, $draftQ);
+                $href = $campDraftsHref($projectId, (string) $slug, $draftQ, $filterFolderId);
                 $active = $filterCategory === (string) $slug;
                 ?>
               <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
@@ -269,6 +340,9 @@ endif;
             <input type="hidden" name="project" value="<?= (int) $projectId ?>">
             <?php if ($filterCategory !== ''): ?>
               <input type="hidden" name="category" value="<?= h($filterCategory) ?>">
+            <?php endif; ?>
+            <?php if ($filterFolderParam !== ''): ?>
+              <input type="hidden" name="dfolder" value="<?= h($filterFolderParam) ?>">
             <?php endif; ?>
             <?php foreach ($draftVars as $vk => $vv):
                 if ($vv === '') {
@@ -311,10 +385,14 @@ endif;
             $bodyHtml = email_campaign_draft_body_html((string) $d['body']);
             $sizeWarn = email_campaign_draft_size_warning((string) $d['body']);
             $cat = (string) $d['category'];
+            $cardFolderName = trim((string) ($d['folder_name'] ?? ''));
+            $fid = (int) ($d['folder_id'] ?? 0);
             $canMoveUp = $di > 0
-                && (string) ($drafts[$di - 1]['category'] ?? '') === $cat;
+                && (string) ($drafts[$di - 1]['category'] ?? '') === $cat
+                && (int) ($drafts[$di - 1]['folder_id'] ?? 0) === $fid;
             $canMoveDown = $di < ($draftTotal - 1)
-                && (string) ($drafts[$di + 1]['category'] ?? '') === $cat;
+                && (string) ($drafts[$di + 1]['category'] ?? '') === $cat
+                && (int) ($drafts[$di + 1]['folder_id'] ?? 0) === $fid;
             $editHref = $formAction . '&edit=' . $did . '#camp-draft-form';
             if ($hasDraftVars) {
                 foreach ($draftVars as $vk => $vv) {
@@ -324,7 +402,7 @@ endif;
                 }
             }
             $haystack = $title . ' ' . $subject . ' ' . email_campaign_draft_category_label($cat)
-                . ' ' . email_campaign_draft_html_to_plain((string) $d['body']);
+                . ' ' . $cardFolderName . ' ' . email_campaign_draft_html_to_plain((string) $d['body']);
             ?>
           <article class="camp-draft-card" data-camp-draft-card data-draft-id="<?= $did ?>"
                    data-camp-draft-haystack="<?= h(mb_strtolower($haystack)) ?>"
@@ -335,7 +413,12 @@ endif;
                    data-token-name="<?= h($draftVars['name']) ?>">
             <div class="camp-draft-card-head">
               <h3 class="camp-draft-title"><?= h($title) ?></h3>
-              <span class="swe-status-badge is-ready"><?= h(email_campaign_draft_category_label($cat)) ?></span>
+              <span class="camp-draft-card-tags">
+                <?php if ($cardFolderName !== ''): ?>
+                <span class="camp-draft-folder-tag"><?= h($cardFolderName) ?></span>
+                <?php endif; ?>
+                <span class="swe-status-badge is-ready"><?= h(email_campaign_draft_category_label($cat)) ?></span>
+              </span>
             </div>
             <?php if ($subject !== ''): ?>
             <p class="camp-draft-subject muted" style="margin:0.15rem 0 0.35rem">
@@ -367,6 +450,7 @@ endif;
                 <input type="hidden" name="direction" value="up">
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
                 <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+                <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
                 <button class="btn secondary small" type="submit" title="Move up">↑</button>
               </form>
               <?php endif; ?>
@@ -379,6 +463,7 @@ endif;
                 <input type="hidden" name="direction" value="down">
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
                 <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+                <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
                 <button class="btn secondary small" type="submit" title="Move down">↓</button>
               </form>
               <?php endif; ?>
@@ -392,6 +477,7 @@ endif;
                 <input type="hidden" name="draft_id" value="<?= $did ?>">
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
                 <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+                <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
                 <button class="btn danger small" type="submit">Delete</button>
               </form>
               <?php endif; ?>
@@ -421,6 +507,8 @@ endif;
         <input type="hidden" name="draft_id" value="<?= $editDraft ? (int) $editDraft['id'] : 0 ?>">
         <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
         <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+        <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
+        <div class="form-grid">
           <div>
             <label for="camp_draft_title">Title</label>
             <input id="camp_draft_title" name="title" required maxlength="180"
@@ -435,6 +523,21 @@ endif;
               foreach ($categories as $slug => $label):
                   ?>
                 <option value="<?= h($slug) ?>" <?= $selCat === $slug ? 'selected' : '' ?>><?= h($label) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div>
+            <label for="camp_draft_folder">Folder</label>
+            <select id="camp_draft_folder" name="folder_id">
+              <option value="0">Unfiled</option>
+              <?php
+              $selFolder = (int) ($editDraft['folder_id'] ?? ($filterFolderId > 0 ? $filterFolderId : 0));
+              foreach ($draftFolders as $folderOpt):
+                  $optId = (int) $folderOpt['id'];
+                  ?>
+                <option value="<?= $optId ?>" <?= $selFolder === $optId ? 'selected' : '' ?>>
+                  <?= h((string) $folderOpt['name']) ?>
+                </option>
               <?php endforeach; ?>
             </select>
           </div>

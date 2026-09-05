@@ -294,11 +294,11 @@ function guide_campaign_drafts(): string
 {
     return render_page_purpose(
         'Campaign drafts — copy outreach for email',
-        'Reusable formatted replies, offers, and follow-ups per Admin project. Office proposals · English is a ready library with A / B / C wordings, including country sample articles when a publisher asks for published examples. Optional subject line and tokens such as {domain} and {country}.',
-        'Open a project, search or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Add your own name under Best regards. Communication Team only — this is not the full Admin campaign editor.',
+        'Reusable formatted replies, offers, and follow-ups per Admin project, grouped in folders. Office proposals · English is a ready library with A / B / C wordings, including country sample articles and Topics when a publisher asks for niche or category. Admin chooses which Communication members see each folder. Optional subject line and tokens such as {domain} and {country}.',
+        'Open a project, pick a folder chip, search or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Add your own name under Best regards. Communication Team only — this is not the full Admin campaign editor.',
         [
             'Open Office proposals · English (or another project Admin turned on for Communication Team).',
-            'Search by country (Italy, Germany), niche, sample, discount, invoice, or A / B / C, or use category chips.',
+            'Use folder chips (Samples, Topics, Pricing, …) then search by country (Italy, Germany), niche, sample, discount, invoice, or A / B / C.',
             'Copy into your email client, then add your name. Delete is allowed for the creator or Admin.',
         ]
     );

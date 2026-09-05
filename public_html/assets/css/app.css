@@ -5296,6 +5296,91 @@ textarea:focus-visible {
   display: block;
   color: var(--brand-deep);
 }
+.camp-drafts-folder-chips {
+  margin-bottom: 0.2rem;
+}
+.camp-draft-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+.camp-draft-folder-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #99f6e4;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+.camp-draft-folder-create {
+  margin: 0.75rem 0 0.85rem;
+}
+.camp-admin-draft-folder {
+  margin-top: 0.85rem;
+  padding: 0.7rem 0.75rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.camp-admin-draft-folder-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.55rem;
+  margin-bottom: 0.45rem;
+}
+.camp-admin-draft-folder-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  flex: 1 1 auto;
+}
+.camp-admin-draft-folder-head h3 .muted {
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+.camp-admin-folder-rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.camp-admin-folder-rename input {
+  min-width: 8rem;
+  max-width: 12rem;
+}
+.camp-draft-folder-members {
+  margin: 0.15rem 0 0.55rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.camp-draft-folder-member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+}
+.camp-draft-folder-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.camp-draft-folder-member input {
+  margin: 0;
+}
+.camp-admin-draft-folder .camp-admin-drafts-list {
+  margin-top: 0.45rem;
+}
 @media (max-width: 900px) {
   .camp-drafts-layout {
     grid-template-columns: 1fr;

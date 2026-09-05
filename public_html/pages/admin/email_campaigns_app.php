@@ -1406,13 +1406,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (string) post('category'),
                 $draftId,
                 (int) ($user['id'] ?? 0),
-                (string) post('subject')
+                (string) post('subject'),
+                (int) post('folder_id')
             );
             if (empty($result['ok'])) {
                 flash('error', (string) ($result['error'] ?? 'Could not save draft.'));
             } else {
                 flash('ok', $draftId > 0 ? 'Updated Communication draft.' : 'Saved Communication draft for this project.');
             }
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
+        if ($action === 'save_draft_folder') {
+            $pid = (int) post('project_id');
+            $folderId = (int) post('folder_id');
+            $result = save_email_campaign_draft_folder(
+                $pid,
+                (string) post('folder_name'),
+                $folderId
+            );
+            if (empty($result['ok'])) {
+                flash('error', (string) ($result['error'] ?? 'Could not save folder.'));
+            } else {
+                flash('ok', $folderId > 0 ? 'Renamed draft folder.' : 'Created draft folder.');
+            }
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
+        if ($action === 'delete_draft_folder') {
+            $pid = (int) post('project_id');
+            $result = delete_email_campaign_draft_folder($pid, (int) post('folder_id'));
+            flash(
+                !empty($result['ok']) ? 'ok' : 'error',
+                !empty($result['ok'])
+                    ? ('Deleted folder “' . (string) ($result['name'] ?? 'folder') . '”. Drafts stay in the project, unfiled.')
+                    : (string) ($result['error'] ?? 'Could not delete folder.')
+            );
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
+        if ($action === 'save_draft_folder_members') {
+            $pid = (int) post('project_id');
+            $shown = post('shown');
+            $shownIds = is_array($shown) ? $shown : [];
+            $result = save_email_campaign_draft_folder_members(
+                $pid,
+                (int) post('folder_id'),
+                $shownIds
+            );
+            flash(
+                !empty($result['ok']) ? 'ok' : 'error',
+                !empty($result['ok'])
+                    ? 'Saved who can see this folder.'
+                    : (string) ($result['error'] ?? 'Could not save folder members.')
+            );
             redirect($campBase . '&project=' . $pid . '#project-drafts');
         }
         if ($action === 'delete_draft') {
@@ -1589,6 +1633,18 @@ if ($projectIdParam > 0) {
     }
     $draftCategories = email_campaign_draft_categories();
     $projectDrafts = list_email_campaign_drafts($projectIdParam);
+    $projectDraftFolders = list_email_campaign_draft_folders($projectIdParam);
+    $draftFolderMembers = list_email_campaign_draft_folder_team_members();
+    $draftsByFolder = [];
+    $unfiledDrafts = [];
+    foreach ($projectDrafts as $d) {
+        $fid = (int) ($d['folder_id'] ?? 0);
+        if ($fid > 0) {
+            $draftsByFolder[$fid][] = $d;
+        } else {
+            $unfiledDrafts[] = $d;
+        }
+    }
     $editDraftId = (int) get('edit_draft');
     $editDraft = $editDraftId > 0 ? get_email_campaign_draft($editDraftId) : null;
     if ($editDraft && (int) ($editDraft['project_id'] ?? 0) !== $projectIdParam) {
@@ -1780,82 +1836,186 @@ if ($projectIdParam > 0) {
 
         <section class="card" style="margin-top:1rem" id="project-drafts">
           <div class="camp-hub-section-head">
-            <h2 style="margin:0"><?= label_with_info('Communication drafts', 'Reusable outreach / offer / reply text for this project only. Communication Team copies these with one click when the project is shown to them.') ?></h2>
+            <h2 style="margin:0"><?= label_with_info('Communication drafts', 'Reusable outreach / offer / reply text for this project only. Group drafts into folders and choose which Communication members see each folder. Unchecked members do not see that folder.') ?></h2>
             <p class="help" style="margin:0.3rem 0 0">
-              <?= count($projectDrafts) ?> draft<?= count($projectDrafts) === 1 ? '' : 's' ?> · seed starter text here or let Communication add their own
+              <?= count($projectDrafts) ?> draft<?= count($projectDrafts) === 1 ? '' : 's' ?>
+              · <?= count($projectDraftFolders) ?> folder<?= count($projectDraftFolders) === 1 ? '' : 's' ?>
+              · seed starter text here or let Communication add their own
             </p>
           </div>
-          <?php if ($projectDrafts): ?>
-          <ul class="camp-admin-drafts-list">
-            <?php
-            $adminDraftTotal = count($projectDrafts);
-            foreach ($projectDrafts as $adi => $d):
-                $did = (int) $d['id'];
-                $adminCat = (string) ($d['category'] ?? '');
-                $adminCanUp = $adi > 0
-                    && (string) ($projectDrafts[$adi - 1]['category'] ?? '') === $adminCat;
-                $adminCanDown = $adi < ($adminDraftTotal - 1)
-                    && (string) ($projectDrafts[$adi + 1]['category'] ?? '') === $adminCat;
-                $adminSizeWarn = email_campaign_draft_size_warning((string) ($d['body'] ?? ''));
-                ?>
-              <li>
-                <div class="camp-admin-draft-meta">
-                  <strong><?= h((string) $d['title']) ?></strong>
-                  <span class="muted" style="font-size:0.82rem">
-                    <?= h(email_campaign_draft_category_label($adminCat)) ?>
-                  </span>
-                  <?php if (trim((string) ($d['subject'] ?? '')) !== ''): ?>
-                  <span class="help" style="display:block;margin-top:0.15rem">
-                    Subject: <?= h((string) $d['subject']) ?>
-                  </span>
-                  <?php endif; ?>
-                  <?php
-                    $adminAttr = email_campaign_draft_attribution($d);
-                    if ($adminAttr !== ''):
-                  ?>
-                  <span class="help" style="display:block;margin-top:0.2rem"><?= h($adminAttr) ?></span>
-                  <?php endif; ?>
-                  <?php if ($adminSizeWarn !== ''): ?>
-                  <span class="help camp-draft-size-warn" style="display:block;margin-top:0.2rem"><?= h($adminSizeWarn) ?></span>
-                  <?php endif; ?>
+
+          <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form camp-draft-folder-create" autocomplete="off"
+                data-show-processing="Saving folder…">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="save_draft_folder">
+            <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+            <input type="hidden" name="folder_id" value="0">
+            <div class="camp-hub-field">
+              <label for="new_draft_folder_name">New folder</label>
+              <input id="new_draft_folder_name" name="folder_name" required maxlength="120"
+                     placeholder="e.g. Samples">
+            </div>
+            <p class="actions camp-hub-create-actions">
+              <button class="btn secondary" type="submit">Create folder</button>
+            </p>
+          </form>
+
+          <?php
+          $adminDraftSections = [];
+          foreach ($projectDraftFolders as $folderRow) {
+              $fid = (int) $folderRow['id'];
+              $adminDraftSections[] = [
+                  'folder' => $folderRow,
+                  'drafts' => $draftsByFolder[$fid] ?? [],
+              ];
+          }
+          if ($unfiledDrafts !== []) {
+              $adminDraftSections[] = [
+                  'folder' => null,
+                  'drafts' => $unfiledDrafts,
+              ];
+          }
+          foreach ($adminDraftSections as $sec):
+              $folderRow = $sec['folder'];
+              $secDrafts = $sec['drafts'];
+              $fid = $folderRow ? (int) $folderRow['id'] : 0;
+              $hiddenIds = $fid > 0 ? array_fill_keys(list_email_campaign_draft_folder_hidden_user_ids($fid), true) : [];
+              ?>
+            <div class="camp-admin-draft-folder" <?= $fid > 0 ? 'id="draft-folder-' . $fid . '"' : '' ?>>
+              <div class="camp-admin-draft-folder-head">
+                <h3>
+                  <?= $folderRow ? h((string) $folderRow['name']) : 'Unfiled' ?>
+                  <span class="muted"><?= count($secDrafts) ?></span>
+                </h3>
+                <?php if ($folderRow): ?>
+                <form method="post" action="<?= h($projectForm) ?>" class="camp-admin-folder-rename" autocomplete="off">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="save_draft_folder">
+                  <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                  <input type="hidden" name="folder_id" value="<?= $fid ?>">
+                  <input name="folder_name" required maxlength="120" value="<?= h((string) $folderRow['name']) ?>"
+                         aria-label="Rename folder">
+                  <button class="btn secondary small" type="submit">Rename</button>
+                </form>
+                <form method="post" action="<?= h($projectForm) ?>"
+                      onsubmit="return confirm(<?= h(json_encode('Delete folder “' . (string) $folderRow['name'] . '”? Drafts stay in the project, unfiled.', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="delete_draft_folder">
+                  <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                  <input type="hidden" name="folder_id" value="<?= $fid ?>">
+                  <button class="btn danger small" type="submit">Delete folder</button>
+                </form>
+                <?php endif; ?>
+              </div>
+              <?php if ($folderRow && $draftFolderMembers): ?>
+              <form method="post" action="<?= h($projectForm) ?>" class="camp-draft-folder-members">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_draft_folder_members">
+                <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                <input type="hidden" name="folder_id" value="<?= $fid ?>">
+                <p class="help" style="margin:0 0 0.35rem">Show this folder to Communication members (unchecked = hidden):</p>
+                <div class="camp-draft-folder-member-list">
+                  <?php foreach ($draftFolderMembers as $mem):
+                      $uid = (int) ($mem['id'] ?? 0);
+                      if ($uid < 1) {
+                          continue;
+                      }
+                      $label = trim((string) ($mem['full_name'] ?? ''));
+                      if ($label === '') {
+                          $label = (string) ($mem['username'] ?? 'Member');
+                      }
+                      $checked = !isset($hiddenIds[$uid]);
+                      ?>
+                    <label class="camp-draft-folder-member">
+                      <input type="checkbox" name="shown[]" value="<?= $uid ?>" <?= $checked ? 'checked' : '' ?>>
+                      <span><?= h($label) ?></span>
+                    </label>
+                  <?php endforeach; ?>
                 </div>
-                <div class="actions">
-                  <?php if ($adminCanUp): ?>
-                  <form method="post" action="<?= h($projectForm) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="move_draft">
-                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
-                    <input type="hidden" name="draft_id" value="<?= $did ?>">
-                    <input type="hidden" name="direction" value="up">
-                    <button class="btn secondary small" type="submit" title="Move up">↑</button>
-                  </form>
-                  <?php endif; ?>
-                  <?php if ($adminCanDown): ?>
-                  <form method="post" action="<?= h($projectForm) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="move_draft">
-                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
-                    <input type="hidden" name="draft_id" value="<?= $did ?>">
-                    <input type="hidden" name="direction" value="down">
-                    <button class="btn secondary small" type="submit" title="Move down">↓</button>
-                  </form>
-                  <?php endif; ?>
-                  <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
-                  <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
-                  <form method="post" action="<?= h($projectForm) ?>"
-                        onsubmit="return confirm(<?= h(json_encode('Delete draft “' . (string) $d['title'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="delete_draft">
-                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
-                    <input type="hidden" name="draft_id" value="<?= $did ?>">
-                    <button class="btn danger small" type="submit">Delete</button>
-                  </form>
-                  <?php endif; ?>
-                </div>
-              </li>
-            <?php endforeach; ?>
-          </ul>
-          <?php else: ?>
+                <p class="actions" style="margin:0.45rem 0 0">
+                  <button class="btn secondary small" type="submit">Save who can see this</button>
+                </p>
+              </form>
+              <?php elseif ($folderRow): ?>
+              <p class="help">No Communication Team members yet — folders are visible by default when someone is added.</p>
+              <?php endif; ?>
+
+              <?php if ($secDrafts): ?>
+              <ul class="camp-admin-drafts-list">
+                <?php
+                $adminDraftTotal = count($secDrafts);
+                foreach ($secDrafts as $adi => $d):
+                    $did = (int) $d['id'];
+                    $adminCat = (string) ($d['category'] ?? '');
+                    $adminCanUp = $adi > 0
+                        && (string) ($secDrafts[$adi - 1]['category'] ?? '') === $adminCat;
+                    $adminCanDown = $adi < ($adminDraftTotal - 1)
+                        && (string) ($secDrafts[$adi + 1]['category'] ?? '') === $adminCat;
+                    $adminSizeWarn = email_campaign_draft_size_warning((string) ($d['body'] ?? ''));
+                    ?>
+                  <li>
+                    <div class="camp-admin-draft-meta">
+                      <strong><?= h((string) $d['title']) ?></strong>
+                      <span class="muted" style="font-size:0.82rem">
+                        <?= h(email_campaign_draft_category_label($adminCat)) ?>
+                      </span>
+                      <?php if (trim((string) ($d['subject'] ?? '')) !== ''): ?>
+                      <span class="help" style="display:block;margin-top:0.15rem">
+                        Subject: <?= h((string) $d['subject']) ?>
+                      </span>
+                      <?php endif; ?>
+                      <?php
+                        $adminAttr = email_campaign_draft_attribution($d);
+                        if ($adminAttr !== ''):
+                      ?>
+                      <span class="help" style="display:block;margin-top:0.2rem"><?= h($adminAttr) ?></span>
+                      <?php endif; ?>
+                      <?php if ($adminSizeWarn !== ''): ?>
+                      <span class="help camp-draft-size-warn" style="display:block;margin-top:0.2rem"><?= h($adminSizeWarn) ?></span>
+                      <?php endif; ?>
+                    </div>
+                    <div class="actions">
+                      <?php if ($adminCanUp): ?>
+                      <form method="post" action="<?= h($projectForm) ?>">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="move_draft">
+                        <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                        <input type="hidden" name="draft_id" value="<?= $did ?>">
+                        <input type="hidden" name="direction" value="up">
+                        <button class="btn secondary small" type="submit" title="Move up">↑</button>
+                      </form>
+                      <?php endif; ?>
+                      <?php if ($adminCanDown): ?>
+                      <form method="post" action="<?= h($projectForm) ?>">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="move_draft">
+                        <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                        <input type="hidden" name="draft_id" value="<?= $did ?>">
+                        <input type="hidden" name="direction" value="down">
+                        <button class="btn secondary small" type="submit" title="Move down">↓</button>
+                      </form>
+                      <?php endif; ?>
+                      <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
+                      <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
+                      <form method="post" action="<?= h($projectForm) ?>"
+                            onsubmit="return confirm(<?= h(json_encode('Delete draft “' . (string) $d['title'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="delete_draft">
+                        <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                        <input type="hidden" name="draft_id" value="<?= $did ?>">
+                        <button class="btn danger small" type="submit">Delete</button>
+                      </form>
+                      <?php endif; ?>
+                    </div>
+                  </li>
+                <?php endforeach; ?>
+              </ul>
+              <?php elseif ($folderRow): ?>
+              <p class="muted" style="margin:0.45rem 0 0">No drafts in this folder yet.</p>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+          <?php if ($adminDraftSections === []): ?>
           <p class="muted" style="margin:0.65rem 0 0">No drafts yet for this project.</p>
           <?php endif; ?>
 
@@ -1888,6 +2048,21 @@ if ($projectIdParam > 0) {
                           title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
                 <?php endforeach; ?>
               </p>
+            </div>
+            <div class="camp-hub-field">
+              <label for="admin_draft_folder">Folder</label>
+              <select id="admin_draft_folder" name="folder_id">
+                <option value="0">Unfiled</option>
+                <?php
+                $adminSelFolder = (int) ($editDraft['folder_id'] ?? 0);
+                foreach ($projectDraftFolders as $folderOpt):
+                    $optId = (int) $folderOpt['id'];
+                    ?>
+                  <option value="<?= $optId ?>" <?= $adminSelFolder === $optId ? 'selected' : '' ?>>
+                    <?= h((string) $folderOpt['name']) ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
             </div>
             <div class="camp-hub-field">
               <label for="admin_draft_category">Category</label>
