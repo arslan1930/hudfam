@@ -5121,16 +5121,30 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.55rem;
 }
-.camp-drafts-search .sheet-search {
-  min-width: 12rem;
-  max-width: 18rem;
+.camp-drafts-search {
+  position: relative;
+  flex: 1 1 22rem;
+  min-width: 16rem;
+  max-width: 36rem;
 }
-.camp-drafts-search input[type="search"] {
+.camp-drafts-search .sheet-search {
+  display: block;
+  position: relative;
+  min-width: 0;
+  max-width: none;
   width: 100%;
+}
+.camp-drafts-search input[type="search"],
+.camp-drafts-search .sheet-search input[type="search"] {
+  width: 100%;
+  max-width: none;
+}
+.camp-drafts-search [data-camp-draft-suggest] {
+  margin-top: 0.35rem;
 }
 .camp-drafts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 0.85rem;
   margin-top: 0.85rem;
 }
@@ -5143,6 +5157,27 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 0.55rem;
   min-height: 12rem;
+}
+.camp-draft-card.sheet-search-hit {
+  outline: 2px solid #4b5563;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+.camp-draft-abc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.camp-draft-abc [data-camp-draft-abc-tab].is-on {
+  font-weight: 700;
+}
+.camp-draft-variant {
+  display: none;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.camp-draft-variant.is-on {
+  display: flex;
 }
 .camp-draft-card-head {
   display: flex;
@@ -5171,6 +5206,9 @@ textarea:focus-visible {
   padding: 0.65rem 0.75rem;
   max-height: 10rem;
   overflow: auto;
+}
+.camp-draft-preview.is-expanded {
+  max-height: none;
 }
 .camp-draft-rich p,
 .camp-draft-surface p {

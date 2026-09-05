@@ -3171,6 +3171,41 @@ try {
         ]));
     }
 
+    $groupedOffice = email_campaign_group_draft_cards($allOffice);
+    $italyGroup = null;
+    $singletonOk = false;
+    foreach ($groupedOffice as $g) {
+        if ((string) ($g['base_title'] ?? '') === 'Sample · Italy') {
+            $italyGroup = $g;
+        }
+    }
+    $italyLetters = [];
+    foreach (($italyGroup['variants'] ?? []) as $v) {
+        $italyLetters[] = (string) ($v['_abc'] ?? '');
+    }
+    $solo = email_campaign_group_draft_cards([
+        ['id' => 1, 'title' => 'Custom note', 'category' => 'reply', 'folder_id' => 0, 'folder_name' => ''],
+        ['id' => 2, 'title' => 'Ping · A', 'category' => 'reply', 'folder_id' => 0, 'folder_name' => ''],
+        ['id' => 3, 'title' => 'Ping · B', 'category' => 'reply', 'folder_id' => 0, 'folder_name' => ''],
+        ['id' => 4, 'title' => 'Ping · C', 'category' => 'offer', 'folder_id' => 0, 'folder_name' => ''],
+    ]);
+    $singletonOk = count($solo) === 3
+        && (string) ($solo[0]['base_title'] ?? '') === 'Custom note'
+        && count($solo[1]['variants'] ?? []) === 2
+        && count($solo[2]['variants'] ?? []) === 1;
+    if (count($groupedOffice) >= 61
+        && $italyGroup
+        && $italyLetters === ['A', 'B', 'C']
+        && $singletonOk) {
+        pass('campaign drafts A/B/C grouping helper');
+    } else {
+        fail('draft grouping: ' . json_encode([
+            'groups' => count($groupedOffice),
+            'italy' => $italyLetters,
+            'solo' => count($solo),
+        ]));
+    }
+
     $officeFolders = $officePid > 0 ? list_email_campaign_draft_folders($officePid) : [];
     $officeFolderSlugs = array_map(static fn ($f) => (string) ($f['slug'] ?? ''), $officeFolders);
     $samplesFolder = $officePid > 0 ? get_email_campaign_draft_folder_by_slug($officePid, 'samples') : null;

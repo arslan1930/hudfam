@@ -5356,6 +5356,84 @@ function list_email_campaign_drafts(
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
+/**
+ * Split an office-style title "Situation · A" into base + letter.
+ *
+ * @return array{base:string,letter:string}
+ */
+function email_campaign_draft_abc_parts(string $title): array
+{
+    $title = trim($title);
+    if (preg_match('/^(.*) · ([ABC])$/u', $title, $m)) {
+        return ['base' => trim((string) $m[1]), 'letter' => (string) $m[2]];
+    }
+    return ['base' => $title, 'letter' => ''];
+}
+
+/**
+ * Group A/B/C wordings of the same situation (folder + category + base title)
+ * into one card. Titles without · A/B/C stay as their own card.
+ *
+ * @param list<array<string,mixed>> $drafts
+ * @return list<array{
+ *   base_title:string,
+ *   category:string,
+ *   folder_id:int,
+ *   folder_name:string,
+ *   variants:list<array<string,mixed>>
+ * }>
+ */
+function email_campaign_group_draft_cards(array $drafts): array
+{
+    $groups = [];
+    $order = [];
+    foreach ($drafts as $d) {
+        if (!is_array($d)) {
+            continue;
+        }
+        $parts = email_campaign_draft_abc_parts((string) ($d['title'] ?? ''));
+        $fid = (int) ($d['folder_id'] ?? 0);
+        $cat = (string) ($d['category'] ?? '');
+        if ($parts['letter'] !== '') {
+            $key = $fid . "\0" . $cat . "\0" . $parts['base'];
+        } else {
+            $key = 'id:' . (int) ($d['id'] ?? 0);
+        }
+        if (!isset($groups[$key])) {
+            $groups[$key] = [
+                'base_title' => $parts['letter'] !== '' ? $parts['base'] : (string) ($d['title'] ?? ''),
+                'category' => $cat,
+                'folder_id' => $fid,
+                'folder_name' => (string) ($d['folder_name'] ?? ''),
+                'variants' => [],
+            ];
+            $order[] = $key;
+        }
+        $letter = $parts['letter'] !== '' ? $parts['letter'] : ('_' . (int) ($d['id'] ?? 0));
+        if (isset($groups[$key]['variants'][$letter])) {
+            $letter .= ':' . (int) ($d['id'] ?? 0);
+        }
+        $d['_abc'] = $parts['letter'];
+        $groups[$key]['variants'][$letter] = $d;
+    }
+    $out = [];
+    foreach ($order as $key) {
+        $g = $groups[$key];
+        uksort($g['variants'], static function (string $a, string $b): int {
+            $rank = ['A' => 0, 'B' => 1, 'C' => 2];
+            $ra = $rank[$a] ?? 50;
+            $rb = $rank[$b] ?? 50;
+            if ($ra !== $rb) {
+                return $ra <=> $rb;
+            }
+            return strcmp($a, $b);
+        });
+        $g['variants'] = array_values($g['variants']);
+        $out[] = $g;
+    }
+    return $out;
+}
+
 function count_email_campaign_drafts(int $projectId): int
 {
     ensure_email_campaign_schema();

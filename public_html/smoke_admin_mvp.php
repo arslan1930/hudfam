@@ -2591,10 +2591,17 @@ if (!str_contains($campLib, 'email_campaign_office_proposals.php')
     || !str_contains($campDraftsTeam, 'data-camp-draft-search')
     || !str_contains($campDraftsTeam, 'ensure_email_campaign_office_proposal_drafts')
     || !str_contains($campDraftsTeam, 'data-camp-draft-haystack')
+    || !str_contains($campDraftsTeam, 'data-camp-draft-suggest')
+    || !str_contains($campDraftsTeam, 'data-camp-draft-abc')
+    || !str_contains($campDraftsTeam, 'data-camp-draft-expand')
+    || !str_contains($campDraftsTeam, 'Italy, niche, discount, homepage')
     || !str_contains($campDraftsTeam, 'dfolder')
     || !str_contains($campDraftsTeam, 'camp-drafts-folder-chips')
     || !str_contains($campDraftJs, 'initDraftSearch')
+    || !str_contains($campDraftJs, 'initAbcTabs')
+    || !str_contains($campDraftJs, 'selectSuggestion')
     || !str_contains($campLib, 'd.title LIKE ?')
+    || !str_contains($campLib, 'function email_campaign_group_draft_cards')
     || !str_contains($campLib, 'function list_email_campaign_draft_folders')
     || !str_contains($campLib, 'function save_email_campaign_draft_folder_members')
     || !str_contains($campLib, 'email_campaign_draft_folder_hidden')
@@ -2610,7 +2617,10 @@ if (!str_contains($campLib, 'email_campaign_office_proposals.php')
 $campCss = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($campCss, '.camp-drafts-folder-chips')
     || !str_contains($campCss, '.camp-draft-folder-member')
-    || !str_contains($campCss, '.camp-admin-draft-folder')) {
+    || !str_contains($campCss, '.camp-admin-draft-folder')
+    || !str_contains($campCss, '.camp-draft-variant')
+    || !str_contains($campCss, '.camp-draft-preview.is-expanded')
+    || !str_contains($campCss, '.camp-draft-abc')) {
     fail('app.css missing campaign draft folder styles');
 } else {
     ok('campaign draft folder CSS');

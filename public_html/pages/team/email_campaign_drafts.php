@@ -165,14 +165,9 @@ if ($filterFolderId > 0 && !isset($visibleFolderIds[$filterFolderId])) {
 }
 
 $drafts = $selectedProject
-    ? list_email_campaign_drafts(
-        $projectId,
-        $filterCategory !== '' ? $filterCategory : null,
-        $draftQ,
-        $filterFolderId,
-        $actorId
-    )
+    ? list_email_campaign_drafts($projectId, null, '', 0, $actorId)
     : [];
+$draftGroups = email_campaign_group_draft_cards($drafts);
 $editId = (int) get('edit');
 $editDraft = ($editId > 0) ? get_email_campaign_draft($editId) : null;
 if ($editDraft && (int) ($editDraft['project_id'] ?? 0) !== $projectId) {
@@ -276,30 +271,19 @@ endif;
     <?php
     $projectName = (string) ($selectedProject['name'] ?? 'Project');
     $draftCount = count($drafts);
+    $groupCount = count($draftGroups);
     ?>
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar">
         <div>
           <h2 style="margin:0"><?= h($projectName) ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
-            <?= (int) $draftCount ?> draft<?= (int) $draftCount === 1 ? '' : 's' ?>
-            <?= $filterCategory !== '' ? ' in “' . h(email_campaign_draft_category_label($filterCategory)) . '”' : '' ?>
-            <?php
-            $folderLabel = '';
-            if ($filterFolderId > 0) {
-                foreach ($draftFolders as $folderRow) {
-                    if ((int) $folderRow['id'] === $filterFolderId) {
-                        $folderLabel = (string) $folderRow['name'];
-                        break;
-                    }
-                }
-            } elseif ($filterFolderId < 0) {
-                $folderLabel = 'Unfiled';
-            }
-            ?>
-            <?= $folderLabel !== '' ? ' in folder “' . h($folderLabel) . '”' : '' ?>
-            <?= $draftQ !== '' ? ' matching “' . h($draftQ) . '”' : '' ?>.
-            Search, then <strong>Copy</strong> or <strong>Copy plain</strong>. Each situation has A / B / C wordings so teammates do not send the same letter.
+            <span data-camp-draft-count><?= (int) $groupCount ?> situation<?= (int) $groupCount === 1 ? '' : 's' ?>
+            · <?= (int) $draftCount ?> letter<?= (int) $draftCount === 1 ? '' : 's' ?></span>.
+            Search the full library — typing is not limited to a folder or Reply chip.
+            <strong>Enter</strong> jumps to the next match, <strong>Shift+Enter</strong> the previous.
+            Each situation is one card with <strong>A / B / C</strong> tabs.
+            <strong>Show full</strong> reveals the whole letter.
             Add your own name under <strong>Best regards</strong> before you send.
             Tokens: <code>{domain}</code> <code>{site}</code> <code>{country}</code> <code>{language}</code> <code>{name}</code>.
             <?php if ($hasDraftVars): ?>
@@ -320,7 +304,10 @@ endif;
                 $href = $campDraftsHref($projectId, $filterCategory, $draftQ, $fid);
                 $active = $filterFolderId === $fid;
                 ?>
-              <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h((string) $fl['name']) ?></a>
+              <a class="btn small <?= $active ? '' : 'secondary' ?>"
+                 href="<?= h($href) ?>"
+                 data-camp-draft-chip="folder"
+                 data-camp-draft-chip-value="<?= $fid ?>"><?= h((string) $fl['name']) ?></a>
             <?php endforeach; ?>
           </p>
           <p class="swe-sent-filters camp-drafts-filters">
@@ -330,12 +317,16 @@ endif;
                 $href = $campDraftsHref($projectId, (string) $slug, $draftQ, $filterFolderId);
                 $active = $filterCategory === (string) $slug;
                 ?>
-              <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
+              <a class="btn small <?= $active ? '' : 'secondary' ?>"
+                 href="<?= h($href) ?>"
+                 data-camp-draft-chip="category"
+                 data-camp-draft-chip-value="<?= h((string) $slug) ?>"><?= h($label) ?></a>
             <?php endforeach; ?>
           </p>
         </div>
         <div class="actions camp-drafts-toolbar-actions">
-          <form method="get" action="index.php" class="camp-drafts-search" role="search">
+          <form method="get" action="index.php" class="camp-drafts-search" role="search"
+                data-camp-draft-search-form>
             <input type="hidden" name="page" value="team_email_campaigns_drafts">
             <input type="hidden" name="project" value="<?= (int) $projectId ?>">
             <?php if ($filterCategory !== ''): ?>
@@ -353,9 +344,13 @@ endif;
             <label class="sheet-search" for="camp-draft-search">
               <span class="visually-hidden">Search drafts</span>
               <input id="camp-draft-search" type="search" name="q" value="<?= h($draftQ) ?>"
-                     placeholder="Search title or text…" autocomplete="off" spellcheck="false"
+                     placeholder="Italy, niche, discount, homepage…" autocomplete="off" spellcheck="false"
+                     aria-autocomplete="list" aria-controls="camp-draft-suggest" aria-expanded="false"
                      data-camp-draft-search data-no-draft>
+              <ul class="swe-admin-delete-suggest" id="camp-draft-suggest" data-camp-draft-suggest
+                  hidden role="listbox"></ul>
             </label>
+            <span class="sheet-search-meta" data-camp-draft-search-meta></span>
           </form>
           <a class="btn small" href="<?= h($formAction) ?>#camp-draft-form">+ New draft</a>
         </div>
@@ -363,13 +358,8 @@ endif;
 
       <?php if ($drafts === []): ?>
       <div class="empty-state" id="camp-drafts-empty">
-        <?php if ($draftQ !== ''): ?>
-          <p>No drafts match “<?= h($draftQ) ?>”<?= $filterCategory !== '' ? ' in this category' : '' ?>.</p>
-          <p class="muted">Try another word, or clear search to see the full list.</p>
-        <?php else: ?>
-          <p>No drafts<?= $filterCategory !== '' ? ' in this category' : ' in this project' ?> yet.</p>
-          <p class="muted">Add your first outreach / offer / reply text below.</p>
-        <?php endif; ?>
+        <p>No drafts in this project yet.</p>
+        <p class="muted">Add your first outreach / offer / reply text below.</p>
       </div>
       <?php else: ?>
       <div class="empty-state" id="camp-drafts-search-empty" hidden>
@@ -378,41 +368,51 @@ endif;
       <div class="camp-drafts-grid">
         <?php
         $draftTotal = count($drafts);
-        foreach ($drafts as $di => $d):
-            $did = (int) $d['id'];
-            $title = (string) $d['title'];
-            $subject = trim((string) ($d['subject'] ?? ''));
-            $bodyHtml = email_campaign_draft_body_html((string) $d['body']);
-            $sizeWarn = email_campaign_draft_size_warning((string) $d['body']);
-            $cat = (string) $d['category'];
-            $cardFolderName = trim((string) ($d['folder_name'] ?? ''));
-            $fid = (int) ($d['folder_id'] ?? 0);
-            $canMoveUp = $di > 0
-                && (string) ($drafts[$di - 1]['category'] ?? '') === $cat
-                && (int) ($drafts[$di - 1]['folder_id'] ?? 0) === $fid;
-            $canMoveDown = $di < ($draftTotal - 1)
-                && (string) ($drafts[$di + 1]['category'] ?? '') === $cat
-                && (int) ($drafts[$di + 1]['folder_id'] ?? 0) === $fid;
-            $editHref = $formAction . '&edit=' . $did . '#camp-draft-form';
-            if ($hasDraftVars) {
-                foreach ($draftVars as $vk => $vv) {
-                    if ($vv !== '') {
-                        $editHref .= '&' . rawurlencode($vk) . '=' . rawurlencode($vv);
-                    }
+        $draftIndexById = [];
+        foreach ($drafts as $di => $row) {
+            $draftIndexById[(int) ($row['id'] ?? 0)] = $di;
+        }
+        foreach ($draftGroups as $group):
+            $variants = $group['variants'];
+            if ($variants === []) {
+                continue;
+            }
+            $first = $variants[0];
+            $cat = (string) ($group['category'] ?? '');
+            $cardFolderName = trim((string) ($group['folder_name'] ?? ''));
+            $fid = (int) ($group['folder_id'] ?? 0);
+            $baseTitle = (string) ($group['base_title'] ?? '');
+            $hayParts = [
+                $baseTitle,
+                email_campaign_draft_category_label($cat),
+                $cardFolderName,
+            ];
+            $letters = [];
+            foreach ($variants as $d) {
+                $hayParts[] = (string) ($d['title'] ?? '');
+                $hayParts[] = (string) ($d['subject'] ?? '');
+                $hayParts[] = email_campaign_draft_html_to_plain((string) ($d['body'] ?? ''));
+                $let = (string) ($d['_abc'] ?? '');
+                if ($let !== '') {
+                    $letters[] = $let;
                 }
             }
-            $haystack = $title . ' ' . $subject . ' ' . email_campaign_draft_category_label($cat)
-                . ' ' . $cardFolderName . ' ' . email_campaign_draft_html_to_plain((string) $d['body']);
+            $haystack = implode(' ', $hayParts);
+            $hasAbc = count($letters) > 1;
+            $firstId = (int) ($first['id'] ?? 0);
             ?>
-          <article class="camp-draft-card" data-camp-draft-card data-draft-id="<?= $did ?>"
+          <article class="camp-draft-card" data-camp-draft-card data-draft-id="<?= $firstId ?>"
                    data-camp-draft-haystack="<?= h(mb_strtolower($haystack)) ?>"
-                   data-camp-draft-subject="<?= h($subject) ?>"
+                   data-camp-draft-suggest-title="<?= h($baseTitle) ?>"
+                   data-camp-draft-category="<?= h($cat) ?>"
+                   data-camp-draft-folder="<?= $fid ?>"
+                   data-camp-draft-subject="<?= h(trim((string) ($first['subject'] ?? ''))) ?>"
                    data-token-domain="<?= h($draftVars['domain']) ?>"
                    data-token-country="<?= h($draftVars['country']) ?>"
                    data-token-language="<?= h($draftVars['language']) ?>"
                    data-token-name="<?= h($draftVars['name']) ?>">
             <div class="camp-draft-card-head">
-              <h3 class="camp-draft-title"><?= h($title) ?></h3>
+              <h3 class="camp-draft-title"><?= h($baseTitle) ?></h3>
               <span class="camp-draft-card-tags">
                 <?php if ($cardFolderName !== ''): ?>
                 <span class="camp-draft-folder-tag"><?= h($cardFolderName) ?></span>
@@ -420,68 +420,114 @@ endif;
                 <span class="swe-status-badge is-ready"><?= h(email_campaign_draft_category_label($cat)) ?></span>
               </span>
             </div>
-            <?php if ($subject !== ''): ?>
-            <p class="camp-draft-subject muted" style="margin:0.15rem 0 0.35rem">
-              Subject: <strong data-camp-draft-subject-label><?= h($subject) ?></strong>
-            </p>
-            <?php endif; ?>
-            <?php
-              $attr = email_campaign_draft_attribution($d);
-              if ($attr !== ''):
-            ?>
-            <p class="help camp-draft-attribution" style="margin:0.2rem 0 0.45rem"><?= h($attr) ?></p>
-            <?php endif; ?>
-            <div class="camp-draft-preview camp-draft-rich" data-camp-draft-preview data-camp-draft-html><?= $bodyHtml ?></div>
-            <?php if ($sizeWarn !== ''): ?>
-            <p class="help camp-draft-size-warn" style="margin:0.45rem 0 0"><?= h($sizeWarn) ?></p>
-            <?php endif; ?>
-            <div class="camp-draft-card-actions actions">
-              <button type="button" class="btn small" data-camp-draft-copy
-                      title="Copy with formatting for email paste">Copy</button>
-              <button type="button" class="btn secondary small" data-camp-draft-copy-plain
-                      title="Copy plain text only (reliable in any email client)">Copy plain</button>
-              <a class="btn secondary small" href="<?= h($editHref) ?>">Edit</a>
-              <?php if ($canMoveUp): ?>
-              <form method="post" action="<?= h($formAction) ?>" class="camp-draft-move-form">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="move_draft">
-                <input type="hidden" name="project_id" value="<?= $projectId ?>">
-                <input type="hidden" name="draft_id" value="<?= $did ?>">
-                <input type="hidden" name="direction" value="up">
-                <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
-                <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
-                <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
-                <button class="btn secondary small" type="submit" title="Move up">↑</button>
-              </form>
-              <?php endif; ?>
-              <?php if ($canMoveDown): ?>
-              <form method="post" action="<?= h($formAction) ?>" class="camp-draft-move-form">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="move_draft">
-                <input type="hidden" name="project_id" value="<?= $projectId ?>">
-                <input type="hidden" name="draft_id" value="<?= $did ?>">
-                <input type="hidden" name="direction" value="down">
-                <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
-                <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
-                <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
-                <button class="btn secondary small" type="submit" title="Move down">↓</button>
-              </form>
-              <?php endif; ?>
-              <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
-              <form method="post" action="<?= h($formAction) ?>" class="camp-draft-delete-form"
-                    data-camp-draft-delete
-                    onsubmit="return confirm(<?= h(json_encode('Delete draft “' . $title . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="delete_draft">
-                <input type="hidden" name="project_id" value="<?= $projectId ?>">
-                <input type="hidden" name="draft_id" value="<?= $did ?>">
-                <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
-                <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
-                <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
-                <button class="btn danger small" type="submit">Delete</button>
-              </form>
-              <?php endif; ?>
+            <?php if ($hasAbc): ?>
+            <div class="camp-draft-abc" data-camp-draft-abc role="tablist" aria-label="A B C wordings">
+              <?php foreach ($variants as $vi => $d):
+                  $let = (string) ($d['_abc'] ?? '');
+                  if ($let === '') {
+                      continue;
+                  }
+                  ?>
+                <button type="button" class="btn small<?= $vi === 0 ? ' is-on' : ' secondary' ?>"
+                        data-camp-draft-abc-tab="<?= h($let) ?>"
+                        aria-pressed="<?= $vi === 0 ? 'true' : 'false' ?>"><?= h($let) ?></button>
+              <?php endforeach; ?>
             </div>
+            <?php endif; ?>
+            <?php foreach ($variants as $vi => $d):
+                $did = (int) $d['id'];
+                $title = (string) $d['title'];
+                $subject = trim((string) ($d['subject'] ?? ''));
+                $bodyHtml = email_campaign_draft_body_html((string) $d['body']);
+                $sizeWarn = email_campaign_draft_size_warning((string) $d['body']);
+                $let = (string) ($d['_abc'] ?? '');
+                $di = $draftIndexById[$did] ?? -1;
+                $canMoveUp = $di > 0
+                    && (string) ($drafts[$di - 1]['category'] ?? '') === $cat
+                    && (int) ($drafts[$di - 1]['folder_id'] ?? 0) === $fid;
+                $canMoveDown = $di >= 0 && $di < ($draftTotal - 1)
+                    && (string) ($drafts[$di + 1]['category'] ?? '') === $cat
+                    && (int) ($drafts[$di + 1]['folder_id'] ?? 0) === $fid;
+                $editHref = $formAction . '&edit=' . $did . '#camp-draft-form';
+                if ($hasDraftVars) {
+                    foreach ($draftVars as $vk => $vv) {
+                        if ($vv !== '') {
+                            $editHref .= '&' . rawurlencode($vk) . '=' . rawurlencode($vv);
+                        }
+                    }
+                }
+                ?>
+            <div class="camp-draft-variant<?= $vi === 0 ? ' is-on' : '' ?>"
+                 data-camp-draft-variant="<?= h($let !== '' ? $let : (string) $did) ?>"
+                 data-draft-id="<?= $did ?>"
+                 data-camp-draft-title="<?= h($title) ?>"
+                 data-camp-draft-subject="<?= h($subject) ?>">
+              <span class="visually-hidden"><?= h($title) ?></span>
+              <?php if ($subject !== ''): ?>
+              <p class="camp-draft-subject muted" style="margin:0.15rem 0 0.35rem">
+                Subject: <strong data-camp-draft-subject-label><?= h($subject) ?></strong>
+              </p>
+              <?php endif; ?>
+              <?php
+                $attr = email_campaign_draft_attribution($d);
+                if ($attr !== ''):
+              ?>
+              <p class="help camp-draft-attribution" style="margin:0.2rem 0 0.45rem"><?= h($attr) ?></p>
+              <?php endif; ?>
+              <div class="camp-draft-preview camp-draft-rich" data-camp-draft-preview data-camp-draft-html><?= $bodyHtml ?></div>
+              <?php if ($sizeWarn !== ''): ?>
+              <p class="help camp-draft-size-warn" style="margin:0.45rem 0 0"><?= h($sizeWarn) ?></p>
+              <?php endif; ?>
+              <div class="camp-draft-card-actions actions">
+                <button type="button" class="btn small" data-camp-draft-copy
+                        title="Copy with formatting for email paste">Copy</button>
+                <button type="button" class="btn secondary small" data-camp-draft-copy-plain
+                        title="Copy plain text only (reliable in any email client)">Copy plain</button>
+                <button type="button" class="btn secondary small" data-camp-draft-expand>Show full</button>
+                <a class="btn secondary small" href="<?= h($editHref) ?>">Edit</a>
+                <?php if ($canMoveUp): ?>
+                <form method="post" action="<?= h($formAction) ?>" class="camp-draft-move-form">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="move_draft">
+                  <input type="hidden" name="project_id" value="<?= $projectId ?>">
+                  <input type="hidden" name="draft_id" value="<?= $did ?>">
+                  <input type="hidden" name="direction" value="up">
+                  <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
+                  <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+                  <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
+                  <button class="btn secondary small" type="submit" title="Move up">↑</button>
+                </form>
+                <?php endif; ?>
+                <?php if ($canMoveDown): ?>
+                <form method="post" action="<?= h($formAction) ?>" class="camp-draft-move-form">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="move_draft">
+                  <input type="hidden" name="project_id" value="<?= $projectId ?>">
+                  <input type="hidden" name="draft_id" value="<?= $did ?>">
+                  <input type="hidden" name="direction" value="down">
+                  <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
+                  <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+                  <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
+                  <button class="btn secondary small" type="submit" title="Move down">↓</button>
+                </form>
+                <?php endif; ?>
+                <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
+                <form method="post" action="<?= h($formAction) ?>" class="camp-draft-delete-form"
+                      data-camp-draft-delete
+                      onsubmit="return confirm(<?= h(json_encode('Delete draft “' . $title . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="delete_draft">
+                  <input type="hidden" name="project_id" value="<?= $projectId ?>">
+                  <input type="hidden" name="draft_id" value="<?= $did ?>">
+                  <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
+                  <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
+                  <input type="hidden" name="filter_dfolder" value="<?= h($filterFolderParam) ?>">
+                  <button class="btn danger small" type="submit">Delete</button>
+                </form>
+                <?php endif; ?>
+              </div>
+            </div>
+            <?php endforeach; ?>
             <p class="help camp-draft-copy-status" data-camp-draft-status hidden></p>
           </article>
         <?php endforeach; ?>
