@@ -742,4 +742,29 @@
   initEditors();
   initCopyButtons();
   initTokenButtons();
+  initDraftSearch();
+
+  function initDraftSearch() {
+    var input = document.querySelector('[data-camp-draft-search]');
+    var cards = document.querySelectorAll('[data-camp-draft-card]');
+    var empty = document.getElementById('camp-drafts-search-empty');
+    if (!input) return;
+
+    function apply() {
+      var q = String(input.value || '').trim().toLowerCase();
+      var shown = 0;
+      cards.forEach(function (card) {
+        var hay = String(card.getAttribute('data-camp-draft-haystack') || '').toLowerCase();
+        var ok = !q || hay.indexOf(q) !== -1;
+        card.hidden = !ok;
+        if (ok) shown += 1;
+      });
+      if (empty) {
+        empty.hidden = !(q && shown === 0 && cards.length > 0);
+      }
+    }
+
+    input.addEventListener('input', apply);
+    apply();
+  }
 })();

@@ -1249,10 +1249,54 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign search')) {
     fail('comms blocked from Campaign search status=' . $r['status']);
 }
 $r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
-if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')) {
+if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')
+    && str_contains($r['body'], 'Office proposals · English')
+    && str_contains($r['body'], 'data-camp-draft-search')
+    && str_contains($r['body'], 'First outreach · requesting · A')
+    && str_contains($r['body'], '3 articles · ask group rate · B')
+    && str_contains($r['body'], 'Best regards')
+    && !str_contains($r['body'], 'Rehan')
+    && !str_contains($r['body'], 'TeqnoWebs')) {
     pass('comms can open Campaign drafts');
 } else {
     fail('comms blocked from Campaign drafts status=' . $r['status']);
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('sample'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Sample · they asked for an example · A')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search filters cards');
+} else {
+    fail('comms Campaign drafts search did not filter');
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('homepage'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Homepage text link or banner · 1 year · A')
+    && str_contains($r['body'], 'Where to place · any homepage spot including footer · A')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search homepage banner cards');
+} else {
+    fail('comms Campaign drafts homepage search did not filter');
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('Italy'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Sample · Italy · A')
+    && str_contains($r['body'], 'savonanews.it')
+    && str_contains($r['body'], 'ciavula.it')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search Italy sample cards');
+} else {
+    fail('comms Campaign drafts Italy sample search did not filter');
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts&q=' . rawurlencode('Germany'));
+if ($r['status'] === 200
+    && str_contains($r['body'], 'Sample · Germany · A')
+    && str_contains($r['body'], 'velototal.de')
+    && str_contains($r['body'], 'das-marburger.de')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts search Germany sample cards');
+} else {
+    fail('comms Campaign drafts Germany sample search did not filter');
 }
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];

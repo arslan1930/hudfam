@@ -14,14 +14,19 @@ if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
 $base = 'index.php?page=team_email_campaigns_drafts';
 $categories = email_campaign_draft_categories();
 $actorId = (int) ($user['id'] ?? 0);
+ensure_email_campaign_office_proposal_drafts();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $projectId = (int) post('project_id');
     $returnCat = trim((string) post('filter_category'));
+    $returnQ = trim((string) post('filter_q'));
     $back = $base . '&project=' . max(0, $projectId);
     if ($returnCat !== '' && isset($categories[$returnCat])) {
         $back .= '&category=' . rawurlencode($returnCat);
+    }
+    if ($returnQ !== '') {
+        $back .= '&q=' . rawurlencode($returnQ);
     }
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
@@ -96,13 +101,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $projects = list_email_campaign_projects(true);
 $projectId = (int) get('project');
 $filterCategory = trim((string) get('category'));
+$draftQ = trim((string) get('q'));
 if ($filterCategory !== '' && !isset($categories[$filterCategory])) {
     $filterCategory = '';
 }
 
-// Default to first visible project when none selected.
+// Default to the office English library, then the first visible project.
 if ($projectId < 1 && $projects !== []) {
-    $projectId = (int) $projects[0]['id'];
+    $officeName = email_campaign_office_proposal_project_name();
+    foreach ($projects as $p) {
+        if ((string) ($p['name'] ?? '') === $officeName) {
+            $projectId = (int) $p['id'];
+            break;
+        }
+    }
+    if ($projectId < 1) {
+        $projectId = (int) $projects[0]['id'];
+    }
 }
 $selectedProject = null;
 foreach ($projects as $p) {
@@ -121,18 +136,17 @@ $projectCountMap = count_email_campaign_drafts_by_projects(
 );
 
 $drafts = $selectedProject
-    ? list_email_campaign_drafts($projectId, $filterCategory !== '' ? $filterCategory : null)
+    ? list_email_campaign_drafts(
+        $projectId,
+        $filterCategory !== '' ? $filterCategory : null,
+        $draftQ
+    )
     : [];
 $editId = (int) get('edit');
 $editDraft = ($editId > 0) ? get_email_campaign_draft($editId) : null;
 if ($editDraft && (int) ($editDraft['project_id'] ?? 0) !== $projectId) {
     $editDraft = null;
     $editId = 0;
-}
-
-$formAction = $base . '&project=' . $projectId;
-if ($filterCategory !== '') {
-    $formAction .= '&category=' . rawurlencode($filterCategory);
 }
 
 $draftVars = [
@@ -143,6 +157,24 @@ $draftVars = [
 ];
 $hasDraftVars = $draftVars['domain'] !== '' || $draftVars['country'] !== ''
     || $draftVars['language'] !== '' || $draftVars['name'] !== '';
+
+$campDraftsHref = static function (int $pid, string $cat = '', string $q = '') use ($base, $draftVars): string {
+    $href = $base . '&project=' . $pid;
+    if ($cat !== '') {
+        $href .= '&category=' . rawurlencode($cat);
+    }
+    if ($q !== '') {
+        $href .= '&q=' . rawurlencode($q);
+    }
+    foreach ($draftVars as $vk => $vv) {
+        if ($vv !== '') {
+            $href .= '&' . rawurlencode($vk) . '=' . rawurlencode($vv);
+        }
+    }
+    return $href;
+};
+
+$formAction = $campDraftsHref($projectId, $filterCategory, $draftQ);
 
 render_header('Campaign drafts', 'team');
 render_breadcrumbs([
@@ -185,17 +217,7 @@ endif;
       <?php foreach ($projects as $p):
           $pid = (int) $p['id'];
           $count = (int) ($projectCountMap[$pid] ?? 0);
-          $href = $base . '&project=' . $pid;
-          if ($filterCategory !== '') {
-              $href .= '&category=' . rawurlencode($filterCategory);
-          }
-          if ($hasDraftVars) {
-              foreach ($draftVars as $vk => $vv) {
-                  if ($vv !== '') {
-                      $href .= '&' . rawurlencode($vk) . '=' . rawurlencode($vv);
-                  }
-              }
-          }
+          $href = $campDraftsHref($pid, $filterCategory, $draftQ);
           $active = $pid === $projectId;
           ?>
         <li>
@@ -219,8 +241,10 @@ endif;
           <h2 style="margin:0"><?= h($projectName) ?></h2>
           <p class="help" style="margin:0.25rem 0 0">
             <?= (int) $draftCount ?> draft<?= (int) $draftCount === 1 ? '' : 's' ?>
-            <?= $filterCategory !== '' ? ' in “' . h(email_campaign_draft_category_label($filterCategory)) . '”' : '' ?>.
-            Copy keeps bold / italic / underline / headings / lists / links for paste into your mail client.
+            <?= $filterCategory !== '' ? ' in “' . h(email_campaign_draft_category_label($filterCategory)) . '”' : '' ?>
+            <?= $draftQ !== '' ? ' matching “' . h($draftQ) . '”' : '' ?>.
+            Search, then <strong>Copy</strong> or <strong>Copy plain</strong>. Each situation has A / B / C wordings so teammates do not send the same letter.
+            Add your own name under <strong>Best regards</strong> before you send.
             Tokens: <code>{domain}</code> <code>{site}</code> <code>{country}</code> <code>{language}</code> <code>{name}</code>.
             <?php if ($hasDraftVars): ?>
               · Filling from site
@@ -232,27 +256,51 @@ endif;
             <?php
             $catLinks = ['' => 'All'] + $categories;
             foreach ($catLinks as $slug => $label):
-                $href = $base . '&project=' . $projectId;
-                if ($slug !== '') {
-                    $href .= '&category=' . rawurlencode($slug);
-                }
+                $href = $campDraftsHref($projectId, (string) $slug, $draftQ);
                 $active = $filterCategory === (string) $slug;
                 ?>
               <a class="btn small <?= $active ? '' : 'secondary' ?>" href="<?= h($href) ?>"><?= h($label) ?></a>
             <?php endforeach; ?>
           </p>
         </div>
-        <div class="actions">
+        <div class="actions camp-drafts-toolbar-actions">
+          <form method="get" action="index.php" class="camp-drafts-search" role="search">
+            <input type="hidden" name="page" value="team_email_campaigns_drafts">
+            <input type="hidden" name="project" value="<?= (int) $projectId ?>">
+            <?php if ($filterCategory !== ''): ?>
+              <input type="hidden" name="category" value="<?= h($filterCategory) ?>">
+            <?php endif; ?>
+            <?php foreach ($draftVars as $vk => $vv):
+                if ($vv === '') {
+                    continue;
+                } ?>
+              <input type="hidden" name="<?= h($vk) ?>" value="<?= h($vv) ?>">
+            <?php endforeach; ?>
+            <label class="sheet-search" for="camp-draft-search">
+              <span class="visually-hidden">Search drafts</span>
+              <input id="camp-draft-search" type="search" name="q" value="<?= h($draftQ) ?>"
+                     placeholder="Search title or text…" autocomplete="off" spellcheck="false"
+                     data-camp-draft-search data-no-draft>
+            </label>
+          </form>
           <a class="btn small" href="<?= h($formAction) ?>#camp-draft-form">+ New draft</a>
         </div>
       </div>
 
       <?php if ($drafts === []): ?>
       <div class="empty-state" id="camp-drafts-empty">
-        <p>No drafts<?= $filterCategory !== '' ? ' in this category' : ' in this project' ?> yet.</p>
-        <p class="muted">Add your first outreach / offer / reply text below.</p>
+        <?php if ($draftQ !== ''): ?>
+          <p>No drafts match “<?= h($draftQ) ?>”<?= $filterCategory !== '' ? ' in this category' : '' ?>.</p>
+          <p class="muted">Try another word, or clear search to see the full list.</p>
+        <?php else: ?>
+          <p>No drafts<?= $filterCategory !== '' ? ' in this category' : ' in this project' ?> yet.</p>
+          <p class="muted">Add your first outreach / offer / reply text below.</p>
+        <?php endif; ?>
       </div>
       <?php else: ?>
+      <div class="empty-state" id="camp-drafts-search-empty" hidden>
+        <p>No drafts match this search.</p>
+      </div>
       <div class="camp-drafts-grid">
         <?php
         $draftTotal = count($drafts);
@@ -275,8 +323,11 @@ endif;
                     }
                 }
             }
+            $haystack = $title . ' ' . $subject . ' ' . email_campaign_draft_category_label($cat)
+                . ' ' . email_campaign_draft_html_to_plain((string) $d['body']);
             ?>
           <article class="camp-draft-card" data-camp-draft-card data-draft-id="<?= $did ?>"
+                   data-camp-draft-haystack="<?= h(mb_strtolower($haystack)) ?>"
                    data-camp-draft-subject="<?= h($subject) ?>"
                    data-token-domain="<?= h($draftVars['domain']) ?>"
                    data-token-country="<?= h($draftVars['country']) ?>"
@@ -315,6 +366,7 @@ endif;
                 <input type="hidden" name="draft_id" value="<?= $did ?>">
                 <input type="hidden" name="direction" value="up">
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
+                <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
                 <button class="btn secondary small" type="submit" title="Move up">↑</button>
               </form>
               <?php endif; ?>
@@ -326,6 +378,7 @@ endif;
                 <input type="hidden" name="draft_id" value="<?= $did ?>">
                 <input type="hidden" name="direction" value="down">
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
+                <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
                 <button class="btn secondary small" type="submit" title="Move down">↓</button>
               </form>
               <?php endif; ?>
@@ -338,6 +391,7 @@ endif;
                 <input type="hidden" name="project_id" value="<?= $projectId ?>">
                 <input type="hidden" name="draft_id" value="<?= $did ?>">
                 <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
+                <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
                 <button class="btn danger small" type="submit">Delete</button>
               </form>
               <?php endif; ?>
@@ -366,7 +420,7 @@ endif;
         <input type="hidden" name="project_id" value="<?= $projectId ?>">
         <input type="hidden" name="draft_id" value="<?= $editDraft ? (int) $editDraft['id'] : 0 ?>">
         <input type="hidden" name="filter_category" value="<?= h($filterCategory) ?>">
-        <div class="form-grid">
+        <input type="hidden" name="filter_q" value="<?= h($draftQ) ?>">
           <div>
             <label for="camp_draft_title">Title</label>
             <input id="camp_draft_title" name="title" required maxlength="180"

@@ -3089,6 +3089,81 @@ try {
         fail("draft cascade left=$goneWithProject");
     }
 
+    $catalog = email_campaign_office_proposal_catalog();
+    $sign = email_campaign_office_proposal_sign_off();
+    $catalogBad = [];
+    foreach ($catalog as $item) {
+        $title = (string) ($item['title'] ?? '');
+        $body = (string) ($item['body'] ?? '');
+        $sad = !empty($item['sad']);
+        $nSad = substr_count($body, ':(');
+        if ($title === '' || $body === '') {
+            $catalogBad[] = 'empty item';
+            continue;
+        }
+        if (!str_ends_with($body, $sign)) {
+            $catalogBad[] = $title . ' missing sign-off';
+        }
+        if (preg_match('/Rehan|TeqnoWebs|Topurlz/i', $title . "\n" . $body)) {
+            $catalogBad[] = $title . ' has personal name/company';
+        }
+        if ($sad && ($nSad < 1 || $nSad > 2)) {
+            $catalogBad[] = $title . " sad count=$nSad";
+        }
+        if (!$sad && $nSad !== 0) {
+            $catalogBad[] = $title . ' unexpected sad face';
+        }
+        if (!preg_match('/ · [ABC]$/', $title)) {
+            $catalogBad[] = $title . ' missing A/B/C suffix';
+        }
+    }
+    $seed1 = ensure_email_campaign_office_proposal_drafts();
+    $officePid = (int) ($seed1['project_id'] ?? 0);
+    $seed2 = ensure_email_campaign_office_proposal_drafts();
+    $allOffice = $officePid > 0 ? list_email_campaign_drafts($officePid) : [];
+    $sampleHits = $officePid > 0 ? list_email_campaign_drafts($officePid, null, 'sample') : [];
+    $maxHits = $officePid > 0 ? list_email_campaign_drafts($officePid, 'offer', '€150') : [];
+    $homeHits = $officePid > 0 ? list_email_campaign_drafts($officePid, 'offer', 'homepage') : [];
+    $italyHits = $officePid > 0 ? list_email_campaign_drafts($officePid, null, 'Italy') : [];
+    $germanyHits = $officePid > 0 ? list_email_campaign_drafts($officePid, null, 'Germany') : [];
+    $italyHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? '') . "\n" . (string) ($r['body'] ?? ''), $italyHits));
+    $germanyHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? '') . "\n" . (string) ($r['body'] ?? ''), $germanyHits));
+    $officeProject = $officePid > 0 ? get_email_campaign_project($officePid) : null;
+    if ($catalogBad === []
+        && count($catalog) === 180
+        && $officePid > 0
+        && count($allOffice) >= 180
+        && (int) ($seed2['inserted'] ?? -1) === 0
+        && count($sampleHits) >= 3
+        && count($maxHits) >= 1
+        && count($homeHits) >= 3
+        && count($italyHits) >= 3
+        && count($germanyHits) >= 3
+        && str_contains($italyHay, 'Sample · Italy · A')
+        && str_contains($italyHay, 'savonanews.it')
+        && str_contains($italyHay, 'ciavula.it')
+        && str_contains($germanyHay, 'Sample · Germany · A')
+        && str_contains($germanyHay, 'velototal.de')
+        && str_contains($germanyHay, 'das-marburger.de')
+        && (string) ($officeProject['name'] ?? '') === email_campaign_office_proposal_project_name()
+        && email_campaign_project_team_visible($officeProject ?? [])) {
+        pass('office English proposal catalog seed + search');
+    } else {
+        fail('office proposals: ' . json_encode([
+            'catalog' => count($catalog),
+            'bad' => array_slice($catalogBad, 0, 8),
+            'seed1' => $seed1,
+            'seed2' => $seed2,
+            'listed' => count($allOffice),
+            'sample' => count($sampleHits),
+            'max' => count($maxHits),
+            'home' => count($homeHits),
+            'italy' => count($italyHits),
+            'germany' => count($germanyHits),
+            'name' => $officeProject['name'] ?? null,
+        ]));
+    }
+
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
     $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
