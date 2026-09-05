@@ -240,6 +240,76 @@ function ensure_email_campaign_schema(): void
         // ignore migration hiccups
     }
 
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_draft_folders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          project_id INT NOT NULL,
+          slug VARCHAR(60) NOT NULL,
+          name VARCHAR(120) NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_camp_draft_folder_slug (project_id, slug),
+          INDEX (project_id),
+          INDEX (sort_order),
+          CONSTRAINT fk_camp_draft_folder_project
+            FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_draft_folder_hidden (
+          folder_id INT NOT NULL,
+          user_id INT NOT NULL,
+          PRIMARY KEY (folder_id, user_id),
+          INDEX (user_id),
+          CONSTRAINT fk_camp_draft_folder_hidden_folder
+            FOREIGN KEY (folder_id) REFERENCES email_campaign_draft_folders(id) ON DELETE CASCADE,
+          CONSTRAINT fk_camp_draft_folder_hidden_user
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_drafts')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['folder_id'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_drafts
+                 ADD COLUMN folder_id INT NULL AFTER project_id,
+                 ADD INDEX idx_email_campaign_draft_folder (folder_id)'
+            );
+        }
+        $idx = $pdo->query('SHOW INDEX FROM email_campaign_drafts')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $haveIdx = [];
+        foreach ($idx as $row) {
+            $haveIdx[(string) ($row['Key_name'] ?? '')] = true;
+        }
+        if (empty($haveIdx['fk_email_campaign_draft_folder'])
+            && empty($haveIdx['idx_email_campaign_draft_folder'])) {
+            try {
+                $pdo->exec(
+                    'ALTER TABLE email_campaign_drafts
+                     ADD INDEX idx_email_campaign_draft_folder (folder_id)'
+                );
+            } catch (Throwable $e) {
+                // ignore duplicate
+            }
+        }
+        if (empty($haveIdx['fk_email_campaign_draft_folder'])) {
+            try {
+                $pdo->exec(
+                    'ALTER TABLE email_campaign_drafts
+                     ADD CONSTRAINT fk_email_campaign_draft_folder
+                       FOREIGN KEY (folder_id) REFERENCES email_campaign_draft_folders(id)
+                       ON DELETE SET NULL'
+                );
+            } catch (Throwable $e) {
+                // ignore if InnoDB already has the FK under another name
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore migration hiccups
+    }
+
     // Who deleted a site / removed an email — survives Allow again.
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS email_campaign_row_events (
@@ -4957,11 +5027,14 @@ function get_email_campaign_draft(int $draftId): ?array
     }
     $stmt = db()->prepare(
         'SELECT d.*,
+                f.name AS folder_name,
+                f.slug AS folder_slug,
                 cu.username AS created_by_username,
                 cu.full_name AS created_by_name,
                 uu.username AS updated_by_username,
                 uu.full_name AS updated_by_name
          FROM email_campaign_drafts d
+         LEFT JOIN email_campaign_draft_folders f ON f.id = d.folder_id
          LEFT JOIN users cu ON cu.id = d.created_by
          LEFT JOIN users uu ON uu.id = d.updated_by
          WHERE d.id=? LIMIT 1'
@@ -4971,21 +5044,283 @@ function get_email_campaign_draft(int $draftId): ?array
     return $row ?: null;
 }
 
+function email_campaign_draft_folder_slugify(string $name): string
+{
+    $slug = strtolower(trim($name));
+    $slug = preg_replace('/[^a-z0-9]+/', '_', $slug) ?? '';
+    $slug = trim($slug, '_');
+    if ($slug === '') {
+        $slug = 'folder';
+    }
+    if (strlen($slug) > 60) {
+        $slug = rtrim(substr($slug, 0, 60), '_');
+        if ($slug === '') {
+            $slug = 'folder';
+        }
+    }
+    return $slug;
+}
+
+function email_campaign_draft_folder_unique_slug(int $projectId, string $slug, int $exceptId = 0): string
+{
+    $base = email_campaign_draft_folder_slugify($slug);
+    $candidate = $base;
+    $n = 2;
+    while (true) {
+        $stmt = db()->prepare(
+            'SELECT id FROM email_campaign_draft_folders WHERE project_id=? AND slug=? LIMIT 1'
+        );
+        $stmt->execute([$projectId, $candidate]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row || (int) ($row['id'] ?? 0) === $exceptId) {
+            return $candidate;
+        }
+        $suffix = '_' . $n;
+        $candidate = substr($base, 0, max(1, 60 - strlen($suffix))) . $suffix;
+        $candidate = trim($candidate, '_');
+        $n++;
+        if ($n > 80) {
+            return substr($base, 0, 51) . '_' . bin2hex(random_bytes(4));
+        }
+    }
+}
+
+function get_email_campaign_draft_folder(int $folderId): ?array
+{
+    ensure_email_campaign_schema();
+    if ($folderId < 1) {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT * FROM email_campaign_draft_folders WHERE id=? LIMIT 1');
+    $stmt->execute([$folderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function get_email_campaign_draft_folder_by_slug(int $projectId, string $slug): ?array
+{
+    ensure_email_campaign_schema();
+    $slug = email_campaign_draft_folder_slugify($slug);
+    if ($projectId < 1 || $slug === '') {
+        return null;
+    }
+    $stmt = db()->prepare(
+        'SELECT * FROM email_campaign_draft_folders WHERE project_id=? AND slug=? LIMIT 1'
+    );
+    $stmt->execute([$projectId, $slug]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function resolve_email_campaign_draft_folder_id(int $projectId, int $folderId): ?int
+{
+    if ($folderId < 1) {
+        return null;
+    }
+    $folder = get_email_campaign_draft_folder($folderId);
+    if (!$folder || (int) ($folder['project_id'] ?? 0) !== $projectId) {
+        return null;
+    }
+    return (int) $folder['id'];
+}
+
 /**
  * @return list<array<string,mixed>>
  */
-function list_email_campaign_drafts(int $projectId, ?string $category = null, string $q = ''): array
+function list_email_campaign_draft_folder_team_members(): array
+{
+    if (!function_exists('get_department_by_slug') || !function_exists('list_department_members')) {
+        return [];
+    }
+    $dept = get_department_by_slug('communication');
+    if (!$dept) {
+        return [];
+    }
+    $out = [];
+    foreach (list_department_members((int) $dept['id']) as $m) {
+        if ((int) ($m['is_active'] ?? 1) !== 1) {
+            continue;
+        }
+        $out[] = $m;
+    }
+    return $out;
+}
+
+/**
+ * @return list<int>
+ */
+function list_email_campaign_draft_folder_hidden_user_ids(int $folderId): array
+{
+    ensure_email_campaign_schema();
+    if ($folderId < 1) {
+        return [];
+    }
+    $stmt = db()->prepare(
+        'SELECT user_id FROM email_campaign_draft_folder_hidden WHERE folder_id=? ORDER BY user_id ASC'
+    );
+    $stmt->execute([$folderId]);
+    $ids = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $id = (int) ($row['user_id'] ?? 0);
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    return $ids;
+}
+
+/**
+ * @param list<int> $shownUserIds checked Communication members (shown)
+ * @return array{ok:bool,error?:string}
+ */
+function save_email_campaign_draft_folder_members(int $projectId, int $folderId, array $shownUserIds): array
+{
+    ensure_email_campaign_schema();
+    $folder = get_email_campaign_draft_folder($folderId);
+    if (!$folder || (int) ($folder['project_id'] ?? 0) !== $projectId) {
+        return ['ok' => false, 'error' => 'Folder not found in this project.'];
+    }
+    $shown = [];
+    foreach ($shownUserIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $shown[$id] = true;
+        }
+    }
+    $hiddenIds = [];
+    foreach (list_email_campaign_draft_folder_team_members() as $m) {
+        $uid = (int) ($m['id'] ?? 0);
+        if ($uid > 0 && !isset($shown[$uid])) {
+            $hiddenIds[] = $uid;
+        }
+    }
+    $pdo = db();
+    $pdo->prepare('DELETE FROM email_campaign_draft_folder_hidden WHERE folder_id=?')->execute([$folderId]);
+    $ins = $pdo->prepare(
+        'INSERT INTO email_campaign_draft_folder_hidden (folder_id, user_id) VALUES (?,?)'
+    );
+    foreach ($hiddenIds as $uid) {
+        $ins->execute([$folderId, $uid]);
+    }
+    return ['ok' => true];
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_draft_folders(int $projectId, int $forUserId = 0): array
 {
     ensure_email_campaign_schema();
     if ($projectId < 1) {
         return [];
     }
+    $sql = 'SELECT f.*,
+                   (SELECT COUNT(*) FROM email_campaign_drafts d WHERE d.folder_id = f.id) AS draft_count
+            FROM email_campaign_draft_folders f
+            WHERE f.project_id=?';
+    $params = [$projectId];
+    if ($forUserId > 0) {
+        $sql .= ' AND f.id NOT IN (
+                    SELECT h.folder_id FROM email_campaign_draft_folder_hidden h WHERE h.user_id=?
+                 )';
+        $params[] = $forUserId;
+    }
+    $sql .= ' ORDER BY f.sort_order ASC, f.name ASC, f.id ASC';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
+ * @return array{ok:bool,error?:string,id?:int}
+ */
+function save_email_campaign_draft_folder(
+    int $projectId,
+    string $name,
+    int $folderId = 0,
+    string $slug = ''
+): array {
+    ensure_email_campaign_schema();
+    if (!get_email_campaign_project($projectId)) {
+        return ['ok' => false, 'error' => 'Project not found.'];
+    }
+    $name = trim($name);
+    if ($name === '') {
+        return ['ok' => false, 'error' => 'Folder name is required.'];
+    }
+    if (mb_strlen($name) > 120) {
+        $name = mb_substr($name, 0, 120);
+    }
+    $slug = trim($slug);
+    if ($folderId > 0) {
+        $existing = get_email_campaign_draft_folder($folderId);
+        if (!$existing || (int) ($existing['project_id'] ?? 0) !== $projectId) {
+            return ['ok' => false, 'error' => 'Folder not found in this project.'];
+        }
+        $keepSlug = $slug !== ''
+            ? email_campaign_draft_folder_unique_slug($projectId, $slug, $folderId)
+            : (string) ($existing['slug'] ?? '');
+        db()->prepare(
+            'UPDATE email_campaign_draft_folders SET name=?, slug=?, updated_at=NOW() WHERE id=? AND project_id=?'
+        )->execute([$name, $keepSlug, $folderId, $projectId]);
+        return ['ok' => true, 'id' => $folderId];
+    }
+    $slug = email_campaign_draft_folder_unique_slug(
+        $projectId,
+        $slug !== '' ? $slug : $name
+    );
+    $stmtMax = db()->prepare(
+        'SELECT COALESCE(MAX(sort_order), 0) FROM email_campaign_draft_folders WHERE project_id=?'
+    );
+    $stmtMax->execute([$projectId]);
+    $sort = (int) $stmtMax->fetchColumn() + 10;
+    db()->prepare(
+        'INSERT INTO email_campaign_draft_folders (project_id, slug, name, sort_order) VALUES (?,?,?,?)'
+    )->execute([$projectId, $slug, $name, $sort]);
+    return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+}
+
+/**
+ * @return array{ok:bool,error?:string,name?:string}
+ */
+function delete_email_campaign_draft_folder(int $projectId, int $folderId): array
+{
+    ensure_email_campaign_schema();
+    $folder = get_email_campaign_draft_folder($folderId);
+    if (!$folder || (int) ($folder['project_id'] ?? 0) !== $projectId) {
+        return ['ok' => false, 'error' => 'Folder not found in this project.'];
+    }
+    db()->prepare('DELETE FROM email_campaign_draft_folders WHERE id=? AND project_id=?')
+        ->execute([$folderId, $projectId]);
+    return [
+        'ok' => true,
+        'name' => (string) ($folder['name'] ?? 'Folder'),
+    ];
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_drafts(
+    int $projectId,
+    ?string $category = null,
+    string $q = '',
+    int $folderId = 0,
+    int $forUserId = 0
+): array {
+    ensure_email_campaign_schema();
+    if ($projectId < 1) {
+        return [];
+    }
     $sql = 'SELECT d.*,
+                   f.name AS folder_name,
+                   f.slug AS folder_slug,
                    cu.username AS created_by_username,
                    cu.full_name AS created_by_name,
                    uu.username AS updated_by_username,
                    uu.full_name AS updated_by_name
             FROM email_campaign_drafts d
+            LEFT JOIN email_campaign_draft_folders f ON f.id = d.folder_id
             LEFT JOIN users cu ON cu.id = d.created_by
             LEFT JOIN users uu ON uu.id = d.updated_by
             WHERE d.project_id=?';
@@ -4993,6 +5328,18 @@ function list_email_campaign_drafts(int $projectId, ?string $category = null, st
     if ($category !== null && $category !== '') {
         $sql .= ' AND d.category=?';
         $params[] = normalize_email_campaign_draft_category($category);
+    }
+    if ($folderId > 0) {
+        $sql .= ' AND d.folder_id=?';
+        $params[] = $folderId;
+    } elseif ($folderId < 0) {
+        $sql .= ' AND d.folder_id IS NULL';
+    }
+    if ($forUserId > 0) {
+        $sql .= ' AND (d.folder_id IS NULL OR d.folder_id NOT IN (
+                    SELECT h.folder_id FROM email_campaign_draft_folder_hidden h WHERE h.user_id=?
+                 ))';
+        $params[] = $forUserId;
     }
     $q = trim($q);
     if ($q !== '') {
@@ -5002,7 +5349,8 @@ function list_email_campaign_drafts(int $projectId, ?string $category = null, st
         $params[] = $like;
         $params[] = $like;
     }
-    $sql .= ' ORDER BY d.category ASC, d.sort_order ASC, d.title ASC, d.id ASC';
+    $sql .= ' ORDER BY (f.sort_order IS NULL) ASC, f.sort_order ASC, f.name ASC,
+              d.category ASC, d.sort_order ASC, d.title ASC, d.id ASC';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -5025,7 +5373,7 @@ function count_email_campaign_drafts(int $projectId): int
  * @param list<int> $projectIds
  * @return array<int,int> project_id => count
  */
-function count_email_campaign_drafts_by_projects(array $projectIds): array
+function count_email_campaign_drafts_by_projects(array $projectIds, int $forUserId = 0): array
 {
     ensure_email_campaign_schema();
     $ids = [];
@@ -5039,13 +5387,19 @@ function count_email_campaign_drafts_by_projects(array $projectIds): array
         return [];
     }
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = db()->prepare(
-        "SELECT project_id, COUNT(*) AS c
-         FROM email_campaign_drafts
-         WHERE project_id IN ($placeholders)
-         GROUP BY project_id"
-    );
-    $stmt->execute(array_keys($ids));
+    $sql = "SELECT project_id, COUNT(*) AS c
+            FROM email_campaign_drafts
+            WHERE project_id IN ($placeholders)";
+    $params = array_keys($ids);
+    if ($forUserId > 0) {
+        $sql .= ' AND (folder_id IS NULL OR folder_id NOT IN (
+                    SELECT h.folder_id FROM email_campaign_draft_folder_hidden h WHERE h.user_id=?
+                 ))';
+        $params[] = $forUserId;
+    }
+    $sql .= ' GROUP BY project_id';
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $ids[(int) $row['project_id']] = (int) $row['c'];
     }
@@ -5065,7 +5419,13 @@ function move_email_campaign_draft(int $projectId, int $draftId, string $directi
         return ['ok' => false, 'error' => 'Draft not found in this project.'];
     }
     $direction = strtolower(trim($direction)) === 'up' ? 'up' : 'down';
-    $list = list_email_campaign_drafts($projectId, (string) ($draft['category'] ?? ''));
+    $fid = (int) ($draft['folder_id'] ?? 0);
+    $list = list_email_campaign_drafts(
+        $projectId,
+        (string) ($draft['category'] ?? ''),
+        '',
+        $fid > 0 ? $fid : -1
+    );
     $idx = -1;
     foreach ($list as $i => $row) {
         if ((int) ($row['id'] ?? 0) === $draftId) {
@@ -5184,7 +5544,8 @@ function save_email_campaign_draft(
     string $category = 'custom',
     int $draftId = 0,
     int $actorId = 0,
-    string $subject = ''
+    string $subject = '',
+    int $folderId = 0
 ): array {
     ensure_email_campaign_schema();
     if (!get_email_campaign_project($projectId)) {
@@ -5207,6 +5568,7 @@ function save_email_campaign_draft(
     }
     $category = normalize_email_campaign_draft_category($category);
     $actor = $actorId > 0 ? $actorId : null;
+    $resolvedFolder = resolve_email_campaign_draft_folder_id($projectId, $folderId);
 
     if ($draftId > 0) {
         $existing = get_email_campaign_draft($draftId);
@@ -5215,17 +5577,19 @@ function save_email_campaign_draft(
         }
         db()->prepare(
             'UPDATE email_campaign_drafts
-             SET category=?, title=?, subject=?, body=?, updated_by=?, updated_at=NOW()
+             SET folder_id=?, category=?, title=?, subject=?, body=?, updated_by=?, updated_at=NOW()
              WHERE id=? AND project_id=?'
-        )->execute([$category, $title, $subject, $body, $actor, $draftId, $projectId]);
+        )->execute([$resolvedFolder, $category, $title, $subject, $body, $actor, $draftId, $projectId]);
         return ['ok' => true, 'id' => $draftId];
     }
 
     db()->prepare(
-        'INSERT INTO email_campaign_drafts (project_id, category, title, subject, body, created_by, updated_by)
-         VALUES (?,?,?,?,?,?,?)'
+        'INSERT INTO email_campaign_drafts
+            (project_id, folder_id, category, title, subject, body, created_by, updated_by)
+         VALUES (?,?,?,?,?,?,?,?)'
     )->execute([
         $projectId,
+        $resolvedFolder,
         $category,
         $title,
         $subject,
