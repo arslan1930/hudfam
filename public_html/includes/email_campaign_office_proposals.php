@@ -18,6 +18,96 @@ function email_campaign_office_proposal_sign_off(): string
 }
 
 /**
+ * Default folders for the office English library (slug => display name + sort).
+ *
+ * @return list<array{slug:string,name:string,sort_order:int}>
+ */
+function email_campaign_office_default_draft_folders(): array
+{
+    return [
+        ['slug' => 'samples', 'name' => 'Samples', 'sort_order' => 10],
+        ['slug' => 'topics', 'name' => 'Topics', 'sort_order' => 20],
+        ['slug' => 'quality', 'name' => 'Quality', 'sort_order' => 30],
+        ['slug' => 'outreach', 'name' => 'Outreach', 'sort_order' => 40],
+        ['slug' => 'pricing', 'name' => 'Pricing', 'sort_order' => 50],
+        ['slug' => 'homepage', 'name' => 'Homepage', 'sort_order' => 60],
+        ['slug' => 'publishing', 'name' => 'Publishing', 'sort_order' => 70],
+        ['slug' => 'payment', 'name' => 'Payment', 'sort_order' => 80],
+        ['slug' => 'follow_up', 'name' => 'Follow-up', 'sort_order' => 90],
+    ];
+}
+
+function email_campaign_office_proposal_folder_slug(string $title): string
+{
+    $t = mb_strtolower(trim($title));
+    if (str_starts_with($t, 'sample') || str_contains($t, 'sample ·')) {
+        return 'samples';
+    }
+    if (str_contains($t, 'topics') || str_contains($t, 'here are the topics')) {
+        return 'topics';
+    }
+    if (str_contains($t, 'quality')) {
+        return 'quality';
+    }
+    if (str_contains($t, 'first outreach')) {
+        return 'outreach';
+    }
+    if (str_contains($t, 'homepage') || str_contains($t, 'banner') || str_contains($t, 'where to place')) {
+        return 'homepage';
+    }
+    if (str_contains($t, 'when /') || str_contains($t, 'follow-up')
+        || str_contains($t, 'contact later') || str_contains($t, 'articles this month')) {
+        return 'follow_up';
+    }
+    if (str_contains($t, 'invoice') || str_contains($t, 'paypal') || str_contains($t, 'payment')
+        || str_contains($t, 'prefer pay')) {
+        return 'payment';
+    }
+    if (str_contains($t, '3 articles') || str_contains($t, 'rate card') || str_contains($t, '10%')
+        || str_contains($t, 'only this site') || str_contains($t, 'last polite')
+        || str_contains($t, 'we accept') || str_contains($t, 'they said no')
+        || str_contains($t, 'extra fees')) {
+        return 'pricing';
+    }
+    return 'publishing';
+}
+
+/**
+ * Ensure default office folders exist. Returns slug => folder id.
+ *
+ * @return array<string,int>
+ */
+function ensure_email_campaign_office_draft_folders(int $projectId): array
+{
+    $map = [];
+    foreach (email_campaign_office_default_draft_folders() as $folder) {
+        $slug = (string) $folder['slug'];
+        $existing = get_email_campaign_draft_folder_by_slug($projectId, $slug);
+        if ($existing) {
+            $id = (int) $existing['id'];
+            if ((string) ($existing['name'] ?? '') === '' || (int) ($existing['sort_order'] ?? 0) === 0) {
+                db()->prepare(
+                    'UPDATE email_campaign_draft_folders SET name=?, sort_order=? WHERE id=? AND project_id=?'
+                )->execute([(string) $folder['name'], (int) $folder['sort_order'], $id, $projectId]);
+            }
+            $map[$slug] = $id;
+            continue;
+        }
+        db()->prepare(
+            'INSERT INTO email_campaign_draft_folders (project_id, slug, name, sort_order)
+             VALUES (?,?,?,?)'
+        )->execute([
+            $projectId,
+            $slug,
+            (string) $folder['name'],
+            (int) $folder['sort_order'],
+        ]);
+        $map[$slug] = (int) db()->lastInsertId();
+    }
+    return $map;
+}
+
+/**
  * Latest published-article samples per country (two URLs when the sheet has them).
  * Picked from the office published-articles sheet by newest year/month/day.
  *
@@ -1514,17 +1604,27 @@ function ensure_email_campaign_office_proposal_drafts(): array
     $name = email_campaign_office_proposal_project_name();
     $projectId = create_email_campaign_project($name, 0, true);
     set_email_campaign_project_team_visible($projectId, true);
+    $folderMap = ensure_email_campaign_office_draft_folders($projectId);
     $existing = list_email_campaign_drafts($projectId);
     $byTitle = [];
     foreach ($existing as $row) {
-        $byTitle[mb_strtolower(trim((string) ($row['title'] ?? '')))] = (int) ($row['id'] ?? 0);
+        $byTitle[mb_strtolower(trim((string) ($row['title'] ?? '')))] = $row;
     }
     $inserted = 0;
     $skipped = 0;
     foreach (email_campaign_office_proposal_catalog() as $item) {
         $key = mb_strtolower(trim((string) $item['title']));
+        $slug = email_campaign_office_proposal_folder_slug((string) $item['title']);
+        $folderId = (int) ($folderMap[$slug] ?? 0);
         if (isset($byTitle[$key])) {
             $skipped++;
+            $row = $byTitle[$key];
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0 && (int) ($row['folder_id'] ?? 0) < 1 && $folderId > 0) {
+                db()->prepare(
+                    'UPDATE email_campaign_drafts SET folder_id=? WHERE id=? AND project_id=? AND folder_id IS NULL'
+                )->execute([$folderId, $id, $projectId]);
+            }
             continue;
         }
         $html = email_campaign_draft_plain_to_html((string) $item['body']);
@@ -1535,7 +1635,8 @@ function ensure_email_campaign_office_proposal_drafts(): array
             (string) $item['category'],
             0,
             0,
-            ''
+            '',
+            $folderId
         );
         if (!empty($result['ok'])) {
             $inserted++;
