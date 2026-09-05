@@ -114,6 +114,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ensure_invoice_schema();
         $notes[] = 'invoices / invoice_items (Invoices panel) OK';
 
+        require_once __DIR__ . '/includes/office_expenses.php';
+        ensure_office_expense_schema();
+        $notes[] = 'office_expense_months / office_expense_rows (Office expenses) OK';
+
         ensure_users_auth_schema();
         $notes[] = 'users.must_change_password OK';
 

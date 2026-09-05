@@ -61,6 +61,7 @@ $routes = [
     'admin_invoice_generate' => 'pages/admin/invoice_generate.php',
     'admin_invoice_manual' => 'pages/admin/invoice_manual.php',
     'admin_invoice_view' => 'pages/admin/invoice_view.php',
+    'admin_office_expenses' => 'pages/admin/office_expenses.php',
     'admin_users' => 'pages/admin/users.php',
     'admin_account' => 'pages/admin/account.php',
     'admin_tasks' => 'pages/admin/tasks.php',
@@ -206,6 +207,7 @@ if (!in_array($page, $txfLightPages, true)) {
     require __DIR__ . '/includes/orders.php';
     require __DIR__ . '/includes/site_prices.php';
     require __DIR__ . '/includes/invoices.php';
+    require __DIR__ . '/includes/office_expenses.php';
     require __DIR__ . '/includes/guides.php';
     require __DIR__ . '/includes/presence.php';
     require __DIR__ . '/includes/semrush_research.php';

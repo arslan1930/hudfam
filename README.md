@@ -22,6 +22,7 @@ Laravel is fine in principle; this app stays **plain PHP** (no framework) so Hos
 - **Sites with emails** — Team sheet → Push to Admin archive (also synced to Final archive)
 - **Email campaign projects** — Admin country sheets (site + up to 4 emails); Communication Team uses Campaign search + drafts (copy into an email client)
 - **Orders** + **Invoices** — Admin one-sheet orders, unpaid LIVE push to printable bills (email or name, no client folder)
+- **Office expenses** — Admin-only monthly ledger (salaries, rent, grocery, internet, other); save each month to freeze the bill
 - **Users** — Admin and Team logins; department assignment; temp passwords
 
 Retired names (do not look for these in the sidebar): Catalog, Project catalog, Client folders.

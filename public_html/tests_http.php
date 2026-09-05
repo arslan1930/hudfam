@@ -473,13 +473,14 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashb
 // Admin pages (extracted hub redirects into folder=extracted_sites)
 foreach (
     [
-        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting &gt; 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing'],
+        'admin_dashboard' => ['Our database', 'Extracted Sites', 'Emails data', 'Users', 'Unpaid LIVE', 'Waiting invoices', 'Waiting &gt; 14 days', 'Emails Admin', 'Campaign sheets', 'app-footer', 'admin_orders&amp;folder=processing', 'Office expenses'],
         'admin_prospects' => ['Our database', 'Markets', 'What is this?', 'show empty countries', 'Super search', 'Add sites'],
         'admin_extracted&folder=extracted_sites' => ['Extracted Sites'],
         'admin_emails_data' => ['Emails data', 'Working list from Team Push', 'folder-open'],
         'admin_departments' => ['Departments', 'Site Finding', 'folder-open'],
         'admin_orders' => ['Order', 'leftover', 'added here'],
         'admin_invoices' => ['Invoice', 'Mark paid', 'invoice-list-chips'],
+        'admin_office_expenses' => ['Office expenses', 'Save this month', 'Employee salaries', 'Office rent', 'Office grocery', 'Office internet', 'Euro', 'PKR'],
         'admin_users' => ['Users', 'Awaiting assignment', 'Must change password', 'users-office'],
         'account_password' => ['Change password', 'breadcrumbs'],
     ] as $page => $needles
@@ -1027,6 +1028,13 @@ if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashbo
     pass('teammate blocked from OM copy live URLs');
 } else {
     fail('teammate OM copy status=' . $r['status'] . ' loc=' . $loc);
+}
+$r = req('GET', $base . '/index.php?page=admin_office_expenses');
+$loc = location($r);
+if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'team_dashboard')) {
+    pass('teammate blocked from Office expenses');
+} else {
+    fail('teammate Office expenses status=' . $r['status'] . ' loc=' . $loc);
 }
 $r = req('GET', $base . '/index.php?page=admin_orders&folder=processing&download=txt');
 $loc = location($r);

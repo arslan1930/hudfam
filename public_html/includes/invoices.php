@@ -386,15 +386,27 @@ function list_invoices_open_for_append(int $limit = 50): array
 {
     ensure_invoice_schema();
     $limit = max(1, min(200, $limit));
-    $sql = "SELECT i.*,
+    $draftLimit = max(1, (int) ceil($limit / 2));
+    $waitLimit = max(1, $limit - $draftLimit);
+    $select = "SELECT i.*,
                 (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
-         FROM invoices i
-         WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
-         ORDER BY CASE WHEN COALESCE(i.work_status, 'done') = 'draft' THEN 1 ELSE 0 END,
-                  i.invoice_date DESC, i.id DESC
-         LIMIT " . $limit;
+         FROM invoices i";
     try {
-        return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $waiting = db()->query(
+            $select . "
+         WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
+           AND COALESCE(i.work_status, 'done') <> 'draft'
+         ORDER BY i.invoice_date DESC, i.id DESC
+         LIMIT " . $waitLimit
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $drafts = db()->query(
+            $select . "
+         WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
+           AND COALESCE(i.work_status, 'done') = 'draft'
+         ORDER BY i.id DESC
+         LIMIT " . $draftLimit
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        return array_merge($waiting, $drafts);
     } catch (Throwable $e) {
         return [];
     }

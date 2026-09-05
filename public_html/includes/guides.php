@@ -54,8 +54,8 @@ function render_admin_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>5. Orders + Invoices</h3>'
-        . '<p><strong>What:</strong> One order sheet (country, date, admin, client email or name) and printable invoices.</p>'
-        . '<p><strong>How:</strong> Order management → fill the sheet → push unpaid LIVE rows to Invoices. Website prices is a separate Office rate book (publisher prices by country).</p>'
+        . '<p><strong>What:</strong> One order sheet (country, date, admin, client email or name) and printable invoices. Office expenses is a shared monthly ledger for salaries, rent, grocery, internet, and other bills.</p>'
+        . '<p><strong>How:</strong> Order management → fill the sheet → push unpaid LIVE rows to Invoices. Website prices is a separate Office rate book (publisher prices by country). Office expenses → add payments, then Save this month to freeze that bill.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>6. Users</h3>'
@@ -71,7 +71,7 @@ function render_admin_panel_guide(): string
         . '<li>Site Extracting <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails – Team</strong>.</li>'
         . '<li>Email Extracting adds emails, then <strong>Push to Admin</strong> → Admin archive (also synced to Final). Pushed rows leave the Team working copy.</li>'
         . '<li>Admin creates a <strong>campaign project</strong> under Emails data; Communication uses <strong>Campaign search</strong> / <strong>Campaign drafts</strong>.</li>'
-        . '<li>When a placement goes live, record it on the client <strong>Order</strong> sheet and generate an <strong>Invoice</strong>.</li>'
+        . '<li>When a placement goes live, record it on the client <strong>Order</strong> sheet and generate an <strong>Invoice</strong>. Office bills go on <strong>Office expenses</strong> (Admin only), saved each month.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -246,6 +246,21 @@ function guide_orders(): string
             'Completed: unpaid until you click Mark paid (or mark Paid on the invoice). Tick Bill boxes and Push to invoice, or use Push unpaid (N) to open Generate with this filter’s unpaid rows ticked (or an honest label if the list is too long). A row already on a draft or unpaid invoice cannot be pushed again — open that bill from the row. Country and client email/name are required to push. Clearing a live URL on Save also clears Paid (you will be asked to confirm). Paid stays in this folder. Website prices status is not changed when you mark paid.',
             'Open in Website prices jumps to the linked site. If that status no longer matches this folder, the mismatch is shown. Removing a row while Website prices is still Processing brings it back on the next Processing load; removing a Completed-linked row can optionally set Website prices back to Processing.',
             'Team Website prices shows the Completed status only — never LIVE URL, owner/decided/profit, client email/name, or invoices.',
+        ]
+    );
+}
+
+function guide_office_expenses(): string
+{
+    return render_page_purpose(
+        'Office expenses — monthly office bills',
+        'Shared Admin ledger for money sent out of the office: employee salaries, office rent, office grocery, office internet, and other bills. Each payment is Euro or PKR. Team cannot open this page.',
+        'Each calendar month is one bill. Add payments while the month is open. Save this month to freeze it. Reopen if you need to edit. History records who added or changed each payment, and which Admin sent the money. Euro and PKR totals stay separate.',
+        [
+            'Pick the month (defaults to this calendar month). Previous months stay on file.',
+            'Add a payment: date paid, category, description, amount, Euro or PKR, and which Admin sent the money. Who typed it is stored from your login.',
+            'Totals at the bottom sum the month by currency, each category, and each Admin who sent money. PKR and Euro are never mixed.',
+            'Save this month when the bill is complete. Payments lock until an Admin reopens the month.',
         ]
     );
 }

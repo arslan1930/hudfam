@@ -86,6 +86,11 @@ $wpProcessing = 0;
 $wpNew = 0;
 $wpTotal = 0;
 $wpOk = true;
+$oeOk = true;
+$oeCount = 0;
+$oeTotal = 0.0;
+$oeStatus = 'open';
+$oeStats = [];
 try {
     $omStats = order_management_dashboard_stats();
     $orderRowCount = (int) ($omStats['orders'] ?? 0);
@@ -109,6 +114,20 @@ try {
     $wpTotal = 0;
 }
 try {
+    if (function_exists('office_expense_current_month_stats')) {
+        $oeStats = office_expense_current_month_stats();
+        $oeOk = !empty($oeStats['ok']);
+        $oeCount = (int) ($oeStats['count'] ?? 0);
+        $oeTotal = (float) ($oeStats['total'] ?? 0);
+        $oeStatus = (string) ($oeStats['status'] ?? 'open');
+    }
+} catch (Throwable $e) {
+    $oeOk = false;
+    $oeCount = 0;
+    $oeTotal = 0.0;
+    $oeStatus = 'open';
+}
+try {
     $deptStats = departments_dashboard_stats();
     $deptOpenTasks = (int) ($deptStats['open_tasks'] ?? 0);
     $deptMembers = (int) ($deptStats['members'] ?? 0);
@@ -125,6 +144,19 @@ $teamCount = !empty($team['ok']) ? (int) $team['n'] : 0;
 $invoiceDraftCount = !empty($invoiceDrafts['ok']) ? (int) $invoiceDrafts['n'] : 0;
 $invoiceUnpaidCount = !empty($invoiceUnpaid['ok']) ? (int) $invoiceUnpaid['n'] : 0;
 $invoiceWaitingAgedCount = !empty($invoiceWaitingAged['ok']) ? (int) $invoiceWaitingAged['n'] : 0;
+$oeLabel = 'Monthly office bill — salaries, rent, grocery, internet, other. Euro or PKR.';
+if ($oeOk) {
+    $oeAmount = function_exists('office_expense_format_amount_map')
+        ? office_expense_format_amount_map($oeStats['by_currency'] ?? ['eur' => $oeTotal, 'pkr' => $oeStats['total_pkr'] ?? 0])
+        : (function_exists('office_expense_format_amount')
+            ? office_expense_format_amount($oeTotal)
+            : number_format($oeTotal, 2));
+    $oeLabel = $oeCount === 0
+        ? 'No payments this month yet · open.'
+        : (number_format($oeCount) . ' payment' . ($oeCount === 1 ? '' : 's')
+            . ' · ' . $oeAmount
+            . ' · ' . ($oeStatus === 'saved' ? 'saved' : 'open') . '.');
+}
 $waitingByBill = [];
 try {
     $waitingByBill = function_exists('list_invoices_waiting_totals_by_bill_as')
@@ -334,6 +366,11 @@ if ($attention):
       <?php else: ?>
         Generate printable invoices from unpaid LIVE orders.
       <?php endif; ?></p>
+  </a>
+  <a class="launch-card" href="index.php?page=admin_office_expenses" data-dashboard-item
+     data-search="office expenses salaries rent grocery internet bills monthly ledger paid by admin euro pkr currency">
+    <h2>Office expenses</h2>
+    <p><?= h($oeLabel) ?></p>
   </a>
   <a class="launch-card" href="index.php?page=admin_users" data-dashboard-item
      data-search="users admin team logins password department assign awaiting must change">

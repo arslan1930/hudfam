@@ -14,12 +14,12 @@
  * no hidden cards, no scale() on table rows.
  */
 html.ui-v2 {
-  --bg: #0b1018;
-  --bg-2: #111827;
+  --bg: #152033;
+  --bg-2: #1b2535;
   --ink: #f3f6fb;
   --muted: #c5d0dc;
   --line: rgba(148, 163, 184, 0.34);
-  --panel: rgba(17, 24, 39, 0.88);
+  --panel: rgba(30, 41, 59, 0.92);
   --brand: #22d3ee;
   --brand-2: #7dd3fc;
   --brand-deep: #f1f5f9;
@@ -34,14 +34,14 @@ html.ui-v2 {
   --radius: 14px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
   --sans: var(--font);
-  --grad-brand: linear-gradient(180deg, #0b1224 0%, #0f172a 100%);
+  --grad-brand: linear-gradient(180deg, #0f172a 0%, #152033 100%);
   --grad-btn: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
   --grad-page:
     radial-gradient(ellipse at 12% -8%, rgba(34, 211, 238, 0.08), transparent 40%),
-    linear-gradient(180deg, #0b1018 0%, #111827 100%);
+    linear-gradient(180deg, #152033 0%, #1b2535 100%);
   --focus-ring: 0 0 0 3px rgba(34, 211, 238, 0.4);
   --ui-ease: 220ms ease;
-  --fx-glass: rgba(15, 23, 42, 0.82);
+  --fx-glass: rgba(30, 41, 59, 0.90);
   --fx-blur: 10px;
 }
 
@@ -67,8 +67,8 @@ html.ui-v2 body::before {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
   background-size: 56px 48px;
   mask-image: radial-gradient(ellipse at 50% 18%, #000 28%, transparent 78%);
 }
@@ -1145,6 +1145,27 @@ html.ui-v2 .camp-hub-field #new_camp_project {
   border-color: #94a3b8;
 }
 
+/* Country jumpers — beat app.css background:#fff if specificity shifts. */
+html.ui-v2 .camp-country-jump-select,
+html.ui-v2 .camp-country-jump select,
+html.ui-v2 .sheet-country-jump select {
+  background: #1e293b;
+  color: var(--ink);
+  border-color: #94a3b8;
+}
+
+html.ui-v2 .page-purpose {
+  border-left-color: var(--brand);
+}
+html.ui-v2 .page-purpose-title,
+html.ui-v2 .glossary-title,
+html.ui-v2 .glossary-list dt {
+  color: var(--brand-2);
+}
+html.ui-v2 .empty-state > p:first-child {
+  color: var(--ink);
+}
+
 /* Order management — leftover white summary cards / Page totals bar / clipped cells */
 html.ui-v2 .orders-summary-item {
   background: var(--fx-glass);
@@ -1205,16 +1226,51 @@ html.ui-v2 tbody tr:nth-child(even) td {
   background: rgba(148, 163, 184, 0.06);
 }
 
-/* Invoice paper stays white (even-row overlay must not tint it). */
+/* Invoice paper stays the original white letterhead (even-row / thead
+   overlay must not darken it). Table headers stay navy, not white. */
 html.ui-v2 .invoice-preview-wrap {
-  background: #0f172a;
+  background: #152033;
 }
 html.ui-v2 .invoice-doc,
 html.ui-v2 .invoice-doc-logohead,
-html.ui-v2 .invoice-doc thead th {
+html.ui-v2 .invoice-doc-ids,
+html.ui-v2 .invoice-party-to,
+html.ui-v2 .invoice-doc-totals,
+html.ui-v2 .invoice-doc-summary {
   background: #fff !important;
   color: #111827;
   box-shadow: none;
+}
+html.ui-v2 .invoice-doc-ids strong,
+html.ui-v2 .invoice-doc-strong,
+html.ui-v2 .invoice-party-lines,
+html.ui-v2 .invoice-doc-address,
+html.ui-v2 .invoice-desc {
+  color: #111827;
+}
+html.ui-v2 .invoice-doc .invoice-k,
+html.ui-v2 .invoice-doc-footer,
+html.ui-v2 .invoice-party-lines span,
+html.ui-v2 .invoice-doc-vat {
+  color: #6b7280;
+}
+html.ui-v2 .invoice-party-label {
+  color: #1e3a5f;
+}
+html.ui-v2 .invoice-party-from,
+html.ui-v2 .invoice-doc-paybox,
+html.ui-v2 .invoice-doc-admin-note {
+  background: #f8fafc !important;
+  color: #111827;
+}
+html.ui-v2 .invoice-doc-table th,
+html.ui-v2 .invoice-doc thead th {
+  background: #0f2744 !important;
+  color: #fff !important;
+}
+html.ui-v2 .invoice-total-grand {
+  background: #0f2744 !important;
+  color: #fff !important;
 }
 html.ui-v2 .invoice-doc tbody tr td,
 html.ui-v2 .invoice-doc tbody tr:nth-child(even) td,
@@ -1228,6 +1284,34 @@ html.ui-v2 .invoice-doc-table tbody tr:hover td {
 }
 html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td {
   background: #f8fafc !important;
+}
+html.ui-v2 .invoice-doc label {
+  color: #111827;
+}
+html.ui-v2 .invoice-doc input:not([type]),
+html.ui-v2 .invoice-doc input[type="text"],
+html.ui-v2 .invoice-doc input[type="number"],
+html.ui-v2 .invoice-doc input[type="date"],
+html.ui-v2 .invoice-doc input[type="email"],
+html.ui-v2 .invoice-doc input[type="url"],
+html.ui-v2 .invoice-doc select,
+html.ui-v2 .invoice-doc textarea {
+  background: #fff !important;
+  color: #111827 !important;
+  border-color: #d1d5db;
+  box-shadow: none;
+  caret-color: #111827;
+}
+html.ui-v2 .invoice-doc-note-box textarea,
+html.ui-v2 .invoice-doc textarea.invoice-edit-note {
+  background: #fffef8 !important;
+}
+html.ui-v2 .invoice-doc input:-webkit-autofill,
+html.ui-v2 .invoice-doc textarea:-webkit-autofill,
+html.ui-v2 .invoice-doc select:-webkit-autofill {
+  -webkit-text-fill-color: #111827;
+  caret-color: #111827;
+  box-shadow: 0 0 0 1000px #fff inset;
 }
 
 /* Publisher row tints must beat zebra overlay. */
@@ -1246,6 +1330,63 @@ html.ui-v2 .site-price-add[data-tint="blue"] td {
 html.ui-v2 .site-price-row[data-tint="green"] td,
 html.ui-v2 .site-price-add[data-tint="green"] td {
   background: rgba(187, 247, 208, 0.28) !important;
+}
+
+/* Mobile stacked Website prices cards — beat sheet-cards-mobile #fff tints. */
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="yellow"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="yellow"] {
+  background: rgba(253, 230, 138, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="pink"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="pink"] {
+  background: rgba(254, 205, 211, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="blue"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="blue"] {
+  background: rgba(191, 219, 254, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="green"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="green"] {
+  background: rgba(187, 247, 208, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint] td,
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint] td {
+  background: transparent !important;
+}
+
+html.ui-v2 .site-price-status.is-color-green {
+  background-color: rgba(74, 222, 128, 0.18);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: var(--ok);
+}
+html.ui-v2 .site-price-status.is-color-blue {
+  background-color: rgba(96, 165, 250, 0.18);
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #93c5fd;
+}
+html.ui-v2 .site-price-status.is-color-rose {
+  background-color: rgba(251, 113, 133, 0.16);
+  border-color: rgba(251, 113, 133, 0.4);
+  color: var(--bad);
+}
+html.ui-v2 .site-price-status.is-color-teal {
+  background-color: rgba(45, 212, 191, 0.16);
+  border-color: rgba(45, 212, 191, 0.4);
+  color: #5eead4;
+}
+html.ui-v2 .site-price-status.is-color-brown {
+  background-color: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: var(--warn);
+}
+html.ui-v2 .site-price-status.is-color-grey {
+  background-color: rgba(148, 163, 184, 0.16);
+  border-color: var(--line);
+  color: var(--muted);
+}
+html.ui-v2 .site-price-status option {
+  background: #1e293b;
+  color: var(--ink);
 }
 
 /* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
@@ -1364,11 +1505,79 @@ html.ui-v2 .camp-hub-step-num {
   color: #083344;
 }
 
+/* Office expenses — leftover light status / totals / edit row */
+html.ui-v2 .office-expense-status-line {
+  color: var(--muted);
+}
+html.ui-v2 .office-expense-status.is-open {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.45);
+}
+html.ui-v2 .office-expense-status.is-saved {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+  border-color: var(--line);
+}
+html.ui-v2 .office-expense-add-grid label {
+  color: var(--ink);
+}
+html.ui-v2 .office-expense-table thead th {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+html.ui-v2 .office-expense-table td {
+  color: var(--ink);
+}
+html.ui-v2 .office-expense-table .num {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+html.ui-v2 .office-expense-table tr.is-editing td {
+  background: var(--brand-soft);
+  box-shadow: none;
+}
+html.ui-v2 .office-expense-table tr.is-editing td:first-child {
+  box-shadow: inset 4px 0 0 var(--brand);
+}
+html.ui-v2 .office-expense-totals {
+  background: var(--fx-glass);
+  backdrop-filter: blur(var(--fx-blur));
+  -webkit-backdrop-filter: blur(var(--fx-blur));
+  border-top: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+html.ui-v2 .office-expense-totals h3,
+html.ui-v2 .office-expense-grand strong {
+  color: var(--brand-2);
+}
+html.ui-v2 .office-expense-totals li {
+  border-bottom-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .office-expense-history li {
+  border-bottom-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .office-expense-history time {
+  color: var(--muted);
+}
+html.ui-v2 .office-expense-month-jump select {
+  min-width: 11rem;
+}
+
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;
   }
   html.ui-v2 body::before {
     display: none;
+  }
+  html.ui-v2 .invoice-doc,
+  html.ui-v2 .invoice-preview-wrap,
+  html.ui-v2 body.invoice-print-body {
+    background: #fff !important;
+    color: #111827 !important;
+    box-shadow: none;
   }
 }
