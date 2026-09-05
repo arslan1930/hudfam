@@ -8253,30 +8253,22 @@ try {
 // --- Office expenses (Admin monthly ledger) ---
 try {
     ensure_office_expense_schema();
-    db()->exec("DELETE FROM office_expense_rows WHERE description IN ('Office rent January','Payroll','Kitchen','Should fail')");
-    db()->exec(
-        'UPDATE office_expense_months m
-         SET total_amount = (SELECT COALESCE(SUM(r.amount), 0) FROM office_expense_rows r WHERE r.month_id = m.id),
-             row_count = (SELECT COUNT(*) FROM office_expense_rows r WHERE r.month_id = m.id)'
-    );
-    $oeMonths = ['1999-01', '1999-02'];
-    $oeIds = [];
-    foreach ($oeMonths as $oeYm) {
-        $st = db()->prepare('SELECT id FROM office_expense_months WHERE bill_month = ?');
-        $st->execute([$oeYm]);
-        $oid = (int) $st->fetchColumn();
-        if ($oid > 0) {
-            $oeIds[] = $oid;
+    $oePurgeTestMonths = static function (): void {
+        $ids = [];
+        $st = db()->prepare("SELECT id FROM office_expense_months WHERE bill_month IN ('1999-01','1999-02')");
+        $st->execute();
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) ?: [] as $oid) {
+            $ids[] = (int) $oid;
         }
-    }
-    if ($oeIds) {
-        $in = implode(',', array_map('intval', $oeIds));
+        if ($ids === []) {
+            return;
+        }
+        $in = implode(',', $ids);
         db()->exec("DELETE FROM office_expense_events WHERE month_id IN ($in)");
         db()->exec("DELETE FROM office_expense_rows WHERE month_id IN ($in)");
         db()->exec("DELETE FROM office_expense_months WHERE id IN ($in)");
-    } else {
-        db()->exec("DELETE FROM office_expense_months WHERE bill_month IN ('1999-01','1999-02')");
-    }
+    };
+    $oePurgeTestMonths();
 
     $admin2row = db()->query("SELECT * FROM users WHERE username='admin2' AND role='admin'")->fetch(PDO::FETCH_ASSOC);
     if (!$admin2row) {
@@ -8420,12 +8412,37 @@ try {
             fail('office expense history filter');
         }
 
+        $beforeDelete = office_expense_totals($janId);
+        office_expense_delete_row($grocId, (int) $adminUser['id']);
+        $deletedRow = office_expense_get_row($grocId);
+        $afterDelete = office_expense_totals($janId);
+        $hasDelete = false;
+        foreach (office_expense_list_events($janId) as $ev) {
+            if ((string) ($ev['kind'] ?? '') === 'delete'
+                && str_contains((string) ($ev['summary'] ?? ''), 'Kitchen')) {
+                $hasDelete = true;
+                break;
+            }
+        }
+        if ($deletedRow === null && $hasDelete
+            && abs($afterDelete['grand'] - ($beforeDelete['grand'] - 40.25)) < 0.001) {
+            pass('office expense delete writes history');
+        } else {
+            fail('office expense delete: ' . json_encode([
+                'gone' => $deletedRow === null,
+                'hasDelete' => $hasDelete,
+                'before' => $beforeDelete['grand'],
+                'after' => $afterDelete['grand'],
+            ]));
+        }
+
         $febTot = office_expense_totals($febId);
         if ((int) $febTot['count'] === 0 && abs($febTot['grand']) < 0.001) {
             pass('office expense next month starts empty');
         } else {
             fail('office expense Feb not empty: ' . json_encode($febTot));
         }
+        $oePurgeTestMonths();
     }
 } catch (Throwable $e) {
     fail('office expenses: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());

@@ -424,7 +424,7 @@ function office_expense_list_events(int $monthId, int $actorId = 0): array
         $sql .= ' AND e.actor_id = ?';
         $params[] = $actorId;
     }
-    $sql .= ' ORDER BY e.id DESC';
+    $sql .= ' ORDER BY e.created_at DESC, e.id DESC';
     try {
         $stmt = db()->prepare($sql);
         $stmt->execute($params);
@@ -656,8 +656,6 @@ function office_expense_delete_row(int $rowId, int $actorId): void
     }
     office_expense_assert_open($month);
     $old = office_expense_row_public($row);
-    db()->prepare('DELETE FROM office_expense_rows WHERE id = ?')->execute([$rowId]);
-    office_expense_refresh_month_snapshot((int) $row['month_id']);
     office_expense_record_event(
         (int) $row['month_id'],
         $rowId,
@@ -669,6 +667,8 @@ function office_expense_delete_row(int $rowId, int $actorId): void
         $old,
         null
     );
+    db()->prepare('DELETE FROM office_expense_rows WHERE id = ?')->execute([$rowId]);
+    office_expense_refresh_month_snapshot((int) $row['month_id']);
 }
 
 function office_expense_save_month(int $monthId, int $actorId): void
