@@ -53,6 +53,8 @@ $requiredFiles = [
     'pages/admin/site_prices.php',
     'pages/team/site_prices.php',
     'assets/js/site-prices.js',
+    'includes/office_expenses.php',
+    'pages/admin/office_expenses.php',
 ];
 foreach ($requiredFiles as $rel) {
     if (!is_file($root . '/' . $rel)) {
@@ -104,6 +106,12 @@ if (!str_contains($index, "'account_password'")) {
     fail('index.php missing account_password route');
 } else {
     ok('account_password route');
+}
+if (!str_contains($index, "'admin_office_expenses'")
+    || !str_contains($index, 'includes/office_expenses.php')) {
+    fail('index.php missing Office expenses route or include');
+} else {
+    ok('Office expenses route');
 }
 if (!str_contains($index, 'user_must_change_password')) {
     fail('index.php missing password force gate');
@@ -304,14 +312,16 @@ if (!str_contains($guidesLib, 'function guide_emails_data')
 }
 if (!str_contains($guidesLib, 'function guide_orders')
     || !str_contains($guidesLib, 'function guide_invoices')
+    || !str_contains($guidesLib, 'function guide_office_expenses')
     || !str_contains($guidesLib, 'function guide_admin_account')
     || !str_contains($guidesLib, 'function guide_site_prices')
     || !str_contains($guidesLib, 'Push to invoice')
     || !str_contains($guidesLib, 'printable letterhead is Topurlz')
+    || !str_contains($guidesLib, 'Save this month to freeze it')
     || !str_contains($guidesLib, 'Sidebar Change password updates the same password')) {
     fail('Office page-purpose guides missing');
 } else {
-    ok('Office Orders/Invoices/Account/Website prices guides present');
+    ok('Office Orders/Invoices/Account/Website prices/Office expenses guides present');
 }
 if (!str_contains($guidesLib, '<details class="help-details page-purpose">')
     || !str_contains($guidesLib, '<summary>What is this? · ')
@@ -322,11 +332,15 @@ if (!str_contains($guidesLib, '<details class="help-details page-purpose">')
 }
 $ordersHubGuide = file_get_contents($root . '/pages/admin/orders.php') ?: '';
 $invoicesHubGuide = file_get_contents($root . '/pages/admin/invoices.php') ?: '';
+$officeExpPage = file_get_contents($root . '/pages/admin/office_expenses.php') ?: '';
 $accountHubGuide = file_get_contents($root . '/pages/admin/account.php') ?: '';
 $sitePricesHubGuide = file_get_contents($root . '/pages/admin/site_prices.php') ?: '';
 $sitePricesLib = file_get_contents($root . '/includes/site_prices.php') ?: '';
 if (!str_contains($ordersHubGuide, 'guide_orders()')
     || !str_contains($invoicesHubGuide, 'guide_invoices()')
+    || !str_contains($officeExpPage, 'guide_office_expenses()')
+    || !str_contains($officeExpPage, 'Save this month')
+    || !str_contains($officeExpPage, 'require_admin()')
     || !str_contains($accountHubGuide, 'guide_admin_account()')
     || !str_contains($sitePricesHubGuide, 'site_price_run_page')
     || !str_contains($sitePricesLib, 'guide_site_prices()')
@@ -335,7 +349,7 @@ if (!str_contains($ordersHubGuide, 'guide_orders()')
     || !str_contains($sitePricesLib, 'data-no-draft')) {
     fail('Office hubs missing page-purpose guide calls');
 } else {
-    ok('Office hubs echo Orders/Invoices/Account/Website prices guides');
+    ok('Office hubs echo Orders/Invoices/Account/Website prices/Office expenses guides');
 }
 $schemaSql = file_get_contents($root . '/sql/schema.sql') ?: '';
 $upgradePhp = file_get_contents($root . '/upgrade.php') ?: '';
@@ -362,6 +376,30 @@ if (!str_contains($sitePricesLib, 'function ensure_site_prices_schema')
     fail('Website prices missing schema / helpers / route');
 } else {
     ok('Website prices schema + helpers + Admin hub route');
+}
+$officeExpLib = file_get_contents($root . '/includes/office_expenses.php') ?: '';
+$officeExpCss = file_get_contents($root . '/assets/css/app.css') ?: '';
+$testsRunSmoke = file_get_contents($root . '/tests_run.php') ?: '';
+$testsHttpSmoke = file_get_contents($root . '/tests_http.php') ?: '';
+if (!str_contains($officeExpLib, 'function ensure_office_expense_schema')
+    || !str_contains($officeExpLib, 'function office_expense_add_row')
+    || !str_contains($officeExpLib, 'function office_expense_save_month')
+    || !str_contains($officeExpLib, 'function office_expense_reopen_month')
+    || !str_contains($officeExpLib, 'function office_expense_totals')
+    || !str_contains($officeExpLib, 'function office_expense_list_events')
+    || !str_contains($officeExpLib, "'salary' => 'Employee salaries'")
+    || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS office_expense_months')
+    || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS office_expense_rows')
+    || !str_contains($schemaSql, 'CREATE TABLE IF NOT EXISTS office_expense_events')
+    || !str_contains($upgradePhp, 'ensure_office_expense_schema')
+    || !str_contains($indexPhp, "'admin_office_expenses'")
+    || !str_contains($dashPhp, 'index.php?page=admin_office_expenses')
+    || !str_contains($officeExpCss, '.office-expense-totals')
+    || !str_contains($testsRunSmoke, 'office expense save month locks edits')
+    || !str_contains($testsHttpSmoke, 'teammate blocked from Office expenses')) {
+    fail('Office expenses missing schema / helpers / route');
+} else {
+    ok('Office expenses schema + helpers + Admin hub route');
 }
 $sitePricesJs = file_get_contents($root . '/assets/js/site-prices.js') ?: '';
 $sitePricesCss = file_get_contents($root . '/assets/css/app.css') ?: '';
@@ -434,6 +472,7 @@ if (!str_contains($teamSitePricesPage, "site_price_run_page(\$user, 'team')")
     || !str_contains($teamDash, 'team_site_prices')
     || str_contains($teamDash, 'admin_orders')
     || str_contains($teamDash, 'admin_invoices')
+    || str_contains($teamDash, 'admin_office_expenses')
     || str_contains($teamSitePricesPage, 'admin_orders')
     || str_contains($teamSitePricesPage, 'admin_invoices')
     || !str_contains($sitePricesLib, 'function render_site_price_filters')
@@ -2284,7 +2323,8 @@ if (!str_contains($layoutNav, 'nav_is_active($activePage, $current)')) {
 if (!str_contains($layoutNav, "'admin_orders&folder=processing'")
     || !str_contains($layoutNav, "'admin_orders&folder=completed'")
     || !str_contains($layoutNav, "\$activePage === 'admin_orders'")
-    || !str_contains($layoutNav, "'admin_invoices&filter=unpaid'")) {
+    || !str_contains($layoutNav, "'admin_invoices&filter=unpaid'")
+    || !str_contains($layoutNav, "'admin_office_expenses' => ['Office expenses'")) {
     fail('layout Order management does not open Processing');
 } else {
     ok('layout Order management opens Processing');
@@ -3049,7 +3089,8 @@ $cssUi = file_get_contents($root . '/assets/css/app.css') ?: '';
 if (!str_contains($layoutUiSmoke, "'Work' =>")
     || !str_contains($layoutUiSmoke, "'Office' =>")
     || !str_contains($layoutUiSmoke, "'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign']")
-    || !str_contains($layoutUiSmoke, "'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates']")) {
+    || !str_contains($layoutUiSmoke, "'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates']")
+    || !str_contains($layoutUiSmoke, "'admin_office_expenses' => ['Office expenses', 'Monthly office bills']")) {
     fail('Admin sidebar missing Work vs Office groups');
 } else {
     ok('Admin sidebar Work vs Office');

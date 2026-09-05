@@ -6354,3 +6354,146 @@ textarea:focus-visible {
     border-radius: 0;
   }
 }
+
+/* Office expenses — monthly Admin ledger */
+.office-expense-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.office-expense-month-nav form.inline,
+.office-expense-row-actions form.inline {
+  display: inline;
+  margin: 0;
+}
+.office-expense-month-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+.office-expense-month-jump select {
+  min-width: 10rem;
+}
+.office-expense-status-line {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+.office-expense-status {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-right: 0.35rem;
+}
+.office-expense-status.is-open {
+  background: #eefbf3;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+.office-expense-status.is-saved {
+  background: #eef2f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+.office-expense-add-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-weight: 650;
+  font-size: 0.86rem;
+}
+.office-expense-table {
+  width: 100%;
+}
+.office-expense-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.office-expense-table th,
+.office-expense-table td {
+  vertical-align: top;
+}
+.office-expense-table tr.is-editing td {
+  background: #eef5ff;
+}
+.office-expense-row-actions {
+  white-space: nowrap;
+}
+.office-expense-row-actions .btn {
+  margin: 0 0.2rem 0.2rem 0;
+}
+.office-expense-totals {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
+  padding: 0.85rem 0.9rem 0.2rem;
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(249, 250, 251, 0.92) 0%, #f9fafb 40%);
+}
+.office-expense-totals h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+}
+.office-expense-totals ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.office-expense-totals li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid #eef2f6;
+}
+.office-expense-grand {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.office-expense-grand .muted {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.office-expense-history-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+.office-expense-history {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+}
+.office-expense-history li {
+  display: grid;
+  grid-template-columns: 11rem minmax(6rem, 10rem) 1fr;
+  gap: 0.55rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #eef2f6;
+  font-size: 0.9rem;
+}
+.office-expense-history time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 800px) {
+  .office-expense-history li {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+  .office-expense-totals {
+    position: static;
+  }
+}
+

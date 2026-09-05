@@ -487,6 +487,64 @@ CREATE TABLE IF NOT EXISTS invoice_events (
   CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Office expenses: Admin-only monthly office bills
+CREATE TABLE IF NOT EXISTS office_expense_months (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  year_month CHAR(7) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'open',
+  total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  row_count INT NOT NULL DEFAULT 0,
+  note VARCHAR(255) NOT NULL DEFAULT '',
+  saved_at DATETIME NULL,
+  saved_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_office_expense_month (year_month),
+  INDEX (status),
+  CONSTRAINT fk_oem_saved_by FOREIGN KEY (saved_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS office_expense_rows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  month_id INT NOT NULL,
+  paid_on DATE NOT NULL,
+  category VARCHAR(20) NOT NULL DEFAULT 'other',
+  description VARCHAR(255) NOT NULL DEFAULT '',
+  amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  paid_by INT NULL,
+  note VARCHAR(255) NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  updated_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (month_id, paid_on, sort_order, id),
+  INDEX (paid_by),
+  INDEX (category),
+  CONSTRAINT fk_oer_month FOREIGN KEY (month_id) REFERENCES office_expense_months(id) ON DELETE CASCADE,
+  CONSTRAINT fk_oer_paid_by FOREIGN KEY (paid_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_oer_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_oer_updated FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS office_expense_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  month_id INT NOT NULL,
+  row_id INT NULL,
+  actor_id INT NULL,
+  kind VARCHAR(40) NOT NULL,
+  summary VARCHAR(500) NOT NULL DEFAULT '',
+  old_value TEXT NULL,
+  new_value TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX (month_id, id),
+  INDEX (actor_id),
+  INDEX (row_id),
+  CONSTRAINT fk_oee_month FOREIGN KEY (month_id) REFERENCES office_expense_months(id) ON DELETE CASCADE,
+  CONSTRAINT fk_oee_row FOREIGN KEY (row_id) REFERENCES office_expense_rows(id) ON DELETE SET NULL,
+  CONSTRAINT fk_oee_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Semrush Research: Admin-seeded site names per country (Site Finding sheet)
 CREATE TABLE IF NOT EXISTS semrush_sites (
   id INT AUTO_INCREMENT PRIMARY KEY,

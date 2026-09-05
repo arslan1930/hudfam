@@ -29,6 +29,7 @@ require __DIR__ . '/includes/departments.php';
 require __DIR__ . '/includes/orders.php';
 require __DIR__ . '/includes/site_prices.php';
 require __DIR__ . '/includes/invoices.php';
+require __DIR__ . '/includes/office_expenses.php';
 require __DIR__ . '/includes/mail.php';
 require __DIR__ . '/includes/presence.php';
 require __DIR__ . '/includes/semrush_research.php';
@@ -61,6 +62,7 @@ try {
     ensure_order_schema();
     ensure_site_prices_schema();
     ensure_invoice_schema();
+    ensure_office_expense_schema();
     ensure_task_presence_schema();
     ensure_semrush_research_schema();
     pass('schemas ensured');
@@ -8246,6 +8248,181 @@ try {
     }
 } catch (Throwable $e) {
     fail('campaign send batches: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Office expenses (Admin monthly ledger) ---
+try {
+    ensure_office_expense_schema();
+    $oeMonths = ['1999-01', '1999-02'];
+    $oeIds = [];
+    foreach ($oeMonths as $oeYm) {
+        $st = db()->prepare('SELECT id FROM office_expense_months WHERE year_month = ?');
+        $st->execute([$oeYm]);
+        $oid = (int) $st->fetchColumn();
+        if ($oid > 0) {
+            $oeIds[] = $oid;
+        }
+    }
+    if ($oeIds) {
+        $in = implode(',', array_map('intval', $oeIds));
+        db()->exec("DELETE FROM office_expense_events WHERE month_id IN ($in)");
+        db()->exec("DELETE FROM office_expense_rows WHERE month_id IN ($in)");
+        db()->exec("DELETE FROM office_expense_months WHERE id IN ($in)");
+    } else {
+        db()->exec("DELETE FROM office_expense_months WHERE year_month IN ('1999-01','1999-02')");
+    }
+
+    $admin2row = db()->query("SELECT * FROM users WHERE username='admin2' AND role='admin'")->fetch(PDO::FETCH_ASSOC);
+    if (!$admin2row) {
+        $admin2row = db()->query("SELECT * FROM users WHERE role='admin' AND username<>'admin' ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$admin2row) {
+        db()->prepare(
+            "INSERT INTO users (username, password_hash, full_name, email, role, is_active)
+             VALUES ('txfexpadmin', ?, 'Expense Admin', 'txfexp@hudfam.local', 'admin', 1)"
+        )->execute([password_hash('txfexp-test', PASSWORD_DEFAULT)]);
+        $admin2row = db()->query("SELECT * FROM users WHERE username='txfexpadmin'")->fetch(PDO::FETCH_ASSOC);
+    }
+    $admin2User = [
+        'id' => (int) ($admin2row['id'] ?? 0),
+        'username' => (string) ($admin2row['username'] ?? 'admin2'),
+        'full_name' => (string) ($admin2row['full_name'] ?? 'Admin 2'),
+        'role' => 'admin',
+    ];
+    if ($admin2User['id'] < 1) {
+        fail('office expenses second admin missing');
+    } else {
+        $mJan = office_expense_get_or_create_month('1999-01');
+        $mFeb = office_expense_get_or_create_month('1999-02');
+        $janId = (int) $mJan['id'];
+        $febId = (int) $mFeb['id'];
+        if ($janId > 0 && $febId > 0 && office_expense_month_is_open($mJan)
+            && (string) $mJan['year_month'] === '1999-01') {
+            pass('office expense months created open');
+        } else {
+            fail('office expense months: ' . json_encode($mJan));
+        }
+
+        $rentId = office_expense_add_row($janId, [
+            'paid_on' => '1999-01-05',
+            'category' => 'rent',
+            'description' => 'Office rent January',
+            'amount' => '1200.50',
+            'paid_by' => (int) $adminUser['id'],
+            'note' => 'Bank transfer',
+        ], (int) $adminUser['id']);
+        $salId = office_expense_add_row($janId, [
+            'paid_on' => '1999-01-02',
+            'category' => 'salary',
+            'description' => 'Payroll',
+            'amount' => '800',
+            'paid_by' => (int) $admin2User['id'],
+            'note' => '',
+        ], (int) $admin2User['id']);
+        $tot = office_expense_totals($janId);
+        $cats = office_expense_categories();
+        if ($rentId > 0 && $salId > 0
+            && abs($tot['grand'] - 2000.50) < 0.001
+            && (int) $tot['count'] === 2
+            && abs(($tot['by_category']['rent'] ?? 0) - 1200.50) < 0.001
+            && abs(($tot['by_category']['salary'] ?? 0) - 800) < 0.001
+            && isset($cats['grocery'], $cats['internet'], $cats['other'])
+            && count($tot['by_admin']) === 2) {
+            pass('office expense add row + totals');
+        } else {
+            fail('office expense totals: ' . json_encode($tot));
+        }
+
+        office_expense_update_row($rentId, [
+            'paid_on' => '1999-01-05',
+            'category' => 'rent',
+            'description' => 'Office rent January',
+            'amount' => '1250.00',
+            'paid_by' => (int) $adminUser['id'],
+            'note' => 'Bank transfer',
+        ], (int) $admin2User['id']);
+        $rentRow = office_expense_get_row($rentId);
+        if ($rentRow && abs(parse_money($rentRow['amount']) - 1250) < 0.001
+            && (int) ($rentRow['updated_by'] ?? 0) === (int) $admin2User['id']) {
+            pass('office expense second admin can edit');
+        } else {
+            fail('office expense edit: ' . json_encode($rentRow));
+        }
+
+        office_expense_save_month($janId, (int) $adminUser['id']);
+        $saved = office_expense_get_month($janId);
+        $locked = false;
+        try {
+            office_expense_add_row($janId, [
+                'paid_on' => '1999-01-10',
+                'category' => 'grocery',
+                'description' => 'Should fail',
+                'amount' => '10',
+                'paid_by' => (int) $adminUser['id'],
+            ], (int) $adminUser['id']);
+        } catch (RuntimeException $e) {
+            $locked = str_contains($e->getMessage(), 'saved');
+        }
+        if ($saved && !office_expense_month_is_open($saved)
+            && $locked
+            && abs(parse_money($saved['total_amount'] ?? 0) - 2050) < 0.001) {
+            pass('office expense save month locks edits');
+        } else {
+            fail('office expense save lock: ' . json_encode($saved));
+        }
+
+        office_expense_reopen_month($janId, (int) $admin2User['id']);
+        $reopened = office_expense_get_month($janId);
+        $grocId = 0;
+        if ($reopened && office_expense_month_is_open($reopened)) {
+            $grocId = office_expense_add_row($janId, [
+                'paid_on' => '1999-01-12',
+                'category' => 'grocery',
+                'description' => 'Kitchen',
+                'amount' => '40.25',
+                'paid_by' => (int) $adminUser['id'],
+            ], (int) $adminUser['id']);
+        }
+        $evs = office_expense_list_events($janId);
+        $kinds = [];
+        $actors = [];
+        foreach ($evs as $ev) {
+            $kinds[] = (string) ($ev['kind'] ?? '');
+            $actors[] = (int) ($ev['actor_id'] ?? 0);
+        }
+        $needKinds = ['add', 'edit', 'save_month', 'reopen_month'];
+        $missingKinds = array_diff($needKinds, $kinds);
+        if ($grocId > 0 && $missingKinds === []
+            && in_array((int) $adminUser['id'], $actors, true)
+            && in_array((int) $admin2User['id'], $actors, true)) {
+            pass('office expense reopen + history actors');
+        } else {
+            fail('office expense events: ' . json_encode(['kinds' => $kinds, 'actors' => $actors]));
+        }
+
+        $adminOnly = office_expense_list_events($janId, (int) $admin2User['id']);
+        $only2 = true;
+        foreach ($adminOnly as $ev) {
+            if ((int) ($ev['actor_id'] ?? 0) !== (int) $admin2User['id']) {
+                $only2 = false;
+                break;
+            }
+        }
+        if ($adminOnly !== [] && $only2) {
+            pass('office expense history filter by admin');
+        } else {
+            fail('office expense history filter');
+        }
+
+        $febTot = office_expense_totals($febId);
+        if ((int) $febTot['count'] === 0 && abs($febTot['grand']) < 0.001) {
+            pass('office expense next month starts empty');
+        } else {
+            fail('office expense Feb not empty: ' . json_encode($febTot));
+        }
+    }
+} catch (Throwable $e) {
+    fail('office expenses: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 echo "\n==== SUMMARY ====\n";
