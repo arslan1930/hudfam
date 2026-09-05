@@ -1324,8 +1324,8 @@ if ($r['status'] === 200
 }
 $r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
 $folderId = 0;
-if (preg_match('/dfolder=(\d+)[^"]*">Samples</', $r['body'], $fm)
-    || preg_match('/dfolder=(\d+)[^"]*>Samples</', $r['body'], $fm)) {
+if (preg_match('/data-camp-draft-chip-value="(\d+)">Samples</', $r['body'], $fm)
+    || preg_match('/dfolder=(\d+)[^>]*>Samples</', $r['body'], $fm)) {
     $folderId = (int) $fm[1];
 }
 $r = $folderId > 0
