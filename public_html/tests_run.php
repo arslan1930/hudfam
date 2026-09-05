@@ -2066,6 +2066,37 @@ try {
         fail('cleared count=' . ($result['cleared'] ?? 'missing'));
     }
 
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfpush-none.com','Germany','German','europe','none','','','')
+         ON DUPLICATE KEY UPDATE email1='none', email2='', email3='', email4=''"
+    )->execute();
+    $nonePush = push_sites_with_emails_team_to_admin('Germany', $teamUser);
+    $noneOnAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfpush-none.com'"
+    )->fetchColumn();
+    $noneE1 = (string) db()->query(
+        "SELECT email1 FROM sites_with_emails_admin WHERE domain='txfpush-none.com' LIMIT 1"
+    )->fetchColumn();
+    $noneTeamLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txfpush-none.com'"
+    )->fetchColumn();
+    $emptyStillTeam = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txfpush-noemail.com'"
+    )->fetchColumn();
+    if (!empty($nonePush['ok']) && $noneOnAdmin === 1 && $noneE1 === 'none'
+        && $noneTeamLeft === 0 && $emptyStillTeam === 1) {
+        pass('Team push with none moves site to Admin; empty row stays on Team');
+    } else {
+        fail('none push: ' . json_encode([
+            'push' => $nonePush,
+            'admin' => $noneOnAdmin,
+            'e1' => $noneE1,
+            'teamNone' => $noneTeamLeft,
+            'teamEmpty' => $emptyStillTeam,
+        ]));
+    }
+
     // Four separate email slots must all land in Admin + Final.
     db()->prepare(
         "INSERT INTO sites_with_emails_team
@@ -2217,6 +2248,73 @@ try {
         ]));
     }
 
+    $noneNorm = normalize_email_slots(['NONE', '', '', '']);
+    $naNorm = normalize_email_slots(['n/a', '', '', '']);
+    $mixedNorm = normalize_email_slots(['none', 'keep@txftest-none.com', '', '']);
+    if (($noneNorm['slots'][0] ?? '') === 'none'
+        && ($naNorm['slots'][0] ?? '') === 'none'
+        && ($mixedNorm['slots'][0] ?? '') === 'keep@txftest-none.com'
+        && ($mixedNorm['slots'][1] ?? '') === '') {
+        pass('none / n/a normalize; mixed none+real drops marker');
+    } else {
+        fail('none normalize: ' . json_encode([$noneNorm, $naNorm, $mixedNorm]));
+    }
+
+    $adminNone = save_site_with_emails_row(
+        'Germany',
+        'txftest-add-none.com',
+        ['none', '', '', ''],
+        $adminUser,
+        null,
+        'admin_all'
+    );
+    $noneAdmin = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txftest-add-none.com'"
+    )->fetchColumn();
+    $noneFinal = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txftest-add-none.com'"
+    )->fetchColumn();
+    $noneSlot = (string) db()->query(
+        "SELECT email1 FROM sites_with_emails_admin WHERE domain='txftest-add-none.com' LIMIT 1"
+    )->fetchColumn();
+    if (!empty($adminNone['ok']) && $noneAdmin === 1 && $noneFinal === 1 && $noneSlot === 'none') {
+        pass('Admin/Final add with none keeps the site row');
+    } else {
+        fail('admin none add: ' . json_encode([
+            'save' => $adminNone,
+            'admin' => $noneAdmin,
+            'final' => $noneFinal,
+            'e1' => $noneSlot,
+        ]));
+    }
+
+    $noneId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_admin WHERE domain='txftest-add-none.com' LIMIT 1"
+    )->fetchColumn();
+    $noneKeep = save_site_with_emails_row(
+        'Germany',
+        'txftest-add-none.com',
+        ['none', '', '', ''],
+        $adminUser,
+        $noneId,
+        'admin'
+    );
+    $noneStill = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txftest-add-none.com'"
+    )->fetchColumn();
+    if (!empty($noneKeep['ok']) && empty($noneKeep['row_deleted']) && $noneStill === 1) {
+        pass('Admin save none does not delete the working-list row');
+    } else {
+        fail('admin none save: ' . json_encode(['save' => $noneKeep, 'left' => $noneStill]));
+    }
+
+    $copied = collect_sites_with_emails_all_emails('Germany', 'admin');
+    if (!in_array('none', $copied, true)) {
+        pass('Copy all emails skips none marker');
+    } else {
+        fail('copy included none: ' . json_encode($copied));
+    }
+
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-add-%'");
     db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-add-%'");
     db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-add-%'");
@@ -2271,6 +2369,29 @@ try {
         pass('Final paste adds 4 formats, writes Admin+Final, skips no-email');
     } else {
         fail('Final paste: ' . json_encode($finalPaste) . " admin=$bulkAdmin final=$bulkFinal empty=$emptySkipped");
+    }
+
+    $nonePaste = paste_sites_with_emails_rows(
+        'Germany',
+        "txffinal-bulk-none.de, none\n",
+        $adminUser,
+        'admin_all'
+    );
+    $nonePasteE1 = (string) db()->query(
+        "SELECT email1 FROM sites_with_emails_admin WHERE domain='txffinal-bulk-none.de' LIMIT 1"
+    )->fetchColumn();
+    $nonePasteFinal = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txffinal-bulk-none.de'"
+    )->fetchColumn();
+    if (!empty($nonePaste['ok']) && (int) ($nonePaste['added'] ?? 0) === 1
+        && $nonePasteE1 === 'none' && $nonePasteFinal === 1) {
+        pass('Final paste none keeps the site with email1=none');
+    } else {
+        fail('Final paste none: ' . json_encode([
+            'paste' => $nonePaste,
+            'e1' => $nonePasteE1,
+            'final' => $nonePasteFinal,
+        ]));
     }
 
     $csvPath = sys_get_temp_dir() . '/txffinal-import-' . getmypid() . '.csv';
@@ -2485,6 +2606,14 @@ try {
         pass('campaign rejects site without emails');
     } else {
         fail('campaign allowed empty-email site');
+    }
+    $campNone = upsert_email_campaign_row($sheetFr, 'txfcamp-none.fr', [
+        'email1' => 'none', 'email2' => '', 'email3' => '', 'email4' => '',
+    ]);
+    if (empty($campNone['ok'])) {
+        pass('campaign rejects none marker (not a sendable email)');
+    } else {
+        fail('campaign allowed none: ' . json_encode($campNone));
     }
     if (!empty($withEmail['ok'])) {
         $row = db()->query(
@@ -4199,6 +4328,16 @@ try {
             pass('merge_swe_email_slots_prefer_admin fills blanks only');
         } else {
             fail('merge unit: ' . json_encode($unitMerge));
+        }
+
+        $noneMerge = merge_swe_email_slots_prefer_admin(
+            ['none', '', '', ''],
+            ['new@team.test', '', '', '']
+        );
+        if ($noneMerge === ['new@team.test', '', '', '']) {
+            pass('merge replaces Admin none with Team real email');
+        } else {
+            fail('none merge: ' . json_encode($noneMerge));
         }
 
         $fullMerge = merge_swe_email_slots_prefer_admin_stats(

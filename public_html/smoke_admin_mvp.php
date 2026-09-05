@@ -2556,6 +2556,16 @@ if (!str_contains($sweApp, 'data-swe-open-site')
     ok('SWE UI Open site + Open first N + continue');
 }
 $sweJs = file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '';
+if (!str_contains($sweLib, 'function is_no_email_marker')
+    || !str_contains($sweLib, 'function email_slots_have_occupancy')
+    || !str_contains($sweLib, 'function email_slots_have_real')
+    || !str_contains($sweApp, 'type none')
+    || !str_contains($sweApp, 'is-no-email')
+    || !str_contains($sweJs, 'isNoEmailMarker')) {
+    fail('SWE missing none marker keep-row helpers / UI');
+} else {
+    ok('SWE none marker keeps the site row');
+}
 if (!str_contains($sweJs, 'listEligibleOpenRows')
     || !str_contains($sweJs, 'Open all ')
     || !str_contains($sweJs, 'syncOpenBulkButton')

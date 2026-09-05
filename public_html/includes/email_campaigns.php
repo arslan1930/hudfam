@@ -1041,9 +1041,17 @@ function email_campaign_row_email_list(array $row): array
         $e = function_exists('normalize_email_value')
             ? normalize_email_value((string) ($row[$k] ?? ''))
             : strtolower(trim((string) ($row[$k] ?? '')));
-        if ($e !== '') {
-            $out[] = $e;
+        if ($e === '') {
+            continue;
         }
+        if (function_exists('email_slot_is_real')) {
+            if (!email_slot_is_real($e)) {
+                continue;
+            }
+        } elseif ($e === 'none' || !str_contains($e, '@')) {
+            continue;
+        }
+        $out[] = $e;
     }
     return $out;
 }
@@ -2626,7 +2634,9 @@ function save_email_campaign_row(
     // Never put previously removed emails back.
     $filtered = filter_email_campaign_slots_against_exclusions($sheetId, $domain, $slots);
     $slots = $filtered['slots'];
-    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    $hasEmail = function_exists('email_slots_have_real')
+        ? email_slots_have_real($slots)
+        : ($slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '');
     if (!$hasEmail) {
         $gone = email_campaign_row_email_list($existing);
         if (function_exists('sheet_history_push_remove')) {
@@ -2744,7 +2754,9 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
     $slots = $norm['slots'] ?? ['', '', '', ''];
     $filtered = filter_email_campaign_slots_against_exclusions($sheetId, $domain, $slots);
     $slots = $filtered['slots'];
-    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    $hasEmail = function_exists('email_slots_have_real')
+        ? email_slots_have_real($slots)
+        : ($slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '');
     if (!$hasEmail) {
         if ($filtered['stripped'] !== []) {
             return [
@@ -3050,7 +3062,9 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
             if ($filtered['stripped'] !== []) {
                 $skippedEmails += count($filtered['stripped']);
             }
-            $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+            $hasEmail = function_exists('email_slots_have_real')
+                ? email_slots_have_real($slots)
+                : ($slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '');
             if (!$hasEmail) {
                 if ($filtered['stripped'] !== []) {
                     $skippedExcluded++;
@@ -3699,8 +3713,13 @@ function import_email_campaign_sheet_from_swe(
                 (string) ($row['email3'] ?? ''),
                 (string) ($row['email4'] ?? ''),
             ];
-        // Same rule as Sites with emails: never import a site with empty emails.
-        if ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
+        // Campaign needs a sendable address — skip empty and "none" markers.
+        if (function_exists('email_slots_have_real')) {
+            if (!email_slots_have_real($slots)) {
+                $skippedEmpty++;
+                continue;
+            }
+        } elseif ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
             $skippedEmpty++;
             continue;
         }

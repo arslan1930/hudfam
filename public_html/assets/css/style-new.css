@@ -499,6 +499,9 @@ html.ui-v2 textarea:focus {
   border-color: var(--brand-2);
   box-shadow: var(--focus-ring);
 }
+html.ui-v2 .swe-row-no-email .swe-domain {
+  border-color: rgba(251, 191, 36, 0.5);
+}
 html.ui-v2 .swe-domain,
 html.ui-v2 .swe-site-block input {
   color: var(--ink);
@@ -634,6 +637,11 @@ html.ui-v2 .swe-status-badge.is-emailed {
 }
 html.ui-v2 .swe-status-badge.is-unsent,
 html.ui-v2 .swe-status-badge.is-open {
+  background: var(--warn-soft);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+html.ui-v2 .swe-status-badge.is-no-email {
   background: var(--warn-soft);
   color: #fde68a;
   border-color: rgba(251, 191, 36, 0.5);

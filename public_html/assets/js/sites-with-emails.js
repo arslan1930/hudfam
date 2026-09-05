@@ -201,6 +201,11 @@
     return true;
   }
 
+  function isNoEmailMarker(v) {
+    var t = String(v || '').trim().toLowerCase().replace(/[\s_\-]+/g, '');
+    return t === 'none' || t === 'na' || t === 'n/a' || t === 'noemail';
+  }
+
   function countReadyRows() {
     var n = 0;
     document.querySelectorAll('[data-swe-row]').forEach(function (row) {
@@ -215,7 +220,7 @@
     if (!btn) return;
     var hasEmail = row.getAttribute('data-has-email') === '1';
     btn.disabled = !hasEmail;
-    btn.title = hasEmail ? 'Push this site to Admin' : 'Add at least one email first';
+    btn.title = hasEmail ? 'Push this site to Admin' : 'Add an email, or type none when the site has no address';
   }
 
   function syncPushButton(readyOverride) {
@@ -230,14 +235,14 @@
     if (ready > 0) {
       pushBtn.disabled = false;
       pushBtn.setAttribute('data-server-ready', '1');
-      pushBtn.title = 'Push every site on this country that has at least one email';
+      pushBtn.title = 'Push every site on this country that has an email or none';
     } else if (pushBtn.getAttribute('data-server-ready') === '1' && typeof readyOverride !== 'number') {
       // Other pages may still have ready rows
       pushBtn.disabled = false;
     } else {
       pushBtn.disabled = true;
       pushBtn.removeAttribute('data-server-ready');
-      pushBtn.title = 'Add at least one email on a site first';
+      pushBtn.title = 'Add an email, or type none when the site has no address';
     }
   }
 
@@ -256,13 +261,26 @@
     var emails = Array.prototype.map.call(row.querySelectorAll('[data-swe-email]'), function (el) {
       return String(el.value || '').trim().toLowerCase();
     });
-    var hasEmail = emails.some(function (e) { return e !== ''; });
+    var hasOccupancy = emails.some(function (e) { return e !== ''; });
+    var hasReal = emails.some(function (e) { return e !== '' && !isNoEmailMarker(e); });
+    var noEmailOnly = hasOccupancy && !hasReal;
     row.setAttribute('data-search', [domain, lang].concat(emails).filter(Boolean).join(' '));
-    row.setAttribute('data-has-email', hasEmail ? '1' : '0');
-    if (hasEmail) {
+    row.setAttribute('data-has-email', hasOccupancy ? '1' : '0');
+    row.classList.toggle('swe-row-no-email', noEmailOnly);
+    if (hasOccupancy) {
       clearRowOpened(row);
     } else {
       applyOpenedClass(row);
+    }
+    var status = row.querySelector('[data-swe-status]');
+    if (status) {
+      var cur = String(status.textContent || '').trim();
+      if (cur === 'Ready' || cur === 'Needs email' || cur === 'No email') {
+        status.classList.toggle('is-ready', hasOccupancy && hasReal);
+        status.classList.toggle('is-open', !hasOccupancy);
+        status.classList.toggle('is-no-email', noEmailOnly);
+        status.textContent = !hasOccupancy ? 'Needs email' : (noEmailOnly ? 'No email' : 'Ready');
+      }
     }
     syncRowPushButton(row);
     syncPushButton();

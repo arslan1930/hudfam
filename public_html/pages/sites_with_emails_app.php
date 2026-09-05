@@ -419,7 +419,7 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $ready = count_sites_with_emails_ready_to_push($countryName);
         if ($ready < 1) {
             // Only when every site still has all 4 email boxes empty (nothing ready).
-            flash('error', 'All email boxes are empty. Fill at least one email on a site, then Push.');
+            flash('error', 'All email boxes are empty. Fill an email, or type none when the site has no address, then Push.');
             redirect($back);
         }
         $confirmOverwrite = post('confirm_overwrite') === '1';
@@ -600,7 +600,7 @@ if (!$inCountry) {
     <div class="card" style="margin-bottom:1rem" id="swe-open-country">
       <h2><?= label_with_info(
           'Open an empty country',
-          'Countries already in the list open from the table. Use this only to start a country that has no Final folder yet. After it opens, paste or import CSV / Excel / TXT like Campaign. Each site needs at least one email and also creates the Admin working-list row.'
+          'Countries already in the list open from the table. Use this only to start a country that has no Final folder yet. After it opens, paste or import CSV / Excel / TXT like Campaign. Each site needs an email or none (when there is no address) and also creates the Admin working-list row.'
       ) ?></h2>
       <?php if ($emptyCatalogCountries === []): ?>
         <p class="help">
@@ -610,7 +610,7 @@ if (!$inCountry) {
       <?php else: ?>
       <p class="help">
         For a country that is not in the list yet. After it opens, paste or import
-        <strong>site + emails</strong> (same formats as Campaign). Each site needs at least one email.
+        <strong>site + emails</strong> (same formats as Campaign). Each site needs an email, or type none when there is no address.
       </p>
       <form method="get" action="index.php" class="camp-hub-create-form" autocomplete="off" data-no-draft style="margin-top:0.65rem">
         <input type="hidden" name="page" value="admin_emails_data">
@@ -659,7 +659,7 @@ if (!$inCountry) {
             'By country',
             $isAdminAll
                 ? 'Open a folder to see its archive and paste or import. Each country name or Open goes to that sheet.'
-                : 'Open a country to see its sites and emails. Counts show how many sites have at least one email.'
+                : 'Open a country to see its sites and emails. Counts show how many sites have a real email (none is kept on the row but is not counted as an address).'
         ) ?></h2>
         <label class="sheet-search swe-country-search" for="swe-country-search">
           <span class="visually-hidden">Search countries</span>
@@ -929,10 +929,10 @@ render_breadcrumbs($crumbs);
   <div>
     <?php
     $sweJumpTip = $isTeam
-        ? 'Add emails (autosave). Pick another country from this list — you do not need to go back to All countries. Push one site with its row button, or Push all sites that have at least one email.'
+        ? 'Add emails (autosave). If a site has no address, type none in Email 1 so the row stays and can be pushed. Pick another country from this list — you do not need to go back to All countries. Push one site with its row button, or Push all sites that have an email or none.'
         : ($isAdminAll
             ? 'Final archive for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together.'
-            : 'Admin working list for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together. Clear an email with Backspace (autosave). Remove deletes the whole row.');
+            : 'Admin working list for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together. Type none when a site has no address so the row stays. Clear every email box to remove from Admin (Final keeps the copy). Remove deletes the whole row.');
     $sweJumpHidden = ['per_page' => $perPage];
     if ($isTeam) {
         $sweJumpHidden['page'] = 'team_sites_emails';
@@ -986,8 +986,8 @@ render_breadcrumbs($crumbs);
     <?php if ($isTeam || $isAdminAll): ?>
     <button type="button" class="btn" data-swe-add-toggle
             title="<?= $isAdminAll
-                ? 'Add one site + at least one email · also creates the Admin working-list row'
-                : 'Add one site + up to 4 emails (emails optional)' ?>">+ Add site</button>
+                ? 'Add one site + an email, or none when there is no address · also creates the Admin working-list row'
+                : 'Add one site + up to 4 emails (or none when there is no address)' ?>">+ Add site</button>
     <?php endif; ?>
     <?php if ($isAdminAll): ?>
     <a class="btn secondary" href="#swe-bulk-add">Paste / import</a>
@@ -1003,8 +1003,8 @@ render_breadcrumbs($crumbs);
               title="<?= $readyToPush > 0
                   ? ($pushConflictCount > 0
                       ? 'Push every ready site · ' . (int) $pushConflictCount . ' will merge into Admin'
-                      : 'Push every site on this country that has at least one email')
-                  : 'Add at least one email on a site first' ?>">
+                      : 'Push every site on this country that has an email or none')
+                  : 'Add an email, or type none when the site has no address' ?>">
         Push all to Admin
       </button>
     </form>
@@ -1078,7 +1078,8 @@ render_breadcrumbs($crumbs);
   Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
   Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
   Opened rows stay <strong>highlighted</strong> until you enter an email in that row.
-  Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has at least one email.
+  Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has an email or <strong>none</strong>.
+  If a site has no address, type <strong>none</strong> in Email 1 — the row stays and can be pushed. Copy skips none.
   <?php if ($pushConflictCount > 0): ?>
     <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push merges Team emails into empty Admin slots (existing Admin emails stay).
   <?php endif; ?>
@@ -1088,7 +1089,7 @@ render_breadcrumbs($crumbs);
   Neutral duplicate archive (mirror of Admin). No campaign “emailed” marks here.
   Search finds a <strong>site + its emails</strong> together.
   Use <strong>+ Add site</strong>, or paste / import CSV / Excel / TXT below — same as Campaign.
-  Each site needs at least one email and also creates the Admin working-list row.
+  Each site needs an email, or type <strong>none</strong> when there is no address. That also creates the Admin working-list row. Copy and Campaign skip none.
 </p>
 <?php endif; ?>
 
@@ -1108,7 +1109,7 @@ render_sheet_checkpoint_compact(
 <div class="card">
   <div class="invoice-list-toolbar swe-list-toolbar">
     <div>
-      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Sheets can reach ~100K sites — choose how many rows per page with the Per page filter. Search matches site name or any email on that row. Search filters this page after you pause typing (default 100 rows). Ctrl/Cmd+Enter searches all pages.' . ($sweScope === 'admin' ? ' Use Status and the Actions buttons on each row for emailed / up to here.' : ($isAdmin ? ' Edit or Backspace to clear an email · Remove deletes the complete row.' : ' Paste up to 4 emails at once · autosave · row # shows position · Open highlights until an email is entered · Remove deletes the row.'))) ?></h2>
+      <h2 style="margin:0"><?= label_with_info('Sites · Emails', 'Each row is one site with up to 4 emails. Type none in Email 1 when the site has no address — the row stays. Copy skips none. Sheets can reach ~100K sites — choose how many rows per page with the Per page filter. Search matches site name or any email on that row. Search filters this page after you pause typing (default 100 rows). Ctrl/Cmd+Enter searches all pages.' . ($sweScope === 'admin' ? ' Use Status and the Actions buttons on each row for emailed / up to here.' : ($isAdmin ? ' Edit or Backspace to clear an email · Remove deletes the complete row.' : ' Paste up to 4 emails at once · autosave · row # shows position · Open highlights until an email is entered · type none if there is no address · Remove deletes the row.'))) ?></h2>
       <?php if ($sweScope === 'admin'): ?>
       <p class="swe-sent-filters">
         <?php
@@ -1190,8 +1191,8 @@ render_sheet_checkpoint_compact(
     <?php if ($isTeam || $isAdminAll): ?>
     <button type="button" class="btn small" data-swe-add-toggle
             title="<?= $isAdminAll
-                ? 'Add one site + at least one email · also creates the Admin working-list row'
-                : 'Add one site + up to 4 emails (emails optional)' ?>">+ Add site</button>
+                ? 'Add one site + an email, or none when there is no address · also creates the Admin working-list row'
+                : 'Add one site + up to 4 emails (or none when there is no address)' ?>">+ Add site</button>
     <?php endif; ?>
     <?php
     render_sheet_edit_toolbar($listBase, sheet_history_key('swe', $sweScope . ':' . $countryName), [
@@ -1284,7 +1285,14 @@ render_sheet_checkpoint_compact(
           $e2 = (string) $s['email2'];
           $e3 = (string) $s['email3'];
           $e4 = (string) $s['email4'];
-          $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
+          $hasOccupancy = function_exists('email_slots_have_occupancy')
+              ? email_slots_have_occupancy($s)
+              : ($e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '');
+          $hasReal = function_exists('email_slots_have_real')
+              ? email_slots_have_real($s)
+              : $hasOccupancy;
+          $noEmailOnly = $hasOccupancy && !$hasReal;
+          $hasEmail = $hasOccupancy;
           $willOverwrite = $isTeam && isset($pushConflictSet[$domain]);
           $isEmailed = $sweScope === 'admin' && (int) ($s['email_sent'] ?? 0) === 1;
           $openHost = function_exists('extract_host_candidate')
@@ -1302,8 +1310,13 @@ render_sheet_checkpoint_compact(
               $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
               $statusClass = $isEmailed ? 'is-emailed' : 'is-open';
           } elseif ($isTeam) {
-              $statusLabel = $hasEmail ? 'Ready' : 'Needs email';
-              $statusClass = $hasEmail ? 'is-ready' : 'is-open';
+              if ($noEmailOnly) {
+                  $statusLabel = 'No email';
+                  $statusClass = 'is-no-email';
+              } else {
+                  $statusLabel = $hasEmail ? 'Ready' : 'Needs email';
+                  $statusClass = $hasEmail ? 'is-ready' : 'is-open';
+              }
           } else {
               $statusLabel = 'Archive';
               $statusClass = 'is-archive';
@@ -1314,7 +1327,7 @@ render_sheet_checkpoint_compact(
             data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
             data-row-num="<?= (int) $rowNum ?>"
             data-row-signal="<?= h($rowSignal) ?>"
-            class="<?= $isEmailed ? 'swe-row-emailed' : '' ?><?= $rowSignal !== '' ? ' swe-row-' . h($rowSignal) : '' ?>">
+            class="<?= $isEmailed ? 'swe-row-emailed' : '' ?><?= $noEmailOnly ? ' swe-row-no-email' : '' ?><?= $rowSignal !== '' ? ' swe-row-' . h($rowSignal) : '' ?>">
           <?php render_sheet_select_td($sid, $domain); ?>
           <?php if ($isTeam): ?>
           <td class="swe-td-num" data-label="#">
@@ -1405,7 +1418,7 @@ render_sheet_checkpoint_compact(
                       data-admin-conflict="<?= $willOverwrite ? '1' : '0' ?>"
                       title="<?= $hasEmail
                           ? ($willOverwrite ? 'Merge Team emails into empty Admin slots for this site' : 'Push this site to Admin')
-                          : 'Add at least one email first' ?>">Push</button>
+                          : 'Add an email, or type none when the site has no address' ?>">Push</button>
               <?php render_sheet_row_more_open(); ?>
               <?php endif; ?>
               <?php if ($sweScope !== 'admin' && !$isTeam) {
@@ -1441,13 +1454,13 @@ render_sheet_checkpoint_compact(
   <div class="empty-state" id="swe-empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
-      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push.</p>
+      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push — type none if the site has no address so the row can be pushed and kept.</p>
       <p class="actions" style="justify-content:center;margin-top:0.75rem">
         <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
       </p>
     <?php elseif ($isAdminAll): ?>
       <p>No mirrored sites in this country yet.</p>
-      <p class="muted">They sync here from Admin, or add a site / paste / import a CSV like Campaign. Each site needs at least one email (also creates the Admin working-list row).</p>
+      <p class="muted">They sync here from Admin, or add a site / paste / import a CSV like Campaign. Each site needs an email, or none when there is no address (also creates the Admin working-list row).</p>
       <p class="actions" style="justify-content:center;margin-top:0.75rem">
         <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
         <a class="btn secondary" href="#swe-bulk-add">Paste / import file</a>
@@ -1513,13 +1526,13 @@ render_sheet_checkpoint_compact(
 
 <?php if ($isAdminAll): ?>
 <div class="card" style="margin-top:1rem" id="swe-bulk-add">
-  <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry on Final. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email and also creates the Admin working-list row. Identical emails are skipped; different emails replace the existing row.') ?></h2>
+  <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry on Final. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs an email, or none when there is no address, and also creates the Admin working-list row. Identical emails are skipped; different emails replace the existing row.') ?></h2>
   <p class="help">
     Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
     (comma, tab, or semicolon). Header row is optional and skipped.
-    Extra columns after email 4 are ignored. Each site needs at least one email.
+    Extra columns after email 4 are ignored. Each site needs an email, or type none when there is no address.
     Built for large lists — paste or upload thousands of rows at once.
-    Same formats as Campaign. Lines with no email are skipped.
+    Same formats as Campaign. Lines with no email and no none marker are skipped.
   </p>
 
   <form method="post" action="<?= h($listBase) ?>" style="margin-top:0.85rem"
