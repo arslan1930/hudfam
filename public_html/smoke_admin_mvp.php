@@ -454,6 +454,12 @@ if (!str_contains($officeExpLib, 'function ensure_office_expense_schema')
 } else {
     ok('Office expenses schema + helpers + Admin hub route');
 }
+if (str_contains($officeExpPage, 'Cancel edit')
+    || !str_contains($officeExpPage, '>Cancel</a>')) {
+    fail('Office expenses still has duplicate Cancel edit');
+} else {
+    ok('Office expenses Cancel lives on the form only');
+}
 $officeExpCssBlock = '';
 $officeExpCssNeedle = strpos($officeExpCss, '/* Office expenses');
 if ($officeExpCssNeedle !== false) {
@@ -1710,6 +1716,22 @@ if (!str_contains($uiCss, '.orders-summary-item')
     fail('overlay missing Order management leftover-light restyle');
 } else {
     ok('overlay restyles Order management summary + Page totals');
+}
+if (!str_contains($uiCss, 'table.sheet-cards-mobile tr.site-price-row[data-tint="yellow"]')
+    || !str_contains($uiCss, '.sheet-country-jump select')
+    || !str_contains($uiCss, '.camp-country-jump select')
+    || !str_contains($uiCss, '.page-purpose-title')) {
+    fail('overlay missing leftover-light mobile tints / country jump / page purpose');
+} else {
+    ok('overlay leftover-light mobile tints + country jump + page purpose');
+}
+if (!str_contains($uiCss, 'html.ui-v2 .invoice-doc')
+    || !str_contains($uiCss, 'html.ui-v2 .invoice-doc-table th')
+    || !str_contains($uiCss, 'background: #0f2744 !important')
+    || preg_match('/html\.ui-v2 \.invoice-doc,\s*html\.ui-v2 \.invoice-doc-logohead,\s*html\.ui-v2 \.invoice-doc thead th/', $uiCss)) {
+    fail('overlay invoice paper is not original white + navy headers');
+} else {
+    ok('overlay keeps invoice paper white with navy headers');
 }
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')

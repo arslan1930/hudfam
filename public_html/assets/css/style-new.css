@@ -1145,6 +1145,27 @@ html.ui-v2 .camp-hub-field #new_camp_project {
   border-color: #94a3b8;
 }
 
+/* Country jumpers — beat app.css background:#fff if specificity shifts. */
+html.ui-v2 .camp-country-jump-select,
+html.ui-v2 .camp-country-jump select,
+html.ui-v2 .sheet-country-jump select {
+  background: #1e293b;
+  color: var(--ink);
+  border-color: #94a3b8;
+}
+
+html.ui-v2 .page-purpose {
+  border-left-color: var(--brand);
+}
+html.ui-v2 .page-purpose-title,
+html.ui-v2 .glossary-title,
+html.ui-v2 .glossary-list dt {
+  color: var(--brand-2);
+}
+html.ui-v2 .empty-state > p:first-child {
+  color: var(--ink);
+}
+
 /* Order management — leftover white summary cards / Page totals bar / clipped cells */
 html.ui-v2 .orders-summary-item {
   background: var(--fx-glass);
@@ -1205,16 +1226,51 @@ html.ui-v2 tbody tr:nth-child(even) td {
   background: rgba(148, 163, 184, 0.06);
 }
 
-/* Invoice paper stays white (even-row overlay must not tint it). */
+/* Invoice paper stays the original white letterhead (even-row / thead
+   overlay must not darken it). Table headers stay navy, not white. */
 html.ui-v2 .invoice-preview-wrap {
   background: #0f172a;
 }
 html.ui-v2 .invoice-doc,
 html.ui-v2 .invoice-doc-logohead,
-html.ui-v2 .invoice-doc thead th {
+html.ui-v2 .invoice-doc-ids,
+html.ui-v2 .invoice-party-to,
+html.ui-v2 .invoice-doc-totals,
+html.ui-v2 .invoice-doc-summary {
   background: #fff !important;
   color: #111827;
   box-shadow: none;
+}
+html.ui-v2 .invoice-doc-ids strong,
+html.ui-v2 .invoice-doc-strong,
+html.ui-v2 .invoice-party-lines,
+html.ui-v2 .invoice-doc-address,
+html.ui-v2 .invoice-desc {
+  color: #111827;
+}
+html.ui-v2 .invoice-doc .invoice-k,
+html.ui-v2 .invoice-doc-footer,
+html.ui-v2 .invoice-party-lines span,
+html.ui-v2 .invoice-doc-vat {
+  color: #6b7280;
+}
+html.ui-v2 .invoice-party-label {
+  color: #1e3a5f;
+}
+html.ui-v2 .invoice-party-from,
+html.ui-v2 .invoice-doc-paybox,
+html.ui-v2 .invoice-doc-admin-note {
+  background: #f8fafc !important;
+  color: #111827;
+}
+html.ui-v2 .invoice-doc-table th,
+html.ui-v2 .invoice-doc thead th {
+  background: #0f2744 !important;
+  color: #fff !important;
+}
+html.ui-v2 .invoice-total-grand {
+  background: #0f2744 !important;
+  color: #fff !important;
 }
 html.ui-v2 .invoice-doc tbody tr td,
 html.ui-v2 .invoice-doc tbody tr:nth-child(even) td,
@@ -1228,6 +1284,34 @@ html.ui-v2 .invoice-doc-table tbody tr:hover td {
 }
 html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td {
   background: #f8fafc !important;
+}
+html.ui-v2 .invoice-doc label {
+  color: #111827;
+}
+html.ui-v2 .invoice-doc input:not([type]),
+html.ui-v2 .invoice-doc input[type="text"],
+html.ui-v2 .invoice-doc input[type="number"],
+html.ui-v2 .invoice-doc input[type="date"],
+html.ui-v2 .invoice-doc input[type="email"],
+html.ui-v2 .invoice-doc input[type="url"],
+html.ui-v2 .invoice-doc select,
+html.ui-v2 .invoice-doc textarea {
+  background: #fff !important;
+  color: #111827 !important;
+  border-color: #d1d5db;
+  box-shadow: none;
+  caret-color: #111827;
+}
+html.ui-v2 .invoice-doc-note-box textarea,
+html.ui-v2 .invoice-doc textarea.invoice-edit-note {
+  background: #fffef8 !important;
+}
+html.ui-v2 .invoice-doc input:-webkit-autofill,
+html.ui-v2 .invoice-doc textarea:-webkit-autofill,
+html.ui-v2 .invoice-doc select:-webkit-autofill {
+  -webkit-text-fill-color: #111827;
+  caret-color: #111827;
+  box-shadow: 0 0 0 1000px #fff inset;
 }
 
 /* Publisher row tints must beat zebra overlay. */
@@ -1246,6 +1330,28 @@ html.ui-v2 .site-price-add[data-tint="blue"] td {
 html.ui-v2 .site-price-row[data-tint="green"] td,
 html.ui-v2 .site-price-add[data-tint="green"] td {
   background: rgba(187, 247, 208, 0.28) !important;
+}
+
+/* Mobile stacked Website prices cards — beat sheet-cards-mobile #fff tints. */
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="yellow"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="yellow"] {
+  background: rgba(253, 230, 138, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="pink"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="pink"] {
+  background: rgba(254, 205, 211, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="blue"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="blue"] {
+  background: rgba(191, 219, 254, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint="green"],
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint="green"] {
+  background: rgba(187, 247, 208, 0.28) !important;
+}
+html.ui-v2 table.sheet-cards-mobile tr.site-price-row[data-tint] td,
+html.ui-v2 table.sheet-cards-mobile tr.site-price-add[data-tint] td {
+  background: transparent !important;
 }
 
 /* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
@@ -1428,5 +1534,12 @@ html.ui-v2 .office-expense-month-jump select {
   }
   html.ui-v2 body::before {
     display: none;
+  }
+  html.ui-v2 .invoice-doc,
+  html.ui-v2 .invoice-preview-wrap,
+  html.ui-v2 body.invoice-print-body {
+    background: #fff !important;
+    color: #111827 !important;
+    box-shadow: none;
   }
 }

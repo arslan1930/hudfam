@@ -166,9 +166,6 @@ render_header('Office expenses', 'admin');
 <section class="card" id="office-expense-add">
   <div class="invoice-list-toolbar">
     <h2 style="margin:0"><?= $editRow ? 'Edit payment' : 'Add payment' ?></h2>
-    <?php if ($editRow): ?>
-      <a class="btn secondary small" href="<?= h($pageUrl) ?>#office-expense-add">Cancel edit</a>
-    <?php endif; ?>
   </div>
   <form method="post" action="<?= h($pageUrl) ?>" class="office-expense-add">
     <?= csrf_field() ?>
