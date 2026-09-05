@@ -360,6 +360,7 @@ endif;
         <strong>Copy</strong> keeps formatting and pictures for Gmail / Outlook.
       </p>
       <form method="post" action="<?= h($formAction) ?>" class="camp-draft-form" autocomplete="off"
+            data-no-draft
             data-show-processing="<?= $editDraft ? 'Updating draft…' : 'Saving draft…' ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="save_draft">

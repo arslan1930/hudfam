@@ -23,7 +23,7 @@ render_header('Extracting sites', 'team');
   <div>
     <h1>Extracting sites</h1>
     <p class="muted">
-      Shared waiting list per country. Open a country, then use <strong>Open &amp; remove</strong> on that country’s shared Sites list.
+      Open a country. Use <strong>Open &amp; remove</strong> on that country’s shared Sites list.
     </p>
     <?php if ($waitCountries > 0): ?>
       <p class="muted" data-extract-hub-total>

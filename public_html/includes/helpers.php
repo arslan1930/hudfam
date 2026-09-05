@@ -146,11 +146,14 @@ function render_hidden_multiline(string $name, string $value, array $opts = []):
     $id = trim((string) ($opts['id'] ?? ''));
     $extraClass = trim((string) ($opts['class'] ?? ''));
     $class = trim('visually-hidden ' . $extraClass);
-    return '<textarea name="' . h($name) . '"'
+    // Wrap + inline display:none. Clip-based .visually-hidden does not hide
+    // <textarea> (UA rows + global textarea width/padding paint a visible box).
+    return '<div hidden style="display:none" aria-hidden="true">'
+        . '<textarea name="' . h($name) . '"'
         . ($id !== '' ? ' id="' . h($id) . '"' : '')
-        . ' class="' . h($class) . '" aria-hidden="true" tabindex="-1">'
+        . ' class="' . h($class) . '" hidden aria-hidden="true" tabindex="-1" style="display:none">'
         . h($value)
-        . '</textarea>';
+        . '</textarea></div>';
 }
 
 /**
@@ -209,6 +212,14 @@ function stylesheet_url(): string
     $file = dirname(__DIR__) . '/assets/css/app.css';
     $v = is_file($file) ? (string) filemtime($file) : (string) time();
     return app_url('asset.php?f=css/app.css&v=' . rawurlencode($v));
+}
+
+/** UI overlay after app.css (Hostinger-safe via asset.php allowlist). */
+function stylesheet_new_url(): string
+{
+    $file = dirname(__DIR__) . '/assets/css/style-new.css';
+    $v = is_file($file) ? (string) filemtime($file) : (string) time();
+    return app_url('asset.php?f=css/style-new.css&v=' . rawurlencode($v));
 }
 
 /** Hostinger-safe JS URL via asset.php allowlist. */

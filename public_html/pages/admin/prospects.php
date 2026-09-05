@@ -304,7 +304,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             redirect(prospect_country_sheet_url($addCountry, $sheetKeep(['hash' => 'add-sites'])));
         }
         if ($insN > 0) {
-            flash('ok', prospect_saved_sites_message($insN, (string) $result['country']));
+            flash(
+                'ok',
+                prospect_saved_sites_message(
+                    $insN,
+                    (string) $result['country'],
+                    is_array($result['by_country'] ?? null) ? $result['by_country'] : []
+                )
+            );
             prospect_store_just_added_ids(is_array($result['ids'] ?? null) ? $result['ids'] : []);
         } else {
             unset($_SESSION['prospect_just_added_ids']);
@@ -313,8 +320,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'add_si
             flash('fade', prospect_duplicates_deleted_message($dup) . '.');
         }
         unset($_SESSION['admin_prospects_add_draft']);
+        $highlightN = count(is_array($result['ids'] ?? null) ? $result['ids'] : []);
+        if ($highlightN < 1) {
+            $highlightN = $insN;
+        }
         redirect(prospect_country_sheet_url($result['country'], [
-            'just_added' => $insN,
+            'just_added' => $highlightN,
             'hash' => 'prospect-sites-card',
         ]));
     } catch (Throwable $e) {
@@ -474,8 +485,7 @@ if (!$inCountry && !$emptyCountry) {
     <div class="topbar">
       <div>
         <h1><?= label_with_info('Our database', 'Country folders of unique sites. Team Filter & add writes here.') ?></h1>
-        <p class="muted">Each country is its own site database. Team Filter &amp; add writes into these folders.</p>
-        <p class="muted"><?= (int) $grandTotal ?> sites total.</p>
+        <p class="muted">Team Filter &amp; add writes into these folders. <?= (int) $grandTotal ?> sites · open a country to browse or add.</p>
       </div>
       <div class="actions">
         <a class="btn" href="#add-sites">Add sites</a>
@@ -700,7 +710,7 @@ if (!$inCountry && !$emptyCountry) {
 
     <div class="card" id="add-sites">
       <h2>Add sites</h2>
-      <p class="help">Paste root domains into one country’s database. Use <strong>Clean to root domains</strong> for https/paths/subdomains.</p>
+      <p class="help">Paste root domains. .pt→Portugal, .at→Austria; .com stays in the country you pick. Clean https/paths first.</p>
       <form method="post" action="index.php?page=admin_prospects#add-sites" id="prospect-add-sites-form"
             data-show-processing="Saving sites…">
         <?= csrf_field() ?>
@@ -1020,7 +1030,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
             'page' => 'admin_prospects',
             'per_page' => $perPage,
         ],
-        'Country database of unique sites. Pick another country from this list — you do not need to go back to All countries. Team Filter & add writes into these folders.',
+          'Country folder. Pick another from this list.',
         'prospect-country-jump',
         'Our database country'
     );
@@ -1197,7 +1207,7 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
 <div class="card" id="add-sites">
   <h2>Add sites to <?= h($countryName) ?></h2>
   <p class="help">
-    Paste root domains into this country’s Our database folder. Use <strong>Clean to root domains</strong> for https/paths/subdomains.
+    Paste root domains. .pt→Portugal, .at→Austria; .com stays in <?= h($countryName) ?>. Clean https/paths first.
     <?php if ($filterCreatedBy > 0): ?>
       New sites join the <strong>whole folder</strong>, not only <?= h($filterCreatedLabel) ?>’s list.
     <?php endif; ?>

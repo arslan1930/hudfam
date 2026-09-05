@@ -70,8 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'push_results') {
         $resultsText = (string) post('results_text');
-        // Keep draft text on the batch while validating / if push fails partially.
-        save_extract_batch_results($id, $resultsText);
+        // Persist Ready roots (https/paths cleaned). Keep the original paste only
+        // when nothing could be cleaned, so the person can still edit.
+        $persistText = extract_results_text_for_persist($resultsText);
+        save_extract_batch_results($id, $persistText);
         try {
             $pushed = push_extract_results_to_extracted(
                 $resultsText,
@@ -94,14 +96,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             redirect('index.php?page=team_extract_batch&id=' . $id);
         }
-        // Only clear Results when something new was inserted; keep paste if only duplicates.
+        // Only clear Results when something new was inserted; keep Ready roots if only duplicates.
         if ((int) $pushed['inserted'] > 0) {
             save_extract_batch_results($id, '');
-            // Remove successfully pushed domains from this country's Sites list.
+            // Remove pushed roots from this country's Sites list (inserted + already there).
             $pushedDomains = [];
-            $rawLines = preg_split('/\R+/', $resultsText) ?: [];
-            foreach ($rawLines as $line) {
-                $d = normalize_domain(trim((string) $line));
+            foreach (($pushed['domains'] ?? []) as $d) {
+                $d = trim((string) $d);
                 if ($d !== '') {
                     $pushedDomains[] = $d;
                 }
@@ -186,8 +187,7 @@ render_header('Extracting · ' . $country, 'team');
     ?>
     <p class="muted">
       <span id="sites_count_label"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
-      in this country’s <strong>shared</strong> Sites list
-      (both teammates see the same number after refresh)
+      on this shared list
     </p>
   </div>
   <div class="actions">
@@ -203,18 +203,20 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>① Sites list</h2>
     <p class="help">
-      Sites waiting to extract for <strong><?= h($country) ?></strong> — this list is <strong>shared</strong>.
-      Changes <strong>autosave</strong> in real time.
-      <strong>Undo</strong>/<strong>Redo</strong> work while you stay on this page.
-      Use <strong>Open &amp; remove first 10–50</strong> to visit sites in new tabs and take them off this list
-      (batches of 10 — <strong>Open next</strong> continues from the new top).
-      <strong>Undo</strong> puts them back while you stay on this page.
-      If emptied, this page stays open; the country hides when you return to Extracting sites,
-      and the row is removed after <strong>1 hour</strong> unless new sites are added (new sites appear at the top).
-      Our database can be larger — it keeps everything.
-      Extracting shrinks when you Push Results, Open &amp; remove, delete lines here,
-      or Admin removes the same domains from Our database.
+      Shared list for <strong><?= h($country) ?></strong> — autosaves.
+      <strong>Open &amp; remove</strong> first 10–50 to work a batch (Undo puts them back).
     </p>
+    <details class="help-details">
+      <summary>Sites list details</summary>
+      <div class="help-details-body">
+        <p class="help" style="margin:0">
+          Changes autosave. Undo/Redo work while you stay on this page.
+          Open next continues from the new top. If emptied, this page stays open;
+          the country hides on Extracting sites and is removed after 1 hour unless new sites are added.
+          Extracting shrinks when you Push, Open &amp; remove, delete lines, or Admin removes the same domains from Our database.
+        </p>
+      </div>
+    </details>
 
     <?php
       $serverSitesText = implode("\n", $domains);
@@ -263,10 +265,7 @@ render_header('Extracting · ' . $country, 'team');
         placeholder="Waiting for sites from the team mate"
       ><?= h($serverSitesText) ?></textarea>
       <p class="help" style="margin-top:0.5rem">
-        Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>.
-        Hyphens and multi-part TLDs are OK.
-        One per line (or commas). Autosave normalizes <code>https</code>/paths to root domains;
-        invalid lines are removed so this box matches the saved list.
+        One root domain per line. Autosave strips https/paths; invalid lines are dropped.
       </p>
       <p class="muted" style="margin:0.35rem 0 0">
         <span id="sites_footer_count"><?= count($domains) ?> site<?= count($domains) === 1 ? '' : 's' ?></span>
@@ -284,11 +283,9 @@ render_header('Extracting · ' . $country, 'team');
   <div class="card box-panel">
     <h2>② Extracting Results</h2>
     <p class="help">
-      Paste extracted sites, <strong>Clean to root domains</strong> if needed, then <strong>Push</strong>.
-      <strong>Push uses the Ready list only</strong> (Needs attention stays aside).
-      Country TLDs auto-route (<strong>.de</strong>→Germany, <strong>.at</strong>→Austria, <strong>.ch</strong>→Switzerland, …).
-      Generic TLDs (<strong>.com</strong>, <strong>.net</strong>, <strong>.eu</strong>, …) stay in <strong><?= h($country) ?></strong>.
-      Sites go to Extracted Sites + Sites with emails - Team in each destination country.
+      Paste extracted sites — https/paths/subdomains clean to roots automatically
+      (or click <strong>Clean to root domains</strong>). Then <strong>Push</strong> Ready only.
+      .pt→Portugal, .at→Austria, .ch→Switzerland; .com stays in <strong><?= h($country) ?></strong>.
     </p>
     <form method="post" id="extract_results_form">
       <?= csrf_field() ?>

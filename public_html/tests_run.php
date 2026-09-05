@@ -178,6 +178,8 @@ if (
     && str_contains($draftJs, 'just_added')
     && str_contains($draftJs, 'prospect-add-sites-form')
     && str_contains($draftJs, 'Restore already wrote localStorage')
+    && str_contains($draftJs, 'camp-draft-textarea-sync')
+    && str_contains($draftJs, "el.classList.contains('visually-hidden')")
 ) {
     pass('draft autosave skips _csrf; sheet/SWE/presence CSRF wired');
 } else {
@@ -186,6 +188,7 @@ if (
 
 if (str_contains($procJs, "method === 'get'")
     && str_contains($procJs, 'GET forms do')
+    && str_contains($procJs, '(?:export|download)=')
     && str_contains($draftJs, 'Restore already wrote localStorage')
     && str_contains($draftJs, 'restoreBannerVisible')
     && str_contains($draftJs, 'saveForm(form, index, true)')
@@ -525,7 +528,14 @@ try {
     if (prospect_saved_sites_message(1, 'United States') === 'Saved 1 new site to United States. It is at the top of the list.'
         && str_contains(prospect_saved_sites_message(30, 'United States'), 'Saved 30 new sites to United States')
         && !str_contains(prospect_saved_sites_message(30, 'United States'), 'site(s)')
-        && str_contains(prospect_country_sheet_url('Germany', ['just_added' => 30]), 'just_added=30')) {
+        && str_contains(prospect_country_sheet_url('Germany', ['just_added' => 30]), 'just_added=30')
+        && str_contains(
+            prospect_saved_sites_message(3, 'Austria', [
+                'Austria' => ['inserted' => 1],
+                'Portugal' => ['inserted' => 2],
+            ]),
+            'Austria 1, Portugal 2'
+        )) {
         pass('prospect_saved_sites_message grammar + just_added URL');
     } else {
         fail('prospect_saved_sites_message');
@@ -1679,7 +1689,31 @@ try {
         && prospect_destinations_phrase([], 'new') === '') {
         pass('prospect destination phrase + names');
     } else {
-        fail('dest phrase unexpected: ' . json_encode([$phraseNew, $phraseExist, $phraseIns, $names]));
+        fail('destination phrase unexpected: ' . json_encode([
+            $phraseNew, $phraseExist, $phraseIns, $names,
+        ]));
+    }
+    $checkRows = prospect_route_check_rows([
+        'Portugal' => ['new' => ['a.pt', 'b.pt'], 'existing' => ['old.pt']],
+        'Austria' => ['new' => [], 'existing' => ['wien.at', 'graz.at']],
+        'Germany' => ['new' => ['c.de'], 'existing' => []],
+    ]);
+    $byName = [];
+    foreach ($checkRows as $row) {
+        $byName[$row['name']] = $row;
+    }
+    if (
+        (int) ($byName['Portugal']['new'] ?? 0) === 2
+        && (int) ($byName['Portugal']['existing'] ?? 0) === 1
+        && (int) ($byName['Austria']['new'] ?? 0) === 0
+        && (int) ($byName['Austria']['existing'] ?? 0) === 2
+        && (int) ($byName['Germany']['new'] ?? 0) === 1
+        && (int) ($byName['Germany']['existing'] ?? 0) === 0
+        && prospect_route_check_rows([]) === []
+    ) {
+        pass('prospect route check rows (unique vs skipped per destination)');
+    } else {
+        fail('route check rows unexpected: ' . json_encode($checkRows));
     }
 } catch (Throwable $e) {
     fail('dest phrase: ' . $e->getMessage());
@@ -1753,6 +1787,20 @@ try {
         fail("team swe txfpush-* count=$swe");
     }
 
+    $keepHttps = "https://www.txfkeep-dup.de/path\nwww.txfkeep-dup.de\ntxfkeep-dup.de";
+    $keepPersist = extract_results_text_for_persist($keepHttps);
+    if ($keepPersist === 'txfkeep-dup.de') {
+        pass('extract persist Ready roots strip https/www/path');
+    } else {
+        fail('extract persist Ready unexpected: ' . json_encode($keepPersist));
+    }
+    $keepJunk = extract_results_text_for_persist("!!! not a site\n###");
+    if (str_contains($keepJunk, '!!! not a site')) {
+        pass('extract persist keeps unfixable paste when nothing is Ready');
+    } else {
+        fail('extract persist dropped unfixable paste: ' . json_encode($keepJunk));
+    }
+
     // Push auto-route: country TLDs → own folders; generic TLDs stay in selected country.
     // Also mirrors site names into Semrush Research (append + skip duplicates).
     db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txfroute-%'");
@@ -1813,7 +1861,10 @@ try {
         && country_for_push_domain('shop.eu', 'France') === 'France'
         && country_for_push_domain('praza.gal', 'France') === 'Spain'
         && country_for_push_domain('comunidad.madrid', 'France') === 'Spain'
-        && country_for_push_domain('berria.eus', 'France') === 'Spain';
+        && country_for_push_domain('berria.eus', 'France') === 'Spain'
+        && country_for_push_domain('shop.pt', 'Austria') === 'Portugal'
+        && country_for_push_domain('loja.com.pt', 'Austria') === 'Portugal'
+        && country_for_push_domain('shop.at', 'Portugal') === 'Austria';
     if ((int) ($routePush['inserted'] ?? 0) >= 5
         && $inDe === 4 // .com + .net + .eu + .de
         && $inAt === 1
@@ -3342,6 +3393,72 @@ try {
         fail('copy domains: unsent=' . json_encode($copyUnsent)
             . ' sent=' . json_encode($copySent) . ' all=' . json_encode($copyAll));
     }
+
+    db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email1='good@txfcamp-nl-c.nl, not-an-email, also@txfcamp-nl-c.nl',
+             email2='', email3='', email4=''
+         WHERE sheet_id=? AND domain='txfcamp-nl-c.nl'"
+    )->execute([$nlSheet]);
+    $copyEmailsUnsent = collect_email_campaign_emails($nlSheet, '0');
+    $copyEmailsSent = collect_email_campaign_emails($nlSheet, '1');
+    $copyEmailsAll = collect_email_campaign_emails($nlSheet, null);
+    $hasGoodC = in_array('good@txfcamp-nl-c.nl', $copyEmailsUnsent, true)
+        && in_array('also@txfcamp-nl-c.nl', $copyEmailsUnsent, true);
+    $noBadC = !in_array('not-an-email', $copyEmailsUnsent, true)
+        && !in_array('not-an-email', $copyEmailsAll, true);
+    $aEmail = (string) db()->query(
+        "SELECT email1 FROM email_campaign_rows WHERE sheet_id=" . (int) $nlSheet
+        . " AND domain='txfcamp-nl-a.nl' LIMIT 1"
+    )->fetchColumn();
+    $aInSent = $aEmail !== '' && in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsSent), true);
+    $aNotUnsent = $aEmail === '' || !in_array(mb_strtolower($aEmail), array_map('mb_strtolower', $copyEmailsUnsent), true);
+    if (    $hasGoodC && $noBadC && $aInSent && $aNotUnsent
+        && in_array('good@txfcamp-nl-c.nl', $copyEmailsAll, true)) {
+        pass('campaign copy emails splits sent vs unsent and skips invalid tokens');
+    } else {
+        fail('copy emails: unsent=' . json_encode($copyEmailsUnsent)
+            . ' sent=' . json_encode($copyEmailsSent) . ' all=' . json_encode($copyEmailsAll)
+            . " aEmail=$aEmail");
+    }
+
+    $csvUnsent = collect_email_campaign_csv_rows($nlSheet, '0');
+    $csvSentRows = collect_email_campaign_csv_rows($nlSheet, '1');
+    $csvAllRows = collect_email_campaign_csv_rows($nlSheet, null);
+    $csvC = null;
+    $csvCInSent = false;
+    $csvAInSent = false;
+    foreach ($csvUnsent as $row) {
+        if (($row[0] ?? '') === 'txfcamp-nl-c.nl') {
+            $csvC = $row;
+        }
+    }
+    foreach ($csvSentRows as $row) {
+        if (($row[0] ?? '') === 'txfcamp-nl-c.nl') {
+            $csvCInSent = true;
+        }
+        if (($row[0] ?? '') === 'txfcamp-nl-a.nl') {
+            $csvAInSent = true;
+        }
+    }
+    $csvJoined = $csvC ? strtolower(implode(' ', $csvC)) : '';
+    if ($csvC
+        && str_contains($csvJoined, 'good@txfcamp-nl-c.nl')
+        && str_contains($csvJoined, 'also@txfcamp-nl-c.nl')
+        && !str_contains($csvJoined, 'not-an-email')
+        && $csvAInSent
+        && !$csvCInSent
+        && count($csvAllRows) >= 2) {
+        pass('campaign csv rows keep site+emails and honor emailed filter');
+    } else {
+        fail('campaign csv: unsent=' . json_encode($csvUnsent)
+            . ' sent=' . json_encode($csvSentRows) . ' all=' . json_encode($csvAllRows));
+    }
+    db()->prepare(
+        "UPDATE email_campaign_rows
+         SET email1='c-new@txfcamp-nl-c.nl', email2='', email3='', email4=''
+         WHERE sheet_id=? AND domain='txfcamp-nl-c.nl'"
+    )->execute([$nlSheet]);
 
     // Team import: copy into campaign, never delete Team rows; stamp fetched to campaign.
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfcamp-nl-%'");
@@ -7358,6 +7475,63 @@ try {
     db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfroute-add-%'");
 } catch (Throwable $e) {
     fail('routed filter/add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- Admin Add from Austria: .pt → Portugal, .at/.com stay in Austria ---
+try {
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfpt-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfpt-%'");
+
+    $ptAdd = admin_add_urls_to_database(
+        "txfpt-wien.at\ntxfpt-lisboa.pt\ntxfpt-global.com",
+        $adminUser,
+        'Austria',
+        'German'
+    );
+    $ptInPt = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Portugal' AND domain='txfpt-lisboa.pt'"
+    )->fetchColumn();
+    $ptInAt = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain='txfpt-lisboa.pt'"
+    )->fetchColumn();
+    $atInAt = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain IN ('txfpt-wien.at','txfpt-global.com')"
+    )->fetchColumn();
+    $ptInAtWrong = (int) db()->query(
+        "SELECT COUNT(*) FROM prospect_sites WHERE country='Austria' AND domain LIKE 'txfpt-%.pt'"
+    )->fetchColumn();
+    $filterPt = filter_domains_routed_against_prospects(
+        ['txfpt-filter.pt', 'txfpt-wien.at'],
+        'Austria'
+    );
+
+    if (
+        (int) ($ptAdd['inserted'] ?? 0) === 3
+        && $ptInPt === 1
+        && $ptInAt === 0
+        && $atInAt === 2
+        && $ptInAtWrong === 0
+        && (int) (($ptAdd['by_country']['Portugal']['inserted'] ?? 0)) === 1
+        && (int) (($ptAdd['by_country']['Austria']['inserted'] ?? 0)) === 2
+        && in_array('txfpt-filter.pt', $filterPt['by_country']['Portugal']['new'] ?? [], true)
+        && !in_array('txfpt-filter.pt', $filterPt['by_country']['Austria']['new'] ?? [], true)
+    ) {
+        pass('Admin Add / Filter from Austria routes .pt to Portugal');
+    } else {
+        fail('Austria .pt routing: ' . json_encode([
+            'add' => $ptAdd,
+            'ptInPt' => $ptInPt,
+            'ptInAt' => $ptInAt,
+            'atInAt' => $atInAt,
+            'ptInAtWrong' => $ptInAtWrong,
+            'filter' => $filterPt,
+        ]));
+    }
+
+    db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txfpt-%'");
+    db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txfpt-%'");
+} catch (Throwable $e) {
+    fail('Austria .pt routing: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Shared Extracting country count (two users) + live hub COUNT ---

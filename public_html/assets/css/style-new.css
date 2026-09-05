@@ -1,0 +1,1374 @@
+/**
+ * TechxForm UI overlay (dark / readable).
+ * Load AFTER app.css. Do not delete app.css — it stays the fallback.
+ * Restyles existing classes only. Do not rename JS/PHP hooks.
+ *
+ * Color roles:
+ *   --ink        body text (high contrast)
+ *   --muted      secondary / help text
+ *   --line       card edges (neutral, not brand)
+ *   --brand      primary actions and in-page links only
+ *   --ok/warn/bad status: done / waiting / danger
+ *
+ * Safe rules: no global sidebar-link hover, no smooth scroll,
+ * no hidden cards, no scale() on table rows.
+ */
+html.ui-v2 {
+  --bg: #0b1018;
+  --bg-2: #111827;
+  --ink: #f3f6fb;
+  --muted: #c5d0dc;
+  --line: rgba(148, 163, 184, 0.34);
+  --panel: rgba(17, 24, 39, 0.88);
+  --brand: #22d3ee;
+  --brand-2: #7dd3fc;
+  --brand-deep: #f1f5f9;
+  --brand-soft: rgba(34, 211, 238, 0.14);
+  --ok: #4ade80;
+  --ok-soft: rgba(74, 222, 128, 0.16);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.18);
+  --bad: #f87171;
+  --bad-soft: rgba(248, 113, 113, 0.16);
+  --shadow: 0 10px 28px rgba(2, 6, 23, 0.45);
+  --radius: 14px;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --sans: var(--font);
+  --grad-brand: linear-gradient(180deg, #0b1224 0%, #0f172a 100%);
+  --grad-btn: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
+  --grad-page:
+    radial-gradient(ellipse at 12% -8%, rgba(34, 211, 238, 0.08), transparent 40%),
+    linear-gradient(180deg, #0b1018 0%, #111827 100%);
+  --focus-ring: 0 0 0 3px rgba(34, 211, 238, 0.4);
+  --ui-ease: 220ms ease;
+  --fx-glass: rgba(15, 23, 42, 0.82);
+  --fx-blur: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.ui-v2 *,
+  html.ui-v2 *::before,
+  html.ui-v2 *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html.ui-v2 body {
+  background: var(--grad-page);
+  color: var(--ink);
+}
+
+html.ui-v2 body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 56px 48px;
+  mask-image: radial-gradient(ellipse at 50% 18%, #000 28%, transparent 78%);
+}
+
+html.ui-v2 .shell,
+html.ui-v2 .login-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+/* Do not restyle every in-page link hover — a global rule
+   was beating .sidebar .brand:hover (logo text went dark). */
+html.ui-v2 .main a,
+html.ui-v2 .login-wrap a {
+  color: var(--brand-2);
+}
+html.ui-v2 .main a:hover,
+html.ui-v2 .login-wrap a:hover {
+  color: #fff;
+}
+
+html.ui-v2 .ui-skip {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 2300;
+  padding: 0.45rem 0.8rem;
+  border-radius: 10px;
+  background: #0891b2;
+  color: #041016;
+  font-weight: 700;
+  text-decoration: none;
+}
+html.ui-v2 .ui-skip:focus {
+  top: 0.75rem;
+}
+
+/* Shell / sidebar — keep #app-sidebar, .nav-toggle, body.nav-open */
+html.ui-v2 .shell {
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+html.ui-v2 .sidebar,
+html.ui-v2 .mobile-bar {
+  background: var(--grad-brand);
+  border-right: 1px solid var(--line);
+}
+html.ui-v2 .sidebar .brand {
+  letter-spacing: 0.03em;
+  text-shadow: none;
+  color: #fff;
+}
+html.ui-v2 .sidebar-role {
+  color: #cbd5e1;
+}
+html.ui-v2 .nav-group-label,
+html.ui-v2 .nav-section {
+  color: #94a3b8;
+}
+html.ui-v2 .sidebar nav a {
+  color: #e2e8f0;
+  transition: background var(--ui-ease), box-shadow var(--ui-ease);
+}
+html.ui-v2 .sidebar nav a:hover {
+  background: rgba(34, 211, 238, 0.12);
+}
+html.ui-v2 .sidebar nav a.active {
+  background: rgba(34, 211, 238, 0.2);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #22d3ee;
+}
+html.ui-v2 .sidebar .nav-hint {
+  color: rgba(148, 163, 184, 0.9);
+}
+html.ui-v2 .nav-toggle {
+  border-radius: 10px;
+  transition: background var(--ui-ease);
+}
+
+@media (max-width: 900px) {
+  html.ui-v2 .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* App bar + main */
+html.ui-v2 .app-bar {
+  background: rgba(8, 18, 36, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+html.ui-v2 .app-bar-chip {
+  background: var(--brand-soft);
+  color: var(--brand-2);
+  border-color: rgba(34, 211, 238, 0.4);
+}
+html.ui-v2 .app-bar-user,
+html.ui-v2 .app-bar-account a {
+  color: var(--brand-2);
+}
+html.ui-v2 .app-bar-logout {
+  color: var(--brand-2) !important;
+}
+html.ui-v2 .breadcrumbs,
+html.ui-v2 .breadcrumbs .sep {
+  color: var(--muted);
+}
+html.ui-v2 .breadcrumbs a {
+  color: var(--brand-2);
+}
+
+html.ui-v2 .main {
+  min-width: 0;
+}
+
+html.ui-v2 h1,
+html.ui-v2 h2,
+html.ui-v2 h3 {
+  letter-spacing: -0.02em;
+  color: #f8fafc;
+}
+html.ui-v2 .launch-card h2,
+html.ui-v2 .folder h2,
+html.ui-v2 .folder strong,
+html.ui-v2 .workflow-body a,
+html.ui-v2 .workflow-body strong {
+  color: #f8fafc;
+}
+html.ui-v2 .muted,
+html.ui-v2 .help,
+html.ui-v2 .dashboard-stat-sub {
+  color: var(--muted);
+}
+html.ui-v2 ::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+/* Cards / launch / folders */
+html.ui-v2 .card,
+html.ui-v2 .login-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: var(--fx-glass);
+  backdrop-filter: blur(var(--fx-blur));
+  -webkit-backdrop-filter: blur(var(--fx-blur));
+  color: var(--ink);
+}
+html.ui-v2 .panel-ok {
+  border-color: rgba(52, 245, 197, 0.35);
+  background: rgba(52, 245, 197, 0.08);
+}
+html.ui-v2 .launch-card,
+html.ui-v2 .folder {
+  transition: border-color var(--ui-ease), box-shadow var(--ui-ease);
+}
+html.ui-v2 .launch-card:hover,
+html.ui-v2 .folder:hover {
+  border-color: var(--brand-2);
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.16);
+  text-decoration: none;
+}
+html.ui-v2 .card.stat:hover {
+  border-color: var(--brand);
+  text-decoration: none;
+  box-shadow: 0 0 0 1px var(--brand);
+}
+html.ui-v2 .card.stat strong,
+html.ui-v2 .stat strong {
+  color: #fff;
+  text-shadow: none;
+}
+html.ui-v2 a.card.stat[href*="unpaid"] strong,
+html.ui-v2 a.card.stat[href*="filter=unpaid"] strong {
+  color: var(--bad);
+}
+html.ui-v2 .step.active {
+  border-color: var(--brand);
+  color: var(--brand-deep);
+  background: var(--brand-soft);
+}
+html.ui-v2 .step.done {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.45);
+}
+html.ui-v2 .page-lead {
+  max-width: 40rem;
+}
+html.ui-v2 .filter-optional {
+  margin: 0.85rem 0 0;
+}
+html.ui-v2 .filter-optional > summary {
+  font-weight: 650;
+}
+html.ui-v2 .route-check-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+/* Primary CTAs — keep .btn .secondary .danger .small .large .block */
+html.ui-v2 .btn,
+html.ui-v2 button.btn {
+  background: #22d3ee;
+  border-color: #67e8f9;
+  color: #083344 !important;
+  box-shadow: none;
+  font-weight: 700;
+  transition: background var(--ui-ease), border-color var(--ui-ease), box-shadow var(--ui-ease), filter var(--ui-ease);
+}
+html.ui-v2 .btn:hover {
+  background: #67e8f9;
+  border-color: #a5f3fc;
+  filter: none;
+  box-shadow: none;
+}
+html.ui-v2 .btn:focus-visible,
+html.ui-v2 button.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #070b16, 0 0 0 5px rgba(34, 211, 238, 0.55);
+}
+html.ui-v2 .login-card .btn,
+html.ui-v2 .actions-sticky .btn.large {
+  transition: transform var(--ui-ease), filter var(--ui-ease), box-shadow var(--ui-ease);
+}
+html.ui-v2 .login-card .btn:hover,
+html.ui-v2 .actions-sticky .btn.large:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+html.ui-v2 .btn:active {
+  transform: scale(0.98);
+}
+html.ui-v2 .btn.secondary,
+html.ui-v2 button.btn.secondary {
+  background: #334155;
+  color: #f1f5f9 !important;
+  border: 1px solid #94a3b8;
+  box-shadow: none;
+  filter: none;
+}
+html.ui-v2 .btn.secondary:hover,
+html.ui-v2 button.btn.secondary:hover {
+  background: #334155;
+  border-color: #94a3b8;
+  color: #fff !important;
+  filter: none;
+}
+html.ui-v2 .btn.danger:not(.secondary),
+html.ui-v2 button.btn.danger:not(.secondary) {
+  background: #e11d48;
+  border-color: #fb7185;
+  color: #fff !important;
+  filter: none;
+  box-shadow: none;
+}
+html.ui-v2 .btn.danger:not(.secondary):hover,
+html.ui-v2 button.btn.danger:not(.secondary):hover {
+  background: #fb7185;
+  border-color: #fecdd3;
+  color: #fff !important;
+  filter: none;
+}
+html.ui-v2 .btn.secondary.danger {
+  background: transparent;
+  color: var(--bad) !important;
+  border-color: rgba(251, 113, 133, 0.5);
+  box-shadow: none;
+  filter: none;
+}
+html.ui-v2 .btn:disabled,
+html.ui-v2 button.btn:disabled,
+html.ui-v2 .btn.secondary.danger:disabled {
+  background: #1e293b;
+  border-color: #334155;
+  color: #64748b !important;
+  box-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+html.ui-v2 #filter_submit:not(:disabled),
+html.ui-v2 #add_unique_btn:not(:disabled) {
+  background: #22d3ee;
+  color: #083344 !important;
+  border-color: #67e8f9;
+  box-shadow: none;
+}
+html.ui-v2 #filter_submit:disabled {
+  background: #422006;
+  color: #fde68a !important;
+  border-color: #fbbf24;
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
+/* Our database country sheet — close the Niche/Domain hole, quiet disabled Remove */
+html.ui-v2 .help-details > summary {
+  padding: 0.55rem 0.9rem;
+}
+html.ui-v2 .prospect-site-toolbar {
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+html.ui-v2 .prospect-site-search-row {
+  gap: 0.55rem !important;
+}
+html.ui-v2 #prospect-site-table {
+  width: 100%;
+}
+html.ui-v2 #prospect-site-table th,
+html.ui-v2 #prospect-site-table td {
+  vertical-align: middle;
+}
+html.ui-v2 #prospect-site-table .prospect-niche-td {
+  width: 13.5rem;
+  max-width: 16rem;
+}
+html.ui-v2 #prospect-site-table .prospect-niche-td .niche-chip-box {
+  width: 100%;
+}
+html.ui-v2 .niche-chip-box.is-compact .niche-chip-control {
+  min-height: 2rem;
+  padding: 0.22rem 0.4rem;
+}
+html.ui-v2 #prospect-site-table .prospect-domain-td {
+  white-space: nowrap;
+}
+html.ui-v2 #prospect-site-table th:nth-child(4),
+html.ui-v2 #prospect-site-table th:nth-child(5),
+html.ui-v2 #prospect-site-table th:nth-child(6),
+html.ui-v2 #prospect-site-table td[data-label="Language"],
+html.ui-v2 #prospect-site-table td[data-label="Added by"],
+html.ui-v2 #prospect-site-table td[data-label="When"] {
+  white-space: nowrap;
+  width: 1%;
+}
+html.ui-v2 .main a.swe-open-site {
+  color: #083344;
+  background: #22d3ee;
+  border: 1px solid #67e8f9;
+  text-decoration: none;
+}
+html.ui-v2 .main a.swe-open-site:hover {
+  color: #083344;
+  background: #67e8f9;
+  border-color: #a5f3fc;
+  text-decoration: none;
+}
+html.ui-v2 .sheet-tool-menu-panel,
+html.ui-v2 .sheet-row-more-panel {
+  min-width: 19rem;
+  background: rgba(8, 18, 36, 0.96);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .tld-rail-btn {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .tld-rail-btn.is-active {
+  border-color: var(--brand-2);
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+}
+html.ui-v2 .tld-workspace-active,
+html.ui-v2 .tld-workspace-list {
+  background: rgba(8, 18, 36, 0.55);
+  border-color: var(--line);
+}
+html.ui-v2 .tld-site-row:hover {
+  background: rgba(34, 211, 238, 0.08);
+}
+html.ui-v2 .tld-site-drop,
+html.ui-v2 .tld-rail-drop {
+  color: var(--brand-2);
+  background: rgba(34, 211, 238, 0.1);
+  border-color: var(--line);
+}
+html.ui-v2 .tld-site-drop:hover,
+html.ui-v2 .tld-site-drop:focus-visible,
+html.ui-v2 .tld-rail-drop:hover,
+html.ui-v2 .tld-rail-drop:focus-visible {
+  background: rgba(251, 113, 133, 0.2);
+  color: var(--bad);
+  border-color: rgba(251, 113, 133, 0.5);
+}
+
+/* Forms — visual only; names/ids unchanged.
+   Many fields omit type= (HTML defaults to text) so [type="text"] misses them. */
+html.ui-v2 input:not([type]),
+html.ui-v2 input[type="text"],
+html.ui-v2 input[type="password"],
+html.ui-v2 input[type="email"],
+html.ui-v2 input[type="search"],
+html.ui-v2 input[type="number"],
+html.ui-v2 input[type="url"],
+html.ui-v2 input[type="date"],
+html.ui-v2 input[type="month"],
+html.ui-v2 input[type="tel"],
+html.ui-v2 input[type="datetime-local"],
+html.ui-v2 input[type="time"],
+html.ui-v2 select,
+html.ui-v2 textarea,
+html.ui-v2 input[type="file"] {
+  background: #1e293b;
+  color: var(--ink);
+  border-radius: 10px;
+  border: 1px solid #94a3b8;
+  transition: border-color var(--ui-ease), box-shadow var(--ui-ease);
+}
+html.ui-v2 input:not([type]):focus,
+html.ui-v2 input[type="text"]:focus,
+html.ui-v2 input[type="password"]:focus,
+html.ui-v2 input[type="email"]:focus,
+html.ui-v2 input[type="search"]:focus,
+html.ui-v2 input[type="number"]:focus,
+html.ui-v2 input[type="url"]:focus,
+html.ui-v2 input[type="date"]:focus,
+html.ui-v2 input[type="month"]:focus,
+html.ui-v2 input[type="tel"]:focus,
+html.ui-v2 input[type="datetime-local"]:focus,
+html.ui-v2 input[type="time"]:focus,
+html.ui-v2 select:focus,
+html.ui-v2 textarea:focus {
+  border-color: var(--brand-2);
+  box-shadow: var(--focus-ring);
+}
+html.ui-v2 .swe-domain,
+html.ui-v2 .swe-site-block input {
+  color: var(--ink);
+}
+html.ui-v2 .swe-domain:hover,
+html.ui-v2 .swe-domain:focus,
+html.ui-v2 .swe-td-email .email-field input:hover,
+html.ui-v2 .swe-td-email .email-field input:focus,
+html.ui-v2 .swe-td-email .swe-email-field input:hover,
+html.ui-v2 .swe-td-email .swe-email-field input:focus {
+  background: rgba(2, 6, 23, 0.85);
+  border-color: rgba(34, 211, 238, 0.4);
+  color: var(--ink);
+}
+
+/* Login / auth */
+html.ui-v2 .login-wrap {
+  background:
+    radial-gradient(ellipse at 18% 12%, rgba(34, 211, 238, 0.16), transparent 45%),
+    radial-gradient(ellipse at 85% 88%, rgba(167, 139, 250, 0.12), transparent 42%),
+    var(--grad-page);
+}
+html.ui-v2 .login-card {
+  box-shadow: 0 16px 48px rgba(2, 6, 23, 0.45);
+}
+html.ui-v2 .login-card::before {
+  background: linear-gradient(90deg, #22d3ee, #a78bfa);
+}
+html.ui-v2 .login-card .btn {
+  width: 100%;
+}
+
+/* Tables: readability; keep sheet JS hooks */
+html.ui-v2 thead th {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+html.ui-v2 tbody tr:hover td {
+  background: rgba(34, 211, 238, 0.06);
+}
+
+/* Alerts — existing .alert-ok / .alert-error / .alert-fade only */
+html.ui-v2 .alert-box {
+  background: var(--fx-glass);
+  backdrop-filter: blur(var(--fx-blur));
+  color: var(--ink);
+  animation: fx-alert-in 0.35s ease;
+}
+@keyframes fx-alert-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+html.ui-v2 .alert-ok {
+  border-color: rgba(52, 245, 197, 0.5);
+  box-shadow: 0 0 22px rgba(52, 245, 197, 0.2);
+}
+html.ui-v2 .alert-error {
+  border-color: rgba(251, 113, 133, 0.5);
+  box-shadow: 0 0 22px rgba(251, 113, 133, 0.2);
+}
+html.ui-v2 .alert-fade {
+  border-color: rgba(96, 165, 250, 0.45);
+  box-shadow: 0 0 18px rgba(96, 165, 250, 0.16);
+}
+html.ui-v2 .alert-ok .alert-icon {
+  background: var(--ok);
+  color: #041016;
+  box-shadow: 0 0 12px rgba(52, 245, 197, 0.5);
+  animation: fx-pulse 1.8s ease-in-out infinite;
+}
+html.ui-v2 .alert-error .alert-icon {
+  background: var(--bad);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.45);
+  animation: fx-pulse 1.8s ease-in-out infinite;
+}
+html.ui-v2 .alert-ok .alert-title {
+  color: var(--ok);
+}
+html.ui-v2 .alert-error .alert-title {
+  color: var(--bad);
+}
+@keyframes fx-pulse {
+  0%, 100% { box-shadow: 0 0 8px currentColor; }
+  50% { box-shadow: 0 0 16px currentColor; }
+}
+html.ui-v2 .alert-box[data-alert-fade="1"] {
+  position: relative;
+  overflow: hidden;
+}
+html.ui-v2 .alert-box[data-alert-fade="1"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand), var(--ok));
+  transform-origin: left;
+  animation: fx-alert-bar 4.2s linear forwards;
+}
+@keyframes fx-alert-bar {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+html.ui-v2 .app-footer a {
+  color: var(--brand);
+  font-weight: 650;
+}
+html.ui-v2 .app-processing-card {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--ink);
+  border-radius: 16px;
+}
+html.ui-v2 .app-processing-spinner {
+  border-top-color: var(--brand);
+}
+html.ui-v2 .task-presence-dot {
+  background: var(--ok);
+}
+
+html.ui-v2 .swe-status-badge {
+  background: #334155;
+  color: #e2e8f0;
+  border-color: #64748b;
+}
+html.ui-v2 .swe-status-badge.is-sent,
+html.ui-v2 .swe-status-badge.is-emailed {
+  background: var(--ok-soft);
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.45);
+}
+html.ui-v2 .swe-status-badge.is-unsent,
+html.ui-v2 .swe-status-badge.is-open {
+  background: var(--warn-soft);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+html.ui-v2 .swe-status-badge.is-ready {
+  background: var(--brand-soft);
+  color: #7dd3fc;
+  border-color: rgba(34, 211, 238, 0.4);
+}
+
+html.ui-v2 .pagination a {
+  color: var(--brand-2);
+}
+html.ui-v2 .info-tip {
+  color: var(--brand-2);
+}
+html.ui-v2 .help-details {
+  background: var(--fx-glass);
+  border-color: var(--line);
+}
+html.ui-v2 .typeahead-list,
+html.ui-v2 .sheet-tool-menu-panel,
+html.ui-v2 .sheet-row-more-panel {
+  background: rgba(8, 18, 36, 0.96);
+  color: var(--ink);
+}
+html.ui-v2 .typeahead-option:hover,
+html.ui-v2 .typeahead-option.is-active {
+  background: rgba(34, 211, 238, 0.12);
+}
+html.ui-v2 .niche-chip-control {
+  background: rgba(2, 6, 23, 0.78);
+  border-color: rgba(34, 211, 238, 0.28);
+}
+html.ui-v2 .messages li {
+  background: var(--ok-soft);
+  border-color: rgba(52, 245, 197, 0.3);
+  color: var(--ink);
+}
+html.ui-v2 .messages li.error {
+  background: var(--bad-soft);
+  border-color: rgba(251, 113, 133, 0.4);
+}
+
+/* Leftover light surfaces hardcoded in app.css */
+html.ui-v2 .folder,
+html.ui-v2 .launch-card,
+html.ui-v2 .panel-guide,
+html.ui-v2 .panel-guide-card,
+html.ui-v2 .panel-guide-flow,
+html.ui-v2 .workflow li,
+html.ui-v2 .swe-checkpoint-rule {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .panel-muted {
+  background: rgba(8, 18, 36, 0.4);
+  border-color: var(--line);
+}
+html.ui-v2 .step.active {
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  border-color: var(--brand);
+}
+html.ui-v2 .draft-restore-banner,
+html.ui-v2 .draft-status {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: 0 0 18px rgba(96, 165, 250, 0.16);
+}
+html.ui-v2 .draft-restore-banner__text strong {
+  color: var(--brand-2);
+}
+html.ui-v2 .draft-restore-banner__text span {
+  color: var(--muted);
+}
+html.ui-v2 .app-footer,
+html.ui-v2 .project-credit {
+  background: rgba(8, 18, 36, 0.88);
+  border-top-color: var(--line);
+  color: var(--muted);
+}
+html.ui-v2 .app-footer-who,
+html.ui-v2 .app-footer-who strong {
+  color: var(--ink);
+}
+html.ui-v2 .sites-list-box,
+html.ui-v2 .extracted-plain-list,
+html.ui-v2 .inventory-box,
+html.ui-v2 .unique-sites-preview {
+  background: rgba(2, 6, 23, 0.72);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .sites-list-row:hover {
+  background: rgba(34, 211, 238, 0.14);
+}
+html.ui-v2 .sites-list-row.is-selected {
+  background: rgba(34, 211, 238, 0.42) !important;
+  color: #f8fafc;
+  box-shadow: inset 5px 0 0 #22d3ee;
+}
+html.ui-v2 .sites-open-panel {
+  background: #1e293b;
+  border-color: #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 .sites-list-shell kbd,
+html.ui-v2 .box-panel kbd {
+  background: #0f172a;
+  border-color: #64748b;
+  color: var(--ink);
+}
+html.ui-v2 .swe-open-count {
+  background: #1e293b;
+  color: var(--ink);
+  border-color: #94a3b8;
+}
+html.ui-v2 .swe-row-chip.is-new {
+  background: rgba(251, 191, 36, 0.22);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+html.ui-v2 .swe-row-chip.is-updated {
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+html.ui-v2 .badge.extract-large {
+  background: var(--brand-soft);
+  color: #7dd3fc;
+}
+html.ui-v2 .route-dest-list,
+html.ui-v2 .route-check-list,
+html.ui-v2 .route-skip-list {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+html.ui-v2 .route-dest-list li,
+html.ui-v2 .route-check-list li,
+html.ui-v2 .route-skip-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  background: rgba(34, 211, 238, 0.14);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-left: 4px solid #22d3ee;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  color: #f8fafc;
+}
+html.ui-v2 .route-dest-list li strong,
+html.ui-v2 .route-check-list li strong,
+html.ui-v2 .route-skip-list li strong {
+  color: #fff;
+}
+html.ui-v2 .route-check-list li.is-skip,
+html.ui-v2 .route-skip-list li {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.4);
+  border-left-color: #94a3b8;
+}
+html.ui-v2 .route-check-list li.is-new {
+  background: rgba(52, 211, 153, 0.14);
+  border-color: rgba(52, 211, 153, 0.4);
+  border-left-color: #34d399;
+}
+html.ui-v2 tr.swe-row-new td {
+  animation: fx-swe-row-flash 1.4s ease-out 1;
+}
+html.ui-v2 tr.swe-row-updated td {
+  animation: fx-swe-row-flash-soft 1.2s ease-out 1;
+}
+@keyframes fx-swe-row-flash {
+  0% { background-color: rgba(251, 191, 36, 0.42); }
+  100% { background-color: transparent; }
+}
+@keyframes fx-swe-row-flash-soft {
+  0% { background-color: rgba(56, 189, 248, 0.38); }
+  100% { background-color: transparent; }
+}
+html.ui-v2 .pagination,
+html.ui-v2 .card .pagination {
+  border-top-color: var(--line);
+}
+html.ui-v2 .pagination a,
+html.ui-v2 .card .pagination a,
+html.ui-v2 .pagination .is-current {
+  background: rgba(8, 18, 36, 0.8);
+  border-color: var(--line);
+  color: var(--brand-2);
+}
+html.ui-v2 .pagination a:hover,
+html.ui-v2 .card .pagination a:hover {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: var(--brand);
+}
+html.ui-v2 .tld-warn,
+html.ui-v2 .tld-confirm {
+  background: var(--warn-soft);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--ink);
+}
+html.ui-v2 .swe-checkpoint-rule > h2 {
+  color: var(--ok);
+}
+html.ui-v2 .prospect-market-toggle:hover {
+  background: rgba(34, 211, 238, 0.08);
+}
+html.ui-v2 .swe-table tr.swe-row-opened .swe-row-num {
+  color: #7dd3fc;
+}
+html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"],
+html.ui-v2 .main .swe-row-actions button[form*="-remove-"],
+html.ui-v2 .main .swe-row-actions button[form*="remove"] {
+  background: transparent !important;
+  color: var(--bad) !important;
+  border-color: rgba(251, 113, 133, 0.5) !important;
+}
+html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"]:hover,
+html.ui-v2 .main .swe-row-actions button[form*="-remove-"]:hover,
+html.ui-v2 .main .swe-row-actions button[form*="remove"]:hover {
+  background: var(--bad-soft) !important;
+  border-color: var(--bad) !important;
+}
+html.ui-v2 #swe_status,
+html.ui-v2 #prospect_copy_status,
+html.ui-v2 .camp-status,
+html.ui-v2 .camp-status:not([hidden]) {
+  background: #1e293b;
+  border-color: #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 #swe_status.is-ok,
+html.ui-v2 .camp-status.is-ok {
+  background: var(--ok-soft);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #86efac;
+}
+html.ui-v2 #swe_status.is-error,
+html.ui-v2 #prospect_copy_status.is-error,
+html.ui-v2 .camp-status.is-error {
+  background: var(--bad-soft);
+  border-color: rgba(251, 113, 133, 0.45);
+  color: #fecaca;
+}
+html.ui-v2 .extracted-plain-item.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.12) !important;
+  outline-color: var(--brand);
+}
+html.ui-v2 .dashboard-attention a {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+html.ui-v2 .dashboard-attention a:hover {
+  background: #334155;
+  border-color: #94a3b8;
+  color: #fff;
+}
+html.ui-v2 .dashboard-attention a[href*="awaiting=1"],
+html.ui-v2 .dashboard-attention a[href*="admin_departments"] {
+  border-color: rgba(34, 211, 238, 0.5);
+  color: #7dd3fc;
+}
+html.ui-v2 .dashboard-attention a[href*="filter=draft"],
+html.ui-v2 .dashboard-attention a[href*="must_change"] {
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fbbf24;
+}
+html.ui-v2 .dashboard-attention a[href*="filter=unpaid"] {
+  border-color: rgba(248, 113, 113, 0.55);
+  color: #f87171;
+}
+html.ui-v2 .dashboard-attention a[href*="sites_with_emails"] {
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #4ade80;
+}
+html.ui-v2 .launch-card.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.12);
+  outline-color: var(--brand);
+}
+html.ui-v2 .niche-chip {
+  background: rgba(34, 211, 238, 0.14);
+  border-color: var(--line);
+  color: #e0f2fe;
+}
+html.ui-v2 {
+  color-scheme: dark;
+}
+html.ui-v2 input:-webkit-autofill,
+html.ui-v2 input:-webkit-autofill:hover,
+html.ui-v2 input:-webkit-autofill:focus,
+html.ui-v2 textarea:-webkit-autofill,
+html.ui-v2 select:-webkit-autofill {
+  -webkit-text-fill-color: #e8f1ff;
+  caret-color: #e8f1ff;
+  box-shadow: 0 0 0 1000px #0b1224 inset;
+  transition: background-color 9999s ease-out;
+}
+
+/* More leftover light chrome (higher-specificity app.css #fff) */
+html.ui-v2 .alert-box.alert-ok,
+html.ui-v2 .alert-box.alert-error,
+html.ui-v2 .alert-box.alert-fade {
+  background: var(--fx-glass);
+  color: var(--ink);
+}
+html.ui-v2 .tabs a,
+html.ui-v2 .sheet-tabs a {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .tabs a.active,
+html.ui-v2 .sheet-tabs a.active {
+  background: #22d3ee;
+  color: #083344;
+  border-color: #67e8f9;
+}
+html.ui-v2 .camp-hub-team-btn,
+html.ui-v2 .camp-hub-count,
+html.ui-v2 .camp-drafts-project-count {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .camp-hub-team-btn.is-on {
+  border-color: rgba(74, 222, 128, 0.55);
+  color: var(--ok);
+}
+html.ui-v2 .camp-hub-team-btn.is-off {
+  color: var(--muted);
+}
+html.ui-v2 .camp-hub-team-btn.is-on .camp-hub-team-dot {
+  background: var(--ok);
+}
+html.ui-v2 .camp-hub-team-btn.is-off .camp-hub-team-dot {
+  background: #64748b;
+}
+html.ui-v2 .camp-hub-row-actions button.btn.secondary {
+  color: #fecaca !important;
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+html.ui-v2 .camp-hub-row-actions button.btn.secondary:hover {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+  color: #fecaca !important;
+}
+html.ui-v2 .password-toggle {
+  background: rgba(8, 18, 36, 0.9);
+  color: var(--brand-2);
+  border-color: var(--line);
+}
+html.ui-v2 .password-toggle:hover {
+  background: rgba(34, 211, 238, 0.14);
+}
+html.ui-v2 .info-tip {
+  background: rgba(8, 18, 36, 0.9);
+  color: var(--brand-2);
+  border-color: var(--line);
+}
+html.ui-v2 .info-tip:hover,
+html.ui-v2 .info-tip:focus-visible,
+html.ui-v2 .info-tip.is-open {
+  background: var(--brand-soft);
+  color: #7dd3fc;
+  border-color: var(--brand);
+}
+html.ui-v2 .swe-push-note {
+  background: var(--warn-soft);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: var(--ink);
+}
+html.ui-v2 .swe-push-note.swe-push-blocked,
+html.ui-v2 .swe-no-email-tag,
+html.ui-v2 .domains-paste-attention {
+  background: var(--bad-soft);
+  border-color: rgba(251, 113, 133, 0.4);
+  color: var(--ink);
+}
+html.ui-v2 .dept-task-table .inline-form select,
+html.ui-v2 .inline-form select[name="status"] {
+  background: rgba(2, 6, 23, 0.78);
+  color: var(--ink);
+  border-color: #64748b;
+}
+html.ui-v2 .dept-task-mine td {
+  background: rgba(52, 245, 197, 0.08);
+}
+html.ui-v2 .dept-task-overdue td {
+  background: rgba(251, 113, 133, 0.1);
+}
+html.ui-v2 .order-client-row,
+html.ui-v2 .semrush-comment-list li,
+html.ui-v2 .camp-drafts-project-link,
+html.ui-v2 .camp-admin-drafts-list li,
+html.ui-v2 .ss-list,
+html.ui-v2 table.sheet-cards-mobile tr {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .camp-drafts-project-link:hover {
+  background: rgba(34, 211, 238, 0.1);
+  border-color: var(--brand);
+}
+html.ui-v2 .camp-drafts-project-link.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+html.ui-v2 .camp-draft-card,
+html.ui-v2 .camp-draft-preview,
+html.ui-v2 .camp-draft-editor {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .site-price-country-tabs,
+html.ui-v2 .site-price-country-more-list {
+  background: rgba(8, 18, 36, 0.92);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-note-preview,
+html.ui-v2 .invoice-list-note-form {
+  background: rgba(2, 6, 23, 0.78);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-list-table tr.sheet-search-hit td {
+  background: rgba(34, 211, 238, 0.12) !important;
+}
+html.ui-v2 .btn-paid {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-pay-badge {
+  background: rgba(8, 18, 36, 0.8);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 .invoice-pay-badge.is-paid {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: rgba(52, 245, 197, 0.35);
+}
+html.ui-v2 .invoice-pay-badge.is-draft {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+html.ui-v2 .invoice-pay-badge.is-done {
+  background: var(--brand-soft);
+  color: #7dd3fc;
+  border-color: var(--line);
+}
+html.ui-v2 .badge.agreed,
+html.ui-v2 .badge.completed,
+html.ui-v2 .badge.active,
+html.ui-v2 .badge.replied {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+html.ui-v2 .badge.sent,
+html.ui-v2 .badge.processing {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+html.ui-v2 .badge.rejected,
+html.ui-v2 .badge.blocked {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+html.ui-v2 .badge.draft,
+html.ui-v2 .badge.negotiating,
+html.ui-v2 .badge.skipped,
+html.ui-v2 .badge.paused,
+html.ui-v2 .badge.archived,
+html.ui-v2 .badge.on_hold,
+html.ui-v2 .badge.cancelled {
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--muted);
+}
+html.ui-v2 .swe-status-badge.is-archive {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
+  border-color: var(--line);
+}
+html.ui-v2 .camp-hub-steps,
+html.ui-v2 .camp-hub-check {
+  background: var(--fx-glass);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .camp-hub-field input:not([type]),
+html.ui-v2 .camp-hub-field #new_camp_project {
+  background: #1e293b;
+  color: var(--ink);
+  border-color: #94a3b8;
+}
+
+/* Order management — leftover white summary cards / Page totals bar / clipped cells */
+html.ui-v2 .orders-summary-item {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+html.ui-v2 .orders-summary-item strong {
+  color: var(--ink);
+}
+html.ui-v2 .orders-summary-done {
+  background: var(--ok-soft);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+html.ui-v2 .order-sheet th {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+html.ui-v2 .order-sheet tfoot td {
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--ink);
+}
+html.ui-v2 .order-check-head {
+  color: #cbd5e1;
+}
+html.ui-v2 .site-cell .cell-note {
+  background: rgba(2, 6, 23, 0.55);
+  color: var(--muted);
+}
+html.ui-v2 .order-row.is-placement .col-live .cell-input,
+html.ui-v2 .order-row.is-completed .col-live .cell-input {
+  background: rgba(2, 6, 23, 0.85);
+  border-color: rgba(34, 211, 238, 0.35);
+  color: var(--ink);
+}
+html.ui-v2 .profit-pos { color: var(--ok); }
+html.ui-v2 .profit-neg { color: var(--bad); }
+
+html.ui-v2 label {
+  color: #e2e8f0;
+}
+html.ui-v2 input[type="checkbox"],
+html.ui-v2 input[type="radio"],
+html.ui-v2 .sheet-check input[type="checkbox"] {
+  accent-color: #22d3ee;
+  width: 1.1rem;
+  height: 1.1rem;
+  outline: 1px solid #94a3b8;
+  outline-offset: 1px;
+  cursor: pointer;
+}
+html.ui-v2 .swe-cell-text,
+html.ui-v2 td[data-label="Language"],
+html.ui-v2 .camp-sheet-table .camp-cell {
+  color: var(--ink);
+}
+html.ui-v2 tbody tr:nth-child(even) td {
+  background: rgba(148, 163, 184, 0.06);
+}
+
+/* Invoice paper stays white (even-row overlay must not tint it). */
+html.ui-v2 .invoice-preview-wrap {
+  background: #0f172a;
+}
+html.ui-v2 .invoice-doc,
+html.ui-v2 .invoice-doc-logohead,
+html.ui-v2 .invoice-doc thead th {
+  background: #fff !important;
+  color: #111827;
+  box-shadow: none;
+}
+html.ui-v2 .invoice-doc tbody tr td,
+html.ui-v2 .invoice-doc tbody tr:nth-child(even) td,
+html.ui-v2 .invoice-doc tbody tr:hover td,
+html.ui-v2 .invoice-doc-table tbody tr td,
+html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td,
+html.ui-v2 .invoice-doc-table tbody tr:hover td {
+  background: #fff !important;
+  color: #111827 !important;
+  box-shadow: none;
+}
+html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td {
+  background: #f8fafc !important;
+}
+
+/* Publisher row tints must beat zebra overlay. */
+html.ui-v2 .site-price-row[data-tint="yellow"] td,
+html.ui-v2 .site-price-add[data-tint="yellow"] td {
+  background: rgba(253, 230, 138, 0.28) !important;
+}
+html.ui-v2 .site-price-row[data-tint="pink"] td,
+html.ui-v2 .site-price-add[data-tint="pink"] td {
+  background: rgba(254, 205, 211, 0.28) !important;
+}
+html.ui-v2 .site-price-row[data-tint="blue"] td,
+html.ui-v2 .site-price-add[data-tint="blue"] td {
+  background: rgba(191, 219, 254, 0.28) !important;
+}
+html.ui-v2 .site-price-row[data-tint="green"] td,
+html.ui-v2 .site-price-add[data-tint="green"] td {
+  background: rgba(187, 247, 208, 0.28) !important;
+}
+
+/* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
+html.ui-v2 tr.is-sheet-selected td,
+html.ui-v2 li.is-sheet-selected,
+html.ui-v2 tbody tr.is-sheet-selected td,
+html.ui-v2 tbody tr.is-sheet-selected:hover td,
+html.ui-v2 tbody tr:nth-child(even).is-sheet-selected td,
+html.ui-v2 .swe-table tr.is-sheet-selected > td,
+html.ui-v2 #prospect-site-table tr.is-sheet-selected td {
+  background: rgba(34, 211, 238, 0.52) !important;
+  box-shadow: inset 5px 0 0 #22d3ee;
+  color: #f8fafc;
+}
+html.ui-v2 .swe-table tr.swe-row-opened > td,
+html.ui-v2 .swe-table tr.swe-row-opened:hover > td,
+html.ui-v2 .swe-table tr.swe-row-opened.sheet-search-hit td {
+  background: rgba(56, 189, 248, 0.50) !important;
+  box-shadow: inset 5px 0 0 #38bdf8;
+  color: #f8fafc;
+}
+html.ui-v2 .swe-table tr.swe-row-emailed > td,
+html.ui-v2 .swe-table tr.swe-row-emailed:hover > td,
+html.ui-v2 .swe-table tr.swe-row-emailed.sheet-search-hit td,
+html.ui-v2 tbody tr.swe-row-emailed > td,
+html.ui-v2 tbody tr:nth-child(even).swe-row-emailed > td {
+  background: rgba(52, 211, 153, 0.55) !important;
+  box-shadow: inset 5px 0 0 #34d399;
+  color: #f8fafc;
+}
+html.ui-v2 .swe-table tr.swe-row-emailed.is-sheet-selected > td,
+html.ui-v2 tbody tr.swe-row-emailed.is-sheet-selected td {
+  background: rgba(34, 211, 238, 0.50) !important;
+  box-shadow: inset 5px 0 0 #22d3ee, inset 0 0 0 1px rgba(52, 211, 153, 0.7);
+  color: #f8fafc;
+}
+html.ui-v2 .sheet-search-hit,
+html.ui-v2 tr.sheet-search-hit td,
+html.ui-v2 .swe-table tr.sheet-search-hit td,
+html.ui-v2 #prospect-site-table tr.sheet-search-hit td,
+html.ui-v2 .extracted-country-table tr.sheet-search-hit td,
+html.ui-v2 .invoice-list-table tr.sheet-search-hit td,
+html.ui-v2 .site-price-sheet tr.sheet-search-hit td,
+html.ui-v2 .folder.sheet-search-hit,
+html.ui-v2 .launch-card.sheet-search-hit,
+html.ui-v2 .extracted-plain-item.sheet-search-hit {
+  background: rgba(34, 211, 238, 0.50) !important;
+  outline: 2px solid #22d3ee !important;
+  outline-offset: -2px;
+  color: #f8fafc;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
+}
+html.ui-v2 #prospect-site-table tr.is-just-added td,
+html.ui-v2 #prospect-site-table tr.is-just-added:hover td,
+html.ui-v2 tbody tr.is-just-added td {
+  background: rgba(52, 211, 153, 0.46) !important;
+  color: #f8fafc;
+}
+html.ui-v2 #prospect-site-table tr.is-just-added td:first-child {
+  box-shadow: inset 5px 0 0 #34d399;
+}
+html.ui-v2 .dept-task-mine td {
+  background: rgba(52, 211, 153, 0.22) !important;
+  box-shadow: inset 4px 0 0 #34d399;
+  color: #f8fafc;
+}
+html.ui-v2 .dept-task-overdue td {
+  background: rgba(248, 113, 113, 0.26) !important;
+  box-shadow: inset 4px 0 0 #f87171;
+  color: #f8fafc;
+}
+html.ui-v2 .tld-site-row:hover {
+  background: rgba(34, 211, 238, 0.18);
+}
+html.ui-v2 .camp-add-row > td {
+  background: #1e293b;
+  border-bottom-color: var(--line);
+}
+html.ui-v2 .sites-list-box,
+html.ui-v2 .extracted-plain-list,
+html.ui-v2 .inventory-box,
+html.ui-v2 .unique-sites-preview {
+  background: #1e293b;
+  border: 1px solid #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 .niche-chip-control {
+  background: #1e293b;
+  border-color: #94a3b8;
+}
+html.ui-v2 .sheet-search input[type="search"],
+html.ui-v2 .dashboard-search input[type="search"] {
+  background: #1e293b;
+  border: 1px solid #94a3b8;
+  color: var(--ink);
+}
+html.ui-v2 .sidebar-user,
+html.ui-v2 .sidebar-user span {
+  color: #cbd5e1;
+}
+html.ui-v2 .login-wrap .help,
+html.ui-v2 .login-wrap .muted {
+  color: var(--muted);
+}
+html.ui-v2 .login-wrap a {
+  color: #7dd3fc;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+html.ui-v2 .help-details > summary {
+  color: #e2e8f0;
+  cursor: pointer;
+}
+html.ui-v2 .camp-hub-step-num {
+  background: #22d3ee;
+  color: #083344;
+}
+
+@media print {
+  html.ui-v2 .ui-skip {
+    display: none !important;
+  }
+  html.ui-v2 body::before {
+    display: none;
+  }
+}

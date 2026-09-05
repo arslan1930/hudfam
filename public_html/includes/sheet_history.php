@@ -442,7 +442,7 @@ function render_sheet_tool_menu_open(string $label, string $aria = ''): void
 {
     $aria = $aria !== '' ? $aria : $label;
     echo '<details class="sheet-tool-menu">';
-    echo '<summary class="btn secondary sheet-tool-menu-summary">' . h($label) . '</summary>';
+    echo '<summary class="btn secondary sheet-tool-menu-summary" title="' . h($aria) . '">' . h($label) . '</summary>';
     echo '<div class="sheet-tool-menu-panel" role="group" aria-label="' . h($aria) . '">';
 }
 

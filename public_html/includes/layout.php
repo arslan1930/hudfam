@@ -46,9 +46,10 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
+    $cssNew = function_exists('stylesheet_new_url') ? stylesheet_new_url() : '';
     $logo = brand_logo_url();
 
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
+    echo '<!DOCTYPE html><html lang="en" class="ui-v2"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
     if ($user) {
         echo '<meta name="csrf-token" content="' . h(csrf_token()) . '">';
@@ -57,11 +58,15 @@ function render_header(string $title, string $panel = ''): void
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
-    // One stylesheet URL (asset.php) — avoid loading CSS twice (parse cost / jank).
+    // app.css via asset.php, then UI overlay (style-new.css). Do not also load /assets/css/*.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
+    if ($cssNew !== '') {
+        echo '<link rel="stylesheet" href="' . h($cssNew) . '">';
+    }
     echo '<style>';
     echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(31,35,40,.42)}';
     echo 'html.is-page-loading body{overflow:hidden}';
+    echo '.ui-skip{position:absolute;left:-9999px}';
     echo '</style>';
     echo '<noscript><style>html.is-page-loading #app-processing{display:none!important}html.is-page-loading body{overflow:auto}</style></noscript>';
     echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
@@ -84,6 +89,7 @@ function render_header(string $title, string $panel = ''): void
     if (!$user || $panel === '') {
         return;
     }
+    echo '<a class="ui-skip" href="#app-main">Skip to content</a>';
 
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
     $current = current_route_page();
@@ -307,7 +313,7 @@ function render_header(string $title, string $panel = ''): void
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
     $sheetApp = in_array($current, ['admin_emails_data', 'team_sites_emails', 'team_email_campaigns'], true);
-    echo '</nav></aside><main class="main' . ($sheetApp ? ' is-sheet-app' : '') . '" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    echo '</nav></aside><main id="app-main" class="main' . ($sheetApp ? ' is-sheet-app' : '') . '" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
     $uname = (string) ($user['username'] ?? '');
     echo '<div class="app-bar">';
     echo '<div class="app-bar-meta">';
@@ -354,6 +360,7 @@ function render_footer(string $panel = ''): void
         // Login / forgot / reset / verify: Show password (logged-in pages load it above).
         echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
     }
+    // Overlay is CSS-only. Do not load the old overlay script (it intercepted Fill gaps / Paste links).
     echo '</body></html>';
 }
 

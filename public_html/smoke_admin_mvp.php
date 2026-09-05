@@ -79,6 +79,45 @@ if (str_contains($layout, 'asset_url(\'assets/css/app.css\')')) {
 } else {
     ok('single CSS via stylesheet_url');
 }
+$helpersCss = file_get_contents($root . '/includes/helpers.php') ?: '';
+$uiCss = file_get_contents($root . '/assets/css/style-new.css') ?: '';
+$uiJs = file_get_contents($root . '/assets/js/ui-enhancements.js') ?: '';
+if (!str_contains($asset, 'css/style-new.css')
+    || !str_contains($helpersCss, 'function stylesheet_new_url')
+    || !str_contains($layout, 'stylesheet_new_url')
+    || str_contains($layout, "script_asset_url('js/ui-enhancements.js')")
+    || !str_contains($layout, 'class="ui-v2"')
+    || !str_contains($layout, 'id="app-main"')
+    || !str_contains($layout, 'class="ui-skip"')
+    || !str_contains($uiCss, 'html.ui-v2')
+    || !str_contains($uiCss, '--brand: #22d3ee')
+    || str_contains($uiCss, "html.ui-v2 a:hover")
+    || str_contains($uiCss, 'scroll-behavior: smooth')
+    || str_contains($uiCss, '.crystal')
+    || str_contains($uiCss, '.ui-enter')
+    || !str_contains($uiCss, '.btn.danger:not(.secondary)')
+    || !str_contains($uiCss, '#prospect-site-table .prospect-niche-td')
+    || !str_contains($uiCss, '.main a.swe-open-site')
+    || !str_contains($uiCss, '.draft-restore-banner')
+    || !str_contains($uiCss, '.dashboard-attention a')
+    || !str_contains($uiCss, '.niche-chip')
+    || !str_contains($uiCss, '.password-toggle')
+    || !str_contains($uiCss, '.sheet-tabs a')
+    || !str_contains($uiCss, 'input:not([type])')
+    || !str_contains($uiCss, '.camp-hub-check')
+    || !str_contains($uiCss, '.swe-status-badge.is-emailed')
+    || !str_contains($uiCss, '.sheet-check input[type="checkbox"]')
+    || !str_contains($uiCss, 'swe-row-opened')
+    || !str_contains($uiCss, 'is-just-added')
+    || !str_contains($uiCss, '.swe-table tr.sheet-search-hit td')
+    || str_contains($uiJs, 'preventDefault')
+    || str_contains($uiJs, 'IntersectionObserver')
+    || str_contains($uiJs, 'data-nav-toggle')
+    || str_contains($uiJs, 'addEventListener(\'submit\'')) {
+    fail('teal UI overlay missing or it rebinds nav/forms');
+} else {
+    ok('teal UI overlay is CSS-only (no #link interceptor)');
+}
 if (!str_contains($layout, 'Site adding history')) {
     fail('layout missing Site adding history label');
 } else {
@@ -969,6 +1008,8 @@ if (!str_contains($indexFull, "\$page === 'presence_ping'")
     || !str_contains($draftJsSmoke, "typeahead::")
     || !str_contains($draftJsSmoke, 'typeahead:select')
     || !str_contains($draftJsSmoke, 'Typed country')
+    || !str_contains($draftJsSmoke, 'camp-draft-textarea-sync')
+    || !str_contains($draftJsSmoke, "el.classList.contains('visually-hidden')")
     || !preg_match('/data-swe-save>\s*<\?=\s*csrf_field\(\)/', $sweAppCsrfSmoke)
     || !str_contains($presenceJsCsrfSmoke, "body.set('_csrf'")) {
     fail('draft autosave / shared sheet / SWE save / presence CSRF missing');
@@ -1525,6 +1566,39 @@ if (!str_contains($campLibSmoke, 'function collect_email_campaign_domains')
 } else {
     ok('campaign copy not-emailed domains + Team fetch stamps');
 }
+if (!str_contains($campLibSmoke, 'function collect_email_campaign_emails')
+    || !str_contains($campLibSmoke, 'function stream_email_campaign_emails_plain')
+    || !str_contains($campLibSmoke, 'function collect_email_campaign_csv_rows')
+    || !str_contains($campLibSmoke, 'function stream_email_campaign_csv')
+    || !str_contains($campAppSmoke, 'Copy selected emails (this page)')
+    || !str_contains($campAppSmoke, 'data-camp-copy-selected-emails')
+    || !str_contains($campAppSmoke, 'data-camp-copy-domains')
+    || !str_contains($campAppSmoke, 'export=emails')
+    || !str_contains($campAppSmoke, 'export=csv')
+    || !str_contains($campAppSmoke, 'Download CSV / Excel')
+    || !str_contains($campAppSmoke, 'data-camp-copy-emails')
+    || !str_contains($campAppSmoke, 'Copy all emails')
+    || !str_contains($campAppSmoke, 'Copy not emailed emails')
+    || !str_contains($campAppSmoke, 'Domains (this country)')
+    || !str_contains($campAppSmoke, 'Emails (this country)')
+    || !str_contains($campAppSmoke, 'This page (ticked rows)')
+    || !str_contains($campAppSmoke, 'Copy domains or emails')
+    || preg_match('/>Select</', $campAppSmoke)
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '', 'data-camp-copy-emails')) {
+    fail('campaigns missing copy selected emails / export emails by status');
+} else {
+    ok('campaign copy selected emails + export emails by status');
+}
+$sweCopySmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
+if (!str_contains($sweCopySmoke, 'Copy selected emails (this page)')
+    || !str_contains($sweCopySmoke, 'data-swe-copy-selected-emails')
+    || !str_contains($sweCopySmoke, 'Copy all emails')
+    || !str_contains($sweCopySmoke, 'Copy not emailed')
+    || !str_contains($sweCopySmoke, 'Copy emailed')) {
+    fail('Admin Emails missing Copy selected emails (this page) or lost whole-sheet copy');
+} else {
+    ok('Admin Emails Copy selected emails (this page) + Copy all emails');
+}
 if (!str_contains($campLibSmoke, 'Never copies emailed flags')
     || !str_contains($campLibSmoke, 'Never set email_sent here')
     || !str_contains($campLibSmoke, 'function email_campaign_ensure_source_fetch_cascade')
@@ -1596,6 +1670,20 @@ if (!str_contains($omCss, '.order-sheet-card')
     fail('orders sheet still squeezes into the viewport');
 } else {
     ok('orders sheet scrolls instead of squeezing');
+}
+if (!str_contains($omCss, '.order-sheet .col-country { min-width: 168px')
+    || !str_contains($omCss, '.order-sheet .col-admin { min-width: 196px')
+    || !str_contains($omCss, 'min-width: 13rem')) {
+    fail('orders country/admin columns still too narrow to read');
+} else {
+    ok('orders country/admin columns fit Netherlands / admin emails');
+}
+if (!str_contains($uiCss, '.orders-summary-item')
+    || !str_contains($uiCss, '.order-sheet tfoot td')
+    || !str_contains($uiCss, '.order-check-head')) {
+    fail('overlay missing Order management leftover-light restyle');
+} else {
+    ok('overlay restyles Order management summary + Page totals');
 }
 if (!str_contains($ordersPage, 'Need a country on every ticked row before completing')
     || !str_contains($ordersPage, 'Need a client email or name on every ticked row before completing')
@@ -2388,10 +2476,11 @@ if (!str_contains($prospectsLib, "'extract_error'")
 } else {
     ok('Filter add surfaces Extracting insert errors');
 }
-if (!str_contains($prospectCheckT, 'json_encode') || !str_contains($prospectCheckT, 'confirm_tld_mismatch')) {
-    fail('Finding TLD confirm not json_encode-safe');
+if (!str_contains($prospectCheckT, 'confirm_tld_mismatch')
+    || str_contains($prospectCheckT, 'despite the TLD mismatch warning')) {
+    fail('Finding TLD mismatch still uses an OK/Cancel confirm');
 } else {
-    ok('Finding TLD confirm json_encode-safe');
+    ok('Finding TLD mismatch uses checkbox only (no OK/Cancel)');
 }
 
 $extractBatchT = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
@@ -2484,10 +2573,10 @@ if (!str_contains($sweLib, "LEFT(domain, 8) <> '__blank_'")) {
 }
 
 $sweApp = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
-if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'MERGE Team emails')) {
-    fail('SWE UI missing merge-on-conflict confirm');
+if (!str_contains($sweApp, 'confirm_overwrite') || !str_contains($sweApp, 'merges Team emails')) {
+    fail('SWE UI missing merge-on-conflict (hidden flag, no OK/Cancel)');
 } else {
-    ok('SWE UI merge-on-conflict confirm');
+    ok('SWE UI merge-on-conflict without OK/Cancel');
 }
 if (str_contains($sweApp, 'merge is not available yet') || str_contains($sweLib, 'merge is not available yet')) {
     fail('SWE still says merge is not available');
@@ -2526,6 +2615,14 @@ if (!str_contains($sweJs, 'data-swe-open-track')
     fail('sites-with-emails.js missing Open highlight-until-email tracking');
 } else {
     ok('sites-with-emails.js Open highlight until email');
+}
+if (!str_contains($sweJs, "kind !== 'push'")
+    || str_contains($sweJs, 'if (!window.confirm(msg)) return;')
+    || str_contains($sweApp, 'data-confirm-push-all')
+    || str_contains($sweApp, 'Push ALL ')) {
+    fail('Team Push still shows confirm OK/Cancel');
+} else {
+    ok('Team Push skips confirm dialogs');
 }
 if (!str_contains($sweApp, 'data-swe-open-track')
     || !str_contains($sweApp, 'swe-col-num')
@@ -2608,6 +2705,16 @@ if (!str_contains($campLib, 'data-camp-open-drafts')
     ok('campaign search Open drafts deep-link');
 }
 $campDraftJs = file_get_contents($root . '/assets/js/email-campaign-drafts.js') ?: '';
+$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($campDraftsTeam, 'class="camp-draft-form"')
+    || !str_contains($campDraftsTeam, 'data-no-draft')
+    || !str_contains($campApp, 'data-no-draft data-show-processing="Saving draft')
+    || !str_contains($cssApp, '.camp-draft-textarea-sync')
+    || !str_contains($cssApp, 'display: none !important')) {
+    fail('Save draft forms still bind device drafts / sync textarea can show');
+} else {
+    ok('Save draft forms skip device autosave; sync textarea stays hidden');
+}
 if (!str_contains($campDraftJs, 'data-camp-draft-copy-plain')
     || !str_contains($campDraftJs, 'expandTokens')
     || !str_contains($campDraftJs, 'data-camp-draft-token')) {
@@ -2842,10 +2949,18 @@ $tldJs = file_get_contents($root . '/assets/js/tld-separate.js') ?: '';
 if (str_contains($tldJs, 'max-height: 18rem') || str_contains($tldJs, 'tld-separate-grid')) {
     // grid may remain as unused legacy class name in comments only — require workspace render
 }
-if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')) {
+if (!str_contains($tldJs, 'data-tld-tab') || !str_contains($tldJs, 'tld-workspace-list')
+    || !str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($tldJs, 'tld-site-row')) {
     fail('tld-separate.js missing tab workspace render');
 } else {
     ok('tld-separate.js tab workspace');
+}
+if (str_contains($tldJs, 'If this ending looks wrong')
+    || str_contains($tldJs, 'window.confirm(\n            \'Send ')) {
+    fail('Send this ending still shows OK/Cancel');
+} else {
+    ok('Send this ending skips OK/Cancel');
 }
 if (str_contains($tldJs, "sourceSel !== '#domains'")
     || str_contains($tldJs, 'if (!el || el.readOnly) return')) {
@@ -2865,12 +2980,33 @@ if (!str_contains($prospectCheckSf, 'data-source="#domains"')
 } else {
     ok('Filter Separate all paste + unique sources');
 }
-$cssApp = file_get_contents($root . '/assets/css/app.css') ?: '';
+if (!str_contains($prospectCheckSf, 'id="add_unique_form"')
+    || !str_contains($prospectCheckSf, 'data-no-draft')
+    || !str_contains($prospectCheckSf, 'unique-sites-preview')
+    || str_contains($prospectCheckSf, 'id="unique_domains_preview" class="inventory-box"')
+    || !str_contains($helpers, "hidden aria-hidden")
+    || !str_contains($helpers, 'style="display:none"')
+    || !str_contains($cssApp, 'textarea.visually-hidden')
+    || !str_contains($cssApp, '.unique-sites-preview')) {
+    fail('Filter unique card still shows hidden domain boxes / inventory-box preview');
+} else {
+    ok('Filter unique card hides POST textareas and sizes preview to the list');
+}
 if (str_contains($cssApp, '.tld-workspace-list')
     && str_contains($cssApp, 'No max-height scroll cage')) {
     ok('TLD workspace CSS without scroll cage');
 } else {
     fail('app.css missing TLD workspace no-scroll styles');
+}
+if (!str_contains($tldJs, 'data-tld-drop-site')
+    || !str_contains($tldJs, 'data-tld-drop-ending')
+    || !str_contains($tldJs, 'tld-rail-drop')
+    || !str_contains($cssApp, '.tld-site-drop')
+    || !str_contains($cssApp, '.tld-rail-drop')
+    || str_contains($tldJs, "Send ' + n + ' ")) {
+    fail('TLD list missing per-site × / ending × or Send still confirms');
+} else {
+    ok('TLD list per-site ×, ending ×, and Send without confirm');
 }
 // Paste Separate workspace must sit outside #filter_form (Send form).
 if (!preg_match('/<\/form>\s*.*?data-tld-separate/s', $prospectCheckSf)
@@ -2916,10 +3052,33 @@ if (!str_contains($prospectsLib, 'function filter_domains_routed_against_prospec
     ok('prospect routed Filter helper');
 }
 if (!str_contains($prospectCheckSf, 'filter_domains_routed_against_prospects')
-    || !str_contains($prospectCheckSf, 'TLD → country')) {
+    || !str_contains($prospectCheckSf, 'TLD → country')
+    || !str_contains($prospectCheckSf, '.pt→Portugal')) {
     fail('Filter & add missing routed Filter/Add path');
 } else {
     ok('Filter & add uses routed per-country de-dupe');
+}
+if (!str_contains($prospectsLib, 'function admin_add_urls_to_database')
+    || !str_contains($prospectsLib, 'route_domains_by_country_tld($domains, $selectedCountry)')) {
+    fail('Admin Add sites missing TLD routing');
+} else {
+    ok('Admin Add sites routes country TLDs');
+}
+if (!str_contains($prospectCheckSf, 'route-dest-list')
+    || !str_contains($prospectCheckSf, 'route-check-list')
+    || !str_contains($prospectCheckSf, 'not sent to Extracting')
+    || !str_contains($prospectCheckSf, 'each destination Our database')
+    || !str_contains($uiCss, 'route-dest-list')
+    || !str_contains($uiCss, 'route-check-list')
+    || !str_contains($uiCss, 'invoice-doc')
+    || !str_contains($uiCss, 'site-price-row[data-tint="yellow"]')
+    || !str_contains($uiCss, 'sites-open-panel')
+    || !str_contains($uiCss, 'sites-list-row:hover')
+    || !str_contains($uiCss, '#swe_status')
+    || !str_contains($prospectCheckSf, '.pt→Portugal')) {
+    fail('Team Filter unique missing destination list or leftover light Sites list styles');
+} else {
+    ok('Team Filter unique destination list + Sites list overlay');
 }
 $geoLib = file_get_contents($root . '/includes/geo.php') ?: '';
 if (!str_contains($geoLib, 'function group_domains_by_tld')) {
@@ -2963,6 +3122,13 @@ if (!str_contains($sitesFormJs, 'readyText')
     fail('sites-form.js missing Ready/attention split');
 } else {
     ok('sites-form.js Ready/attention clean split');
+}
+if (!str_contains($sitesFormJs, 'autoCleanIfNeeded')
+    || !str_contains($sitesFormJs, 'still has')
+    || !str_contains($sitesFormJs, 'still have')) {
+    fail('sites-form.js missing paste auto-clean / dirty grammar');
+} else {
+    ok('sites-form.js paste auto-clean + dirty grammar');
 }
 if (!str_contains($sitesFormJs, 'PLATFORM_PUBLIC_SUFFIXES')
     || !str_contains($sitesFormJs, 'vercel.app')) {
@@ -3015,10 +3181,17 @@ if (!str_contains($sheetHistSmoke, 'function render_sheet_edit_toolbar')
     ok('sheet history toolbar helpers');
 }
 if (str_contains($sheetHistSmoke, 'data-sheet-select title=')
-    || preg_match('/>Select</', $sheetHistSmoke)) {
+    || preg_match('/>Select</', $sheetHistSmoke)
+    || preg_match('/>Select</', $sheetSelJsSmoke)) {
     fail('sheet toolbar still has extra Select button (keep Select all only)');
 } else {
     ok('sheet toolbar has Select all without extra Select');
+}
+if (!str_contains($sheetSelJsSmoke, "textContent = allOn ? 'Unselect all' : 'Select all'")
+    || !str_contains($sheetSelJsSmoke, 'Unselect all')) {
+    fail('sheet-select-undo.js missing Unselect all label');
+} else {
+    ok('Select all toggles to Unselect all');
 }
 if (!str_contains($sheetSelJsSmoke, 'getComputedStyle')
     || !str_contains($sheetSelJsSmoke, 'clearHiddenSelection')
@@ -3071,6 +3244,7 @@ if (!str_contains($layoutLoadSmoke, 'id="app-processing"')
     || !str_contains($procJsSmoke, 'NAV_DELAY_MS')
     || !str_contains($procJsSmoke, 'armDelayedLoading')
     || !str_contains($procJsSmoke, "method === 'get'")
+    || !str_contains($procJsSmoke, '(?:export|download)=')
     || !str_contains($sheetSelJsSmoke, 'data-sheet-remove-selected')) {
     fail('Missing delayed loading overlay or select-remove JS');
 } else {
@@ -3133,7 +3307,8 @@ if (!str_contains($sweUi, 'is-dense')
 $campLibSmokeUx = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 if (!str_contains($campUi, 'href="#camp-fill-gaps"')
     || !str_contains($campUi, 'Not emailed (')
-    || !str_contains($campUi, 'Search site or email (this page)')
+    || !str_contains($campUi, 'placeholder="Search site or email"')
+    || str_contains($campUi, 'placeholder="Search site or email (this page)"')
     || substr_count($campUi, 'id="camp-add-toggle"') !== 1
     || !str_contains($campLibSmokeUx, 'function email_campaign_default_language')
     || !str_contains($campLibSmokeUx, 'function email_campaign_fill_blank_row_languages')
@@ -3185,13 +3360,21 @@ if (!str_contains($extractBatchJump, 'Clean first — Push only sends Ready.')) 
 } else {
     ok('Extracting Push empty Ready copy');
 }
+if (!str_contains($extractLibSmoke, 'function extract_results_text_for_persist')
+    || !str_contains($extractBatchJump, 'extract_results_text_for_persist')) {
+    fail('Extracting Push missing persist Ready roots helper');
+} else {
+    ok('Extracting Push persists cleaned Ready roots');
+}
 if (!str_contains($semrushHubSmoke, 'Filled from Extracting Push; Clear is Site Finding / Admin.')) {
     fail('Semrush hub missing ownership line');
 } else {
     ok('Semrush hub ownership line');
 }
 if (!str_contains($prospectsLib, 'function prospect_destinations_phrase')
+    || !str_contains($prospectsLib, 'function prospect_route_check_rows')
     || !str_contains($prospectCheckSf, 'prospect_destinations_phrase')
+    || !str_contains($prospectCheckSf, 'prospect_route_check_rows')
     || !str_contains($prospectCheckSf, 'Add ')
     || !str_contains($prospectCheckSf, 'unique site')
     || str_contains($prospectCheckSf, 'Country database (private)')

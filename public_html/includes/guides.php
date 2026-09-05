@@ -85,8 +85,8 @@ function render_team_panel_guide(): string
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Filter &amp; add</h3>'
-        . '<p><strong>What:</strong> Compare your paste to one country’s database without seeing that list.</p>'
-        . '<p><strong>How:</strong> Select country → Paste → Filter unique sites → Add. Site Finding only.</p>'
+        . '<p><strong>What:</strong> Paste a list, filter unique sites, add them to Extracting.</p>'
+        . '<p><strong>How:</strong> Country → Paste → Filter unique sites → Add. Site Finding only.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracting sites</h3>'
@@ -121,8 +121,8 @@ function guide_inventory(): string
 {
     return render_page_purpose(
         'Our database — country folders',
-        'Each country has its own site database. Admin opens a country folder to view or add sites.',
-        'Pick a country folder, then browse or add sites for that country only.',
+        'Each country has its own site database. Open a folder to view or add sites.',
+        'Pick a country, then browse or add sites for that country only.',
         [
             'Open a country folder.',
             'Add sites into that country’s database.',
@@ -134,14 +134,13 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — new unique sites only',
-        'Paste a list and compare it privately against each destination country’s Our database. Country TLDs (.de, .at, .ch, …) route to their folders; .com/.net/.eu stay in the selected country. Existing URLs stay hidden; only new unique sites are shown.',
-        'Select country → Paste → Filter unique sites (TLD route + per-country de-dupe) → Add or Separate. Extractors only see unique sites per country Sites list.',
+        'Filter & add — paste, filter, add unique',
+        'Paste a list. Filter keeps only sites that are not already in each destination country’s Our database. Existing URLs stay hidden.',
+        'Pick a starting country → Paste → Filter unique sites → Add. Country endings (.at, .pt, …) go to their folders; .com stays in the country you picked. Only unique sites go to Extracting.',
         [
-            'Select an existing country database (Germany, Spain, …) as the starting folder for generic TLDs.',
-            'Paste root domains and Filter unique sites — .at/.ch/… go to Austria/Switzerland/… and duplicates in those Our databases are removed.',
-            'Add only the remaining unique sites — that leftover is this Filter run (your session), not the shared country total. Each destination folder and Extracting Sites list are shared — both teammates see the same country count after refresh. Separate before Filter is Copy/Delete only.',
-            'If Admin later removes those sites from Our database, they also leave Extracting. Filter unique and Add again to put them back at the top of Extracting.',
+            'Pick the country you are working from (.com stays there).',
+            'Paste root domains and Filter unique sites. .at is checked in Austria, .pt in Portugal, even if you started from another country.',
+            'Add sends only the new sites to those folders and Extracting. Separate all can send one ending at a time after Filter.',
         ]
     );
 }
@@ -150,13 +149,12 @@ function guide_extracting(): string
 {
     return render_page_purpose(
         'Extracting sites — Sites list + Results',
-        'Each country has its own batch with two boxes: Sites list and Extracting Results.',
-        'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
+        'Each country has a shared Sites list (waiting list) and an Extracting Results box.',
+        'Open a country. Work the Sites list, then paste results and Push.',
         [
-            'Open a country. Sites list tools: Copy, Undo, Redo, and Open & remove first 10–50 (Open next continues from the new top). Undo restores them while you stay on this page.',
-            'Paste Extracting Results → Clean to root domains → Push Ready only. Country TLDs route; .com/.net/.eu stay in the selected country.',
-            'Extracting is the waiting list. It shrinks when you Push, Open & remove, delete lines, or Admin removes the same domains from Our database.',
-            'Add emails in Sites with emails, then Push to Admin.',
+            'Sites list: Copy, Undo, Redo, and Open & remove first 10–50. Undo restores them while you stay on this page.',
+            'Paste Extracting Results — https/paths clean to roots automatically — then Push Ready. .pt→Portugal, .at→Austria, .com stays in the selected country.',
+            'Extracting shrinks when you Push, Open & remove, delete lines, or Admin removes the same domains from Our database.',
         ]
     );
 }
@@ -175,8 +173,8 @@ function guide_admin_add(): string
 {
     return render_page_purpose(
         'Add sites — inside Our database',
-        'Paste root domains into one country’s folder in Our database. Extracted Sites are filled only when Team clicks Push.',
-        'In Our database: choose country, paste root domains, Clean to root domains if needed, save.',
+        'Paste root domains into a country folder. Country endings (.at, .pt, …) go to that country; .com stays in the folder you picked.',
+        'Choose country, paste, Clean to root domains if needed, save.',
         [
             'Open Our database (sidebar).',
             'Use Add sites — select country, paste domains, Clean to root domains, save.',
