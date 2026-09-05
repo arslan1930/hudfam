@@ -1035,6 +1035,9 @@
     folderChips.concat(catChips).forEach(function (chip) {
       chip.addEventListener('click', function (e) {
         e.preventDefault();
+        if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+          window.AppProcessing.hideAll();
+        }
         var kind = chip.getAttribute('data-camp-draft-chip');
         var value = chip.getAttribute('data-camp-draft-chip-value') || '';
         if (kind === 'folder') setChipActive(folderChips, value);

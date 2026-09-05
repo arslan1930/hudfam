@@ -306,6 +306,7 @@ endif;
                 ?>
               <a class="btn small <?= $active ? '' : 'secondary' ?>"
                  href="<?= h($href) ?>"
+                 data-no-processing
                  data-camp-draft-chip="folder"
                  data-camp-draft-chip-value="<?= $fid ?>"><?= h((string) $fl['name']) ?></a>
             <?php endforeach; ?>
@@ -319,6 +320,7 @@ endif;
                 ?>
               <a class="btn small <?= $active ? '' : 'secondary' ?>"
                  href="<?= h($href) ?>"
+                 data-no-processing
                  data-camp-draft-chip="category"
                  data-camp-draft-chip-value="<?= h((string) $slug) ?>"><?= h($label) ?></a>
             <?php endforeach; ?>
