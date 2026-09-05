@@ -293,9 +293,37 @@ CREATE TABLE IF NOT EXISTS email_campaign_rows (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Communication / Admin: reusable outreach drafts per Email campaign project
+CREATE TABLE IF NOT EXISTS email_campaign_draft_folders (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  project_id INT NOT NULL,
+  slug VARCHAR(60) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_camp_draft_folder_slug (project_id, slug),
+  INDEX (project_id),
+  INDEX (sort_order),
+  CONSTRAINT fk_camp_draft_folder_project
+    FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS email_campaign_draft_folder_hidden (
+  folder_id INT NOT NULL,
+  user_id INT NOT NULL,
+  PRIMARY KEY (folder_id, user_id),
+  INDEX (user_id),
+  CONSTRAINT fk_camp_draft_folder_hidden_folder
+    FOREIGN KEY (folder_id) REFERENCES email_campaign_draft_folders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_camp_draft_folder_hidden_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Communication / Admin: reusable outreach drafts per Email campaign project
 CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   id INT AUTO_INCREMENT PRIMARY KEY,
   project_id INT NOT NULL,
+  folder_id INT NULL,
   category VARCHAR(40) NOT NULL DEFAULT 'custom',
   title VARCHAR(180) NOT NULL,
   subject VARCHAR(255) NOT NULL DEFAULT '',
@@ -307,9 +335,12 @@ CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX (project_id),
   INDEX idx_email_campaign_draft_cat (project_id, category),
+  INDEX idx_email_campaign_draft_folder (folder_id),
   INDEX (updated_at),
   CONSTRAINT fk_email_campaign_draft_project
     FOREIGN KEY (project_id) REFERENCES email_campaign_projects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_email_campaign_draft_folder
+    FOREIGN KEY (folder_id) REFERENCES email_campaign_draft_folders(id) ON DELETE SET NULL,
   CONSTRAINT fk_email_campaign_draft_user
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

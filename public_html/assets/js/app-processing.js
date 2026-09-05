@@ -196,6 +196,7 @@
       var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
       if (!a) return;
       if (a.hasAttribute('download')) return;
+      if (a.hasAttribute('data-no-processing')) return;
       var tgt = String(a.getAttribute('target') || '');
       if (tgt && tgt !== '_self') return;
       var href = a.getAttribute('href') || '';

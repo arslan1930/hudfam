@@ -579,9 +579,41 @@
       .replace(/\{name\}/gi, name);
   }
 
-  function cardSubject(card) {
+  function activeVariant(card) {
+    if (!card) return null;
+    return card.querySelector('[data-camp-draft-variant].is-on')
+      || card.querySelector('[data-camp-draft-variant]')
+      || card;
+  }
+
+  function cardSubject(card, variant) {
     if (!card) return '';
-    return expandTokens(String(card.getAttribute('data-camp-draft-subject') || ''), card).trim();
+    var v = variant || activeVariant(card);
+    var raw = '';
+    if (v && v.getAttribute) {
+      raw = String(v.getAttribute('data-camp-draft-subject') || '');
+    }
+    if (!raw) {
+      raw = String(card.getAttribute('data-camp-draft-subject') || '');
+    }
+    return expandTokens(raw, card).trim();
+  }
+
+  function cardTitle(card, variant) {
+    var v = variant || activeVariant(card);
+    if (v && v.getAttribute) {
+      var t = String(v.getAttribute('data-camp-draft-title') || '').trim();
+      if (t) return t;
+    }
+    return String((card.querySelector('.camp-draft-title') || {}).textContent || 'draft').trim();
+  }
+
+  function variantHtml(card, variant) {
+    var v = variant || activeVariant(card);
+    var htmlEl = (v && v.querySelector)
+      ? v.querySelector('[data-camp-draft-html]')
+      : card.querySelector('[data-camp-draft-html]');
+    return expandTokens(htmlEl ? String(htmlEl.innerHTML || '') : '', card);
   }
 
   function copyPlainText(text) {
@@ -614,10 +646,10 @@
       btn.addEventListener('click', function () {
         var card = btn.closest('[data-camp-draft-card]');
         if (!card) return;
-        var htmlEl = card.querySelector('[data-camp-draft-html]');
-        var html = expandTokens(htmlEl ? String(htmlEl.innerHTML || '') : '', card);
+        var variant = btn.closest('[data-camp-draft-variant]') || activeVariant(card);
+        var html = variantHtml(card, variant);
         var plain = htmlToPlain(html);
-        var subject = cardSubject(card);
+        var subject = cardSubject(card, variant);
         if (subject) {
           plain = 'Subject: ' + subject + '\n\n' + plain;
           html = '<p><strong>Subject:</strong> ' + subject.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</p>' + html;
@@ -626,7 +658,7 @@
           setStatus(card, 'This draft is empty.', true);
           return;
         }
-        var title = String((card.querySelector('.camp-draft-title') || {}).textContent || 'draft').trim();
+        var title = cardTitle(card, variant);
         var hasImg = countImages(html) > 0;
         btn.disabled = true;
         copyHtmlAndPlain(html, plain)
@@ -655,10 +687,10 @@
       btn.addEventListener('click', function () {
         var card = btn.closest('[data-camp-draft-card]');
         if (!card) return;
-        var htmlEl = card.querySelector('[data-camp-draft-html]');
-        var html = expandTokens(htmlEl ? String(htmlEl.innerHTML || '') : '', card);
+        var variant = btn.closest('[data-camp-draft-variant]') || activeVariant(card);
+        var html = variantHtml(card, variant);
         var plain = htmlToPlain(html);
-        var subject = cardSubject(card);
+        var subject = cardSubject(card, variant);
         if (subject) {
           plain = 'Subject: ' + subject + '\n\n' + plain;
         }
@@ -666,7 +698,7 @@
           setStatus(card, 'This draft is empty.', true);
           return;
         }
-        var title = String((card.querySelector('.camp-draft-title') || {}).textContent || 'draft').trim();
+        var title = cardTitle(card, variant);
         btn.disabled = true;
         copyPlainText(plain)
           .then(function () {
@@ -742,29 +774,325 @@
   initEditors();
   initCopyButtons();
   initTokenButtons();
+  initAbcTabs();
+  initExpandButtons();
   initDraftSearch();
+
+  function initAbcTabs() {
+    document.querySelectorAll('[data-camp-draft-abc]').forEach(function (bar) {
+      var card = bar.closest('[data-camp-draft-card]');
+      if (!card) return;
+      bar.querySelectorAll('[data-camp-draft-abc-tab]').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          activateVariant(card, tab.getAttribute('data-camp-draft-abc-tab') || '');
+        });
+      });
+    });
+  }
+
+  function activateVariant(card, letter) {
+    if (!card || !letter) return;
+    card.querySelectorAll('[data-camp-draft-variant]').forEach(function (v) {
+      v.classList.toggle('is-on', v.getAttribute('data-camp-draft-variant') === letter);
+    });
+    var bar = card.querySelector('[data-camp-draft-abc]');
+    if (!bar) return;
+    bar.querySelectorAll('[data-camp-draft-abc-tab]').forEach(function (t) {
+      var on = t.getAttribute('data-camp-draft-abc-tab') === letter;
+      t.classList.toggle('is-on', on);
+      t.classList.toggle('secondary', !on);
+      t.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function initExpandButtons() {
+    document.querySelectorAll('[data-camp-draft-expand]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var variant = btn.closest('[data-camp-draft-variant]');
+        var preview = variant
+          ? variant.querySelector('[data-camp-draft-preview]')
+          : null;
+        if (!preview) return;
+        var on = preview.classList.toggle('is-expanded');
+        btn.textContent = on ? 'Show less' : 'Show full';
+      });
+    });
+  }
 
   function initDraftSearch() {
     var input = document.querySelector('[data-camp-draft-search]');
-    var cards = document.querySelectorAll('[data-camp-draft-card]');
+    var form = document.querySelector('[data-camp-draft-search-form]');
+    var suggestEl = document.querySelector('[data-camp-draft-suggest]');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('[data-camp-draft-card]'));
     var empty = document.getElementById('camp-drafts-search-empty');
+    var meta = document.querySelector('[data-camp-draft-search-meta]');
+    var folderChips = Array.prototype.slice.call(document.querySelectorAll('[data-camp-draft-chip="folder"]'));
+    var catChips = Array.prototype.slice.call(document.querySelectorAll('[data-camp-draft-chip="category"]'));
     if (!input) return;
+
+    var suggestions = [];
+    var activeIndex = -1;
+    var matchIndex = -1;
+    var matchCards = [];
+
+    function activeChipValue(chips) {
+      var active = chips.filter(function (c) { return !c.classList.contains('secondary'); })[0];
+      return active ? String(active.getAttribute('data-camp-draft-chip-value') || '') : '';
+    }
+
+    function setChipActive(chips, value) {
+      chips.forEach(function (c) {
+        var on = String(c.getAttribute('data-camp-draft-chip-value') || '') === String(value);
+        c.classList.toggle('secondary', !on);
+      });
+    }
+
+    function hideSuggest() {
+      if (!suggestEl) return;
+      suggestEl.hidden = true;
+      suggestEl.innerHTML = '';
+      activeIndex = -1;
+      input.setAttribute('aria-expanded', 'false');
+    }
+
+    function cardMatches(card, q, ignoreChips, folder, cat) {
+      var hay = String(card.getAttribute('data-camp-draft-haystack') || '').toLowerCase();
+      if (q && hay.indexOf(q) === -1) return false;
+      if (ignoreChips) return true;
+      if (cat && String(card.getAttribute('data-camp-draft-category') || '') !== cat) return false;
+      if (folder === '-1' || folder === -1) {
+        if (String(card.getAttribute('data-camp-draft-folder') || '0') !== '0') return false;
+      } else if (folder && folder !== '0' && folder !== 0) {
+        if (String(card.getAttribute('data-camp-draft-folder') || '') !== String(folder)) return false;
+      }
+      return true;
+    }
+
+    function firstMatchingLetter(card, q) {
+      if (!q) return '';
+      var variants = card.querySelectorAll('[data-camp-draft-variant]');
+      for (var i = 0; i < variants.length; i++) {
+        var v = variants[i];
+        var bits = [
+          v.getAttribute('data-camp-draft-title') || '',
+          v.getAttribute('data-camp-draft-subject') || '',
+          v.textContent || ''
+        ].join(' ').toLowerCase();
+        if (bits.indexOf(q) !== -1) {
+          return String(v.getAttribute('data-camp-draft-variant') || '');
+        }
+      }
+      return '';
+    }
 
     function apply() {
       var q = String(input.value || '').trim().toLowerCase();
+      var ignoreChips = q !== '';
+      var folder = activeChipValue(folderChips);
+      var cat = activeChipValue(catChips);
       var shown = 0;
+      matchCards = [];
       cards.forEach(function (card) {
-        var hay = String(card.getAttribute('data-camp-draft-haystack') || '').toLowerCase();
-        var ok = !q || hay.indexOf(q) !== -1;
+        var ok = cardMatches(card, q, ignoreChips, folder, cat);
         card.hidden = !ok;
-        if (ok) shown += 1;
+        if (ok) {
+          shown += 1;
+          if (q) matchCards.push(card);
+        }
       });
       if (empty) {
-        empty.hidden = !(q && shown === 0 && cards.length > 0);
+        empty.hidden = !(shown === 0 && cards.length > 0);
+      }
+      if (meta) {
+        if (q) {
+          meta.textContent = shown === 0
+            ? '0 matches'
+            : (shown + ' of ' + cards.length + (matchIndex >= 0 ? ' · ' + (matchIndex + 1) : ''));
+        } else if (ignoreChips) {
+          meta.textContent = '';
+        } else {
+          meta.textContent = shown === cards.length ? '' : (shown + ' shown');
+        }
+      }
+      return shown;
+    }
+
+    function renderSuggest() {
+      if (!suggestEl) return;
+      suggestEl.innerHTML = '';
+      if (!suggestions.length) {
+        hideSuggest();
+        return;
+      }
+      suggestions.forEach(function (item, idx) {
+        var li = document.createElement('li');
+        li.className = 'swe-admin-delete-item' + (idx === activeIndex ? ' is-active' : '');
+        li.setAttribute('role', 'option');
+        li.setAttribute('data-index', String(idx));
+        var main = document.createElement('div');
+        main.className = 'swe-admin-delete-item-main';
+        main.textContent = item.title;
+        var metaEl = document.createElement('div');
+        metaEl.className = 'swe-admin-delete-item-meta';
+        metaEl.textContent = item.meta;
+        if (item.letters) {
+          var tag = document.createElement('span');
+          tag.className = 'swe-admin-delete-match';
+          tag.textContent = item.letters;
+          li.appendChild(tag);
+        }
+        li.appendChild(main);
+        li.appendChild(metaEl);
+        li.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          selectSuggestion(idx);
+        });
+        suggestEl.appendChild(li);
+      });
+      suggestEl.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    function buildSuggestions() {
+      var q = String(input.value || '').trim().toLowerCase();
+      suggestions = [];
+      if (q.length < 1) {
+        hideSuggest();
+        return;
+      }
+      cards.forEach(function (card) {
+        if (!cardMatches(card, q, true, '0', '')) return;
+        var title = String(card.getAttribute('data-camp-draft-suggest-title') || '').trim()
+          || String((card.querySelector('.camp-draft-title') || {}).textContent || '').trim();
+        if (!title) return;
+        var folderTag = card.querySelector('.camp-draft-folder-tag');
+        var catTag = card.querySelector('.swe-status-badge');
+        var letters = [];
+        card.querySelectorAll('[data-camp-draft-abc-tab]').forEach(function (t) {
+          letters.push(t.getAttribute('data-camp-draft-abc-tab') || '');
+        });
+        suggestions.push({
+          card: card,
+          title: title,
+          meta: [folderTag ? folderTag.textContent : '', catTag ? catTag.textContent : '']
+            .filter(Boolean).join(' · '),
+          letters: letters.filter(Boolean).join(' / '),
+          letter: firstMatchingLetter(card, q)
+        });
+      });
+      suggestions = suggestions.slice(0, 12);
+      activeIndex = suggestions.length ? 0 : -1;
+      renderSuggest();
+    }
+
+    function clearHits() {
+      cards.forEach(function (c) { c.classList.remove('sheet-search-hit'); });
+    }
+
+    function jumpTo(card, letter) {
+      if (!card) return;
+      if (letter) activateVariant(card, letter);
+      clearHits();
+      card.classList.add('sheet-search-hit');
+      try {
+        card.scrollIntoView({ block: 'center', behavior: 'auto' });
+      } catch (err) {
+        card.scrollIntoView(true);
+      }
+      matchIndex = matchCards.indexOf(card);
+      if (meta && matchCards.length) {
+        meta.textContent = (matchIndex >= 0 ? (matchIndex + 1) + ' of ' : '') + matchCards.length;
       }
     }
 
-    input.addEventListener('input', apply);
+    function selectSuggestion(idx) {
+      var item = suggestions[idx];
+      if (!item) return;
+      if (item.title) input.value = item.title;
+      hideSuggest();
+      matchIndex = -1;
+      apply();
+      jumpTo(item.card, item.letter);
+    }
+
+    function jump(dir) {
+      var q = String(input.value || '').trim();
+      apply();
+      if (!matchCards.length) return;
+      matchIndex = matchIndex < 0
+        ? (dir > 0 ? 0 : matchCards.length - 1)
+        : (matchIndex + dir + matchCards.length) % matchCards.length;
+      var card = matchCards[matchIndex];
+      jumpTo(card, firstMatchingLetter(card, q.toLowerCase()));
+    }
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+      });
+    }
+
+    folderChips.concat(catChips).forEach(function (chip) {
+      chip.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (window.AppProcessing && typeof window.AppProcessing.hideAll === 'function') {
+          window.AppProcessing.hideAll();
+        }
+        var kind = chip.getAttribute('data-camp-draft-chip');
+        var value = chip.getAttribute('data-camp-draft-chip-value') || '';
+        if (kind === 'folder') setChipActive(folderChips, value);
+        else setChipActive(catChips, value);
+        matchIndex = -1;
+        apply();
+        hideSuggest();
+      });
+    });
+
+    input.addEventListener('input', function () {
+      matchIndex = -1;
+      apply();
+      buildSuggestions();
+    });
+    input.addEventListener('search', function () {
+      matchIndex = -1;
+      apply();
+      buildSuggestions();
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') {
+        if (!suggestions.length || !suggestEl || suggestEl.hidden) return;
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % suggestions.length;
+        renderSuggest();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        if (!suggestions.length || !suggestEl || suggestEl.hidden) return;
+        e.preventDefault();
+        activeIndex = activeIndex <= 0 ? suggestions.length - 1 : activeIndex - 1;
+        renderSuggest();
+        return;
+      }
+      if (e.key === 'Escape') {
+        hideSuggest();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (suggestEl && !suggestEl.hidden && suggestions.length && activeIndex >= 0) {
+          selectSuggestion(activeIndex);
+          return;
+        }
+        jump(e.shiftKey ? -1 : 1);
+      }
+    });
+    input.addEventListener('blur', function () {
+      window.setTimeout(hideSuggest, 150);
+    });
+
     apply();
+    if (String(input.value || '').trim()) {
+      buildSuggestions();
+    }
   }
 })();
