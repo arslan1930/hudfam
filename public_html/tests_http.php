@@ -1255,6 +1255,10 @@ if ($r['status'] === 200 && str_contains($r['body'], 'Campaign drafts')
     && str_contains($r['body'], 'First outreach · requesting · A')
     && str_contains($r['body'], '3 articles · ask group rate · B')
     && str_contains($r['body'], 'Best regards')
+    && str_contains($r['body'], 'dfolder')
+    && str_contains($r['body'], 'camp-drafts-folder-chips')
+    && str_contains($r['body'], '>Samples<')
+    && str_contains($r['body'], '>Topics<')
     && !str_contains($r['body'], 'Rehan')
     && !str_contains($r['body'], 'TeqnoWebs')) {
     pass('comms can open Campaign drafts');
@@ -1308,6 +1312,25 @@ if ($r['status'] === 200
     pass('comms Campaign drafts search niche topic cards');
 } else {
     fail('comms Campaign drafts niche topic search did not filter');
+}
+$r = req('GET', $base . '/index.php?page=team_email_campaigns_drafts');
+$folderId = 0;
+if (preg_match('/dfolder=(\d+)[^"]*">Samples</', $r['body'], $fm)
+    || preg_match('/dfolder=(\d+)[^"]*>Samples</', $r['body'], $fm)) {
+    $folderId = (int) $fm[1];
+}
+$r = $folderId > 0
+    ? req('GET', $base . '/index.php?page=team_email_campaigns_drafts&dfolder=' . $folderId)
+    : ['status' => 0, 'body' => ''];
+if ($r['status'] === 200
+    && $folderId > 0
+    && str_contains($r['body'], 'Sample · Italy · A')
+    && str_contains($r['body'], 'Sample · they asked for an example · A')
+    && !str_contains($r['body'], 'First outreach · requesting · A')
+    && !str_contains($r['body'], 'Payment has been sent · A')) {
+    pass('comms Campaign drafts Samples folder chip filters cards');
+} else {
+    fail('comms Campaign drafts Samples folder chip did not filter');
 }
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];

@@ -3171,6 +3171,78 @@ try {
         ]));
     }
 
+    $officeFolders = $officePid > 0 ? list_email_campaign_draft_folders($officePid) : [];
+    $officeFolderSlugs = array_map(static fn ($f) => (string) ($f['slug'] ?? ''), $officeFolders);
+    $samplesFolder = $officePid > 0 ? get_email_campaign_draft_folder_by_slug($officePid, 'samples') : null;
+    $topicsFolder = $officePid > 0 ? get_email_campaign_draft_folder_by_slug($officePid, 'topics') : null;
+    $samplesId = (int) ($samplesFolder['id'] ?? 0);
+    $topicsId = (int) ($topicsFolder['id'] ?? 0);
+    $italyInSamples = $samplesId > 0
+        ? list_email_campaign_drafts($officePid, null, 'Sample · Italy', $samplesId)
+        : [];
+    $topicFolderHits = $topicsId > 0
+        ? list_email_campaign_drafts($officePid, null, 'niche', $topicsId)
+        : [];
+    $topicFolderHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? ''), $topicFolderHits));
+    $hideUserId = (int) db()->query("SELECT id FROM users WHERE username='comms' LIMIT 1")->fetchColumn();
+    if ($hideUserId < 1) {
+        $hideUserId = (int) ($teamUser['id'] ?? 0);
+    }
+    $italyHiddenHay = '';
+    $italyShownHay = '';
+    $folderHideOk = false;
+    if ($samplesId > 0 && $hideUserId > 0) {
+        db()->prepare(
+            'INSERT IGNORE INTO email_campaign_draft_folder_hidden (folder_id, user_id) VALUES (?,?)'
+        )->execute([$samplesId, $hideUserId]);
+        $italyHidden = list_email_campaign_drafts($officePid, null, 'Italy', 0, $hideUserId);
+        $italyShown = list_email_campaign_drafts($officePid, null, 'Italy', 0, 0);
+        $italyHiddenHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? ''), $italyHidden));
+        $italyShownHay = implode("\n", array_map(static fn ($r) => (string) ($r['title'] ?? ''), $italyShown));
+        $folderHideOk = !str_contains($italyHiddenHay, 'Sample · Italy')
+            && str_contains($italyShownHay, 'Sample · Italy');
+        db()->prepare(
+            'DELETE FROM email_campaign_draft_folder_hidden WHERE folder_id=? AND user_id=?'
+        )->execute([$samplesId, $hideUserId]);
+    }
+    $customFolder = $officePid > 0
+        ? save_email_campaign_draft_folder($officePid, 'Scratch folder')
+        : ['ok' => false];
+    $customFolderId = (int) ($customFolder['id'] ?? 0);
+    $renamedFolder = $customFolderId > 0
+        ? save_email_campaign_draft_folder($officePid, 'Scratch folder v2', $customFolderId)
+        : ['ok' => false];
+    $deletedFolder = $customFolderId > 0
+        ? delete_email_campaign_draft_folder($officePid, $customFolderId)
+        : ['ok' => false];
+    $expectedSlugs = ['samples', 'topics', 'quality', 'outreach', 'pricing', 'homepage', 'publishing', 'payment', 'follow_up'];
+    $missingSlugs = array_values(array_diff($expectedSlugs, $officeFolderSlugs));
+    if ($missingSlugs === []
+        && $samplesId > 0
+        && $topicsId > 0
+        && count($italyInSamples) >= 3
+        && str_contains($topicFolderHay, 'Topics · they asked for niche / category · A')
+        && $folderHideOk
+        && !empty($customFolder['ok'])
+        && !empty($renamedFolder['ok'])
+        && !empty($deletedFolder['ok'])) {
+        pass('office draft folders seed + hide samples from a user');
+    } else {
+        fail('office draft folders: ' . json_encode([
+            'folders' => $officeFolderSlugs,
+            'missing' => $missingSlugs,
+            'samplesId' => $samplesId,
+            'topicsId' => $topicsId,
+            'italyInSamples' => count($italyInSamples),
+            'topics' => $topicFolderHay,
+            'hide' => $folderHideOk,
+            'hiddenHay' => $italyHiddenHay,
+            'custom' => $customFolder,
+            'renamed' => $renamedFolder,
+            'deleted' => $deletedFolder,
+        ]));
+    }
+
     // Admin bulk add: paste / CSV / Excel-text import into Email Sheet.
     $bulkSheet = create_email_campaign_sheet('Austria', (int) $adminUser['id'], 'Austria Bulk Import', false);
     $paste = paste_email_campaign_rows($bulkSheet, implode("\n", [
