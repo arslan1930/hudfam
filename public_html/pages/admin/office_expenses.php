@@ -159,7 +159,12 @@ render_header('Office expenses', 'admin');
 
 <?php if ($open): ?>
 <section class="card" id="office-expense-add">
-  <h2><?= $editRow ? 'Edit payment' : 'Add payment' ?></h2>
+  <div class="invoice-list-toolbar">
+    <h2 style="margin:0"><?= $editRow ? 'Edit payment' : 'Add payment' ?></h2>
+    <?php if ($editRow): ?>
+      <a class="btn secondary small" href="<?= h($pageUrl) ?>#office-expense-add">Cancel edit</a>
+    <?php endif; ?>
+  </div>
   <form method="post" action="<?= h($pageUrl) ?>" class="office-expense-add">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="<?= $editRow ? 'update' : 'add' ?>">
@@ -208,7 +213,9 @@ render_header('Office expenses', 'admin');
 <?php endif; ?>
 
 <section class="card" id="office-expense-sheet">
-  <h2><?= h(office_expense_month_label($ym)) ?> payments</h2>
+  <div class="invoice-list-toolbar">
+    <h2 style="margin:0"><?= h(office_expense_month_label($ym)) ?> payments</h2>
+  </div>
   <?php if (!$rows): ?>
     <div class="empty-state">
       <p><?= $open ? 'No payments this month yet. Add the first one above.' : 'No payments were recorded for this month.' ?></p>

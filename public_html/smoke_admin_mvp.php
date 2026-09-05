@@ -434,12 +434,31 @@ if (!str_contains($officeExpLib, 'function ensure_office_expense_schema')
     || !str_contains($indexPhp, "'admin_office_expenses'")
     || !str_contains($dashPhp, 'index.php?page=admin_office_expenses')
     || !str_contains($officeExpCss, '.office-expense-totals')
+    || !str_contains($officeExpCss, 'var(--ok-soft)')
+    || !str_contains($officeExpCss, 'var(--brand-soft)')
+    || !str_contains($officeExpCss, 'var(--panel)')
+    || !str_contains($uiCss, 'html.ui-v2 .office-expense-totals')
+    || !str_contains($uiCss, 'html.ui-v2 .office-expense-status.is-open')
+    || !str_contains($uiCss, 'html.ui-v2 .office-expense-table tr.is-editing td')
     || !str_contains($testsRunSmoke, 'office expense save month locks edits')
     || !str_contains($testsRunSmoke, 'office expense delete writes history')
     || !str_contains($testsHttpSmoke, 'teammate blocked from Office expenses')) {
     fail('Office expenses missing schema / helpers / route');
 } else {
     ok('Office expenses schema + helpers + Admin hub route');
+}
+$officeExpCssBlock = '';
+$officeExpCssNeedle = strpos($officeExpCss, '/* Office expenses');
+if ($officeExpCssNeedle !== false) {
+    $officeExpCssBlock = substr($officeExpCss, $officeExpCssNeedle);
+}
+if ($officeExpCssBlock === ''
+    || str_contains($officeExpCssBlock, '#eefbf3')
+    || str_contains($officeExpCssBlock, '#eef5ff')
+    || str_contains($officeExpCssBlock, 'background: #f9fafb')) {
+    fail('Office expenses CSS still uses leftover light hex colors');
+} else {
+    ok('Office expenses CSS uses theme tokens (no leftover light hex)');
 }
 $sitePricesJs = file_get_contents($root . '/assets/js/site-prices.js') ?: '';
 $sitePricesCss = file_get_contents($root . '/assets/css/app.css') ?: '';
