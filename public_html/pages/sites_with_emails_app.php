@@ -41,6 +41,15 @@ $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
 }
+if ($sheet === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $postedCountry = trim((string) post('country'));
+    if ($postedCountry === '') {
+        $postedCountry = trim((string) post('sheet'));
+    }
+    if ($postedCountry !== '') {
+        $sheet = $postedCountry;
+    }
+}
 if ($sheet !== '' && $sheet !== 'all') {
     $canonSheet = resolve_canonical_country($sheet);
     if ($canonSheet === null) {
@@ -1200,6 +1209,7 @@ render_sheet_checkpoint_compact(
         'p' => $pageNum,
         'sent' => $sentFilter,
         'filter' => $rowFilter,
+        'country' => $countryName,
     ]);
     ?>
   </div>
@@ -1441,6 +1451,7 @@ render_sheet_checkpoint_compact(
       'p' => $pageNum,
       'sent' => $sentFilter,
       'filter' => $rowFilter,
+      'country' => $countryName,
       'mark' => $sweScope === 'admin',
       'push' => $isTeam,
       'remove' => true,

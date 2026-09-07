@@ -794,7 +794,7 @@ function render_sheet_per_page_filter(array $baseQuery, int $current): void
  * Buttons use data-sheet-action + data-site-id instead of a form copy on every row.
  *
  * @param array{
- *   q?:string,p?:int,sent?:string,filter?:string,
+ *   q?:string,p?:int,sent?:string,filter?:string,country?:string,
  *   mark?:bool,push?:bool,remove?:bool
  * } $state
  */
@@ -819,6 +819,10 @@ function render_sheet_shared_row_action_forms(string $actionUrl, string $prefix,
     }
     if ($filter !== '') {
         $nav .= '<input type="hidden" name="filter" value="' . h($filter) . '">';
+    }
+    $country = trim((string) ($state['country'] ?? ''));
+    if ($country !== '') {
+        $nav .= '<input type="hidden" name="country" value="' . h($country) . '">';
     }
     $url = h($actionUrl);
     $pre = h($prefix);

@@ -581,12 +581,15 @@
     saveRowForm(form, { quiet: true });
   }, true);
 
-  function postAjaxForm(form, failLabel) {
+  function postAjaxForm(form, failLabel, extra) {
     if (!form || form.getAttribute('data-busy') === '1') {
       return Promise.resolve(null);
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    if (extra) {
+      Object.keys(extra).forEach(function (k) { body.set(k, extra[k]); });
+    }
     if (searchInput) body.set('q', String(searchInput.value || ''));
     form.setAttribute('data-busy', '1');
     return fetch(form.getAttribute('action') || window.location.href, {
@@ -869,7 +872,8 @@
     e.preventDefault();
     setStatus('Removing site…', false, true);
     showProcessing('Removing site…');
-    postAjaxForm(form, 'Remove failed').then(function (result) {
+    var removeId = String((form.querySelector('[name="site_id"]') || {}).value || '');
+    postAjaxForm(form, 'Remove failed', removeId ? { site_id: removeId } : null).then(function (result) {
       if (!result) {
         hideProcessing();
         return;

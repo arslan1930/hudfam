@@ -1633,11 +1633,21 @@ function find_site_with_emails_id(string $country, string $domain, string $scope
 function remove_sites_with_emails_by_ids(string $country, array $ids, string $scope = 'team'): array
 {
     $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $scope = swe_normalize_scope($scope);
+    $canon = function_exists('resolve_canonical_country') ? resolve_canonical_country($country) : null;
+    $country = $canon ? $canon['name'] : trim($country);
     $snaps = [];
     $removed = [];
     foreach ($ids as $id) {
         $row = get_site_with_emails($id, $scope);
-        if (!$row || (string) ($row['country'] ?? '') !== $country) {
+        if (!$row) {
+            continue;
+        }
+        $rowCountry = (string) ($row['country'] ?? '');
+        $sameCountry = function_exists('same_canonical_country')
+            ? same_canonical_country($rowCountry, $country)
+            : (strcasecmp(trim($rowCountry), trim($country)) === 0);
+        if (!$sameCountry) {
             continue;
         }
         $snaps[] = $row;
@@ -1646,7 +1656,7 @@ function remove_sites_with_emails_by_ids(string $country, array $ids, string $sc
         }
     }
     if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
-        sheet_history_push_remove('swe', $scope . ':' . $country, $snaps, ['scope' => swe_normalize_scope($scope)]);
+        sheet_history_push_remove('swe', $scope . ':' . $country, $snaps, ['scope' => $scope]);
     }
     if ($removed === []) {
         return ['ok' => false, 'error' => 'No matching rows to remove.', 'removed' => [], 'count' => 0];
@@ -1849,7 +1859,7 @@ function save_site_with_emails_row(
     // Typing "none" occupies Email 1 so the site row is kept.
     if (!$hasOccupancy && $id !== null && $id > 0 && ($scopeNorm === 'admin' || $origScope === 'admin_all')) {
         $existing = get_site_with_emails($id, 'admin');
-        if (!$existing || (string) $existing['country'] !== $country) {
+        if (!$existing || !same_canonical_country((string) ($existing['country'] ?? ''), $country)) {
             return ['ok' => false, 'error' => 'Row not found in this country.'];
         }
         $delDomain = (string) ($existing['domain'] ?? $domain);
@@ -1868,7 +1878,7 @@ function save_site_with_emails_row(
 
     if ($id !== null && $id > 0) {
         $existing = get_site_with_emails($id, $scope);
-        if (!$existing || (string) $existing['country'] !== $country) {
+        if (!$existing || !same_canonical_country((string) ($existing['country'] ?? ''), $country)) {
             return ['ok' => false, 'error' => 'Row not found in this country.'];
         }
         $dup = db()->prepare(

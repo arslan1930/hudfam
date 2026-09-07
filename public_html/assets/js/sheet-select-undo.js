@@ -348,7 +348,7 @@
     if (idsInput) idsInput.value = ids.join(',');
     setStatus('Removing selected…', false);
     showProcessing('Removing selected…');
-    postForm(form).then(function (data) {
+    postForm(form, { site_ids: ids.join(',') }).then(function (data) {
       var removed = (data.removed || []).map(function (r) {
         return String(r.id != null ? r.id : r);
       });

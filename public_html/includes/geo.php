@@ -825,6 +825,27 @@ function require_canonical_country(string $input): array
     return $resolved;
 }
 
+/**
+ * True when two country labels are the same sheet (trim, case, aliases like German → Germany).
+ * Listing uses SQL collation (case-insensitive); PHP === is not — use this for id checks.
+ */
+function same_canonical_country(string $a, string $b): bool
+{
+    $a = trim($a);
+    $b = trim($b);
+    if ($a === '' || $b === '') {
+        return false;
+    }
+    if (strcasecmp($a, $b) === 0) {
+        return true;
+    }
+    $canonA = resolve_canonical_country($a);
+    $canonB = resolve_canonical_country($b);
+    $nameA = trim((string) (($canonA['name'] ?? '') !== '' ? $canonA['name'] : $a));
+    $nameB = trim((string) (($canonB['name'] ?? '') !== '' ? $canonB['name'] : $b));
+    return strcasecmp($nameA, $nameB) === 0;
+}
+
 function apply_site_geo_filters(array &$where, array &$params, array $filters): void
 {
     if (!empty($filters['region'])) {
