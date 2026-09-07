@@ -248,10 +248,31 @@
   }
 
   function postForm(form, extra) {
-    var body = new URLSearchParams(new FormData(form));
+    var body = new URLSearchParams();
+    Array.prototype.forEach.call(form.elements || [], function (el) {
+      if (!el || !el.name || el.disabled) return;
+      var key = String(el.name);
+      if (key === 'site_ids' || key === 'site_ids[]') return;
+      var type = String(el.type || '').toLowerCase();
+      if (type === 'file' || type === 'submit' || type === 'button' || type === 'reset') return;
+      if ((type === 'checkbox' || type === 'radio') && !el.checked) return;
+      body.append(key, el.value);
+    });
     body.set('ajax', '1');
     if (extra) {
-      Object.keys(extra).forEach(function (k) { body.set(k, extra[k]); });
+      Object.keys(extra).forEach(function (k) {
+        var v = extra[k];
+        if (Array.isArray(v)) {
+          // Repeat site_ids[] rather than "1,2,3,4" — comma lists get blocked or
+          // stripped once more than a couple of ids are selected.
+          v.forEach(function (item) {
+            if (item === '' || item == null) return;
+            body.append(k + '[]', String(item));
+          });
+          return;
+        }
+        if (v != null && v !== '') body.set(k, String(v));
+      });
     }
     if (!body.get('_csrf')) {
       var tok = csrfToken();
@@ -345,10 +366,10 @@
     var confirmMsg = 'Remove ' + ids.length + ' selected site' + (ids.length === 1 ? '' : 's') + '?';
     if (!window.confirm(confirmMsg)) return;
     var idsInput = form.querySelector('[data-sheet-site-ids]');
-    if (idsInput) idsInput.value = ids.join(',');
+    if (idsInput) idsInput.value = ids.join(' ');
     setStatus('Removing selected…', false);
     showProcessing('Removing selected…');
-    postForm(form, { site_ids: ids.join(',') }).then(function (data) {
+    postForm(form, { site_ids: ids }).then(function (data) {
       var removed = (data.removed || []).map(function (r) {
         return String(r.id != null ? r.id : r);
       });

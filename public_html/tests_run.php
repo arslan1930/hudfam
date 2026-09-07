@@ -2455,6 +2455,37 @@ try {
         fail('empty id remove: ' . json_encode($miss));
     }
 
+    $parsedSpace = parse_posted_id_list('10 20 30 40 50');
+    $parsedArr = parse_posted_id_list(['11', '12', '13', '14', '15']);
+    if ($parsedSpace === [10, 20, 30, 40, 50] && $parsedArr === [11, 12, 13, 14, 15]) {
+        pass('parse_posted_id_list accepts 5+ ids as spaces or array');
+    } else {
+        fail('parse_posted_id_list 5 ids: ' . json_encode([$parsedSpace, $parsedArr]));
+    }
+
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-bulk-%'");
+    $bulkIds = [];
+    $bulkIns = db()->prepare(
+        "INSERT INTO sites_with_emails_team (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?, ?, 'German', 'europe', ?, '', '', '')"
+    );
+    for ($bi = 1; $bi <= 5; $bi++) {
+        $country = $bi === 2 ? 'germany' : ($bi === 3 ? 'Germany ' : ($bi === 4 ? 'German' : 'Germany'));
+        $email = $bi === 1 ? '' : ($bi === 5 ? 'none' : ('b' . $bi . '@txfrmv-bulk.de'));
+        $bulkIns->execute(['txfrmv-bulk-' . $bi . '.de', $country, $email]);
+        $bulkIds[] = (int) db()->lastInsertId();
+    }
+    $fiveRm = remove_sites_with_emails_by_ids('Germany', $bulkIds, 'team');
+    $bulkLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-bulk-%'"
+    )->fetchColumn();
+    if (!empty($fiveRm['ok']) && (int) ($fiveRm['count'] ?? 0) === 5 && $bulkLeft === 0) {
+        pass('Team remove selected deletes 5 ids in one call');
+    } else {
+        fail('team remove 5 ids: ' . json_encode(['remove' => $fiveRm, 'left' => $bulkLeft, 'ids' => $bulkIds]));
+    }
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-bulk-%'");
+
     db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-%'");
     db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfrmv-%'");
     db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfrmv-%'");

@@ -100,7 +100,15 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         http_response_code($code);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($payload);
+        $flags = 0;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        if (defined('JSON_UNESCAPED_UNICODE')) {
+            $flags |= JSON_UNESCAPED_UNICODE;
+        }
+        $json = json_encode($payload, $flags);
+        echo $json !== false ? $json : '{"ok":false,"error":"Could not encode response."}';
         exit;
     };
     $back = $sweBase . '&country=' . rawurlencode($countryName);
@@ -180,7 +188,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'remove_selected') {
         $ids = function_exists('parse_posted_id_list') ? parse_posted_id_list(post('site_ids')) : [];
-        $result = remove_sites_with_emails_by_ids($countryName, $ids, $sweScope);
+        $result = $ids === []
+            ? ['ok' => false, 'error' => 'Select at least one row first.', 'removed' => [], 'count' => 0]
+            : remove_sites_with_emails_by_ids($countryName, $ids, $sweScope);
         $left = count_sites_with_emails_for_country($countryName, $sweScope);
         if ($wantsJson) {
             $jsonOut(
