@@ -353,13 +353,21 @@
         return String(r.id != null ? r.id : r);
       });
       if (!removed.length) removed = ids;
+      var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
+      if (totalLabel && typeof data.site_count === 'number') {
+        totalLabel.textContent = String(data.site_count);
+      }
       removeRowsByIds(removed);
       applyState(data);
       var n = typeof data.count === 'number' ? data.count : removed.length;
       setStatus('Removed ' + n + ' selected site' + (n === 1 ? '' : 's') + '.');
-      var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
-      if (totalLabel && typeof data.site_count === 'number') {
-        totalLabel.textContent = String(data.site_count);
+      if (window.SheetSelectUndo && typeof window.SheetSelectUndo.syncPageStatus === 'function') {
+        var qEl = document.getElementById('swe-row-search');
+        var filtering = !!(qEl && String(qEl.value || '').trim());
+        var shown = filtering
+          ? document.querySelectorAll('[data-swe-row]:not([hidden]), [data-extracted-url-row]:not([hidden]), [data-prospect-site-row]:not([hidden])').length
+          : 0;
+        window.SheetSelectUndo.syncPageStatus(shown, filtering);
       }
       hideProcessing();
       if (data.redirect) {
@@ -403,11 +411,30 @@
     syncPageStatus: function (shown, filtering) {
       var el = document.querySelector('[data-sheet-page-status]');
       if (!el) return;
-      if (!el.getAttribute('data-default-text')) {
-        el.setAttribute('data-default-text', String(el.textContent || '').replace(/\s+/g, ' ').trim());
+      var live = document.querySelectorAll('[data-sheet-row-check]').length;
+      var header = document.getElementById('swe_total_label')
+        || document.getElementById('extracted_total_label')
+        || document.getElementById('prospect_country_total_label');
+      var prevOnPage = Number(el.getAttribute('data-on-page'));
+      var prevTotal = Number(el.getAttribute('data-total'));
+      var total;
+      if (header && String(header.textContent || '').trim() !== '') {
+        var parsed = parseInt(header.textContent, 10);
+        total = isNaN(parsed) ? prevTotal : parsed;
+      } else if (!isNaN(prevOnPage) && !isNaN(prevTotal) && live <= prevOnPage) {
+        total = Math.max(0, prevTotal - (prevOnPage - live));
+      } else {
+        total = isNaN(prevTotal) ? live : prevTotal;
       }
+      if (isNaN(total)) total = live;
+      el.setAttribute('data-on-page', String(live));
+      el.setAttribute('data-total', String(total));
+      var page = el.getAttribute('data-page') || '1';
+      var pages = el.getAttribute('data-pages') || '1';
+      var idleText = 'Page ' + page + ' / ' + pages + ' · showing ' + live + ' of ' + total;
+      el.setAttribute('data-default-text', idleText);
       if (!filtering) {
-        el.textContent = el.getAttribute('data-default-text');
+        el.textContent = idleText;
         return;
       }
       shown = Number(shown) || 0;
@@ -415,10 +442,7 @@
         el.textContent = 'No search matches on this page';
         return;
       }
-      var page = el.getAttribute('data-page') || '1';
-      var pages = el.getAttribute('data-pages') || '1';
-      var onPage = el.getAttribute('data-on-page') || String(shown);
-      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + onPage + ' on this page';
+      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + live + ' on this page';
     },
     removed: function (ids, data) {
       if (ids && ids.length) removeRowsByIds(ids.map(String));

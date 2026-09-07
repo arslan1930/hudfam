@@ -350,6 +350,41 @@
     }
   }
 
+  function syncTotalWord(n) {
+    var word = document.querySelector('[data-swe-total-word]');
+    if (!word || typeof n !== 'number' || isNaN(n)) return;
+    word.textContent = n === 1 ? ' site' : ' sites';
+  }
+
+  function renumberSweRows() {
+    var status = document.querySelector('[data-sheet-page-status]');
+    var page = status ? (Number(status.getAttribute('data-page')) || 1) : 1;
+    var perSel = document.getElementById('sheet_per_page_select');
+    var perPage = perSel ? (Number(perSel.value) || 100) : 100;
+    var n = (Math.max(1, page) - 1) * Math.max(1, perPage);
+    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+      n++;
+      row.setAttribute('data-row-num', String(n));
+      var num = row.querySelector('.swe-row-num');
+      if (num) {
+        num.textContent = String(n);
+        num.setAttribute('title', 'Site #' + n);
+      }
+    });
+  }
+
+  function afterSheetRowsChanged() {
+    if (totalLabel) {
+      var n = parseInt(totalLabel.textContent, 10);
+      if (!isNaN(n)) syncTotalWord(n);
+    }
+    renumberSweRows();
+    filterRows();
+    syncPushButton();
+  }
+
+  document.addEventListener('hf-sheet-rows-changed', afterSheetRowsChanged);
+
   function jump(dir) {
     if (!searchInput || !String(searchInput.value || '').trim()) return;
     filterRows();
@@ -467,8 +502,7 @@
             totalLabel.textContent = String(data.site_count);
           }
           setStatus('Removed ' + (data.domain || 'site') + ' (no emails left).');
-          filterRows();
-          syncPushButton();
+          try { document.dispatchEvent(new CustomEvent('hf-sheet-rows-changed')); } catch (e2) { /* ignore */ }
           return data;
         }
         var row = form.closest('[data-swe-row]');
@@ -740,6 +774,7 @@
         if (gone) gone.remove();
         if (typeof data.site_count === 'number' && totalLabel) {
           totalLabel.textContent = String(data.site_count);
+          syncTotalWord(data.site_count);
         }
         if (typeof data.ready_count === 'number') {
           syncPushButton(data.ready_count);
@@ -747,6 +782,7 @@
           syncPushButton();
         }
         setStatus('Pushed ' + (data.domain || 'site') + ' to Admin · cleared from Team.');
+        renumberSweRows();
         filterRows();
         if (data.redirect) {
           showProcessing('Loading…');
@@ -884,13 +920,15 @@
       if (rowEl) rowEl.remove();
       if (typeof data.site_count === 'number' && totalLabel) {
         totalLabel.textContent = String(data.site_count);
+        syncTotalWord(data.site_count);
       }
       setStatus('Removed complete row for ' + (data.domain || 'site') + '.');
       if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
         window.SheetSelectUndo.applyState(data);
       }
-      filterRows();
-      syncPushButton();
+      try {
+        document.dispatchEvent(new CustomEvent('hf-sheet-rows-changed'));
+      } catch (err) { /* ignore */ }
       if (data.redirect) {
         showProcessing('Loading…');
         window.setTimeout(function () { window.location.href = data.redirect; }, 250);

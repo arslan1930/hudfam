@@ -2572,7 +2572,10 @@ if (!str_contains($geoLibSmoke, 'function same_canonical_country')
     || !str_contains($sweLib, 'same_canonical_country($rowCountry, $country)')
     || !str_contains($sweApp, "'country' => \$countryName")
     || !str_contains($sweJs, 'removeId ? { site_id: removeId }')
-    || !str_contains($sheetSelJsRm, "postForm(form, { site_ids: ids.join(',') })")) {
+    || !str_contains($sheetSelJsRm, "postForm(form, { site_ids: ids.join(',') })")
+    || !str_contains($sheetSelJsRm, "el.setAttribute('data-on-page'")
+    || !str_contains($sweJs, 'function renumberSweRows')
+    || !str_contains($sweApp, 'data-swe-total-word')) {
     fail('SWE remove missing canonical country match / posted ids');
 } else {
     ok('SWE remove matches country aliases and posts ids');

@@ -960,7 +960,7 @@ render_breadcrumbs($crumbs);
     );
     ?>
     <p class="muted">
-      <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
+      <span id="swe_total_label"><?= (int) $countryTotal ?></span><span data-swe-total-word><?= (int) $countryTotal === 1 ? ' site' : ' sites' ?></span>
       <?= $q !== '' || $sentFilter !== '' || $rowFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
       · <?= (int) $perPage ?> per page
       · up to 4 emails each
