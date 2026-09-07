@@ -2566,6 +2566,21 @@ if (!str_contains($sweLib, 'function is_no_email_marker')
 } else {
     ok('SWE none marker keeps the site row');
 }
+$geoLibSmoke = file_get_contents($root . '/includes/geo.php') ?: '';
+$sheetSelJsRm = file_get_contents($root . '/assets/js/sheet-select-undo.js') ?: '';
+if (!str_contains($geoLibSmoke, 'function same_canonical_country')
+    || !str_contains($sweLib, 'same_canonical_country($rowCountry, $country)')
+    || !str_contains($sweApp, "'country' => \$countryName")
+    || !str_contains($sweJs, 'removeId ? { site_id: removeId }')
+    || !str_contains($sheetSelJsRm, 'postForm(form, { site_ids: ids })')
+    || !str_contains($sheetSelJsRm, "body.append(k + '[]'")
+    || !str_contains($sheetSelJsRm, "el.setAttribute('data-on-page'")
+    || !str_contains($sweJs, 'function renumberSweRows')
+    || !str_contains($sweApp, 'data-swe-total-word')) {
+    fail('SWE remove missing canonical country match / posted ids');
+} else {
+    ok('SWE remove matches country aliases and posts ids');
+}
 if (!str_contains($sweJs, 'listEligibleOpenRows')
     || !str_contains($sweJs, 'Open all ')
     || !str_contains($sweJs, 'syncOpenBulkButton')

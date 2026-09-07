@@ -41,6 +41,15 @@ $sheet = (string) get('country');
 if ($sheet === '' && (string) get('sheet') !== '') {
     $sheet = (string) get('sheet');
 }
+if ($sheet === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $postedCountry = trim((string) post('country'));
+    if ($postedCountry === '') {
+        $postedCountry = trim((string) post('sheet'));
+    }
+    if ($postedCountry !== '') {
+        $sheet = $postedCountry;
+    }
+}
 if ($sheet !== '' && $sheet !== 'all') {
     $canonSheet = resolve_canonical_country($sheet);
     if ($canonSheet === null) {
@@ -91,7 +100,15 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         http_response_code($code);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($payload);
+        $flags = 0;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        if (defined('JSON_UNESCAPED_UNICODE')) {
+            $flags |= JSON_UNESCAPED_UNICODE;
+        }
+        $json = json_encode($payload, $flags);
+        echo $json !== false ? $json : '{"ok":false,"error":"Could not encode response."}';
         exit;
     };
     $back = $sweBase . '&country=' . rawurlencode($countryName);
@@ -171,7 +188,9 @@ if ($inCountry && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'remove_selected') {
         $ids = function_exists('parse_posted_id_list') ? parse_posted_id_list(post('site_ids')) : [];
-        $result = remove_sites_with_emails_by_ids($countryName, $ids, $sweScope);
+        $result = $ids === []
+            ? ['ok' => false, 'error' => 'Select at least one row first.', 'removed' => [], 'count' => 0]
+            : remove_sites_with_emails_by_ids($countryName, $ids, $sweScope);
         $left = count_sites_with_emails_for_country($countryName, $sweScope);
         if ($wantsJson) {
             $jsonOut(
@@ -951,7 +970,7 @@ render_breadcrumbs($crumbs);
     );
     ?>
     <p class="muted">
-      <span id="swe_total_label"><?= (int) $countryTotal ?></span> site<?= (int) $countryTotal === 1 ? '' : 's' ?>
+      <span id="swe_total_label"><?= (int) $countryTotal ?></span><span data-swe-total-word><?= (int) $countryTotal === 1 ? ' site' : ' sites' ?></span>
       <?= $q !== '' || $sentFilter !== '' || $rowFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
       · <?= (int) $perPage ?> per page
       · up to 4 emails each
@@ -1200,6 +1219,7 @@ render_sheet_checkpoint_compact(
         'p' => $pageNum,
         'sent' => $sentFilter,
         'filter' => $rowFilter,
+        'country' => $countryName,
     ]);
     ?>
   </div>
@@ -1441,6 +1461,7 @@ render_sheet_checkpoint_compact(
       'p' => $pageNum,
       'sent' => $sentFilter,
       'filter' => $rowFilter,
+      'country' => $countryName,
       'mark' => $sweScope === 'admin',
       'push' => $isTeam,
       'remove' => true,

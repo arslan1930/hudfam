@@ -248,10 +248,31 @@
   }
 
   function postForm(form, extra) {
-    var body = new URLSearchParams(new FormData(form));
+    var body = new URLSearchParams();
+    Array.prototype.forEach.call(form.elements || [], function (el) {
+      if (!el || !el.name || el.disabled) return;
+      var key = String(el.name);
+      if (key === 'site_ids' || key === 'site_ids[]') return;
+      var type = String(el.type || '').toLowerCase();
+      if (type === 'file' || type === 'submit' || type === 'button' || type === 'reset') return;
+      if ((type === 'checkbox' || type === 'radio') && !el.checked) return;
+      body.append(key, el.value);
+    });
     body.set('ajax', '1');
     if (extra) {
-      Object.keys(extra).forEach(function (k) { body.set(k, extra[k]); });
+      Object.keys(extra).forEach(function (k) {
+        var v = extra[k];
+        if (Array.isArray(v)) {
+          // Repeat site_ids[] rather than "1,2,3,4" — comma lists get blocked or
+          // stripped once more than a couple of ids are selected.
+          v.forEach(function (item) {
+            if (item === '' || item == null) return;
+            body.append(k + '[]', String(item));
+          });
+          return;
+        }
+        if (v != null && v !== '') body.set(k, String(v));
+      });
     }
     if (!body.get('_csrf')) {
       var tok = csrfToken();
@@ -345,21 +366,29 @@
     var confirmMsg = 'Remove ' + ids.length + ' selected site' + (ids.length === 1 ? '' : 's') + '?';
     if (!window.confirm(confirmMsg)) return;
     var idsInput = form.querySelector('[data-sheet-site-ids]');
-    if (idsInput) idsInput.value = ids.join(',');
+    if (idsInput) idsInput.value = ids.join(' ');
     setStatus('Removing selected…', false);
     showProcessing('Removing selected…');
-    postForm(form).then(function (data) {
+    postForm(form, { site_ids: ids }).then(function (data) {
       var removed = (data.removed || []).map(function (r) {
         return String(r.id != null ? r.id : r);
       });
       if (!removed.length) removed = ids;
+      var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
+      if (totalLabel && typeof data.site_count === 'number') {
+        totalLabel.textContent = String(data.site_count);
+      }
       removeRowsByIds(removed);
       applyState(data);
       var n = typeof data.count === 'number' ? data.count : removed.length;
       setStatus('Removed ' + n + ' selected site' + (n === 1 ? '' : 's') + '.');
-      var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
-      if (totalLabel && typeof data.site_count === 'number') {
-        totalLabel.textContent = String(data.site_count);
+      if (window.SheetSelectUndo && typeof window.SheetSelectUndo.syncPageStatus === 'function') {
+        var qEl = document.getElementById('swe-row-search');
+        var filtering = !!(qEl && String(qEl.value || '').trim());
+        var shown = filtering
+          ? document.querySelectorAll('[data-swe-row]:not([hidden]), [data-extracted-url-row]:not([hidden]), [data-prospect-site-row]:not([hidden])').length
+          : 0;
+        window.SheetSelectUndo.syncPageStatus(shown, filtering);
       }
       hideProcessing();
       if (data.redirect) {
@@ -403,11 +432,30 @@
     syncPageStatus: function (shown, filtering) {
       var el = document.querySelector('[data-sheet-page-status]');
       if (!el) return;
-      if (!el.getAttribute('data-default-text')) {
-        el.setAttribute('data-default-text', String(el.textContent || '').replace(/\s+/g, ' ').trim());
+      var live = document.querySelectorAll('[data-sheet-row-check]').length;
+      var header = document.getElementById('swe_total_label')
+        || document.getElementById('extracted_total_label')
+        || document.getElementById('prospect_country_total_label');
+      var prevOnPage = Number(el.getAttribute('data-on-page'));
+      var prevTotal = Number(el.getAttribute('data-total'));
+      var total;
+      if (header && String(header.textContent || '').trim() !== '') {
+        var parsed = parseInt(header.textContent, 10);
+        total = isNaN(parsed) ? prevTotal : parsed;
+      } else if (!isNaN(prevOnPage) && !isNaN(prevTotal) && live <= prevOnPage) {
+        total = Math.max(0, prevTotal - (prevOnPage - live));
+      } else {
+        total = isNaN(prevTotal) ? live : prevTotal;
       }
+      if (isNaN(total)) total = live;
+      el.setAttribute('data-on-page', String(live));
+      el.setAttribute('data-total', String(total));
+      var page = el.getAttribute('data-page') || '1';
+      var pages = el.getAttribute('data-pages') || '1';
+      var idleText = 'Page ' + page + ' / ' + pages + ' · showing ' + live + ' of ' + total;
+      el.setAttribute('data-default-text', idleText);
       if (!filtering) {
-        el.textContent = el.getAttribute('data-default-text');
+        el.textContent = idleText;
         return;
       }
       shown = Number(shown) || 0;
@@ -415,10 +463,7 @@
         el.textContent = 'No search matches on this page';
         return;
       }
-      var page = el.getAttribute('data-page') || '1';
-      var pages = el.getAttribute('data-pages') || '1';
-      var onPage = el.getAttribute('data-on-page') || String(shown);
-      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + onPage + ' on this page';
+      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + live + ' on this page';
     },
     removed: function (ids, data) {
       if (ids && ids.length) removeRowsByIds(ids.map(String));

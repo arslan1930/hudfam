@@ -114,9 +114,9 @@ db()->exec("DELETE FROM prospect_batch_items WHERE domain LIKE 'txftest-%' OR do
 db()->exec("DELETE FROM prospect_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfshare-%'");
 db()->exec("DELETE FROM extract_batch_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfshare-%'");
 db()->exec("DELETE FROM extracted_sites WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%'");
-db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
-db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
-db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%'");
+db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%' OR domain LIKE 'txfrmv-%'");
+db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%' OR domain LIKE 'txfrmv-%'");
+db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-%' OR domain LIKE 'txfpush-%' OR domain LIKE 'txfbrand-%' OR domain LIKE 'txfcamp-%' OR domain LIKE 'txfsent-%' OR domain LIKE 'txfsug-%' OR domain LIKE 'txfgap-%' OR domain LIKE 'txfrmv-%'");
 db()->exec("DELETE FROM email_campaign_rows WHERE domain LIKE 'txfcamp-%' OR domain LIKE 'txfcamp-sent-%' OR domain LIKE 'txfgap-%'");
 db()->exec("DELETE FROM order_clients WHERE name LIKE 'Test Client%'");
 db()->exec("DELETE FROM order_items WHERE site_name LIKE 'txforder-%'");
@@ -2320,6 +2320,177 @@ try {
     db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txftest-add-%'");
 } catch (Throwable $e) {
     fail('swe inline add: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+}
+
+// --- SWE remove by id (empty emails, none, mixed-case / whitespace country) ---
+try {
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfrmv-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfrmv-%'");
+
+    if (function_exists('same_canonical_country')
+        && same_canonical_country('germany', 'Germany')
+        && same_canonical_country('German', 'Germany')
+        && same_canonical_country('Germany ', 'Germany')
+        && !same_canonical_country('Spain', 'Germany')) {
+        pass('same_canonical_country matches aliases / case / trim');
+    } else {
+        fail('same_canonical_country helper');
+    }
+
+    $emptySave = save_site_with_emails_row(
+        'Germany',
+        'txfrmv-empty.de',
+        ['', '', '', ''],
+        $teamUser,
+        null,
+        'team'
+    );
+    $noneSave = save_site_with_emails_row(
+        'Germany',
+        'txfrmv-none.de',
+        ['none', '', '', ''],
+        $teamUser,
+        null,
+        'team'
+    );
+    $emptyId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_team WHERE domain='txfrmv-empty.de' LIMIT 1"
+    )->fetchColumn();
+    $noneId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_team WHERE domain='txfrmv-none.de' LIMIT 1"
+    )->fetchColumn();
+    $bulkRm = remove_sites_with_emails_by_ids('Germany', [$emptyId, $noneId], 'team');
+    $emptyLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txfrmv-empty.de'"
+    )->fetchColumn();
+    $noneLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txfrmv-none.de'"
+    )->fetchColumn();
+    if (!empty($emptySave['ok']) && !empty($noneSave['ok'])
+        && !empty($bulkRm['ok']) && (int) ($bulkRm['count'] ?? 0) === 2
+        && $emptyLeft === 0 && $noneLeft === 0) {
+        pass('Team remove selected deletes empty and none rows');
+    } else {
+        fail('team remove empty/none: ' . json_encode([
+            'empty_save' => $emptySave,
+            'none_save' => $noneSave,
+            'remove' => $bulkRm,
+            'empty_left' => $emptyLeft,
+            'none_left' => $noneLeft,
+        ]));
+    }
+
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfrmv-lc.de', 'germany', 'German', 'europe', '', '', '', '')"
+    )->execute();
+    db()->prepare(
+        "INSERT INTO sites_with_emails_team (domain, country, language, region, email1, email2, email3, email4)
+         VALUES ('txfrmv-ws.de', 'Germany ', 'German', 'europe', 'a@txfrmv-ws.de', '', '', '')"
+    )->execute();
+    $lcId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_team WHERE domain='txfrmv-lc.de' LIMIT 1"
+    )->fetchColumn();
+    $wsId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_team WHERE domain='txfrmv-ws.de' LIMIT 1"
+    )->fetchColumn();
+    $lcRm = remove_sites_with_emails_by_ids('Germany', [$lcId], 'team');
+    $wsRm = remove_sites_with_emails_by_ids('Germany', [$wsId], 'team');
+    $lcLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txfrmv-lc.de'"
+    )->fetchColumn();
+    $wsLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain='txfrmv-ws.de'"
+    )->fetchColumn();
+    if (!empty($lcRm['ok']) && !empty($wsRm['ok']) && $lcLeft === 0 && $wsLeft === 0) {
+        pass('Team remove matches lowercase / trailing-space country');
+    } else {
+        fail('team remove mixed country: ' . json_encode([
+            'lc' => $lcRm,
+            'ws' => $wsRm,
+            'lc_left' => $lcLeft,
+            'ws_left' => $wsLeft,
+        ]));
+    }
+
+    $adminNone = save_site_with_emails_row(
+        'Germany',
+        'txfrmv-admin-none.de',
+        ['none', '', '', ''],
+        $adminUser,
+        null,
+        'admin'
+    );
+    $adminId = (int) db()->query(
+        "SELECT id FROM sites_with_emails_admin WHERE domain='txfrmv-admin-none.de' LIMIT 1"
+    )->fetchColumn();
+    $finalBefore = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfrmv-admin-none.de'"
+    )->fetchColumn();
+    $adminRm = remove_sites_with_emails_by_ids('Germany', [$adminId], 'admin');
+    $adminLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin WHERE domain='txfrmv-admin-none.de'"
+    )->fetchColumn();
+    $finalAfter = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_admin_all WHERE domain='txfrmv-admin-none.de'"
+    )->fetchColumn();
+    if (!empty($adminNone['ok']) && !empty($adminRm['ok'])
+        && $adminLeft === 0 && $finalBefore === 1 && $finalAfter === 1) {
+        pass('Admin remove keeps Final archive copy');
+    } else {
+        fail('admin remove keep final: ' . json_encode([
+            'save' => $adminNone,
+            'remove' => $adminRm,
+            'admin_left' => $adminLeft,
+            'final_before' => $finalBefore,
+            'final_after' => $finalAfter,
+        ]));
+    }
+
+    $miss = remove_sites_with_emails_by_ids('Germany', [0, -1], 'team');
+    if (empty($miss['ok']) && (string) ($miss['error'] ?? '') === 'No matching rows to remove.') {
+        pass('remove with no valid ids still reports no matching rows');
+    } else {
+        fail('empty id remove: ' . json_encode($miss));
+    }
+
+    $parsedSpace = parse_posted_id_list('10 20 30 40 50');
+    $parsedArr = parse_posted_id_list(['11', '12', '13', '14', '15']);
+    if ($parsedSpace === [10, 20, 30, 40, 50] && $parsedArr === [11, 12, 13, 14, 15]) {
+        pass('parse_posted_id_list accepts 5+ ids as spaces or array');
+    } else {
+        fail('parse_posted_id_list 5 ids: ' . json_encode([$parsedSpace, $parsedArr]));
+    }
+
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-bulk-%'");
+    $bulkIds = [];
+    $bulkIns = db()->prepare(
+        "INSERT INTO sites_with_emails_team (domain, country, language, region, email1, email2, email3, email4)
+         VALUES (?, ?, 'German', 'europe', ?, '', '', '')"
+    );
+    for ($bi = 1; $bi <= 5; $bi++) {
+        $country = $bi === 2 ? 'germany' : ($bi === 3 ? 'Germany ' : ($bi === 4 ? 'German' : 'Germany'));
+        $email = $bi === 1 ? '' : ($bi === 5 ? 'none' : ('b' . $bi . '@txfrmv-bulk.de'));
+        $bulkIns->execute(['txfrmv-bulk-' . $bi . '.de', $country, $email]);
+        $bulkIds[] = (int) db()->lastInsertId();
+    }
+    $fiveRm = remove_sites_with_emails_by_ids('Germany', $bulkIds, 'team');
+    $bulkLeft = (int) db()->query(
+        "SELECT COUNT(*) FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-bulk-%'"
+    )->fetchColumn();
+    if (!empty($fiveRm['ok']) && (int) ($fiveRm['count'] ?? 0) === 5 && $bulkLeft === 0) {
+        pass('Team remove selected deletes 5 ids in one call');
+    } else {
+        fail('team remove 5 ids: ' . json_encode(['remove' => $fiveRm, 'left' => $bulkLeft, 'ids' => $bulkIds]));
+    }
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-bulk-%'");
+
+    db()->exec("DELETE FROM sites_with_emails_team WHERE domain LIKE 'txfrmv-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin WHERE domain LIKE 'txfrmv-%'");
+    db()->exec("DELETE FROM sites_with_emails_admin_all WHERE domain LIKE 'txfrmv-%'");
+} catch (Throwable $e) {
+    fail('swe remove rows: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
 }
 
 // --- Final bulk paste / CSV (Campaign-style, Admin working list also written) ---
