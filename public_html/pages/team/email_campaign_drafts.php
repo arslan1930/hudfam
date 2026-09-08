@@ -60,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     };
 
     $project = $projectId > 0 ? get_email_campaign_project($projectId) : null;
-    if (!$project || !email_campaign_project_team_visible($project)) {
+    $draftAclUserId = (function_exists('is_admin') && is_admin($user)) ? 0 : $actorId;
+    if (!$project || !email_campaign_project_team_drafts_visible($project, $draftAclUserId)) {
         $json(['ok' => false, 'error' => 'This project is not available to Communication Team.'], 403);
     }
 
@@ -113,7 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
-$projects = list_email_campaign_projects(true);
+$draftAclUserId = (function_exists('is_admin') && is_admin($user)) ? 0 : $actorId;
+$projects = list_email_campaign_projects_for_team_drafts($draftAclUserId);
 $projectId = (int) get('project');
 $filterCategory = trim((string) get('category'));
 $draftQ = trim((string) get('q'));
@@ -150,11 +152,11 @@ if (!$selectedProject && $projects !== []) {
 
 $projectCountMap = count_email_campaign_drafts_by_projects(
     array_map(static fn ($p) => (int) $p['id'], $projects),
-    $actorId
+    $draftAclUserId
 );
 
 $draftFolders = $selectedProject
-    ? list_email_campaign_draft_folders($projectId, $actorId)
+    ? list_email_campaign_draft_folders($projectId, $draftAclUserId)
     : [];
 $visibleFolderIds = [];
 foreach ($draftFolders as $folderRow) {
@@ -165,7 +167,7 @@ if ($filterFolderId > 0 && !isset($visibleFolderIds[$filterFolderId])) {
 }
 
 $drafts = $selectedProject
-    ? list_email_campaign_drafts($projectId, null, '', 0, $actorId)
+    ? list_email_campaign_drafts($projectId, null, '', 0, $draftAclUserId)
     : [];
 $draftGroups = email_campaign_group_draft_cards($drafts);
 $editId = (int) get('edit');
@@ -223,7 +225,7 @@ render_breadcrumbs([
   <div>
     <h1><?= label_with_info('Campaign drafts', 'Reusable outreach text for Communication Team. Optional subject + tokens ({domain}, {country}, …). Format with bold/italic/images. Copy (or Copy plain) for your email client.') ?></h1>
     <p class="muted">
-      <?= count($projects) ?> project<?= count($projects) === 1 ? '' : 's' ?> shared by Admin ·
+      <?= count($projects) ?> project<?= count($projects) === 1 ? '' : 's' ?> with drafts or a team search bar ·
       format replies / offers / follow-ups · <strong>Copy</strong> keeps formatting for paste
     </p>
   </div>
@@ -237,7 +239,7 @@ render_breadcrumbs([
 <div class="card">
   <div class="empty-state">
     <p>No project draft libraries yet.</p>
-    <p class="muted">When Admin creates a project and turns on “Show to Communication Team”, it appears here for drafts.</p>
+    <p class="muted">When Admin saves a Communication draft on a project, it appears here. The campaign search bar is a separate toggle.</p>
   </div>
 </div>
 <?php
@@ -548,7 +550,7 @@ endif;
         <strong>Copy</strong> keeps formatting and pictures for Gmail / Outlook.
       </p>
       <form method="post" action="<?= h($formAction) ?>" class="camp-draft-form" autocomplete="off"
-            data-show-processing="<?= $editDraft ? 'Updating draft…' : 'Saving draft…' ?>">
+            data-no-draft data-show-processing="<?= $editDraft ? 'Updating draft…' : 'Saving draft…' ?>">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="save_draft">
         <input type="hidden" name="project_id" value="<?= $projectId ?>">

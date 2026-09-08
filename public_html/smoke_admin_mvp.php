@@ -2611,7 +2611,16 @@ if (!str_contains($campLib, 'email_campaign_office_proposals.php')
     || !str_contains($campOffice, 'Topics · they asked for niche / category')
     || !str_contains($campApp, 'save_draft_folder')
     || !str_contains($campApp, 'save_draft_folder_members')
-    || !str_contains($campApp, 'ensure_email_campaign_office_proposal_drafts')) {
+    || !str_contains($campApp, 'ensure_email_campaign_office_proposal_drafts')
+    || !str_contains($campLib, 'function list_email_campaign_projects_for_team_drafts')
+    || !str_contains($campLib, 'function email_campaign_project_team_drafts_visible')
+    || !str_contains($campDraftsTeam, 'list_email_campaign_projects_for_team_drafts')
+    || !str_contains($campDraftsTeam, 'email_campaign_project_team_drafts_visible')
+    || !str_contains($campApp, 'Communication drafts below are shared with the team even when this search bar is hidden')
+    || !str_contains($campApp, 'listed here for Admin, and on Campaign drafts for Communication')
+    || !str_contains($campApp, 'data-no-draft data-show-processing="Saving draft')
+    || str_contains($campApp, 'Drafts stay available when the project is shown')
+    || str_contains($campDraftsTeam, 'list_email_campaign_projects(true)')) {
     fail('campaign office English proposals + search missing');
 } else {
     ok('campaign office English proposals + draft search');

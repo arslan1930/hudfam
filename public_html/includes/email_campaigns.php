@@ -1512,6 +1512,57 @@ function email_campaign_project_team_visible(array $project): bool
 }
 
 /**
+ * Campaign drafts library is independent of the search-bar toggle.
+ * Admin-saved drafts stay listed for Communication even when search is hidden.
+ */
+function email_campaign_project_team_drafts_visible(array $project, int $forUserId = 0): bool
+{
+    if (email_campaign_project_team_visible($project)) {
+        return true;
+    }
+    $pid = (int) ($project['id'] ?? 0);
+    if ($pid < 1) {
+        return false;
+    }
+    $counts = count_email_campaign_drafts_by_projects([$pid], $forUserId);
+    return (int) ($counts[$pid] ?? 0) > 0;
+}
+
+/**
+ * Projects Communication can open on Campaign drafts.
+ * Includes every search-visible project, plus hidden-search projects that
+ * already have drafts the member may see (folder ACL still applies).
+ *
+ * @return list<array{
+ *   id:int,name:string,team_search_visible:bool,country_count:int,row_count:int,
+ *   countries:list<string>,created_at:?string,updated_at:?string
+ * }>
+ */
+function list_email_campaign_projects_for_team_drafts(int $forUserId = 0): array
+{
+    $all = list_email_campaign_projects(null);
+    if ($all === []) {
+        return [];
+    }
+    $ids = [];
+    foreach ($all as $p) {
+        $pid = (int) ($p['id'] ?? 0);
+        if ($pid > 0) {
+            $ids[] = $pid;
+        }
+    }
+    $counts = count_email_campaign_drafts_by_projects($ids, $forUserId);
+    $out = [];
+    foreach ($all as $p) {
+        $pid = (int) ($p['id'] ?? 0);
+        if (!empty($p['team_search_visible']) || (int) ($counts[$pid] ?? 0) > 0) {
+            $out[] = $p;
+        }
+    }
+    return $out;
+}
+
+/**
  * @return list<array{
  *   id:int,name:string,team_search_visible:bool,country_count:int,row_count:int,
  *   countries:list<string>,created_at:?string,updated_at:?string

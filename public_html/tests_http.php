@@ -1342,6 +1342,84 @@ if ($r['status'] === 200
 } else {
     fail('comms Campaign drafts Samples folder chip did not filter');
 }
+
+// Admin-saved drafts on a hidden search-bar project must still list for Admin
+// and on Communication Campaign drafts.
+req('GET', $base . '/index.php?page=logout');
+login_post($base, 'admin', 'TestAdmin9x');
+$hiddenCampName = 'TXF HTTP Hidden Drafts ' . substr(bin2hex(random_bytes(4)), 0, 8);
+$hiddenCampTitle = 'Admin shared draft ' . substr(bin2hex(random_bytes(3)), 0, 6);
+$rHub = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns');
+$csrfTok = '';
+if (preg_match('/name="csrf-token"\s+content="([^"]+)"/', $rHub['body'], $m)
+    || preg_match('/name="_csrf"\s+value="([^"]+)"/', $rHub['body'], $m)) {
+    $csrfTok = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+}
+$rCreate = req('POST', $base . '/index.php?page=admin_emails_data&folder=email_campaigns', [
+    'body' => http_build_query([
+        '_csrf' => $csrfTok,
+        'action' => 'create_project',
+        'project_name' => $hiddenCampName,
+    ]),
+]);
+$createLoc = location($rCreate);
+$hiddenPid = 0;
+if (preg_match('/project=(\d+)/', $createLoc, $pm)) {
+    $hiddenPid = (int) $pm[1];
+}
+$rHiddenProj = $hiddenPid > 0
+    ? req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&project=' . $hiddenPid)
+    : ['status' => 0, 'body' => ''];
+if (preg_match('/name="csrf-token"\s+content="([^"]+)"/', $rHiddenProj['body'], $m)
+    || preg_match('/name="_csrf"\s+value="([^"]+)"/', $rHiddenProj['body'], $m)) {
+    $csrfTok = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+}
+$rSaveDraft = $hiddenPid > 0
+    ? req('POST', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&project=' . $hiddenPid, [
+        'body' => http_build_query([
+            '_csrf' => $csrfTok,
+            'action' => 'save_draft',
+            'project_id' => $hiddenPid,
+            'draft_id' => 0,
+            'title' => $hiddenCampTitle,
+            'subject' => '',
+            'folder_id' => 0,
+            'category' => 'custom',
+            'body' => 'Hello Communication Team — admin saved this on a hidden search bar.',
+        ]),
+    ])
+    : ['status' => 0, 'headers' => '', 'body' => ''];
+$rHiddenProj = $hiddenPid > 0
+    ? req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&project=' . $hiddenPid)
+    : ['status' => 0, 'body' => ''];
+if ($hiddenPid > 0
+    && $rHiddenProj['status'] === 200
+    && str_contains($rHiddenProj['body'], $hiddenCampTitle)
+    && str_contains($rHiddenProj['body'], 'listed here for Admin, and on Campaign drafts for Communication')
+    && str_contains($rHiddenProj['body'], 'Team search: <strong>hidden</strong>')) {
+    pass('admin sees own Communication draft on a hidden-search project');
+} else {
+    fail('admin hidden-search draft missing status=' . ($rHiddenProj['status'] ?? '?')
+        . ' pid=' . $hiddenPid . ' loc=' . $createLoc);
+}
+req('GET', $base . '/index.php?page=logout');
+login_post($base, 'comms', 'DeptTest9x');
+$rTeamHidden = $hiddenPid > 0
+    ? req('GET', $base . '/index.php?page=team_email_campaigns_drafts&project=' . $hiddenPid)
+    : ['status' => 0, 'body' => ''];
+$rTeamSearch = req('GET', $base . '/index.php?page=team_email_campaigns');
+if ($hiddenPid > 0
+    && $rTeamHidden['status'] === 200
+    && str_contains($rTeamHidden['body'], $hiddenCampName)
+    && str_contains($rTeamHidden['body'], $hiddenCampTitle)
+    && str_contains($rTeamHidden['body'], 'Hello Communication Team')
+    && !str_contains($rTeamSearch['body'] ?? '', 'data-sheet-name="' . $hiddenCampName . '"')) {
+    pass('comms sees admin-saved drafts when project search bar is hidden');
+} else {
+    fail('comms hidden-search admin draft missing status=' . ($rTeamHidden['status'] ?? '?')
+        . ' pid=' . $hiddenPid);
+}
+
 $r = req('GET', $base . '/index.php?page=team_site_prices&country=Germany');
 $teamNeedles = ['data-site-price-sheet', 'data-site-price-copy-one', '>Email</th>'];
 $teamBad = [];
