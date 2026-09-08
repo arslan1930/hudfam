@@ -1824,7 +1824,7 @@ if ($projectIdParam > 0) {
                 <input type="checkbox" name="team_search_visible" value="1" <?= $teamVisible ? 'checked' : '' ?>>
                 <span>
                   <strong>Show search bar to Communication Team</strong>
-                  <span class="camp-hub-field-hint">They search the whole project; deletes update the country sheet that matched. Drafts stay available when the project is shown.</span>
+                  <span class="camp-hub-field-hint">They search the whole project; deletes update the country sheet that matched. Communication drafts below are shared with the team even when this search bar is hidden.</span>
                 </span>
               </label>
             </div>
@@ -1840,7 +1840,7 @@ if ($projectIdParam > 0) {
             <p class="help" style="margin:0.3rem 0 0">
               <?= count($projectDrafts) ?> draft<?= count($projectDrafts) === 1 ? '' : 's' ?>
               · <?= count($projectDraftFolders) ?> folder<?= count($projectDraftFolders) === 1 ? '' : 's' ?>
-              · seed starter text here or let Communication add their own
+              · listed here for Admin, and on Campaign drafts for Communication
             </p>
           </div>
 
@@ -2020,7 +2020,7 @@ if ($projectIdParam > 0) {
           <?php endif; ?>
 
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" style="margin-top:1rem"
-                autocomplete="off" data-show-processing="Saving draft…">
+                autocomplete="off" data-no-draft data-show-processing="Saving draft…">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="save_draft">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
@@ -2487,7 +2487,7 @@ $projectCount = count($projects);
           <input type="checkbox" name="team_search_visible" value="1" checked>
           <span>
             <strong>Show search bar to Communication Team</strong>
-            <span class="camp-hub-field-hint">One bar for the whole project · uncheck to keep Admin-only for now.</span>
+            <span class="camp-hub-field-hint">One bar for the whole project · uncheck to hide search. Drafts you save are still shared with Communication.</span>
           </span>
         </label>
       </div>

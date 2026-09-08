@@ -2817,13 +2817,28 @@ try {
     $hiddenDraft = save_email_campaign_draft(
         $draftHiddenPid,
         'Hidden project draft',
-        'Should not appear when project is hidden from team.',
+        'Admin-saved draft must still appear on Campaign drafts when search is hidden.',
         'reply',
         0,
         (int) $adminUser['id']
     );
     $visibleProjects = list_email_campaign_projects(true);
     $visibleNames = array_map(static fn ($p) => (string) $p['name'], $visibleProjects);
+    $draftViewerId = (int) db()->query("SELECT id FROM users WHERE username='comms' LIMIT 1")->fetchColumn();
+    if ($draftViewerId < 1) {
+        $draftViewerId = (int) ($teamUser['id'] ?? 0);
+    }
+    $teamDraftProjects = list_email_campaign_projects_for_team_drafts($draftViewerId);
+    $teamDraftNames = array_map(static fn ($p) => (string) $p['name'], $teamDraftProjects);
+    $hiddenListedForTeam = list_email_campaign_drafts($draftHiddenPid, null, '', 0, $draftViewerId);
+    $hiddenListedForAdmin = list_email_campaign_drafts($draftHiddenPid);
+    $hiddenTeamTitles = array_map(static fn ($d) => (string) ($d['title'] ?? ''), $hiddenListedForTeam);
+    $hiddenAdminTitles = array_map(static fn ($d) => (string) ($d['title'] ?? ''), $hiddenListedForAdmin);
+    $hiddenProjectRow = get_email_campaign_project($draftHiddenPid) ?? [];
+    $adminSeesHidden = in_array('Hidden project draft', $hiddenAdminTitles, true);
+    $teamSeesHidden = in_array('TXF Drafts Hidden', $teamDraftNames, true)
+        && in_array('Hidden project draft', $hiddenTeamTitles, true)
+        && email_campaign_project_team_drafts_visible($hiddenProjectRow, $draftViewerId);
     if (!empty($saved['ok']) && !empty($savedOffer['ok']) && empty($badEmpty['ok'])
         && count($allDrafts) === 2
         && count($offerOnly) === 1
@@ -2831,8 +2846,10 @@ try {
         && email_campaign_draft_category_label('first_outreach') === 'First outreach'
         && in_array('TXF Drafts Alpha', $visibleNames, true)
         && !in_array('TXF Drafts Hidden', $visibleNames, true)
-        && !empty($hiddenDraft['ok'])) {
-        pass('campaign drafts save/list by category; hidden projects stay out of team list');
+        && !empty($hiddenDraft['ok'])
+        && $adminSeesHidden
+        && $teamSeesHidden) {
+        pass('campaign drafts save/list; admin drafts show to admin and team even when search is hidden');
     } else {
         fail('campaign drafts: ' . json_encode([
             'saved' => $saved,
@@ -2841,6 +2858,11 @@ try {
             'all' => count($allDrafts),
             'offer_only' => $offerOnly,
             'visible' => $visibleNames,
+            'team_drafts' => $teamDraftNames,
+            'admin_sees' => $adminSeesHidden,
+            'team_sees' => $teamSeesHidden,
+            'hidden_admin' => $hiddenAdminTitles,
+            'hidden_team' => $hiddenTeamTitles,
         ]));
     }
     $withSubject = save_email_campaign_draft(
