@@ -419,9 +419,16 @@ html.ui-v2 .main a.swe-open-site:hover {
   border-color: #a5f3fc;
   text-decoration: none;
 }
-html.ui-v2 .sheet-tool-menu-panel,
-html.ui-v2 .sheet-row-more-panel {
+html.ui-v2 .sheet-tool-menu-panel {
   min-width: 19rem;
+  background: rgba(8, 18, 36, 0.96);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html.ui-v2 .sheet-row-more-panel {
+  min-width: 9.5rem;
+  width: max-content;
+  max-width: min(14rem, calc(100vw - 1.25rem));
   background: rgba(8, 18, 36, 0.96);
   border-color: var(--line);
   color: var(--ink);
