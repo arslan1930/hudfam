@@ -3261,6 +3261,17 @@ if (!str_contains($sheetHistUi, 'sheet-history-text')
 } else {
     ok('sheet Undo/Redo labels + menus');
 }
+if (!str_contains($cssUi, 'min-width: 9.5rem')
+    || !str_contains($cssUi, 'tr:has(.sheet-row-more[open])')
+    || !str_contains($sweJsSmoke, 'function clearServerSheetSearch')
+    || !str_contains($sweJsSmoke, 'function closeSheetMenus')
+    || !str_contains(file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '', 'function clearServerSheetSearch')
+    || !str_contains(file_get_contents($root . '/assets/css/style-new.css') ?: '', 'html.ui-v2 .sheet-row-more-panel')
+    || !str_contains(file_get_contents($root . '/assets/css/style-new.css') ?: '', 'max-width: min(14rem')) {
+    fail('sheet row more menu still overlays the row or search clear misses server q');
+} else {
+    ok('sheet row ⋮ stays compact; clearing search drops server q');
+}
 if (!str_contains($sweUi, 'Copy / Open')
     || !str_contains($sweUi, 'render_sheet_row_more_open')
     || !str_contains($sweUi, 'sheet-cards-mobile')

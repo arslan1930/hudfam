@@ -5107,6 +5107,26 @@ table.extracted-country-table th {
   align-items: flex-start;
   gap: 0.75rem 1rem;
 }
+.swe-list-toolbar > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+.swe-list-toolbar > div:first-child > h2,
+.swe-list-toolbar > div:first-child > .swe-sent-filters {
+  flex: 1 0 100%;
+  margin-top: 0;
+}
+.swe-list-toolbar .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
 .invoice-list-toolbar h2,
 .swe-list-toolbar h2 {
   margin: 0;
@@ -5484,8 +5504,18 @@ textarea:focus-visible {
 .sheet-row-more-panel {
   left: auto;
   right: 0;
-  min-width: 10.5rem;
-  z-index: 35;
+  min-width: 9.5rem;
+  width: max-content;
+  max-width: min(14rem, calc(100vw - 1.25rem));
+  z-index: 45;
+}
+.swe-sheet-table .swe-td-actions {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+}
+.swe-sheet-table tbody tr:has(.sheet-row-more[open]) .swe-td-actions {
+  z-index: 8;
 }
 .sheet-row-more-panel .btn,
 .sheet-tool-menu-panel .btn {

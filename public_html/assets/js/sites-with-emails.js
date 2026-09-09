@@ -290,6 +290,24 @@
   function sheetActionRows() {
     return document.querySelectorAll('[data-swe-row]');
   }
+  function closeSheetMenus() {
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      d.open = false;
+    });
+  }
+  function clearServerSheetSearch() {
+    if (!searchInput || String(searchInput.value || '').trim()) return false;
+    try {
+      var url = new URL(window.location.href);
+      if (!String(url.searchParams.get('q') || '').trim()) return false;
+      url.searchParams.delete('q');
+      url.searchParams.delete('p');
+      window.location.assign(url.toString());
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
   function scheduleFilterRows() {
     if (filterTimer) window.clearTimeout(filterTimer);
     var q = searchInput ? String(searchInput.value || '').trim() : '';
@@ -312,6 +330,8 @@
   function filterRows() {
     if (!searchInput) return;
     var q = String(searchInput.value || '').trim().toLowerCase();
+    closeSheetMenus();
+    if (!q && clearServerSheetSearch()) return;
     matchRows = [];
     clearHits();
     var shown = 0;
