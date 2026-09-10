@@ -14,6 +14,11 @@
   var isCheckpointSheet = !!(document.querySelector('.swe-sheet-table.is-admin-checkpoint')
     || document.querySelector('[data-swe-mark]'));
 
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? String(meta.getAttribute('content') || '') : '';
+  }
+
   function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
     if (!msg) {
@@ -401,6 +406,8 @@
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    var tok = csrfToken();
+    if (tok) body.set('_csrf', tok);
     form.setAttribute('data-busy', '1');
     return fetch(form.getAttribute('action') || window.location.href, {
       method: 'POST',
@@ -527,6 +534,8 @@
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    var tok = csrfToken();
+    if (tok) body.set('_csrf', tok);
     form.setAttribute('data-busy', '1');
     return fetch(form.getAttribute('action') || window.location.href, {
       method: 'POST',

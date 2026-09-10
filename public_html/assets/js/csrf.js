@@ -16,9 +16,13 @@
     if (!form || !form.tagName || form.tagName.toLowerCase() !== 'form') return;
     var method = String(form.getAttribute('method') || 'get').toLowerCase();
     if (method === 'get') return;
-    if (form.querySelector('input[name="_csrf"]')) return;
     var t = token();
     if (!t) return;
+    var existing = form.querySelector('input[name="_csrf"]');
+    if (existing) {
+      existing.value = t;
+      return;
+    }
     var input = document.createElement('input');
     input.type = 'hidden';
     input.name = '_csrf';
@@ -70,11 +74,11 @@
     var t = token();
     if (!t) return body;
     if (body instanceof URLSearchParams) {
-      if (!body.has('_csrf')) body.set('_csrf', t);
+      body.set('_csrf', t);
       return body;
     }
     if (typeof FormData !== 'undefined' && body instanceof FormData) {
-      if (!body.has('_csrf')) body.append('_csrf', t);
+      body.set('_csrf', t);
       return body;
     }
     if (typeof body === 'string') {
@@ -83,8 +87,11 @@
       if (trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[') {
         return body;
       }
-      if (body.indexOf('_csrf=') !== -1) return body;
-      return body + (body ? '&' : '') + '_csrf=' + encodeURIComponent(t);
+      var encoded = encodeURIComponent(t);
+      if (/(?:^|&)_csrf=/.test(body)) {
+        return body.replace(/(^|&)_csrf=[^&]*/g, '$1_csrf=' + encoded);
+      }
+      return body + (body ? '&' : '') + '_csrf=' + encoded;
     }
     return body;
   }

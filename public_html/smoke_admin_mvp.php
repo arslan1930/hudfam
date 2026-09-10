@@ -1011,6 +1011,19 @@ if (!str_contains($layoutFull, "\$panel === 'admin' || \$panel === 'team'")) {
 } else {
     ok('layout csrf.js for Admin + Team');
 }
+$csrfJsSrc = file_get_contents($root . '/assets/js/csrf.js') ?: '';
+$helpersCsrfSrc = file_get_contents($root . '/includes/helpers.php') ?: '';
+$sweMarkJs = file_get_contents($root . '/assets/js/sites-with-emails.js') ?: '';
+$campMarkJs = file_get_contents($root . '/assets/js/email-campaign-sheet.js') ?: '';
+if (!str_contains($csrfJsSrc, "body.replace(/(^|&)_csrf=[^&]*/g")
+    || !str_contains($csrfJsSrc, "existing.value = t")
+    || !str_contains($helpersCsrfSrc, 'stale hidden')
+    || !str_contains($sweMarkJs, "body.set('_csrf', tok)")
+    || !str_contains($campMarkJs, "body.set('_csrf', tok)")) {
+    fail('Mark emailed CSRF still loses to a stale hidden _csrf field');
+} else {
+    ok('CSRF accepts header or POST; JS refreshes _csrf on Mark emailed');
+}
 $prospectCheck = file_get_contents($root . '/pages/team/prospect_check.php') ?: '';
 $extractBatch = file_get_contents($root . '/pages/team/extract_batch.php') ?: '';
 if (!str_contains($prospectCheck, 'csrf_field()') || !str_contains($extractBatch, 'csrf_field()')) {
