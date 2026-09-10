@@ -3272,6 +3272,16 @@ if (!str_contains($cssUi, 'min-width: 9.5rem')
 } else {
     ok('sheet row ⋮ stays compact; clearing search drops server q');
 }
+$overlayCssSmoke = file_get_contents($root . '/assets/css/style-new.css') ?: '';
+if (!str_contains($overlayCssSmoke, 'html.ui-v2 .camp-action-fieldset')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .swe-admin-delete-suggest')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .swe-admin-delete-match')
+    || !str_contains($overlayCssSmoke, 'radial-gradient(circle, #22d3ee')
+    || !str_contains($cssUi, 'min-inline-size: 0')) {
+    fail('overlay missing campaign/admin search selected-card restyle');
+} else {
+    ok('overlay restyles campaign search selected actions + radios');
+}
 if (!str_contains($sweUi, 'Copy / Open')
     || !str_contains($sweUi, 'render_sheet_row_more_open')
     || !str_contains($sweUi, 'sheet-cards-mobile')

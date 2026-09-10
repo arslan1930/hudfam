@@ -885,8 +885,8 @@ html.ui-v2 #swe_status,
 html.ui-v2 #prospect_copy_status,
 html.ui-v2 .camp-status,
 html.ui-v2 .camp-status:not([hidden]) {
-  background: #1e293b;
-  border-color: #94a3b8;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid var(--line);
   color: var(--ink);
 }
 html.ui-v2 #swe_status.is-ok,
@@ -1202,7 +1202,6 @@ html.ui-v2 label {
   color: #e2e8f0;
 }
 html.ui-v2 input[type="checkbox"],
-html.ui-v2 input[type="radio"],
 html.ui-v2 .sheet-check input[type="checkbox"] {
   accent-color: #22d3ee;
   width: 1.1rem;
@@ -1210,6 +1209,59 @@ html.ui-v2 .sheet-check input[type="checkbox"] {
   outline: 1px solid #94a3b8;
   outline-offset: 1px;
   cursor: pointer;
+}
+html.ui-v2 input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  flex-shrink: 0;
+  border: 2px solid #94a3b8;
+  border-radius: 50%;
+  background: #0b1224;
+  outline: none;
+  cursor: pointer;
+}
+html.ui-v2 input[type="radio"]:checked {
+  border-color: #22d3ee;
+  background:
+    radial-gradient(circle, #22d3ee 0 38%, transparent 42%),
+    #0b1224;
+}
+html.ui-v2 input[type="radio"]:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+/* Campaign / Admin emails search selected card — leftover light chrome */
+html.ui-v2 .camp-action-fieldset {
+  background: transparent;
+  border: none;
+  padding: 0.35rem 0 0;
+  margin-top: 0.65rem;
+}
+html.ui-v2 .camp-action-choice:hover {
+  background: rgba(34, 211, 238, 0.1);
+}
+html.ui-v2 .swe-admin-delete-selected {
+  border-top-color: var(--line);
+}
+html.ui-v2 .swe-admin-delete-panel {
+  background: rgba(2, 6, 23, 0.45);
+  border-color: var(--line);
+}
+html.ui-v2 .swe-admin-delete-suggest {
+  background: #0f172a;
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+html.ui-v2 .swe-admin-delete-item:hover,
+html.ui-v2 .swe-admin-delete-item.is-active {
+  background: rgba(34, 211, 238, 0.12);
+}
+html.ui-v2 .swe-admin-delete-match {
+  color: #7dd3fc;
+  background: rgba(34, 211, 238, 0.16);
 }
 html.ui-v2 .swe-cell-text,
 html.ui-v2 td[data-label="Language"],

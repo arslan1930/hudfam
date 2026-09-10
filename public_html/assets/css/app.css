@@ -2220,9 +2220,13 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
 .camp-status.is-error { color: var(--bad); }
 .camp-action-fieldset {
   margin: 0.85rem 0 0;
-  padding: 0.75rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: var(--radius, 8px);
+  width: max-content;
+  max-width: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
 }
 .camp-action-choice {
   display: flex;
@@ -5067,7 +5071,7 @@ table.extracted-country-table th {
 .swe-admin-delete-selected {
   margin-top: 0.35rem;
   padding-top: 0.35rem;
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px solid var(--line, #e5e7eb);
 }
 .swe-admin-delete-domain {
   color: var(--brand-deep);
