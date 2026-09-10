@@ -327,8 +327,34 @@ function csrf_request_token(): string
 function csrf_token_valid(?string $token = null): bool
 {
     $expected = csrf_token();
-    $got = $token ?? csrf_request_token();
-    return $got !== '' && hash_equals($expected, $got);
+    if ($expected === '') {
+        return false;
+    }
+    $candidates = [];
+    if ($token !== null) {
+        $candidates[] = $token;
+    } else {
+        // Prefer a matching token from POST or the fetch header. A stale hidden
+        // _csrf in the body must not reject X-CSRF-Token from the current page.
+        $fromPost = (string) ($_POST['_csrf'] ?? '');
+        if ($fromPost !== '') {
+            $candidates[] = $fromPost;
+        }
+        $header = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+        if ($header !== '') {
+            $candidates[] = $header;
+        }
+        $alt = (string) ($_SERVER['REDIRECT_HTTP_X_CSRF_TOKEN'] ?? '');
+        if ($alt !== '') {
+            $candidates[] = $alt;
+        }
+    }
+    foreach ($candidates as $got) {
+        if ($got !== '' && hash_equals($expected, $got)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**

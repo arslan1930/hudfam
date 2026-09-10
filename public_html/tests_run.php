@@ -184,6 +184,31 @@ if (
     fail('draft autosave / sheet / presence CSRF wiring');
 }
 
+$csrfJsSrc = (string) file_get_contents(__DIR__ . '/assets/js/csrf.js');
+$_csrfPostHold = $_POST['_csrf'] ?? null;
+$_csrfHdrHold = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+$expectedCsrf = csrf_token();
+$_POST['_csrf'] = str_repeat('b', strlen($expectedCsrf));
+$_SERVER['HTTP_X_CSRF_TOKEN'] = $expectedCsrf;
+$stalePostOk = csrf_token_valid();
+if ($_csrfPostHold === null) {
+    unset($_POST['_csrf']);
+} else {
+    $_POST['_csrf'] = $_csrfPostHold;
+}
+if ($_csrfHdrHold === null) {
+    unset($_SERVER['HTTP_X_CSRF_TOKEN']);
+} else {
+    $_SERVER['HTTP_X_CSRF_TOKEN'] = $_csrfHdrHold;
+}
+if ($stalePostOk
+    && str_contains($csrfJsSrc, "body.replace(/(^|&)_csrf=[^&]*/g")
+    && str_contains($helpersSrc, 'stale hidden')) {
+    pass('CSRF accepts matching header when POST _csrf is stale');
+} else {
+    fail('CSRF still rejects stale POST _csrf even with a valid header');
+}
+
 if (str_contains($procJs, "method === 'get'")
     && str_contains($procJs, 'GET forms do')
     && str_contains($procJs, '(?:export|download)=')

@@ -11,6 +11,11 @@
   var readyLabel = document.getElementById('swe_ready_label');
   var autosaveTimers = new WeakMap();
 
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? String(meta.getAttribute('content') || '') : '';
+  }
+
   function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
     if (!msg) {
@@ -494,6 +499,8 @@
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    var tok = csrfToken();
+    if (tok) body.set('_csrf', tok);
     if (searchInput) body.set('q', String(searchInput.value || ''));
     form.setAttribute('data-busy', '1');
     return fetch(form.getAttribute('action') || window.location.href, {
@@ -641,6 +648,8 @@
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    var tok = csrfToken();
+    if (tok) body.set('_csrf', tok);
     if (extra) {
       Object.keys(extra).forEach(function (k) { body.set(k, extra[k]); });
     }

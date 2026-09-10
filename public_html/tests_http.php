@@ -695,6 +695,45 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
     pass('admin campaign folder has no project yet (Fill gaps UI skipped)');
 }
 
+$rMarkSheet = req('GET', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&sheet=1');
+$markBody = $rMarkSheet['body'] ?? '';
+$markCsrf = '';
+if (preg_match('/name="csrf-token"\s+content="([^"]+)"/', $markBody, $markCsrfM)) {
+    $markCsrf = html_entity_decode($markCsrfM[1], ENT_QUOTES, 'UTF-8');
+}
+$markSiteId = '';
+if (preg_match('/data-sheet-action="mark"\s+data-site-id="(\d+)"/', $markBody, $markSiteM)) {
+    $markSiteId = $markSiteM[1];
+}
+if ($rMarkSheet['status'] === 200 && $markCsrf !== '' && $markSiteId !== '') {
+    $stale = str_repeat('b', strlen($markCsrf));
+    $rMark = req('POST', $base . '/index.php?page=admin_emails_data&folder=email_campaigns&sheet=1&per_page=100', [
+        'headers' => [
+            'Accept: application/json',
+            'X-CSRF-Token: ' . $markCsrf,
+        ],
+        'body' => http_build_query([
+            'action' => 'mark_email_sent',
+            'site_id' => $markSiteId,
+            'email_sent' => '0',
+            '_csrf' => $stale,
+            'ajax' => '1',
+        ]),
+    ]);
+    $markJson = json_decode($rMark['body'] ?? '', true);
+    if ($rMark['status'] === 200
+        && is_array($markJson)
+        && !empty($markJson['ok'])
+        && !str_contains((string) ($rMark['body'] ?? ''), 'Invalid or missing CSRF')) {
+        pass('campaign Mark emailed CSRF accepts header when POST token is stale');
+    } else {
+        fail('campaign Mark emailed CSRF stale-token status=' . ($rMark['status'] ?? '?')
+            . ' body=' . substr((string) ($rMark['body'] ?? ''), 0, 180));
+    }
+} else {
+    pass('campaign Mark emailed CSRF skipped (no sheet rows)');
+}
+
 $r = req('GET', $base . '/index.php?page=admin_emails_data&folder=all_sites_with_emails');
 $finalHub = $r['body'] ?? '';
 $tableAt = strpos($finalHub, 'id="swe-country-table"');
