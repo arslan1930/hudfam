@@ -3325,7 +3325,8 @@ if (!is_file($root . '/assets/js/app-dialog.js')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 code')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .actions-sticky {')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 ::selection')
-    || !str_contains($overlayCssSmoke, 'html.ui-v2 .info-tip-bubble')) {
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .info-tip-bubble')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .invoice-doc input')) {
     fail('UI overlay missing in-app dialog, help quieting, or distinct row states');
 } else {
     ok('in-app dialog + quieter help + distinct sheet row states');

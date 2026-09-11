@@ -1341,6 +1341,26 @@ html.ui-v2 .invoice-doc-table tbody tr:hover td {
 html.ui-v2 .invoice-doc-table tbody tr:nth-child(even) td {
   background: #f8fafc !important;
 }
+html.ui-v2 .invoice-doc input,
+html.ui-v2 .invoice-doc textarea,
+html.ui-v2 .invoice-doc select,
+html.ui-v2 .invoice-doc-editable .invoice-edit-note,
+html.ui-v2 .invoice-doc-editable .invoice-edit-date,
+html.ui-v2 .invoice-doc-editable .invoice-edit-input,
+html.ui-v2 .invoice-doc-editable .invoice-edit-textarea,
+html.ui-v2 .invoice-doc-editable .invoice-edit-party-lines input,
+html.ui-v2 .invoice-doc-editable .invoice-edit-desc,
+html.ui-v2 .invoice-doc-editable .invoice-edit-amount,
+html.ui-v2 .invoice-doc-editable .invoice-edit-qty {
+  background: #fffef8 !important;
+  color: #111827 !important;
+  border: 1px dashed #cbd5e1;
+  box-shadow: none;
+  caret-color: #111827;
+}
+html.ui-v2 .invoice-doc label {
+  color: #111827;
+}
 
 /* Publisher row tints must beat zebra overlay. */
 html.ui-v2 .site-price-row[data-tint="yellow"] td,
