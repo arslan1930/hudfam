@@ -1482,6 +1482,9 @@ html.ui-v2 .app-dialog {
 html.ui-v2 .app-dialog::backdrop {
   background: rgba(2, 6, 23, 0.72);
 }
+html.ui-v2 .app-dialog.is-fallback[open] {
+  background: rgba(2, 6, 23, 0.72);
+}
 html.ui-v2 .app-dialog-card {
   background: rgba(8, 18, 36, 0.96);
   border: 1px solid var(--line);

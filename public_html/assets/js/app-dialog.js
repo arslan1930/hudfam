@@ -48,6 +48,7 @@
         try {
           if (dlg.open) dlg.close();
         } catch (err) { /* ignore */ }
+        dlg.classList.remove('is-fallback');
         resolve(val);
       }
 
@@ -83,9 +84,10 @@
       }
 
       try {
-        if (!document.body.contains(dlg)) {
+        if (document.body && dlg.parentNode !== document.body) {
           document.body.appendChild(dlg);
         }
+        dlg.classList.remove('is-fallback');
         if (dlg.open) {
           dlg.removeEventListener('close', onClose);
           dlg.close();
@@ -94,14 +96,17 @@
         if (typeof dlg.showModal === 'function') {
           dlg.showModal();
         } else {
+          dlg.classList.add('is-fallback');
           dlg.setAttribute('open', '');
         }
       } catch (err) {
         try {
           if (dlg.open) dlg.close();
-          document.body.appendChild(dlg);
+          if (document.body) document.body.appendChild(dlg);
+          dlg.classList.remove('is-fallback');
           dlg.showModal();
         } catch (err2) {
+          dlg.classList.add('is-fallback');
           dlg.setAttribute('open', '');
         }
       }
@@ -138,6 +143,8 @@
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form || form.nodeName !== 'FORM') return;
+    if (form.closest && form.closest('#app-dialog')) return;
+    if (String(form.getAttribute('method') || '').toLowerCase() === 'dialog') return;
     if (form.getAttribute('data-confirm-ok') === '1') {
       form.removeAttribute('data-confirm-ok');
       return;

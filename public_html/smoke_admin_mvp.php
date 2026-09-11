@@ -3110,7 +3110,8 @@ if (!str_contains($testsSf, 'gate subtract leaves remaining unique')) {
 $sitesFormJs = file_get_contents($root . '/assets/js/sites-form.js') ?: '';
 $sitesFormPhp = file_get_contents($root . '/includes/sites_form.php') ?: '';
 if (!str_contains($sitesFormPhp, 'data-domains-attention')
-    || !str_contains($sitesFormPhp, 'Clean to root domains')) {
+    || !str_contains($sitesFormPhp, 'Clean to root domains')
+    || !str_contains($sitesFormPhp, "opts['ready_use']")) {
     fail('sites_form missing Ready/Needs attention Clean UI');
 } else {
     ok('Clean Ready / Needs attention markup');
@@ -3306,8 +3307,11 @@ if (!is_file($root . '/assets/js/app-dialog.js')
     || !str_contains($layoutDialogSmoke, 'id="app-dialog"')
     || !str_contains($dialogJsSmoke, 'window.txfConfirm')
     || !str_contains($dialogJsSmoke, 'window.txfAlert')
+    || !str_contains($dialogJsSmoke, "closest('#app-dialog')")
+    || !str_contains($dialogJsSmoke, 'is-fallback')
     || !str_contains($helpersDialogSmoke, 'function confirm_data_attr')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .app-dialog')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .app-dialog.is-fallback[open]')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .empty-state')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .main:has(.page-purpose) .info-tip')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .btn.secondary:hover')

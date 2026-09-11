@@ -227,9 +227,13 @@ function render_domains_paste_field(
         . ($class !== '' ? ' class="' . h($class) . '"' : '')
         . ' placeholder="' . h($placeholder) . '" data-domains-input spellcheck="false">'
         . h($value) . '</textarea>';
+    $readyUse = trim((string) ($opts['ready_use'] ?? ''));
     $html .= '<p class="help" style="margin-top:0.5rem">'
-        . 'One root domain per line (example.com). Paste (or <strong>Clean to root domains</strong>) strips https/paths; leftovers go to Needs attention.'
-        . '</p>';
+        . 'One root domain per line (example.com). Paste (or <strong>Clean to root domains</strong>) strips https/paths; leftovers go to Needs attention.';
+    if ($readyUse !== '') {
+        $html .= ' ' . h($readyUse);
+    }
+    $html .= '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
     $html .= '<div class="domains-paste-attention" data-domains-attention-wrap hidden>';
     $html .= '<label for="' . h($attentionId) . '">Needs attention</label>';

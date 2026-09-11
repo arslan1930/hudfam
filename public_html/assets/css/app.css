@@ -102,6 +102,7 @@ html.is-page-loading body {
 .app-dialog {
   border: none;
   padding: 0;
+  margin: auto;
   background: transparent;
   max-width: min(32rem, calc(100vw - 1.5rem));
   color: inherit;
@@ -112,12 +113,22 @@ html.is-page-loading body {
 .app-dialog[open] {
   z-index: 2400;
 }
+.app-dialog.is-fallback[open] {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.62);
+}
 .app-dialog-card {
   margin: 0;
   padding: 1.15rem 1.25rem 1.05rem;
   border: 1px solid var(--line, #d1d5db);
   border-radius: 14px;
-  background: #fff;
+  background: var(--panel, #fff);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
 }
 .app-dialog-title {
