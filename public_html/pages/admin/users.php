@@ -604,13 +604,13 @@ render_header('Admins & users', 'admin');
       </tr>
     <?php endforeach; ?>
     <?php if (!$usersPage): ?>
-      <tr><td colspan="8" class="muted"><?php
+      <tr><td colspan="8"><div class="empty-state"><p><?php
         if ($awaitingFilter === '1' && !$q && $roleFilter === '' && $activeFilter === '' && $mustChangeFilter !== '1') {
             echo 'No team users awaiting assignment.';
         } else {
             echo 'No users match these filters.';
         }
-      ?></td></tr>
+      ?></p></div></td></tr>
     <?php endif; ?>
     </tbody>
   </table>
@@ -710,15 +710,21 @@ render_header('Admins & users', 'admin');
 </div>
 <script>
 (function () {
+  function ask(msg) {
+    if (typeof window.txfConfirm === 'function') return window.txfConfirm(msg);
+    return Promise.resolve(!!window.confirm(msg));
+  }
   var form = document.getElementById('users-save-form');
   var pwd = document.getElementById('users_password');
   if (form) {
     form.addEventListener('submit', function (e) {
+      if (form.getAttribute('data-confirm-ok') === '1') {
+        form.removeAttribute('data-confirm-ok');
+        return;
+      }
+      var msgs = [];
       if (pwd && pwd.getAttribute('data-editing-other') === '1' && String(pwd.value || '').trim()) {
-        if (!window.confirm('Set a new password for this user? They must change it on next login.')) {
-          e.preventDefault();
-          return;
-        }
+        msgs.push('Set a new password for this user? They must change it on next login.');
       }
       var box = form.querySelector('[name="is_active"]');
       var was = form.getAttribute('data-was-active') === '1';
@@ -733,23 +739,44 @@ render_header('Admins & users', 'admin');
           }
           msg += '. Memberships are not removed automatically.';
         }
-        if (!window.confirm(msg)) {
-          e.preventDefault();
-        }
+        msgs.push(msg);
       }
+      if (!msgs.length) return;
+      e.preventDefault();
+      var chain = Promise.resolve(true);
+      msgs.forEach(function (m) {
+        chain = chain.then(function (ok) {
+          if (!ok) return false;
+          return ask(m);
+        });
+      });
+      chain.then(function (ok) {
+        if (!ok) return;
+        form.setAttribute('data-confirm-ok', '1');
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
+      });
     });
   }
   var gen = document.querySelector('form[data-generate-temp]');
   if (gen) {
     gen.addEventListener('submit', function (e) {
+      if (gen.getAttribute('data-confirm-ok') === '1') {
+        gen.removeAttribute('data-confirm-ok');
+        return;
+      }
       var name = gen.getAttribute('data-username') || 'this user';
       var msg = 'Generate a temporary password for ' + name + '? They must change it on next login.';
       if (gen.getAttribute('data-inactive') === '1') {
         msg += ' This account is inactive, so they cannot sign in until you tick Active.';
       }
-      if (!window.confirm(msg)) {
-        e.preventDefault();
-      }
+      e.preventDefault();
+      ask(msg).then(function (ok) {
+        if (!ok) return;
+        gen.setAttribute('data-confirm-ok', '1');
+        if (typeof gen.requestSubmit === 'function') gen.requestSubmit();
+        else gen.submit();
+      });
     });
   }
 })();

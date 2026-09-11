@@ -331,8 +331,7 @@ endif;
               <?php endif; ?>
               <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
               <form method="post" action="<?= h($formAction) ?>" class="camp-draft-delete-form"
-                    data-camp-draft-delete
-                    onsubmit="return confirm(<?= h(json_encode('Delete draft “' . $title . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                    data-camp-draft-delete <?= confirm_data_attr('Delete draft “' . $title . '”?') ?>>
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="delete_draft">
                 <input type="hidden" name="project_id" value="<?= $projectId ?>">

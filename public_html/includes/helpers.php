@@ -25,6 +25,12 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+/** HTML attribute for the in-app confirm dialog (app-dialog.js). */
+function confirm_data_attr(string $message): string
+{
+    return 'data-confirm="' . h($message) . '"';
+}
+
 function txf_request_is_https(): bool
 {
     if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') {

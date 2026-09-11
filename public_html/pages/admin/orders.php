@@ -862,9 +862,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
       </thead>
       <tbody>
       <?php if (!$items): ?>
-        <tr>
-          <td colspan="<?= (int) $colspan ?>" class="muted" style="padding:1rem">
-            <?= $filtersOn
+      <tr>
+        <td colspan="<?= (int) $colspan ?>">
+          <div class="empty-state">
+            <p><?= $filtersOn
                 ? 'No orders match this filter.'
                 : ($isProcessing
                     ? ($origin === 'leftover'
@@ -878,17 +879,18 @@ if ($compactUnpaidStats && !$showPagingStats) {
                         ? 'No unpaid completed orders to bill. Open All to see Paid, or mark Processing rows completed.'
                         : ($filter['status'] === 'paid'
                             ? 'No paid completed orders.'
-                            : 'No completed orders yet — mark processing rows completed with a live URL.'))) ?>
+                            : 'No completed orders yet — mark processing rows completed with a live URL.'))) ?></p>
             <?php if ($filtersOn): ?>
-              <a href="<?= h($ordersQs([
+              <p class="actions"><a class="btn secondary" href="<?= h($ordersQs([
                   'q' => '',
                   'country' => '',
                   'admin_id' => 0,
                   'date_from' => '',
                   'date_to' => '',
                   'p' => 1,
-              ])) ?>">Clear filters</a>
+              ])) ?>">Clear filters</a></p>
             <?php endif; ?>
+          </div>
           </td>
         </tr>
       <?php endif; ?>
@@ -1058,7 +1060,8 @@ if ($compactUnpaidStats && !$showPagingStats) {
               <button class="btn-paid is-paid" type="submit"
                       title="Click to remove paid mark"
                       data-paid="paid"
-                      onclick="if (!confirm('Remove paid mark?')) return false; document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='unmark_paid';">
+                      data-confirm="Remove paid mark?"
+                      onclick="document.getElementById('delete-item-id').value='<?= $id ?>'; document.getElementById('sheet-action').value='unmark_paid';">
                 Paid
               </button>
             <?php else: ?>
@@ -1109,10 +1112,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
               $wpStatusForDel = strtolower(trim((string) ($row['wp_status_slug'] ?? '')));
             ?>
             <button class="btn-link danger" type="submit"
+                    data-om-remove
                     data-item-id="<?= $id ?>"
                     data-site="<?= h($siteLabel) ?>"
-                    data-wp-status="<?= h($wpStatusForDel) ?>"
-                    onclick="return omConfirmRemove(this);">
+                    data-wp-status="<?= h($wpStatusForDel) ?>">
               Remove
             </button>
           </td>
@@ -1474,12 +1477,39 @@ if ($compactUnpaidStats && !$showPagingStats) {
     });
   }
 
+  function omAsk(msg, isConfirm) {
+    if (isConfirm) {
+      if (typeof window.txfConfirm === 'function') return window.txfConfirm(msg);
+      return Promise.resolve(!!window.confirm(msg));
+    }
+    if (typeof window.txfAlert === 'function') return window.txfAlert(msg);
+    window.alert(msg);
+    return Promise.resolve();
+  }
+  function omResubmit() {
+    form.setAttribute('data-om-ok', '1');
+    submitting = true;
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.submit();
+  }
+
   form.addEventListener('submit', function (e) {
+    if (form.getAttribute('data-om-ok') === '1') {
+      form.removeAttribute('data-om-ok');
+      submitting = true;
+      return;
+    }
     var actionEl = document.getElementById('sheet-action');
     var action = actionEl ? String(actionEl.value || '') : '';
     if (action !== 'delete_row') {
       var restoreEl = document.getElementById('restore-wp');
       if (restoreEl) restoreEl.value = '';
+    }
+    function halt(msg) {
+      e.preventDefault();
+      e.stopPropagation();
+      submitting = false;
+      if (msg) omAsk(msg, false);
     }
     if (action === 'push_invoice') {
       var any = false;
@@ -1494,17 +1524,11 @@ if ($compactUnpaidStats && !$showPagingStats) {
         if (!live || !country || !client) pushNotReady = true;
       });
       if (!any) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        alert('Tick at least one unpaid completed row to push to an invoice.');
+        halt('Tick at least one unpaid completed row to push to an invoice.');
         return;
       }
       if (pushNotReady) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        alert('Every ticked row needs a live URL, country, and client email or name before generating an invoice.');
+        halt('Every ticked row needs a live URL, country, and client email or name before generating an invoice.');
         return;
       }
     }
@@ -1523,10 +1547,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
         });
       }
       if (!completeRows.length) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        alert('Tick at least one row with a live URL, or fill LIVE URL and click Mark completed on that row.');
+        halt('Tick at least one row with a live URL, or fill LIVE URL and click Mark completed on that row.');
         return;
       }
       var missingLive = false;
@@ -1538,24 +1559,15 @@ if ($compactUnpaidStats && !$showPagingStats) {
         if (!String((row.querySelector('[name^="client_label"]') || {}).value || '').trim()) missingClient = true;
       });
       if (missingLive) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        alert('Need a live URL on every ticked row before completing.');
+        halt('Need a live URL on every ticked row before completing.');
         return;
       }
       if (missingCountry) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        alert('Need a country on every ticked row before completing. Save first if you just typed it.');
+        halt('Need a country on every ticked row before completing. Save first if you just typed it.');
         return;
       }
       if (missingClient) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        alert('Need a client email or name on every ticked row before completing. Save first if you just typed it.');
+        halt('Need a client email or name on every ticked row before completing. Save first if you just typed it.');
         return;
       }
     }
@@ -1568,15 +1580,17 @@ if ($compactUnpaidStats && !$showPagingStats) {
         if (orig !== '' && !String(liveEl.value || '').trim()) clearingLive = true;
       });
       if (clearingLive) {
-        if (!confirm('Clearing the live URL also clears Paid. Continue?')) {
-          e.preventDefault();
-          e.stopPropagation();
-          submitting = false;
-          return;
-        }
+        e.preventDefault();
+        e.stopPropagation();
+        submitting = false;
+        omAsk('Clearing the live URL also clears Paid. Continue?', true).then(function (ok) {
+          if (ok) omResubmit();
+        });
+        return;
       }
     }
     var bad = null;
+    var priceMsg = '';
     document.querySelectorAll('[data-row]').forEach(function (row) {
       if (bad) return;
       var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
@@ -1589,16 +1603,14 @@ if ($compactUnpaidStats && !$showPagingStats) {
       if (oRaw === '' || dRaw === '' || d <= 0) {
         bad = row.querySelector('[name^="site_name"]');
         var site = bad ? String(bad.value || '').trim() : '';
-        alert('When LIVE URL is filled, Owner and Decided prices cannot be empty, and Decided must be greater than 0'
-          + (site ? ' (' + site + ').' : '.'));
+        priceMsg = 'When LIVE URL is filled, Owner and Decided prices cannot be empty, and Decided must be greater than 0'
+          + (site ? ' (' + site + ').' : '.');
         if (ownerEl && oRaw === '') ownerEl.focus();
         else if (decidedEl) decidedEl.focus();
       }
     });
     if (bad) {
-      e.preventDefault();
-      e.stopPropagation();
-      submitting = false;
+      halt(priceMsg);
       return;
     }
     if (action === 'mark_completed') {
@@ -1606,12 +1618,13 @@ if ($compactUnpaidStats && !$showPagingStats) {
       var confirmMsg = oneRow
         ? 'Mark this order completed? It moves to Completed orders and sets Website prices to Completed.'
         : 'Mark selected orders completed? They move to Completed orders and Website prices is set to Completed.';
-      if (!confirm(confirmMsg)) {
-        e.preventDefault();
-        e.stopPropagation();
-        submitting = false;
-        return;
-      }
+      e.preventDefault();
+      e.stopPropagation();
+      submitting = false;
+      omAsk(confirmMsg, true).then(function (ok) {
+        if (ok) omResubmit();
+      });
+      return;
     }
     submitting = true;
   });
@@ -1654,20 +1667,42 @@ function omConfirmRemove(btn) {
     msg += ' Website prices is still Processing, so this order will reappear the next time Processing loads.';
   }
   msg += ' This cannot be undone.';
-  if (!confirm(msg)) return false;
-  var restore = document.getElementById('restore-wp');
-  if (restore) restore.value = '';
-  if (wp === 'completed') {
-    if (confirm('Also set Website prices back to Processing for this site? That creates a new Processing order.')) {
-      if (restore) restore.value = '1';
+  var finish = function (restore) {
+    var restoreEl = document.getElementById('restore-wp');
+    if (restoreEl) restoreEl.value = restore ? '1' : '';
+    var itemEl = document.getElementById('delete-item-id');
+    var actionEl = document.getElementById('sheet-action');
+    var form = btn.form || document.getElementById('order-sheet-form');
+    if (itemEl) itemEl.value = id;
+    if (actionEl) actionEl.value = 'delete_row';
+    if (form) {
+      form.setAttribute('data-om-ok', '1');
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
     }
-  }
-  var itemEl = document.getElementById('delete-item-id');
-  var actionEl = document.getElementById('sheet-action');
-  if (itemEl) itemEl.value = id;
-  if (actionEl) actionEl.value = 'delete_row';
-  return true;
+  };
+  var ask = (typeof window.txfConfirm === 'function')
+    ? window.txfConfirm(msg)
+    : Promise.resolve(!!window.confirm(msg));
+  ask.then(function (ok) {
+    if (!ok) return;
+    if (wp === 'completed') {
+      var extra = (typeof window.txfConfirm === 'function')
+        ? window.txfConfirm('Also set Website prices back to Processing for this site? That creates a new Processing order.')
+        : Promise.resolve(!!window.confirm('Also set Website prices back to Processing for this site? That creates a new Processing order.'));
+      extra.then(function (restore) { finish(!!restore); });
+      return;
+    }
+    finish(false);
+  });
+  return false;
 }
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest ? e.target.closest('[data-om-remove]') : null;
+  if (!btn) return;
+  e.preventDefault();
+  omConfirmRemove(btn);
+});
 </script>
 <?= open_site_script_tag() ?>
 <?php render_footer('admin'); ?>

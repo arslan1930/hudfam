@@ -669,14 +669,24 @@ render_header('Generate invoice', 'admin');
   if (existSearch) existSearch.addEventListener('input', applyExistingSearch);
   if (form) {
     form.addEventListener('submit', function (e) {
+      if (form.getAttribute('data-confirm-ok') === '1') {
+        form.removeAttribute('data-confirm-ok');
+        return;
+      }
       if (destMode() !== 'existing') return;
       var n = checkedCount();
       var opt = existSelect ? existSelect.options[existSelect.selectedIndex] : null;
       var num = opt ? String(opt.getAttribute('data-number') || '') : '';
       if (!num || n < 1) return;
-      if (!window.confirm('Add ' + n + ' site' + (n === 1 ? '' : 's') + ' to invoice ' + num + '?')) {
-        e.preventDefault();
-      }
+      e.preventDefault();
+      var msg = 'Add ' + n + ' site' + (n === 1 ? '' : 's') + ' to invoice ' + num + '?';
+      var ask = (typeof window.txfConfirm === 'function') ? window.txfConfirm(msg) : Promise.resolve(!!window.confirm(msg));
+      ask.then(function (ok) {
+        if (!ok) return;
+        form.setAttribute('data-confirm-ok', '1');
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
+      });
     });
   }
   if (all) {

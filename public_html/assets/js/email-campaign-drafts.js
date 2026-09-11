@@ -245,7 +245,11 @@
         if (!href) return;
         href = String(href).trim();
         if (!/^https?:\/\//i.test(href)) {
-          window.alert('Only http:// or https:// links are allowed.');
+          if (typeof window.txfAlert === 'function') {
+            window.txfAlert('Only http:// or https:// links are allowed.');
+          } else {
+            window.alert('Only http:// or https:// links are allowed.');
+          }
           return;
         }
         document.execCommand('createLink', false, href);

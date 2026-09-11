@@ -63,6 +63,9 @@
       if (emailPick) {
         emailPick.hidden = !(mode === 'email' && emails.length > 0);
       }
+      if (applyBtn) {
+        applyBtn.textContent = mode === 'email' ? 'Remove email' : 'Delete site';
+      }
       if (emailSelect && mode === 'email') {
         emailSelect.innerHTML = '';
         emails.forEach(function (email) {
@@ -252,9 +255,7 @@
           : 'Remove only this email from Sites with emails - Admin?\n\n'
             + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
             + '\n\nSite name stays; other emails remain.';
-        if (!window.confirm(confirmMsg)) {
-          return;
-        }
+        var runEmailDelete = function () {
         postAction({
           ajax: '1',
           action: 'delete_email',
@@ -281,16 +282,22 @@
           .catch(function (err) {
             setStatus(err.message || 'Could not remove email.', true);
           });
+        };
+        if (typeof window.txfConfirm === 'function') {
+          window.txfConfirm(confirmMsg).then(function (ok) { if (ok) runEmailDelete(); });
+          return;
+        }
+        if (!window.confirm(confirmMsg)) {
+          return;
+        }
+        runEmailDelete();
         return;
       }
 
-      if (!window.confirm(
-        'Delete BOTH site name and all emails from Sites with emails - Admin?\n\n' +
+      var rowMsg = 'Delete BOTH site name and all emails from Sites with emails - Admin?\n\n' +
         'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmails: ' +
-        ((selected.emails || []).join(', ') || '(none)')
-      )) {
-        return;
-      }
+        ((selected.emails || []).join(', ') || '(none)');
+      var runRowDelete = function () {
       postAction({
         ajax: '1',
         action: 'delete_row',
@@ -310,6 +317,15 @@
         .catch(function (err) {
           setStatus(err.message || 'Could not delete.', true);
         });
+      };
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(rowMsg).then(function (ok) { if (ok) runRowDelete(); });
+        return;
+      }
+      if (!window.confirm(rowMsg)) {
+        return;
+      }
+      runRowDelete();
     }
 
     if (input) {

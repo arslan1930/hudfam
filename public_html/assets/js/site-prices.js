@@ -411,9 +411,37 @@
       return;
     }
     if (String(data.status_slug || '') === 'processing') {
-      if (!window.confirm('Add as Processing? This adds the site to Order management Processing.')) {
+      var addProcessing = function () {
+        var btn = $('[data-site-price-add-btn]', tr);
+        if (btn) btn.disabled = true;
+        setStatus('Adding…', false);
+        post('add_row', data).then(function (json) {
+          if (btn) btn.disabled = false;
+          if (!json.ok) {
+            setStatus(json.error || 'Could not add that site.', true);
+            return;
+          }
+          setStatus('Added ' + (json.domain || 'site') + '.', false);
+          applyPager(json);
+          if (json.tbody_html) applyTbody(json.tbody_html);
+          if (json.total != null) applyCount(json.total);
+          var addDomain = document.querySelector('[data-add-domain]');
+          if (addDomain) addDomain.focus();
+        }).catch(function () {
+          if (btn) btn.disabled = false;
+          setStatus('Could not add that site.', true);
+        });
+      };
+      var msg = 'Add as Processing? This adds the site to Order management Processing.';
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(msg).then(function (ok) { if (ok) addProcessing(); });
         return;
       }
+      if (!window.confirm(msg)) {
+        return;
+      }
+      addProcessing();
+      return;
     }
     var btn = $('[data-site-price-add-btn]', tr);
     if (btn) btn.disabled = true;
@@ -554,22 +582,30 @@
       if (box) domain = String(box.getAttribute('data-domain') || '').trim();
     }
     var label = domain || 'this site';
-    if (!window.confirm('Remove ' + label + ' from this country sheet? Order management rows stay; they will no longer point at this site.')) {
+    var msg = 'Remove ' + label + ' from this country sheet? Order management rows stay; they will no longer point at this site.';
+    var runDelete = function () {
+      setStatus('Removing…', false);
+      post('delete_row', { site_id: id }).then(function (json) {
+        if (!json.ok) {
+          setStatus(json.error || 'Could not remove that site.', true);
+          return;
+        }
+        setStatus(json.message || 'Removed.', false);
+        applyPager(json);
+        if (json.tbody_html) applyTbody(json.tbody_html);
+        if (json.total != null) applyCount(json.total);
+      }).catch(function () {
+        setStatus('Could not remove that site.', true);
+      });
+    };
+    if (typeof window.txfConfirm === 'function') {
+      window.txfConfirm(msg).then(function (ok) { if (ok) runDelete(); });
       return;
     }
-    setStatus('Removing…', false);
-    post('delete_row', { site_id: id }).then(function (json) {
-      if (!json.ok) {
-        setStatus(json.error || 'Could not remove that site.', true);
-        return;
-      }
-      setStatus(json.message || 'Removed.', false);
-      applyPager(json);
-      if (json.tbody_html) applyTbody(json.tbody_html);
-      if (json.total != null) applyCount(json.total);
-    }).catch(function () {
-      setStatus('Could not remove that site.', true);
-    });
+    if (!window.confirm(msg)) {
+      return;
+    }
+    runDelete();
   }
 
   function paintStatusSelect(sel) {
@@ -870,7 +906,23 @@
         if (srow) {
           var prev = String(srow.getAttribute('data-status') || 'new');
           if (String(t.value || '') === 'processing' && prev !== 'processing') {
-            if (!window.confirm('Set to Processing? This adds the site to Order management Processing.')) {
+            var statusMsg = 'Set to Processing? This adds the site to Order management Processing.';
+            var applyStatus = function () {
+              paintStatusSelect(t);
+              scheduleSave(srow);
+            };
+            if (typeof window.txfConfirm === 'function') {
+              window.txfConfirm(statusMsg).then(function (ok) {
+                if (!ok) {
+                  t.value = prev;
+                  paintStatusSelect(t);
+                  return;
+                }
+                applyStatus();
+              });
+              return;
+            }
+            if (!window.confirm(statusMsg)) {
               t.value = prev;
               paintStatusSelect(t);
               return;

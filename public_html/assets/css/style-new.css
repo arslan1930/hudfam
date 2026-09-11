@@ -50,8 +50,8 @@ html.ui-v2 {
   html.ui-v2 *::before,
   html.ui-v2 *::after {
     animation: none !important;
-    transition: none !important;
     scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -67,8 +67,8 @@ html.ui-v2 body::before {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.018) 1px, transparent 1px);
   background-size: 56px 48px;
   mask-image: radial-gradient(ellipse at 50% 18%, #000 28%, transparent 78%);
 }
@@ -313,8 +313,8 @@ html.ui-v2 button.btn.secondary {
 }
 html.ui-v2 .btn.secondary:hover,
 html.ui-v2 button.btn.secondary:hover {
-  background: #334155;
-  border-color: #94a3b8;
+  background: #475569;
+  border-color: #cbd5e1;
   color: #fff !important;
   filter: none;
 }
@@ -875,11 +875,15 @@ html.ui-v2 .main .swe-row-actions button[form*="remove"] {
   color: var(--bad) !important;
   border-color: rgba(251, 113, 133, 0.5) !important;
 }
-html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"]:hover,
-html.ui-v2 .main .swe-row-actions button[form*="-remove-"]:hover,
-html.ui-v2 .main .swe-row-actions button[form*="remove"]:hover {
-  background: var(--bad-soft) !important;
-  border-color: var(--bad) !important;
+html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary,
+html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary:hover {
+  background: #334155;
+  color: #f1f5f9 !important;
+  border-color: #94a3b8;
+}
+html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary:hover {
+  background: #475569;
+  border-color: #cbd5e1;
 }
 html.ui-v2 #swe_status,
 html.ui-v2 #prospect_copy_status,
@@ -1223,6 +1227,9 @@ html.ui-v2 input[type="radio"] {
   outline: none;
   cursor: pointer;
 }
+html.ui-v2 input[type="radio"]:focus-visible {
+  box-shadow: 0 0 0 2px #070b16, 0 0 0 5px rgba(34, 211, 238, 0.55);
+}
 html.ui-v2 input[type="radio"]:checked {
   border-color: #22d3ee;
   background:
@@ -1315,7 +1322,7 @@ html.ui-v2 .site-price-add[data-tint="green"] td {
   background: rgba(187, 247, 208, 0.28) !important;
 }
 
-/* Highlighted rows: beat app.css light tints so selected / search / opened / emailed stay readable */
+/* Row states must be distinct: selected = cyan bar, opened = sky, emailed = muted green, search = amber outline */
 html.ui-v2 tr.is-sheet-selected td,
 html.ui-v2 li.is-sheet-selected,
 html.ui-v2 tbody tr.is-sheet-selected td,
@@ -1323,35 +1330,39 @@ html.ui-v2 tbody tr.is-sheet-selected:hover td,
 html.ui-v2 tbody tr:nth-child(even).is-sheet-selected td,
 html.ui-v2 .swe-table tr.is-sheet-selected > td,
 html.ui-v2 #prospect-site-table tr.is-sheet-selected td {
-  background: rgba(34, 211, 238, 0.52) !important;
-  box-shadow: inset 5px 0 0 #22d3ee;
-  color: #f8fafc;
+  background: rgba(34, 211, 238, 0.16) !important;
+  box-shadow: inset 4px 0 0 #22d3ee;
+  color: var(--ink);
 }
 html.ui-v2 .swe-table tr.swe-row-opened > td,
-html.ui-v2 .swe-table tr.swe-row-opened:hover > td,
-html.ui-v2 .swe-table tr.swe-row-opened.sheet-search-hit td {
-  background: rgba(56, 189, 248, 0.50) !important;
-  box-shadow: inset 5px 0 0 #38bdf8;
-  color: #f8fafc;
+html.ui-v2 .swe-table tr.swe-row-opened:hover > td {
+  background: rgba(125, 211, 252, 0.12) !important;
+  box-shadow: inset 4px 0 0 #38bdf8;
+  color: var(--ink);
 }
 html.ui-v2 .swe-table tr.swe-row-emailed > td,
 html.ui-v2 .swe-table tr.swe-row-emailed:hover > td,
-html.ui-v2 .swe-table tr.swe-row-emailed.sheet-search-hit td,
 html.ui-v2 tbody tr.swe-row-emailed > td,
 html.ui-v2 tbody tr:nth-child(even).swe-row-emailed > td {
-  background: rgba(52, 211, 153, 0.55) !important;
-  box-shadow: inset 5px 0 0 #34d399;
-  color: #f8fafc;
+  background: rgba(74, 222, 128, 0.08) !important;
+  box-shadow: inset 4px 0 0 #4ade80;
+  color: #cbd5e1;
+}
+html.ui-v2 .swe-table tr.swe-row-emailed .swe-domain,
+html.ui-v2 .swe-table tr.swe-row-emailed .swe-cell-text {
+  color: #94a3b8;
 }
 html.ui-v2 .swe-table tr.swe-row-emailed.is-sheet-selected > td,
 html.ui-v2 tbody tr.swe-row-emailed.is-sheet-selected td {
-  background: rgba(34, 211, 238, 0.50) !important;
-  box-shadow: inset 5px 0 0 #22d3ee, inset 0 0 0 1px rgba(52, 211, 153, 0.7);
-  color: #f8fafc;
+  background: rgba(34, 211, 238, 0.14) !important;
+  box-shadow: inset 4px 0 0 #22d3ee;
+  color: var(--ink);
 }
 html.ui-v2 .sheet-search-hit,
 html.ui-v2 tr.sheet-search-hit td,
 html.ui-v2 .swe-table tr.sheet-search-hit td,
+html.ui-v2 .swe-table tr.swe-row-opened.sheet-search-hit td,
+html.ui-v2 .swe-table tr.swe-row-emailed.sheet-search-hit td,
 html.ui-v2 #prospect-site-table tr.sheet-search-hit td,
 html.ui-v2 .extracted-country-table tr.sheet-search-hit td,
 html.ui-v2 .invoice-list-table tr.sheet-search-hit td,
@@ -1359,11 +1370,8 @@ html.ui-v2 .site-price-sheet tr.sheet-search-hit td,
 html.ui-v2 .folder.sheet-search-hit,
 html.ui-v2 .launch-card.sheet-search-hit,
 html.ui-v2 .extracted-plain-item.sheet-search-hit {
-  background: rgba(34, 211, 238, 0.50) !important;
-  outline: 2px solid #22d3ee !important;
+  outline: 2px solid #fbbf24 !important;
   outline-offset: -2px;
-  color: #f8fafc;
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
 }
 html.ui-v2 #prospect-site-table tr.is-just-added td,
 html.ui-v2 #prospect-site-table tr.is-just-added:hover td,
@@ -1429,6 +1437,103 @@ html.ui-v2 .help-details > summary {
 html.ui-v2 .camp-hub-step-num {
   background: #22d3ee;
   color: #083344;
+}
+
+/* Help: page purpose is the main copy; (i) stays available but quieter */
+html.ui-v2 .main:has(.page-purpose) .info-tip {
+  opacity: 0.48;
+}
+html.ui-v2 .main:has(.page-purpose) .info-tip:hover,
+html.ui-v2 .main:has(.page-purpose) .info-tip:focus-visible,
+html.ui-v2 .main:has(.page-purpose) .info-tip.is-open {
+  opacity: 1;
+}
+html.ui-v2 .page-purpose-title {
+  color: var(--ink);
+}
+html.ui-v2 .page-purpose-badge {
+  color: var(--brand-2);
+}
+html.ui-v2 .page-purpose-what,
+html.ui-v2 .page-purpose-how {
+  color: var(--ink);
+}
+html.ui-v2 h1:has(.info-tip) + .help,
+html.ui-v2 h2:has(.info-tip) + .help {
+  font-size: 0.86rem;
+  max-width: 52rem;
+  color: var(--muted);
+}
+
+html.ui-v2 .empty-state {
+  background: var(--fx-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  padding: 1.75rem 1.1rem;
+}
+html.ui-v2 .empty-state > p:first-child {
+  color: var(--ink);
+}
+
+html.ui-v2 .app-dialog {
+  color: var(--ink);
+}
+html.ui-v2 .app-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72);
+}
+html.ui-v2 .app-dialog.is-fallback[open] {
+  background: rgba(2, 6, 23, 0.72);
+}
+html.ui-v2 .app-dialog-card {
+  background: rgba(8, 18, 36, 0.96);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+html.ui-v2 .app-dialog-title {
+  color: #f8fafc;
+}
+html.ui-v2 .app-dialog-body {
+  color: var(--ink);
+}
+
+/* Leftover light chrome except invoice paper */
+html.ui-v2 .site-price-color-panel,
+html.ui-v2 .ss-panel,
+html.ui-v2 .ss-list,
+html.ui-v2 .color-chip,
+html.ui-v2 .order-filter-bar,
+html.ui-v2 .order-sheet-toolbar,
+html.ui-v2 .invoice-list-note-form,
+html.ui-v2 table.sheet-cards-mobile tr {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.ui-v2 #swe_status.is-loading {
+  background: var(--fx-glass);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* Sheet toolbars: wrap tightly; Copy/Batches already live in ⋮ menus */
+html.ui-v2 .main.is-sheet-app .swe-list-toolbar,
+html.ui-v2 .main.is-sheet-app .invoice-list-toolbar {
+  gap: 0.45rem 0.7rem;
+}
+html.ui-v2 .main.is-sheet-app .swe-list-toolbar .actions,
+html.ui-v2 .main.is-sheet-app .swe-sent-filters {
+  gap: 0.35rem;
+}
+html.ui-v2 .sheet-tool-menu-panel .swe-copy-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+html.ui-v2 .sheet-tool-menu-panel .btn {
+  justify-content: flex-start;
 }
 
 @media print {

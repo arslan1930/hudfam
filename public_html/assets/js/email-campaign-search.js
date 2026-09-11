@@ -68,6 +68,9 @@
       if (emailPick) {
         emailPick.hidden = !(mode === 'email' && emails.length > 0);
       }
+      if (applyBtn) {
+        applyBtn.textContent = mode === 'email' ? 'Remove email' : 'Delete site';
+      }
       if (emailSelect && mode === 'email') {
         emailSelect.innerHTML = '';
         emails.forEach(function (email) {
@@ -291,48 +294,52 @@
           : 'Remove only this email from ' + countryLabel + ' sheet?\n\n'
             + 'Site: ' + selected.domain + '\nEmail: ' + email
             + '\n\nSite name stays; other emails remain.';
+        var runEmailDelete = function () {
+          postAction({
+            ajax: '1',
+            action: 'delete_email',
+            sheet_id: sid,
+            row_id: String(selected.id),
+            email: email
+          })
+            .then(function (data) {
+              setStatus(data.message || 'Email removed.');
+              if (data.row_deleted) {
+                selected = null;
+                renderSelected();
+                if (input) {
+                  input.value = '';
+                  input.focus();
+                }
+                suggestions = [];
+                hideSuggest();
+                return;
+              }
+              selected.emails = data.emails || [];
+              selected.focusEmail = null;
+              renderSelected();
+            })
+            .catch(function (err) {
+              setStatus(err.message || 'Could not remove email.', true);
+            });
+        };
+        if (typeof window.txfConfirm === 'function') {
+          window.txfConfirm(confirmMsg).then(function (ok) { if (ok) runEmailDelete(); });
+          return;
+        }
         if (!window.confirm(confirmMsg)) {
           return;
         }
-        postAction({
-          ajax: '1',
-          action: 'delete_email',
-          sheet_id: sid,
-          row_id: String(selected.id),
-          email: email
-        })
-          .then(function (data) {
-            setStatus(data.message || 'Email removed.');
-            if (data.row_deleted) {
-              selected = null;
-              renderSelected();
-              if (input) {
-                input.value = '';
-                input.focus();
-              }
-              suggestions = [];
-              hideSuggest();
-              return;
-            }
-            selected.emails = data.emails || [];
-            selected.focusEmail = null;
-            renderSelected();
-          })
-          .catch(function (err) {
-            setStatus(err.message || 'Could not remove email.', true);
-          });
+        runEmailDelete();
         return;
       }
 
       var sid = String(selected.sheetId || sheetId || '');
       var countryLabel = selected.country || sheetName;
-      if (!window.confirm(
-        'Delete BOTH site name and all emails from ' + countryLabel + ' sheet?\n\n' +
+      var rowMsg = 'Delete BOTH site name and all emails from ' + countryLabel + ' sheet?\n\n' +
         'Site: ' + selected.domain + '\nEmails: ' +
-        ((selected.emails || []).join(', ') || '(none)')
-      )) {
-        return;
-      }
+        ((selected.emails || []).join(', ') || '(none)');
+      var runRowDelete = function () {
       postAction({
         ajax: '1',
         action: 'delete_row',
@@ -353,6 +360,15 @@
         .catch(function (err) {
           setStatus(err.message || 'Could not delete.', true);
         });
+      };
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(rowMsg).then(function (ok) { if (ok) runRowDelete(); });
+        return;
+      }
+      if (!window.confirm(rowMsg)) {
+        return;
+      }
+      runRowDelete();
     }
 
     if (input) {

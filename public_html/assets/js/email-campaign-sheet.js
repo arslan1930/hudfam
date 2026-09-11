@@ -373,18 +373,27 @@
     if (!form) return;
     e.preventDefault();
     var confirmMsg = btn.getAttribute('data-confirm');
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
-    var siteInput = form.querySelector('[name="site_id"]');
-    if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
-    if (kind === 'mark') {
-      var sentInput = form.querySelector('[name="email_sent"]');
-      if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+    function submitCampAction() {
+      var siteInput = form.querySelector('[name="site_id"]');
+      if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
+      if (kind === 'mark') {
+        var sentInput = form.querySelector('[name="email_sent"]');
+        if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+      }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
     }
-    if (typeof form.requestSubmit === 'function') {
-      form.requestSubmit();
-    } else {
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    if (confirmMsg) {
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(confirmMsg).then(function (ok) { if (ok) submitCampAction(); });
+        return;
+      }
+      if (!window.confirm(confirmMsg)) return;
     }
+    submitCampAction();
   });
 
   function removeRowFromDom(siteId, siteCount) {
