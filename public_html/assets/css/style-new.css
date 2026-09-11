@@ -1641,6 +1641,15 @@ html.ui-v2 .site-price-tint.is-none,
 html.ui-v2 .site-price-color-panel .site-price-tint.is-none {
   background: var(--input);
 }
+html.ui-v2 .site-price-lane td,
+html.ui-v2 table.sheet-cards-mobile tr.site-price-lane,
+html.ui-v2 table.sheet-cards-mobile tr.site-price-lane td {
+  background: var(--table-head) !important;
+  color: var(--table-head-ink);
+}
+html.ui-v2 .site-price-lane-title {
+  color: var(--heading);
+}
 
 /* Missing palette roles: generic badges, code, sticky save, tips, scroll, selection */
 html.ui-v2 .badge {
