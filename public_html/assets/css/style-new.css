@@ -875,11 +875,15 @@ html.ui-v2 .main .swe-row-actions button[form*="remove"] {
   color: var(--bad) !important;
   border-color: rgba(251, 113, 133, 0.5) !important;
 }
-html.ui-v2 .main .swe-row-actions button[data-sheet-action="remove"]:hover,
-html.ui-v2 .main .swe-row-actions button[form*="-remove-"]:hover,
-html.ui-v2 .main .swe-row-actions button[form*="remove"]:hover {
-  background: var(--bad-soft) !important;
-  border-color: var(--bad) !important;
+html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary,
+html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary:hover {
+  background: #334155;
+  color: #f1f5f9 !important;
+  border-color: #94a3b8;
+}
+html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary:hover {
+  background: #475569;
+  border-color: #cbd5e1;
 }
 html.ui-v2 #swe_status,
 html.ui-v2 #prospect_copy_status,

@@ -83,15 +83,27 @@
       }
 
       try {
+        if (!document.body.contains(dlg)) {
+          document.body.appendChild(dlg);
+        }
+        if (dlg.open) {
+          dlg.removeEventListener('close', onClose);
+          dlg.close();
+          dlg.addEventListener('close', onClose);
+        }
         if (typeof dlg.showModal === 'function') {
           dlg.showModal();
         } else {
-          finish(!isAlert ? window.confirm(String(opts.message || '')) : (window.alert(String(opts.message || '')), true));
-          return;
+          dlg.setAttribute('open', '');
         }
       } catch (err) {
-        finish(!isAlert ? window.confirm(String(opts.message || '')) : (window.alert(String(opts.message || '')), true));
-        return;
+        try {
+          if (dlg.open) dlg.close();
+          document.body.appendChild(dlg);
+          dlg.showModal();
+        } catch (err2) {
+          dlg.setAttribute('open', '');
+        }
       }
       if (ok) {
         try { ok.focus(); } catch (err2) { /* ignore */ }
