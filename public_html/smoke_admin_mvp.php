@@ -3316,7 +3316,16 @@ if (!is_file($root . '/assets/js/app-dialog.js')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .main:has(.page-purpose) .info-tip')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .btn.secondary:hover')
     || !str_contains($overlayCssSmoke, 'outline: 2px solid #fbbf24')
-    || !str_contains($overlayCssSmoke, 'box-shadow: inset 4px 0 0 #4ade80')) {
+    || !str_contains($overlayCssSmoke, 'box-shadow: inset 4px 0 0 #4ade80')
+    || !str_contains($overlayCssSmoke, '--on-brand:')
+    || !str_contains($overlayCssSmoke, '--input:')
+    || !str_contains($overlayCssSmoke, '--hit:')
+    || !str_contains($overlayCssSmoke, '--placeholder:')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .badge {')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 code')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .actions-sticky {')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 ::selection')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .info-tip-bubble')) {
     fail('UI overlay missing in-app dialog, help quieting, or distinct row states');
 } else {
     ok('in-app dialog + quieter help + distinct sheet row states');

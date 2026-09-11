@@ -4,11 +4,14 @@
  * Restyles existing classes only. Do not rename JS/PHP hooks.
  *
  * Color roles:
- *   --ink        body text (high contrast)
- *   --muted      secondary / help text
- *   --line       card edges (neutral, not brand)
- *   --brand      primary actions and in-page links only
- *   --ok/warn/bad status: done / waiting / danger
+ *   --ink / --heading / --label   body, titles, form labels
+ *   --muted / --placeholder        secondary + empty field text
+ *   --line / --input / --input-line  card edges and field chrome
+ *   --brand / --on-brand          primary actions (cyan on dark teal)
+ *   --ok / --warn / --bad / --danger  status + destructive
+ *   --info                        opened-row (sky, distinct from selected cyan)
+ *   --hit                         search-hit outline (amber)
+ *   --accent                      login stripe only (violet)
  *
  * Safe rules: no global sidebar-link hover, no smooth scroll,
  * no hidden cards, no scale() on table rows.
@@ -22,14 +25,44 @@ html.ui-v2 {
   --panel: rgba(17, 24, 39, 0.88);
   --brand: #22d3ee;
   --brand-2: #7dd3fc;
+  --brand-hover: #67e8f9;
+  --brand-edge: #a5f3fc;
   --brand-deep: #f1f5f9;
   --brand-soft: rgba(34, 211, 238, 0.14);
+  --on-brand: #083344;
   --ok: #4ade80;
   --ok-soft: rgba(74, 222, 128, 0.16);
+  --ok-ink: #86efac;
   --warn: #fbbf24;
   --warn-soft: rgba(251, 191, 36, 0.18);
+  --warn-deep: #422006;
+  --warn-ink: #fde68a;
   --bad: #f87171;
   --bad-soft: rgba(248, 113, 113, 0.16);
+  --danger: #e11d48;
+  --on-danger: #fff;
+  --info: #38bdf8;
+  --info-soft: rgba(56, 189, 248, 0.16);
+  --hit: #fbbf24;
+  --hit-soft: rgba(251, 191, 36, 0.16);
+  --accent: #a78bfa;
+  --accent-soft: rgba(167, 139, 250, 0.16);
+  --input: #1e293b;
+  --input-line: #94a3b8;
+  --placeholder: #94a3b8;
+  --disabled: #1e293b;
+  --disabled-ink: #64748b;
+  --secondary: #334155;
+  --secondary-hover: #475569;
+  --secondary-line: #94a3b8;
+  --code-bg: #0b1220;
+  --code-ink: #cbd5e1;
+  --heading: #f8fafc;
+  --label: #e2e8f0;
+  --table-head: #1e293b;
+  --table-head-ink: #cbd5e1;
+  --nav-ink: #e2e8f0;
+  --nav-muted: #cbd5e1;
   --shadow: 0 10px 28px rgba(2, 6, 23, 0.45);
   --radius: 14px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -121,14 +154,14 @@ html.ui-v2 .sidebar .brand {
   color: #fff;
 }
 html.ui-v2 .sidebar-role {
-  color: #cbd5e1;
+  color: var(--nav-muted);
 }
 html.ui-v2 .nav-group-label,
 html.ui-v2 .nav-section {
-  color: #94a3b8;
+  color: var(--placeholder);
 }
 html.ui-v2 .sidebar nav a {
-  color: #e2e8f0;
+  color: var(--nav-ink);
   transition: background var(--ui-ease), box-shadow var(--ui-ease);
 }
 html.ui-v2 .sidebar nav a:hover {
@@ -187,14 +220,14 @@ html.ui-v2 h1,
 html.ui-v2 h2,
 html.ui-v2 h3 {
   letter-spacing: -0.02em;
-  color: #f8fafc;
+  color: var(--heading);
 }
 html.ui-v2 .launch-card h2,
 html.ui-v2 .folder h2,
 html.ui-v2 .folder strong,
 html.ui-v2 .workflow-body a,
 html.ui-v2 .workflow-body strong {
-  color: #f8fafc;
+  color: var(--heading);
 }
 html.ui-v2 .muted,
 html.ui-v2 .help,
@@ -202,7 +235,7 @@ html.ui-v2 .dashboard-stat-sub {
   color: var(--muted);
 }
 html.ui-v2 ::placeholder {
-  color: #94a3b8;
+  color: var(--placeholder);
   opacity: 1;
 }
 
@@ -274,16 +307,16 @@ html.ui-v2 .route-check-meta {
 /* Primary CTAs — keep .btn .secondary .danger .small .large .block */
 html.ui-v2 .btn,
 html.ui-v2 button.btn {
-  background: #22d3ee;
-  border-color: #67e8f9;
-  color: #083344 !important;
+  background: var(--brand);
+  border-color: var(--brand-hover);
+  color: var(--on-brand) !important;
   box-shadow: none;
   font-weight: 700;
   transition: background var(--ui-ease), border-color var(--ui-ease), box-shadow var(--ui-ease), filter var(--ui-ease);
 }
 html.ui-v2 .btn:hover {
-  background: #67e8f9;
-  border-color: #a5f3fc;
+  background: var(--brand-hover);
+  border-color: var(--brand-edge);
   filter: none;
   box-shadow: none;
 }
@@ -305,32 +338,32 @@ html.ui-v2 .btn:active {
 }
 html.ui-v2 .btn.secondary,
 html.ui-v2 button.btn.secondary {
-  background: #334155;
-  color: #f1f5f9 !important;
-  border: 1px solid #94a3b8;
+  background: var(--secondary);
+  color: var(--brand-deep) !important;
+  border: 1px solid var(--secondary-line);
   box-shadow: none;
   filter: none;
 }
 html.ui-v2 .btn.secondary:hover,
 html.ui-v2 button.btn.secondary:hover {
-  background: #475569;
-  border-color: #cbd5e1;
-  color: #fff !important;
+  background: var(--secondary-hover);
+  border-color: var(--table-head-ink);
+  color: var(--on-danger) !important;
   filter: none;
 }
 html.ui-v2 .btn.danger:not(.secondary),
 html.ui-v2 button.btn.danger:not(.secondary) {
-  background: #e11d48;
-  border-color: #fb7185;
-  color: #fff !important;
+  background: var(--danger);
+  border-color: var(--bad);
+  color: var(--on-danger) !important;
   filter: none;
   box-shadow: none;
 }
 html.ui-v2 .btn.danger:not(.secondary):hover,
 html.ui-v2 button.btn.danger:not(.secondary):hover {
-  background: #fb7185;
+  background: var(--bad);
   border-color: #fecdd3;
-  color: #fff !important;
+  color: var(--on-danger) !important;
   filter: none;
 }
 html.ui-v2 .btn.secondary.danger {
@@ -343,9 +376,9 @@ html.ui-v2 .btn.secondary.danger {
 html.ui-v2 .btn:disabled,
 html.ui-v2 button.btn:disabled,
 html.ui-v2 .btn.secondary.danger:disabled {
-  background: #1e293b;
-  border-color: #334155;
-  color: #64748b !important;
+  background: var(--disabled);
+  border-color: var(--secondary);
+  color: var(--disabled-ink) !important;
   box-shadow: none;
   filter: none;
   transform: none;
@@ -353,15 +386,15 @@ html.ui-v2 .btn.secondary.danger:disabled {
 
 html.ui-v2 #filter_submit:not(:disabled),
 html.ui-v2 #add_unique_btn:not(:disabled) {
-  background: #22d3ee;
-  color: #083344 !important;
-  border-color: #67e8f9;
+  background: var(--brand);
+  color: var(--on-brand) !important;
+  border-color: var(--brand-hover);
   box-shadow: none;
 }
 html.ui-v2 #filter_submit:disabled {
-  background: #422006;
-  color: #fde68a !important;
-  border-color: #fbbf24;
+  background: var(--warn-deep);
+  color: var(--warn-ink) !important;
+  border-color: var(--warn);
   pointer-events: auto;
   cursor: not-allowed;
 }
@@ -408,15 +441,15 @@ html.ui-v2 #prospect-site-table td[data-label="When"] {
   width: 1%;
 }
 html.ui-v2 .main a.swe-open-site {
-  color: #083344;
-  background: #22d3ee;
-  border: 1px solid #67e8f9;
+  color: var(--on-brand);
+  background: var(--brand);
+  border: 1px solid var(--brand-hover);
   text-decoration: none;
 }
 html.ui-v2 .main a.swe-open-site:hover {
-  color: #083344;
-  background: #67e8f9;
-  border-color: #a5f3fc;
+  color: var(--on-brand);
+  background: var(--brand-hover);
+  border-color: var(--brand-edge);
   text-decoration: none;
 }
 html.ui-v2 .sheet-tool-menu-panel {
@@ -483,10 +516,10 @@ html.ui-v2 input[type="time"],
 html.ui-v2 select,
 html.ui-v2 textarea,
 html.ui-v2 input[type="file"] {
-  background: #1e293b;
+  background: var(--input);
   color: var(--ink);
   border-radius: 10px;
-  border: 1px solid #94a3b8;
+  border: 1px solid var(--input-line);
   transition: border-color var(--ui-ease), box-shadow var(--ui-ease);
 }
 html.ui-v2 input:not([type]):focus,
@@ -505,6 +538,19 @@ html.ui-v2 select:focus,
 html.ui-v2 textarea:focus {
   border-color: var(--brand-2);
   box-shadow: var(--focus-ring);
+}
+html.ui-v2 input:disabled,
+html.ui-v2 select:disabled,
+html.ui-v2 textarea:disabled,
+html.ui-v2 input:not([type]):disabled {
+  background: var(--disabled);
+  color: var(--disabled-ink);
+  border-color: var(--line);
+  opacity: 1;
+}
+html.ui-v2 option {
+  background: var(--input);
+  color: var(--ink);
 }
 html.ui-v2 .swe-row-no-email .swe-domain {
   border-color: rgba(251, 191, 36, 0.5);
@@ -528,14 +574,14 @@ html.ui-v2 .swe-td-email .swe-email-field input:focus {
 html.ui-v2 .login-wrap {
   background:
     radial-gradient(ellipse at 18% 12%, rgba(34, 211, 238, 0.16), transparent 45%),
-    radial-gradient(ellipse at 85% 88%, rgba(167, 139, 250, 0.12), transparent 42%),
+    radial-gradient(ellipse at 85% 88%, var(--accent-soft), transparent 42%),
     var(--grad-page);
 }
 html.ui-v2 .login-card {
   box-shadow: 0 16px 48px rgba(2, 6, 23, 0.45);
 }
 html.ui-v2 .login-card::before {
-  background: linear-gradient(90deg, #22d3ee, #a78bfa);
+  background: linear-gradient(90deg, var(--brand), var(--accent));
 }
 html.ui-v2 .login-card .btn {
   width: 100%;
@@ -543,8 +589,8 @@ html.ui-v2 .login-card .btn {
 
 /* Tables: readability; keep sheet JS hooks */
 html.ui-v2 thead th {
-  background: #1e293b;
-  color: #cbd5e1;
+  background: var(--table-head);
+  color: var(--table-head-ink);
 }
 html.ui-v2 tbody tr:hover td {
   background: rgba(34, 211, 238, 0.06);
@@ -639,7 +685,7 @@ html.ui-v2 .swe-status-badge {
 html.ui-v2 .swe-status-badge.is-sent,
 html.ui-v2 .swe-status-badge.is-emailed {
   background: var(--ok-soft);
-  color: #86efac;
+  color: var(--ok-ink);
   border-color: rgba(74, 222, 128, 0.45);
 }
 html.ui-v2 .swe-status-badge.is-unsent,
@@ -754,20 +800,20 @@ html.ui-v2 .sites-list-row.is-selected {
   box-shadow: inset 5px 0 0 #22d3ee;
 }
 html.ui-v2 .sites-open-panel {
-  background: #1e293b;
-  border-color: #94a3b8;
+  background: var(--input);
+  border-color: var(--input-line);
   color: var(--ink);
 }
 html.ui-v2 .sites-list-shell kbd,
 html.ui-v2 .box-panel kbd {
-  background: #0f172a;
-  border-color: #64748b;
-  color: var(--ink);
+  background: var(--code-bg);
+  border-color: var(--disabled-ink);
+  color: var(--code-ink);
 }
 html.ui-v2 .swe-open-count {
-  background: #1e293b;
+  background: var(--input);
   color: var(--ink);
-  border-color: #94a3b8;
+  border-color: var(--input-line);
 }
 html.ui-v2 .swe-row-chip.is-new {
   background: rgba(251, 191, 36, 0.22);
@@ -877,13 +923,13 @@ html.ui-v2 .main .swe-row-actions button[form*="remove"] {
 }
 html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary,
 html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary:hover {
-  background: #334155;
-  color: #f1f5f9 !important;
-  border-color: #94a3b8;
+  background: var(--secondary);
+  color: var(--brand-deep) !important;
+  border-color: var(--secondary-line);
 }
 html.ui-v2 .swe-row-actions button[data-sheet-action="mark"].secondary:hover {
-  background: #475569;
-  border-color: #cbd5e1;
+  background: var(--secondary-hover);
+  border-color: var(--table-head-ink);
 }
 html.ui-v2 #swe_status,
 html.ui-v2 #prospect_copy_status,
@@ -907,18 +953,17 @@ html.ui-v2 .camp-status.is-error {
   color: #fecaca;
 }
 html.ui-v2 .extracted-plain-item.sheet-search-hit {
-  background: rgba(34, 211, 238, 0.12) !important;
-  outline-color: var(--brand);
+  outline-color: var(--hit);
 }
 html.ui-v2 .dashboard-attention a {
-  background: #1e293b;
-  border-color: #475569;
-  color: #e2e8f0;
+  background: var(--input);
+  border-color: var(--secondary-hover);
+  color: var(--label);
 }
 html.ui-v2 .dashboard-attention a:hover {
-  background: #334155;
-  border-color: #94a3b8;
-  color: #fff;
+  background: var(--secondary);
+  border-color: var(--input-line);
+  color: var(--on-danger);
 }
 html.ui-v2 .dashboard-attention a[href*="awaiting=1"],
 html.ui-v2 .dashboard-attention a[href*="admin_departments"] {
@@ -939,8 +984,7 @@ html.ui-v2 .dashboard-attention a[href*="sites_with_emails"] {
   color: #4ade80;
 }
 html.ui-v2 .launch-card.sheet-search-hit {
-  background: rgba(34, 211, 238, 0.12);
-  outline-color: var(--brand);
+  outline-color: var(--hit);
 }
 html.ui-v2 .niche-chip {
   background: rgba(34, 211, 238, 0.14);
@@ -976,9 +1020,9 @@ html.ui-v2 .sheet-tabs a {
 }
 html.ui-v2 .tabs a.active,
 html.ui-v2 .sheet-tabs a.active {
-  background: #22d3ee;
-  color: #083344;
-  border-color: #67e8f9;
+  background: var(--brand);
+  color: var(--on-brand);
+  border-color: var(--brand-hover);
 }
 html.ui-v2 .camp-hub-team-btn,
 html.ui-v2 .camp-hub-count,
@@ -998,17 +1042,17 @@ html.ui-v2 .camp-hub-team-btn.is-on .camp-hub-team-dot {
   background: var(--ok);
 }
 html.ui-v2 .camp-hub-team-btn.is-off .camp-hub-team-dot {
-  background: #64748b;
+  background: var(--disabled-ink);
 }
 html.ui-v2 .camp-hub-row-actions button.btn.secondary {
-  color: #fecaca !important;
-  border-color: #f87171;
-  background: rgba(248, 113, 113, 0.12);
+  color: var(--bad) !important;
+  border-color: var(--bad);
+  background: var(--bad-soft);
 }
 html.ui-v2 .camp-hub-row-actions button.btn.secondary:hover {
   background: var(--bad-soft);
   border-color: var(--bad);
-  color: #fecaca !important;
+  color: var(--bad) !important;
 }
 html.ui-v2 .password-toggle {
   background: rgba(8, 18, 36, 0.9);
@@ -1046,10 +1090,7 @@ html.ui-v2 .dept-task-table .inline-form select,
 html.ui-v2 .inline-form select[name="status"] {
   background: rgba(2, 6, 23, 0.78);
   color: var(--ink);
-  border-color: #64748b;
-}
-html.ui-v2 .dept-task-mine td {
-  background: rgba(52, 245, 197, 0.08);
+  border-color: var(--disabled-ink);
 }
 html.ui-v2 .dept-task-overdue td {
   background: rgba(251, 113, 133, 0.1);
@@ -1092,7 +1133,7 @@ html.ui-v2 .invoice-list-note-form {
   border-color: var(--line);
 }
 html.ui-v2 .invoice-list-table tr.sheet-search-hit td {
-  background: rgba(34, 211, 238, 0.12) !important;
+  outline-color: var(--hit);
 }
 html.ui-v2 .btn-paid {
   background: rgba(8, 18, 36, 0.8);
@@ -1159,9 +1200,9 @@ html.ui-v2 .camp-hub-check {
 }
 html.ui-v2 .camp-hub-field input:not([type]),
 html.ui-v2 .camp-hub-field #new_camp_project {
-  background: #1e293b;
+  background: var(--input);
   color: var(--ink);
-  border-color: #94a3b8;
+  border-color: var(--input-line);
 }
 
 /* Order management — leftover white summary cards / Page totals bar / clipped cells */
@@ -1179,15 +1220,15 @@ html.ui-v2 .orders-summary-done {
   border-color: rgba(74, 222, 128, 0.35);
 }
 html.ui-v2 .order-sheet th {
-  background: #1e293b;
-  color: #cbd5e1;
+  background: var(--table-head);
+  color: var(--table-head-ink);
 }
 html.ui-v2 .order-sheet tfoot td {
   background: rgba(15, 23, 42, 0.72);
   color: var(--ink);
 }
 html.ui-v2 .order-check-head {
-  color: #cbd5e1;
+  color: var(--table-head-ink);
 }
 html.ui-v2 .site-cell .cell-note {
   background: rgba(2, 6, 23, 0.55);
@@ -1203,14 +1244,14 @@ html.ui-v2 .profit-pos { color: var(--ok); }
 html.ui-v2 .profit-neg { color: var(--bad); }
 
 html.ui-v2 label {
-  color: #e2e8f0;
+  color: var(--label);
 }
 html.ui-v2 input[type="checkbox"],
 html.ui-v2 .sheet-check input[type="checkbox"] {
-  accent-color: #22d3ee;
+  accent-color: var(--brand);
   width: 1.1rem;
   height: 1.1rem;
-  outline: 1px solid #94a3b8;
+  outline: 1px solid var(--input-line);
   outline-offset: 1px;
   cursor: pointer;
 }
@@ -1221,14 +1262,11 @@ html.ui-v2 input[type="radio"] {
   height: 1.1rem;
   margin: 0;
   flex-shrink: 0;
-  border: 2px solid #94a3b8;
+  border: 2px solid var(--input-line);
   border-radius: 50%;
   background: #0b1224;
   outline: none;
   cursor: pointer;
-}
-html.ui-v2 input[type="radio"]:focus-visible {
-  box-shadow: 0 0 0 2px #070b16, 0 0 0 5px rgba(34, 211, 238, 0.55);
 }
 html.ui-v2 input[type="radio"]:checked {
   border-color: #22d3ee;
@@ -1336,8 +1374,8 @@ html.ui-v2 #prospect-site-table tr.is-sheet-selected td {
 }
 html.ui-v2 .swe-table tr.swe-row-opened > td,
 html.ui-v2 .swe-table tr.swe-row-opened:hover > td {
-  background: rgba(125, 211, 252, 0.12) !important;
-  box-shadow: inset 4px 0 0 #38bdf8;
+  background: var(--info-soft) !important;
+  box-shadow: inset 4px 0 0 var(--info);
   color: var(--ink);
 }
 html.ui-v2 .swe-table tr.swe-row-emailed > td,
@@ -1396,47 +1434,47 @@ html.ui-v2 .tld-site-row:hover {
   background: rgba(34, 211, 238, 0.18);
 }
 html.ui-v2 .camp-add-row > td {
-  background: #1e293b;
+  background: var(--input);
   border-bottom-color: var(--line);
 }
 html.ui-v2 .sites-list-box,
 html.ui-v2 .extracted-plain-list,
 html.ui-v2 .inventory-box,
 html.ui-v2 .unique-sites-preview {
-  background: #1e293b;
-  border: 1px solid #94a3b8;
+  background: var(--input);
+  border: 1px solid var(--input-line);
   color: var(--ink);
 }
 html.ui-v2 .niche-chip-control {
-  background: #1e293b;
-  border-color: #94a3b8;
+  background: var(--input);
+  border-color: var(--input-line);
 }
 html.ui-v2 .sheet-search input[type="search"],
 html.ui-v2 .dashboard-search input[type="search"] {
-  background: #1e293b;
-  border: 1px solid #94a3b8;
+  background: var(--input);
+  border: 1px solid var(--input-line);
   color: var(--ink);
 }
 html.ui-v2 .sidebar-user,
 html.ui-v2 .sidebar-user span {
-  color: #cbd5e1;
+  color: var(--nav-muted);
 }
 html.ui-v2 .login-wrap .help,
 html.ui-v2 .login-wrap .muted {
   color: var(--muted);
 }
 html.ui-v2 .login-wrap a {
-  color: #7dd3fc;
+  color: var(--brand-2);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
 html.ui-v2 .help-details > summary {
-  color: #e2e8f0;
+  color: var(--label);
   cursor: pointer;
 }
 html.ui-v2 .camp-hub-step-num {
-  background: #22d3ee;
-  color: #083344;
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 /* Help: page purpose is the main copy; (i) stays available but quieter */
@@ -1492,7 +1530,7 @@ html.ui-v2 .app-dialog-card {
   box-shadow: var(--shadow);
 }
 html.ui-v2 .app-dialog-title {
-  color: #f8fafc;
+  color: var(--heading);
 }
 html.ui-v2 .app-dialog-body {
   color: var(--ink);
@@ -1515,6 +1553,77 @@ html.ui-v2 #swe_status.is-loading {
   background: var(--fx-glass);
   color: var(--ink);
   border-color: var(--line);
+}
+
+/* Missing palette roles: generic badges, code, sticky save, tips, scroll, selection */
+html.ui-v2 .badge {
+  background: var(--bg-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+html.ui-v2 code,
+html.ui-v2 kbd,
+html.ui-v2 samp {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.08rem 0.32rem;
+}
+html.ui-v2 pre {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+}
+html.ui-v2 hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+html.ui-v2 mark {
+  background: var(--hit-soft);
+  color: var(--ink);
+}
+html.ui-v2 fieldset {
+  border-color: var(--line);
+}
+html.ui-v2 .form-section legend {
+  color: var(--heading);
+}
+html.ui-v2 .actions-sticky {
+  background: linear-gradient(180deg, rgba(11, 16, 24, 0) 0%, var(--bg-2) 28%);
+  border-top-color: var(--line);
+}
+html.ui-v2 .info-tip-bubble {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+html.ui-v2 .info-tip-bubble::after {
+  border-top-color: var(--panel);
+}
+html.ui-v2 ::selection {
+  background: var(--brand-soft);
+  color: var(--ink);
+}
+html.ui-v2 {
+  scrollbar-color: var(--secondary-hover) #0b1220;
+}
+html.ui-v2 ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html.ui-v2 ::-webkit-scrollbar-track {
+  background: #0b1220;
+}
+html.ui-v2 ::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: 8px;
+}
+html.ui-v2 ::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-hover);
 }
 
 /* Sheet toolbars: wrap tightly; Copy/Batches already live in ⋮ menus */
