@@ -604,6 +604,12 @@
         e.preventDefault();
         var tld = col.getAttribute('data-tld-col') || '';
         var label = endingLabel(tld);
+        if (typeof window.txfConfirm === 'function') {
+          window.txfConfirm('Delete the ' + label + ' list from this view? (Does not change the country database.)').then(function (ok) {
+            if (ok) removeEnding(tld);
+          });
+          return;
+        }
         if (!window.confirm('Delete the ' + label + ' list from this view? (Does not change the country database.)')) {
           return;
         }

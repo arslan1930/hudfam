@@ -364,7 +364,7 @@
     var ids = selectedChecks().map(function (el) { return String(el.value || ''); }).filter(Boolean);
     if (!ids.length) return;
     var confirmMsg = 'Remove ' + ids.length + ' selected site' + (ids.length === 1 ? '' : 's') + '?';
-    if (!window.confirm(confirmMsg)) return;
+    var runRemove = function () {
     var idsInput = form.querySelector('[data-sheet-site-ids]');
     if (idsInput) idsInput.value = ids.join(' ');
     setStatus('Removing selected…', false);
@@ -399,6 +399,13 @@
       hideProcessing();
       setStatus(err.message || 'Could not remove selected.', true);
     });
+    };
+    if (typeof window.txfConfirm === 'function') {
+      window.txfConfirm(confirmMsg).then(function (ok) { if (ok) runRemove(); });
+      return;
+    }
+    if (!window.confirm(confirmMsg)) return;
+    runRemove();
   });
 
   document.addEventListener('keydown', function (e) {

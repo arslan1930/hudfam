@@ -70,6 +70,7 @@ function render_header(string $title, string $panel = ''): void
     echo '</style>';
     echo '<noscript><style>html.is-page-loading #app-processing{display:none!important}html.is-page-loading body{overflow:auto}</style></noscript>';
     echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
+    echo '<script src="' . h(script_asset_url('js/app-dialog.js')) . '" defer></script>';
     // Early scroll restore after same-page POST actions (before paint when possible).
     echo '<script>';
     echo '(function(){try{';
@@ -85,6 +86,14 @@ function render_header(string $title, string $panel = ''): void
     echo '<p class="app-processing-msg" data-processing-msg>Loading…</p>';
     echo '<p class="app-processing-sub muted" data-processing-sub>Please wait.</p>';
     echo '</div></div>';
+    echo '<dialog id="app-dialog" class="app-dialog" aria-labelledby="app-dialog-title">';
+    echo '<form method="dialog" class="app-dialog-card">';
+    echo '<h2 id="app-dialog-title" class="app-dialog-title">Confirm</h2>';
+    echo '<p id="app-dialog-body" class="app-dialog-body"></p>';
+    echo '<div class="app-dialog-actions">';
+    echo '<button type="button" class="btn secondary" data-app-dialog-cancel>Cancel</button>';
+    echo '<button type="submit" class="btn" value="ok" data-app-dialog-ok>Continue</button>';
+    echo '</div></form></dialog>';
 
     if (!$user || $panel === '') {
         return;

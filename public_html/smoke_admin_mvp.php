@@ -1156,19 +1156,19 @@ if (!str_contains($extracted, 'Last pushed')
 
 $semrushHubSmoke = file_get_contents($root . '/pages/admin/semrush_research.php') ?: '';
 $semrushSheetSmoke = file_get_contents($root . '/pages/admin/semrush_sheet.php') ?: '';
-if (!str_contains($semrushHubSmoke, 'json_encode')
+if (!str_contains($semrushHubSmoke, 'confirm_data_attr')
     || !str_contains($semrushHubSmoke, 'Extracted Sites stay unchanged')
     || str_contains($semrushHubSmoke, "confirm('Clear ALL Semrush")) {
     fail('Admin Semrush hub Clear confirm still uses h() inside JS string');
 } else {
-    ok('Admin Semrush hub Clear uses json_encode');
+    ok('Admin Semrush hub Clear uses confirm_data_attr');
 }
 if (!str_contains($semrushHubSmoke, 'csrf_field()')
     || !str_contains($semrushSheetSmoke, 'csrf_field()')
-    || !str_contains($semrushSheetSmoke, 'json_encode')) {
-    fail('Admin Semrush missing csrf_field or sheet json_encode confirm');
+    || !str_contains($semrushSheetSmoke, 'confirm_data_attr')) {
+    fail('Admin Semrush missing csrf_field or sheet confirm_data_attr');
 } else {
-    ok('Admin Semrush csrf_field + sheet json_encode confirm');
+    ok('Admin Semrush csrf_field + sheet confirm_data_attr');
 }
 if (!str_contains($semrushSheetSmoke, 'semrush_sheet_writer_conflict')
     || !str_contains($semrushSheetSmoke, 'data-writer-at')) {
@@ -1284,14 +1284,15 @@ $campAppSmoke = file_get_contents($root . '/pages/admin/email_campaigns_app.php'
 if (str_contains($sweAppSmoke, "confirm('Clear ALL emailed")
     || str_contains($sweAppSmoke, "confirm('Remove ALL")
     || str_contains($sweAppSmoke, "confirm('Remove matching sites")
-    || !str_contains($sweAppSmoke, 'json_encode')
+    || !str_contains($sweAppSmoke, 'confirm_data_attr')
     || str_contains($campAppSmoke, "confirm('Clear ALL emailed")
     || str_contains($campAppSmoke, "confirm('Import into")
     || str_contains($campAppSmoke, "confirm('Remove <?= h(\$sheetCountry)")
-    || !str_contains($campAppSmoke, "json_encode('Clear ALL emailed marks on '")) {
+    || !str_contains($campAppSmoke, 'Clear ALL emailed marks on ')
+    || !str_contains($campAppSmoke, 'confirm_data_attr')) {
     fail('Emails Admin/Final/Campaign confirms still use h() inside JS strings');
 } else {
-    ok('Emails Admin/Final/Campaign confirms use json_encode');
+    ok('Emails Admin/Final/Campaign confirms use confirm_data_attr');
 }
 if (str_contains($campAppSmoke, 'it?\n\nTeam')
     || !str_contains($campAppSmoke, '"\n\nTeam “fetched to "')) {
@@ -3192,7 +3193,7 @@ if (!str_contains($sheetSelJsSmoke, "textContent = allOn ? 'Unselect all' : 'Sel
 }
 if (!str_contains($sheetSelJsSmoke, 'getComputedStyle')
     || !str_contains($sheetSelJsSmoke, 'clearHiddenSelection')
-    || !str_contains($sheetSelJsSmoke, 'window.confirm')
+    || !str_contains($sheetSelJsSmoke, 'txfConfirm')
     || !str_contains($sheetSelJsSmoke, 'sync: syncRemoveButton')) {
     fail('sheet-select-undo.js missing visible-row sync / confirm');
 } else {
@@ -3295,6 +3296,27 @@ if (!str_contains($overlayCssSmoke, 'html.ui-v2 .camp-action-fieldset')
 } else {
     ok('overlay restyles campaign search selected actions + radios');
 }
+$dialogJsSmoke = file_get_contents($root . '/assets/js/app-dialog.js') ?: '';
+$layoutDialogSmoke = file_get_contents($root . '/includes/layout.php') ?: '';
+$assetDialogSmoke = file_get_contents($root . '/asset.php') ?: '';
+$helpersDialogSmoke = file_get_contents($root . '/includes/helpers.php') ?: '';
+if (!is_file($root . '/assets/js/app-dialog.js')
+    || !str_contains($assetDialogSmoke, 'js/app-dialog.js')
+    || !str_contains($layoutDialogSmoke, 'js/app-dialog.js')
+    || !str_contains($layoutDialogSmoke, 'id="app-dialog"')
+    || !str_contains($dialogJsSmoke, 'window.txfConfirm')
+    || !str_contains($dialogJsSmoke, 'window.txfAlert')
+    || !str_contains($helpersDialogSmoke, 'function confirm_data_attr')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .app-dialog')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .empty-state')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .main:has(.page-purpose) .info-tip')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .btn.secondary:hover')
+    || !str_contains($overlayCssSmoke, 'outline: 2px solid #fbbf24')
+    || !str_contains($overlayCssSmoke, 'box-shadow: inset 4px 0 0 #4ade80')) {
+    fail('UI overlay missing in-app dialog, help quieting, or distinct row states');
+} else {
+    ok('in-app dialog + quieter help + distinct sheet row states');
+}
 if (!str_contains($sweUi, 'Copy / Open')
     || !str_contains($sweUi, 'render_sheet_row_more_open')
     || !str_contains($sweUi, 'sheet-cards-mobile')
@@ -3315,11 +3337,11 @@ if (!str_contains($sweUi, 'is-dense')
     || !str_contains($cssUi, '@media (min-width: 900px)')
     || !str_contains($cssUi, '.main.is-sheet-app > .alert-box.alert-ok .alert-title')
     || !str_contains($layoutUiSmoke, 'is-sheet-app')
-    || !str_contains($sweUi, "'Undo' : 'Emailed'")
+    || !str_contains($sweUi, "'Undo mark' : 'Mark emailed'")
     || !str_contains($campUi, "'Undo mark' : 'Mark emailed'")) {
     fail('sheets missing dense rows / compact emailed rule / short mark labels');
 } else {
-    ok('dense sheet rows + compact checkpoint + short Emailed/Undo');
+    ok('dense sheet rows + compact checkpoint + Mark emailed / Undo mark');
 }
 $campLibSmokeUx = file_get_contents($root . '/includes/email_campaigns.php') ?: '';
 if (!str_contains($campUi, 'href="#camp-fill-gaps"')

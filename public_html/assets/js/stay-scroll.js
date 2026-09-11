@@ -125,7 +125,11 @@
         });
       })
       .catch(function (err) {
-        window.alert(err.message || 'Update failed');
+        if (typeof window.txfAlert === 'function') {
+          window.txfAlert(err.message || 'Update failed');
+        } else {
+          window.alert(err.message || 'Update failed');
+        }
         form.removeAttribute('data-busy');
         return null;
       });

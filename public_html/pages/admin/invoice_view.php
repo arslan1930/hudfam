@@ -204,10 +204,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php endif; ?>
     <?php if ($isDraft && !$isManual && !$isPaid): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
-            onsubmit="return confirm(<?= h(json_encode(
-                'Mark this invoice as sent for payment? You can still add more unpaid sites until it is paid.',
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+            <?= confirm_data_attr('Mark this invoice as sent for payment? You can still add more unpaid sites until it is paid.') ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_sent">
         <button class="btn" type="submit">Mark as sent</button>
@@ -215,12 +212,11 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php endif; ?>
     <?php if (!$isPaid && !$isDraft): ?>
       <form method="post" class="inline" action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>"
-            onsubmit="return confirm(<?= h(json_encode(
+            <?= confirm_data_attr(
                 $isManual
                     ? 'Mark this blank invoice as paid?'
-                    : 'Mark this invoice as paid? Linked unpaid sheet rows will be marked Paid.',
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+                    : 'Mark this invoice as paid? Linked unpaid sheet rows will be marked Paid.'
+            ) ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="mark_paid">
         <button class="btn-paid btn-paid-mark" type="submit">Mark paid</button>
@@ -370,7 +366,11 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       e.preventDefault();
       syncSaveState(0);
       if (saveHint) saveHint.hidden = false;
-      alert('Mark as sent needs a total above €0. Use Save as draft while the invoice is incomplete.');
+      if (typeof window.txfAlert === 'function') {
+        window.txfAlert('Mark as sent needs a total above €0. Use Save as draft while the invoice is incomplete.');
+      } else {
+        alert('Mark as sent needs a total above €0. Use Save as draft while the invoice is incomplete.');
+      }
     }
   });
   syncRemove();
@@ -450,7 +450,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 <section class="card no-print invoice-history">
   <h2><?= label_with_info('History', 'Who changed this invoice and which sites were on it then. Article doc and LIVE URL are internal — they do not print on the bill.') ?></h2>
   <?php if (!$invoiceEvents): ?>
-    <p class="muted">No history yet.</p>
+    <div class="empty-state"><p>No history yet.</p></div>
   <?php else: ?>
     <ol class="invoice-history-list">
       <?php foreach ($invoiceEvents as $ev): ?>

@@ -2664,7 +2664,7 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
         </div>
       </fieldset>
       <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
-        <button type="button" class="btn danger" data-swe-apply>Update (Enter)</button>
+        <button type="button" class="btn danger" data-swe-apply>Delete site</button>
         <button type="button" class="btn secondary" data-swe-clear>Clear selection</button>
       </div>
     </div>

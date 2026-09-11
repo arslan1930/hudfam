@@ -221,9 +221,10 @@
     if (rmBtn) rmBtn.textContent = 'Remove ' + n + ' matching';
     if (show) {
       removeForm.setAttribute(
-        'onsubmit',
-        'return confirm(' + JSON.stringify(data.remove_confirm || ('Remove ' + n + ' matching site(s)?')) + ');'
+        'data-confirm',
+        data.remove_confirm || ('Remove ' + n + ' matching site(s)?')
       );
+      removeForm.removeAttribute('onsubmit');
     }
   }
 

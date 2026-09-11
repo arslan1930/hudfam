@@ -144,8 +144,7 @@ render_breadcrumbs([
           <td class="actions">
             <a class="btn secondary small" href="<?= h($sheetHref) ?>">Open sheet</a>
             <a class="btn secondary small" href="<?= h($hub) ?>&amp;country=<?= rawurlencode($c) ?>#add-sites">Add more</a>
-            <form method="post" action="<?= h($hub) ?>" style="display:inline"
-                  onsubmit="return confirm(<?= h(json_encode('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.', JSON_UNESCAPED_UNICODE)) ?>);">
+            <form method="post" action="<?= h($hub) ?>" style="display:inline" <?= confirm_data_attr('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.') ?>>
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_country">
               <input type="hidden" name="country" value="<?= h($c) ?>">

@@ -467,21 +467,30 @@
     if (!form) return;
     e.preventDefault();
     var confirmMsg = btn.getAttribute('data-confirm');
-    if (kind !== 'push' && confirmMsg && !window.confirm(confirmMsg)) return;
-    var siteInput = form.querySelector('[name="site_id"]');
-    if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
-    if (kind === 'mark') {
-      var sentInput = form.querySelector('[name="email_sent"]');
-      if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+    function submitSheetAction() {
+      var siteInput = form.querySelector('[name="site_id"]');
+      if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
+      if (kind === 'mark') {
+        var sentInput = form.querySelector('[name="email_sent"]');
+        if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+      }
+      if (kind === 'push') {
+        form.setAttribute('data-admin-conflict', btn.getAttribute('data-admin-conflict') || '0');
+      }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
     }
-    if (kind === 'push') {
-      form.setAttribute('data-admin-conflict', btn.getAttribute('data-admin-conflict') || '0');
+    if (kind !== 'push' && confirmMsg) {
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(confirmMsg).then(function (ok) { if (ok) submitSheetAction(); });
+        return;
+      }
+      if (!window.confirm(confirmMsg)) return;
     }
-    if (typeof form.requestSubmit === 'function') {
-      form.requestSubmit();
-    } else {
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    }
+    submitSheetAction();
   });
 
   if (pushBtn && !pushBtn.disabled) {
@@ -709,7 +718,7 @@
       var markTitle = sent
         ? 'Clear emailed mark on this site only'
         : 'Mark emailed · remove from Admin (Final keeps a copy)';
-      markBtn.textContent = sent ? 'Undo' : 'Emailed';
+      markBtn.textContent = sent ? 'Undo mark' : 'Mark emailed';
       markBtn.title = markTitle;
       markBtn.setAttribute('aria-label', markTitle);
       markBtn.classList.toggle('secondary', sent);

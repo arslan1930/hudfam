@@ -4751,7 +4751,7 @@ function render_email_campaign_super_search(
         </div>
       </fieldset>
       <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
-        <button type="button" class="btn danger" data-camp-apply>Update (Enter)</button>
+        <button type="button" class="btn danger" data-camp-apply>Delete site</button>
         <a class="btn secondary" data-camp-open-drafts href="#" hidden
            title="Open Campaign drafts with this site filled into {domain}/{country} tokens">
           Open drafts for site

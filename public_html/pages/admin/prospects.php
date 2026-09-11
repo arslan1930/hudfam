@@ -824,10 +824,7 @@ if (!$inCountry && !$emptyCountry) {
                   <td class="actions">
                     <a class="btn small" href="<?= h($openUrl) ?>"><?= h(prospect_open_in_folder_label($hitCountry)) ?></a>
                     <form method="post" action="index.php?page=admin_prospects#super-search" class="inline-form"
-                          onsubmit="return confirm(<?= h(json_encode(
-                              'Remove ' . $hitDomain . ' from ' . $countryLabel . '?',
-                              JSON_UNESCAPED_UNICODE
-                          )) ?>);">
+                          <?= confirm_data_attr('Remove ' . $hitDomain . ' from ' . $countryLabel . '?') ?>>
                       <?= csrf_field() ?>
                       <input type="hidden" name="action" value="remove_site">
                       <input type="hidden" name="site_id" value="<?= (int) $hit['id'] ?>">
@@ -1249,11 +1246,10 @@ $clearPersonUrl = prospect_country_sheet_url($emptyCountry ? '_none' : $countryN
     method="post"
     action="index.php?page=admin_prospects&amp;country=<?= urlencode($countryName) ?>#remove-by-list"
     enctype="multipart/form-data"
-    onsubmit="return confirm(<?= h(json_encode(
+    <?= confirm_data_attr(
         'Remove all matching sites from this list in ' . $countryName
-        . ' (Our database and Extracting sites)? This removes from the whole country folder, not only a person or niche filter.',
-        JSON_UNESCAPED_UNICODE
-    )) ?>);"
+        . ' (Our database and Extracting sites)? This removes from the whole country folder, not only a person or niche filter.'
+    ) ?>
   >
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">

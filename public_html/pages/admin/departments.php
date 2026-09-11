@@ -383,8 +383,7 @@ render_breadcrumbs([
         <td><?= h((string) $m['username']) ?></td>
         <td class="muted"><?= h((string) ($m['email'] ?: '—')) ?></td>
         <td>
-          <form method="post" action="<?= h($deptFolderUrl()) ?>#members"
-                onsubmit="return confirm(<?= h(json_encode($removeMsg, JSON_UNESCAPED_UNICODE)) ?>);"
+          <form method="post" action="<?= h($deptFolderUrl()) ?>#members" <?= confirm_data_attr($removeMsg) ?>
                 class="inline-form">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="remove_member">
@@ -619,8 +618,7 @@ render_breadcrumbs([
           <td class="muted<?= $overdue ? ' dept-due-overdue' : '' ?>" data-due-cell><?= h((string) ($t['due_date'] ?: '—')) ?></td>
           <td>
             <form method="post" action="<?= h($deptFolderUrl()) ?>"
-                  class="inline-form"
-                  onsubmit="return confirm(<?= h(json_encode('Delete this task?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  class="inline-form" <?= confirm_data_attr('Delete this task?') ?>>
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="delete_task">
               <input type="hidden" name="task_id" value="<?= (int) $t['id'] ?>">

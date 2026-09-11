@@ -541,8 +541,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <form
     id="extracted-remove-matching"
     method="post"
-    action="<?= h($listBase) ?>"
-    onsubmit="return confirm(<?= h(json_encode('Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?', JSON_UNESCAPED_UNICODE)) ?>);"
+    action="<?= h($listBase) ?>" <?= confirm_data_attr('Remove ' . (int) $searchMatchCount . ' site(s) matching “' . $q . '”?') ?>
     style="margin-bottom:0.85rem"
     <?= ($q !== '' && $searchMatchCount > 0) ? '' : ' hidden' ?>
   >
@@ -586,8 +585,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
       ], $perPage);
       ?>
     </div>
-    <form method="post" action="<?= h($listBase) ?>"
-          onsubmit="return confirm(<?= h(json_encode('Remove ALL ' . (int) $countryTotal . ' URLs from ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+    <form method="post" action="<?= h($listBase) ?>" <?= confirm_data_attr('Remove ALL ' . (int) $countryTotal . ' URLs from ' . $countryName . '?') ?>>
       <?= csrf_field() ?>
       <input type="hidden" name="action" value="remove_all">
       <input type="hidden" name="per_page" value="<?= (int) $perPage ?>">
@@ -606,8 +604,7 @@ render_header('Extracted Sites · ' . $countryName, 'admin');
   <form
     method="post"
     action="<?= h($listBase) ?>#remove-by-list"
-    enctype="multipart/form-data"
-    onsubmit="return confirm(<?= h(json_encode('Remove all matching sites from this list in ' . $countryName . '?', JSON_UNESCAPED_UNICODE)) ?>);"
+    enctype="multipart/form-data" <?= confirm_data_attr('Remove all matching sites from this list in ' . $countryName . '?') ?>
   >
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="remove_list">

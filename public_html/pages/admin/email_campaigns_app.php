@@ -673,8 +673,7 @@ if ($sheetId > 0) {
             <?php endforeach; ?>
             <?php if ((int) $sentStats['sent'] > 0): ?>
             <form method="post" action="<?= h($formAction) ?>" class="swe-clear-all-emailed"
-                  data-swe-clear-all-emailed
-                  onsubmit="return confirm(<?= h(json_encode('Clear ALL emailed marks on ' . $sheetCountry . " in this project?\n\nYou can resend and track this sheet from scratch.", JSON_UNESCAPED_UNICODE)) ?>);">
+                  data-swe-clear-all-emailed <?= confirm_data_attr('Clear ALL emailed marks on ' . $sheetCountry . " in this project?\n\nYou can resend and track this sheet from scratch.") ?>>
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_all_emailed">
               <input type="hidden" name="q" value="<?= h($q) ?>">
@@ -1149,11 +1148,9 @@ if ($sheetId > 0) {
       </p>
       <?php endif; ?>
       <form method="post" action="<?= h($formAction) ?>" style="margin-top:.85rem"
-            data-show-processing="Filling gaps…"
-            onsubmit="return confirm(<?= h(json_encode(
-                'Fill gaps from Final then Admin into ' . $sheetCountry . "?\n\nCampaign emailed marks stay on this sheet.\nAdmin and Final are not changed.",
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+            data-show-processing="Filling gaps…" <?= confirm_data_attr(
+                'Fill gaps from Final then Admin into ' . $sheetCountry . "?\n\nCampaign emailed marks stay on this sheet.\nAdmin and Final are not changed."
+            ) ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="fill_gaps">
         <p class="actions" style="margin-top:0.75rem">
@@ -1173,11 +1170,9 @@ if ($sheetId > 0) {
         Previously removed sites and emails are never re-added (use <strong>Allow again</strong> below if a removal was a mistake).
       </p>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Importing sites…"
-            onsubmit="return confirm(<?= h(json_encode(
-                'Import into ' . $sheetCountry . "?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added.",
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+            data-show-processing="Importing sites…" <?= confirm_data_attr(
+                'Import into ' . $sheetCountry . "?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added."
+            ) ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
@@ -1346,13 +1341,11 @@ if ($sheetId > 0) {
     <div class="card" style="margin-top:1rem">
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Deleting country sheet…"
-            onsubmit="return confirm(<?= h(json_encode(
+            data-show-processing="Deleting country sheet…" <?= confirm_data_attr(
                 'Remove ' . $sheetCountry . ' from project “' . $projectName . "”?\n\n"
                 . "This deletes this country’s campaign rows and the “fetched to " . $projectName . "” stamp on Team.\n"
-                . "Other campaigns are not affected.\nTeam sites stay.",
-                JSON_UNESCAPED_UNICODE
-            )) ?>);">
+                . "Other campaigns are not affected.\nTeam sites stay."
+            ) ?>>
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Remove country from project</button>
@@ -1748,7 +1741,7 @@ if ($projectIdParam > 0) {
                     <div class="camp-hub-row-actions">
                       <a class="btn secondary small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
                       <form method="post" action="<?= h($projectForm) ?>"
-                            onsubmit="return confirm(<?= h(json_encode('Remove “' . $cName . '” from this project?', JSON_UNESCAPED_UNICODE)) ?>);">
+                            <?= confirm_data_attr('Remove “' . $cName . '” from this project?') ?>>
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="delete_country">
                         <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
@@ -1902,8 +1895,7 @@ if ($projectIdParam > 0) {
                   <?php endif; ?>
                   <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
                   <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
-                  <form method="post" action="<?= h($projectForm) ?>"
-                        onsubmit="return confirm(<?= h(json_encode('Delete draft “' . (string) $d['title'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <form method="post" action="<?= h($projectForm) ?>" <?= confirm_data_attr('Delete draft “' . (string) $d['title'] . '”?') ?>>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete_draft">
                     <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
@@ -1997,12 +1989,10 @@ if ($projectIdParam > 0) {
           <h2>Danger zone</h2>
           <p class="muted">Deletes this project and all of its country sheets, contacts, drafts, and Team “fetched to this campaign” stamps. Team sites stay. Other campaigns are not affected.</p>
           <form method="post" action="<?= h($projectForm) ?>"
-                data-show-processing="Deleting project…"
-                onsubmit="return confirm(<?= h(json_encode(
+                data-show-processing="Deleting project…" <?= confirm_data_attr(
                     'Delete project “' . $projectName . '” and all country sheets and drafts inside it?'
-                    . "\n\nTeam “fetched to " . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.',
-                    JSON_UNESCAPED_UNICODE
-                )) ?>);">
+                    . "\n\nTeam “fetched to " . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.'
+                ) ?>>
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="delete_project">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
@@ -2303,7 +2293,7 @@ $projectCount = count($projects);
                 <div class="camp-hub-row-actions">
                   <a class="btn secondary small" href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">Open</a>
                   <form method="post" action="<?= h($campBase) ?>"
-                        onsubmit="return confirm(<?= h(json_encode('Delete project “' . $pName . '” and all its countries?', JSON_UNESCAPED_UNICODE)) ?>);">
+                        <?= confirm_data_attr('Delete project “' . $pName . '” and all its countries?') ?>>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete_project">
                     <input type="hidden" name="project_id" value="<?= (int) $p['id'] ?>">
