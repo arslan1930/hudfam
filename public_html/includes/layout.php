@@ -55,6 +55,7 @@ function render_header(string $title, string $panel = ''): void
         echo '<meta name="csrf-token" content="' . h(csrf_token()) . '">';
     }
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
+    echo '<link rel="icon" href="' . h($logo) . '" type="image/svg+xml">';
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
@@ -64,7 +65,7 @@ function render_header(string $title, string $panel = ''): void
         echo '<link rel="stylesheet" href="' . h($cssNew) . '">';
     }
     echo '<style>';
-    echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(31,35,40,.42)}';
+    echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(2,6,23,.72)}';
     echo 'html.is-page-loading body{overflow:hidden}';
     echo '.ui-skip{position:absolute;left:-9999px}';
     echo '</style>';

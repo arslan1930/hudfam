@@ -8,10 +8,10 @@
  *   --muted / --placeholder        secondary + empty field text
  *   --line / --input / --input-line  card edges and field chrome
  *   --brand / --on-brand          primary actions (cyan on dark teal)
- *   --ok / --warn / --bad / --danger  status + destructive
+ *   --ok / --warn / --bad         status: done / waiting / danger (one each)
  *   --info                        opened-row (sky, distinct from selected cyan)
- *   --hit                         search-hit outline (amber)
- *   --accent                      login stripe only (violet)
+ *   --hit                         search-hit outline (orange, not warn gold)
+ *   --accent                      cyan family (same as --brand-2; no extra violet)
  *
  * Safe rules: no global sidebar-link hover, no smooth scroll,
  * no hidden cards, no scale() on table rows.
@@ -39,22 +39,23 @@ html.ui-v2 {
   --warn-ink: #fde68a;
   --bad: #f87171;
   --bad-soft: rgba(248, 113, 113, 0.16);
-  --danger: #e11d48;
+  --danger: #f87171;
+  --danger-hover: #fca5a5;
   --on-danger: #fff;
   --info: #38bdf8;
   --info-soft: rgba(56, 189, 248, 0.16);
-  --hit: #fbbf24;
-  --hit-soft: rgba(251, 191, 36, 0.16);
-  --accent: #a78bfa;
-  --accent-soft: rgba(167, 139, 250, 0.16);
+  --hit: #fb923c;
+  --hit-soft: rgba(251, 146, 60, 0.18);
+  --accent: #7dd3fc;
+  --accent-soft: rgba(125, 211, 252, 0.16);
   --input: #1e293b;
   --input-line: #94a3b8;
-  --placeholder: #94a3b8;
-  --disabled: #1e293b;
+  --placeholder: #7c8a99;
+  --disabled: #0c1220;
   --disabled-ink: #64748b;
   --secondary: #334155;
   --secondary-hover: #475569;
-  --secondary-line: #94a3b8;
+  --secondary-line: #64748b;
   --code-bg: #0b1220;
   --code-ink: #cbd5e1;
   --heading: #f8fafc;
@@ -354,14 +355,14 @@ html.ui-v2 button.btn.secondary:hover {
 html.ui-v2 .btn.danger:not(.secondary),
 html.ui-v2 button.btn.danger:not(.secondary) {
   background: var(--danger);
-  border-color: var(--bad);
+  border-color: var(--danger-hover);
   color: var(--on-danger) !important;
   filter: none;
   box-shadow: none;
 }
 html.ui-v2 .btn.danger:not(.secondary):hover,
 html.ui-v2 button.btn.danger:not(.secondary):hover {
-  background: var(--bad);
+  background: var(--danger-hover);
   border-color: #fecdd3;
   color: var(--on-danger) !important;
   filter: none;
@@ -574,14 +575,14 @@ html.ui-v2 .swe-td-email .swe-email-field input:focus {
 html.ui-v2 .login-wrap {
   background:
     radial-gradient(ellipse at 18% 12%, rgba(34, 211, 238, 0.16), transparent 45%),
-    radial-gradient(ellipse at 85% 88%, var(--accent-soft), transparent 42%),
+    radial-gradient(ellipse at 85% 88%, var(--brand-soft), transparent 42%),
     var(--grad-page);
 }
 html.ui-v2 .login-card {
   box-shadow: 0 16px 48px rgba(2, 6, 23, 0.45);
 }
 html.ui-v2 .login-card::before {
-  background: linear-gradient(90deg, var(--brand), var(--accent));
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
 }
 html.ui-v2 .login-card .btn {
   width: 100%;
@@ -616,8 +617,8 @@ html.ui-v2 .alert-error {
   box-shadow: 0 0 22px rgba(251, 113, 133, 0.2);
 }
 html.ui-v2 .alert-fade {
-  border-color: rgba(96, 165, 250, 0.45);
-  box-shadow: 0 0 18px rgba(96, 165, 250, 0.16);
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.16);
 }
 html.ui-v2 .alert-ok .alert-icon {
   background: var(--ok);
@@ -865,9 +866,9 @@ html.ui-v2 .route-skip-list li {
   border-left-color: #94a3b8;
 }
 html.ui-v2 .route-check-list li.is-new {
-  background: rgba(52, 211, 153, 0.14);
-  border-color: rgba(52, 211, 153, 0.4);
-  border-left-color: #34d399;
+  background: var(--ok-soft);
+  border-color: rgba(74, 222, 128, 0.4);
+  border-left-color: var(--ok);
 }
 html.ui-v2 tr.swe-row-new td {
   animation: fx-swe-row-flash 1.4s ease-out 1;
@@ -968,20 +969,20 @@ html.ui-v2 .dashboard-attention a:hover {
 html.ui-v2 .dashboard-attention a[href*="awaiting=1"],
 html.ui-v2 .dashboard-attention a[href*="admin_departments"] {
   border-color: rgba(34, 211, 238, 0.5);
-  color: #7dd3fc;
+  color: var(--brand-2);
 }
 html.ui-v2 .dashboard-attention a[href*="filter=draft"],
 html.ui-v2 .dashboard-attention a[href*="must_change"] {
   border-color: rgba(251, 191, 36, 0.55);
-  color: #fbbf24;
+  color: var(--warn);
 }
 html.ui-v2 .dashboard-attention a[href*="filter=unpaid"] {
   border-color: rgba(248, 113, 113, 0.55);
-  color: #f87171;
+  color: var(--bad);
 }
 html.ui-v2 .dashboard-attention a[href*="sites_with_emails"] {
   border-color: rgba(74, 222, 128, 0.5);
-  color: #4ade80;
+  color: var(--ok);
 }
 html.ui-v2 .launch-card.sheet-search-hit {
   outline-color: var(--hit);
@@ -999,9 +1000,9 @@ html.ui-v2 input:-webkit-autofill:hover,
 html.ui-v2 input:-webkit-autofill:focus,
 html.ui-v2 textarea:-webkit-autofill,
 html.ui-v2 select:-webkit-autofill {
-  -webkit-text-fill-color: #e8f1ff;
-  caret-color: #e8f1ff;
-  box-shadow: 0 0 0 1000px #0b1224 inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  box-shadow: 0 0 0 1000px var(--input) inset;
   transition: background-color 9999s ease-out;
 }
 
@@ -1045,14 +1046,16 @@ html.ui-v2 .camp-hub-team-btn.is-off .camp-hub-team-dot {
   background: var(--disabled-ink);
 }
 html.ui-v2 .camp-hub-row-actions button.btn.secondary {
+  background: transparent;
   color: var(--bad) !important;
-  border-color: var(--bad);
-  background: var(--bad-soft);
+  border-color: rgba(248, 113, 113, 0.5);
+  box-shadow: none;
+  filter: none;
 }
 html.ui-v2 .camp-hub-row-actions button.btn.secondary:hover {
   background: var(--bad-soft);
   border-color: var(--bad);
-  color: var(--bad) !important;
+  color: var(--on-danger) !important;
 }
 html.ui-v2 .password-toggle {
   background: rgba(8, 18, 36, 0.9);
@@ -1365,19 +1368,35 @@ html.ui-v2 .invoice-doc label {
 /* Publisher row tints must beat zebra overlay. */
 html.ui-v2 .site-price-row[data-tint="yellow"] td,
 html.ui-v2 .site-price-add[data-tint="yellow"] td {
-  background: rgba(253, 230, 138, 0.28) !important;
+  background: var(--warn-soft) !important;
 }
 html.ui-v2 .site-price-row[data-tint="pink"] td,
 html.ui-v2 .site-price-add[data-tint="pink"] td {
-  background: rgba(254, 205, 211, 0.28) !important;
+  background: var(--bad-soft) !important;
 }
 html.ui-v2 .site-price-row[data-tint="blue"] td,
 html.ui-v2 .site-price-add[data-tint="blue"] td {
-  background: rgba(191, 219, 254, 0.28) !important;
+  background: var(--info-soft) !important;
 }
 html.ui-v2 .site-price-row[data-tint="green"] td,
 html.ui-v2 .site-price-add[data-tint="green"] td {
-  background: rgba(187, 247, 208, 0.28) !important;
+  background: var(--ok-soft) !important;
+}
+html.ui-v2 .site-price-row[data-tint="yellow"] td:first-child,
+html.ui-v2 .site-price-add[data-tint="yellow"] td:first-child {
+  box-shadow: inset 4px 0 0 var(--warn);
+}
+html.ui-v2 .site-price-row[data-tint="pink"] td:first-child,
+html.ui-v2 .site-price-add[data-tint="pink"] td:first-child {
+  box-shadow: inset 4px 0 0 var(--bad);
+}
+html.ui-v2 .site-price-row[data-tint="blue"] td:first-child,
+html.ui-v2 .site-price-add[data-tint="blue"] td:first-child {
+  box-shadow: inset 4px 0 0 var(--info);
+}
+html.ui-v2 .site-price-row[data-tint="green"] td:first-child,
+html.ui-v2 .site-price-add[data-tint="green"] td:first-child {
+  box-shadow: inset 4px 0 0 var(--ok);
 }
 
 /* Row states must be distinct: selected = cyan bar, opened = sky, emailed = muted green, search = amber outline */
@@ -1428,27 +1447,27 @@ html.ui-v2 .site-price-sheet tr.sheet-search-hit td,
 html.ui-v2 .folder.sheet-search-hit,
 html.ui-v2 .launch-card.sheet-search-hit,
 html.ui-v2 .extracted-plain-item.sheet-search-hit {
-  outline: 2px solid #fbbf24 !important;
+  outline: 2px solid #fb923c !important;
   outline-offset: -2px;
 }
 html.ui-v2 #prospect-site-table tr.is-just-added td,
 html.ui-v2 #prospect-site-table tr.is-just-added:hover td,
 html.ui-v2 tbody tr.is-just-added td {
-  background: rgba(52, 211, 153, 0.46) !important;
-  color: #f8fafc;
+  background: rgba(74, 222, 128, 0.32) !important;
+  color: var(--heading);
 }
 html.ui-v2 #prospect-site-table tr.is-just-added td:first-child {
-  box-shadow: inset 5px 0 0 #34d399;
+  box-shadow: inset 5px 0 0 var(--ok);
 }
 html.ui-v2 .dept-task-mine td {
-  background: rgba(52, 211, 153, 0.22) !important;
-  box-shadow: inset 4px 0 0 #34d399;
-  color: #f8fafc;
+  background: rgba(74, 222, 128, 0.22) !important;
+  box-shadow: inset 4px 0 0 var(--ok);
+  color: var(--heading);
 }
 html.ui-v2 .dept-task-overdue td {
   background: rgba(248, 113, 113, 0.26) !important;
-  box-shadow: inset 4px 0 0 #f87171;
-  color: #f8fafc;
+  box-shadow: inset 4px 0 0 var(--bad);
+  color: var(--heading);
 }
 html.ui-v2 .tld-site-row:hover {
   background: rgba(34, 211, 238, 0.18);
@@ -1573,6 +1592,63 @@ html.ui-v2 #swe_status.is-loading {
   background: var(--fx-glass);
   color: var(--ink);
   border-color: var(--line);
+}
+
+html.ui-v2 .site-price-sheet .site-price-input {
+  background: var(--input);
+  color: var(--ink);
+  border-color: var(--input-line);
+}
+html.ui-v2 .site-price-id.is-locked {
+  background: var(--input);
+  color: var(--ink);
+}
+html.ui-v2 .site-price-status.is-color-green {
+  background-color: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok-ink);
+}
+html.ui-v2 .site-price-status.is-color-blue {
+  background-color: var(--info-soft);
+  border-color: var(--info);
+  color: var(--brand-2);
+}
+html.ui-v2 .site-price-status.is-color-rose {
+  background-color: var(--bad-soft);
+  border-color: var(--bad);
+  color: var(--bad);
+}
+html.ui-v2 .site-price-status.is-color-teal {
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-2);
+}
+html.ui-v2 .site-price-status.is-color-brown {
+  background-color: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn-ink);
+}
+html.ui-v2 .site-price-status.is-color-grey {
+  background-color: var(--secondary);
+  border-color: var(--secondary-line);
+  color: var(--ink);
+}
+html.ui-v2 .site-price-status option {
+  background: var(--input);
+  color: var(--ink);
+}
+html.ui-v2 .site-price-tint.is-none,
+html.ui-v2 .site-price-color-panel .site-price-tint.is-none {
+  background: var(--input);
+}
+html.ui-v2 .site-price-lane td,
+html.ui-v2 table.sheet-cards-mobile tr.site-price-lane,
+html.ui-v2 table.sheet-cards-mobile tr.site-price-lane td {
+  background: var(--table-head) !important;
+  color: var(--table-head-ink);
+}
+html.ui-v2 .site-price-lane-title {
+  color: var(--heading);
 }
 
 /* Missing palette roles: generic badges, code, sticky save, tips, scroll, selection */
