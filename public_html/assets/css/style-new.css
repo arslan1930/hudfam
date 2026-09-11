@@ -1594,6 +1594,54 @@ html.ui-v2 #swe_status.is-loading {
   border-color: var(--line);
 }
 
+html.ui-v2 .site-price-sheet .site-price-input {
+  background: var(--input);
+  color: var(--ink);
+  border-color: var(--input-line);
+}
+html.ui-v2 .site-price-id.is-locked {
+  background: var(--input);
+  color: var(--ink);
+}
+html.ui-v2 .site-price-status.is-color-green {
+  background-color: var(--ok-soft);
+  border-color: var(--ok);
+  color: var(--ok-ink);
+}
+html.ui-v2 .site-price-status.is-color-blue {
+  background-color: var(--info-soft);
+  border-color: var(--info);
+  color: var(--brand-2);
+}
+html.ui-v2 .site-price-status.is-color-rose {
+  background-color: var(--bad-soft);
+  border-color: var(--bad);
+  color: var(--bad);
+}
+html.ui-v2 .site-price-status.is-color-teal {
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-2);
+}
+html.ui-v2 .site-price-status.is-color-brown {
+  background-color: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn-ink);
+}
+html.ui-v2 .site-price-status.is-color-grey {
+  background-color: var(--secondary);
+  border-color: var(--secondary-line);
+  color: var(--ink);
+}
+html.ui-v2 .site-price-status option {
+  background: var(--input);
+  color: var(--ink);
+}
+html.ui-v2 .site-price-tint.is-none,
+html.ui-v2 .site-price-color-panel .site-price-tint.is-none {
+  background: var(--input);
+}
+
 /* Missing palette roles: generic badges, code, sticky save, tips, scroll, selection */
 html.ui-v2 .badge {
   background: var(--bg-2);

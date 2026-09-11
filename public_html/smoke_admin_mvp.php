@@ -3331,6 +3331,7 @@ if (!is_file($root . '/assets/js/app-dialog.js')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 ::selection')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .info-tip-bubble')
     || !str_contains($overlayCssSmoke, 'html.ui-v2 .invoice-doc input')
+    || !str_contains($overlayCssSmoke, 'html.ui-v2 .site-price-id.is-locked')
     || str_contains($overlayCssSmoke, '#a78bfa')
     || str_contains($overlayCssSmoke, '#34d399')) {
     fail('UI overlay missing in-app dialog, help quieting, or distinct row states');
