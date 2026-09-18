@@ -616,20 +616,47 @@ $completedCount = 0;
 $completedProfit = 0.0;
 $liveFilledCount = 0;
 $siteCount = 0;
+$namedSiteCount = 0;
+$bannerCount = 0;
+$textlinkCount = 0;
+$docCount = 0;
+$paidCount = 0;
 foreach ($items as $row) {
     $siteCount++;
     $profit = order_profit($row['owner_price'], $row['decided_price']);
     $totalOwner += parse_money($row['owner_price']);
     $totalDecided += parse_money($row['decided_price']);
     $totalProfit += $profit;
+    if (trim((string) ($row['site_name'] ?? '')) !== '') {
+        $namedSiteCount++;
+    }
+    $placementKind = normalize_placement_type($row['placement_type'] ?? '');
+    if ($placementKind === 'banner') {
+        $bannerCount++;
+    } elseif ($placementKind === 'textlink') {
+        $textlinkCount++;
+    }
+    if (trim((string) ($row['article_doc_url'] ?? '')) !== '') {
+        $docCount++;
+    }
     if (trim((string) ($row['live_url'] ?? '')) !== '') {
         $liveFilledCount++;
+    }
+    if (order_is_paid($row)) {
+        $paidCount++;
     }
     if (order_is_completed($row)) {
         $completedCount++;
         $completedProfit += $profit;
     }
 }
+$orderColCount = static function (string $key, int $n, string $prefix = '', string $title = ''): string {
+    $text = $prefix !== '' ? ($prefix . ' ' . $n) : (string) $n;
+    $tip = $title !== '' ? $title : 'On this page';
+    return '<span class="order-col-count" data-col-count="' . h($key) . '"'
+        . ($prefix !== '' ? ' data-col-prefix="' . h($prefix) . '"' : '')
+        . ' title="' . h($tip) . '">' . h($text) . '</span>';
+};
 
 $colspan = 16;
 $placementOptions = order_placement_options();
@@ -894,15 +921,15 @@ if ($compactUnpaidStats && !$showPagingStats) {
           <th class="col-date"><?= label_with_info('Date', 'Order date.') ?></th>
           <th class="col-admin"><?= label_with_info('Admin', 'Which admin this order belongs to.') ?></th>
           <th class="col-client"><?= label_with_info('Client email or name', 'Free text — email or a short name. No client folder or extra details required.') ?></th>
-          <th class="col-site"><?= label_with_info('Site name', 'Website or domain for this row (e.g. site.com).') ?></th>
-          <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?></th>
+          <th class="col-site"><?= label_with_info('Site name', 'Website or domain for this row (e.g. site.com).') ?><?= $orderColCount('sites', $namedSiteCount, '', 'Sites with a name on this page') ?></th>
+          <th class="col-placement"><?= label_with_info('Banner / Textlink', 'Leave empty for articles. Choose Banner or Textlink only when this placement is not an article.') ?><?= $orderColCount('banner', $bannerCount, 'B', 'Banner rows on this page') ?><?= $orderColCount('textlink', $textlinkCount, 'T', 'Textlink rows on this page') ?></th>
           <th class="col-price"><?= label_with_info('Owner', 'Owner price — what you pay the site owner / publisher.') ?></th>
           <th class="col-price"><?= label_with_info('Decided', 'Decided price — what the client pays you. Profit = Decided − Owner.') ?></th>
-          <th class="col-doc"><?= label_with_info('Article doc', 'Google Doc for the piece that was or will be published. Not the live page. Internal only — not printed on the invoice.') ?></th>
-          <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?></th>
+          <th class="col-doc"><?= label_with_info('Article doc', 'Google Doc for the piece that was or will be published. Not the live page. Internal only — not printed on the invoice.') ?><?= $orderColCount('docs', $docCount, '', 'Article docs on this page') ?></th>
+          <th class="col-live"><?= label_with_info('LIVE URL', $isProcessing ? 'Required to mark completed. Filling this and saving does not complete the order — use Mark completed.' : 'Live placement URL. Required for completed orders.') ?><?= $orderColCount('live', $liveFilledCount, '', 'Live URLs on this page') ?></th>
           <th class="col-paid"><?= $isProcessing
               ? label_with_info('Complete', 'Mark this row completed after the live URL is filled. Moves it to Completed orders and sets Website prices to Completed.')
-              : label_with_info('Paid', 'Click Mark paid after payment, or mark Paid on the invoice. Green Paid means it is already paid. Paid rows cannot be pushed to a new invoice.') ?></th>
+              : label_with_info('Paid', 'Click Mark paid after payment, or mark Paid on the invoice. Green Paid means it is already paid. Paid rows cannot be pushed to a new invoice.') ?><?php if ($isCompleted): ?><?= $orderColCount('paid', $paidCount, '', 'Paid rows on this page') ?><?php endif; ?></th>
           <th class="col-profit"><?= label_with_info('Profit', 'Auto-calculated: Decided price − Owner price.') ?></th>
           <th class="col-month"><?= label_with_info('Month', 'Article month, or for Banner/Textlink the start month plus end month.') ?></th>
           <th class="col-del"><?= label_with_info('Remove', 'Deletes this row after confirmation. Cannot be undone.') ?></th>
@@ -1173,17 +1200,17 @@ if ($compactUnpaidStats && !$showPagingStats) {
       <?php if ($siteCount > 0): ?>
       <tfoot>
         <tr>
-          <td colspan="8"><strong>Page totals</strong></td>
+          <td colspan="6"><strong>Page totals</strong></td>
+          <td class="col-site"><?= $orderColCount('sites', $namedSiteCount, '', 'Sites with a name on this page') ?></td>
+          <td class="col-placement"><?= $orderColCount('banner', $bannerCount, 'B', 'Banner rows on this page') ?><?= $orderColCount('textlink', $textlinkCount, 'T', 'Textlink rows on this page') ?></td>
           <td class="col-price"><strong data-total-owner><?= h(format_money($totalOwner)) ?></strong></td>
           <td class="col-price"><strong data-total-decided><?= h(format_money($totalDecided)) ?></strong></td>
-          <td class="col-doc"></td>
+          <td class="col-doc"><?= $orderColCount('docs', $docCount, '', 'Article docs on this page') ?></td>
           <td class="col-live">
-            <?php if ($isProcessing): ?>
-              <span class="muted">With live URL </span>
-              <strong data-total-completed><?= (int) $liveFilledCount ?></strong>
-            <?php endif; ?>
+            <span class="muted">With live URL </span>
+            <strong data-total-completed data-col-count="live" title="Live URLs on this page"><?= (int) $liveFilledCount ?></strong>
           </td>
-          <td class="col-paid"></td>
+          <td class="col-paid"><?php if ($isCompleted): ?><?= $orderColCount('paid', $paidCount, '', 'Paid rows on this page') ?><?php endif; ?></td>
           <td class="col-profit"><strong data-total-profit class="<?= $totalProfit >= 0 ? 'profit-pos' : 'profit-neg' ?>"><?= h(format_money($totalProfit)) ?></strong></td>
           <td colspan="2"></td>
         </tr>
@@ -1338,10 +1365,17 @@ if ($compactUnpaidStats && !$showPagingStats) {
   function refresh() {
     var ownerTotal = 0, decidedTotal = 0, profitTotal = 0;
     var completed = 0, completedProfit = 0, sites = 0;
+    var namedSites = 0, banners = 0, textlinks = 0, docs = 0, paids = 0;
     document.querySelectorAll('[data-row]').forEach(function (row) {
       syncPlacementRow(row);
       syncPushCheck(row);
       sites++;
+      if (String((row.querySelector('[name^="site_name"]') || {}).value || '').trim()) namedSites++;
+      var placement = String((row.querySelector('[data-placement]') || {}).value || '').trim();
+      if (placement === 'banner') banners++;
+      else if (placement === 'textlink') textlinks++;
+      if (String((row.querySelector('[name^="article_doc_url"]') || {}).value || '').trim()) docs++;
+      if (row.classList.contains('is-paid') || row.querySelector('.btn-paid.is-paid')) paids++;
       var o = num((row.querySelector('[data-owner]') || {}).value);
       var d = num((row.querySelector('[data-decided]') || {}).value);
       var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
@@ -1383,10 +1417,22 @@ if ($compactUnpaidStats && !$showPagingStats) {
       el.classList.toggle('profit-pos', val >= 0);
       el.classList.toggle('profit-neg', val < 0);
     }
+    function setCount(key, n) {
+      document.querySelectorAll('[data-col-count="' + key + '"]').forEach(function (el) {
+        var prefix = el.getAttribute('data-col-prefix') || '';
+        el.textContent = prefix ? (prefix + ' ' + n) : String(n);
+      });
+    }
     setText('[data-total-owner]', money(ownerTotal));
     setText('[data-total-decided]', money(decidedTotal));
     setMoney('[data-total-profit]', profitTotal);
     setText('[data-total-completed]', String(completed));
+    setCount('sites', namedSites);
+    setCount('banner', banners);
+    setCount('textlink', textlinks);
+    setCount('docs', docs);
+    setCount('live', completed);
+    setCount('paid', paids);
     setText('[data-summary-sites]', String(sites));
     setText('[data-summary-completed]', String(completed));
     setText('[data-summary-decided]', money(decidedTotal));

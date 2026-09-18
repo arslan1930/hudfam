@@ -4045,6 +4045,21 @@ textarea[hidden],
 .order-sheet .col-admin { min-width: 196px; width: 212px; }
 .order-sheet .col-client { min-width: 200px; }
 .order-sheet .col-site { min-width: 188px; }
+.order-col-count {
+  display: inline-block;
+  min-width: 1.15rem;
+  margin-left: 0.28rem;
+  padding: 0.02rem 0.32rem;
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.12);
+  color: #0e7490;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.order-sheet tfoot .order-col-count { margin-left: 0.15rem; }
 .order-sheet .col-placement { min-width: 148px; width: 152px; }
 .order-row:not(.is-placement) .cell-end-month { display: none; }
 .site-cell {
