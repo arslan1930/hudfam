@@ -83,7 +83,7 @@ function ensure_invoice_schema(): void
           amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
           qty INT NOT NULL DEFAULT 1,
           line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-          order_item_ids VARCHAR(500) NOT NULL DEFAULT '',
+          order_item_ids TEXT NOT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           INDEX (invoice_id, sort_order),
           CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
@@ -143,8 +143,16 @@ function ensure_invoice_schema(): void
         $itemCols = $pdo->query('SHOW COLUMNS FROM invoice_items')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('order_item_ids', $itemCols, true)) {
             $pdo->exec(
-                "ALTER TABLE invoice_items ADD COLUMN order_item_ids VARCHAR(500) NOT NULL DEFAULT '' AFTER line_total"
+                "ALTER TABLE invoice_items ADD COLUMN order_item_ids TEXT NOT NULL AFTER line_total"
             );
+        } else {
+            $idCol = $pdo->query("SHOW COLUMNS FROM invoice_items LIKE 'order_item_ids'")->fetch(PDO::FETCH_ASSOC);
+            $idType = strtolower((string) ($idCol['Type'] ?? ''));
+            // A grouped line stores every order id. VARCHAR(500) rejects a long list
+            // and the insert fails, so the push never lands on the invoice.
+            if ($idType !== '' && !str_contains($idType, 'text')) {
+                $pdo->exec('ALTER TABLE invoice_items MODIFY order_item_ids TEXT NOT NULL');
+            }
         }
     } catch (Throwable $e) {
         // ignore
@@ -980,12 +988,71 @@ function invoice_match_open_for_bill_as(string $billAs): ?array
     if ($key === '') {
         return null;
     }
-    foreach (list_invoices_open_for_append(200) as $inv) {
-        if (invoice_bill_as_key(invoice_display_bill_as($inv)) === $key) {
-            return $inv;
+    ensure_invoice_schema();
+    try {
+        $stmt = db()->prepare(
+            "SELECT i.*,
+                    (SELECT COUNT(*) FROM invoice_items ii WHERE ii.invoice_id = i.id) AS item_count
+             FROM invoices i
+             WHERE COALESCE(i.payment_status, 'unpaid') <> 'paid'
+               AND LOWER(TRIM(CASE
+                    WHEN TRIM(COALESCE(i.bill_to_name, '')) <> '' THEN i.bill_to_name
+                    ELSE COALESCE(i.client_name, '')
+               END)) = ?
+             ORDER BY CASE WHEN COALESCE(i.work_status, 'done') = 'draft' THEN 1 ELSE 0 END,
+                      i.invoice_date DESC, i.id DESC
+             LIMIT 1"
+        );
+        $stmt->execute([$key]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            return $row;
+        }
+    } catch (Throwable $e) {
+        foreach (list_invoices_open_for_append(200) as $inv) {
+            if (invoice_bill_as_key(invoice_display_bill_as($inv)) === $key) {
+                return $inv;
+            }
         }
     }
     return null;
+}
+
+/**
+ * One Draft/Waiting invoice per bill-as, including bills older than the picker cap.
+ * Waiting (already sent) wins over Draft. Used so Add to existing can select a bill
+ * that is not in the recent 50-row list.
+ *
+ * @return array<string, array{id:int,number:string,total:string,status:string}>
+ */
+function invoice_open_append_targets(): array
+{
+    ensure_invoice_schema();
+    try {
+        $rows = db()->query(
+            "SELECT id, invoice_number, bill_to_name, client_name, work_status, payment_status, total_amount
+             FROM invoices
+             WHERE COALESCE(payment_status, 'unpaid') <> 'paid'
+             ORDER BY CASE WHEN COALESCE(work_status, 'done') = 'draft' THEN 1 ELSE 0 END,
+                      invoice_date DESC, id DESC"
+        )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $inv) {
+        $key = invoice_bill_as_key(invoice_display_bill_as($inv));
+        if ($key === '' || isset($out[$key])) {
+            continue;
+        }
+        $out[$key] = [
+            'id' => (int) ($inv['id'] ?? 0),
+            'number' => (string) ($inv['invoice_number'] ?? ''),
+            'total' => number_format((float) ($inv['total_amount'] ?? 0), 2, '.', ''),
+            'status' => invoice_append_status_label($inv),
+        ];
+    }
+    return $out;
 }
 
 /**
@@ -1786,6 +1853,47 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
 }
 
 /**
+ * Description for the order ids that will actually be added.
+ * A grouped line can list URLs whose rows are already on this invoice; qty is
+ * then only the new ids, so the text must drop the ones we skip.
+ *
+ * @param list<int> $keep
+ */
+function invoice_description_for_kept_order_ids(array $keep, string $fallback): string
+{
+    if (!$keep) {
+        return $fallback;
+    }
+    $byId = [];
+    foreach (list_order_items_by_ids($keep) as $row) {
+        $byId[(int) ($row['id'] ?? 0)] = $row;
+    }
+    $urls = [];
+    $placement = [];
+    foreach ($keep as $oid) {
+        $row = $byId[(int) $oid] ?? null;
+        if (!$row) {
+            continue;
+        }
+        if (order_is_placement($row)) {
+            $placement[] = order_invoice_description($row);
+            continue;
+        }
+        $url = trim((string) ($row['live_url'] ?? ''));
+        if ($url !== '') {
+            $urls[] = $url;
+        }
+    }
+    if ($placement !== [] && $urls === []) {
+        return count($placement) === 1 ? $placement[0] : implode("\n\n", $placement);
+    }
+    if ($urls !== [] && $placement === []) {
+        return 'Article Published -' . "\n" . implode("\n", $urls);
+    }
+    return $fallback;
+}
+
+/**
  * Add unpaid LIVE order lines onto an existing unpaid invoice (same invoice number).
  *
  * @param list<array{description:string,amount:float|string,qty:int|string,line_total?:float|string,order_item_ids?:list<int>}> $lines
@@ -1864,8 +1972,12 @@ function append_orders_to_invoice(int $invoiceId, array $lines, array $picked): 
         $qty = count($keep);
         $amount = (float) $line['amount'];
         $lineTotal = round($amount * $qty, 2);
+        $desc = (string) $line['description'];
+        if (count($keep) !== count($line['order_item_ids'])) {
+            $desc = invoice_description_for_kept_order_ids($keep, $desc);
+        }
         $filtered[] = [
-            'description' => $line['description'],
+            'description' => $desc,
             'amount' => $amount,
             'qty' => $qty,
             'line_total' => $lineTotal,

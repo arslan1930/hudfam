@@ -60,17 +60,7 @@ if ($preselectExistingId < 1 && !$forceNew && $precheck && count($billAsLabels) 
 }
 $openInvoices = invoice_with_open_append_option($openInvoices, $appendInvoice);
 $emptyStats = (!$invoiceable && !$selectedFromSheet) ? invoice_generate_empty_stats() : null;
-$unpaidByBill = [];
-foreach ($openInvoices as $openInv) {
-    $billKey = invoice_bill_as_key(invoice_display_bill_as($openInv));
-    if ($billKey === '' || isset($unpaidByBill[$billKey])) {
-        continue;
-    }
-    $unpaidByBill[$billKey] = [
-        'id' => (int) ($openInv['id'] ?? 0),
-        'number' => (string) ($openInv['invoice_number'] ?? ''),
-    ];
-}
+$unpaidByBill = invoice_open_append_targets();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) post('action') === 'generate') {
     try {
@@ -552,6 +542,29 @@ render_header('Generate invoice', 'admin');
     if (typeof hit === 'object') return hit;
     return { id: 0, number: String(hit) };
   }
+  function ensureExistOption(hit, billAsLabel) {
+    if (!existSelect || !hit || !hit.id) return;
+    var id = String(hit.id);
+    var found = null;
+    Array.prototype.forEach.call(existSelect.options, function (opt) {
+      if (opt.value === id) found = opt;
+    });
+    if (!found) {
+      found = document.createElement('option');
+      found.value = id;
+      found.setAttribute('data-number', String(hit.number || ''));
+      found.setAttribute('data-total', String(hit.total != null ? hit.total : '0'));
+      found.setAttribute('data-bill-as', String(billAsLabel || ''));
+      found.setAttribute('data-status', String(hit.status || ''));
+      found.setAttribute('data-search', (String(hit.number || '') + ' ' + String(billAsLabel || '') + ' ' + String(hit.status || '')).toLowerCase());
+      var bits = [String(hit.number || id)];
+      if (hit.status) bits.push(String(hit.status));
+      if (billAsLabel) bits.push(String(billAsLabel));
+      found.textContent = bits.join(' · ');
+      existSelect.appendChild(found);
+    }
+    existSelect.value = id;
+  }
   function maybeAutoExisting() {
     if (forceNew || userPickedDest || destMode() === 'existing') return false;
     var checked = boxesIn(rows).filter(function (cb) { return cb.checked; });
@@ -563,7 +576,7 @@ render_header('Generate invoice', 'admin');
     if (!existingRadio || existingRadio.disabled) return false;
     existingRadio.checked = true;
     if (existSelect && hit.id) {
-      existSelect.value = String(hit.id);
+      ensureExistOption(hit, labels[0]);
     } else if (existSelect && hit.number) {
       Array.prototype.forEach.call(existSelect.options, function (opt) {
         if (String(opt.getAttribute('data-number') || '') === String(hit.number)) {

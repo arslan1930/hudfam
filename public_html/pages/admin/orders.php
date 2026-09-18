@@ -223,6 +223,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 0, $sites, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls
             );
         };
+        $saveSubset = static function (array $siteSubset) use ($notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls): void {
+            if (!$siteSubset) {
+                return;
+            }
+            save_order_sheet_rows(
+                0, $siteSubset, $notes, $placements, $countries, $orderMonths, $endMonths, $orderYears, $owner, $decided, $urls, $labels, $adminIds, $dates, $docUrls
+            );
+        };
+        $splitPostedSites = static function (array $onlyIds) use ($sites): array {
+            $flip = [];
+            foreach ($onlyIds as $id) {
+                $id = (int) $id;
+                if ($id > 0) {
+                    $flip[$id] = true;
+                }
+            }
+            $pickedSites = [];
+            $otherSites = [];
+            foreach ($sites as $id => $siteName) {
+                if (isset($flip[(int) $id])) {
+                    $pickedSites[$id] = $siteName;
+                } else {
+                    $otherSites[$id] = $siteName;
+                }
+            }
+            return [$pickedSites, $otherSites];
+        };
 
         if ($action === 'add_row') {
             if (!$isProcessing) {
@@ -286,11 +313,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isProcessing) {
                 throw new InvalidArgumentException('Mark completed is only on the Processing folder.');
             }
-            try {
-                $saveCurrent();
-            } catch (Throwable $e) {
-                // Still complete ticked rows from posted live URLs if other rows fail validation.
-            }
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $oneId = (int) post('item_id');
             if ($oneId > 0) {
@@ -300,6 +322,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$selectedIds) {
                 throw new InvalidArgumentException('Tick at least one row (with a live URL) to mark completed.');
             }
+            [$pickedSites, $otherSites] = $splitPostedSites($selectedIds);
+            $otherSaveError = '';
+            try {
+                $saveSubset($otherSites);
+            } catch (Throwable $e) {
+                $otherSaveError = $e->getMessage();
+            }
+            // Rows being completed must save first. A Banner/Textlink site-name
+            // or price error used to be swallowed, then the row was marked done
+            // with the old placement fields.
+            $saveSubset($pickedSites);
             $result = order_mark_items_completed($selectedIds, $urls, (int) ($user['id'] ?? 0));
             if ($result['ok'] < 1) {
                 throw new InvalidArgumentException(
@@ -309,6 +342,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = 'Marked ' . (int) $result['ok'] . ' order' . ($result['ok'] === 1 ? '' : 's') . ' completed.';
             if ($result['errors']) {
                 $msg .= ' ' . implode(' ', $result['errors']);
+            }
+            if ($otherSaveError !== '') {
+                $msg .= ' Other rows on this page were not saved: ' . $otherSaveError;
             }
             flash('ok', $msg);
             $jumpId = $oneId > 0 && count($selectedIds) === 1
@@ -344,19 +380,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isCompleted) {
                 throw new InvalidArgumentException('Push to invoice is only on Completed orders.');
             }
-            $sheetSaveError = '';
-            try {
-                $saveCurrent();
-            } catch (Throwable $e) {
-                // A different row on this page can fail price checks. Still push
-                // the ticked rows that did save.
-                $sheetSaveError = $e->getMessage();
-            }
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
             if (!$selectedIds) {
                 throw new InvalidArgumentException('Tick at least one unpaid completed row to push to an invoice.');
             }
+            [$pickedSites, $otherSites] = $splitPostedSites($selectedIds);
+            $sheetSaveError = '';
+            try {
+                $saveSubset($otherSites);
+            } catch (Throwable $e) {
+                $sheetSaveError = $e->getMessage();
+            }
+            // Ticked rows must save. Otherwise a price or Banner/Textlink error
+            // is thrown away and the invoice is built from the old row.
+            $saveSubset($pickedSites);
             $picked = list_order_items_by_ids($selectedIds);
             $onOpen = function_exists('order_items_on_open_invoices')
                 ? order_items_on_open_invoices($selectedIds)
@@ -410,7 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if ($sheetSaveError !== '') {
-                flash('error', $sheetSaveError);
+                flash('ok', 'The ticked rows were sent to the invoice. Other rows on this page were not saved: ' . $sheetSaveError);
             }
             redirect(invoice_generate_href_for_orders($ready, $matchId));
         }
@@ -1532,12 +1570,24 @@ if ($compactUnpaidStats && !$showPagingStats) {
         var client = String((row && row.querySelector('[name^="client_label"]') || {}).value || '').trim();
         if (!live || !country || !client) pushNotReady = true;
       });
+      var pushMissingSite = false;
+      document.querySelectorAll('[data-push-check]').forEach(function (cb) {
+        if (!cb.checked || cb.disabled || pushMissingSite) return;
+        var row = cb.closest('[data-row]');
+        var placement = String((row && row.querySelector('[data-placement]') || {}).value || '').trim();
+        var site = String((row && row.querySelector('[name^="site_name"]') || {}).value || '').trim();
+        if (placement && !site) pushMissingSite = true;
+      });
       if (!any) {
         halt('Tick at least one unpaid completed row to push to an invoice.');
         return;
       }
       if (pushNotReady) {
         halt('Every ticked row needs a live URL, country, and client email or name before generating an invoice.');
+        return;
+      }
+      if (pushMissingSite) {
+        halt('Banner / Textlink rows need a site name when LIVE URL is filled.');
         return;
       }
     }
@@ -1577,6 +1627,16 @@ if ($compactUnpaidStats && !$showPagingStats) {
       }
       if (missingClient) {
         halt('Need a client email or name on every ticked row before completing. Save first if you just typed it.');
+        return;
+      }
+      var missingPlacementSite = false;
+      completeRows.forEach(function (row) {
+        var placement = String((row.querySelector('[data-placement]') || {}).value || '').trim();
+        var site = String((row.querySelector('[name^="site_name"]') || {}).value || '').trim();
+        if (placement && !site) missingPlacementSite = true;
+      });
+      if (missingPlacementSite) {
+        halt('Banner / Textlink rows need a site name when LIVE URL is filled.');
         return;
       }
     }

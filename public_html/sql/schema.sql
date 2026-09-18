@@ -467,7 +467,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   qty INT NOT NULL DEFAULT 1,
   line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-  order_item_ids VARCHAR(500) NOT NULL DEFAULT '',
+  order_item_ids TEXT NOT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   INDEX (invoice_id, sort_order),
   CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE

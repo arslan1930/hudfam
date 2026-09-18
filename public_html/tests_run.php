@@ -5969,6 +5969,72 @@ try {
         ]));
     }
 
+    $idCol = db()->query("SHOW COLUMNS FROM invoice_items LIKE 'order_item_ids'")->fetch(PDO::FETCH_ASSOC);
+    if ($idCol && str_contains(strtolower((string) ($idCol['Type'] ?? '')), 'text')) {
+        pass('invoice order ids column holds a long grouped list');
+    } else {
+        fail('order_item_ids still too short: ' . json_encode($idCol));
+    }
+    $bannerTargets = invoice_open_append_targets();
+    $bannerMatch = invoice_match_open_for_bill_as('Banner@example.com');
+    if ($bannerMatch
+        && isset($bannerTargets['banner@example.com'])
+        && (int) ($bannerTargets['banner@example.com']['id'] ?? 0) === (int) ($bannerMatch['id'] ?? 0)
+        && (int) ($bannerMatch['id'] ?? 0) > 0) {
+        pass('Add to existing finds a bill outside the recent picker');
+    } else {
+        fail('bill-as match missed the open banner invoice');
+    }
+
+    $dropA = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
+    $dropB = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
+    update_order_item((int) $dropA, 0, [
+        'site_name' => 'group-drop-a.example',
+        'country' => 'Germany',
+        'client_label' => 'groupdrop@example.com',
+        'owner_price' => 5,
+        'decided_price' => 12,
+        'live_url' => 'https://example.com/group-drop-a',
+        'order_month' => 2,
+        'order_year' => 2026,
+    ]);
+    update_order_item((int) $dropB, 0, [
+        'site_name' => 'group-drop-b.example',
+        'country' => 'Germany',
+        'client_label' => 'groupdrop@example.com',
+        'owner_price' => 5,
+        'decided_price' => 12,
+        'live_url' => 'https://example.com/group-drop-b',
+        'order_month' => 2,
+        'order_year' => 2026,
+    ]);
+    order_mark_completed((int) $dropA, 'https://example.com/group-drop-a', (int) $adminUser['id']);
+    order_mark_completed((int) $dropB, 'https://example.com/group-drop-b', (int) $adminUser['id']);
+    $dropAReady = list_invoiceable_order_items_by_ids([(int) $dropA]);
+    $dropBoth = list_order_items_by_ids([(int) $dropA, (int) $dropB]);
+    $dropBOnly = list_invoiceable_order_items_by_ids([(int) $dropB]);
+    if (count($dropAReady) === 1 && count($dropBoth) === 2 && count($dropBOnly) === 1) {
+        $dropInv = create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_name' => 'groupdrop@example.com',
+            'bill_to_name' => 'groupdrop@example.com',
+        ], build_invoice_lines_from_orders($dropAReady, false), (int) $adminUser['id']);
+        $grouped = build_invoice_lines_from_orders($dropBoth, true);
+        append_orders_to_invoice((int) $dropInv, $grouped, $dropBOnly);
+        $dropItems = list_invoice_items((int) $dropInv);
+        $addedLine = $dropItems[count($dropItems) - 1] ?? [];
+        $addedDesc = (string) ($addedLine['description'] ?? '');
+        if ((int) ($addedLine['qty'] ?? 0) === 1
+            && str_contains($addedDesc, 'https://example.com/group-drop-b')
+            && !str_contains($addedDesc, 'group-drop-a')) {
+            pass('grouped append drops urls already on this invoice');
+        } else {
+            fail('grouped append kept a stale description: ' . json_encode($addedLine));
+        }
+    } else {
+        fail('grouped append setup missing rows');
+    }
+
     $rebillDomain = 'txfom-rebill-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';
     $rebillId = add_order_pipeline_row((int) $adminUser['id'], 'rebill@example.com');
     update_order_item((int) $rebillId, 0, [

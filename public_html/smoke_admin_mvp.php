@@ -1716,10 +1716,17 @@ if (str_contains($ordersPage, 'if ($isProcessing):') && str_contains($ordersPage
     fail('orders Push to invoice not gated to Completed');
 }
 $pushNeedle = strpos($ordersPage, "action === 'push_invoice'");
-$saveAfterPush = $pushNeedle !== false ? strpos($ordersPage, '$saveCurrent();', $pushNeedle) : false;
 $nextActionAfterPush = $pushNeedle !== false ? strpos($ordersPage, "action ===", $pushNeedle + 10) : false;
-if ($pushNeedle === false || $saveAfterPush === false
-    || ($nextActionAfterPush !== false && $saveAfterPush > $nextActionAfterPush)) {
+$pushChunk = '';
+if ($pushNeedle !== false) {
+    $pushChunk = substr(
+        $ordersPage,
+        $pushNeedle,
+        ($nextActionAfterPush !== false ? $nextActionAfterPush : strlen($ordersPage)) - $pushNeedle
+    );
+}
+if ($pushNeedle === false
+    || (!str_contains($pushChunk, '$saveCurrent();') && !str_contains($pushChunk, '$saveSubset('))) {
     fail('orders Push to invoice must save the sheet first');
 } else {
     ok('orders Push to invoice saves sheet first');
