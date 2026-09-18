@@ -4046,6 +4046,7 @@ textarea[hidden],
 .order-sheet .col-client { min-width: 200px; }
 .order-sheet .col-site { min-width: 188px; }
 .order-sheet .col-placement { min-width: 148px; width: 152px; }
+.order-row:not(.is-placement) .cell-end-month { display: none; }
 .site-cell {
   display: grid;
   gap: 0.28rem;

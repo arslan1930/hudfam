@@ -5883,9 +5883,90 @@ try {
             } else {
                 fail('append allowed onto a paid invoice');
             }
+            $kept = invoice_with_open_append_option(
+                [['id' => 1, 'payment_status' => 'unpaid', 'work_status' => 'done']],
+                ['id' => 9, 'payment_status' => 'unpaid', 'work_status' => 'done', 'item_count' => 2, 'bill_to_name' => 'x']
+            );
+            if ((int) ($kept[0]['id'] ?? 0) === 9) {
+                pass('add-to-existing list keeps an older unpaid invoice');
+            } else {
+                fail('older unpaid invoice dropped from add-to-existing list');
+            }
         } else {
             fail('pipeline invoice kept a client folder link');
         }
+    }
+
+    $bannerId = add_order_pipeline_row((int) $adminUser['id'], 'banner@example.com');
+    $textId = add_order_pipeline_row((int) $adminUser['id'], 'banner@example.com');
+    update_order_item((int) $bannerId, 0, [
+        'site_name' => 'banner-host.example',
+        'placement_type' => 'banner',
+        'country' => 'Germany',
+        'client_label' => 'banner@example.com',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => date('Y-m-d'),
+        'owner_price' => 8,
+        'decided_price' => 18,
+        'live_url' => 'https://example.com/banner-live',
+        'order_month' => 1,
+        'period_end_month' => 12,
+        'order_year' => 2026,
+    ]);
+    update_order_item((int) $textId, 0, [
+        'site_name' => 'textlink-host.example',
+        'placement_type' => 'textlink',
+        'country' => 'Germany',
+        'client_label' => 'banner@example.com',
+        'admin_user_id' => (int) $adminUser['id'],
+        'order_date' => date('Y-m-d'),
+        'owner_price' => 4,
+        'decided_price' => 9,
+        'live_url' => 'https://example.com/textlink-live',
+        'order_month' => 3,
+        'period_end_month' => 6,
+        'order_year' => 2026,
+    ]);
+    order_mark_completed((int) $bannerId, 'https://example.com/banner-live', (int) $adminUser['id']);
+    order_mark_completed((int) $textId, 'https://example.com/textlink-live', (int) $adminUser['id']);
+    $bannerRow = get_order_item((int) $bannerId);
+    $textRow = get_order_item((int) $textId);
+    $placeReady = list_invoiceable_order_items_by_ids([(int) $bannerId, (int) $textId]);
+    $placeLines = build_invoice_lines_from_orders($placeReady, true);
+    $placeDescs = array_map(static fn ($line) => (string) ($line['description'] ?? ''), $placeLines);
+    $bannerOk = $bannerRow
+        && ($bannerRow['placement_type'] ?? '') === 'banner'
+        && (int) ($bannerRow['period_end_month'] ?? 0) === 12
+        && str_contains(order_invoice_description($bannerRow), 'Banner per year')
+        && str_contains(order_invoice_description($bannerRow), 'January')
+        && str_contains(order_invoice_description($bannerRow), 'December');
+    $textOk = $textRow
+        && ($textRow['placement_type'] ?? '') === 'textlink'
+        && (int) ($textRow['period_end_month'] ?? 0) === 6
+        && str_contains(order_invoice_description($textRow), 'Textlink per year')
+        && str_contains(order_invoice_description($textRow), 'March')
+        && str_contains(order_invoice_description($textRow), 'June');
+    $linesOk = count($placeLines) === 2
+        && !str_contains(implode("\n", $placeDescs), 'Article Published');
+    if ($bannerOk && $textOk && $linesOk && count($placeReady) === 2) {
+        $placeInv = create_invoice([
+            'invoice_date' => date('Y-m-d'),
+            'client_name' => 'banner@example.com',
+            'bill_to_name' => 'banner@example.com',
+        ], $placeLines, (int) $adminUser['id']);
+        $placeItems = list_invoice_items((int) $placeInv);
+        if (count($placeItems) === 2) {
+            pass('Banner and Textlink save, then push onto an invoice as placement lines');
+        } else {
+            fail('Banner/Textlink invoice lines missing: ' . json_encode($placeItems));
+        }
+    } else {
+        fail('Banner/Textlink add failed: ' . json_encode([
+            'banner' => is_array($bannerRow) ? ($bannerRow['placement_type'] ?? null) : null,
+            'text' => is_array($textRow) ? ($textRow['placement_type'] ?? null) : null,
+            'ready' => count($placeReady),
+            'descs' => $placeDescs,
+        ]));
     }
 
     $rebillDomain = 'txfom-rebill-' . substr(sha1((string) microtime(true)), 0, 8) . '.com';

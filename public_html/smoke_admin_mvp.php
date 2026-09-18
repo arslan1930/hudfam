@@ -2018,6 +2018,7 @@ if (!str_contains($invoicesLib, 'function append_orders_to_invoice')
     || !str_contains($invoiceGenerate, 'selectedExistBillAs')
     || !str_contains($invoiceGenerate, 'maybeAutoExisting')
     || !str_contains($invoiceGenerate, 'Use a new invoice instead')
+    || !str_contains($invoicesLib, 'function invoice_with_open_append_option')
     || !str_contains($invoicesLib, 'function invoice_append_status_label')
     || !str_contains($invoicesLib, 'function invoice_generate_append_href')
     || str_contains($invoiceGenerate, 'name="invoice_number"')) {

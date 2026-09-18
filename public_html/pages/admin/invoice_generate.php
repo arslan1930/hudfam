@@ -18,17 +18,15 @@ if ($selectedFromSheet) {
 $forceNew = (string) (get('new') ?: post('new')) === '1';
 $openInvoices = list_invoices_open_for_append(50);
 $preselectExistingId = $forceNew ? 0 : (int) get('existing');
-$preselectFound = false;
-foreach ($openInvoices as $openInv) {
-    if ((int) ($openInv['id'] ?? 0) === $preselectExistingId) {
-        $preselectFound = true;
-        break;
+$appendInvoice = null;
+if ($preselectExistingId > 0) {
+    $candidate = get_invoice($preselectExistingId);
+    if ($candidate && invoice_can_append_orders($candidate)) {
+        $appendInvoice = $candidate;
+    } else {
+        $preselectExistingId = 0;
     }
 }
-if (!$preselectFound) {
-    $preselectExistingId = 0;
-}
-$appendInvoice = $preselectExistingId > 0 ? get_invoice($preselectExistingId) : null;
 $filterBillAs = '';
 if ($appendInvoice && !$selectedFromSheet) {
     $filterBillAs = invoice_display_bill_as($appendInvoice);
@@ -60,6 +58,7 @@ if ($preselectExistingId < 1 && !$forceNew && $precheck && count($billAsLabels) 
         $filterBillAs = invoice_display_bill_as($appendInvoice);
     }
 }
+$openInvoices = invoice_with_open_append_option($openInvoices, $appendInvoice);
 $emptyStats = (!$invoiceable && !$selectedFromSheet) ? invoice_generate_empty_stats() : null;
 $unpaidByBill = [];
 foreach ($openInvoices as $openInv) {

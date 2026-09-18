@@ -344,7 +344,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$isCompleted) {
                 throw new InvalidArgumentException('Push to invoice is only on Completed orders.');
             }
-            $saveCurrent();
+            $sheetSaveError = '';
+            try {
+                $saveCurrent();
+            } catch (Throwable $e) {
+                // A different row on this page can fail price checks. Still push
+                // the ticked rows that did save.
+                $sheetSaveError = $e->getMessage();
+            }
             $selectedIds = array_map('intval', (array) ($_POST['item_ids'] ?? []));
             $selectedIds = array_values(array_filter($selectedIds, static fn ($id) => $id > 0));
             if (!$selectedIds) {
@@ -401,6 +408,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $match = invoice_match_open_for_bill_as($readyLabels[0]);
                     $matchId = (int) ($match['id'] ?? 0);
                 }
+            }
+            if ($sheetSaveError !== '') {
+                flash('error', $sheetSaveError);
             }
             redirect(invoice_generate_href_for_orders($ready, $matchId));
         }
@@ -1098,7 +1108,7 @@ if ($compactUnpaidStats && !$showPagingStats) {
                 <?php endforeach; ?>
               </select>
               <select class="cell-input cell-select cell-end-month" name="period_end_month[<?= $id ?>]"
-                      aria-label="End month" <?= $isPlacement ? '' : 'hidden' ?>>
+                      aria-label="End month">
                 <option value="">End</option>
                 <?php foreach ($months as $num => $label): ?>
                   <option value="<?= (int) $num ?>" <?= $endMonthVal === (int) $num ? 'selected' : '' ?>><?= h($label) ?></option>
@@ -1245,9 +1255,8 @@ if ($compactUnpaidStats && !$showPagingStats) {
     if (live) {
       live.placeholder = isPlacement ? 'site.com (required)' : '(empty until live)';
     }
-    if (endMonth) {
-      endMonth.hidden = !isPlacement;
-      if (!isPlacement) endMonth.value = '';
+    if (endMonth && !isPlacement) {
+      endMonth.value = '';
     }
     if (startMonth) {
       var emptyOpt = startMonth.querySelector('option[value=""]');
@@ -1593,6 +1602,10 @@ if ($compactUnpaidStats && !$showPagingStats) {
     var priceMsg = '';
     document.querySelectorAll('[data-row]').forEach(function (row) {
       if (bad) return;
+      if (action === 'push_invoice') {
+        var pushCb = row.querySelector('[data-push-check]');
+        if (!pushCb || !pushCb.checked || pushCb.disabled) return;
+      }
       var live = String((row.querySelector('[data-live]') || {}).value || '').trim();
       if (!live) return;
       var ownerEl = row.querySelector('[data-owner]');

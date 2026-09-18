@@ -145,17 +145,20 @@
     if (!form || form.nodeName !== 'FORM') return;
     if (form.closest && form.closest('#app-dialog')) return;
     if (String(form.getAttribute('method') || '').toLowerCase() === 'dialog') return;
-    if (form.getAttribute('data-confirm-ok') === '1') {
-      form.removeAttribute('data-confirm-ok');
-      return;
-    }
     var submitter = e.submitter || null;
     var msg = '';
     if (submitter && submitter.getAttribute) {
       msg = String(submitter.getAttribute('data-confirm') || '');
     }
     if (!msg) msg = String(form.getAttribute('data-confirm') || '');
+    // Invoice "Add to existing" reuses data-confirm-ok on a form with no
+    // data-confirm. Only consume the flag when this dialog owns the confirm,
+    // otherwise the page handler never sees it and the post is cancelled.
     if (!msg) return;
+    if (form.getAttribute('data-confirm-ok') === '1') {
+      form.removeAttribute('data-confirm-ok');
+      return;
+    }
     e.preventDefault();
     e.stopImmediatePropagation();
     window.txfConfirm(msg).then(function (ok) {

@@ -1187,6 +1187,7 @@ function save_order_sheet_rows(
 ): int {
     ensure_order_schema();
     $saved = 0;
+    $errors = [];
     foreach ($sites as $id => $siteName) {
         $itemId = (int) $id;
         if ($itemId <= 0) {
@@ -1216,8 +1217,15 @@ function save_order_sheet_rows(
         if (array_key_exists($id, $articleDocUrls) || array_key_exists((string) $id, $articleDocUrls)) {
             $data['article_doc_url'] = $articleDocUrls[$id] ?? '';
         }
-        update_order_item($itemId, $clientId, $data);
-        $saved++;
+        try {
+            update_order_item($itemId, $clientId, $data);
+            $saved++;
+        } catch (Throwable $e) {
+            $errors[] = $e->getMessage();
+        }
+    }
+    if ($errors) {
+        throw new InvalidArgumentException($errors[0]);
     }
     return $saved;
 }

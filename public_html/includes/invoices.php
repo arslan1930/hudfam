@@ -401,6 +401,36 @@ function list_invoices_open_for_append(int $limit = 50): array
 }
 
 /**
+ * Keep a chosen unpaid invoice in the Add-to-existing list even when it is
+ * older than the recent-invoice cap. Without this the radio is "existing"
+ * but the select has no match, and Generate stays disabled.
+ *
+ * @param list<array<string,mixed>> $open
+ * @return list<array<string,mixed>>
+ */
+function invoice_with_open_append_option(array $open, ?array $invoice): array
+{
+    if (!$invoice || !invoice_can_append_orders($invoice)) {
+        return $open;
+    }
+    $id = (int) ($invoice['id'] ?? 0);
+    if ($id < 1) {
+        return $open;
+    }
+    foreach ($open as $row) {
+        if ((int) ($row['id'] ?? 0) === $id) {
+            return $open;
+        }
+    }
+    if (!array_key_exists('item_count', $invoice)) {
+        $invoice['item_count'] = count(list_invoice_items($id));
+    }
+    array_unshift($open, $invoice);
+
+    return $open;
+}
+
+/**
  * @param array{q?:string,filter?:string,client_id?:int} $opts
  * @return array{0:string,1:list<mixed>}
  */
