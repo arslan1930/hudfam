@@ -5,12 +5,14 @@
  *
  * Expects $invoice + $items.
  * Set $editable = true for blank-invoice in-document editing (not for print).
+ * Set $editableLines = true to edit description / amount / qty on an unpaid invoice.
  */
 if (!isset($invoice) || !is_array($invoice)) {
     return;
 }
 $items = $items ?? [];
 $editable = !empty($editable);
+$editableLines = $editable || !empty($editableLines);
 $editableBill = $editable || !empty($editableBill);
 $billAs = function_exists('invoice_display_bill_as')
     ? invoice_display_bill_as($invoice)
@@ -28,16 +30,17 @@ $adminNote = function_exists('invoice_admin_note')
 
 /** Ensure at least one empty editable row when there are no items. */
 $editRows = $items;
-if ($editable && !$editRows) {
+if ($editableLines && !$editRows) {
     $editRows = [[
         'description' => '',
         'amount' => '',
         'qty' => 1,
         'line_total' => 0,
+        'order_item_ids' => '',
     ]];
 }
 ?>
-<article class="invoice-doc<?= $editable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
+<article class="invoice-doc<?= $editableLines ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-logohead">
     <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz"
          onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
@@ -138,7 +141,7 @@ if ($editable && !$editRows) {
     </div>
   </section>
 
-  <table class="invoice-doc-table<?= $editable ? ' invoice-edit-table' : '' ?>">
+  <table class="invoice-doc-table<?= $editableLines ? ' invoice-edit-table' : '' ?>">
     <thead>
       <tr>
         <th class="col-line">#</th>
@@ -146,13 +149,13 @@ if ($editable && !$editRows) {
         <th class="num">Amount</th>
         <th class="num">Qty</th>
         <th class="num">Total</th>
-        <?php if ($editable): ?>
+        <?php if ($editableLines): ?>
           <th class="col-edit-actions no-print"></th>
         <?php endif; ?>
       </tr>
     </thead>
-    <tbody<?= $editable ? ' id="invoice-edit-items"' : '' ?>>
-      <?php if ($editable): ?>
+    <tbody<?= $editableLines ? ' id="invoice-edit-items"' : '' ?>>
+      <?php if ($editableLines): ?>
         <?php foreach ($editRows as $item): ?>
           <?php $lineNo++; ?>
           <tr class="invoice-edit-row">
@@ -160,6 +163,7 @@ if ($editable && !$editRows) {
             <td>
               <textarea name="line_desc[]" rows="2" class="invoice-edit-desc"
                         placeholder="Item description"><?= h((string) ($item['description'] ?? '')) ?></textarea>
+              <input type="hidden" name="line_order_item_ids[]" value="<?= h((string) ($item['order_item_ids'] ?? '')) ?>">
             </td>
             <td class="num">
               <input name="line_amount[]" type="text" inputmode="decimal" class="invoice-edit-amount"
@@ -196,7 +200,7 @@ if ($editable && !$editRows) {
       <?php endif; ?>
     </tbody>
   </table>
-  <?php if ($editable): ?>
+  <?php if ($editableLines): ?>
     <div class="invoice-edit-add-row no-print">
       <button type="button" class="btn secondary small" id="invoice-edit-add">+ Add item</button>
     </div>

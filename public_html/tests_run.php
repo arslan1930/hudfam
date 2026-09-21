@@ -5986,6 +5986,95 @@ try {
         fail('bill-as match missed the open banner invoice');
     }
 
+    $editItems = list_invoice_items((int) $placeInv);
+    $bannerLine = null;
+    $textLine = null;
+    foreach ($editItems as $editItem) {
+        $editIds = parse_order_item_ids((string) ($editItem['order_item_ids'] ?? ''));
+        if (in_array((int) $bannerId, $editIds, true)) {
+            $bannerLine = $editItem;
+        }
+        if (in_array((int) $textId, $editIds, true)) {
+            $textLine = $editItem;
+        }
+    }
+    $sheetBefore = get_order_item((int) $bannerId);
+    $editOk = false;
+    $paidLocked = false;
+    $editErr = '';
+    if ($bannerLine && $textLine && $sheetBefore) {
+        try {
+            update_generated_invoice((int) $placeInv, [
+            'invoice_date' => date('Y-m-d'),
+            'admin_note' => 'changed lines',
+            'bill_to_name' => 'banner@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+        ], [
+            [
+                'description' => 'Banner edited line',
+                'amount' => '15.50',
+                'qty' => 2,
+                'order_item_ids' => (string) ($bannerLine['order_item_ids'] ?? ''),
+            ],
+            [
+                'description' => 'Extra manual line',
+                'amount' => 4,
+                'qty' => 1,
+                'order_item_ids' => (int) $bannerId . ',999999',
+            ],
+        ]);
+        $edited = get_invoice((int) $placeInv);
+        $descOk = false;
+        $manualEmpty = false;
+        foreach (list_invoice_items((int) $placeInv) as $savedLine) {
+            $savedIds = parse_order_item_ids((string) ($savedLine['order_item_ids'] ?? ''));
+            if ((string) ($savedLine['description'] ?? '') === 'Banner edited line') {
+                $descOk = abs((float) ($savedLine['amount'] ?? 0) - 15.5) < 0.001
+                    && (int) ($savedLine['qty'] ?? 0) === 2
+                    && abs((float) ($savedLine['line_total'] ?? 0) - 31) < 0.001
+                    && $savedIds === [(int) $bannerId];
+            }
+            if ((string) ($savedLine['description'] ?? '') === 'Extra manual line') {
+                $manualEmpty = $savedIds === [];
+            }
+        }
+        $released = order_items_on_open_invoices([(int) $textId]);
+        $stillLinked = order_items_on_open_invoices([(int) $bannerId]);
+        $sheetAfter = get_order_item((int) $bannerId);
+        $editOk = $edited
+            && $descOk
+            && $manualEmpty
+            && count(list_invoice_items((int) $placeInv)) === 2
+            && abs((float) ($edited['total_amount'] ?? 0) - 35) < 0.011
+            && (string) ($edited['admin_note'] ?? '') === 'changed lines'
+            && !isset($released[(int) $textId])
+            && (int) (($stillLinked[(int) $bannerId]['id'] ?? 0)) === (int) $placeInv
+            && abs((float) ($sheetAfter['decided_price'] ?? 0) - (float) ($sheetBefore['decided_price'] ?? -1)) < 0.001;
+            try {
+                mark_invoice_payment_received((int) $placeInv);
+                update_generated_invoice((int) $placeInv, [
+                    'bill_to_name' => 'banner@example.com',
+                ], [
+                    ['description' => 'should not save', 'amount' => 1, 'qty' => 1, 'order_item_ids' => ''],
+                ]);
+            } catch (InvalidArgumentException $editPaidEx) {
+                $paidLocked = str_contains($editPaidEx->getMessage(), 'Paid');
+            }
+        } catch (Throwable $editEx) {
+            $editErr = $editEx->getMessage();
+        }
+    }
+    if ($editOk && $paidLocked) {
+        pass('unpaid order invoice lines can be edited without changing the sheet');
+    } else {
+        fail('order invoice line edit failed' . ($editErr !== '' ? ': ' . $editErr : ''));
+    }
+
     $dropA = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
     $dropB = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
     update_order_item((int) $dropA, 0, [

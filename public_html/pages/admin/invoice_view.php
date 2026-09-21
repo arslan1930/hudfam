@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($isManual) {
                 throw new InvalidArgumentException('Use Save as draft / Mark as sent on a blank invoice.');
             }
-            update_invoice_bill_header($id, [
+            $header = [
                 'invoice_date' => (string) post('invoice_date'),
                 'admin_note' => (string) post('admin_note'),
                 'bill_to_name' => (string) post('bill_to_name'),
@@ -42,8 +42,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'supplier_number' => (string) post('supplier_number'),
                 'cost_center' => (string) post('cost_center'),
                 'orderer' => (string) post('orderer'),
-            ]);
-            flash('ok', 'Bill as saved.');
+            ];
+            if (!array_key_exists('line_desc', $_POST)) {
+                update_invoice_bill_header($id, $header);
+                flash('ok', 'Bill as saved.');
+            } else {
+                $descs = (array) ($_POST['line_desc'] ?? []);
+                $amounts = (array) ($_POST['line_amount'] ?? []);
+                $qtys = (array) ($_POST['line_qty'] ?? []);
+                $orderIds = (array) ($_POST['line_order_item_ids'] ?? []);
+                $lines = [];
+                foreach ($descs as $i => $desc) {
+                    $lines[] = [
+                        'description' => (string) $desc,
+                        'amount' => $amounts[$i] ?? 0,
+                        'qty' => $qtys[$i] ?? 1,
+                        'order_item_ids' => (string) ($orderIds[$i] ?? ''),
+                    ];
+                }
+                update_generated_invoice($id, $header, $lines);
+                flash('ok', 'Invoice saved. Order-sheet prices were not changed.');
+            }
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
         if ($action === 'save_blank') {
@@ -99,12 +118,15 @@ $isManual = invoice_is_manual($invoice);
 $isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
 $editableBill = !$isManual && !$isPaid && !$print;
+$editableLines = !$isPaid && !$print;
 $linkedOrders = (!$print && !$isManual) ? list_invoice_linked_order_items($id) : [];
 $invoiceEvents = $print ? [] : list_invoice_events($id);
 $legacyClientId = (int) ($invoice['client_id'] ?? 0);
 
 if ($print) {
     $editable = false;
+    $editableBill = false;
+    $editableLines = false;
     $cssPhp = stylesheet_url();
     header('Content-Type: text/html; charset=utf-8');
     ?>
@@ -175,7 +197,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
         · Waiting for payment — add more unpaid sites to this invoice, or Mark paid when it arrives
       <?php elseif ($editableBill): ?>
-        · Bill as is the email or name — optional address stays hidden on the print unless filled
+        · Edit description, amount, or qty, then Save changes. Removing a line takes those sites off this bill — order-sheet prices stay as they are
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
@@ -192,7 +214,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <a class="btn" href="<?= h(invoice_generate_append_href($id)) ?>">Add sites to this invoice</a>
     <?php endif; ?>
     <?php if ($editableBill): ?>
-      <button class="btn" type="submit" form="generated-invoice-form">Save bill as</button>
+      <button class="btn" type="submit" form="generated-invoice-form">Save changes</button>
     <?php endif; ?>
     <?php if ($editable): ?>
       <button class="btn secondary" type="submit" form="blank-invoice-form" name="work_status" value="draft"
@@ -243,11 +265,27 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php include __DIR__ . '/_invoice_document.php'; ?>
   </div>
 </form>
+<?php elseif ($editableBill): ?>
+<form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
+      action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
+  <?= csrf_field() ?>
+  <input type="hidden" name="action" value="save_bill">
+  <div class="invoice-preview-wrap">
+    <?php include __DIR__ . '/_invoice_document.php'; ?>
+  </div>
+</form>
+<?php else: ?>
+<div class="invoice-preview-wrap">
+  <?php include __DIR__ . '/_invoice_document.php'; ?>
+</div>
+<?php endif; ?>
+<?php if ($editable || $editableBill): ?>
 <script>
 (function () {
-  var form = document.getElementById('blank-invoice-form');
+  var form = document.getElementById('blank-invoice-form') || document.getElementById('generated-invoice-form');
   if (!form) return;
   var tbody = document.getElementById('invoice-edit-items');
+  if (!tbody) return;
   var addBtn = document.getElementById('invoice-edit-add');
   var saveDraftBtn = document.getElementById('blank-invoice-save-draft');
   var saveDoneBtn = document.getElementById('blank-invoice-save-done');
@@ -268,7 +306,9 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     });
   }
   function syncPaybox() {
-    var name = (form.querySelector('[name="company_name"]') || {}).value || '';
+    var nameEl = form.querySelector('[name="company_name"]');
+    if (!nameEl) return;
+    var name = nameEl.value || '';
     var iban = (form.querySelector('[name="company_iban"]') || {}).value || '';
     var bic = (form.querySelector('[name="company_bic"]') || {}).value || '';
     var vat = (form.querySelector('[name="vat_note"]') || {}).value || '';
@@ -387,19 +427,6 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   }
 })();
 </script>
-<?php elseif ($editableBill): ?>
-<form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
-      action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
-  <?= csrf_field() ?>
-  <input type="hidden" name="action" value="save_bill">
-  <div class="invoice-preview-wrap">
-    <?php include __DIR__ . '/_invoice_document.php'; ?>
-  </div>
-</form>
-<?php else: ?>
-<div class="invoice-preview-wrap">
-  <?php include __DIR__ . '/_invoice_document.php'; ?>
-</div>
 <?php endif; ?>
 <?php if ($linkedOrders): ?>
 <section class="card no-print invoice-om-links">

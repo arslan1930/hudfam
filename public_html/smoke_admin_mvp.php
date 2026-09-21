@@ -1952,6 +1952,17 @@ if (substr_count($invoicesListCsrf, 'csrf_field()') < 3
 } else {
     ok('Invoice list/view csrf_field on POST forms');
 }
+$invoiceDocSrc = file_get_contents($root . '/pages/admin/_invoice_document.php') ?: '';
+if (!str_contains($invoiceViewCsrf, '$editableLines')
+    || !str_contains($invoiceViewCsrf, 'update_generated_invoice')
+    || !str_contains($invoicesLibTypeahead, 'function update_generated_invoice')
+    || !str_contains($invoiceDocSrc, 'name="line_order_item_ids[]"')
+    || !str_contains($invoiceDocSrc, 'id="invoice-edit-items"')
+    || !str_contains($invoiceViewCsrf, 'id="generated-invoice-form"')) {
+    fail('unpaid order invoices cannot edit line items');
+} else {
+    ok('unpaid order invoices can edit line items');
+}
 if (!str_contains($invoicesListCsrf, 'btn-paid-mark')
     || !str_contains($invoicesListCsrf, 'Mark paid')
     || str_contains($invoicesListCsrf, 'Mark payment received')) {

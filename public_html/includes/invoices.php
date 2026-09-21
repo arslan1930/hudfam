@@ -736,6 +736,7 @@ function invoice_event_type_label(string $type): string
         'marked_paid' => 'Marked paid',
         'note_saved' => 'Note saved',
         'blank_saved' => 'Blank invoice saved',
+        'lines_saved' => 'Line items saved',
         'deleted' => 'Deleted',
     ];
     $type = trim($type);
@@ -1390,7 +1391,7 @@ function update_invoice_admin_note(int $invoiceId, string $note): void
 
 /**
  * Fix bill-as / optional address / date / note on an unpaid invoice.
- * Line items stay as generated — use a blank invoice to rewrite amounts.
+ * Does not change line items — use update_generated_invoice() for that.
  *
  * @param array<string,mixed> $header
  */
@@ -1441,6 +1442,144 @@ function update_invoice_bill_header(int $invoiceId, array $header): void
         'total_before' => (float) ($invoice['total_amount'] ?? 0),
         'total_after' => (float) ($invoice['total_amount'] ?? 0),
         'rows' => [],
+        'bill_to_name' => $billName,
+    ]);
+}
+
+/**
+ * Save bill-as plus line items on an unpaid order invoice.
+ * Existing lines keep only order-sheet ids that were already on this invoice.
+ * New lines are not linked. Order-sheet prices are left unchanged.
+ * Removing a line drops its ids so those sites can be invoiced again.
+ *
+ * @param array<string,mixed> $header
+ * @param list<array{description?:string,amount?:float|string,qty?:int|string,order_item_ids?:string|list<int>}> $lines
+ */
+function update_generated_invoice(int $invoiceId, array $header, array $lines): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+    if (invoice_is_manual($invoice)) {
+        throw new InvalidArgumentException('Blank invoices are saved separately.');
+    }
+    if (invoice_is_paid($invoice)) {
+        throw new InvalidArgumentException('Paid invoices cannot be edited.');
+    }
+
+    $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
+    if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
+        $invoiceDate = (string) $invoice['invoice_date'];
+    }
+    $adminNote = trim((string) ($header['admin_note'] ?? ''));
+    if (mb_strlen($adminNote) > 255) {
+        $adminNote = mb_substr($adminNote, 0, 255);
+    }
+
+    $alreadyOnInvoice = [];
+    foreach (list_invoice_items($invoiceId) as $item) {
+        foreach (parse_order_item_ids((string) ($item['order_item_ids'] ?? '')) as $oid) {
+            $alreadyOnInvoice[$oid] = true;
+        }
+    }
+
+    $normalized = [];
+    $total = 0.0;
+    $sort = 0;
+    $usedIds = [];
+    foreach ($lines as $line) {
+        $desc = trim((string) ($line['description'] ?? ''));
+        if ($desc === '') {
+            continue;
+        }
+        $amount = parse_money($line['amount'] ?? 0);
+        $qty = max(1, (int) ($line['qty'] ?? 1));
+        $lineTotal = round($amount * $qty, 2);
+        $posted = $line['order_item_ids'] ?? '';
+        if (is_array($posted)) {
+            $posted = implode(',', array_map('strval', $posted));
+        }
+        $keep = [];
+        foreach (parse_order_item_ids((string) $posted) as $oid) {
+            if (!isset($alreadyOnInvoice[$oid]) || isset($usedIds[$oid])) {
+                continue;
+            }
+            $usedIds[$oid] = true;
+            $keep[] = $oid;
+        }
+        $normalized[] = [
+            'description' => $desc,
+            'amount' => $amount,
+            'qty' => $qty,
+            'line_total' => $lineTotal,
+            'order_item_ids' => $keep,
+            'sort_order' => $sort++,
+        ];
+        $total += $lineTotal;
+    }
+    if (!$normalized) {
+        throw new InvalidArgumentException('Add at least one line item with a description.');
+    }
+    $total = round($total, 2);
+
+    $billName = trim((string) ($header['bill_to_name'] ?? ''));
+    $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare(
+            'UPDATE invoices SET
+                invoice_date=?, admin_note=?,
+                client_name=?, bill_to_name=?, bill_to_address=?, bill_to_hrb=?, bill_to_vat=?,
+                supplier_number=?, cost_center=?, orderer=?,
+                total_amount=?, updated_at=NOW()
+             WHERE id=? AND is_manual=0'
+        )->execute([
+            $invoiceDate,
+            $adminNote,
+            $billName,
+            $billName,
+            trim((string) ($header['bill_to_address'] ?? '')),
+            trim((string) ($header['bill_to_hrb'] ?? '')),
+            trim((string) ($header['bill_to_vat'] ?? '')),
+            $supplier,
+            trim((string) ($header['cost_center'] ?? '')),
+            trim((string) ($header['orderer'] ?? '')),
+            $total,
+            $invoiceId,
+        ]);
+
+        $pdo->prepare('DELETE FROM invoice_items WHERE invoice_id=?')->execute([$invoiceId]);
+        $itemStmt = $pdo->prepare(
+            'INSERT INTO invoice_items (invoice_id, description, amount, qty, line_total, order_item_ids, sort_order)
+             VALUES (?,?,?,?,?,?,?)'
+        );
+        foreach ($normalized as $line) {
+            $itemStmt->execute([
+                $invoiceId,
+                $line['description'],
+                $line['amount'],
+                $line['qty'],
+                $line['line_total'],
+                implode(',', $line['order_item_ids']),
+                $line['sort_order'],
+            ]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    invoice_record_event($invoiceId, 'lines_saved', null, 'Line items saved.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => $total,
+        'rows' => invoice_snapshot_order_rows(array_keys($usedIds)),
         'bill_to_name' => $billName,
     ]);
 }
