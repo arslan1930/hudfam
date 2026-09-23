@@ -23,8 +23,12 @@ $showExtraBill = function_exists('invoice_has_extra_bill_details')
     ? invoice_has_extra_bill_details($invoice)
     : true;
 $logo = function_exists('invoice_logo_url') ? invoice_logo_url($invoice) : topurlz_logo_url();
-$logoFile = asset_url('assets/img/topurlz-logo.png');
-$logoSvg = asset_url('assets/img/topurlz-logo.svg');
+$logoFile = is_file(dirname(__DIR__, 2) . '/assets/img/teqno-logo.png')
+    ? asset_url('assets/img/teqno-logo.png')
+    : asset_url('assets/img/topurlz-logo.png');
+$logoSvg = is_file(dirname(__DIR__, 2) . '/assets/img/teqno-logo.svg')
+    ? asset_url('assets/img/teqno-logo.svg')
+    : asset_url('assets/img/topurlz-logo.svg');
 $hasCustomLogo = function_exists('invoice_logo_has_custom') && invoice_logo_has_custom($invoice);
 $lineNo = 0;
 $adminNote = function_exists('invoice_admin_note')
@@ -247,6 +251,6 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
   </section>
 
   <footer class="invoice-doc-footer">
-    Thank you for your business — <span class="invoice-footer-company"><?= h($invoice['company_name'] !== '' ? $invoice['company_name'] : 'Topurlz Ltd') ?></span>
+    Thank you for your business — <span class="invoice-footer-company"><?= h($invoice['company_name'] !== '' ? $invoice['company_name'] : 'Teqno Ltd') ?></span>
   </footer>
 </article>

@@ -41,6 +41,8 @@ $allowed = [
     'img/techxform-logo.svg' => 'image/svg+xml',
     'img/topurlz-logo.svg' => 'image/svg+xml',
     'img/topurlz-logo.png' => 'image/png',
+    'img/teqno-logo.svg' => 'image/svg+xml',
+    'img/teqno-logo.png' => 'image/png',
 ];
 
 $f = (string) ($_GET['f'] ?? '');

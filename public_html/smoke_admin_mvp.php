@@ -2073,6 +2073,15 @@ if (!is_file($root . '/assets/img/topurlz-logo.png')) {
 } else {
     ok('file assets/img/topurlz-logo.png');
 }
+if (!is_file($root . '/assets/img/teqno-logo.png')
+    || !is_file($root . '/assets/img/teqno-logo.svg')
+    || !str_contains(file_get_contents($root . '/asset.php') ?: '', "img/teqno-logo.png")
+    || !str_contains($invoicesLibTypeahead, 'teqno-logo.png')
+    || !str_contains($invoicesLibTypeahead, "'company_name' => 'Teqno Ltd'")) {
+    fail('missing Teqno Ltd default logo branding');
+} else {
+    ok('Teqno Ltd default invoice logo branding');
+}
 
 $adminDepts = file_get_contents($root . '/pages/admin/departments.php') ?: '';
 if (!str_contains($adminDepts, 'csrf_field()')) {

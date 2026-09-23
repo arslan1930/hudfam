@@ -379,7 +379,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     el = form.querySelector('.invoice-pay-iban'); if (el) el.textContent = iban;
     el = form.querySelector('.invoice-pay-bic'); if (el) el.textContent = bic;
     el = form.querySelector('.invoice-pay-vat'); if (el) el.textContent = vat;
-    el = form.querySelector('.invoice-footer-company'); if (el) el.textContent = name || 'Topurlz Ltd';
+    el = form.querySelector('.invoice-footer-company'); if (el) el.textContent = name || 'Teqno Ltd';
   }
   function currentGrand() {
     var grand = 0;

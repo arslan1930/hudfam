@@ -203,7 +203,7 @@ function invoice_ensure_events_table(): void
 function invoice_company_defaults(): array
 {
     return [
-        'company_name' => 'Topurlz Ltd',
+        'company_name' => 'Teqno Ltd',
         'company_bic' => 'TRWIBEB1XXX',
         'company_iban' => 'BE04905543949331',
         'company_phone' => '+447445152374',
@@ -215,6 +215,17 @@ function invoice_company_defaults(): array
 
 function topurlz_logo_url(): string
 {
+    // Prefer Teqno Ltd branding when present; fall back to legacy Topurlz assets.
+    $teqnoPng = dirname(__DIR__) . '/assets/img/teqno-logo.png';
+    if (is_file($teqnoPng)) {
+        $v = (string) filemtime($teqnoPng);
+        return app_url('asset.php?f=img/teqno-logo.png&v=' . rawurlencode($v));
+    }
+    $teqnoSvg = dirname(__DIR__) . '/assets/img/teqno-logo.svg';
+    if (is_file($teqnoSvg)) {
+        $v = (string) filemtime($teqnoSvg);
+        return app_url('asset.php?f=img/teqno-logo.svg&v=' . rawurlencode($v));
+    }
     $png = dirname(__DIR__) . '/assets/img/topurlz-logo.png';
     if (is_file($png)) {
         $v = (string) filemtime($png);
