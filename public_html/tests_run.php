@@ -6014,6 +6014,14 @@ try {
             'supplier_number' => 'NEW',
             'cost_center' => '',
             'orderer' => '',
+            'company_name' => 'Custom Bill Co',
+            'company_bic' => 'TESTBICXX',
+            'company_iban' => 'DE00TESTIBAN',
+            'company_phone' => '+100000',
+            'company_address' => '1 Edit Street',
+            'company_reg_no' => 'REG-EDIT',
+            'vat_note' => 'VAT note edited',
+            'company_logo' => '',
         ], [
             [
                 'description' => 'Banner edited line',
@@ -6026,6 +6034,43 @@ try {
                 'amount' => 4,
                 'qty' => 1,
                 'order_item_ids' => (int) $bannerId . ',999999',
+            ],
+        ]);
+        $edited = get_invoice((int) $placeInv);
+        $logoName = 'inv_' . (int) $placeInv . '_' . bin2hex(random_bytes(8)) . '.png';
+        // 1x1 PNG
+        $pngBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+        file_put_contents(invoice_logo_storage_dir() . '/' . $logoName, $pngBytes);
+        update_generated_invoice((int) $placeInv, [
+            'invoice_date' => (string) ($edited['invoice_date'] ?? date('Y-m-d')),
+            'admin_note' => 'changed lines',
+            'bill_to_name' => 'banner@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Custom Bill Co',
+            'company_bic' => 'TESTBICXX',
+            'company_iban' => 'DE00TESTIBAN',
+            'company_phone' => '+100000',
+            'company_address' => '1 Edit Street',
+            'company_reg_no' => 'REG-EDIT',
+            'vat_note' => 'VAT note edited',
+            'company_logo' => $logoName,
+        ], [
+            [
+                'description' => 'Banner edited line',
+                'amount' => '15.50',
+                'qty' => 2,
+                'order_item_ids' => (string) ($bannerLine['order_item_ids'] ?? (string) $bannerId),
+            ],
+            [
+                'description' => 'Extra manual line',
+                'amount' => 4,
+                'qty' => 1,
+                'order_item_ids' => '',
             ],
         ]);
         $edited = get_invoice((int) $placeInv);
@@ -6046,9 +6091,18 @@ try {
         $released = order_items_on_open_invoices([(int) $textId]);
         $stillLinked = order_items_on_open_invoices([(int) $bannerId]);
         $sheetAfter = get_order_item((int) $bannerId);
+        $companyOk = $edited
+            && (string) ($edited['company_name'] ?? '') === 'Custom Bill Co'
+            && (string) ($edited['company_iban'] ?? '') === 'DE00TESTIBAN'
+            && (string) ($edited['company_logo'] ?? '') === $logoName
+            && invoice_logo_has_custom($edited)
+            && str_contains(invoice_logo_url($edited), 'invoice_logo.php');
+        $resetLogo = invoice_resolve_logo_for_save($edited, null, true);
         $editOk = $edited
             && $descOk
             && $manualEmpty
+            && $companyOk
+            && $resetLogo === ''
             && count(list_invoice_items((int) $placeInv)) === 2
             && abs((float) ($edited['total_amount'] ?? 0) - 35) < 0.011
             && (string) ($edited['admin_note'] ?? '') === 'changed lines'
@@ -6070,7 +6124,7 @@ try {
         }
     }
     if ($editOk && $paidLocked) {
-        pass('unpaid order invoice lines can be edited without changing the sheet');
+        pass('unpaid order invoice lines, company, and logo can be edited without changing the sheet');
     } else {
         fail('order invoice line edit failed' . ($editErr !== '' ? ': ' . $editErr : ''));
     }

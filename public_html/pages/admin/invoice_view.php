@@ -32,6 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($isManual) {
                 throw new InvalidArgumentException('Use Save as draft / Mark as sent on a blank invoice.');
             }
+            $logoName = invoice_resolve_logo_for_save(
+                $invoice,
+                isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
+                (string) post('company_logo_reset') === '1'
+            );
             $header = [
                 'invoice_date' => (string) post('invoice_date'),
                 'admin_note' => (string) post('admin_note'),
@@ -42,6 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'supplier_number' => (string) post('supplier_number'),
                 'cost_center' => (string) post('cost_center'),
                 'orderer' => (string) post('orderer'),
+                'company_name' => (string) post('company_name'),
+                'company_bic' => (string) post('company_bic'),
+                'company_iban' => (string) post('company_iban'),
+                'company_phone' => (string) post('company_phone'),
+                'company_address' => (string) post('company_address'),
+                'company_reg_no' => (string) post('company_reg_no'),
+                'vat_note' => (string) post('vat_note'),
+                'company_logo' => $logoName,
             ];
             if (!array_key_exists('line_desc', $_POST)) {
                 update_invoice_bill_header($id, $header);
@@ -81,6 +94,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'qty' => $qtys[$i] ?? 1,
                 ];
             }
+            $logoName = invoice_resolve_logo_for_save(
+                $invoice,
+                isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
+                (string) post('company_logo_reset') === '1'
+            );
             $header = [
                 'invoice_date' => (string) post('invoice_date'),
                 'admin_note' => (string) post('admin_note'),
@@ -98,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'company_address' => (string) post('company_address'),
                 'company_reg_no' => (string) post('company_reg_no'),
                 'vat_note' => (string) post('vat_note'),
+                'company_logo' => $logoName,
             ];
             update_blank_invoice($id, $header, $lines, $workStatus);
             flash('ok', $workStatus === 'done'
@@ -119,6 +138,7 @@ $isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
 $editableBill = !$isManual && !$isPaid && !$print;
 $editableLines = !$isPaid && !$print;
+$editableCompany = !$isPaid && !$print;
 $linkedOrders = (!$print && !$isManual) ? list_invoice_linked_order_items($id) : [];
 $invoiceEvents = $print ? [] : list_invoice_events($id);
 $legacyClientId = (int) ($invoice['client_id'] ?? 0);
@@ -127,6 +147,7 @@ if ($print) {
     $editable = false;
     $editableBill = false;
     $editableLines = false;
+    $editableCompany = false;
     $cssPhp = stylesheet_url();
     header('Content-Type: text/html; charset=utf-8');
     ?>
@@ -197,7 +218,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
         · Waiting for payment — add more unpaid sites to this invoice, or Mark paid when it arrives
       <?php elseif ($editableBill): ?>
-        · Edit description, amount, or qty, then Save changes. Removing a line takes those sites off this bill — order-sheet prices stay as they are
+        · Edit logo, company details, bill as, and line items, then Save changes. Removing a line takes those sites off this bill — order-sheet prices stay as they are
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
@@ -258,6 +279,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 
 <?php if ($editable): ?>
 <form method="post" id="blank-invoice-form" class="invoice-blank-edit-form"
+      enctype="multipart/form-data"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_blank">
@@ -267,6 +289,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 </form>
 <?php elseif ($editableBill): ?>
 <form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
+      enctype="multipart/form-data"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_bill">
@@ -415,6 +438,22 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   });
   syncRemove();
   refreshTotals();
+
+  var logoInput = form.querySelector('[data-invoice-logo-input]');
+  var logoImg = form.querySelector('[data-invoice-logo-img]');
+  if (logoInput && logoImg) {
+    logoInput.addEventListener('change', function () {
+      var file = logoInput.files && logoInput.files[0];
+      if (!file) return;
+      var url = URL.createObjectURL(file);
+      logoImg.onload = function () {
+        try { URL.revokeObjectURL(url); } catch (e) {}
+      };
+      logoImg.src = url;
+      var reset = form.querySelector('[name="company_logo_reset"]');
+      if (reset) reset.checked = false;
+    });
+  }
 
   var noteTa = form.querySelector('#admin_note, [data-note-input]');
   if (noteTa) {

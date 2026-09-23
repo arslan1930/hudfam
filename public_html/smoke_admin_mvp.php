@@ -1960,8 +1960,17 @@ if (!str_contains($invoiceViewCsrf, '$editableLines')
     || !str_contains($invoiceDocSrc, 'id="invoice-edit-items"')
     || !str_contains($invoiceViewCsrf, 'id="generated-invoice-form"')) {
     fail('unpaid order invoices cannot edit line items');
+} elseif (!str_contains($invoiceViewCsrf, '$editableCompany')
+    || !str_contains($invoiceDocSrc, 'Change logo')
+    || !str_contains($invoiceDocSrc, 'name="company_logo"')
+    || !str_contains($invoiceDocSrc, '$editableCompany')
+    || !str_contains($invoiceViewCsrf, 'enctype="multipart/form-data"')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_resolve_logo_for_save')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_logo_url')
+    || !is_file($root . '/invoice_logo.php')) {
+    fail('unpaid invoices cannot edit logo and company details');
 } else {
-    ok('unpaid order invoices can edit line items');
+    ok('unpaid invoices can edit lines, logo, and company details');
 }
 if (!str_contains($invoicesListCsrf, 'btn-paid-mark')
     || !str_contains($invoicesListCsrf, 'Mark paid')

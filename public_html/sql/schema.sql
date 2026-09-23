@@ -441,6 +441,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   company_phone VARCHAR(80) NOT NULL DEFAULT '',
   company_address TEXT NULL,
   company_reg_no VARCHAR(80) NOT NULL DEFAULT '',
+  company_logo VARCHAR(255) NOT NULL DEFAULT '',
   vat_note VARCHAR(255) NOT NULL DEFAULT 'Not VAT registered – no VAT charged.',
   currency CHAR(3) NOT NULL DEFAULT 'EUR',
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,

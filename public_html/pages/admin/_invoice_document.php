@@ -6,6 +6,7 @@
  * Expects $invoice + $items.
  * Set $editable = true for blank-invoice in-document editing (not for print).
  * Set $editableLines = true to edit description / amount / qty on an unpaid invoice.
+ * Set $editableCompany = true to edit logo + From / bank details on an unpaid invoice.
  */
 if (!isset($invoice) || !is_array($invoice)) {
     return;
@@ -14,15 +15,17 @@ $items = $items ?? [];
 $editable = !empty($editable);
 $editableLines = $editable || !empty($editableLines);
 $editableBill = $editable || !empty($editableBill);
+$editableCompany = $editable || !empty($editableCompany);
 $billAs = function_exists('invoice_display_bill_as')
     ? invoice_display_bill_as($invoice)
     : trim((string) ($invoice['bill_to_name'] ?? $invoice['client_name'] ?? ''));
 $showExtraBill = function_exists('invoice_has_extra_bill_details')
     ? invoice_has_extra_bill_details($invoice)
     : true;
-$logo = topurlz_logo_url();
+$logo = function_exists('invoice_logo_url') ? invoice_logo_url($invoice) : topurlz_logo_url();
 $logoFile = asset_url('assets/img/topurlz-logo.png');
 $logoSvg = asset_url('assets/img/topurlz-logo.svg');
+$hasCustomLogo = function_exists('invoice_logo_has_custom') && invoice_logo_has_custom($invoice);
 $lineNo = 0;
 $adminNote = function_exists('invoice_admin_note')
     ? invoice_admin_note($invoice)
@@ -39,11 +42,27 @@ if ($editableLines && !$editRows) {
         'order_item_ids' => '',
     ]];
 }
+$docEditable = $editableLines || $editableCompany || $editableBill;
 ?>
-<article class="invoice-doc<?= $editableLines ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
+<article class="invoice-doc<?= $docEditable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-logohead">
-    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz"
+    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h(trim((string) ($invoice['company_name'] ?? '')) !== '' ? (string) $invoice['company_name'] : 'topUrlz') ?>"
+         data-invoice-logo-img
          onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
+    <?php if ($editableCompany): ?>
+      <div class="invoice-logo-edit no-print">
+        <label class="invoice-logo-upload">
+          <span class="btn secondary small">Change logo</span>
+          <input type="file" name="company_logo" accept="image/png,image/jpeg,image/webp,image/gif" data-invoice-logo-input>
+        </label>
+        <?php if ($hasCustomLogo): ?>
+          <label class="invoice-logo-reset">
+            <input type="checkbox" name="company_logo_reset" value="1"> Use default logo
+          </label>
+        <?php endif; ?>
+        <span class="help">PNG, JPG, WEBP or GIF · under 2 MB</span>
+      </div>
+    <?php endif; ?>
   </header>
 
   <section class="invoice-doc-ids">
@@ -75,7 +94,7 @@ if ($editableLines && !$editRows) {
   <section class="invoice-doc-parties">
     <div class="invoice-party invoice-party-from">
       <div class="invoice-party-label">From / Bank details</div>
-      <?php if ($editable): ?>
+      <?php if ($editableCompany): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="company_name"
                value="<?= h($invoice['company_name']) ?>" placeholder="Company name">
         <div class="invoice-party-lines invoice-edit-party-lines">
