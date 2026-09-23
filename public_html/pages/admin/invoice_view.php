@@ -32,7 +32,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($isManual) {
                 throw new InvalidArgumentException('Use Save as draft / Mark as sent on a blank invoice.');
             }
-            $logoName = invoice_resolve_logo_for_save(
+            if ($isPaid) {
+                throw new InvalidArgumentException('Paid invoices cannot be edited.');
+            }
+            $descs = (array) ($_POST['line_desc'] ?? []);
+            $amounts = (array) ($_POST['line_amount'] ?? []);
+            $qtys = (array) ($_POST['line_qty'] ?? []);
+            $orderIds = (array) ($_POST['line_order_item_ids'] ?? []);
+            $lines = [];
+            foreach ($descs as $i => $desc) {
+                $lines[] = [
+                    'description' => (string) $desc,
+                    'amount' => $amounts[$i] ?? 0,
+                    'qty' => $qtys[$i] ?? 1,
+                    'order_item_ids' => (string) ($orderIds[$i] ?? ''),
+                ];
+            }
+            // Validate lines before touching logo files so a bad save cannot delete the current logo.
+            $hasLine = false;
+            foreach ($lines as $line) {
+                if (trim((string) ($line['description'] ?? '')) !== '') {
+                    $hasLine = true;
+                    break;
+                }
+            }
+            if (!$hasLine) {
+                throw new InvalidArgumentException('Add at least one line item with a description.');
+            }
+            $logoPlan = invoice_resolve_logo_for_save(
                 $invoice,
                 isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
                 (string) post('company_logo_reset') === '1'
@@ -54,33 +81,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'company_address' => (string) post('company_address'),
                 'company_reg_no' => (string) post('company_reg_no'),
                 'vat_note' => (string) post('vat_note'),
-                'company_logo' => $logoName,
+                'company_logo' => $logoPlan['value'],
             ];
-            if (!array_key_exists('line_desc', $_POST)) {
-                update_invoice_bill_header($id, $header);
-                flash('ok', 'Bill as saved.');
-            } else {
-                $descs = (array) ($_POST['line_desc'] ?? []);
-                $amounts = (array) ($_POST['line_amount'] ?? []);
-                $qtys = (array) ($_POST['line_qty'] ?? []);
-                $orderIds = (array) ($_POST['line_order_item_ids'] ?? []);
-                $lines = [];
-                foreach ($descs as $i => $desc) {
-                    $lines[] = [
-                        'description' => (string) $desc,
-                        'amount' => $amounts[$i] ?? 0,
-                        'qty' => $qtys[$i] ?? 1,
-                        'order_item_ids' => (string) ($orderIds[$i] ?? ''),
-                    ];
-                }
+            try {
                 update_generated_invoice($id, $header, $lines);
-                flash('ok', 'Invoice saved. Order-sheet prices were not changed.');
+            } catch (Throwable $genSaveEx) {
+                $staged = (string) ($logoPlan['value'] ?? '');
+                $prev = basename(trim((string) ($invoice['company_logo'] ?? '')));
+                if ($staged !== '' && $staged !== $prev) {
+                    invoice_delete_logo_file($staged);
+                }
+                throw $genSaveEx;
             }
+            invoice_finalize_logo_cleanup($logoPlan['delete_after'] ?? null);
+            flash('ok', 'Invoice saved. Order-sheet prices were not changed.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
         if ($action === 'save_blank') {
             if (!$isManual) {
                 throw new InvalidArgumentException('Only blank invoices can be edited.');
+            }
+            if ($isPaid) {
+                throw new InvalidArgumentException('Paid invoices cannot be edited. Unmark is not available — create a new blank invoice if needed.');
             }
             $workStatus = normalize_invoice_work_status((string) post('work_status'));
             $descs = (array) ($_POST['line_desc'] ?? []);
@@ -94,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'qty' => $qtys[$i] ?? 1,
                 ];
             }
-            $logoName = invoice_resolve_logo_for_save(
+            $logoPlan = invoice_resolve_logo_for_save(
                 $invoice,
                 isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
                 (string) post('company_logo_reset') === '1'
@@ -116,9 +138,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'company_address' => (string) post('company_address'),
                 'company_reg_no' => (string) post('company_reg_no'),
                 'vat_note' => (string) post('vat_note'),
-                'company_logo' => $logoName,
+                'company_logo' => $logoPlan['value'],
             ];
-            update_blank_invoice($id, $header, $lines, $workStatus);
+            try {
+                update_blank_invoice($id, $header, $lines, $workStatus);
+            } catch (Throwable $blankSaveEx) {
+                // Drop a newly staged upload if the blank save rejects (e.g. Done with €0).
+                $staged = (string) ($logoPlan['value'] ?? '');
+                $prev = basename(trim((string) ($invoice['company_logo'] ?? '')));
+                if ($staged !== '' && $staged !== $prev) {
+                    invoice_delete_logo_file($staged);
+                }
+                throw $blankSaveEx;
+            }
+            invoice_finalize_logo_cleanup($logoPlan['delete_after'] ?? null);
             flash('ok', $workStatus === 'done'
                 ? 'Invoice saved as Done — waiting for payment.'
                 : 'Draft saved. You can finish the invoice later.');
@@ -213,12 +246,18 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php endif; ?>
       <?php if ($editable): ?>
         · <strong>Draft</strong> = still needs data · <strong>Waiting</strong> = sent, still unpaid
+      <?php elseif ($editableBill): ?>
+        · Edit logo, company details, bill as, and line items, then Save changes
+        <?php if ($isDraft && !$isManual): ?>
+          · Draft — add more sites from Generate, then Mark as sent
+        <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
+          · Waiting for payment — add more unpaid sites, or Mark paid when it arrives
+        <?php endif; ?>
+        · Removing a line takes those sites off this bill — order-sheet prices stay as they are
       <?php elseif ($isDraft && !$isManual): ?>
         · Draft — add more sites from Generate, then Mark as sent
       <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
         · Waiting for payment — add more unpaid sites to this invoice, or Mark paid when it arrives
-      <?php elseif ($editableBill): ?>
-        · Edit logo, company details, bill as, and line items, then Save changes. Removing a line takes those sites off this bill — order-sheet prices stay as they are
       <?php elseif (invoice_admin_note($invoice) !== ''): ?>
         · <?= h(invoice_admin_note($invoice)) ?>
       <?php endif; ?>
@@ -441,17 +480,30 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 
   var logoInput = form.querySelector('[data-invoice-logo-input]');
   var logoImg = form.querySelector('[data-invoice-logo-img]');
+  var logoReset = form.querySelector('[name="company_logo_reset"]');
+  var logoObjectUrl = null;
+  function setLogoPreview(src) {
+    if (!logoImg || !src) return;
+    if (logoObjectUrl) {
+      try { URL.revokeObjectURL(logoObjectUrl); } catch (e) {}
+      logoObjectUrl = null;
+    }
+    logoImg.src = src;
+  }
   if (logoInput && logoImg) {
     logoInput.addEventListener('change', function () {
       var file = logoInput.files && logoInput.files[0];
       if (!file) return;
-      var url = URL.createObjectURL(file);
-      logoImg.onload = function () {
-        try { URL.revokeObjectURL(url); } catch (e) {}
-      };
-      logoImg.src = url;
-      var reset = form.querySelector('[name="company_logo_reset"]');
-      if (reset) reset.checked = false;
+      logoObjectUrl = URL.createObjectURL(file);
+      setLogoPreview(logoObjectUrl);
+      if (logoReset) logoReset.checked = false;
+    });
+  }
+  if (logoReset && logoImg) {
+    logoReset.addEventListener('change', function () {
+      if (!logoReset.checked) return;
+      if (logoInput) logoInput.value = '';
+      setLogoPreview(logoImg.getAttribute('data-default-logo') || logoImg.src);
     });
   }
 

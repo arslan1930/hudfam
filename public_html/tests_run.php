@@ -6097,18 +6097,85 @@ try {
             && (string) ($edited['company_logo'] ?? '') === $logoName
             && invoice_logo_has_custom($edited)
             && str_contains(invoice_logo_url($edited), 'invoice_logo.php');
-        $resetLogo = invoice_resolve_logo_for_save($edited, null, true);
+        $resetPlan = invoice_resolve_logo_for_save($edited, null, true);
+        $logoStillOnDisk = is_file(invoice_logo_storage_dir() . '/' . $logoName);
+        update_generated_invoice((int) $placeInv, [
+            'invoice_date' => (string) ($edited['invoice_date'] ?? date('Y-m-d')),
+            'admin_note' => 'changed lines',
+            'bill_to_name' => 'banner@example.com',
+            'bill_to_address' => '',
+            'bill_to_hrb' => '',
+            'bill_to_vat' => '',
+            'supplier_number' => 'NEW',
+            'cost_center' => '',
+            'orderer' => '',
+            'company_name' => 'Custom Bill Co',
+            'company_bic' => 'TESTBICXX',
+            'company_iban' => 'DE00TESTIBAN',
+            'company_phone' => '+100000',
+            'company_address' => '1 Edit Street',
+            'company_reg_no' => 'REG-EDIT',
+            'vat_note' => 'VAT note edited',
+            'company_logo' => $resetPlan['value'],
+        ], [
+            [
+                'description' => 'Banner edited line',
+                'amount' => '15.50',
+                'qty' => 2,
+                'order_item_ids' => (string) $bannerId,
+            ],
+            [
+                'description' => 'Extra manual line',
+                'amount' => 4,
+                'qty' => 1,
+                'order_item_ids' => '',
+            ],
+        ]);
+        invoice_finalize_logo_cleanup($resetPlan['delete_after'] ?? null);
+        $afterReset = get_invoice((int) $placeInv);
+        $failedClearKeptLogo = false;
+        try {
+            update_generated_invoice((int) $placeInv, [
+                'bill_to_name' => 'banner@example.com',
+                'company_logo' => (string) ($afterReset['company_logo'] ?? ''),
+            ], [
+                ['description' => '', 'amount' => 1, 'qty' => 1, 'order_item_ids' => ''],
+            ]);
+        } catch (InvalidArgumentException $clearLinesEx) {
+            $failedClearKeptLogo = str_contains($clearLinesEx->getMessage(), 'line item');
+        }
+        $deleteLogoName = 'inv_' . (int) $placeInv . '_' . bin2hex(random_bytes(8)) . '.png';
+        file_put_contents(invoice_logo_storage_dir() . '/' . $deleteLogoName, $pngBytes);
+        db()->prepare('UPDATE invoices SET company_logo=? WHERE id=?')->execute([$deleteLogoName, (int) $placeInv]);
+        // Keep a throwaway unpaid clone id for delete cleanup — use a blank invoice instead.
+        $logoBlankId = create_blank_invoice((int) $adminUser['id']);
+        $blankLogo = 'inv_' . (int) $logoBlankId . '_' . bin2hex(random_bytes(8)) . '.png';
+        file_put_contents(invoice_logo_storage_dir() . '/' . $blankLogo, $pngBytes);
+        db()->prepare('UPDATE invoices SET company_logo=? WHERE id=?')->execute([$blankLogo, (int) $logoBlankId]);
+        delete_invoice((int) $logoBlankId);
+        $blankLogoGone = !is_file(invoice_logo_storage_dir() . '/' . $blankLogo);
+        // Restored placeInv logo file was cleared by reset; recreate for paid lock path.
         $editOk = $edited
             && $descOk
             && $manualEmpty
             && $companyOk
-            && $resetLogo === ''
+            && ($resetPlan['value'] ?? null) === ''
+            && $logoStillOnDisk
+            && (string) ($afterReset['company_logo'] ?? 'x') === ''
+            && !is_file(invoice_logo_storage_dir() . '/' . $logoName)
+            && $failedClearKeptLogo
+            && $blankLogoGone
             && count(list_invoice_items((int) $placeInv)) === 2
             && abs((float) ($edited['total_amount'] ?? 0) - 35) < 0.011
             && (string) ($edited['admin_note'] ?? '') === 'changed lines'
             && !isset($released[(int) $textId])
             && (int) (($stillLinked[(int) $bannerId]['id'] ?? 0)) === (int) $placeInv
             && abs((float) ($sheetAfter['decided_price'] ?? 0) - (float) ($sheetBefore['decided_price'] ?? -1)) < 0.001;
+            // Remove the orphan deleteLogoName if still present on placeInv
+            if (is_file(invoice_logo_storage_dir() . '/' . $deleteLogoName)) {
+                @unlink(invoice_logo_storage_dir() . '/' . $deleteLogoName);
+            }
+            db()->prepare('UPDATE invoices SET company_logo=? WHERE id=?')->execute(['', (int) $placeInv]);
             try {
                 mark_invoice_payment_received((int) $placeInv);
                 update_generated_invoice((int) $placeInv, [

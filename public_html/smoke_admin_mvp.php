@@ -1965,7 +1965,10 @@ if (!str_contains($invoiceViewCsrf, '$editableLines')
     || !str_contains($invoiceDocSrc, 'name="company_logo"')
     || !str_contains($invoiceDocSrc, '$editableCompany')
     || !str_contains($invoiceViewCsrf, 'enctype="multipart/form-data"')
+    || !str_contains($invoiceViewCsrf, 'invoice_finalize_logo_cleanup')
+    || !str_contains($invoiceViewCsrf, "Paid invoices cannot be edited.")
     || !str_contains($invoicesLibTypeahead, 'function invoice_resolve_logo_for_save')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_finalize_logo_cleanup')
     || !str_contains($invoicesLibTypeahead, 'function invoice_logo_url')
     || !is_file($root . '/invoice_logo.php')) {
     fail('unpaid invoices cannot edit logo and company details');

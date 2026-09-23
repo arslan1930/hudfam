@@ -48,6 +48,7 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
   <header class="invoice-doc-logohead">
     <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h(trim((string) ($invoice['company_name'] ?? '')) !== '' ? (string) $invoice['company_name'] : 'topUrlz') ?>"
          data-invoice-logo-img
+         data-default-logo="<?= h(function_exists('topurlz_logo_url') ? topurlz_logo_url() : $logo) ?>"
          onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
     <?php if ($editableCompany): ?>
       <div class="invoice-logo-edit no-print">

@@ -240,6 +240,15 @@ function invoice_logo_filename_valid(string $name): bool
     return (bool) preg_match('/^inv_\d+_[a-zA-Z0-9]{6,32}\.(png|jpe?g|webp|gif)$/', $name);
 }
 
+function invoice_logo_belongs_to_invoice(string $name, int $invoiceId): bool
+{
+    $name = basename(trim($name));
+    if ($invoiceId < 1 || !invoice_logo_filename_valid($name)) {
+        return false;
+    }
+    return str_starts_with($name, 'inv_' . $invoiceId . '_');
+}
+
 /**
  * Public URL for the logo printed on this invoice (custom upload or default).
  *
@@ -248,7 +257,8 @@ function invoice_logo_filename_valid(string $name): bool
 function invoice_logo_url(array $invoice): string
 {
     $name = basename(trim((string) ($invoice['company_logo'] ?? '')));
-    if ($name !== '' && invoice_logo_filename_valid($name)) {
+    $invoiceId = (int) ($invoice['id'] ?? 0);
+    if ($name !== '' && ($invoiceId < 1 || invoice_logo_belongs_to_invoice($name, $invoiceId))) {
         $path = invoice_logo_storage_dir() . '/' . $name;
         if (is_file($path)) {
             $v = (string) filemtime($path);
@@ -261,8 +271,9 @@ function invoice_logo_url(array $invoice): string
 function invoice_logo_has_custom(array $invoice): bool
 {
     $name = basename(trim((string) ($invoice['company_logo'] ?? '')));
+    $invoiceId = (int) ($invoice['id'] ?? 0);
     return $name !== ''
-        && invoice_logo_filename_valid($name)
+        && ($invoiceId < 1 || invoice_logo_belongs_to_invoice($name, $invoiceId))
         && is_file(invoice_logo_storage_dir() . '/' . $name);
 }
 
@@ -279,24 +290,35 @@ function invoice_delete_logo_file(string $name): void
 }
 
 /**
- * Accept a new logo upload or reset to the default Topurlz logo.
- * Returns the company_logo value to store ('' = default).
+ * Plan a logo change without deleting the previous file yet.
+ * Call invoice_finalize_logo_cleanup() only after the invoice row saves successfully.
  *
  * @param array<string,mixed>|null $uploaded $_FILES['company_logo'] entry
+ * @return array{value:string, delete_after:?string}
  */
-function invoice_resolve_logo_for_save(array $invoice, ?array $uploaded, bool $resetToDefault): string
+function invoice_resolve_logo_for_save(array $invoice, ?array $uploaded, bool $resetToDefault): array
 {
+    $invoiceId = (int) ($invoice['id'] ?? 0);
     $current = basename(trim((string) ($invoice['company_logo'] ?? '')));
+    if ($current !== '' && $invoiceId > 0 && !invoice_logo_belongs_to_invoice($current, $invoiceId)) {
+        $current = '';
+    } elseif ($current !== '' && !invoice_logo_filename_valid($current)) {
+        $current = '';
+    }
+
     if ($resetToDefault) {
-        if ($current !== '') {
-            invoice_delete_logo_file($current);
-        }
-        return '';
+        return [
+            'value' => '',
+            'delete_after' => $current !== '' ? $current : null,
+        ];
     }
 
     $err = (int) ($uploaded['error'] ?? UPLOAD_ERR_NO_FILE);
     if ($err === UPLOAD_ERR_NO_FILE || $uploaded === null) {
-        return $current !== '' && invoice_logo_filename_valid($current) ? $current : '';
+        return [
+            'value' => $current,
+            'delete_after' => null,
+        ];
     }
     if ($err !== UPLOAD_ERR_OK) {
         throw new InvalidArgumentException('Logo upload failed. Try a smaller PNG or JPG.');
@@ -323,7 +345,6 @@ function invoice_resolve_logo_for_save(array $invoice, ?array $uploaded, bool $r
     if (!isset($extMap[$mime])) {
         throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
     }
-    $invoiceId = (int) ($invoice['id'] ?? 0);
     if ($invoiceId < 1) {
         throw new InvalidArgumentException('Invoice not found.');
     }
@@ -336,10 +357,41 @@ function invoice_resolve_logo_for_save(array $invoice, ?array $uploaded, bool $r
     if (!@move_uploaded_file($tmp, $dest)) {
         throw new InvalidArgumentException('Could not save the logo file.');
     }
-    if ($current !== '' && $current !== $name) {
-        invoice_delete_logo_file($current);
+    return [
+        'value' => $name,
+        'delete_after' => ($current !== '' && $current !== $name) ? $current : null,
+    ];
+}
+
+/** Delete the previous logo file after a successful invoice save. */
+function invoice_finalize_logo_cleanup(?string $oldName): void
+{
+    if ($oldName === null || $oldName === '') {
+        return;
     }
-    return $name;
+    invoice_delete_logo_file($oldName);
+}
+
+/**
+ * Normalize a posted/stored logo filename for this invoice id.
+ */
+function invoice_normalize_logo_name(string $name, int $invoiceId, string $fallback = ''): string
+{
+    $name = basename(trim($name));
+    if ($name === '') {
+        return '';
+    }
+    if ($invoiceId > 0 && invoice_logo_belongs_to_invoice($name, $invoiceId)) {
+        return $name;
+    }
+    if ($invoiceId < 1 && invoice_logo_filename_valid($name)) {
+        return $name;
+    }
+    $fallback = basename(trim($fallback));
+    if ($fallback !== '' && ($invoiceId < 1 || invoice_logo_belongs_to_invoice($fallback, $invoiceId))) {
+        return $fallback;
+    }
+    return '';
 }
 
 function format_euro($value): string
@@ -1648,12 +1700,13 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
     $billName = trim((string) ($header['bill_to_name'] ?? ''));
     $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
     $company = invoice_company_defaults();
-    $logoName = array_key_exists('company_logo', $header)
-        ? basename(trim((string) $header['company_logo']))
-        : basename(trim((string) ($invoice['company_logo'] ?? '')));
-    if ($logoName !== '' && !invoice_logo_filename_valid($logoName)) {
-        $logoName = '';
-    }
+    $logoName = invoice_normalize_logo_name(
+        array_key_exists('company_logo', $header)
+            ? (string) $header['company_logo']
+            : (string) ($invoice['company_logo'] ?? ''),
+        $invoiceId,
+        (string) ($invoice['company_logo'] ?? '')
+    );
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -1812,12 +1865,13 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
     }
 
     $billName = trim((string) ($header['bill_to_name'] ?? ''));
-    $logoName = array_key_exists('company_logo', $header)
-        ? basename(trim((string) $header['company_logo']))
-        : basename(trim((string) ($invoice['company_logo'] ?? '')));
-    if ($logoName !== '' && !invoice_logo_filename_valid($logoName)) {
-        $logoName = '';
-    }
+    $logoName = invoice_normalize_logo_name(
+        array_key_exists('company_logo', $header)
+            ? (string) $header['company_logo']
+            : (string) ($invoice['company_logo'] ?? ''),
+        $invoiceId,
+        (string) ($invoice['company_logo'] ?? '')
+    );
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -1842,14 +1896,14 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
             trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
             trim((string) ($header['cost_center'] ?? '')),
             trim((string) ($header['orderer'] ?? '')),
-            trim((string) ($header['company_name'] ?? $company['company_name'])),
-            trim((string) ($header['company_bic'] ?? $company['company_bic'])),
-            trim((string) ($header['company_iban'] ?? $company['company_iban'])),
-            trim((string) ($header['company_phone'] ?? $company['company_phone'])),
-            trim((string) ($header['company_address'] ?? $company['company_address'])),
-            trim((string) ($header['company_reg_no'] ?? $company['company_reg_no'])),
+            trim((string) ($header['company_name'] ?? $invoice['company_name'] ?? $company['company_name'])),
+            trim((string) ($header['company_bic'] ?? $invoice['company_bic'] ?? $company['company_bic'])),
+            trim((string) ($header['company_iban'] ?? $invoice['company_iban'] ?? $company['company_iban'])),
+            trim((string) ($header['company_phone'] ?? $invoice['company_phone'] ?? $company['company_phone'])),
+            trim((string) ($header['company_address'] ?? $invoice['company_address'] ?? $company['company_address'])),
+            trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
             $logoName,
-            trim((string) ($header['vat_note'] ?? $company['vat_note'])),
+            trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
             $total,
             $invoiceId,
         ]);
@@ -2452,6 +2506,12 @@ function delete_invoice(int $id): void
             'total_after' => 0,
             'rows' => invoice_snapshot_order_rows($orderIds),
         ]);
+        $logo = basename(trim((string) ($invoice['company_logo'] ?? '')));
+        db()->prepare('DELETE FROM invoices WHERE id=?')->execute([$id]);
+        if ($logo !== '') {
+            invoice_delete_logo_file($logo);
+        }
+        return;
     }
     db()->prepare('DELETE FROM invoices WHERE id=?')->execute([$id]);
 }
