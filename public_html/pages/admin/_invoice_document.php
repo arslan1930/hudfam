@@ -67,7 +67,7 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
           <input type="checkbox" name="company_logo_reset" value="1" data-invoice-logo-reset<?= $hasCustomLogo ? '' : ' disabled' ?>>
           Use default logo
         </label>
-        <span class="help" data-invoice-logo-hint>PNG, JPG, WEBP or GIF · under 2 MB · then click <strong>Save changes</strong></span>
+        <span class="help" data-invoice-logo-hint>PNG, JPG, WEBP or GIF · under 2 MB · then save the invoice</span>
       </div>
     <?php endif; ?>
   </header>

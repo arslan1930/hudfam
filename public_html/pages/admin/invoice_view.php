@@ -16,6 +16,15 @@ $print = (string) get('print') === '1';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     try {
+        if (
+            empty($_POST)
+            && empty($_FILES)
+            && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0
+        ) {
+            throw new InvalidArgumentException(
+                'The save was too large for this server. Use a smaller logo (under 1 MB) and try again.'
+            );
+        }
         if ($action === 'mark_paid') {
             mark_invoice_payment_received($id);
             flash('ok', $isManual
@@ -339,6 +348,10 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   <div class="invoice-preview-wrap">
     <?php include __DIR__ . '/_invoice_document.php'; ?>
   </div>
+  <div class="no-print invoice-edit-save-bar" style="margin:0.75rem 0 1.25rem;text-align:right;display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap">
+    <button class="btn secondary" type="submit" name="work_status" value="draft">Save as draft</button>
+    <button class="btn" type="submit" name="work_status" value="done">Mark as sent</button>
+  </div>
 </form>
 <?php elseif ($editableBill): ?>
 <form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
@@ -349,7 +362,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   <div class="invoice-preview-wrap">
     <?php include __DIR__ . '/_invoice_document.php'; ?>
   </div>
-  <div class="no-print" style="margin:0.75rem 0 1.25rem;text-align:right">
+  <div class="no-print invoice-edit-save-bar" style="margin:0.75rem 0 1.25rem;text-align:right">
     <button class="btn" type="submit">Save changes</button>
   </div>
 </form>
@@ -501,6 +514,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   var logoData = form.querySelector('[data-invoice-logo-data], [name="company_logo_data"]');
   var logoHint = form.querySelector('[data-invoice-logo-hint]');
   var logoObjectUrl = null;
+  var logoPending = false;
   var logoDefaultHint = logoHint ? String(logoHint.innerHTML || '') : '';
   function setLogoPreview(src) {
     if (!logoImg || !src) return;
@@ -520,16 +534,45 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     }
     if (logoReset) logoReset.disabled = false;
   }
+  function setLogoPending(on) {
+    logoPending = !!on;
+    form.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+      if (on) {
+        btn.setAttribute('data-logo-was-disabled', btn.disabled ? '1' : '0');
+        btn.disabled = true;
+      } else if (btn.getAttribute('data-logo-was-disabled') === '0') {
+        btn.disabled = false;
+        btn.removeAttribute('data-logo-was-disabled');
+      } else if (btn.getAttribute('data-logo-was-disabled') === '1') {
+        btn.removeAttribute('data-logo-was-disabled');
+      }
+    });
+    document.querySelectorAll('button[form="' + form.id + '"]').forEach(function (btn) {
+      if (on) {
+        btn.setAttribute('data-logo-was-disabled', btn.disabled ? '1' : '0');
+        btn.disabled = true;
+      } else if (btn.getAttribute('data-logo-was-disabled') === '0') {
+        btn.disabled = false;
+        btn.removeAttribute('data-logo-was-disabled');
+      } else if (btn.getAttribute('data-logo-was-disabled') === '1') {
+        btn.removeAttribute('data-logo-was-disabled');
+      }
+    });
+    // Re-apply blank Done rule after logo unlock.
+    if (!on) refreshTotals();
+  }
   if (logoInput && logoImg) {
     logoInput.addEventListener('change', function () {
       var file = logoInput.files && logoInput.files[0];
       if (!file) {
         setLogoData('');
+        setLogoPending(false);
         return;
       }
       if (file.size > 2 * 1024 * 1024) {
         setLogoData('');
         logoInput.value = '';
+        setLogoPending(false);
         if (typeof window.txfAlert === 'function') {
           window.txfAlert('Logo must be under 2 MB.');
         } else {
@@ -540,21 +583,33 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       if (logoReset) logoReset.checked = false;
       logoObjectUrl = URL.createObjectURL(file);
       setLogoPreview(logoObjectUrl);
-      markLogoDirty('New logo selected — click <strong>Save changes</strong> (or Save as draft) to keep it.');
+      markLogoDirty('Preparing logo… then save the invoice to keep it.');
       if (typeof FileReader === 'undefined') {
         setLogoData('');
+        setLogoPending(false);
+        markLogoDirty('New logo selected — save the invoice to keep it.');
         return;
       }
+      setLogoPending(true);
       var reader = new FileReader();
       reader.onload = function () {
         var result = String(reader.result || '');
         if (result.indexOf('data:image/') === 0) {
           setLogoData(result);
+          // Avoid posting file + base64 together (can blow post_max_size on shared hosts).
+          try { logoInput.value = ''; } catch (err) {}
+          markLogoDirty('New logo ready — save the invoice to keep it.');
         } else {
           setLogoData('');
+          markLogoDirty('Could not read that image. Try a smaller PNG or JPG.');
         }
+        setLogoPending(false);
       };
-      reader.onerror = function () { setLogoData(''); };
+      reader.onerror = function () {
+        setLogoData('');
+        setLogoPending(false);
+        markLogoDirty('Could not read that image. Try a smaller PNG or JPG.');
+      };
       reader.readAsDataURL(file);
     });
   }
@@ -563,10 +618,27 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       if (!logoReset.checked) return;
       if (logoInput) logoInput.value = '';
       setLogoData('');
+      setLogoPending(false);
       setLogoPreview(logoImg.getAttribute('data-default-logo') || logoImg.src);
-      markLogoDirty('Default logo selected — click <strong>Save changes</strong> to apply.');
+      markLogoDirty('Default logo selected — save the invoice to apply.');
     });
   }
+  form.addEventListener('submit', function (e) {
+    if (logoPending) {
+      e.preventDefault();
+      markLogoDirty('Still preparing the logo… wait a second, then save again.');
+      if (typeof window.txfAlert === 'function') {
+        window.txfAlert('Still preparing the logo. Wait a moment, then save again.');
+      } else {
+        alert('Still preparing the logo. Wait a moment, then save again.');
+      }
+      return;
+    }
+    // Prefer the data-URI field alone so the POST stays under shared-host limits.
+    if (logoData && logoData.value && logoInput) {
+      try { logoInput.value = ''; } catch (err2) {}
+    }
+  });
 
   var noteTa = form.querySelector('#admin_note, [data-note-input]');
   if (noteTa) {

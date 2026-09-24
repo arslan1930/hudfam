@@ -335,38 +335,55 @@ function invoice_resolve_logo_for_save(
     }
 
     $err = (int) ($uploaded['error'] ?? UPLOAD_ERR_NO_FILE);
-    if ($err !== UPLOAD_ERR_NO_FILE && $uploaded !== null) {
-        if ($err !== UPLOAD_ERR_OK) {
-            throw new InvalidArgumentException('Logo upload failed. Try a smaller PNG or JPG (under 2 MB).');
+    $dataUri = trim($dataUri);
+
+    // Prefer a successful multipart file. On Hostinger, file uploads often fail
+    // (size limits / dropped inputs) while the browser data-URI backup still works.
+    if ($err === UPLOAD_ERR_OK && $uploaded !== null) {
+        try {
+            $tmp = (string) ($uploaded['tmp_name'] ?? '');
+            if ($tmp === '' || !is_uploaded_file($tmp)) {
+                throw new InvalidArgumentException('Logo upload failed. Try again.');
+            }
+            $size = (int) ($uploaded['size'] ?? 0);
+            if ($size < 1 || $size > 2 * 1024 * 1024) {
+                throw new InvalidArgumentException('Logo must be an image under 2 MB.');
+            }
+            $info = @getimagesize($tmp);
+            if ($info === false) {
+                throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+            }
+            $mime = strtolower((string) ($info['mime'] ?? ''));
+            $ext = invoice_logo_ext_for_mime($mime);
+            if ($ext === '') {
+                throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+            }
+            return invoice_store_logo_bytes(
+                $invoiceId,
+                (string) file_get_contents($tmp),
+                $ext,
+                $current
+            );
+        } catch (InvalidArgumentException $uploadEx) {
+            if ($dataUri === '') {
+                throw $uploadEx;
+            }
+            // Fall through to data-URI backup.
         }
-        $tmp = (string) ($uploaded['tmp_name'] ?? '');
-        if ($tmp === '' || !is_uploaded_file($tmp)) {
-            throw new InvalidArgumentException('Logo upload failed. Try again.');
-        }
-        $size = (int) ($uploaded['size'] ?? 0);
-        if ($size < 1 || $size > 2 * 1024 * 1024) {
-            throw new InvalidArgumentException('Logo must be an image under 2 MB.');
-        }
-        $info = @getimagesize($tmp);
-        if ($info === false) {
-            throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
-        }
-        $mime = strtolower((string) ($info['mime'] ?? ''));
-        $ext = invoice_logo_ext_for_mime($mime);
-        if ($ext === '') {
-            throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
-        }
-        return invoice_store_logo_bytes(
-            $invoiceId,
-            (string) file_get_contents($tmp),
-            $ext,
-            $current
-        );
     }
 
-    $dataUri = trim($dataUri);
     if ($dataUri !== '') {
         return invoice_store_logo_data_uri($invoiceId, $dataUri, $current);
+    }
+
+    if ($err !== UPLOAD_ERR_NO_FILE && $uploaded !== null) {
+        $why = match ($err) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Logo is too large for this server. Use a smaller PNG or JPG under 1 MB.',
+            UPLOAD_ERR_PARTIAL => 'Logo upload was interrupted. Try again.',
+            UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => 'Server could not store the upload. Ask hosting to fix PHP temp uploads.',
+            default => 'Logo upload failed. Try a smaller PNG or JPG (under 2 MB).',
+        };
+        throw new InvalidArgumentException($why);
     }
 
     return [

@@ -6160,6 +6160,29 @@ try {
             && ($dataPlan['value'] ?? '') !== ''
             && invoice_logo_belongs_to_invoice((string) $dataPlan['value'], (int) $placeInv)
             && is_file(invoice_logo_storage_dir() . '/' . (string) $dataPlan['value']);
+        $uploadFailFallbackOk = false;
+        try {
+            $failPlan = invoice_resolve_logo_for_save(
+                $afterReset,
+                [
+                    'error' => UPLOAD_ERR_INI_SIZE,
+                    'tmp_name' => '',
+                    'size' => 0,
+                    'name' => 'too-big.png',
+                    'type' => 'image/png',
+                ],
+                false,
+                $dataUri
+            );
+            $uploadFailFallbackOk = is_array($failPlan)
+                && ($failPlan['value'] ?? '') !== ''
+                && is_file(invoice_logo_storage_dir() . '/' . (string) $failPlan['value']);
+            if ($uploadFailFallbackOk) {
+                invoice_delete_logo_file((string) $failPlan['value']);
+            }
+        } catch (Throwable $failEx) {
+            $uploadFailFallbackOk = false;
+        }
         if ($dataUriOk) {
             update_generated_invoice((int) $placeInv, [
                 'invoice_date' => (string) ($afterReset['invoice_date'] ?? date('Y-m-d')),
@@ -6212,6 +6235,7 @@ try {
             && $failedClearKeptLogo
             && $blankLogoGone
             && $dataUriOk
+            && $uploadFailFallbackOk
             && count(list_invoice_items((int) $placeInv)) === 2
             && abs((float) ($edited['total_amount'] ?? 0) - 35) < 0.011
             && (string) ($edited['admin_note'] ?? '') === 'changed lines'
