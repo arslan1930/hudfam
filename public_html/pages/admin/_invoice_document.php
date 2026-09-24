@@ -50,22 +50,24 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
 ?>
 <article class="invoice-doc<?= $docEditable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-logohead">
-    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h(trim((string) ($invoice['company_name'] ?? '')) !== '' ? (string) $invoice['company_name'] : 'topUrlz') ?>"
+    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h(trim((string) ($invoice['company_name'] ?? '')) !== '' ? (string) $invoice['company_name'] : 'Teqno Ltd') ?>"
          data-invoice-logo-img
          data-default-logo="<?= h(function_exists('topurlz_logo_url') ? topurlz_logo_url() : $logo) ?>"
-         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
+         <?php if (!$hasCustomLogo): ?>
+         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};"
+         <?php endif; ?>>
     <?php if ($editableCompany): ?>
       <div class="invoice-logo-edit no-print">
         <label class="invoice-logo-upload">
           <span class="btn secondary small">Change logo</span>
-          <input type="file" name="company_logo" accept="image/png,image/jpeg,image/webp,image/gif" data-invoice-logo-input>
+          <input type="file" name="company_logo" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" data-invoice-logo-input>
         </label>
-        <?php if ($hasCustomLogo): ?>
-          <label class="invoice-logo-reset">
-            <input type="checkbox" name="company_logo_reset" value="1"> Use default logo
-          </label>
-        <?php endif; ?>
-        <span class="help">PNG, JPG, WEBP or GIF · under 2 MB</span>
+        <input type="hidden" name="company_logo_data" value="" data-invoice-logo-data>
+        <label class="invoice-logo-reset">
+          <input type="checkbox" name="company_logo_reset" value="1" data-invoice-logo-reset<?= $hasCustomLogo ? '' : ' disabled' ?>>
+          Use default logo
+        </label>
+        <span class="help" data-invoice-logo-hint>PNG, JPG, WEBP or GIF · under 2 MB · then click <strong>Save changes</strong></span>
       </div>
     <?php endif; ?>
   </header>

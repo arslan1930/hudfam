@@ -241,7 +241,10 @@ function invoice_logo_storage_dir(): string
 {
     $dir = dirname(__DIR__) . '/uploads/invoice_logos';
     if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+        @mkdir($dir, 0775, true);
+    }
+    if (is_dir($dir) && !is_writable($dir)) {
+        @chmod($dir, 0775);
     }
     return $dir;
 }
@@ -304,11 +307,18 @@ function invoice_delete_logo_file(string $name): void
  * Plan a logo change without deleting the previous file yet.
  * Call invoice_finalize_logo_cleanup() only after the invoice row saves successfully.
  *
+ * Prefers a real multipart upload; falls back to a data-URI from the browser
+ * (some hosts/browsers drop file inputs when Save is outside the form).
+ *
  * @param array<string,mixed>|null $uploaded $_FILES['company_logo'] entry
  * @return array{value:string, delete_after:?string}
  */
-function invoice_resolve_logo_for_save(array $invoice, ?array $uploaded, bool $resetToDefault): array
-{
+function invoice_resolve_logo_for_save(
+    array $invoice,
+    ?array $uploaded,
+    bool $resetToDefault,
+    string $dataUri = ''
+): array {
     $invoiceId = (int) ($invoice['id'] ?? 0);
     $current = basename(trim((string) ($invoice['company_logo'] ?? '')));
     if ($current !== '' && $invoiceId > 0 && !invoice_logo_belongs_to_invoice($current, $invoiceId)) {
@@ -325,53 +335,120 @@ function invoice_resolve_logo_for_save(array $invoice, ?array $uploaded, bool $r
     }
 
     $err = (int) ($uploaded['error'] ?? UPLOAD_ERR_NO_FILE);
-    if ($err === UPLOAD_ERR_NO_FILE || $uploaded === null) {
-        return [
-            'value' => $current,
-            'delete_after' => null,
-        ];
+    if ($err !== UPLOAD_ERR_NO_FILE && $uploaded !== null) {
+        if ($err !== UPLOAD_ERR_OK) {
+            throw new InvalidArgumentException('Logo upload failed. Try a smaller PNG or JPG (under 2 MB).');
+        }
+        $tmp = (string) ($uploaded['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new InvalidArgumentException('Logo upload failed. Try again.');
+        }
+        $size = (int) ($uploaded['size'] ?? 0);
+        if ($size < 1 || $size > 2 * 1024 * 1024) {
+            throw new InvalidArgumentException('Logo must be an image under 2 MB.');
+        }
+        $info = @getimagesize($tmp);
+        if ($info === false) {
+            throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+        }
+        $mime = strtolower((string) ($info['mime'] ?? ''));
+        $ext = invoice_logo_ext_for_mime($mime);
+        if ($ext === '') {
+            throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+        }
+        return invoice_store_logo_bytes(
+            $invoiceId,
+            (string) file_get_contents($tmp),
+            $ext,
+            $current
+        );
     }
-    if ($err !== UPLOAD_ERR_OK) {
-        throw new InvalidArgumentException('Logo upload failed. Try a smaller PNG or JPG.');
+
+    $dataUri = trim($dataUri);
+    if ($dataUri !== '') {
+        return invoice_store_logo_data_uri($invoiceId, $dataUri, $current);
     }
-    $tmp = (string) ($uploaded['tmp_name'] ?? '');
-    if ($tmp === '' || !is_uploaded_file($tmp)) {
-        throw new InvalidArgumentException('Logo upload failed. Try again.');
-    }
-    $size = (int) ($uploaded['size'] ?? 0);
-    if ($size < 1 || $size > 2 * 1024 * 1024) {
-        throw new InvalidArgumentException('Logo must be an image under 2 MB.');
-    }
-    $info = @getimagesize($tmp);
-    if ($info === false) {
-        throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
-    }
-    $mime = strtolower((string) ($info['mime'] ?? ''));
-    $extMap = [
+
+    return [
+        'value' => $current,
+        'delete_after' => null,
+    ];
+}
+
+function invoice_logo_ext_for_mime(string $mime): string
+{
+    $map = [
         'image/png' => 'png',
         'image/jpeg' => 'jpg',
         'image/webp' => 'webp',
         'image/gif' => 'gif',
     ];
-    if (!isset($extMap[$mime])) {
-        throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
-    }
+    return $map[strtolower(trim($mime))] ?? '';
+}
+
+/**
+ * @return array{value:string, delete_after:?string}
+ */
+function invoice_store_logo_bytes(int $invoiceId, string $bytes, string $ext, string $current): array
+{
     if ($invoiceId < 1) {
         throw new InvalidArgumentException('Invoice not found.');
     }
-    $name = 'inv_' . $invoiceId . '_' . bin2hex(random_bytes(8)) . '.' . $extMap[$mime];
+    $len = strlen($bytes);
+    if ($len < 32 || $len > 2 * 1024 * 1024) {
+        throw new InvalidArgumentException('Logo must be an image under 2 MB.');
+    }
+    $info = @getimagesizefromstring($bytes);
+    if ($info === false) {
+        throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+    }
+    $extFromMime = invoice_logo_ext_for_mime(strtolower((string) ($info['mime'] ?? '')));
+    if ($extFromMime === '') {
+        throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+    }
+    $ext = $extFromMime;
+    $name = 'inv_' . $invoiceId . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
     $destDir = invoice_logo_storage_dir();
+    if (!is_dir($destDir)) {
+        @mkdir($destDir, 0775, true);
+    }
     if (!is_dir($destDir) || !is_writable($destDir)) {
-        throw new InvalidArgumentException('Logo folder is not writable on the server.');
+        throw new InvalidArgumentException(
+            'Logo folder is not writable on the server. Create public_html/uploads/invoice_logos and make it writable.'
+        );
     }
     $dest = $destDir . '/' . $name;
-    if (!@move_uploaded_file($tmp, $dest)) {
+    if (@file_put_contents($dest, $bytes) === false) {
         throw new InvalidArgumentException('Could not save the logo file.');
     }
+    @chmod($dest, 0644);
     return [
         'value' => $name,
         'delete_after' => ($current !== '' && $current !== $name) ? $current : null,
     ];
+}
+
+/**
+ * @return array{value:string, delete_after:?string}
+ */
+function invoice_store_logo_data_uri(int $invoiceId, string $dataUri, string $current): array
+{
+    if (!preg_match('#^data:image/(png|jpeg|jpg|webp|gif);base64,#i', $dataUri, $m)) {
+        throw new InvalidArgumentException('Logo must be a PNG, JPG, WEBP, or GIF image.');
+    }
+    $comma = strpos($dataUri, ',');
+    if ($comma === false) {
+        throw new InvalidArgumentException('Logo upload failed. Try again.');
+    }
+    $raw = base64_decode(substr($dataUri, $comma + 1), true);
+    if ($raw === false) {
+        throw new InvalidArgumentException('Logo upload failed. Try again.');
+    }
+    $ext = strtolower($m[1]);
+    if ($ext === 'jpeg') {
+        $ext = 'jpg';
+    }
+    return invoice_store_logo_bytes($invoiceId, $raw, $ext, $current);
 }
 
 /** Delete the previous logo file after a successful invoice save. */

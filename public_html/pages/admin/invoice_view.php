@@ -62,7 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $logoPlan = invoice_resolve_logo_for_save(
                 $invoice,
                 isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
-                (string) post('company_logo_reset') === '1'
+                (string) post('company_logo_reset') === '1',
+                (string) post('company_logo_data')
             );
             $header = [
                 'invoice_date' => (string) post('invoice_date'),
@@ -94,7 +95,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw $genSaveEx;
             }
             invoice_finalize_logo_cleanup($logoPlan['delete_after'] ?? null);
-            flash('ok', 'Invoice saved. Order-sheet prices were not changed.');
+            $logoChanged = ($logoPlan['value'] ?? '') !== basename(trim((string) ($invoice['company_logo'] ?? '')))
+                || !empty($logoPlan['delete_after']);
+            flash('ok', $logoChanged
+                ? 'Invoice saved, including the logo. Order-sheet prices were not changed.'
+                : 'Invoice saved. Order-sheet prices were not changed.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
         if ($action === 'save_blank') {
@@ -119,7 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $logoPlan = invoice_resolve_logo_for_save(
                 $invoice,
                 isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
-                (string) post('company_logo_reset') === '1'
+                (string) post('company_logo_reset') === '1',
+                (string) post('company_logo_data')
             );
             $header = [
                 'invoice_date' => (string) post('invoice_date'),
@@ -152,9 +158,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw $blankSaveEx;
             }
             invoice_finalize_logo_cleanup($logoPlan['delete_after'] ?? null);
-            flash('ok', $workStatus === 'done'
-                ? 'Invoice saved as Done — waiting for payment.'
-                : 'Draft saved. You can finish the invoice later.');
+            $logoChanged = ($logoPlan['value'] ?? '') !== basename(trim((string) ($invoice['company_logo'] ?? '')))
+                || !empty($logoPlan['delete_after']);
+            if ($workStatus === 'done') {
+                flash('ok', $logoChanged
+                    ? 'Invoice saved as Done (logo updated) — waiting for payment.'
+                    : 'Invoice saved as Done — waiting for payment.');
+            } else {
+                flash('ok', $logoChanged
+                    ? 'Draft saved, including the logo. You can finish the invoice later.'
+                    : 'Draft saved. You can finish the invoice later.');
+            }
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
     } catch (Throwable $e) {
@@ -335,6 +349,9 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   <div class="invoice-preview-wrap">
     <?php include __DIR__ . '/_invoice_document.php'; ?>
   </div>
+  <div class="no-print" style="margin:0.75rem 0 1.25rem;text-align:right">
+    <button class="btn" type="submit">Save changes</button>
+  </div>
 </form>
 <?php else: ?>
 <div class="invoice-preview-wrap">
@@ -480,30 +497,74 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 
   var logoInput = form.querySelector('[data-invoice-logo-input]');
   var logoImg = form.querySelector('[data-invoice-logo-img]');
-  var logoReset = form.querySelector('[name="company_logo_reset"]');
+  var logoReset = form.querySelector('[data-invoice-logo-reset], [name="company_logo_reset"]');
+  var logoData = form.querySelector('[data-invoice-logo-data], [name="company_logo_data"]');
+  var logoHint = form.querySelector('[data-invoice-logo-hint]');
   var logoObjectUrl = null;
+  var logoDefaultHint = logoHint ? String(logoHint.innerHTML || '') : '';
   function setLogoPreview(src) {
     if (!logoImg || !src) return;
     if (logoObjectUrl) {
       try { URL.revokeObjectURL(logoObjectUrl); } catch (e) {}
       logoObjectUrl = null;
     }
+    logoImg.removeAttribute('onerror');
     logoImg.src = src;
+  }
+  function setLogoData(value) {
+    if (logoData) logoData.value = value || '';
+  }
+  function markLogoDirty(msg) {
+    if (logoHint) {
+      logoHint.innerHTML = msg || logoDefaultHint;
+    }
+    if (logoReset) logoReset.disabled = false;
   }
   if (logoInput && logoImg) {
     logoInput.addEventListener('change', function () {
       var file = logoInput.files && logoInput.files[0];
-      if (!file) return;
+      if (!file) {
+        setLogoData('');
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        setLogoData('');
+        logoInput.value = '';
+        if (typeof window.txfAlert === 'function') {
+          window.txfAlert('Logo must be under 2 MB.');
+        } else {
+          alert('Logo must be under 2 MB.');
+        }
+        return;
+      }
+      if (logoReset) logoReset.checked = false;
       logoObjectUrl = URL.createObjectURL(file);
       setLogoPreview(logoObjectUrl);
-      if (logoReset) logoReset.checked = false;
+      markLogoDirty('New logo selected — click <strong>Save changes</strong> (or Save as draft) to keep it.');
+      if (typeof FileReader === 'undefined') {
+        setLogoData('');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var result = String(reader.result || '');
+        if (result.indexOf('data:image/') === 0) {
+          setLogoData(result);
+        } else {
+          setLogoData('');
+        }
+      };
+      reader.onerror = function () { setLogoData(''); };
+      reader.readAsDataURL(file);
     });
   }
   if (logoReset && logoImg) {
     logoReset.addEventListener('change', function () {
       if (!logoReset.checked) return;
       if (logoInput) logoInput.value = '';
+      setLogoData('');
       setLogoPreview(logoImg.getAttribute('data-default-logo') || logoImg.src);
+      markLogoDirty('Default logo selected — click <strong>Save changes</strong> to apply.');
     });
   }
 
