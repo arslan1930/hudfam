@@ -1681,7 +1681,7 @@ function update_invoice_bill_header(int $invoiceId, array $header): void
         throw new InvalidArgumentException('Invoice not found.');
     }
     if (invoice_is_paid($invoice)) {
-        throw new InvalidArgumentException('Paid invoices cannot be edited.');
+        throw new InvalidArgumentException('Paid invoices cannot change line items. Company, bill as, and payment details can still be edited.');
     }
 
     $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
@@ -1725,6 +1725,85 @@ function update_invoice_bill_header(int $invoiceId, array $header): void
 }
 
 /**
+ * Save company / bank / bill-as / date / note / logo on any invoice, including paid.
+ * Does not change line items, totals, or payment status.
+ *
+ * @param array<string,mixed> $header
+ */
+function update_invoice_party_fields(int $invoiceId, array $header): void
+{
+    ensure_invoice_schema();
+    $invoice = get_invoice($invoiceId);
+    if (!$invoice) {
+        throw new InvalidArgumentException('Invoice not found.');
+    }
+
+    $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
+    if ($invoiceDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate)) {
+        $invoiceDate = (string) $invoice['invoice_date'];
+    }
+    $adminNote = trim((string) ($header['admin_note'] ?? ''));
+    if (mb_strlen($adminNote) > 255) {
+        $adminNote = mb_substr($adminNote, 0, 255);
+    }
+
+    $company = invoice_company_defaults();
+    $logoName = invoice_normalize_logo_name(
+        array_key_exists('company_logo', $header)
+            ? (string) $header['company_logo']
+            : (string) ($invoice['company_logo'] ?? ''),
+        $invoiceId,
+        (string) ($invoice['company_logo'] ?? '')
+    );
+    $billName = trim((string) ($header['bill_to_name'] ?? ''));
+    $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
+    $currency = strtoupper(trim((string) ($header['currency'] ?? ($invoice['currency'] ?? 'EUR'))));
+    if ($currency === '' || strlen($currency) > 3) {
+        $currency = (string) ($invoice['currency'] ?? 'EUR') ?: 'EUR';
+    }
+
+    db()->prepare(
+        'UPDATE invoices SET
+            invoice_date=?, admin_note=?,
+            client_name=?, bill_to_name=?, bill_to_address=?, bill_to_hrb=?, bill_to_vat=?,
+            supplier_number=?, cost_center=?, orderer=?,
+            company_name=?, company_bic=?, company_iban=?, company_phone=?,
+            company_address=?, company_reg_no=?, company_logo=?, vat_note=?,
+            currency=?, updated_at=NOW()
+         WHERE id=?'
+    )->execute([
+        $invoiceDate,
+        $adminNote,
+        $billName,
+        $billName,
+        trim((string) ($header['bill_to_address'] ?? '')),
+        trim((string) ($header['bill_to_hrb'] ?? '')),
+        trim((string) ($header['bill_to_vat'] ?? '')),
+        $supplier,
+        trim((string) ($header['cost_center'] ?? '')),
+        trim((string) ($header['orderer'] ?? '')),
+        trim((string) ($header['company_name'] ?? $invoice['company_name'] ?? $company['company_name'])),
+        trim((string) ($header['company_bic'] ?? $invoice['company_bic'] ?? $company['company_bic'])),
+        trim((string) ($header['company_iban'] ?? $invoice['company_iban'] ?? $company['company_iban'])),
+        trim((string) ($header['company_phone'] ?? $invoice['company_phone'] ?? $company['company_phone'])),
+        trim((string) ($header['company_address'] ?? $invoice['company_address'] ?? $company['company_address'])),
+        trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
+        $logoName,
+        trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
+        $currency,
+        $invoiceId,
+    ]);
+
+    invoice_record_event($invoiceId, 'bill_as_saved', null, 'Company, bill as, and payment details saved.', [
+        'invoice_number' => (string) ($invoice['invoice_number'] ?? ''),
+        'total_before' => (float) ($invoice['total_amount'] ?? 0),
+        'total_after' => (float) ($invoice['total_amount'] ?? 0),
+        'rows' => [],
+        'bill_to_name' => $billName,
+    ]);
+}
+
+/**
  * Save bill-as plus line items on an unpaid order invoice.
  * Existing lines keep only order-sheet ids that were already on this invoice.
  * New lines are not linked. Order-sheet prices are left unchanged.
@@ -1744,7 +1823,7 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
         throw new InvalidArgumentException('Blank invoices are saved separately.');
     }
     if (invoice_is_paid($invoice)) {
-        throw new InvalidArgumentException('Paid invoices cannot be edited.');
+        throw new InvalidArgumentException('Paid invoices cannot change line items. Company, bill as, and payment details can still be edited.');
     }
 
     $invoiceDate = trim((string) ($header['invoice_date'] ?? ''));
@@ -1812,6 +1891,10 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
         $invoiceId,
         (string) ($invoice['company_logo'] ?? '')
     );
+    $currency = strtoupper(trim((string) ($header['currency'] ?? ($invoice['currency'] ?? 'EUR'))));
+    if ($currency === '' || strlen($currency) > 3) {
+        $currency = (string) ($invoice['currency'] ?? 'EUR') ?: 'EUR';
+    }
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -1822,7 +1905,7 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
                 supplier_number=?, cost_center=?, orderer=?,
                 company_name=?, company_bic=?, company_iban=?, company_phone=?,
                 company_address=?, company_reg_no=?, company_logo=?, vat_note=?,
-                total_amount=?, updated_at=NOW()
+                currency=?, total_amount=?, updated_at=NOW()
              WHERE id=? AND is_manual=0'
         )->execute([
             $invoiceDate,
@@ -1843,6 +1926,7 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
             trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
             $logoName,
             trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
+            $currency,
             $total,
             $invoiceId,
         ]);
@@ -1926,7 +2010,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
         throw new InvalidArgumentException('Only blank invoices can be edited this way.');
     }
     if (invoice_is_paid($invoice)) {
-        throw new InvalidArgumentException('Paid invoices cannot be edited. Unmark is not available — create a new blank invoice if needed.');
+        throw new InvalidArgumentException('Paid invoices cannot change line items. Company, bill as, and payment details can still be edited.');
     }
 
     $workStatus = normalize_invoice_work_status($workStatus);
@@ -1977,6 +2061,10 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
         $invoiceId,
         (string) ($invoice['company_logo'] ?? '')
     );
+    $currency = strtoupper(trim((string) ($header['currency'] ?? ($invoice['currency'] ?? 'EUR'))));
+    if ($currency === '' || strlen($currency) > 3) {
+        $currency = (string) ($invoice['currency'] ?? 'EUR') ?: 'EUR';
+    }
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -1987,7 +2075,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
                 supplier_number=?, cost_center=?, orderer=?,
                 company_name=?, company_bic=?, company_iban=?, company_phone=?,
                 company_address=?, company_reg_no=?, company_logo=?, vat_note=?,
-                total_amount=?, updated_at=NOW()
+                currency=?, total_amount=?, updated_at=NOW()
              WHERE id=? AND is_manual=1'
         )->execute([
             $invoiceDate,
@@ -2009,6 +2097,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
             trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
             $logoName,
             trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
+            $currency,
             $total,
             $invoiceId,
         ]);

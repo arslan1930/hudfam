@@ -37,12 +37,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('ok', 'Invoice marked as sent — waiting for payment. You can still add more unpaid sites to this bill.');
             redirect('index.php?page=admin_invoice_view&id=' . $id);
         }
+        if ($action === 'save_party') {
+            $logoPlan = invoice_resolve_logo_for_save(
+                $invoice,
+                isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) ? $_FILES['company_logo'] : null,
+                (string) post('company_logo_reset') === '1',
+                (string) post('company_logo_data')
+            );
+            $header = [
+                'invoice_date' => (string) post('invoice_date'),
+                'admin_note' => (string) post('admin_note'),
+                'bill_to_name' => (string) post('bill_to_name'),
+                'bill_to_address' => (string) post('bill_to_address'),
+                'bill_to_hrb' => (string) post('bill_to_hrb'),
+                'bill_to_vat' => (string) post('bill_to_vat'),
+                'supplier_number' => (string) post('supplier_number'),
+                'cost_center' => (string) post('cost_center'),
+                'orderer' => (string) post('orderer'),
+                'company_name' => (string) post('company_name'),
+                'company_bic' => (string) post('company_bic'),
+                'company_iban' => (string) post('company_iban'),
+                'company_phone' => (string) post('company_phone'),
+                'company_address' => (string) post('company_address'),
+                'company_reg_no' => (string) post('company_reg_no'),
+                'vat_note' => (string) post('vat_note'),
+                'currency' => (string) post('currency'),
+                'company_logo' => $logoPlan['value'],
+            ];
+            try {
+                update_invoice_party_fields($id, $header);
+            } catch (Throwable $partySaveEx) {
+                $staged = (string) ($logoPlan['value'] ?? '');
+                $prev = basename(trim((string) ($invoice['company_logo'] ?? '')));
+                if ($staged !== '' && $staged !== $prev) {
+                    invoice_delete_logo_file($staged);
+                }
+                throw $partySaveEx;
+            }
+            invoice_finalize_logo_cleanup($logoPlan['delete_after'] ?? null);
+            $logoChanged = ($logoPlan['value'] ?? '') !== basename(trim((string) ($invoice['company_logo'] ?? '')))
+                || !empty($logoPlan['delete_after']);
+            flash('ok', $logoChanged
+                ? 'Company, bill as, and payment details saved (including the logo).'
+                : 'Company, bill as, and payment details saved.');
+            redirect('index.php?page=admin_invoice_view&id=' . $id);
+        }
         if ($action === 'save_bill') {
             if ($isManual) {
                 throw new InvalidArgumentException('Use Save as draft / Mark as sent on a blank invoice.');
             }
             if ($isPaid) {
-                throw new InvalidArgumentException('Paid invoices cannot be edited.');
+                throw new InvalidArgumentException('Paid invoices cannot change line items. Company, bill as, and payment details can still be edited.');
             }
             $descs = (array) ($_POST['line_desc'] ?? []);
             $amounts = (array) ($_POST['line_amount'] ?? []);
@@ -91,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'company_address' => (string) post('company_address'),
                 'company_reg_no' => (string) post('company_reg_no'),
                 'vat_note' => (string) post('vat_note'),
+                'currency' => (string) post('currency'),
                 'company_logo' => $logoPlan['value'],
             ];
             try {
@@ -116,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Only blank invoices can be edited.');
             }
             if ($isPaid) {
-                throw new InvalidArgumentException('Paid invoices cannot be edited. Unmark is not available — create a new blank invoice if needed.');
+                throw new InvalidArgumentException('Paid blank invoices cannot change line items. Company, bill as, and payment details can still be edited.');
             }
             $workStatus = normalize_invoice_work_status((string) post('work_status'));
             $descs = (array) ($_POST['line_desc'] ?? []);
@@ -153,6 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'company_address' => (string) post('company_address'),
                 'company_reg_no' => (string) post('company_reg_no'),
                 'vat_note' => (string) post('vat_note'),
+                'currency' => (string) post('currency'),
                 'company_logo' => $logoPlan['value'],
             ];
             try {
@@ -192,9 +239,11 @@ $isPaid = invoice_is_paid($invoice);
 $isManual = invoice_is_manual($invoice);
 $isDraft = invoice_is_draft($invoice);
 $editable = $isManual && !$isPaid && !$print;
-$editableBill = !$isManual && !$isPaid && !$print;
 $editableLines = !$isPaid && !$print;
-$editableCompany = !$isPaid && !$print;
+$editableCompany = !$print;
+$editableBill = !$print;
+$editableGenerated = !$isManual && $editableLines;
+$editablePartyOnly = !$editable && !$editableGenerated && ($editableCompany || $editableBill);
 $linkedOrders = (!$print && !$isManual) ? list_invoice_linked_order_items($id) : [];
 $invoiceEvents = $print ? [] : list_invoice_events($id);
 $legacyClientId = (int) ($invoice['client_id'] ?? 0);
@@ -204,6 +253,8 @@ if ($print) {
     $editableBill = false;
     $editableLines = false;
     $editableCompany = false;
+    $editableGenerated = false;
+    $editablePartyOnly = false;
     $cssPhp = stylesheet_url();
     header('Content-Type: text/html; charset=utf-8');
     ?>
@@ -269,14 +320,19 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
       <?php endif; ?>
       <?php if ($editable): ?>
         · <strong>Draft</strong> = still needs data · <strong>Waiting</strong> = sent, still unpaid
-      <?php elseif ($editableBill): ?>
-        · Edit logo, company details, bill as, and line items, then Save changes
+      <?php elseif ($editableGenerated): ?>
+        · Edit logo, company details, bill as, payment details, and line items, then Save changes
         <?php if ($isDraft && !$isManual): ?>
           · Draft — add more sites from Generate, then Mark as sent
         <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
           · Waiting for payment — add more unpaid sites, or Mark paid when it arrives
         <?php endif; ?>
         · Removing a line takes those sites off this bill — order-sheet prices stay as they are
+      <?php elseif ($editablePartyOnly): ?>
+        · Edit logo, company details, bill as, and payment details, then Save changes
+        <?php if ($isPaid): ?>
+          · Line items are locked on paid invoices
+        <?php endif; ?>
       <?php elseif ($isDraft && !$isManual): ?>
         · Draft — add more sites from Generate, then Mark as sent
       <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
@@ -296,8 +352,10 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <?php elseif (!$isPaid && invoice_can_append_orders($invoice)): ?>
       <a class="btn" href="<?= h(invoice_generate_append_href($id)) ?>">Add sites to this invoice</a>
     <?php endif; ?>
-    <?php if ($editableBill): ?>
+    <?php if ($editableGenerated): ?>
       <button class="btn" type="submit" form="generated-invoice-form">Save changes</button>
+    <?php elseif ($editablePartyOnly): ?>
+      <button class="btn" type="submit" form="party-invoice-form">Save changes</button>
     <?php endif; ?>
     <?php if ($editable): ?>
       <button class="btn secondary" type="submit" form="blank-invoice-form" name="work_status" value="draft"
@@ -353,7 +411,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <button class="btn" type="submit" name="work_status" value="done">Mark as sent</button>
   </div>
 </form>
-<?php elseif ($editableBill): ?>
+<?php elseif ($editableGenerated): ?>
 <form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
       enctype="multipart/form-data"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
@@ -366,18 +424,32 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     <button class="btn" type="submit">Save changes</button>
   </div>
 </form>
+<?php elseif ($editablePartyOnly): ?>
+<form method="post" id="party-invoice-form" class="invoice-blank-edit-form"
+      enctype="multipart/form-data"
+      action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
+  <?= csrf_field() ?>
+  <input type="hidden" name="action" value="save_party">
+  <div class="invoice-preview-wrap">
+    <?php include __DIR__ . '/_invoice_document.php'; ?>
+  </div>
+  <div class="no-print invoice-edit-save-bar" style="margin:0.75rem 0 1.25rem;text-align:right">
+    <button class="btn" type="submit">Save changes</button>
+  </div>
+</form>
 <?php else: ?>
 <div class="invoice-preview-wrap">
   <?php include __DIR__ . '/_invoice_document.php'; ?>
 </div>
 <?php endif; ?>
-<?php if ($editable || $editableBill): ?>
+<?php if ($editable || $editableGenerated || $editablePartyOnly): ?>
 <script>
 (function () {
-  var form = document.getElementById('blank-invoice-form') || document.getElementById('generated-invoice-form');
+  var form = document.getElementById('blank-invoice-form')
+    || document.getElementById('generated-invoice-form')
+    || document.getElementById('party-invoice-form');
   if (!form) return;
   var tbody = document.getElementById('invoice-edit-items');
-  if (!tbody) return;
   var addBtn = document.getElementById('invoice-edit-add');
   var saveDraftBtn = document.getElementById('blank-invoice-save-draft');
   var saveDoneBtn = document.getElementById('blank-invoice-save-done');
@@ -392,27 +464,39 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     return isNaN(n) ? 0 : n;
   }
   function renumber() {
+    if (!tbody) return;
     tbody.querySelectorAll('.invoice-edit-row').forEach(function (row, i) {
       var num = row.querySelector('.invoice-edit-num');
       if (num) num.textContent = String(i + 1);
     });
   }
+  function fieldValue(name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    return el ? (el.value || '') : '';
+  }
+  function setMirror(sel, value) {
+    form.querySelectorAll(sel).forEach(function (el) {
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        if (document.activeElement !== el) el.value = value;
+      } else {
+        el.textContent = value;
+      }
+    });
+  }
   function syncPaybox() {
-    var nameEl = form.querySelector('[name="company_name"]');
-    if (!nameEl) return;
-    var name = nameEl.value || '';
-    var iban = (form.querySelector('[name="company_iban"]') || {}).value || '';
-    var bic = (form.querySelector('[name="company_bic"]') || {}).value || '';
-    var vat = (form.querySelector('[name="vat_note"]') || {}).value || '';
-    var el;
-    el = form.querySelector('.invoice-pay-company'); if (el) el.textContent = name;
-    el = form.querySelector('.invoice-pay-iban'); if (el) el.textContent = iban;
-    el = form.querySelector('.invoice-pay-bic'); if (el) el.textContent = bic;
-    el = form.querySelector('.invoice-pay-vat'); if (el) el.textContent = vat;
-    el = form.querySelector('.invoice-footer-company'); if (el) el.textContent = name || 'Teqno Ltd';
+    var name = fieldValue('company_name');
+    var iban = fieldValue('company_iban');
+    var bic = fieldValue('company_bic');
+    var vat = fieldValue('vat_note');
+    setMirror('.invoice-pay-company', name);
+    setMirror('.invoice-pay-iban', iban);
+    setMirror('.invoice-pay-bic', bic);
+    setMirror('.invoice-pay-vat', vat);
+    setMirror('.invoice-footer-company', name || 'Teqno Ltd');
   }
   function currentGrand() {
     var grand = 0;
+    if (!tbody) return grand;
     tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
       var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
       var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
@@ -434,20 +518,23 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
   }
   function refreshTotals() {
     var grand = 0;
-    tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
-      var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
-      var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
-      var line = amount * qty;
-      grand += line;
-      var cell = row.querySelector('.invoice-edit-line-total');
-      if (cell) cell.textContent = money(line);
-    });
-    var g = form.querySelector('[data-invoice-grand-total]');
-    if (g) g.textContent = money(grand);
+    if (tbody) {
+      tbody.querySelectorAll('.invoice-edit-row').forEach(function (row) {
+        var amount = parseNum((row.querySelector('.invoice-edit-amount') || {}).value);
+        var qty = Math.max(1, parseInt((row.querySelector('.invoice-edit-qty') || {}).value, 10) || 1);
+        var line = amount * qty;
+        grand += line;
+        var cell = row.querySelector('.invoice-edit-line-total');
+        if (cell) cell.textContent = money(line);
+      });
+      var g = form.querySelector('[data-invoice-grand-total]');
+      if (g) g.textContent = money(grand);
+    }
     syncPaybox();
     syncSaveState(grand);
   }
   function syncRemove() {
+    if (!tbody) return;
     var rows = tbody.querySelectorAll('.invoice-edit-row');
     rows.forEach(function (row) {
       var btn = row.querySelector('.invoice-edit-remove');
@@ -455,7 +542,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     });
   }
 
-  if (addBtn) {
+  if (addBtn && tbody) {
     addBtn.addEventListener('click', function () {
       var first = tbody.querySelector('.invoice-edit-row');
       if (!first) return;
@@ -475,19 +562,32 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     });
   }
 
-  tbody.addEventListener('click', function (e) {
-    var btn = e.target.closest('.invoice-edit-remove');
-    if (!btn || btn.disabled) return;
-    var row = btn.closest('.invoice-edit-row');
-    if (!row) return;
-    if (tbody.querySelectorAll('.invoice-edit-row').length <= 1) return;
-    row.remove();
-    renumber();
-    syncRemove();
+  if (tbody) {
+    tbody.addEventListener('click', function (e) {
+      var btn = e.target.closest('.invoice-edit-remove');
+      if (!btn || btn.disabled) return;
+      var row = btn.closest('.invoice-edit-row');
+      if (!row) return;
+      if (tbody.querySelectorAll('.invoice-edit-row').length <= 1) return;
+      row.remove();
+      renumber();
+      syncRemove();
+      refreshTotals();
+    });
+  }
+
+  form.addEventListener('input', function (e) {
+    var mirror = e.target && e.target.getAttribute && e.target.getAttribute('data-pay-mirror');
+    if (mirror) {
+      var target = form.querySelector('[name="' + mirror + '"]');
+      if (target && target !== e.target) target.value = e.target.value || '';
+      var foot = form.querySelector('.invoice-footer-company');
+      if (mirror === 'company_name' && foot) {
+        foot.textContent = (e.target.value || '') || 'Teqno Ltd';
+      }
+    }
     refreshTotals();
   });
-
-  form.addEventListener('input', refreshTotals);
   form.addEventListener('change', refreshTotals);
   form.addEventListener('submit', function (e) {
     var submitter = e.submitter;
@@ -624,6 +724,13 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
     });
   }
   form.addEventListener('submit', function (e) {
+    // Flush Payment-details mirrors into the named From fields before POST.
+    form.querySelectorAll('[data-pay-mirror]').forEach(function (el) {
+      var name = el.getAttribute('data-pay-mirror');
+      if (!name) return;
+      var target = form.querySelector('[name="' + name + '"]');
+      if (target) target.value = el.value || '';
+    });
     if (logoPending) {
       e.preventDefault();
       markLogoDirty('Still preparing the logo… wait a second, then save again.');

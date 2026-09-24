@@ -6001,6 +6001,7 @@ try {
     $sheetBefore = get_order_item((int) $bannerId);
     $editOk = false;
     $paidLocked = false;
+    $partyPaidOk = false;
     $editErr = '';
     if ($bannerLine && $textLine && $sheetBefore) {
         try {
@@ -6260,13 +6261,47 @@ try {
                     ['description' => 'should not save', 'amount' => 1, 'qty' => 1, 'order_item_ids' => ''],
                 ]);
             } catch (InvalidArgumentException $editPaidEx) {
-                $paidLocked = str_contains($editPaidEx->getMessage(), 'Paid');
+                $paidLocked = str_contains($editPaidEx->getMessage(), 'Paid')
+                    || str_contains($editPaidEx->getMessage(), 'line items');
+            }
+            $partyPaidOk = false;
+            if ($paidLocked) {
+                $totalBeforeParty = (float) ((get_invoice((int) $placeInv)['total_amount'] ?? 0));
+                update_invoice_party_fields((int) $placeInv, [
+                    'invoice_date' => date('Y-m-d'),
+                    'admin_note' => 'paid party edit',
+                    'bill_to_name' => 'paid-party@example.com',
+                    'bill_to_address' => '9 Paid Street',
+                    'bill_to_hrb' => 'HRB-PAID',
+                    'bill_to_vat' => 'VAT-PAID',
+                    'supplier_number' => 'SUP-PAID',
+                    'cost_center' => 'CC-PAID',
+                    'orderer' => 'Orderer Paid',
+                    'company_name' => 'Paid Party Co',
+                    'company_bic' => 'PAIDBICXX',
+                    'company_iban' => 'DE00PAIDIBAN',
+                    'company_phone' => '+199999',
+                    'company_address' => 'Paid Address',
+                    'company_reg_no' => 'REG-PAID',
+                    'vat_note' => 'Paid VAT note',
+                    'currency' => 'EUR',
+                    'company_logo' => '',
+                ]);
+                $partyAfter = get_invoice((int) $placeInv);
+                $partyPaidOk = $partyAfter
+                    && invoice_is_paid($partyAfter)
+                    && (string) ($partyAfter['company_name'] ?? '') === 'Paid Party Co'
+                    && (string) ($partyAfter['company_iban'] ?? '') === 'DE00PAIDIBAN'
+                    && (string) ($partyAfter['bill_to_name'] ?? '') === 'paid-party@example.com'
+                    && (string) ($partyAfter['bill_to_address'] ?? '') === '9 Paid Street'
+                    && (string) ($partyAfter['admin_note'] ?? '') === 'paid party edit'
+                    && abs((float) ($partyAfter['total_amount'] ?? -1) - $totalBeforeParty) < 0.001;
             }
         } catch (Throwable $editEx) {
             $editErr = $editEx->getMessage();
         }
     }
-    if ($editOk && $paidLocked) {
+    if ($editOk && $paidLocked && !empty($partyPaidOk)) {
         pass('unpaid order invoice lines, company, and logo can be edited without changing the sheet');
     } else {
         fail('order invoice line edit failed' . ($editErr !== '' ? ': ' . $editErr : ''));

@@ -6,7 +6,8 @@
  * Expects $invoice + $items.
  * Set $editable = true for blank-invoice in-document editing (not for print).
  * Set $editableLines = true to edit description / amount / qty on an unpaid invoice.
- * Set $editableCompany = true to edit logo + From / bank details on an unpaid invoice.
+ * Set $editableCompany = true to edit logo + From / bank / payment details (including paid).
+ * Set $editableBill = true to edit bill-as / date / note (including paid).
  */
 if (!isset($invoice) || !is_array($invoice)) {
     return;
@@ -235,15 +236,42 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
   <section class="invoice-doc-summary">
     <div class="invoice-doc-paybox">
       <div class="invoice-party-label">Payment details</div>
-      <div><strong class="invoice-pay-company"><?= h($invoice['company_name']) ?></strong></div>
-      <div>IBAN <span class="invoice-pay-iban"><?= h($invoice['company_iban']) ?></span></div>
-      <div>BIC <span class="invoice-pay-bic"><?= h($invoice['company_bic']) ?></span></div>
-      <div class="invoice-doc-vat invoice-pay-vat"><?= h($invoice['vat_note']) ?></div>
+      <?php if ($editableCompany): ?>
+        <div>
+          <input class="invoice-edit-input invoice-edit-strong invoice-pay-company"
+                 data-pay-mirror="company_name"
+                 value="<?= h($invoice['company_name']) ?>" placeholder="Company name"
+                 aria-label="Payment company name">
+        </div>
+        <div class="invoice-pay-edit-row">
+          <span>IBAN</span>
+          <input class="invoice-edit-input invoice-pay-iban" data-pay-mirror="company_iban"
+                 value="<?= h($invoice['company_iban']) ?>" placeholder="IBAN" aria-label="IBAN">
+        </div>
+        <div class="invoice-pay-edit-row">
+          <span>BIC</span>
+          <input class="invoice-edit-input invoice-pay-bic" data-pay-mirror="company_bic"
+                 value="<?= h($invoice['company_bic']) ?>" placeholder="BIC" aria-label="BIC">
+        </div>
+        <input class="invoice-edit-input invoice-edit-vat invoice-pay-vat" data-pay-mirror="vat_note"
+               value="<?= h($invoice['vat_note']) ?>" placeholder="VAT note" aria-label="VAT note">
+      <?php else: ?>
+        <div><strong class="invoice-pay-company"><?= h($invoice['company_name']) ?></strong></div>
+        <div>IBAN <span class="invoice-pay-iban"><?= h($invoice['company_iban']) ?></span></div>
+        <div>BIC <span class="invoice-pay-bic"><?= h($invoice['company_bic']) ?></span></div>
+        <div class="invoice-doc-vat invoice-pay-vat"><?= h($invoice['vat_note']) ?></div>
+      <?php endif; ?>
     </div>
     <div class="invoice-doc-totals">
       <div class="invoice-total-row">
         <span>Currency</span>
-        <strong><?= h((string) ($invoice['currency'] ?? 'EUR')) ?></strong>
+        <?php if ($editableCompany): ?>
+          <input class="invoice-edit-currency" name="currency" maxlength="3"
+                 value="<?= h((string) ($invoice['currency'] ?? 'EUR')) ?>"
+                 aria-label="Currency" required>
+        <?php else: ?>
+          <strong><?= h((string) ($invoice['currency'] ?? 'EUR')) ?></strong>
+        <?php endif; ?>
       </div>
       <div class="invoice-total-row invoice-total-grand">
         <span>TOTAL</span>
