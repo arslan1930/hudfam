@@ -6313,11 +6313,8 @@ try {
         $legacyId = create_blank_invoice((int) $adminUser['id']);
         db()->prepare("UPDATE invoices SET company_name='Topurlz', company_iban='', company_bic='' WHERE id=?")
             ->execute([(int) $legacyId]);
-        // Force migration path again for this process.
-        $ref = new ReflectionFunction('invoice_migrate_legacy_topurlz_branding');
-        // Static $done cannot be reset easily — call resolve/display helpers + ensure path.
         ensure_invoice_schema();
-        // Directly rewrite like the migrator for the row if static already ran earlier in this process.
+        // Direct rewrite covers cases where the process-static migrator already ran earlier.
         db()->prepare(
             "UPDATE invoices SET company_name=? WHERE id=? AND LOWER(TRIM(company_name)) IN ('topurlz','topurlz ltd','top urlz','topurlz limited','')"
         )->execute([(string) invoice_company_defaults()['company_name'], (int) $legacyId]);
