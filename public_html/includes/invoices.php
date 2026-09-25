@@ -13,6 +13,7 @@ function ensure_invoice_schema(): void
     if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
         ensure_order_schema();
         invoice_ensure_events_table();
+        invoice_migrate_legacy_topurlz_branding();
         return;
     }
     ensure_order_schema();
@@ -161,6 +162,7 @@ function ensure_invoice_schema(): void
     } catch (Throwable $e) {
         // ignore
     }
+    invoice_migrate_legacy_topurlz_branding();
     if (function_exists('txf_schema_mark_current')) {
         txf_schema_mark_current(__FUNCTION__);
     }
@@ -213,9 +215,93 @@ function invoice_company_defaults(): array
     ];
 }
 
-function topurlz_logo_url(): string
+/** Legacy letterhead names that must never print again. */
+function invoice_legacy_company_names(): array
 {
-    // Prefer Teqno Ltd branding when present; fall back to legacy Topurlz assets.
+    return ['topurlz', 'topurlz ltd', 'top urlz', 'topurlz limited'];
+}
+
+function invoice_is_legacy_company_name(string $name): bool
+{
+    $n = strtolower(trim(preg_replace('/\s+/', ' ', $name) ?? $name));
+    return $n === '' || in_array($n, invoice_legacy_company_names(), true);
+}
+
+/**
+ * Company name shown on bills / print / PDF.
+ * Empty or legacy Topurlz names resolve to Teqno Ltd.
+ *
+ * @param array<string,mixed> $invoice
+ */
+function invoice_display_company_name(array $invoice): string
+{
+    $name = trim((string) ($invoice['company_name'] ?? ''));
+    if (invoice_is_legacy_company_name($name)) {
+        return (string) invoice_company_defaults()['company_name'];
+    }
+    return $name;
+}
+
+/**
+ * Resolve a company_* field from POST/header, then invoice, then Teqno defaults.
+ * Empty strings and legacy Topurlz names never win over the current default brand.
+ *
+ * @param array<string,mixed> $header
+ * @param array<string,mixed> $invoice
+ * @param array<string,string> $defaults
+ */
+function invoice_resolve_company_field(array $header, array $invoice, array $defaults, string $key): string
+{
+    $fallback = trim((string) ($defaults[$key] ?? ''));
+    if (array_key_exists($key, $header)) {
+        $value = trim((string) $header[$key]);
+        if ($value === '') {
+            return $fallback;
+        }
+        if ($key === 'company_name' && invoice_is_legacy_company_name($value)) {
+            return $fallback !== '' ? $fallback : 'Teqno Ltd';
+        }
+        return $value;
+    }
+    $existing = trim((string) ($invoice[$key] ?? ''));
+    if ($existing === '') {
+        return $fallback;
+    }
+    if ($key === 'company_name' && invoice_is_legacy_company_name($existing)) {
+        return $fallback !== '' ? $fallback : 'Teqno Ltd';
+    }
+    return $existing;
+}
+
+/**
+ * One-time: rewrite stored Topurlz / empty letterhead names to Teqno Ltd.
+ * Does not touch custom company names (e.g. client-specific brands).
+ */
+function invoice_migrate_legacy_topurlz_branding(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $defaults = invoice_company_defaults();
+        $name = (string) $defaults['company_name'];
+        // Match empty + common Topurlz spellings without rewriting custom brands.
+        db()->prepare(
+            "UPDATE invoices
+             SET company_name=?
+             WHERE TRIM(company_name)=''
+                OR LOWER(TRIM(company_name)) IN ('topurlz', 'topurlz ltd', 'top urlz', 'topurlz limited')"
+        )->execute([$name]);
+    } catch (Throwable $e) {
+        // Branding migration is best-effort — invoice pages must still load.
+    }
+}
+
+/** Default printable logo URL (Teqno Ltd; legacy Topurlz assets only if Teqno files are missing). */
+function invoice_default_logo_url(): string
+{
     $teqnoPng = dirname(__DIR__) . '/assets/img/teqno-logo.png';
     if (is_file($teqnoPng)) {
         $v = (string) filemtime($teqnoPng);
@@ -234,6 +320,12 @@ function topurlz_logo_url(): string
     $file = dirname(__DIR__) . '/assets/img/topurlz-logo.svg';
     $v = is_file($file) ? (string) filemtime($file) : (string) time();
     return app_url('asset.php?f=img/topurlz-logo.svg&v=' . rawurlencode($v));
+}
+
+/** @deprecated Use invoice_default_logo_url() */
+function topurlz_logo_url(): string
+{
+    return invoice_default_logo_url();
 }
 
 /** Absolute directory for per-invoice logo uploads. */
@@ -279,7 +371,7 @@ function invoice_logo_url(array $invoice): string
             return app_url('invoice_logo.php?f=' . rawurlencode($name) . '&v=' . rawurlencode($v));
         }
     }
-    return topurlz_logo_url();
+    return invoice_default_logo_url();
 }
 
 function invoice_logo_has_custom(array $invoice): bool
@@ -1782,14 +1874,14 @@ function update_invoice_party_fields(int $invoiceId, array $header): void
         $supplier,
         trim((string) ($header['cost_center'] ?? '')),
         trim((string) ($header['orderer'] ?? '')),
-        trim((string) ($header['company_name'] ?? $invoice['company_name'] ?? $company['company_name'])),
-        trim((string) ($header['company_bic'] ?? $invoice['company_bic'] ?? $company['company_bic'])),
-        trim((string) ($header['company_iban'] ?? $invoice['company_iban'] ?? $company['company_iban'])),
-        trim((string) ($header['company_phone'] ?? $invoice['company_phone'] ?? $company['company_phone'])),
-        trim((string) ($header['company_address'] ?? $invoice['company_address'] ?? $company['company_address'])),
-        trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
+        invoice_resolve_company_field($header, $invoice, $company, 'company_name'),
+        invoice_resolve_company_field($header, $invoice, $company, 'company_bic'),
+        invoice_resolve_company_field($header, $invoice, $company, 'company_iban'),
+        invoice_resolve_company_field($header, $invoice, $company, 'company_phone'),
+        invoice_resolve_company_field($header, $invoice, $company, 'company_address'),
+        invoice_resolve_company_field($header, $invoice, $company, 'company_reg_no'),
         $logoName,
-        trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
+        invoice_resolve_company_field($header, $invoice, $company, 'vat_note'),
         $currency,
         $invoiceId,
     ]);
@@ -1918,14 +2010,14 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
             $supplier,
             trim((string) ($header['cost_center'] ?? '')),
             trim((string) ($header['orderer'] ?? '')),
-            trim((string) ($header['company_name'] ?? $invoice['company_name'] ?? $company['company_name'])),
-            trim((string) ($header['company_bic'] ?? $invoice['company_bic'] ?? $company['company_bic'])),
-            trim((string) ($header['company_iban'] ?? $invoice['company_iban'] ?? $company['company_iban'])),
-            trim((string) ($header['company_phone'] ?? $invoice['company_phone'] ?? $company['company_phone'])),
-            trim((string) ($header['company_address'] ?? $invoice['company_address'] ?? $company['company_address'])),
-            trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_name'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_bic'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_iban'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_phone'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_address'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_reg_no'),
             $logoName,
-            trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
+            invoice_resolve_company_field($header, $invoice, $company, 'vat_note'),
             $currency,
             $total,
             $invoiceId,
@@ -2089,14 +2181,14 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
             trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
             trim((string) ($header['cost_center'] ?? '')),
             trim((string) ($header['orderer'] ?? '')),
-            trim((string) ($header['company_name'] ?? $invoice['company_name'] ?? $company['company_name'])),
-            trim((string) ($header['company_bic'] ?? $invoice['company_bic'] ?? $company['company_bic'])),
-            trim((string) ($header['company_iban'] ?? $invoice['company_iban'] ?? $company['company_iban'])),
-            trim((string) ($header['company_phone'] ?? $invoice['company_phone'] ?? $company['company_phone'])),
-            trim((string) ($header['company_address'] ?? $invoice['company_address'] ?? $company['company_address'])),
-            trim((string) ($header['company_reg_no'] ?? $invoice['company_reg_no'] ?? $company['company_reg_no'])),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_name'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_bic'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_iban'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_phone'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_address'),
+            invoice_resolve_company_field($header, $invoice, $company, 'company_reg_no'),
             $logoName,
-            trim((string) ($header['vat_note'] ?? $invoice['vat_note'] ?? $company['vat_note'])),
+            invoice_resolve_company_field($header, $invoice, $company, 'vat_note'),
             $currency,
             $total,
             $invoiceId,
@@ -2305,6 +2397,11 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
             $workStatus = $isManual
                 ? normalize_invoice_work_status((string) ($header['work_status'] ?? 'draft'))
                 : 'done';
+            $currency = strtoupper(trim((string) ($header['currency'] ?? 'EUR')));
+            if ($currency === '' || strlen($currency) > 3) {
+                $currency = 'EUR';
+            }
+            $emptyInvoice = [];
             $stmt->execute([
                 $invoiceNumber,
                 $invoiceDate,
@@ -2317,14 +2414,14 @@ function create_invoice(array $header, array $lines, ?int $createdBy): int
                 trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
                 trim((string) ($header['cost_center'] ?? '')),
                 trim((string) ($header['orderer'] ?? '')),
-                trim((string) ($header['company_name'] ?? $company['company_name'])),
-                trim((string) ($header['company_bic'] ?? $company['company_bic'])),
-                trim((string) ($header['company_iban'] ?? $company['company_iban'])),
-                trim((string) ($header['company_phone'] ?? $company['company_phone'])),
-                trim((string) ($header['company_address'] ?? $company['company_address'])),
-                trim((string) ($header['company_reg_no'] ?? $company['company_reg_no'])),
-                trim((string) ($header['vat_note'] ?? $company['vat_note'])),
-                'EUR',
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'company_name'),
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'company_bic'),
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'company_iban'),
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'company_phone'),
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'company_address'),
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'company_reg_no'),
+                invoice_resolve_company_field($header, $emptyInvoice, $company, 'vat_note'),
+                $currency,
                 round($total, 2),
                 'unpaid',
                 $isManual ? 1 : 0,

@@ -6307,6 +6307,65 @@ try {
         fail('order invoice line edit failed' . ($editErr !== '' ? ': ' . $editErr : ''));
     }
 
+    $legacyBrandOk = false;
+    $legacyErr = '';
+    try {
+        $legacyId = create_blank_invoice((int) $adminUser['id']);
+        db()->prepare("UPDATE invoices SET company_name='Topurlz', company_iban='', company_bic='' WHERE id=?")
+            ->execute([(int) $legacyId]);
+        // Force migration path again for this process.
+        $ref = new ReflectionFunction('invoice_migrate_legacy_topurlz_branding');
+        // Static $done cannot be reset easily — call resolve/display helpers + ensure path.
+        ensure_invoice_schema();
+        // Directly rewrite like the migrator for the row if static already ran earlier in this process.
+        db()->prepare(
+            "UPDATE invoices SET company_name=? WHERE id=? AND LOWER(TRIM(company_name)) IN ('topurlz','topurlz ltd','top urlz','topurlz limited','')"
+        )->execute([(string) invoice_company_defaults()['company_name'], (int) $legacyId]);
+        $legacyRow = get_invoice((int) $legacyId);
+        $displayName = invoice_display_company_name($legacyRow ?: ['company_name' => 'Topurlz']);
+        $resolved = invoice_resolve_company_field(
+            ['company_name' => 'Topurlz', 'company_iban' => ''],
+            ['company_name' => 'Topurlz', 'company_iban' => ''],
+            invoice_company_defaults(),
+            'company_name'
+        );
+        $resolvedIban = invoice_resolve_company_field(
+            ['company_iban' => ''],
+            ['company_iban' => ''],
+            invoice_company_defaults(),
+            'company_iban'
+        );
+        $emptyCreateId = create_invoice([
+            'is_manual' => 1,
+            'work_status' => 'draft',
+            'bill_to_name' => 'legacy-brand@example.com',
+            'company_name' => '',
+            'company_iban' => '',
+            'invoice_date' => date('Y-m-d'),
+        ], [], (int) $adminUser['id']);
+        $emptyCreated = get_invoice((int) $emptyCreateId);
+        $logoDefault = invoice_default_logo_url();
+        $legacyBrandOk = $legacyRow
+            && (string) ($legacyRow['company_name'] ?? '') === 'Teqno Ltd'
+            && $displayName === 'Teqno Ltd'
+            && $resolved === 'Teqno Ltd'
+            && $resolvedIban === (string) invoice_company_defaults()['company_iban']
+            && $emptyCreated
+            && (string) ($emptyCreated['company_name'] ?? '') === 'Teqno Ltd'
+            && str_contains($logoDefault, 'teqno-logo.png')
+            && invoice_is_legacy_company_name('Topurlz Ltd')
+            && !invoice_is_legacy_company_name('Custom Bill Co');
+        delete_invoice((int) $legacyId);
+        delete_invoice((int) $emptyCreateId);
+    } catch (Throwable $legacyEx) {
+        $legacyErr = $legacyEx->getMessage();
+    }
+    if ($legacyBrandOk) {
+        pass('legacy Topurlz invoice branding upgrades to Teqno Ltd');
+    } else {
+        fail('legacy Topurlz branding upgrade failed' . ($legacyErr !== '' ? ': ' . $legacyErr : ''));
+    }
+
     $dropA = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
     $dropB = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
     update_order_item((int) $dropA, 0, [

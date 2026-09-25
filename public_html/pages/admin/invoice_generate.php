@@ -409,7 +409,7 @@ render_header('Generate invoice', 'admin');
       </details>
 
       <details class="invoice-company-details">
-        <summary>Bank / supplier details (Topurlz)</summary>
+        <summary>Bank / supplier details (Teqno Ltd)</summary>
         <div class="form-grid" style="margin-top:0.75rem">
           <div>
             <label for="company_name">Company</label>

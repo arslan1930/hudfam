@@ -348,7 +348,7 @@ if (!str_contains($guidesLib, 'function guide_orders')
     || !str_contains($guidesLib, 'function guide_admin_account')
     || !str_contains($guidesLib, 'function guide_site_prices')
     || !str_contains($guidesLib, 'Push to invoice')
-    || !str_contains($guidesLib, 'printable letterhead is Topurlz')
+    || !str_contains($guidesLib, 'printable letterhead is Teqno Ltd')
     || !str_contains($guidesLib, 'Sidebar Change password updates the same password')) {
     fail('Office page-purpose guides missing');
 } else {
@@ -2091,7 +2091,14 @@ if (!is_file($root . '/assets/img/teqno-logo.png')
     || !is_file($root . '/assets/img/teqno-logo.svg')
     || !str_contains(file_get_contents($root . '/asset.php') ?: '', "img/teqno-logo.png")
     || !str_contains($invoicesLibTypeahead, 'teqno-logo.png')
-    || !str_contains($invoicesLibTypeahead, "'company_name' => 'Teqno Ltd'")) {
+    || !str_contains($invoicesLibTypeahead, "'company_name' => 'Teqno Ltd'")
+    || !str_contains($invoicesLibTypeahead, 'function invoice_default_logo_url')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_display_company_name')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_migrate_legacy_topurlz_branding')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_resolve_company_field')
+    || !str_contains($invoiceDocSrc, 'invoice_display_company_name')
+    || str_contains(file_get_contents($root . '/pages/admin/invoice_generate.php') ?: '', 'Bank / supplier details (Topurlz)')
+    || str_contains(file_get_contents($root . '/pages/admin/invoices.php') ?: '', 'printable Topurlz bills')) {
     fail('missing Teqno Ltd default logo branding');
 } else {
     ok('Teqno Ltd default invoice logo branding');

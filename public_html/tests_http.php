@@ -567,11 +567,12 @@ if ($invViewId > 0) {
     $rPrint = req('GET', $base . '/index.php?page=admin_invoice_view&id=' . $invViewId . '&print=1');
     if ($rView['status'] === 200
         && str_contains($rView['body'], 'invoice-doc-logohead')
-        && str_contains($rView['body'], 'topurlz-logo.png')
+        && (str_contains($rView['body'], 'teqno-logo.png') || str_contains($rView['body'], 'invoice_logo.php') || str_contains($rView['body'], 'topurlz-logo.png'))
         && (str_contains($rView['body'], 'Mark paid') || str_contains($rView['body'], 'Paid'))
         && str_contains($rView['body'], 'History')
         && str_contains($rView['body'], 'invoice-history')
-        && !str_contains($rView['body'], 'Fatal error')) {
+        && !str_contains($rView['body'], 'Fatal error')
+        && !str_contains($rView['body'], '>Topurlz<')) {
         pass('admin invoice open bill');
     } else {
         fail('admin invoice open bill status=' . ($rView['status'] ?? '?'));

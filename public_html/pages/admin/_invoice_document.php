@@ -23,13 +23,15 @@ $billAs = function_exists('invoice_display_bill_as')
 $showExtraBill = function_exists('invoice_has_extra_bill_details')
     ? invoice_has_extra_bill_details($invoice)
     : true;
-$logo = function_exists('invoice_logo_url') ? invoice_logo_url($invoice) : topurlz_logo_url();
-$logoFile = is_file(dirname(__DIR__, 2) . '/assets/img/teqno-logo.png')
-    ? asset_url('assets/img/teqno-logo.png')
-    : asset_url('assets/img/topurlz-logo.png');
-$logoSvg = is_file(dirname(__DIR__, 2) . '/assets/img/teqno-logo.svg')
-    ? asset_url('assets/img/teqno-logo.svg')
-    : asset_url('assets/img/topurlz-logo.svg');
+$companyName = function_exists('invoice_display_company_name')
+    ? invoice_display_company_name($invoice)
+    : (trim((string) ($invoice['company_name'] ?? '')) !== ''
+        ? (string) $invoice['company_name']
+        : 'Teqno Ltd');
+$logo = function_exists('invoice_logo_url') ? invoice_logo_url($invoice) : (function_exists('invoice_default_logo_url') ? invoice_default_logo_url() : topurlz_logo_url());
+$defaultLogo = function_exists('invoice_default_logo_url')
+    ? invoice_default_logo_url()
+    : (function_exists('topurlz_logo_url') ? topurlz_logo_url() : $logo);
 $hasCustomLogo = function_exists('invoice_logo_has_custom') && invoice_logo_has_custom($invoice);
 $lineNo = 0;
 $adminNote = function_exists('invoice_admin_note')
@@ -51,12 +53,10 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
 ?>
 <article class="invoice-doc<?= $docEditable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-logohead">
-    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h(trim((string) ($invoice['company_name'] ?? '')) !== '' ? (string) $invoice['company_name'] : 'Teqno Ltd') ?>"
+    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h($companyName) ?>"
          data-invoice-logo-img
-         data-default-logo="<?= h(function_exists('topurlz_logo_url') ? topurlz_logo_url() : $logo) ?>"
-         <?php if (!$hasCustomLogo): ?>
-         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};"
-         <?php endif; ?>>
+         data-default-logo="<?= h($defaultLogo) ?>"
+         onerror="this.onerror=null;this.src='<?= h($defaultLogo) ?>';">
     <?php if ($editableCompany): ?>
       <div class="invoice-logo-edit no-print">
         <label class="invoice-logo-upload">
@@ -104,7 +104,7 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
       <div class="invoice-party-label">From / Bank details</div>
       <?php if ($editableCompany): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="company_name"
-               value="<?= h($invoice['company_name']) ?>" placeholder="Company name">
+               value="<?= h($companyName) ?>" placeholder="Company name" required>
         <div class="invoice-party-lines invoice-edit-party-lines">
           <div><span>BIC (SWIFT)</span> <input name="company_bic" value="<?= h($invoice['company_bic']) ?>"></div>
           <div><span>IBAN</span> <input name="company_iban" value="<?= h($invoice['company_iban']) ?>"></div>
@@ -115,7 +115,7 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
         <input class="invoice-edit-input invoice-edit-vat" name="vat_note"
                value="<?= h($invoice['vat_note']) ?>" placeholder="VAT note">
       <?php else: ?>
-        <div class="invoice-doc-strong"><?= h($invoice['company_name']) ?></div>
+        <div class="invoice-doc-strong"><?= h($companyName) ?></div>
         <div class="invoice-party-lines">
           <div><span>BIC (SWIFT)</span> <?= h($invoice['company_bic']) ?></div>
           <div><span>IBAN</span> <?= h($invoice['company_iban']) ?></div>
@@ -240,7 +240,7 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
         <div>
           <input class="invoice-edit-input invoice-edit-strong invoice-pay-company"
                  data-pay-mirror="company_name"
-                 value="<?= h($invoice['company_name']) ?>" placeholder="Company name"
+                 value="<?= h($companyName) ?>" placeholder="Company name"
                  aria-label="Payment company name">
         </div>
         <div class="invoice-pay-edit-row">
@@ -256,7 +256,7 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
         <input class="invoice-edit-input invoice-edit-vat invoice-pay-vat" data-pay-mirror="vat_note"
                value="<?= h($invoice['vat_note']) ?>" placeholder="VAT note" aria-label="VAT note">
       <?php else: ?>
-        <div><strong class="invoice-pay-company"><?= h($invoice['company_name']) ?></strong></div>
+        <div><strong class="invoice-pay-company"><?= h($companyName) ?></strong></div>
         <div>IBAN <span class="invoice-pay-iban"><?= h($invoice['company_iban']) ?></span></div>
         <div>BIC <span class="invoice-pay-bic"><?= h($invoice['company_bic']) ?></span></div>
         <div class="invoice-doc-vat invoice-pay-vat"><?= h($invoice['vat_note']) ?></div>
@@ -281,6 +281,6 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
   </section>
 
   <footer class="invoice-doc-footer">
-    Thank you for your business — <span class="invoice-footer-company"><?= h($invoice['company_name'] !== '' ? $invoice['company_name'] : 'Teqno Ltd') ?></span>
+    Thank you for your business — <span class="invoice-footer-company"><?= h($companyName) ?></span>
   </footer>
 </article>

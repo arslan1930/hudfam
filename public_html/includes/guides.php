@@ -256,10 +256,10 @@ function guide_invoices(): string
     return render_page_purpose(
         'Invoices — printable bills',
         'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Waiting when sent). Mark paid when payment arrives — that writes Paid back onto linked sheet rows.',
-        'Notes under an invoice number also print on the bill. The printable letterhead is Topurlz; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
+        'Notes under an invoice number also print on the bill. The printable letterhead is Teqno Ltd; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
         [
-            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. If that bill-as already has a Draft or Waiting bill, Add to existing is selected. New invoice gets the next number. Open a Waiting invoice and use Add sites — matching unpaid LIVE rows are ticked. Paid invoices stay locked. Group same amount is off unless you turn it on.',
-            'Blank invoice: fill bill-as and line items, Save as draft or Mark as sent. On a generated bill, Save bill as to fix the email/name.',
+            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. If that bill-as already has a Draft or Waiting bill, Add to existing is selected. New invoice gets the next number. Open a Waiting invoice and use Add sites — matching unpaid LIVE rows are ticked. Paid invoices keep line items locked but company, bill as, and payment details stay editable. Group same amount is off unless you turn it on.',
+            'Blank invoice: fill bill-as and line items, Save as draft or Mark as sent. On any bill, edit logo, company/bank, bill as, and payment details, then Save changes.',
             'Mark paid on the list or the open bill when payment is received. Draft / Waiting / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Article doc, Completed) and a History of who added sites. Article doc does not print on the bill.',
         ]
     );

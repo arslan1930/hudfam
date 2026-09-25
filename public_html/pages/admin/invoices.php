@@ -125,7 +125,7 @@ render_header('Invoices', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid Order management rows that have a LIVE URL. Mark paid to set those rows Paid.') ?></h1>
+    <h1><?= label_with_info('Invoices', 'Build printable Teqno Ltd bills from unpaid Order management rows that have a LIVE URL. Mark paid to set those rows Paid.') ?></h1>
     <p class="muted">Generate from unpaid LIVE rows, or a blank invoice. Mark paid when payment arrives.</p>
   </div>
   <div class="actions">
