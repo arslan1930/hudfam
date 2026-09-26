@@ -585,7 +585,8 @@ if (!str_contains($guidesLib, 'Dashboard can update Open / In progress / Done'))
 if (!str_contains($guidesLib, 'Email Extracting')
     || !str_contains($guidesLib, 'type none in Email 1')
     || !str_contains($guidesLib, 'merges Team emails into empty Admin slots')
-    || !str_contains($guidesLib, 'Pushed rows leave Team')) {
+    || !str_contains($guidesLib, 'Pushed rows leave Team')
+    || !str_contains($guidesLib, 'stays on Team until Push')) {
     fail('guide_sites_emails_team missing Email Extracting checklist rules');
 } else {
     ok('guide_sites_emails_team covers none, Push merge, stays vs leaves');
@@ -2907,7 +2908,8 @@ if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {
     fail('team_sites_emails missing page-level unlock check');
 } elseif (!str_contains($sitesEmailsAppSmoke, 'guide_sites_emails_team()')
     || !str_contains($sitesEmailsAppSmoke, 'Pushed rows <strong>leave</strong>')
-    || !str_contains($sitesEmailsAppSmoke, 'merges into empty Admin slots only')) {
+    || !str_contains($sitesEmailsAppSmoke, 'merges into empty Admin slots only')
+    || !str_contains($sitesEmailsAppSmoke, 'Before Push, each site needs an email or')) {
     fail('Team Sites with emails missing Email Extracting guide or Push/none help');
 } else {
     ok('team_sites_emails page-level unlock + Email Extracting guide');

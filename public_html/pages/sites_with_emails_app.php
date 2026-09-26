@@ -954,7 +954,7 @@ if ($isTeam && function_exists('guide_sites_emails_team')) {
   <div>
     <?php
     $sweJumpTip = $isTeam
-        ? 'Email Extracting: add emails (autosave). Type none in Email 1 when there is no address so the row stays and can be pushed. Pick another country from this list. Push one site with its row button, or Push all sites that have an email or none. Pushed rows leave Team; empty rows stay. Open What is this? for the full checklist.'
+        ? 'Email Extracting: add emails (autosave). Type none in Email 1 when there is no address so the row stays on Team until Push. Pick another country from this list. Push one site with its row button, or Push all sites that have an email or none. Pushed rows leave Team; empty rows stay. Open What is this? for the full checklist.'
         : ($isAdminAll
             ? 'Final archive for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together.'
             : 'Admin working list for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together. Type none when a site has no address so the row stays. Clear every email box to remove from Admin (Final keeps the copy). Remove deletes the whole row.');
@@ -1104,7 +1104,7 @@ if ($isTeam && function_exists('guide_sites_emails_team')) {
   Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
   Opened rows stay <strong>highlighted</strong> until you enter an email (or <strong>none</strong>) in that row.
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has an email or <strong>none</strong>.
-  If a site has no address, type <strong>none</strong> in Email 1 — the row stays and can be pushed. Copy skips none.
+  If a site has no address, type <strong>none</strong> in Email 1 — the row stays on Team until you Push, then it can be pushed. Copy skips none.
   Pushed rows <strong>leave</strong> this Team list; sites with all email boxes empty <strong>stay</strong> here.
   <?php if ($pushConflictCount > 0): ?>
     <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push merges Team emails into empty Admin slots only (existing Admin emails stay).
@@ -1483,7 +1483,7 @@ render_sheet_checkpoint_compact(
   <div class="empty-state" id="swe-empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
-      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push — type <strong>none</strong> if the site has no address so the row can be pushed and kept. Pushed rows leave Team; empty rows stay. Open <strong>What is this?</strong> above for the Email Extracting checklist.</p>
+      <p class="muted">Push from Extracting Results, or add one site here. Before Push, each site needs an email or <strong>none</strong> (when there is no address). Push moves that row to Admin (it leaves Team); rows still empty stay here. Open <strong>What is this?</strong> above for the Email Extracting checklist.</p>
       <p class="actions" style="justify-content:center;margin-top:0.75rem">
         <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
       </p>

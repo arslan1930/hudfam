@@ -69,7 +69,7 @@ function render_admin_panel_guide(): string
         . '<li>Admin seeds a <strong>country folder</strong> in Our database (or Team Filter &amp; add writes unique sites there).</li>'
         . '<li>Site Finding pastes a list → duplicates for that country are removed privately → unique sites are saved + Site adding history.</li>'
         . '<li>Site Extracting <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails – Team</strong>.</li>'
-        . '<li>Email Extracting adds emails, then <strong>Push to Admin</strong> → Admin archive (also synced to Final). Pushed rows leave the Team working copy.</li>'
+        . '<li>Email Extracting adds emails (or <strong>none</strong> when there is no address), then <strong>Push to Admin</strong> → Admin archive (also synced to Final). Pushed rows leave the Team working copy.</li>'
         . '<li>Admin creates a <strong>campaign project</strong> under Emails data; Communication uses <strong>Campaign search</strong> / <strong>Campaign drafts</strong>.</li>'
         . '<li>When a placement goes live, record it on the client <strong>Order</strong> sheet and generate an <strong>Invoice</strong>.</li>'
         . '</ol>'
@@ -330,7 +330,7 @@ function guide_sites_emails_team(): string
             'Sites arrive after Site Extracting pushes Extracting Results. Open a country from the list (or from Your work → Open on an Email Extracting task).',
             'Open sites with Open / Open first 10–50. Large opens go in batches of 10 — use Open next. Highlighted rows need an email (or none) before they look done.',
             'Paste up to 4 emails into any email box — edits autosave. Invalid addresses are skipped so one bad token does not wipe the rest.',
-            'If a site has no public address, type none in Email 1 so the row stays and can be pushed. Copy skips none — it is not a sendable email.',
+            'If a site has no public address, type none in Email 1 so the row stays on Team until Push. Copy skips none — it is not a sendable email.',
             'Push on a row for one site, or Push all to Admin for every site that has an email or none. Rows with all email boxes empty are left on Team.',
             'If Admin already has that site, Push merges Team emails into empty Admin slots only — existing Admin emails stay. Confirm with Admin emails search if you need to double-check.',
         ]
