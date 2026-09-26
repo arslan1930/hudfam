@@ -2,6 +2,17 @@
 $user = require_admin();
 ensure_invoice_schema();
 
+$invoiceQ = trim((string) get('q'));
+$invoiceFilter = normalize_invoice_list_filter((string) get('filter'));
+$invoiceClientId = max(0, (int) get('client_id'));
+$pageNum = max(1, (int) get('p', 1));
+$listUrl = invoice_list_query([
+    'q' => $invoiceQ,
+    'filter' => $invoiceFilter,
+    'client_id' => $invoiceClientId,
+    'p' => $pageNum,
+]);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     $wantsJson = (string) post('ajax') === '1'
@@ -25,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 delete_invoice($id);
                 flash('ok', 'Deleted invoice ' . $inv['invoice_number'] . '.');
             }
-            redirect('index.php?page=admin_invoices');
+            redirect($listUrl);
         }
         if ($action === 'mark_paid') {
             $id = (int) post('id');
@@ -46,22 +57,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 flash('ok', $msg);
             }
-            redirect('index.php?page=admin_invoices');
+            redirect($listUrl);
         }
         if ($action === 'save_note') {
             $id = (int) post('id');
             update_invoice_admin_note($id, (string) post('admin_note'));
             flash('ok', 'Note saved for invoice.');
-            redirect('index.php?page=admin_invoices#inv-' . $id);
+            redirect($listUrl . '#inv-' . $id);
         }
     } catch (Throwable $e) {
         $jsonOut(['ok' => false, 'error' => $e->getMessage()], 400);
         flash('error', $e->getMessage());
-        redirect('index.php?page=admin_invoices');
+        redirect($listUrl);
     }
 }
 
-$invoices = list_invoices();
+$perPage = 50;
+$listOpts = [
+    'q' => $invoiceQ,
+    'filter' => $invoiceFilter,
+];
+if ($invoiceClientId > 0) {
+    $listOpts['client_id'] = $invoiceClientId;
+}
+$totalInvoices = count_invoices($listOpts);
+$totalPages = max(1, (int) ceil($totalInvoices / $perPage));
+if ($pageNum > $totalPages) {
+    $pageNum = $totalPages;
+}
+$invoices = list_invoices(array_merge($listOpts, [
+    'limit' => $perPage,
+    'offset' => ($pageNum - 1) * $perPage,
+]));
+
+$invoiceListQs = static function (array $overrides) use ($invoiceQ, $invoiceFilter, $invoiceClientId, $pageNum): string {
+    return invoice_list_query(array_merge([
+        'q' => $invoiceQ,
+        'filter' => $invoiceFilter,
+        'client_id' => $invoiceClientId,
+        'p' => $pageNum,
+    ], $overrides));
+};
+
+$chipOpts = [];
+if ($invoiceClientId > 0) {
+    $chipOpts['client_id'] = $invoiceClientId;
+}
+$chipAll = count_invoices($chipOpts);
+$chipDraft = count_invoices(array_merge($chipOpts, ['filter' => 'draft']));
+$chipUnpaid = count_invoices(array_merge($chipOpts, ['filter' => 'unpaid']));
+$chipPaid = count_invoices(array_merge($chipOpts, ['filter' => 'paid']));
+
+$clientScopeLabel = '';
+if ($invoiceClientId > 0) {
+    $scopeClient = get_order_client($invoiceClientId);
+    $clientScopeLabel = $scopeClient
+        ? (string) $scopeClient['name']
+        : ('Client #' . $invoiceClientId);
+}
 
 render_header('Invoices', 'admin');
 ?>
@@ -72,43 +125,137 @@ render_header('Invoices', 'admin');
 
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Invoices', 'Build printable Topurlz bills from unpaid sheet rows that have a LIVE URL. Mark payment received to set those rows Paid.') ?></h1>
-    <p class="muted">Generate from unpaid LIVE sheet rows, or open a blank invoice and fill items on the bill. Blank invoices can be <strong>Draft</strong> (still needs data) or <strong>Done</strong> (sent, waiting for payment). Mark Paid when payment arrives.</p>
+    <h1><?= label_with_info('Invoices', 'Build printable Teqno Ltd bills from unpaid Order management rows that have a LIVE URL. Mark paid to set those rows Paid.') ?></h1>
+    <p class="muted">Generate from unpaid LIVE rows, or a blank invoice. Mark paid when payment arrives.</p>
   </div>
   <div class="actions">
-    <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
+    <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed unpaid</a>
+    <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
     <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
   </div>
 </div>
 
+<?= guide_invoices() ?>
+
 <section class="card">
   <div class="invoice-list-toolbar">
-    <h2 style="margin:0" class="with-info-heading"><?= label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.') ?></h2>
-    <?php if ($invoices): ?>
-      <label class="sheet-search invoice-list-search" for="invoice-search">
-        <span class="visually-hidden">Search invoices</span>
-        <input id="invoice-search" type="search" placeholder="Search…"
-               autocomplete="off" spellcheck="false" data-no-draft
-               title="Type to filter · Enter = next match · Shift+Enter = previous">
-        <span class="sheet-search-meta muted" data-invoice-search-meta hidden></span>
-      </label>
-    <?php endif; ?>
+    <h2 style="margin:0" class="with-info-heading"><?php
+      if ($invoiceClientId > 0) {
+          echo label_with_info(
+              'Leftover client folder',
+              'Older invoices that were linked to a client profile (client_id=). New bills use Bill as (email or name) and show on All invoices.'
+          );
+      } elseif ($invoiceFilter === 'draft') {
+          echo label_with_info('Draft invoices', 'Not sent yet. Mark as sent on the bill when they are ready.');
+      } elseif ($invoiceFilter === 'unpaid') {
+          echo label_with_info('Waiting invoices', 'Sent bills still unpaid. Add sites keeps the same invoice number. Mark paid when it arrives.');
+      } elseif ($invoiceFilter === 'paid') {
+          echo label_with_info('Paid invoices', 'Payment received. Linked Order management rows stay Paid if you delete the bill.');
+      } else {
+          echo label_with_info('All invoices', 'Open, mark Paid, or delete. Add a short note under the invoice number — it also appears on the printable bill.');
+      }
+    ?></h2>
+    <nav class="invoice-list-chips" aria-label="Invoice status">
+      <?php
+        $chipDefs = [
+            '' => ['All', $chipAll],
+            'draft' => ['Draft', $chipDraft],
+            'unpaid' => ['Waiting', $chipUnpaid],
+            'paid' => ['Paid', $chipPaid],
+        ];
+        foreach ($chipDefs as $chipKey => $chipRow):
+            $chipHref = invoice_list_query([
+                'q' => $invoiceQ,
+                'filter' => $chipKey,
+                'client_id' => $invoiceClientId,
+                'p' => 1,
+            ]);
+            $chipOn = $invoiceFilter === $chipKey;
+      ?>
+        <a class="btn secondary small<?= $chipOn ? ' active-soft' : '' ?>"
+           href="<?= h($chipHref) ?>"<?= $chipOn ? ' aria-current="page"' : '' ?>>
+          <?= h($chipRow[0]) ?> (<?= (int) $chipRow[1] ?>)
+        </a>
+      <?php endforeach; ?>
+    </nav>
+    <form method="get" action="index.php" class="sheet-search invoice-list-search">
+      <input type="hidden" name="page" value="admin_invoices">
+      <?php if ($invoiceClientId > 0): ?>
+        <input type="hidden" name="client_id" value="<?= (int) $invoiceClientId ?>">
+      <?php endif; ?>
+      <input type="hidden" name="filter" value="<?= h($invoiceFilter) ?>">
+      <label class="visually-hidden" for="invoice-search">Search invoices</label>
+      <input id="invoice-search" type="search" name="q" value="<?= h($invoiceQ) ?>"
+             placeholder="Invoice no., bill as, or note" autocomplete="off" spellcheck="false" data-no-draft
+             title="Search invoice number, bill as, or note">
+      <button class="btn secondary small" type="submit">Search</button>
+      <?php if ($invoiceQ !== ''): ?>
+        <a class="btn secondary small" href="<?= h(invoice_list_query([
+            'filter' => $invoiceFilter,
+            'client_id' => $invoiceClientId,
+            'p' => 1,
+        ])) ?>">Clear</a>
+      <?php endif; ?>
+      <?php if ($invoiceClientId > 0): ?>
+        <a class="btn secondary small" href="index.php?page=admin_invoices">All invoices</a>
+      <?php endif; ?>
+    </form>
   </div>
-  <?php if (!$invoices): ?>
+  <?php if ($invoiceClientId > 0): ?>
+    <p class="muted" style="margin:0 0 0.65rem">
+      Leftover <code>client_id=<?= (int) $invoiceClientId ?></code> link<?= $clientScopeLabel !== '' ? ' · ' . h($clientScopeLabel) : '' ?>.
+      New bills are listed on All invoices by Bill as.
+    </p>
+  <?php endif; ?>
+  <?php if (!$invoices && $totalInvoices < 1): ?>
     <div class="empty-state">
-      <p>No invoices yet. Generate one from unpaid completed articles on a client sheet.</p>
-      <a class="btn crystal" href="index.php?page=admin_invoice_manual">Blank invoice</a>
+      <p><?php
+        if ($invoiceClientId > 0 && $invoiceQ === '' && $invoiceFilter === '') {
+            echo 'No invoices linked to this leftover client folder.';
+        } elseif ($invoiceFilter === 'unpaid' && $invoiceQ === '') {
+            echo 'No waiting invoices. Open Completed unpaid in Order management to generate a bill.';
+        } elseif ($invoiceQ !== '' || $invoiceFilter !== '' || $invoiceClientId > 0) {
+            echo 'No invoices match this filter.';
+        } else {
+            echo 'No invoices yet. Generate one from unpaid LIVE rows on Order management.';
+        }
+      ?></p>
+      <?php if ($invoiceFilter === 'unpaid' && $invoiceQ === ''): ?>
+      <a class="btn secondary" href="index.php?page=admin_orders&amp;folder=completed">Completed unpaid</a>
       <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
+      <?php elseif ($invoiceQ === '' && $invoiceFilter === '' && $invoiceClientId < 1): ?>
+      <a class="btn secondary" href="index.php?page=admin_invoice_manual">Blank invoice</a>
+      <a class="btn" href="index.php?page=admin_invoice_generate">Generate invoice</a>
+      <?php else: ?>
+      <p><a class="btn secondary" href="index.php?page=admin_invoices">All invoices</a></p>
+      <?php endif; ?>
     </div>
   <?php else: ?>
+    <p class="muted" style="margin:0 0 0.65rem">
+      <?= (int) $totalInvoices ?> invoice<?= $totalInvoices === 1 ? '' : 's' ?>
+      <?php if ($invoiceClientId > 0): ?>
+        · <?= h($clientScopeLabel) ?>
+      <?php endif; ?>
+      <?php if ($invoiceFilter === 'draft'): ?>
+        · Draft
+      <?php elseif ($invoiceFilter === 'unpaid'): ?>
+        · Waiting
+      <?php elseif ($invoiceFilter === 'paid'): ?>
+        · Paid
+      <?php endif; ?>
+      <?php if ($totalPages > 1): ?>
+        · page <?= (int) $pageNum ?> / <?= (int) $totalPages ?>
+        · showing <?= count($invoices) ?>
+      <?php endif; ?>
+    </p>
     <div class="table-wrap">
       <table class="invoice-list-table" id="invoice-list-table">
         <thead>
           <tr>
             <th>Invoice No.</th>
             <th>Date</th>
-            <th>Client</th>
-            <th>Items</th>
+            <th>Bill as</th>
+            <th class="num">Items</th>
             <th class="num">Total</th>
             <th>Payment</th>
             <th></th>
@@ -120,11 +267,15 @@ render_header('Invoices', 'admin');
             $paid = invoice_is_paid($inv);
             $manual = invoice_is_manual($inv);
             $draft = invoice_is_draft($inv);
-            $clientLabel = $inv['bill_to_name'] !== '' ? $inv['bill_to_name'] : $inv['client_name'];
+            $clientLabel = invoice_display_bill_as($inv);
+            if ($clientLabel === '') {
+                $clientLabel = '—';
+            }
             $note = invoice_admin_note($inv);
+            $incomplete = invoice_list_is_incomplete($inv);
             $statusBits = $paid ? 'paid payment received' : ($draft ? 'draft needs data' : 'done unpaid waiting');
           ?>
-          <tr id="inv-<?= (int) $inv['id'] ?>" data-invoice-row
+          <tr id="inv-<?= (int) $inv['id'] ?>"<?= $incomplete ? ' class="is-incomplete"' : '' ?> data-invoice-row
               data-search="<?= h(mb_strtolower(trim(
                   (string) $inv['invoice_number'] . ' '
                   . ($manual ? 'blank manual ' : '')
@@ -138,12 +289,7 @@ render_header('Invoices', 'admin');
             <td data-invoice-cell>
               <strong><?= h($inv['invoice_number']) ?></strong>
               <?php if ($manual): ?>
-                <span class="invoice-manual-tag">(blank)</span>
-              <?php endif; ?>
-              <?php if ($manual && $draft): ?>
-                <span class="invoice-pay-badge is-draft">Draft</span>
-              <?php elseif ($manual && !$paid): ?>
-                <span class="invoice-pay-badge is-done">Done</span>
+                <span class="invoice-manual-tag is-kind">(blank)</span>
               <?php endif; ?>
               <div class="invoice-note-box<?= $note !== '' ? ' has-note' : '' ?>" data-invoice-note-box>
                 <button type="button" class="invoice-note-preview" data-note-open
@@ -152,11 +298,12 @@ render_header('Invoices', 'admin');
                   <?php if ($note !== ''): ?>
                     <span class="invoice-note-preview-text"><?= h($note) ?></span>
                   <?php else: ?>
-                    <span class="invoice-note-preview-empty">note…</span>
+                    <span class="invoice-note-preview-empty">Add note</span>
                   <?php endif; ?>
                 </button>
-                <form method="post" class="invoice-list-note-form" action="index.php?page=admin_invoices"
+                <form method="post" class="invoice-list-note-form" action="<?= h($listUrl) ?>"
                       data-note-panel hidden>
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="save_note">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
                   <label class="visually-hidden" for="inv-note-<?= (int) $inv['id'] ?>">
@@ -177,147 +324,80 @@ render_header('Invoices', 'admin');
             <td data-invoice-cell>
               <?= h($clientLabel) ?>
             </td>
-            <td data-invoice-cell><?= (int) $inv['item_count'] ?></td>
+            <td class="num" data-invoice-cell><?= (int) $inv['item_count'] ?></td>
             <td class="num" data-invoice-cell><?= h(format_euro($inv['total_amount'])) ?></td>
             <td data-invoice-cell>
               <?php if ($paid): ?>
                 <span class="invoice-pay-badge is-paid" title="Payment already received">Paid</span>
               <?php elseif ($draft): ?>
-                <span class="invoice-pay-badge is-draft" title="Still needs data — open and Save as done when ready">Draft</span>
+                <span class="invoice-pay-badge is-draft" title="Still needs data — open and Mark as sent when ready">Draft</span>
               <?php else: ?>
-                <form method="post" class="inline" action="index.php?page=admin_invoices"
-                      data-stay-ajax data-stay-mark-paid
-                      onsubmit="return confirm(<?= h(json_encode(
-                          'Confirm this invoice is paid?' . "\n\n"
-                          . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
-                          . ($manual
-                              ? 'This will mark the blank invoice as Paid.'
-                              : 'This will mark the invoice as Paid and set linked sheet rows to Paid.'),
-                          JSON_UNESCAPED_UNICODE
-                      )) ?>);">
-                  <input type="hidden" name="action" value="mark_paid">
-                  <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                  <button class="btn-paid invoice-list-pay-btn" type="submit" title="Mark invoice as paid">
-                    Paid
-                  </button>
-                </form>
+                <div class="invoice-pay-stack">
+                  <span class="invoice-pay-badge" title="Sent — waiting for payment">Waiting</span>
+                  <form method="post" class="inline" action="<?= h($listUrl) ?>"
+                        data-stay-ajax data-stay-mark-paid
+                        <?= confirm_data_attr(
+                            'Confirm this invoice is paid?' . "\n\n"
+                            . 'Invoice ' . $inv['invoice_number'] . ($manual ? ' (blank)' : '') . "\n"
+                            . ($manual
+                                ? 'This will mark the blank invoice as Paid.'
+                                : 'This will mark the invoice as Paid and set linked sheet rows to Paid.')
+                        ) ?>>
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="mark_paid">
+                    <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
+                    <button class="btn-paid btn-paid-mark invoice-list-pay-btn" type="submit" title="Mark this invoice as paid">
+                      Mark paid
+                    </button>
+                  </form>
+                </div>
               <?php endif; ?>
             </td>
             <td class="invoice-list-actions">
               <div class="invoice-list-actions-row">
                 <a class="btn small" href="index.php?page=admin_invoice_view&amp;id=<?= (int) $inv['id'] ?>">Open</a>
-                <form method="post" class="inline" action="index.php?page=admin_invoices"
-                      onsubmit="return confirm(<?= h(json_encode('Delete invoice ' . $inv['invoice_number'] . '?', JSON_UNESCAPED_UNICODE)) ?>);">
+                <?php if (!$paid && invoice_can_append_orders($inv) && !$manual): ?>
+                  <a class="btn secondary small" href="<?= h(invoice_generate_append_href((int) $inv['id'])) ?>">Add sites</a>
+                <?php endif; ?>
+                <form method="post" class="inline" action="<?= h($listUrl) ?>"
+                      <?= confirm_data_attr(
+                          $paid
+                              ? ('This invoice is Paid. Delete anyway?' . "\n\n"
+                                  . 'Invoice ' . $inv['invoice_number'] . ' will be removed. Linked sheet rows stay Paid.')
+                              : ('Delete invoice ' . $inv['invoice_number'] . '?')
+                      ) ?>>
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="id" value="<?= (int) $inv['id'] ?>">
-                  <button class="btn secondary small" type="submit">Delete</button>
+                  <button class="invoice-list-delete<?= $paid ? ' is-paid' : '' ?>" type="submit"
+                          title="<?= $paid ? 'Delete a Paid invoice' : 'Delete invoice' ?>">Delete</button>
                 </form>
               </div>
             </td>
           </tr>
         <?php endforeach; ?>
-          <tr class="sheet-search-empty" data-invoice-search-empty hidden>
-            <td colspan="7" class="muted">No invoices match your search.</td>
-          </tr>
         </tbody>
       </table>
     </div>
-    <script>
-    (function () {
-      var input = document.getElementById('invoice-search');
-      if (!input) return;
-      var matchRows = [];
-      var matchIndex = -1;
-      var meta = document.querySelector('[data-invoice-search-meta]');
-      var empty = document.querySelector('[data-invoice-search-empty]');
-
-      function clearHits() {
-        document.querySelectorAll('.sheet-search-hit').forEach(function (el) {
-          el.classList.remove('sheet-search-hit');
-        });
-      }
-
-      function filterInvoices() {
-        var q = String(input.value || '').trim().toLowerCase();
-        var rows = document.querySelectorAll('[data-invoice-row]');
-        var shown = 0;
-        matchRows = [];
-        clearHits();
-        rows.forEach(function (row) {
-          var hay = String(row.getAttribute('data-search') || '');
-          var hit = !q || hay.indexOf(q) !== -1;
-          row.hidden = !hit;
-          if (hit) {
-            shown++;
-            if (q) matchRows.push(row);
-          }
-        });
-        if (empty) empty.hidden = !(q && shown === 0);
-        if (matchIndex >= matchRows.length) matchIndex = matchRows.length ? 0 : -1;
-        if (meta) {
-          if (q) {
-            meta.hidden = false;
-            if (!matchRows.length) {
-              meta.textContent = '0 · Enter = next';
-            } else if (matchIndex >= 0) {
-              meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
-            } else {
-              meta.textContent = matchRows.length + (matchRows.length === 1 ? ' match' : ' matches')
-                + ' · Enter = next';
-            }
-          } else {
-            meta.hidden = true;
-            meta.textContent = '';
-            matchIndex = -1;
-          }
-        }
-      }
-
-      function jumpToMatch(dir) {
-        var q = String(input.value || '').trim();
-        if (!q) return;
-        filterInvoices();
-        if (!matchRows.length) return;
-        if (matchIndex < 0) {
-          matchIndex = dir > 0 ? 0 : matchRows.length - 1;
-        } else {
-          matchIndex = (matchIndex + dir + matchRows.length) % matchRows.length;
-        }
-        var row = matchRows[matchIndex];
-        if (!row) return;
-        clearHits();
-        row.hidden = false;
-        row.classList.add('sheet-search-hit');
-        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        if (meta) {
-          meta.hidden = false;
-          meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · Enter = next';
-        }
-        window.setTimeout(function () {
-          try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
-          try {
-            var len = String(input.value || '').length;
-            input.setSelectionRange(len, len);
-          } catch (err2) {}
-        }, 0);
-      }
-
-      input.addEventListener('input', function () {
-        matchIndex = -1;
-        filterInvoices();
-      });
-      input.addEventListener('search', function () {
-        matchIndex = -1;
-        filterInvoices();
-      });
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          jumpToMatch(e.shiftKey ? -1 : 1);
-        }
-      });
-    })();
-    </script>
+    <?php if ($totalPages > 1): ?>
+    <nav class="pagination invoice-list-pager" aria-label="Invoice pages">
+      <?php if ($pageNum > 1): ?>
+        <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum - 1)])) ?>">Previous</a>
+      <?php endif; ?>
+      <?php foreach (invoice_list_page_numbers((int) $pageNum, $totalPages) as $pageLink): ?>
+        <?php if ($pageLink < 1): ?>
+          <span class="pagination-gap" aria-hidden="true">…</span>
+        <?php elseif ($pageLink === $pageNum): ?>
+          <span class="is-current" aria-current="page"><?= (int) $pageLink ?></span>
+        <?php else: ?>
+          <a href="<?= h($invoiceListQs(['p' => (string) $pageLink])) ?>"><?= (int) $pageLink ?></a>
+        <?php endif; ?>
+      <?php endforeach; ?>
+      <?php if ($pageNum < $totalPages): ?>
+        <a href="<?= h($invoiceListQs(['p' => (string) ($pageNum + 1)])) ?>">Next</a>
+      <?php endif; ?>
+    </nav>
+    <?php endif; ?>
     <script>
     (function () {
       function fitTextarea(ta) {
@@ -337,7 +417,7 @@ render_header('Invoices', 'admin');
           openBtn.querySelector('.invoice-note-preview-text').textContent = text;
           openBtn.title = 'Click to read or edit note';
         } else {
-          openBtn.innerHTML = '<span class="invoice-note-preview-empty">note…</span>';
+          openBtn.innerHTML = '<span class="invoice-note-preview-empty">Add note</span>';
           openBtn.title = 'Add a note';
         }
       }

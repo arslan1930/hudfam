@@ -8,10 +8,12 @@
  */
 $allowed = [
     'css/app.css' => 'text/css; charset=utf-8',
+    'css/style-new.css' => 'text/css; charset=utf-8',
     'js/sites-form.js' => 'application/javascript; charset=utf-8',
     'js/extract-sites-list.js' => 'application/javascript; charset=utf-8',
     'js/extracted-admin.js' => 'application/javascript; charset=utf-8',
     'js/sites-with-emails.js' => 'application/javascript; charset=utf-8',
+    'js/open-site.js' => 'application/javascript; charset=utf-8',
     'js/admin-emails-delete.js' => 'application/javascript; charset=utf-8',
     'js/email-campaign-sheet.js' => 'application/javascript; charset=utf-8',
     'js/email-campaign-search.js' => 'application/javascript; charset=utf-8',
@@ -19,16 +21,28 @@ $allowed = [
     'js/semrush-sheet.js' => 'application/javascript; charset=utf-8',
     'js/email-field-clear.js' => 'application/javascript; charset=utf-8',
     'js/app-processing.js' => 'application/javascript; charset=utf-8',
+    'js/app-dialog.js' => 'application/javascript; charset=utf-8',
+    'js/sheet-select-undo.js' => 'application/javascript; charset=utf-8',
     'js/stay-scroll.js' => 'application/javascript; charset=utf-8',
     'js/task-presence.js' => 'application/javascript; charset=utf-8',
     'js/draft-autosave.js' => 'application/javascript; charset=utf-8',
     'js/info-tips.js' => 'application/javascript; charset=utf-8',
     'js/nav-shell.js' => 'application/javascript; charset=utf-8',
+    'js/ui-enhancements.js' => 'application/javascript; charset=utf-8',
     'js/password-toggle.js' => 'application/javascript; charset=utf-8',
     'js/prospect-batch-sheet.js' => 'application/javascript; charset=utf-8',
+    'js/prospects-country.js' => 'application/javascript; charset=utf-8',
+    'js/niche-chips.js' => 'application/javascript; charset=utf-8',
+    'js/alert-fade.js' => 'application/javascript; charset=utf-8',
+    'js/csrf.js' => 'application/javascript; charset=utf-8',
+    'js/tld-separate.js' => 'application/javascript; charset=utf-8',
+    'js/searchable-select.js' => 'application/javascript; charset=utf-8',
+    'js/site-prices.js' => 'application/javascript; charset=utf-8',
     'img/techxform-logo.svg' => 'image/svg+xml',
     'img/topurlz-logo.svg' => 'image/svg+xml',
     'img/topurlz-logo.png' => 'image/png',
+    'img/teqno-logo.svg' => 'image/svg+xml',
+    'img/teqno-logo.png' => 'image/png',
 ];
 
 $f = (string) ($_GET['f'] ?? '');
@@ -56,8 +70,15 @@ if (!is_file($path)) {
 $mtime = filemtime($path) ?: time();
 $etag = '"' . md5($path . $mtime . filesize($path)) . '"';
 header('Content-Type: ' . $allowed[$f]);
-// Always revalidate — max-age=86400 kept teammates on broken JS after deploys.
-header('Cache-Control: no-cache, must-revalidate');
+header('X-Content-Type-Options: nosniff');
+// stylesheet_url() / script_asset_url() append v=filemtime. That URL is immutable.
+// Without v=, keep no-cache so a stale /asset.php?f=css/app.css cannot pin broken JS.
+$versioned = isset($_GET['v']) && (string) $_GET['v'] !== '';
+if ($versioned) {
+    header('Cache-Control: public, max-age=31536000, immutable');
+} else {
+    header('Cache-Control: no-cache, must-revalidate');
+}
 header('ETag: ' . $etag);
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 
@@ -73,4 +94,6 @@ if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
     }
 }
 
+// Do not gzip here. LiteSpeed/Apache gzip PHP output; a second gzip (or a
+// Content-Length that no longer matches) breaks CSS/JS on Team Filter & add.
 readfile($path);

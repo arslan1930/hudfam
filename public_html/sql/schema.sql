@@ -7,11 +7,13 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(150) NOT NULL DEFAULT '',
   email VARCHAR(190) NOT NULL DEFAULT '',
+  email_verified_at DATETIME NULL DEFAULT NULL,
   phone VARCHAR(80) NOT NULL DEFAULT '',
   contact_details TEXT,
   role ENUM('admin','team') NOT NULL DEFAULT 'team',
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+  session_version INT NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX (role),
   INDEX (full_name)
@@ -37,7 +39,7 @@ CREATE TABLE IF NOT EXISTS prospect_sites (
   country VARCHAR(100) NOT NULL DEFAULT '',
   language VARCHAR(50) NOT NULL DEFAULT '',
   region VARCHAR(40) NOT NULL DEFAULT '',
-  niche VARCHAR(255) NOT NULL DEFAULT '',
+  niche VARCHAR(512) NOT NULL DEFAULT '',
   notes TEXT,
   status ENUM('new','contacting','replied','skipped') NOT NULL DEFAULT 'new',
   created_by INT NULL,
@@ -61,7 +63,7 @@ CREATE TABLE IF NOT EXISTS prospect_batches (
   country VARCHAR(100) NOT NULL DEFAULT '',
   language VARCHAR(50) NOT NULL DEFAULT '',
   region VARCHAR(40) NOT NULL DEFAULT '',
-  niche VARCHAR(255) NOT NULL DEFAULT '',
+  niche VARCHAR(512) NOT NULL DEFAULT '',
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -92,6 +94,9 @@ CREATE TABLE IF NOT EXISTS extract_batches (
   site_count INT NOT NULL DEFAULT 0,
   results_text MEDIUMTEXT NULL,
   emptied_at TIMESTAMP NULL DEFAULT NULL,
+  last_pushed_at TIMESTAMP NULL DEFAULT NULL,
+  sites_writer_id INT NULL DEFAULT NULL,
+  sites_writer_at TIMESTAMP NULL DEFAULT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -219,6 +224,16 @@ CREATE TABLE IF NOT EXISTS admin_data_seen (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Per-admin “seen” watermark for Sites with emails - Admin country folders
+CREATE TABLE IF NOT EXISTS swe_admin_country_seen (
+  user_id INT NOT NULL,
+  country VARCHAR(100) NOT NULL,
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, country),
+  CONSTRAINT fk_swe_admin_country_seen_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Email campaign projects (Admin) → country sheets → Communication search + drafts
 CREATE TABLE IF NOT EXISTS email_campaign_projects (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -283,9 +298,11 @@ CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   project_id INT NOT NULL,
   category VARCHAR(40) NOT NULL DEFAULT 'custom',
   title VARCHAR(180) NOT NULL,
+  subject VARCHAR(255) NOT NULL DEFAULT '',
   body MEDIUMTEXT NOT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   created_by INT NULL,
+  updated_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX (project_id),
@@ -343,7 +360,7 @@ CREATE TABLE IF NOT EXISTS department_tasks (
   CONSTRAINT fk_dt_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Order management: one sheet per client
+-- Order management: one pipeline sheet
 CREATE TABLE IF NOT EXISTS order_clients (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(200) NOT NULL,
@@ -358,7 +375,7 @@ CREATE TABLE IF NOT EXISTS order_clients (
 
 CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  client_id INT NOT NULL,
+  client_id INT NULL,
   row_type ENUM('site','year_end') NOT NULL DEFAULT 'site',
   site_name VARCHAR(255) NOT NULL DEFAULT '',
   site_note VARCHAR(255) NOT NULL DEFAULT '',
@@ -370,13 +387,25 @@ CREATE TABLE IF NOT EXISTS order_items (
   owner_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   decided_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   live_url VARCHAR(500) NOT NULL DEFAULT '',
+  article_doc_url VARCHAR(500) NOT NULL DEFAULT '',
+  client_label VARCHAR(255) NOT NULL DEFAULT '',
+  admin_user_id INT NULL,
+  order_date DATE NULL,
   is_paid TINYINT(1) NOT NULL DEFAULT 0,
+  site_price_row_id INT NULL,
+  order_stage ENUM('processing','completed') NOT NULL DEFAULT 'processing',
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX (client_id, sort_order),
   INDEX (client_id, order_year, order_month),
-  CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE CASCADE
+  INDEX idx_oi_admin (admin_user_id),
+  INDEX idx_oi_order_date (order_date),
+  INDEX idx_oi_country (country),
+  UNIQUE KEY uniq_order_items_site_price_row (site_price_row_id),
+  INDEX idx_oi_order_stage (order_stage),
+  CONSTRAINT fk_oi_client FOREIGN KEY (client_id) REFERENCES order_clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_oi_admin FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Invoices (generated from completed order-sheet articles)
@@ -412,6 +441,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   company_phone VARCHAR(80) NOT NULL DEFAULT '',
   company_address TEXT NULL,
   company_reg_no VARCHAR(80) NOT NULL DEFAULT '',
+  company_logo VARCHAR(255) NOT NULL DEFAULT '',
   vat_note VARCHAR(255) NOT NULL DEFAULT 'Not VAT registered – no VAT charged.',
   currency CHAR(3) NOT NULL DEFAULT 'EUR',
   total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -438,10 +468,24 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   qty INT NOT NULL DEFAULT 1,
   line_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-  order_item_ids VARCHAR(500) NOT NULL DEFAULT '',
+  order_item_ids TEXT NOT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   INDEX (invoice_id, sort_order),
   CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS invoice_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  invoice_id INT NULL,
+  event_type VARCHAR(40) NOT NULL DEFAULT '',
+  actor_user_id INT NULL,
+  summary VARCHAR(500) NOT NULL DEFAULT '',
+  payload TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ie_invoice (invoice_id, id),
+  INDEX idx_ie_type (event_type),
+  CONSTRAINT fk_ie_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ie_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Semrush Research: Admin-seeded site names per country (Site Finding sheet)
@@ -470,4 +514,72 @@ CREATE TABLE IF NOT EXISTS semrush_sheet_comments (
   INDEX (country, created_at),
   CONSTRAINT fk_semrush_comment_user
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS semrush_sheet_meta (
+  country VARCHAR(100) NOT NULL PRIMARY KEY,
+  last_writer_id INT NULL,
+  last_writer_at TIMESTAMP NULL DEFAULT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_semrush_meta_user
+    FOREIGN KEY (last_writer_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Website prices (Office): publisher rate book, one country sheet
+CREATE TABLE IF NOT EXISTS site_price_statuses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(80) NOT NULL,
+  label VARCHAR(120) NOT NULL,
+  color VARCHAR(40) NOT NULL DEFAULT 'grey',
+  lane ENUM('processing','new','other') NOT NULL DEFAULT 'other',
+  is_builtin TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_site_price_status_slug (slug),
+  INDEX (lane),
+  INDEX (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS site_price_rows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  country VARCHAR(100) NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  niche VARCHAR(512) NOT NULL DEFAULT '',
+  da VARCHAR(40) NOT NULL DEFAULT '',
+  dr VARCHAR(40) NOT NULL DEFAULT '',
+  traffic VARCHAR(40) NOT NULL DEFAULT '',
+  price_note TEXT NULL,
+  extra_note VARCHAR(500) NOT NULL DEFAULT '',
+  reply_email VARCHAR(190) NOT NULL DEFAULT '',
+  row_tint VARCHAR(20) NOT NULL DEFAULT '',
+  status_slug VARCHAR(80) NOT NULL DEFAULT 'new',
+  sort_in_lane INT NOT NULL DEFAULT 0,
+  identity_locked TINYINT(1) NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  managed_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_site_price_country_domain (country, domain),
+  INDEX (country),
+  INDEX (status_slug),
+  INDEX (created_by),
+  INDEX (managed_by),
+  INDEX (country, status_slug, sort_in_lane),
+  CONSTRAINT fk_spr_created FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_spr_managed FOREIGN KEY (managed_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS site_price_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  row_id INT NOT NULL,
+  actor_id INT NULL,
+  actor_role VARCHAR(20) NOT NULL DEFAULT '',
+  kind VARCHAR(40) NOT NULL,
+  old_value TEXT NULL,
+  new_value TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX (row_id, created_at),
+  INDEX (actor_id),
+  CONSTRAINT fk_spe_row FOREIGN KEY (row_id) REFERENCES site_price_rows(id) ON DELETE CASCADE,
+  CONSTRAINT fk_spe_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

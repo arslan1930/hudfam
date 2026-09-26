@@ -43,9 +43,12 @@
     }
   });
 
-  window.addEventListener('resize', function () {
-    if (!window.matchMedia('(max-width: 900px)').matches) {
-      close();
-    }
-  });
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(max-width: 900px)');
+    var onChange = function (e) {
+      if (!e.matches) close();
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
 })();

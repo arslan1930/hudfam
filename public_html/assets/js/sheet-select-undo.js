@@ -1,0 +1,558 @@
+/**
+ * Sheet Select all / Remove selected + Undo / Redo arrows.
+ * Selection follows live Search: hidden / display:none rows are unchecked.
+ * Used on Email campaign, Sites with emails, Extracted Sites, Our database.
+ */
+(function () {
+  'use strict';
+  if (window.__HF_SHEET_SELECT_UNDO__) return;
+  window.__HF_SHEET_SELECT_UNDO__ = true;
+
+  function rootEl() {
+    return document.querySelector('[data-sheet-select-root]');
+  }
+
+  function rowOfCheck(el) {
+    return el ? el.closest('tr, li, [data-swe-row], [data-extracted-url-row], [data-prospect-site-row]') : null;
+  }
+
+  function isRowVisible(row) {
+    if (!row) return true;
+    if (row.hidden) return false;
+    if (row.getAttribute && row.getAttribute('hidden') != null) return false;
+    try {
+      if (window.getComputedStyle && getComputedStyle(row).display === 'none') return false;
+    } catch (e) { /* ignore */ }
+    return true;
+  }
+
+  function allChecks() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-sheet-row-check]'));
+  }
+
+  function visibleChecks() {
+    return allChecks().filter(function (el) {
+      return isRowVisible(rowOfCheck(el));
+    });
+  }
+
+  function selectedChecks() {
+    return visibleChecks().filter(function (el) { return el.checked; });
+  }
+
+  function clearHiddenSelection() {
+    allChecks().forEach(function (el) {
+      var row = rowOfCheck(el);
+      if (isRowVisible(row)) return;
+      el.checked = false;
+      if (row) row.classList.remove('is-sheet-selected');
+    });
+  }
+
+  function setStatus(msg, isError) {
+    var el = document.getElementById('swe_status')
+      || document.getElementById('extracted_copy_status')
+      || document.getElementById('prospect_copy_status');
+    if (!el) return;
+    if (!msg) {
+      el.hidden = true;
+      el.textContent = '';
+      el.classList.remove('is-error', 'is-ok', 'is-loading');
+      return;
+    }
+    el.hidden = false;
+    el.textContent = msg;
+    el.classList.toggle('is-error', !!isError);
+    el.classList.toggle('is-ok', !isError);
+    el.classList.remove('is-loading');
+  }
+
+  function showProcessing(msg) {
+    if (window.AppProcessing && typeof window.AppProcessing.show === 'function') {
+      window.AppProcessing.show(msg);
+    }
+  }
+
+  function hideProcessing() {
+    if (window.AppProcessing && typeof window.AppProcessing.hide === 'function') {
+      window.AppProcessing.hide();
+    }
+  }
+
+  function applyState(data) {
+    var root = rootEl();
+    if (!root || !data) return;
+    var undo = root.querySelector('[data-sheet-undo]');
+    var redo = root.querySelector('[data-sheet-redo]');
+    if (undo) undo.disabled = !data.can_undo;
+    if (redo) redo.disabled = !data.can_redo;
+  }
+
+  function matchingLabel(n) {
+    return n === 1
+      ? 'Select all 1 matching row on this page'
+      : 'Select all ' + n + ' matching rows on this page';
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        if (!document.execCommand('copy')) reject(new Error('Copy failed'));
+        else resolve();
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
+  function selectedRows() {
+    return selectedChecks().map(rowOfCheck).filter(Boolean);
+  }
+
+  function splitEmailTokens(raw) {
+    var text = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    if (!text) return [];
+    return text.split(/[\n,;]+|\s+/).map(function (part) {
+      return String(part || '').trim().replace(/^<|>$/g, '');
+    }).filter(Boolean);
+  }
+
+  function isValidEmailToken(v) {
+    var s = String(v || '').trim();
+    return s !== '' && s.indexOf('@') !== -1;
+  }
+
+  function collectSelectedEmails() {
+    var rows = selectedRows();
+    var emails = [];
+    var seen = {};
+    var none = 0;
+    rows.forEach(function (row) {
+      var found = 0;
+      Array.prototype.forEach.call(row.querySelectorAll('[data-swe-email]'), function (input) {
+        splitEmailTokens(input.value).forEach(function (e) {
+          if (!isValidEmailToken(e)) return;
+          found++;
+          var key = e.toLowerCase();
+          if (seen[key]) return;
+          seen[key] = true;
+          emails.push(e);
+        });
+      });
+      if (found < 1) none++;
+    });
+    return { emails: emails, sites: rows.length, none: none };
+  }
+
+  function collectSelectedDomains() {
+    var rows = selectedRows();
+    var domains = [];
+    var seen = {};
+    var none = 0;
+    rows.forEach(function (row) {
+      var input = row.querySelector('.swe-domain, [name="domain"]');
+      var d = String((input && input.value) || '').trim();
+      if (!d) {
+        none++;
+        return;
+      }
+      var key = d.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      domains.push(d);
+    });
+    return { domains: domains, sites: rows.length, none: none };
+  }
+
+  function syncCopySelectedButtons(c) {
+    document.querySelectorAll(
+      '[data-camp-copy-selected-emails], [data-swe-copy-selected-emails], [data-camp-copy-selected-domains]'
+    ).forEach(function (btn) {
+      btn.disabled = c < 1;
+    });
+  }
+
+  function syncRemoveButton() {
+    clearHiddenSelection();
+    var vis = visibleChecks();
+    var n = vis.length;
+    var c = selectedChecks().length;
+    var root = rootEl();
+    var btn = root ? root.querySelector('[data-sheet-remove-selected]') : null;
+    if (btn) {
+      btn.disabled = c < 1;
+      btn.textContent = c > 0 ? ('Remove selected (' + c + ')') : 'Remove selected';
+    }
+    var all = document.querySelector('[data-sheet-select-all-check]');
+    var title = matchingLabel(n);
+    if (all) {
+      all.checked = n > 0 && c === n;
+      all.indeterminate = c > 0 && c < n;
+      all.title = title;
+      all.setAttribute('aria-label', title);
+    }
+    var selectAll = root ? root.querySelector('[data-sheet-select-all]') : null;
+    if (selectAll) {
+      var allOn = n > 0 && c === n;
+      selectAll.textContent = allOn ? 'Unselect all' : 'Select all';
+      var selectTitle = allOn
+        ? 'Unselect all matching rows on this page'
+        : 'Select all matching rows on this page';
+      selectAll.title = selectTitle;
+      selectAll.setAttribute('aria-label', selectTitle);
+    }
+    syncCopySelectedButtons(c);
+  }
+
+  function markRowSelected(el, on) {
+    el.checked = !!on;
+    var row = rowOfCheck(el);
+    if (row) row.classList.toggle('is-sheet-selected', !!on);
+  }
+
+  function setVisibleSelected(on) {
+    visibleChecks().forEach(function (el) {
+      markRowSelected(el, on);
+    });
+    syncRemoveButton();
+  }
+
+  function removeRowsByIds(ids) {
+    ids.forEach(function (id) {
+      var check = document.querySelector('[data-sheet-row-check][value="' + id + '"]');
+      var row = check ? rowOfCheck(check) : document.querySelector('[data-site-id="' + id + '"]');
+      if (row) row.remove();
+    });
+    syncRemoveButton();
+    try {
+      document.dispatchEvent(new CustomEvent('hf-sheet-rows-changed'));
+    } catch (e) { /* ignore */ }
+  }
+
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? String(meta.getAttribute('content') || '') : '';
+  }
+
+  function postForm(form, extra) {
+    var body = new URLSearchParams();
+    Array.prototype.forEach.call(form.elements || [], function (el) {
+      if (!el || !el.name || el.disabled) return;
+      var key = String(el.name);
+      if (key === 'site_ids' || key === 'site_ids[]') return;
+      var type = String(el.type || '').toLowerCase();
+      if (type === 'file' || type === 'submit' || type === 'button' || type === 'reset') return;
+      if ((type === 'checkbox' || type === 'radio') && !el.checked) return;
+      body.append(key, el.value);
+    });
+    body.set('ajax', '1');
+    if (extra) {
+      Object.keys(extra).forEach(function (k) {
+        var v = extra[k];
+        if (Array.isArray(v)) {
+          // Repeat site_ids[] rather than "1,2,3,4" — comma lists get blocked or
+          // stripped once more than a couple of ids are selected.
+          v.forEach(function (item) {
+            if (item === '' || item == null) return;
+            body.append(k + '[]', String(item));
+          });
+          return;
+        }
+        if (v != null && v !== '') body.set(k, String(v));
+      });
+    }
+    if (!body.get('_csrf')) {
+      var tok = csrfToken();
+      if (tok) body.set('_csrf', tok);
+    }
+    form.setAttribute('data-busy', '1');
+    return fetch(form.getAttribute('action') || window.location.href, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        Accept: 'application/json'
+      },
+      body: body.toString(),
+      credentials: 'same-origin'
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error((data && data.error) || 'Request failed');
+        }
+        return data;
+      });
+    }).then(function (data) {
+      form.removeAttribute('data-busy');
+      return data;
+    }).catch(function (err) {
+      form.removeAttribute('data-busy');
+      throw err;
+    });
+  }
+
+  function submitHistory(kind) {
+    var root = rootEl();
+    if (!root) return;
+    var form = root.querySelector(kind === 'redo' ? '[data-sheet-redo-form]' : '[data-sheet-undo-form]');
+    if (!form || form.getAttribute('data-busy') === '1') return;
+    var label = kind === 'redo' ? 'Redoing…' : 'Undoing…';
+    setStatus(label, false);
+    showProcessing(label);
+    postForm(form).then(function (data) {
+      applyState(data);
+      setStatus(kind === 'redo' ? 'Redid last change.' : 'Undid last change.');
+      showProcessing('Loading…');
+      window.location.reload();
+    }).catch(function (err) {
+      hideProcessing();
+      setStatus(err.message || 'Could not undo/redo.', true);
+    });
+  }
+
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t || !t.matches) return;
+    if (t.matches('[data-sheet-row-check]')) {
+      var row = rowOfCheck(t);
+      if (row) row.classList.toggle('is-sheet-selected', !!t.checked);
+      syncRemoveButton();
+      return;
+    }
+    if (t.matches('[data-sheet-select-all-check]')) {
+      setVisibleSelected(t.checked);
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-sheet-select-all], [data-sheet-remove-selected], [data-sheet-undo], [data-sheet-redo]') : null;
+    if (!btn || btn.disabled) return;
+    if (btn.hasAttribute('data-sheet-select-all')) {
+      e.preventDefault();
+      var vis = visibleChecks();
+      var allOn = vis.length > 0 && vis.every(function (el) { return el.checked; });
+      setVisibleSelected(!allOn);
+      return;
+    }
+    if (btn.hasAttribute('data-sheet-undo')) {
+      e.preventDefault();
+      submitHistory('undo');
+      return;
+    }
+    if (btn.hasAttribute('data-sheet-redo')) {
+      e.preventDefault();
+      submitHistory('redo');
+      return;
+    }
+    if (!btn.hasAttribute('data-sheet-remove-selected')) return;
+    e.preventDefault();
+    var root = rootEl();
+    var form = root && root.querySelector('[data-sheet-remove-selected-form]');
+    if (!form) return;
+    var ids = selectedChecks().map(function (el) { return String(el.value || ''); }).filter(Boolean);
+    if (!ids.length) return;
+    var confirmMsg = 'Remove ' + ids.length + ' selected site' + (ids.length === 1 ? '' : 's') + '?';
+    var runRemove = function () {
+    var idsInput = form.querySelector('[data-sheet-site-ids]');
+    if (idsInput) idsInput.value = ids.join(' ');
+    setStatus('Removing selected…', false);
+    showProcessing('Removing selected…');
+    postForm(form, { site_ids: ids }).then(function (data) {
+      var removed = (data.removed || []).map(function (r) {
+        return String(r.id != null ? r.id : r);
+      });
+      if (!removed.length) removed = ids;
+      var totalLabel = document.getElementById('swe_total_label') || document.getElementById('extracted_total_label') || document.getElementById('prospect_country_total_label');
+      if (totalLabel && typeof data.site_count === 'number') {
+        totalLabel.textContent = String(data.site_count);
+      }
+      removeRowsByIds(removed);
+      applyState(data);
+      var n = typeof data.count === 'number' ? data.count : removed.length;
+      setStatus('Removed ' + n + ' selected site' + (n === 1 ? '' : 's') + '.');
+      if (window.SheetSelectUndo && typeof window.SheetSelectUndo.syncPageStatus === 'function') {
+        var qEl = document.getElementById('swe-row-search');
+        var filtering = !!(qEl && String(qEl.value || '').trim());
+        var shown = filtering
+          ? document.querySelectorAll('[data-swe-row]:not([hidden]), [data-extracted-url-row]:not([hidden]), [data-prospect-site-row]:not([hidden])').length
+          : 0;
+        window.SheetSelectUndo.syncPageStatus(shown, filtering);
+      }
+      hideProcessing();
+      if (data.redirect) {
+        showProcessing('Loading…');
+        window.location.href = data.redirect;
+      }
+    }).catch(function (err) {
+      hideProcessing();
+      setStatus(err.message || 'Could not remove selected.', true);
+    });
+    };
+    if (typeof window.txfConfirm === 'function') {
+      window.txfConfirm(confirmMsg).then(function (ok) { if (ok) runRemove(); });
+      return;
+    }
+    if (!window.confirm(confirmMsg)) return;
+    runRemove();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    var t = e.target;
+    if (t && t.closest && t.closest('input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+    var key = String(e.key || '').toLowerCase();
+    if (key === 'z' && !e.shiftKey) {
+      var undo = document.querySelector('[data-sheet-undo]');
+      if (!undo || undo.disabled) return;
+      e.preventDefault();
+      undo.click();
+      return;
+    }
+    if (key === 'y' || (key === 'z' && e.shiftKey)) {
+      var redo = document.querySelector('[data-sheet-redo]');
+      if (!redo || redo.disabled) return;
+      e.preventDefault();
+      redo.click();
+    }
+  });
+
+  window.SheetSelectUndo = {
+    applyState: applyState,
+    sync: syncRemoveButton,
+    selectedRows: selectedRows,
+    collectSelectedEmails: collectSelectedEmails,
+    collectSelectedDomains: collectSelectedDomains,
+    syncPageStatus: function (shown, filtering) {
+      var el = document.querySelector('[data-sheet-page-status]');
+      if (!el) return;
+      var live = document.querySelectorAll('[data-sheet-row-check]').length;
+      var header = document.getElementById('swe_total_label')
+        || document.getElementById('extracted_total_label')
+        || document.getElementById('prospect_country_total_label');
+      var prevOnPage = Number(el.getAttribute('data-on-page'));
+      var prevTotal = Number(el.getAttribute('data-total'));
+      var total;
+      if (header && String(header.textContent || '').trim() !== '') {
+        var parsed = parseInt(header.textContent, 10);
+        total = isNaN(parsed) ? prevTotal : parsed;
+      } else if (!isNaN(prevOnPage) && !isNaN(prevTotal) && live <= prevOnPage) {
+        total = Math.max(0, prevTotal - (prevOnPage - live));
+      } else {
+        total = isNaN(prevTotal) ? live : prevTotal;
+      }
+      if (isNaN(total)) total = live;
+      el.setAttribute('data-on-page', String(live));
+      el.setAttribute('data-total', String(total));
+      var page = el.getAttribute('data-page') || '1';
+      var pages = el.getAttribute('data-pages') || '1';
+      var idleText = 'Page ' + page + ' / ' + pages + ' · showing ' + live + ' of ' + total;
+      el.setAttribute('data-default-text', idleText);
+      if (!filtering) {
+        el.textContent = idleText;
+        return;
+      }
+      shown = Number(shown) || 0;
+      if (shown < 1) {
+        el.textContent = 'No search matches on this page';
+        return;
+      }
+      el.textContent = 'Page ' + page + ' / ' + pages + ' · showing ' + shown + ' of ' + live + ' on this page';
+    },
+    removed: function (ids, data) {
+      if (ids && ids.length) removeRowsByIds(ids.map(String));
+      applyState(data || {});
+      syncRemoveButton();
+    }
+  };
+
+  document.addEventListener('toggle', function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.open) return;
+    if (!el.classList.contains('sheet-row-more') && !el.classList.contains('sheet-tool-menu')) return;
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      if (d !== el) d.open = false;
+    });
+  }, true);
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('details.sheet-row-more, details.sheet-tool-menu')) return;
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      d.open = false;
+    });
+  });
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest
+      ? e.target.closest('[data-camp-copy-selected-emails], [data-swe-copy-selected-emails], [data-camp-copy-selected-domains]')
+      : null;
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    var wantDomains = btn.hasAttribute('data-camp-copy-selected-domains');
+    if (selectedChecks().length < 1) {
+      setStatus('Tick a row first.', true);
+      return;
+    }
+    if (wantDomains) {
+      var domainPick = collectSelectedDomains();
+      if (!domainPick.domains.length) {
+        setStatus('No valid domains on the selected sites.', true);
+        return;
+      }
+      copyText(domainPick.domains.join('\n')).then(function () {
+        var n = domainPick.domains.length;
+        var m = domainPick.sites;
+        var msg = 'Copied ' + n + ' domain' + (n === 1 ? '' : 's')
+          + ' from ' + m + ' selected site' + (m === 1 ? '' : 's') + ' on this page.';
+        if (domainPick.none > 0) {
+          msg += ' · ' + domainPick.none + ' had none';
+        }
+        setStatus(msg);
+      }).catch(function () {
+        setStatus('Copy failed.', true);
+      });
+      return;
+    }
+    var pick = collectSelectedEmails();
+    if (!pick.emails.length) {
+      setStatus('No valid emails on the selected sites.', true);
+      return;
+    }
+    copyText(pick.emails.join('\n')).then(function () {
+      var n = pick.emails.length;
+      var m = pick.sites;
+      var msg = 'Copied ' + n + ' email' + (n === 1 ? '' : 's')
+        + ' from ' + m + ' selected site' + (m === 1 ? '' : 's') + ' on this page.';
+      if (pick.none > 0) {
+        msg += ' · ' + pick.none + ' had none';
+      }
+      setStatus(msg);
+    }).catch(function () {
+      setStatus('Copy failed.', true);
+    });
+  });
+
+  document.addEventListener('hf-sheet-rows-changed', function () {
+    syncRemoveButton();
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncRemoveButton);
+  } else {
+    syncRemoveButton();
+  }
+})();

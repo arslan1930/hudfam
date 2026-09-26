@@ -21,13 +21,14 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_departments' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
-        'admin_semrush_research' => [],
+        'admin_semrush_research' => ['admin_semrush_sheet'],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_semrush_research' => ['team_semrush_sheet'],
+        'team_site_prices' => [],
         'team_extracting' => ['team_extract_batch'],
         'team_departments' => [],
-        'team_admin_emails_delete' => [],
+        'team_admin_emails_search' => ['team_admin_emails_delete'],
     ];
     return in_array($current, $aliases[$navPage] ?? [], true);
 }
@@ -45,28 +46,60 @@ function render_header(string $title, string $panel = ''): void
     $user = current_user();
     $base = app_base_path();
     $cssPhp = stylesheet_url();
+    $cssNew = function_exists('stylesheet_new_url') ? stylesheet_new_url() : '';
     $logo = brand_logo_url();
 
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
+    echo '<!DOCTYPE html><html lang="en" class="ui-v2"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+    if ($user) {
+        echo '<meta name="csrf-token" content="' . h(csrf_token()) . '">';
+    }
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
+    echo '<link rel="icon" href="' . h($logo) . '" type="image/svg+xml">';
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
-    // One stylesheet URL (asset.php) — avoid loading CSS twice (parse cost / jank).
+    // app.css via asset.php, then UI overlay (style-new.css). Do not also load /assets/css/*.
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
+    if ($cssNew !== '') {
+        echo '<link rel="stylesheet" href="' . h($cssNew) . '">';
+    }
+    echo '<style>';
+    echo 'html.is-page-loading #app-processing{position:fixed;inset:0;z-index:2200;display:flex!important;align-items:center;justify-content:center;padding:1.25rem;background:rgba(2,6,23,.72)}';
+    echo 'html.is-page-loading body{overflow:hidden}';
+    echo '.ui-skip{position:absolute;left:-9999px}';
+    echo '</style>';
+    echo '<noscript><style>html.is-page-loading #app-processing{display:none!important}html.is-page-loading body{overflow:auto}</style></noscript>';
+    echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
+    echo '<script src="' . h(script_asset_url('js/app-dialog.js')) . '" defer></script>';
     // Early scroll restore after same-page POST actions (before paint when possible).
     echo '<script>';
-    echo '(function(){try{var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
+    echo '(function(){try{';
+    echo 'var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
     echo 'if(p&&y&&p===location.pathname+location.search){var t=parseInt(y,10)||0;if(t>0){';
     echo 'if("scrollRestoration" in history)history.scrollRestoration="manual";';
     echo 'window.scrollTo(0,t);}}}catch(e){}})();';
     echo '</script>';
     echo '</head><body>';
+    echo '<div id="app-processing" class="app-processing is-page-load" hidden aria-busy="false" aria-live="assertive" role="alert">';
+    echo '<div class="app-processing-card">';
+    echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
+    echo '<p class="app-processing-msg" data-processing-msg>Loading…</p>';
+    echo '<p class="app-processing-sub muted" data-processing-sub>Please wait.</p>';
+    echo '</div></div>';
+    echo '<dialog id="app-dialog" class="app-dialog" aria-labelledby="app-dialog-title">';
+    echo '<form method="dialog" class="app-dialog-card">';
+    echo '<h2 id="app-dialog-title" class="app-dialog-title">Confirm</h2>';
+    echo '<p id="app-dialog-body" class="app-dialog-body"></p>';
+    echo '<div class="app-dialog-actions">';
+    echo '<button type="button" class="btn secondary" data-app-dialog-cancel>Cancel</button>';
+    echo '<button type="submit" class="btn" value="ok" data-app-dialog-ok>Continue</button>';
+    echo '</div></form></dialog>';
 
     if (!$user || $panel === '') {
         return;
     }
+    echo '<a class="ui-skip" href="#app-main">Skip to content</a>';
 
     $home = $panel === 'admin' ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
     $current = current_route_page();
@@ -74,7 +107,8 @@ function render_header(string $title, string $panel = ''): void
     $flashes = get_flashes();
     $clearDraft = false;
     foreach ($flashes as $flash) {
-        if (($flash['type'] ?? '') === 'ok') {
+        $flashType = (string) ($flash['type'] ?? '');
+        if ($flashType === 'ok' || $flashType === 'fade' || $flashType === 'ok-fade' || $flashType === 'dup') {
             $clearDraft = true;
             break;
         }
@@ -86,6 +120,7 @@ function render_header(string $title, string $panel = ''): void
     echo '<a class="mobile-brand" href="' . h($home) . '">';
     echo '<img class="brand-logo" src="' . h($logo) . '" alt="">';
     echo '<span>' . h($app) . '</span></a>';
+    echo '<span class="mobile-page-title">' . h($title) . '</span>';
     echo '</div>';
     echo '<div class="sidebar-backdrop" data-nav-backdrop hidden></div>';
     echo '<aside class="sidebar" id="app-sidebar">';
@@ -97,26 +132,36 @@ function render_header(string $title, string $panel = ''): void
 
     if ($panel === 'admin') {
         $groups = [
-            'Main' => [
+            'Work' => [
                 'admin_dashboard' => ['Dashboard', 'Overview'],
                 'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
                 'admin_semrush_research' => ['Semrush Research', 'Site Finding copy · Extracting Push + optional seed'],
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
-                'admin_emails_data' => ['Emails data', 'Archives · campaign sheets'],
-                'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
-                'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
+                'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign'],
+            ],
+            'Office' => [
+                'admin_orders&folder=processing' => ['Order management', 'Processing'],
+                'admin_orders&folder=completed' => ['Completed orders', 'Unpaid LIVE · invoices'],
+                'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
+                'admin_invoices&filter=unpaid' => ['Invoices', 'Waiting bills from unpaid LIVE'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
+                'admin_account' => ['Account', 'Email verify · password'],
             ],
         ];
+        // New badge only for Emails data (emails_admin) — Our DB / Extracted stay off.
+        $adminNewByPage = [
+            'admin_emails_data' => 'emails_admin',
+        ];
     } else {
+        $adminNewByPage = [];
         $deptScoped = function_exists('user_is_department_scoped') && user_is_department_scoped($user);
         if ($deptScoped) {
             // Department members: tasks + tools for their departments.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Your assigned tasks and tools'],
+                    'team_dashboard' => ['Your work', 'Your assigned tasks and tools'],
                     'team_departments' => ['My departments', 'Only departments you belong to'],
                 ],
             ];
@@ -148,9 +193,18 @@ function render_header(string $title, string $panel = ''): void
                     ];
                 }
                 if (!empty($toolSet['team_semrush_research'])) {
+                    $semrushHint = (function_exists('team_can_clear_semrush_country') && team_can_clear_semrush_country($user))
+                        ? 'From Extracting Push · edit, comment, clear country'
+                        : 'From Extracting Push · edit, comment';
                     $groups['Main']['team_semrush_research'] = [
                         'Semrush Research',
-                        'From Extracting Push · edit, comment, clear country',
+                        $semrushHint,
+                    ];
+                }
+                if (!empty($toolSet['team_site_prices'])) {
+                    $groups['Main']['team_site_prices'] = [
+                        'Website prices',
+                        'Country sheets · publisher rates',
                     ];
                 }
                 if (!empty($toolSet['team_extracting'])) {
@@ -161,14 +215,14 @@ function render_header(string $title, string $panel = ''): void
                 }
                 if (!empty($toolSet['team_sites_emails'])) {
                     $groups['Main']['team_sites_emails'] = [
-                        'Sites with emails - Team',
+                        'Sites with emails',
                         'Add emails · Push to Admin',
                     ];
                 }
-                if (!empty($toolSet['team_admin_emails_delete'])) {
-                    $groups['Main']['team_admin_emails_delete'] = [
+                if (!empty($toolSet['team_admin_emails_search'])) {
+                    $groups['Main']['team_admin_emails_search'] = [
                         'Admin emails search',
-                        'Sites with emails - Admin · all countries',
+                        'Admin sheet · all countries',
                     ];
                 }
                 if (!empty($toolSet['team_email_campaigns'])) {
@@ -188,7 +242,7 @@ function render_header(string $title, string $panel = ''): void
             // Team login with no department yet — no tools until Admin assigns one.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Waiting for department assignment'],
+                    'team_dashboard' => ['Your work', 'Waiting for department assignment'],
                     'team_departments' => ['My departments', 'Ask Admin to assign you'],
                 ],
             ];
@@ -196,13 +250,14 @@ function render_header(string $title, string $panel = ''): void
             // Admin browsing Team UI (or non-scoped): full tool set.
             $groups = [
                 'Main' => [
-                    'team_dashboard' => ['Dashboard', 'Overview'],
+                    'team_dashboard' => ['Your work', 'Overview'],
                     'team_prospect_check' => ['Filter & add', 'Paste → filter → add new unique only'],
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
+                    'team_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
-                    'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
-                    'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
-                    'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
+                    'team_sites_emails' => ['Sites with emails', 'Add emails · Push to Admin'],
+                    'team_admin_emails_search' => ['Admin emails search', 'Admin sheet · all countries'],
+                    'team_email_campaigns' => ['Campaign search', 'Campaign sheets · all countries'],
                     'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],
                     'team_prospect_batches' => ['Site adding history', 'Your daily adds'],
@@ -225,17 +280,38 @@ function render_header(string $title, string $panel = ''): void
                 $hrefPage = $page;
             }
             $active = '';
-            if ($current === $activePage) {
-                if (str_contains($page, 'folder=')) {
-                    parse_str(substr($page, strpos($page, '&') + 1), $qs);
-                    $active = ((string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')) ? ' active' : '';
+            if (str_contains($page, 'folder=')) {
+                parse_str(substr($page, strpos($page, '&') + 1), $qs);
+                if ($activePage === 'admin_orders') {
+                    $want = (string) ($qs['folder'] ?? '');
+                    $have = (string) ($_GET['folder'] ?? '');
+                    if ($want === 'processing') {
+                        $active = nav_is_active('admin_orders', $current)
+                            && ($have === 'processing' || $have === '')
+                            ? ' active' : '';
+                    } else {
+                        $active = (
+                            nav_is_active('admin_orders', $current)
+                            && $have === $want
+                        ) ? ' active' : '';
+                    }
                 } else {
-                    $active = nav_is_active($activePage, $current) ? ' active' : '';
+                    $active = (
+                        $current === $activePage
+                        && (string) ($_GET['folder'] ?? '') === (string) ($qs['folder'] ?? '')
+                    ) ? ' active' : '';
                 }
+            } else {
+                // Use aliases so child routes (order sheet, invoice view, Semrush sheet, …) light the parent.
+                $active = nav_is_active($activePage, $current) ? ' active' : '';
             }
             $ariaCurrent = trim($active) !== '' ? ' aria-current="page"' : '';
             echo '<a class="' . trim($active) . '" href="index.php?page=' . h($hrefPage) . '"' . $ariaCurrent . '>';
-            echo '<span class="nav-label">' . h($label) . '</span>';
+            echo '<span class="nav-label">' . h($label);
+            if ($panel === 'admin' && isset($adminNewByPage[$activePage]) && function_exists('admin_new_badge_html')) {
+                echo admin_new_badge_html($adminNewByPage[$activePage], $user);
+            }
+            echo '</span>';
             echo '</a>';
         }
         echo '</div>';
@@ -245,7 +321,19 @@ function render_header(string $title, string $panel = ''): void
     echo '<a href="index.php?page=account_password">Change password</a>';
     echo '<a href="index.php?page=logout">Logout</a>';
     echo '</div>';
-    echo '</nav></aside><main class="main" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    $sheetApp = in_array($current, ['admin_emails_data', 'team_sites_emails', 'team_email_campaigns'], true);
+    echo '</nav></aside><main id="app-main" class="main' . ($sheetApp ? ' is-sheet-app' : '') . '" data-draft-panel="' . h($panel) . '" data-draft-clear="' . ($clearDraft ? '1' : '0') . '">';
+    $uname = (string) ($user['username'] ?? '');
+    echo '<div class="app-bar">';
+    echo '<div class="app-bar-meta">';
+    echo '<span class="app-bar-chip">' . h($roleLabel) . '</span>';
+    echo '<span class="app-bar-user">' . h($uname) . '</span>';
+    echo '</div>';
+    echo '<div class="app-bar-account">';
+    echo '<a href="index.php?page=account_password">Change password</a>';
+    echo '<a class="app-bar-logout" href="index.php?page=logout">Logout</a>';
+    echo '</div>';
+    echo '</div>';
     foreach ($flashes as $flash) {
         render_alert_box((string) ($flash['type'] ?? 'ok'), (string) ($flash['message'] ?? ''));
     }
@@ -266,26 +354,26 @@ function render_footer(string $panel = ''): void
             ], JSON_UNESCAPED_UNICODE) . ';';
             echo 'if(document.querySelector("main.main[data-draft-clear=\\"1\\"]")){window.TXF_DRAFT.clearDraft=true;}';
             echo '</script>';
-            echo '<script src="' . h(script_asset_url('js/app-processing.js')) . '" defer></script>';
+            if ($panel === 'admin' || $panel === 'team') {
+                echo '<script src="' . h(script_asset_url('js/csrf.js')) . '"></script>';
+            }
             echo '<script src="' . h(script_asset_url('js/stay-scroll.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/draft-autosave.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/info-tips.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/nav-shell.js')) . '" defer></script>';
             echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
+            echo '<script src="' . h(script_asset_url('js/alert-fade.js')) . '" defer></script>';
         }
         echo '</main></div>';
-        // Global Processing / Loading overlay (Admin + Team shell).
-        echo '<div id="app-processing" class="app-processing" hidden aria-busy="false" aria-live="assertive" role="alert">';
-        echo '<div class="app-processing-card">';
-        echo '<div class="app-processing-spinner" aria-hidden="true"></div>';
-        echo '<p class="app-processing-msg" data-processing-msg>Processing…</p>';
-        echo '<p class="app-processing-sub muted">Please wait — do not close this page.</p>';
-        echo '</div></div>';
+    } else {
+        // Login / forgot / reset / verify: Show password (logged-in pages load it above).
+        echo '<script src="' . h(script_asset_url('js/password-toggle.js')) . '" defer></script>';
     }
+    // Overlay is CSS-only. Do not load the old overlay script (it intercepted Fill gaps / Paste links).
     echo '</body></html>';
 }
 
-/** Footer credit: TechxForm is a project of Teqnowebs. */
+/** Footer: identity + Teqnowebs credit. */
 function render_project_credit(): void
 {
     $app = 'TechxForm';
@@ -297,8 +385,30 @@ function render_project_credit(): void
     if ($app === '') {
         $app = 'TechxForm';
     }
-    echo '<p class="project-credit">';
-    echo h($app) . ' is a project of ';
-    echo '<a href="https://teqnowebs.com" target="_blank" rel="noopener noreferrer">Teqnowebs</a>';
-    echo '</p>';
+    $user = current_user();
+    $role = '';
+    $uname = '';
+    if (is_array($user)) {
+        $role = (($user['role'] ?? '') === 'admin') ? 'Admin' : 'Team';
+        $uname = (string) ($user['username'] ?? '');
+    }
+    $credit = h($app) . ' is a project of '
+        . '<a href="https://teqnowebs.com" target="_blank" rel="noopener">Teqnowebs</a>';
+
+    echo '<footer class="app-footer project-credit">';
+    echo '<div class="app-footer-primary">';
+    if ($role !== '') {
+        echo '<div class="app-footer-who">';
+        echo '<strong>' . h($app) . '</strong>';
+        echo '<span class="app-footer-sep" aria-hidden="true">·</span>';
+        echo '<span>' . h($role) . '</span>';
+        if ($uname !== '') {
+            echo '<span class="app-footer-sep" aria-hidden="true">·</span>';
+            echo '<span>' . h($uname) . '</span>';
+        }
+        echo '</div>';
+    }
+    echo '<p class="app-footer-credit">' . $credit . '</p>';
+    echo '</div>';
+    echo '</footer>';
 }

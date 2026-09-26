@@ -1,7 +1,6 @@
 <?php
 /**
- * Our database browse is Admin-only. Teammates must not view country URL lists.
+ * Our database browse is Admin-only. Quiet redirect — Team uses Filter & add.
  */
 require_team();
-flash('error', 'Our database is private to Admin. Use Filter & add to submit new unique sites.');
 redirect('index.php?page=team_prospect_check');

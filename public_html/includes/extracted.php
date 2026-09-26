@@ -10,6 +10,9 @@ function ensure_extracted_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     db()->exec(
         "CREATE TABLE IF NOT EXISTS extracted_sites (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -30,6 +33,9 @@ function ensure_extracted_schema(): void
           CONSTRAINT fk_extracted_pushed_by FOREIGN KEY (pushed_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 /**
@@ -171,13 +177,20 @@ function read_extracted_sites_upload(?array $file): string
     if ($size > 25 * 1024 * 1024) {
         throw new InvalidArgumentException('CSV is too large (max 25 MB).');
     }
-    $fh = fopen($tmp, 'rb');
+    $raw = (string) file_get_contents($tmp);
+    if (str_starts_with($raw, "\xEF\xBB\xBF")) {
+        $raw = substr($raw, 3);
+    }
+    $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+    $fh = fopen('php://temp', 'r+');
     if (!$fh) {
         throw new InvalidArgumentException('Could not read the uploaded file.');
     }
+    fwrite($fh, $raw);
+    rewind($fh);
     $lines = [];
     $rowNum = 0;
-    while (($row = fgetcsv($fh)) !== false) {
+    while (($row = fgetcsv($fh, 0, ',', '"', '')) !== false) {
         $rowNum++;
         if ($row === [null] || $row === false) {
             continue;
@@ -288,6 +301,10 @@ function push_extract_results_to_extracted(
             'semrush_inserted' => (int) ($semrush['inserted'] ?? 0),
             'semrush_skipped' => (int) ($semrush['skipped'] ?? 0),
         ];
+    }
+
+    if ($totalInserted > 0) {
+        stamp_extract_batch_last_pushed($extractBatchId);
     }
 
     return [
@@ -462,6 +479,39 @@ function extracted_inventory_query(array $filters, int $pageNum = 1, int $per = 
     ];
 }
 
+/**
+ * Numbered URL list items for Admin Extracted Sites (AJAX whole-folder search).
+ *
+ * @param list<array<string,mixed>> $rows
+ */
+function extracted_url_items_html(array $rows, string $listBase, string $q, int $pageNum): string
+{
+    ob_start();
+    foreach ($rows as $s) {
+        $domain = (string) ($s['domain'] ?? '');
+        $id = (int) ($s['id'] ?? 0);
+        echo '<li class="extracted-plain-item" data-extracted-url-row data-search="'
+            . h(mb_strtolower($domain)) . '" data-site-id="' . $id . '">';
+        echo '<label class="sheet-check">';
+        echo '<input type="checkbox" data-sheet-row-check value="' . $id . '" aria-label="Select ' . h($domain) . '">';
+        echo '</label>';
+        echo '<span class="extracted-plain-domain">' . h($domain) . '</span>';
+        if (function_exists('render_open_site_anchor')) {
+            echo render_open_site_anchor($domain, ['class' => 'extracted-open-site']);
+        }
+        echo '<form method="post" class="extracted-plain-remove" action="' . h($listBase) . '" data-remove-site'
+            . ' ' . confirm_data_attr('Remove ' . $domain . '?') . '>';
+        echo function_exists('csrf_field') ? csrf_field() : '';
+        echo '<input type="hidden" name="action" value="remove_site">';
+        echo '<input type="hidden" name="site_id" value="' . $id . '">';
+        echo '<input type="hidden" name="q" value="' . h($q) . '" data-remove-q>';
+        echo '<input type="hidden" name="p" value="' . (int) $pageNum . '">';
+        echo '<button class="btn secondary small" type="submit">Remove</button>';
+        echo '</form></li>';
+    }
+    return (string) ob_get_clean();
+}
+
 function count_extracted_sites(): int
 {
     ensure_extracted_schema();
@@ -628,6 +678,87 @@ function delete_extracted_site(int $id): bool
     $stmt = db()->prepare('DELETE FROM extracted_sites WHERE id=?');
     $stmt->execute([$id]);
     return $stmt->rowCount() > 0;
+}
+
+/**
+ * @param list<int> $ids
+ * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
+ */
+function delete_extracted_sites_by_ids(string $country, array $ids): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $snaps = [];
+    $removed = [];
+    foreach ($ids as $id) {
+        $row = get_extracted_site($id);
+        if (!$row || (string) ($row['country'] ?? '') !== $country) {
+            continue;
+        }
+        $snaps[] = $row;
+        if (delete_extracted_site($id)) {
+            $removed[] = ['id' => $id, 'domain' => (string) ($row['domain'] ?? '')];
+        }
+    }
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('extracted', $country, $snaps);
+    }
+    if ($removed === []) {
+        return ['ok' => false, 'error' => 'No matching URLs to remove.', 'removed' => [], 'count' => 0];
+    }
+    return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param array<string,mixed> $snap
+ * @return array{ok:bool,id?:int,already?:bool,error?:string}
+ */
+function restore_extracted_site_snapshot(array $snap): array
+{
+    ensure_extracted_schema();
+    $country = (string) ($snap['country'] ?? '');
+    $domain = (string) ($snap['domain'] ?? '');
+    if ($country === '' || $domain === '') {
+        return ['ok' => false, 'error' => 'Invalid site.'];
+    }
+    $dup = db()->prepare('SELECT id FROM extracted_sites WHERE country=? AND domain=? LIMIT 1');
+    $dup->execute([$country, $domain]);
+    $existingId = (int) $dup->fetchColumn();
+    if ($existingId > 0) {
+        return ['ok' => true, 'id' => $existingId, 'already' => true];
+    }
+    $wantId = (int) ($snap['id'] ?? 0);
+    $url = (string) ($snap['url'] ?? '');
+    $language = (string) ($snap['language'] ?? '');
+    $region = (string) ($snap['region'] ?? '');
+    $notes = $snap['notes'] ?? null;
+    $batchId = $snap['extract_batch_id'] ?? null;
+    $batchId = $batchId !== null && $batchId !== '' ? (int) $batchId : null;
+    $pushedBy = $snap['pushed_by'] ?? null;
+    $pushedBy = $pushedBy !== null && $pushedBy !== '' ? (int) $pushedBy : null;
+    $created = trim((string) ($snap['created_at'] ?? ''));
+    $created = $created !== '' ? $created : null;
+    $cols = 'domain, url, country, language, region, notes, extract_batch_id, pushed_by, created_at';
+    $params = [$domain, $url, $country, $language, $region, $notes, $batchId, $pushedBy, $created];
+    $ph = '?,?,?,?,?,?,?,?,?';
+    try {
+        if ($wantId > 0) {
+            $chk = db()->prepare('SELECT id FROM extracted_sites WHERE id=? LIMIT 1');
+            $chk->execute([$wantId]);
+            if (!(int) $chk->fetchColumn()) {
+                db()->prepare("INSERT INTO extracted_sites (id, {$cols}) VALUES (?, {$ph})")->execute(array_merge([$wantId], $params));
+                return ['ok' => true, 'id' => $wantId];
+            }
+        }
+        db()->prepare("INSERT INTO extracted_sites ({$cols}) VALUES ({$ph})")->execute($params);
+        return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+    } catch (PDOException $e) {
+        $dup->execute([$country, $domain]);
+        $existingId = (int) $dup->fetchColumn();
+        if ($existingId > 0) {
+            return ['ok' => true, 'id' => $existingId, 'already' => true];
+        }
+        return ['ok' => false, 'error' => 'Could not restore URL.'];
+    }
 }
 
 /**

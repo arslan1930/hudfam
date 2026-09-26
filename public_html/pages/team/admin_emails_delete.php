@@ -6,27 +6,12 @@
 $user = require_team();
 ensure_sites_with_emails_schema();
 
-$base = 'index.php?page=team_admin_emails_delete';
+$base = 'index.php?page=team_admin_emails_search';
 
 // Allow Communication Team + Email Extracting (and unscoped team / admin).
-if (user_is_department_scoped($user)) {
-    $ok = false;
-    try {
-        $ed = get_department_by_slug('email_extracting');
-        $cd = get_department_by_slug('communication');
-        if ($ed && user_in_department((int) $user['id'], (int) $ed['id'])) {
-            $ok = true;
-        }
-        if ($cd && user_in_department((int) $user['id'], (int) $cd['id'])) {
-            $ok = true;
-        }
-    } catch (Throwable $e) {
-        $ok = false;
-    }
-    if (!$ok) {
-        flash('error', 'This tool is for Communication Team or Email Extracting.');
-        redirect('index.php?page=team_departments');
-    }
+if (!team_page_unlocked($user, 'team_admin_emails_search')) {
+    flash('error', 'This tool is for Communication Team or Email Extracting.');
+    redirect(team_home_url());
 }
 
 // JSON suggest — all countries
@@ -34,11 +19,16 @@ if ((string) get('ajax') === 'suggest') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $q = (string) get('q');
-    echo json_encode([
-        'ok' => true,
-        'q' => $q,
-        'suggestions' => search_sites_with_emails_admin_suggestions($q, 25),
-    ]);
+    $flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS;
+    try {
+        echo json_encode([
+            'ok' => true,
+            'q' => $q,
+            'suggestions' => search_sites_with_emails_admin_suggestions($q, 25),
+        ], $flags);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'q' => $q, 'suggestions' => [], 'error' => 'Search failed.'], $flags);
+    }
     exit;
 }
 
@@ -93,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg = $rowDeleted
             ? 'Removed last email from ' . (string) $result['domain']
                 . ($country !== '' ? ' (' . $country . ')' : '')
-                . ' · site row deleted from Admin + Final (no empty-email sites).'
+                . ' · Admin working-list row deleted · Final keeps its archive copy.'
             : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
                 . ($country !== '' ? ' (' . $country . ')' : '')
                 . '. Site name kept in Admin.';
@@ -113,11 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json(['ok' => false, 'error' => 'Unknown action.'], 400);
 }
 
-$inCommunication = function_exists('user_in_communication_team') && user_in_communication_team($user);
+$canSitesEmails = team_page_unlocked($user, 'team_sites_emails');
+$canCampaigns = team_page_unlocked($user, 'team_email_campaigns');
 
 render_header('Admin emails search', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Admin emails search'],
 ]);
 ?>
@@ -128,17 +119,19 @@ render_breadcrumbs([
       Search <strong>Sites with emails - Admin</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.
       Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
-      Removing the <strong>last</strong> email also deletes the site row.
+      Removing the <strong>last</strong> email also deletes the Admin working-list row. Final keeps its archive copy.
     </p>
   </div>
   <div class="actions">
-    <?php if ($inCommunication): ?>
-      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
-    <?php else: ?>
+    <?php if ($canSitesEmails): ?>
       <a class="btn secondary" href="index.php?page=team_sites_emails">Sites with emails - Team</a>
+    <?php endif; ?>
+    <?php if ($canCampaigns): ?>
+      <a class="btn secondary" href="index.php?page=team_email_campaigns">Campaign search</a>
     <?php endif; ?>
   </div>
 </div>
+<?= guide_admin_emails_search() ?>
 <?php
 render_sites_with_emails_admin_super_search($base);
 render_footer('team');

@@ -125,7 +125,11 @@
         });
       })
       .catch(function (err) {
-        window.alert(err.message || 'Update failed');
+        if (typeof window.txfAlert === 'function') {
+          window.txfAlert(err.message || 'Update failed');
+        } else {
+          window.alert(err.message || 'Update failed');
+        }
         form.removeAttribute('data-busy');
         return null;
       });
@@ -188,8 +192,10 @@
     var form = sel.form;
     if (!form || !form.matches || !form.matches('[data-stay-ajax]')) return;
     var prev = sel.getAttribute('data-prev-value');
+    // FormData omits disabled fields — collect the POST before locking the select.
+    var req = postStayAjax(form);
     sel.disabled = true;
-    postStayAjax(form).then(function (data) {
+    req.then(function (data) {
       sel.disabled = false;
       if (!data) {
         if (prev !== null && prev !== undefined) sel.value = prev;

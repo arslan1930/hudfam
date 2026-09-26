@@ -24,6 +24,25 @@ function public_page_url(string $page, array $query = []): string
 }
 
 /**
+ * True when Forgot password is likely to actually send mail.
+ * Empty / sample mail_from without SMTP is treated as not ready.
+ */
+function app_mail_reset_is_ready(): bool
+{
+    $cfg = function_exists('app_config') ? app_config() : [];
+    if (trim((string) ($cfg['smtp_host'] ?? '')) !== '') {
+        return true;
+    }
+    $from = strtolower(trim((string) ($cfg['mail_from'] ?? '')));
+    if ($from === '' || !filter_var($from, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    $domain = strtolower((string) (explode('@', $from)[1] ?? ''));
+    $placeholders = ['localhost', 'your-domain.com', 'example.com', 'example.org'];
+    return $domain !== '' && !in_array($domain, $placeholders, true);
+}
+
+/**
  * Send a plain-text email. Returns true on success.
  */
 function send_app_mail(string $to, string $subject, string $body): bool

@@ -53,10 +53,14 @@ function render_typeahead_field(
     if ($help !== '') {
         $html .= '<p class="help typeahead-help">' . h($help) . '</p>';
     }
-    $html .= '<script type="application/json" data-typeahead-items>' . json_encode(
+    $json = json_encode(
         $jsonItems,
-        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS
-    ) . '</script>';
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+    if (!is_string($json) || $json === '') {
+        $json = '[]';
+    }
+    $html .= '<script type="application/json" data-typeahead-items>' . $json . '</script>';
     $html .= '</div>';
     return $html;
 }
@@ -150,7 +154,7 @@ function render_language_typeahead(string $value = '', array $opts = []): string
  *
  * @param array{
  *   id?:string,placeholder?:string,class?:string,attrs?:string,
- *   aria_label?:string,swe?:bool
+ *   aria_label?:string,input_aria?:string,swe?:bool,form?:string
  * } $opts
  */
 function render_clearable_email_input(string $name, string $value = '', array $opts = []): string
@@ -163,6 +167,10 @@ function render_clearable_email_input(string $name, string $value = '', array $o
     $aria = (string) ($opts['aria_label'] ?? ('Clear email'));
     $swe = !empty($opts['swe']);
     $has = trim($value) !== '';
+    $inputAria = (string) ($opts['input_aria'] ?? '');
+    if ($inputAria === '' && preg_match('/^email([1-4])$/', $name, $m)) {
+        $inputAria = 'Email ' . $m[1];
+    }
 
     $html = '<div class="email-field swe-email-field' . ($has ? ' has-value' : '') . '">';
     $html .= '<input type="text" inputmode="email" name="' . h($name) . '"'
@@ -171,6 +179,8 @@ function render_clearable_email_input(string $name, string $value = '', array $o
         . ' class="' . h(trim('email-field-input ' . $extraClass)) . '"'
         . ' value="' . h($value) . '"'
         . ($placeholder !== '' ? ' placeholder="' . h($placeholder) . '"' : '')
+        . ($has ? ' title="' . h(trim($value)) . '"' : '')
+        . ($inputAria !== '' ? ' aria-label="' . h($inputAria) . '"' : '')
         . ' spellcheck="false" autocomplete="off"'
         . ' data-email-input'
         . ($swe ? ' data-swe-email' : '')
@@ -191,7 +201,7 @@ function email_field_clear_script_tag(): string
 }
 
 /**
- * Domains textarea + Clean errors control (root domains only).
+ * Domains textarea + Clean to root domains (Ready vs Needs attention).
  */
 function render_domains_paste_field(
     string $name,
@@ -204,24 +214,35 @@ function render_domains_paste_field(
     $required = !empty($opts['required']);
     $class = (string) ($opts['class'] ?? '');
     $placeholder = (string) ($opts['placeholder'] ?? "example.com\nmy-site.co.uk");
+    $attentionId = $id . '_attention';
 
     $html = '<div class="domains-paste" data-domains-paste>';
     $html .= '<div class="domains-paste-head">';
     $html .= '<label for="' . h($id) . '">' . h($label) . '</label>';
-    $html .= '<button type="button" class="btn secondary small" data-clean-domains>Clean errors</button>';
+    $html .= '<button type="button" class="btn secondary small" data-clean-domains title="Convert https/paths/subdomains to root domains; move unfixable lines aside">'
+        . 'Clean to root domains</button>';
     $html .= '</div>';
     $html .= '<textarea id="' . h($id) . '" name="' . h($name) . '" rows="' . $rows . '"'
         . ($required ? ' required' : '')
         . ($class !== '' ? ' class="' . h($class) . '"' : '')
         . ' placeholder="' . h($placeholder) . '" data-domains-input spellcheck="false">'
         . h($value) . '</textarea>';
+    $readyUse = trim((string) ($opts['ready_use'] ?? ''));
     $html .= '<p class="help" style="margin-top:0.5rem">'
-        . 'Root domain only — e.g. <code>example.com</code> or <code>my-site.co.uk</code>. '
-        . 'Hyphens and multi-part TLDs are OK. '
-        . 'One per line (or commas). Use <strong>Clean errors</strong> to correct '
-        . '<code>https</code>, paths, and subdomains into root domains (unfixable lines are kept).'
-        . '</p>';
+        . 'One root domain per line (example.com). Paste (or <strong>Clean to root domains</strong>) strips https/paths; leftovers go to Needs attention.';
+    if ($readyUse !== '') {
+        $html .= ' ' . h($readyUse);
+    }
+    $html .= '</p>';
     $html .= '<p class="domains-paste-status help" data-domains-status hidden></p>';
+    $html .= '<div class="domains-paste-attention" data-domains-attention-wrap hidden>';
+    $html .= '<label for="' . h($attentionId) . '">Needs attention</label>';
+    $html .= '<textarea id="' . h($attentionId) . '" rows="4" class="domains-attention-box" '
+        . 'data-domains-attention spellcheck="false" placeholder="Unfixable lines appear here after Clean"></textarea>';
+    $html .= '<p class="help" style="margin:0.35rem 0 0">Edit or delete these, then Clean again — or leave them; '
+        . h((string) ($opts['attention_hint'] ?? 'Push / Separate only use the Ready list above.'))
+        . '</p>';
+    $html .= '</div>';
     $html .= '</div>';
     return $html;
 }
@@ -229,4 +250,69 @@ function render_domains_paste_field(
 function sites_form_script_tag(): string
 {
     return '<script src="' . h(script_asset_url('js/sites-form.js')) . '" defer></script>';
+}
+
+/**
+ * https:// URL for opening a domain or full URL in a new tab, or '' if not openable.
+ */
+function open_site_url_for_domain(string $domain): string
+{
+    $raw = trim($domain);
+    if ($raw === '') {
+        return '';
+    }
+    // Full URLs (order LIVE links, Google Docs, etc.) — open as given after light cleanup.
+    if (preg_match('#^https?://#i', $raw)) {
+        $raw = preg_replace('/\s+/', '', $raw) ?? $raw;
+        return $raw;
+    }
+    // Article doc paste without scheme: keep the /document/d/… path.
+    if (preg_match('#^(?:www\.)?(?:docs|drive)\.google\.com/.+#i', $raw)) {
+        return 'https://' . preg_replace('/\s+/', '', $raw);
+    }
+    $host = function_exists('extract_host_candidate')
+        ? extract_host_candidate($raw)
+        : strtolower($raw);
+    $root = function_exists('to_root_domain') ? to_root_domain($host) : $host;
+    if ($root !== '' && (!function_exists('is_root_domain') || is_root_domain($root))) {
+        return 'https://' . $root;
+    }
+    $host = strtolower(trim(preg_replace('#^www\.#i', '', $host) ?? $host));
+    if ($host === '' || !str_contains($host, '.') || preg_match('/\s/', $host)) {
+        return '';
+    }
+    if (!preg_match('/^[a-z0-9.-]+$/', $host)) {
+        return '';
+    }
+    return 'https://' . $host;
+}
+
+/**
+ * Compact Open link (optionally next to an editable host input).
+ *
+ * @param array{class?:string,label?:string} $opts
+ */
+function render_open_site_anchor(string $domain, array $opts = []): string
+{
+    $label = (string) ($opts['label'] ?? 'Open');
+    $extraClass = trim((string) ($opts['class'] ?? ''));
+    $url = open_site_url_for_domain($domain);
+    $class = trim('swe-open-site open-site-link ' . $extraClass);
+    if ($url === '') {
+        return '<a class="' . h($class) . ' is-disabled" data-open-site href="#" tabindex="-1" aria-disabled="true"'
+            . ' data-open-host="' . h(strtolower(trim($domain))) . '"'
+            . ' title="Fix the site name (needs a valid domain) before opening"'
+            . ' aria-label="Site name invalid — cannot open">' . h($label) . '</a>';
+    }
+    $host = preg_replace('#^https://#i', '', $url) ?? $url;
+    return '<a class="' . h($class) . '" data-open-site href="' . h($url) . '"'
+        . ' data-open-host="' . h($host) . '"'
+        . ' target="_blank" rel="noopener noreferrer"'
+        . ' title="Open ' . h($host) . ' in a new tab"'
+        . ' aria-label="Open ' . h($host) . ' in a new tab">' . h($label) . '</a>';
+}
+
+function open_site_script_tag(): string
+{
+    return '<script src="' . h(script_asset_url('js/open-site.js')) . '" defer></script>';
 }

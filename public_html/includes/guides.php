@@ -16,56 +16,62 @@ function render_page_purpose(string $title, string $what, string $how, array $st
         $stepsHtml = '<ol class="page-purpose-steps">' . $items . '</ol>';
     }
 
-    return '<aside class="page-purpose" aria-label="Page guide">'
-        . '<div class="page-purpose-badge">What is this?</div>'
-        . '<h2 class="page-purpose-title">' . h($title) . '</h2>'
+    return '<details class="help-details page-purpose">'
+        . '<summary>What is this? · ' . h($title) . '</summary>'
+        . '<div class="help-details-body">'
         . '<p class="page-purpose-what"><strong>Purpose:</strong> ' . h($what) . '</p>'
         . '<p class="page-purpose-how"><strong>How it works:</strong> ' . h($how) . '</p>'
         . $stepsHtml
-        . '</aside>';
+        . '</div>'
+        . '</details>';
 }
 
 function render_admin_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Admin works</h2>'
-        . '<p class="muted">Each country has its own URL database. You seed country folders; Team filters new lists against that country and adds only unique sites. Every add is saved in history.</p>'
+        . '<p class="muted">Our database is Admin-only. Team filters new lists against those country folders and never browses the lists. Departments control which tools each teammate sees. Orders and invoices are Admin office tools.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
-        . '<h3>1. Our database</h3>'
-        . '<p><strong>What:</strong> Country folders — one URL list per country.</p>'
-        . '<p><strong>How:</strong> Open Our database → Add sites (or open a country and paste there).</p>'
+        . '<h3>1. Departments</h3>'
+        . '<p><strong>What:</strong> Site Finding, Site Extracting, Email Extracting, Communication.</p>'
+        . '<p><strong>How:</strong> Add Team users to a department so their sidebar shows only those tools.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>2. Extracted Sites</h3>'
-        . '<p><strong>What:</strong> Sites pushed from Team Extracting Results.</p>'
-        . '<p><strong>How:</strong> Open Extracted Sites → country → copy or remove.</p>'
+        . '<h3>2. Our database</h3>'
+        . '<p><strong>What:</strong> Country folders — one unique URL list per country (Admin only).</p>'
+        . '<p><strong>How:</strong> Open Our database → Add sites, or open a country folder.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>3. Emails data</h3>'
-        . '<p><strong>What:</strong> Sites with emails - Admin, All sites with emails - Final, and Email campaign data (one sheet per country).</p>'
-        . '<p><strong>How:</strong> Archives fill from Team Push. Create a country Email Sheet with site names + emails → Communication Team uses Admin emails search / Campaign search.</p>'
+        . '<h3>3. Extracted Sites + Semrush</h3>'
+        . '<p><strong>What:</strong> Sites pushed from Team Extracting Results; Semrush is shared research notes.</p>'
+        . '<p><strong>How:</strong> Extracted Sites → country → copy or remove. Semrush Research is optional seed/copy for Finding and Extracting.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>4. Site adding history</h3>'
-        . '<p><strong>What:</strong> Who added which sites, by day.</p>'
-        . '<p><strong>How:</strong> Open a day to see the domains that person added.</p>'
+        . '<h3>4. Emails data</h3>'
+        . '<p><strong>What:</strong> Sites with emails – Admin, All sites with emails – Final, and Email campaign projects (country sheets).</p>'
+        . '<p><strong>How:</strong> Archives fill from Team Push. Create a campaign project; Communication Team uses Campaign search and drafts (they do not open the full Admin sheet).</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>5. Users</h3>'
+        . '<h3>5. Orders + Invoices</h3>'
+        . '<p><strong>What:</strong> One order sheet (country, date, admin, client email or name) and printable invoices.</p>'
+        . '<p><strong>How:</strong> Order management → fill the sheet → push unpaid LIVE rows to Invoices. Website prices is a separate Office rate book (publisher prices by country).</p>'
+        . '</article>'
+        . '<article class="panel-guide-card">'
+        . '<h3>6. Users</h3>'
         . '<p><strong>What:</strong> Admin and Team logins.</p>'
-        . '<p><strong>How:</strong> Create Team accounts so they can filter and add sites.</p>'
+        . '<p><strong>How:</strong> Create Team accounts, assign departments, set a temp password if they cannot sign in.</p>'
         . '</article>'
         . '</div>'
         . '<div class="panel-guide-flow">'
         . '<h3>Flow</h3>'
         . '<ol>'
-        . '<li>Admin opens a <strong>country folder</strong> and adds URLs.</li>'
-        . '<li>Team picks the same country → pastes a list → duplicates for that country are removed.</li>'
-        . '<li>Team adds the unique ones → they join that country’s database and <strong>Site adding history</strong>.</li>'
-        . '<li>Team <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails - Team</strong>.</li>'
-        . '<li>Team adds emails, then <strong>Push to Admin</strong> → <strong>Emails data → Sites with emails - Admin</strong> (also synced to <strong>All sites with emails - Final</strong>). Pushed rows leave the Team working copy.</li>'
-        . '<li>Admin creates a <strong>country Email Sheet</strong> under Email campaign data; Communication Team uses <strong>Admin emails search</strong> / <strong>Campaign search</strong> and updates the matching country row.</li>'
+        . '<li>Admin seeds a <strong>country folder</strong> in Our database (or Team Filter &amp; add writes unique sites there).</li>'
+        . '<li>Site Finding pastes a list → duplicates for that country are removed privately → unique sites are saved + Site adding history.</li>'
+        . '<li>Site Extracting <strong>Push</strong>es Extracting Results → <strong>Extracted Sites</strong> and <strong>Sites with emails – Team</strong>.</li>'
+        . '<li>Email Extracting adds emails (or <strong>none</strong> when there is no address), then <strong>Push to Admin</strong> → Admin archive (also synced to Final). Pushed rows leave the Team working copy.</li>'
+        . '<li>Admin creates a <strong>campaign project</strong> under Emails data; Communication uses <strong>Campaign search</strong> / <strong>Campaign drafts</strong>.</li>'
+        . '<li>When a placement goes live, record it on the client <strong>Order</strong> sheet and generate an <strong>Invoice</strong>.</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -75,37 +81,37 @@ function render_team_panel_guide(): string
 {
     return '<section class="panel-guide">'
         . '<h2>How Team works</h2>'
-        . '<p class="muted">Paste new sites for a country. Duplicates are removed privately (existing country lists stay hidden). Add only the new unique sites — they go into the country database and Extracting sites.</p>'
+        . '<p class="muted">Your sidebar shows tools for the departments Admin assigned. Our database country lists stay private to Admin. Communication Team searches campaign sheets and copies drafts — they do not open the full Admin campaign editor.</p>'
         . '<div class="panel-guide-grid">'
         . '<article class="panel-guide-card">'
         . '<h3>1. Filter &amp; add</h3>'
-        . '<p><strong>What:</strong> Compare your paste to one country’s database without seeing that list.</p>'
-        . '<p><strong>How:</strong> Select country → Paste → Filter → Add unique into that country.</p>'
+        . '<p><strong>What:</strong> Paste a list, filter unique sites, add them to Extracting.</p>'
+        . '<p><strong>How:</strong> Country → Paste → Filter unique sites → Add. Site Finding only.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>2. Extracting sites</h3>'
         . '<p><strong>What:</strong> Per country: Sites list + Extracting Results.</p>'
-        . '<p><strong>How:</strong> Paste results and <strong>Push</strong> → country TLDs route to their folders; generic TLDs stay in the selected country (Extracted Sites + Sites with emails - Team).</p>'
+        . '<p><strong>How:</strong> From Your work, Open on an extracting task (or <strong>Extracting sites</strong>) opens the country list. First 10–50 / Undo is on that country’s Sites list. Paste results and <strong>Push</strong> → Extracted Sites + Sites with emails – Team. Site Extracting only.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>3. Sites with emails - Team</h3>'
-        . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each.</p>'
-        . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong> — they move to the Admin archive and clear from Team.</p>'
+        . '<h3>3. Sites with emails – Team</h3>'
+        . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each (Email Extracting).</p>'
+        . '<p><strong>How:</strong> Open a country → fill emails (autosave) → type <strong>none</strong> when there is no address → <strong>Push</strong> to Admin. Pushed rows leave this list; empty rows stay. Use Admin emails search to find/fix Admin rows. Open <strong>What is this?</strong> on the page for the full checklist.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
-        . '<h3>4. Site adding history</h3>'
-        . '<p><strong>What:</strong> Your daily batches of new sites.</p>'
-        . '<p><strong>How:</strong> Open a day to copy or review what you added.</p>'
+        . '<h3>4. Campaign search + drafts + Website prices</h3>'
+        . '<p><strong>What:</strong> Find a site/email in Admin campaign projects; copy outreach text; keep publisher rate sheets.</p>'
+        . '<p><strong>How:</strong> Search, paste drafts into your email client, and manage Website prices. Communication only.</p>'
         . '</article>'
         . '</div>'
         . '<div class="panel-guide-flow">'
         . '<h3>Flow</h3>'
         . '<ol>'
-        . '<li>Open <strong>Filter &amp; add</strong> and select a country.</li>'
-        . '<li>Paste domains and Filter (duplicates already in that country are removed privately).</li>'
-        . '<li>Add the unique sites — they join that country’s database and <strong>Extracting sites → Sites list</strong>.</li>'
-        . '<li>Paste into <strong>Extracting Results</strong> and <strong>Push</strong> → Extracted Sites + Sites with emails - Team.</li>'
-        . '<li>Add emails in <strong>Sites with emails - Team</strong>, then <strong>Push to Admin</strong>.</li>'
+        . '<li>Wait until Admin assigns you to a <strong>department</strong> — then your tools appear.</li>'
+        . '<li>Site Finding: <strong>Filter &amp; add</strong> → unique sites join Our database (unseen) and Extracting Sites list.</li>'
+        . '<li>Site Extracting: paste <strong>Extracting Results</strong> and <strong>Push</strong>.</li>'
+        . '<li>Email Extracting: add emails (or <strong>none</strong>), then <strong>Push to Admin</strong> — see What is this? on Sites with emails – Team.</li>'
+        . '<li>Communication: <strong>Campaign search</strong>, <strong>Campaign drafts</strong>, and <strong>Website prices</strong> (copy, do not send from this app).</li>'
         . '</ol>'
         . '</div>'
         . '</section>';
@@ -115,8 +121,8 @@ function guide_inventory(): string
 {
     return render_page_purpose(
         'Our database — country folders',
-        'Each country has its own site database. Admin opens a country folder to view or add sites.',
-        'Pick a country folder, then browse or add sites for that country only.',
+        'Each country has its own site database. Open a folder to view or add sites.',
+        'Pick a country, then browse or add sites for that country only.',
         [
             'Open a country folder.',
             'Add sites into that country’s database.',
@@ -128,13 +134,13 @@ function guide_inventory(): string
 function guide_filter_add(): string
 {
     return render_page_purpose(
-        'Filter & add — new unique sites only',
-        'Paste a list and compare it privately against the existing country database. Existing URLs stay hidden; only new unique sites are shown so you can add them.',
-        'Select country → Paste → Filter → Add. New sites go into the country database and Extracting sites → Sites list.',
+        'Filter & add — paste, filter, add unique',
+        'Paste a list. Filter keeps only sites that are not already in each destination country’s Our database. Existing URLs stay hidden.',
+        'Pick a starting country → Paste → Filter unique sites → Add. Country endings (.at, .pt, …) go to their folders; .com stays in the country you picked. Only unique sites go to Extracting.',
         [
-            'Select an existing country database (Germany, Spain, …).',
-            'Paste root domains and Filter — duplicates are removed without showing the private country list.',
-            'Add only the remaining new unique sites — they join the country database and that country’s Extracting Sites list.',
+            'Pick the country you are working from (.com stays there).',
+            'Paste root domains and Filter unique sites. .at is checked in Austria, .pt in Portugal, even if you started from another country.',
+            'Add sends only the new sites to those folders and Extracting. Separate all can send one ending at a time after Filter.',
         ]
     );
 }
@@ -143,14 +149,12 @@ function guide_extracting(): string
 {
     return render_page_purpose(
         'Extracting sites — Sites list + Results',
-        'Each country has its own batch with two boxes: Sites list and Extracting Results.',
-        'A country batch is created only when a teammate adds new unique sites. Until then this page stays blank and waits.',
+        'Each country has a shared Sites list (waiting list) and an Extracting Results box.',
+        'Open a country. Work the Sites list, then paste results and Push.',
         [
-            'Teammate uses Filter & add and saves new unique sites.',
-            'Those sites appear here under Sites list for that country.',
-            'Select sites (kept after refresh) · Open links in new tabs · Backspace delete · Ctrl/Cmd+Z / Y undo/redo.',
-            'Paste sites into Extracting Results and Push — country TLDs (.de, .at, .ch, …) go to their own folders; .com/.net/.eu stay in the selected country.',
-            'Add emails in Sites with emails - Team, then Push to Admin for the final Sites with emails - Admin archive.',
+            'Sites list: Copy, Undo, Redo, and Open & remove first 10–50. Undo restores them while you stay on this page.',
+            'Paste Extracting Results — https/paths clean to roots automatically — then Push Ready. .pt→Portugal, .at→Austria, .com stays in the selected country.',
+            'Extracting shrinks when you Push, Open & remove, delete lines, or Admin removes the same domains from Our database.',
         ]
     );
 }
@@ -159,8 +163,8 @@ function guide_add_history(): string
 {
     return render_page_purpose(
         'Site adding history — who added what',
-        'Daily record of domains added by each person.',
-        'Open a date/person to see the exact domains saved that day.',
+        'Daily record of domains added by each person. The list shows recent days (paged). Older days are on later pages.',
+        'Open a date/person to see the exact domains saved that day. Editing the list autosaves: new lines are added to Our database; removed lines leave Our database unless you delete the day with that option checked. Day details (country/language) do not move sites between folders.',
         []
     );
 }
@@ -169,11 +173,11 @@ function guide_admin_add(): string
 {
     return render_page_purpose(
         'Add sites — inside Our database',
-        'Paste root domains into one country’s folder in Our database. Extracted Sites are filled only when Team clicks Push.',
-        'In Our database: choose country, paste root domains, Clean errors if needed, save.',
+        'Paste root domains into a country folder. Country endings (.at, .pt, …) go to that country; .com stays in the folder you picked.',
+        'Choose country, paste, Clean to root domains if needed, save.',
         [
             'Open Our database (sidebar).',
-            'Use Add sites — select country, paste domains, Clean errors, save.',
+            'Use Add sites — select country, paste domains, Clean to root domains, save.',
             'Or open a country folder and add sites there.',
         ]
     );
@@ -194,8 +198,170 @@ function guide_admin_users(): string
 {
     return render_page_purpose(
         'Users — who can log in',
-        'Create Admin and Team accounts.',
-        'Team users can open Filter & add and grow Our database. Admins can add sites and view all history.',
+        'Create Admin and Team accounts. Temporary passwords are shown once; teammates must change them on first login.',
+        'Assign Team users under Departments so they unlock tools. Filter Awaiting assignment for Team not in a department. Admin email login needs a unique address — Send verification on the user, or verify under Account for yourself. You cannot deactivate or demote yourself, or remove the last active admin.',
         []
+    );
+}
+
+function guide_emails_data(): string
+{
+    return render_page_purpose(
+        'Emails data — Admin, Final, and Campaign',
+        'Three separate stores. Admin is the working list Team Push fills. Final keeps a copy after Mark emailed or Remove on Admin. Campaign is project country sheets for Communication Team.',
+        'Super search on this hub updates Admin only. Removing the last email deletes the Admin working-list row; Final keeps its archive copy. Repair copies Admin into Final and never deletes archive rows. Campaign emailed marks stay on that project sheet.',
+        [
+            'Admin: working list from Team Push; mark emailed here.',
+            'Final: archive copy of Admin; Mark emailed or Remove on Admin keeps a copy here. Repair copies Admin → Final. Adding a site here also creates the Admin working-list row. Existing folders open from the list; use Open an empty country only for a country that is not listed yet. Paste or import CSV / Excel / TXT like Campaign on that sheet.',
+            'When a site has no address, type none in Email 1. The row stays so you keep the site. Copy and Campaign skip none — it is not a sendable email. Clearing every email box still removes the Admin working-list row; Final keeps the archive copy.',
+            'Campaign: create a project and country sheets. Communication Team searches the project. Emailed marks are per campaign, not Admin/Final. Mark up to here names a send batch so Admin can see who emailed which stretch.',
+            'Fill gaps from Admin + Final copies into that country campaign sheet only. Admin emails win when both have the domain. Previously removed sites stay blocked. Campaign emailed marks stay. Admin and Final are not edited.',
+        ]
+    );
+}
+
+function guide_site_prices(): string
+{
+    return render_page_purpose(
+        'Website prices — publisher rate book',
+        'One country sheet of website prices and statuses. Team adds rates; site name, DA, DR, and traffic lock after save. Niche fills from Our database when the site already exists in that country.',
+        'Open a country. Processing stays at the top, then New, then the rest. This is not Order management and does not write into Our database.',
+        [
+            'Open a country from the switcher (most-used first) or All countries. On Team, only Communication Team can open these sheets.',
+        'Add a site on the sheet. Website, DA, DR, and traffic lock after save; price, status, email, and row color stay editable. Row color washes the whole row. Admin can Unlock identity. Processing and Completed are Admin-only because Processing fills Order management.',
+        'Processing / New / Other lanes stay in that order. Search this country filters the open sheet (Enter = next match, Ctrl/Cmd+Enter = all pages). Admin Search all countries jumps to a row in any country — it does not filter the sheet. Team copies one website with Copy; Admin Copy selected copies ticked rows on this page only. Admin can Remove a site (orders stay). Take or pick a manager; clear with —.',
+            'Admin sees who added a row and who manages it; Team does not see Admin names.',
+        ]
+    );
+}
+
+function guide_orders(): string
+{
+    return render_page_purpose(
+        'Order management — Processing and Completed',
+        'Processing is Website prices Processing, leftover after Website prices leaves Processing, or + Add order. Completed is after a live URL and Mark completed. Only Completed unpaid rows push to an invoice. Website prices never stores LIVE URL, profit, client, or invoice fields.',
+            'Open a folder, edit Admin OM fields, mark completed with a live URL, then push unpaid Completed rows to Invoices. Processing and Completed stay on the page as tabs — you do not have to go back to the hub.',
+        [
+            'Processing opens Website prices Processing when that tab has rows; otherwise Leftover, then Added here. Leftover stays here when Website prices leaves Processing. + Add order is Added here. Fill LIVE URL, country, and client email or name, then Mark completed — saving a live URL does not complete the row. Article doc is the Google Doc for the piece (not the live page) and stays after Mark completed. Save still works on half-filled Processing rows.',
+            'Copy selected sites or live URLs copies ticked Copy boxes on this page only. Copy all live URLs and Download .txt use this folder and filter (all pages). CSV/Excel are the full sheet. On Completed, Download month close is this calendar month with owner / decided / profit totals.',
+            'Completed: unpaid until you click Mark paid (or mark Paid on the invoice). Tick Bill boxes and Push to invoice, or use Push unpaid (N) to open Generate with this filter’s unpaid rows ticked (or an honest label if the list is too long). A row already on a draft or unpaid invoice cannot be pushed again — open that bill from the row. Country and client email/name are required to push. Clearing a live URL on Save also clears Paid (you will be asked to confirm). Paid stays in this folder. Website prices status is not changed when you mark paid.',
+            'Open in Website prices jumps to the linked site. If that status no longer matches this folder, the mismatch is shown. Removing a row while Website prices is still Processing brings it back on the next Processing load; removing a Completed-linked row can optionally set Website prices back to Processing.',
+            'Team Website prices shows the Completed status only — never LIVE URL, owner/decided/profit, client email/name, or invoices.',
+        ]
+    );
+}
+
+function guide_invoices(): string
+{
+    return render_page_purpose(
+        'Invoices — printable bills',
+        'Generate from unpaid LIVE rows on Order management, or start a blank invoice (Draft while incomplete, Waiting when sent). Mark paid when payment arrives — that writes Paid back onto linked sheet rows.',
+        'Notes under an invoice number also print on the bill. The printable letterhead is Teqno Ltd; the app chrome stays TechxForm. Bill-as is the email or name from the order — no client folder required.',
+        [
+            'Generate invoice: tick unpaid LIVE rows pushed from Order management (opening Generate from Invoices starts with none ticked). Tick one bill-as only — mixed emails/names cannot share a bill. If that bill-as already has a Draft or Waiting bill, Add to existing is selected. New invoice gets the next number. Open a Waiting invoice and use Add sites — matching unpaid LIVE rows are ticked. Paid invoices keep line items locked but company, bill as, and payment details stay editable. Group same amount is off unless you turn it on.',
+            'Blank invoice: fill bill-as and line items, Save as draft or Mark as sent. On any bill, edit logo, company/bank, bill as, and payment details, then Save changes.',
+            'Mark paid on the list or the open bill when payment is received. Draft / Waiting / Paid counts sit above the search. Open a generated bill to see the Order management rows (site, LIVE URL, Article doc, Completed) and a History of who added sites. Article doc does not print on the bill.',
+        ]
+    );
+}
+
+function guide_admin_account(): string
+{
+    return render_page_purpose(
+        'Account — email verify and password',
+        'Verify your Admin email so Forgot password can send a reset link. Team cannot self-reset; Admin sets Team passwords on Users.',
+        'Save an email, send a verification link, then you can request a 2-hour reset. Sidebar Change password updates the same password as this page.',
+        []
+    );
+}
+
+function guide_campaign_search(): string
+{
+    return render_page_purpose(
+        'Campaign search — find a site in a project',
+        'One search bar per Admin project shown to Communication Team. Each bar covers every country sheet in that project.',
+        'Type a site or email, pick a result, then delete both or remove only one email. Updates go to that country’s campaign sheet. Removing the last email also deletes the site row.',
+        [
+            'Pick the project search bar Admin shared with Communication Team.',
+            'Search site name or email across all countries in that project.',
+            'Delete both, or remove only email — JavaScript is required to confirm the update.',
+        ]
+    );
+}
+
+function guide_campaign_drafts(): string
+{
+    return render_page_purpose(
+        'Campaign drafts — copy outreach for email',
+        'Reusable formatted replies, offers, and follow-ups per Admin project. Optional subject line and tokens such as {domain} and {country}.',
+        'Open a project, write or pick a draft, then Copy (keeps formatting) or Copy plain for your email client. Communication Team only — this is not the full Admin campaign editor.',
+        [
+            'Choose a project Admin turned on for Communication Team.',
+            'Save drafts with formatting; tokens fill from Campaign search when you open drafts for a site.',
+            'Copy into your email client. Delete is allowed for the creator or Admin.',
+        ]
+    );
+}
+
+function guide_admin_emails_search(): string
+{
+    return render_page_purpose(
+        'Admin search — Sites with emails, all countries',
+        'Super search across every country in Sites with emails - Admin. Results always show site + email + country together.',
+        'Search, then delete both or remove only email on that country’s Admin row. Removing the last email deletes the Admin working-list row; Final keeps its archive copy.',
+        [
+            'Type a site or email (all countries).',
+            'Choose delete both or remove only email, then Enter to confirm.',
+            'JavaScript is required. This does not open the full Admin sheet.',
+        ]
+    );
+}
+
+/**
+ * Email Extracting — Team working list (Sites with emails – Team).
+ */
+function guide_sites_emails_team(): string
+{
+    return render_page_purpose(
+        'Sites with emails – Team — Email Extracting',
+        'Working list of site names from Site Extracting Push. Add up to 4 emails per site, then Push to Sites with emails - Admin. This is Email Extracting’s main tool.',
+        'Open a country, fill emails (autosave), then Push one row or Push all ready sites. Pushed rows leave Team; sites still empty stay here. Use Admin emails search only to find or fix something already in Admin.',
+        [
+            'Sites arrive after Site Extracting pushes Extracting Results. Open a country from the list (or from Your work → Open on an Email Extracting task).',
+            'Open sites with Open / Open first 10–50. Large opens go in batches of 10 — use Open next. Highlighted rows need an email (or none) before they look done.',
+            'Paste up to 4 emails into any email box — edits autosave. Invalid addresses are skipped so one bad token does not wipe the rest.',
+            'If a site has no public address, type none in Email 1 so the row stays on Team until Push. Copy skips none — it is not a sendable email.',
+            'Push on a row for one site, or Push all to Admin for every site that has an email or none. Rows with all email boxes empty are left on Team.',
+            'If Admin already has that site, Push merges Team emails into empty Admin slots only — existing Admin emails stay. Confirm with Admin emails search if you need to double-check.',
+        ]
+    );
+}
+
+function guide_semrush_team(): string
+{
+    return render_page_purpose(
+        'Semrush Research — site names from Extracting Push',
+        'Country folders of site names copied when Extracting Results are pushed (same TLD routing), plus optional Admin seed. Does not change Extracted Sites.',
+        'Open a country to edit, copy, undo/redo, or comment. Site Finding and Admin can clear a whole country. Site Extracting can research here but cannot Clear.',
+        [
+            'Open a country folder after Extracting Push (or Admin seed).',
+            'Edit the list and add comments. Clear country stays with Site Finding / Admin.',
+            'Filter & add stays on Site Finding — this page is research notes, not the unique-sites filter.',
+        ]
+    );
+}
+
+function guide_team_departments(): string
+{
+    return render_page_purpose(
+        'My departments — tasks for your team',
+        'Departments Admin assigned you to, with open tasks and due dates. Tools stay locked until you are in a department.',
+        'Change status from Dashboard, or open a folder to assign tasks and filter. Only you can change status on a task assigned by name; anyone in the department can update a whole-department (unassigned) task. Anyone in the department can assign a task to a current member.',
+        [
+            'Dashboard Open on a task goes to that department’s tool (Extracting sites, Filter & add, Team emails, or Campaign search). A Tasks link opens this folder. Dashboard can update Open / In progress / Done without opening the folder.',
+            'Open a department folder to assign a task to a teammate already in that department, or to the whole department.',
+            'Update status only on your named tasks, or on tasks with no named assignee.',
+            'Unlocked tools appear in the sidebar and on Dashboard after assignment. Website prices is Communication Team only.',
+        ]
     );
 }
