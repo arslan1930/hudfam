@@ -95,8 +95,8 @@ function render_team_panel_guide(): string
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>3. Sites with emails – Team</h3>'
-        . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each.</p>'
-        . '<p><strong>How:</strong> Fill emails, then <strong>Push to Admin</strong>. Email Extracting only.</p>'
+        . '<p><strong>What:</strong> Site names from Extracting Results Push; add up to 4 emails each (Email Extracting).</p>'
+        . '<p><strong>How:</strong> Open a country → fill emails (autosave) → type <strong>none</strong> when there is no address → <strong>Push</strong> to Admin. Pushed rows leave this list; empty rows stay. Use Admin emails search to find/fix Admin rows. Open <strong>What is this?</strong> on the page for the full checklist.</p>'
         . '</article>'
         . '<article class="panel-guide-card">'
         . '<h3>4. Campaign search + drafts + Website prices</h3>'
@@ -110,7 +110,7 @@ function render_team_panel_guide(): string
         . '<li>Wait until Admin assigns you to a <strong>department</strong> — then your tools appear.</li>'
         . '<li>Site Finding: <strong>Filter &amp; add</strong> → unique sites join Our database (unseen) and Extracting Sites list.</li>'
         . '<li>Site Extracting: paste <strong>Extracting Results</strong> and <strong>Push</strong>.</li>'
-        . '<li>Email Extracting: add emails, then <strong>Push to Admin</strong>.</li>'
+        . '<li>Email Extracting: add emails (or <strong>none</strong>), then <strong>Push to Admin</strong> — see What is this? on Sites with emails – Team.</li>'
         . '<li>Communication: <strong>Campaign search</strong>, <strong>Campaign drafts</strong>, and <strong>Website prices</strong> (copy, do not send from this app).</li>'
         . '</ol>'
         . '</div>'
@@ -313,6 +313,26 @@ function guide_admin_emails_search(): string
             'Type a site or email (all countries).',
             'Choose delete both or remove only email, then Enter to confirm.',
             'JavaScript is required. This does not open the full Admin sheet.',
+        ]
+    );
+}
+
+/**
+ * Email Extracting — Team working list (Sites with emails – Team).
+ */
+function guide_sites_emails_team(): string
+{
+    return render_page_purpose(
+        'Sites with emails – Team — Email Extracting',
+        'Working list of site names from Site Extracting Push. Add up to 4 emails per site, then Push to Sites with emails - Admin. This is Email Extracting’s main tool.',
+        'Open a country, fill emails (autosave), then Push one row or Push all ready sites. Pushed rows leave Team; sites still empty stay here. Use Admin emails search only to find or fix something already in Admin.',
+        [
+            'Sites arrive after Site Extracting pushes Extracting Results. Open a country from the list (or from Your work → Open on an Email Extracting task).',
+            'Open sites with Open / Open first 10–50. Large opens go in batches of 10 — use Open next. Highlighted rows need an email (or none) before they look done.',
+            'Paste up to 4 emails into any email box — edits autosave. Invalid addresses are skipped so one bad token does not wipe the rest.',
+            'If a site has no public address, type none in Email 1 so the row stays and can be pushed. Copy skips none — it is not a sendable email.',
+            'Push on a row for one site, or Push all to Admin for every site that has an email or none. Rows with all email boxes empty are left on Team.',
+            'If Admin already has that site, Push merges Team emails into empty Admin slots only — existing Admin emails stay. Confirm with Admin emails search if you need to double-check.',
         ]
     );
 }

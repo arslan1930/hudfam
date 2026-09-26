@@ -458,7 +458,7 @@ function department_tools_help(string $slug): string
     return match ($slug) {
         'site_finding' => 'Members also get Filter & add, Semrush Research, and Site adding history (not only tasks).',
         'site_extracting' => 'Members also get Extracting sites / Results + Push, and Semrush Research (not only tasks). Clear country stays with Site Finding and Admin.',
-        'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
+        'email_extracting' => 'Members get Sites with emails – Team (add emails / none, then Push to Admin) and Admin emails search/delete. Open What is this? on Sites with emails for the checklist.',
         'communication' => 'Members also get Website prices, Admin emails search, Campaign search, and Campaign drafts.',
         default => 'Members see this department’s tasks (and tools from any other departments you assign).',
     };

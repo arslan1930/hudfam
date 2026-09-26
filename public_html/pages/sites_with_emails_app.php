@@ -553,6 +553,8 @@ if (!$inCountry) {
     render_breadcrumbs($crumbs);
     if ($isAdminAll && function_exists('guide_emails_data')) {
         echo guide_emails_data();
+    } elseif ($isTeam && function_exists('guide_sites_emails_team')) {
+        echo guide_sites_emails_team();
     }
     ?>
     <div class="topbar">
@@ -560,15 +562,16 @@ if (!$inCountry) {
         <h1><?= label_with_info(
             $sweLabel,
             $isTeam
-                ? 'Working copy: site names arrive from Extracting Results Push. Add emails, then Push to Admin — pushed rows leave this list. Sites without emails stay here.'
+                ? 'Working copy for Email Extracting: site names arrive from Extracting Results Push. Add emails (or none), then Push to Admin — pushed rows leave this list. Empty rows stay here. Open What is this? for the full checklist.'
                 : ($isAdminAll
                     ? 'Final keeps a copy after Mark emailed or Remove on Admin. Not linked to Team. Open a folder in the list; paste and import are on that country sheet (and also create the Admin working-list row).'
                     : 'Working list from Team Push. Mark emailed removes the site from this list after Final has a copy. Communication Team can super-search this data.')
         ) ?></h1>
         <p class="muted">
           <?php if ($isTeam): ?>
-            Site names arrive from Extracting Results → Push.
-            Add emails, then Push again to Sites with emails - Admin ·
+            Email Extracting working list · sites from Extracting Results → Push ·
+            add emails (or <strong>none</strong>) · Push to Sites with emails - Admin ·
+            pushed rows leave · empty rows stay ·
           <?php elseif ($isAdminAll): ?>
             Final keeps a copy after Mark emailed or Remove on Admin.
             Open a folder in the list — paste and import are on that sheet.
@@ -943,12 +946,15 @@ $crumbs = $isAdmin
         ['label' => $countryName],
     ];
 render_breadcrumbs($crumbs);
+if ($isTeam && function_exists('guide_sites_emails_team')) {
+    echo guide_sites_emails_team();
+}
 ?>
 <div class="topbar">
   <div>
     <?php
     $sweJumpTip = $isTeam
-        ? 'Add emails (autosave). If a site has no address, type none in Email 1 so the row stays and can be pushed. Pick another country from this list — you do not need to go back to All countries. Push one site with its row button, or Push all sites that have an email or none.'
+        ? 'Email Extracting: add emails (autosave). Type none in Email 1 when there is no address so the row stays and can be pushed. Pick another country from this list. Push one site with its row button, or Push all sites that have an email or none. Pushed rows leave Team; empty rows stay. Open What is this? for the full checklist.'
         : ($isAdminAll
             ? 'Final archive for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together.'
             : 'Admin working list for this country. Pick another country from this list — you do not need to go back to All countries. Search finds site + emails together. Type none when a site has no address so the row stays. Clear every email box to remove from Admin (Final keeps the copy). Remove deletes the whole row.');
@@ -1096,11 +1102,14 @@ render_breadcrumbs($crumbs);
 <p class="help">
   Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
   Use <strong>Open</strong> on a row (or <strong>Open first 10–50</strong> above) to visit sites in new tabs — opens all if fewer are on this page. Large opens go in batches of 10 (use <strong>Open next</strong> to continue).
-  Opened rows stay <strong>highlighted</strong> until you enter an email in that row.
+  Opened rows stay <strong>highlighted</strong> until you enter an email (or <strong>none</strong>) in that row.
   Use <strong>Push</strong> on a row for one site, or <strong>Push all to Admin</strong> for every site that has an email or <strong>none</strong>.
   If a site has no address, type <strong>none</strong> in Email 1 — the row stays and can be pushed. Copy skips none.
+  Pushed rows <strong>leave</strong> this Team list; sites with all email boxes empty <strong>stay</strong> here.
   <?php if ($pushConflictCount > 0): ?>
-    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push merges Team emails into empty Admin slots (existing Admin emails stay).
+    <strong><?= (int) $pushConflictCount ?> site(s)</strong> already exist in Admin — Push merges Team emails into empty Admin slots only (existing Admin emails stay).
+  <?php else: ?>
+    If Admin already has a site, Push merges into empty Admin slots only.
   <?php endif; ?>
 </p>
 <?php elseif ($isAdminAll): ?>
@@ -1474,7 +1483,7 @@ render_sheet_checkpoint_compact(
   <div class="empty-state" id="swe-empty-state">
     <?php if ($isTeam): ?>
       <p>No sites in this country yet.</p>
-      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push — type none if the site has no address so the row can be pushed and kept.</p>
+      <p class="muted">Push from Extracting Results, or add one site here. Emails are optional until you Push — type <strong>none</strong> if the site has no address so the row can be pushed and kept. Pushed rows leave Team; empty rows stay. Open <strong>What is this?</strong> above for the Email Extracting checklist.</p>
       <p class="actions" style="justify-content:center;margin-top:0.75rem">
         <button type="button" class="btn" data-swe-add-toggle>+ Add site</button>
       </p>

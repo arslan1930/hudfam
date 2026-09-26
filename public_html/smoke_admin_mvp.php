@@ -568,6 +568,7 @@ foreach ([
     'guide_campaign_search',
     'guide_campaign_drafts',
     'guide_admin_emails_search',
+    'guide_sites_emails_team',
     'guide_semrush_team',
     'guide_team_departments',
 ] as $fn) {
@@ -581,16 +582,26 @@ if (!str_contains($guidesLib, 'Dashboard can update Open / In progress / Done'))
 } else {
     ok('departments guide mentions Dashboard status');
 }
+if (!str_contains($guidesLib, 'Email Extracting')
+    || !str_contains($guidesLib, 'type none in Email 1')
+    || !str_contains($guidesLib, 'merges Team emails into empty Admin slots')
+    || !str_contains($guidesLib, 'Pushed rows leave Team')) {
+    fail('guide_sites_emails_team missing Email Extracting checklist rules');
+} else {
+    ok('guide_sites_emails_team covers none, Push merge, stays vs leaves');
+}
 $teamCampHub = file_get_contents($root . '/pages/team/email_campaigns.php') ?: '';
 $teamDraftsHub = file_get_contents($root . '/pages/team/email_campaign_drafts.php') ?: '';
 $teamAdminEmailsHub = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
 $teamSemrushHubGuide = file_get_contents($root . '/pages/team/semrush_research.php') ?: '';
 $teamDeptsHub = file_get_contents($root . '/pages/team/departments.php') ?: '';
+$teamSitesEmailsApp = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($teamCampHub, 'guide_campaign_search()')
     || !str_contains($teamDraftsHub, 'guide_campaign_drafts()')
     || !str_contains($teamAdminEmailsHub, 'guide_admin_emails_search()')
     || !str_contains($teamSemrushHubGuide, 'guide_semrush_team()')
-    || !str_contains($teamDeptsHub, 'guide_team_departments()')) {
+    || !str_contains($teamDeptsHub, 'guide_team_departments()')
+    || !str_contains($teamSitesEmailsApp, 'guide_sites_emails_team()')) {
     fail('Team hubs missing page-purpose guide calls');
 } else {
     ok('Team hubs echo page-purpose guides');
@@ -2891,10 +2902,15 @@ if (!str_contains(file_get_contents($root . '/asset.php') ?: '', "'js/open-site.
     ok('asset allowlist open-site.js');
 }
 $sitesEmailsPage = file_get_contents($root . '/pages/team/sites_emails.php') ?: '';
+$sitesEmailsAppSmoke = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 if (!str_contains($sitesEmailsPage, 'team_page_unlocked')) {
     fail('team_sites_emails missing page-level unlock check');
+} elseif (!str_contains($sitesEmailsAppSmoke, 'guide_sites_emails_team()')
+    || !str_contains($sitesEmailsAppSmoke, 'Pushed rows <strong>leave</strong>')
+    || !str_contains($sitesEmailsAppSmoke, 'merges into empty Admin slots only')) {
+    fail('Team Sites with emails missing Email Extracting guide or Push/none help');
 } else {
-    ok('team_sites_emails page-level unlock');
+    ok('team_sites_emails page-level unlock + Email Extracting guide');
 }
 $adminEmailsDelete = file_get_contents($root . '/pages/team/admin_emails_delete.php') ?: '';
 if (!str_contains($adminEmailsDelete, 'team_page_unlocked($user, \'team_admin_emails_search\')')
