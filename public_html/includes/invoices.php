@@ -274,6 +274,60 @@ function invoice_resolve_company_field(array $header, array $invoice, array $def
 }
 
 /**
+ * Bill-to name for save. Empty POST must not wipe an existing printed bill-as
+ * (browser autofill / accidental blank Save next to Print / PDF).
+ *
+ * @param array<string,mixed> $header
+ * @param array<string,mixed> $invoice
+ */
+function invoice_resolve_bill_to_name(array $header, array $invoice): string
+{
+    if (array_key_exists('bill_to_name', $header)) {
+        $posted = trim((string) $header['bill_to_name']);
+        if ($posted !== '') {
+            return $posted;
+        }
+        $prev = trim((string) ($invoice['bill_to_name'] ?? ''));
+        if ($prev !== '') {
+            return $prev;
+        }
+        return trim((string) ($invoice['client_name'] ?? ''));
+    }
+    return invoice_display_bill_as($invoice);
+}
+
+/**
+ * Optional bill field for save. Missing key keeps the stored value; present key
+ * may clear it intentionally.
+ *
+ * @param array<string,mixed> $header
+ * @param array<string,mixed> $invoice
+ */
+function invoice_resolve_bill_field(array $header, array $invoice, string $key): string
+{
+    if (!array_key_exists($key, $header)) {
+        return trim((string) ($invoice[$key] ?? ''));
+    }
+    return trim((string) $header[$key]);
+}
+
+/**
+ * Supplier number for save. Missing key keeps stored; blank POST becomes NEW.
+ *
+ * @param array<string,mixed> $header
+ * @param array<string,mixed> $invoice
+ */
+function invoice_resolve_supplier_number(array $header, array $invoice): string
+{
+    if (!array_key_exists('supplier_number', $header)) {
+        $existing = trim((string) ($invoice['supplier_number'] ?? 'NEW'));
+        return $existing !== '' ? $existing : 'NEW';
+    }
+    $posted = trim((string) $header['supplier_number']);
+    return $posted !== '' ? $posted : 'NEW';
+}
+
+/**
  * One-time: rewrite stored Topurlz / empty letterhead names to Teqno Ltd.
  * Does not touch custom company names (e.g. client-specific brands).
  */
@@ -1784,8 +1838,8 @@ function update_invoice_bill_header(int $invoiceId, array $header): void
     if (mb_strlen($adminNote) > 255) {
         $adminNote = mb_substr($adminNote, 0, 255);
     }
-    $billName = trim((string) ($header['bill_to_name'] ?? ''));
-    $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
+    $billName = invoice_resolve_bill_to_name($header, $invoice);
+    $supplier = invoice_resolve_supplier_number($header, $invoice);
 
     db()->prepare(
         'UPDATE invoices SET
@@ -1799,12 +1853,12 @@ function update_invoice_bill_header(int $invoiceId, array $header): void
         $adminNote,
         $billName,
         $billName,
-        trim((string) ($header['bill_to_address'] ?? '')),
-        trim((string) ($header['bill_to_hrb'] ?? '')),
-        trim((string) ($header['bill_to_vat'] ?? '')),
+        invoice_resolve_bill_field($header, $invoice, 'bill_to_address'),
+        invoice_resolve_bill_field($header, $invoice, 'bill_to_hrb'),
+        invoice_resolve_bill_field($header, $invoice, 'bill_to_vat'),
         $supplier,
-        trim((string) ($header['cost_center'] ?? '')),
-        trim((string) ($header['orderer'] ?? '')),
+        invoice_resolve_bill_field($header, $invoice, 'cost_center'),
+        invoice_resolve_bill_field($header, $invoice, 'orderer'),
         $invoiceId,
     ]);
     invoice_record_event($invoiceId, 'bill_as_saved', null, 'Bill as saved.', [
@@ -1847,8 +1901,8 @@ function update_invoice_party_fields(int $invoiceId, array $header): void
         $invoiceId,
         (string) ($invoice['company_logo'] ?? '')
     );
-    $billName = trim((string) ($header['bill_to_name'] ?? ''));
-    $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
+    $billName = invoice_resolve_bill_to_name($header, $invoice);
+    $supplier = invoice_resolve_supplier_number($header, $invoice);
     $currency = strtoupper(trim((string) ($header['currency'] ?? ($invoice['currency'] ?? 'EUR'))));
     if ($currency === '' || strlen($currency) > 3) {
         $currency = (string) ($invoice['currency'] ?? 'EUR') ?: 'EUR';
@@ -1868,12 +1922,12 @@ function update_invoice_party_fields(int $invoiceId, array $header): void
         $adminNote,
         $billName,
         $billName,
-        trim((string) ($header['bill_to_address'] ?? '')),
-        trim((string) ($header['bill_to_hrb'] ?? '')),
-        trim((string) ($header['bill_to_vat'] ?? '')),
+        invoice_resolve_bill_field($header, $invoice, 'bill_to_address'),
+        invoice_resolve_bill_field($header, $invoice, 'bill_to_hrb'),
+        invoice_resolve_bill_field($header, $invoice, 'bill_to_vat'),
         $supplier,
-        trim((string) ($header['cost_center'] ?? '')),
-        trim((string) ($header['orderer'] ?? '')),
+        invoice_resolve_bill_field($header, $invoice, 'cost_center'),
+        invoice_resolve_bill_field($header, $invoice, 'orderer'),
         invoice_resolve_company_field($header, $invoice, $company, 'company_name'),
         invoice_resolve_company_field($header, $invoice, $company, 'company_bic'),
         invoice_resolve_company_field($header, $invoice, $company, 'company_iban'),
@@ -1973,8 +2027,8 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
     }
     $total = round($total, 2);
 
-    $billName = trim((string) ($header['bill_to_name'] ?? ''));
-    $supplier = trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW';
+    $billName = invoice_resolve_bill_to_name($header, $invoice);
+    $supplier = invoice_resolve_supplier_number($header, $invoice);
     $company = invoice_company_defaults();
     $logoName = invoice_normalize_logo_name(
         array_key_exists('company_logo', $header)
@@ -2004,12 +2058,12 @@ function update_generated_invoice(int $invoiceId, array $header, array $lines): 
             $adminNote,
             $billName,
             $billName,
-            trim((string) ($header['bill_to_address'] ?? '')),
-            trim((string) ($header['bill_to_hrb'] ?? '')),
-            trim((string) ($header['bill_to_vat'] ?? '')),
+            invoice_resolve_bill_field($header, $invoice, 'bill_to_address'),
+            invoice_resolve_bill_field($header, $invoice, 'bill_to_hrb'),
+            invoice_resolve_bill_field($header, $invoice, 'bill_to_vat'),
             $supplier,
-            trim((string) ($header['cost_center'] ?? '')),
-            trim((string) ($header['orderer'] ?? '')),
+            invoice_resolve_bill_field($header, $invoice, 'cost_center'),
+            invoice_resolve_bill_field($header, $invoice, 'orderer'),
             invoice_resolve_company_field($header, $invoice, $company, 'company_name'),
             invoice_resolve_company_field($header, $invoice, $company, 'company_bic'),
             invoice_resolve_company_field($header, $invoice, $company, 'company_iban'),
@@ -2145,7 +2199,7 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
         );
     }
 
-    $billName = trim((string) ($header['bill_to_name'] ?? ''));
+    $billName = invoice_resolve_bill_to_name($header, $invoice);
     $logoName = invoice_normalize_logo_name(
         array_key_exists('company_logo', $header)
             ? (string) $header['company_logo']
@@ -2175,12 +2229,12 @@ function update_blank_invoice(int $invoiceId, array $header, array $lines, strin
             $workStatus,
             $billName,
             $billName,
-            trim((string) ($header['bill_to_address'] ?? '')),
-            trim((string) ($header['bill_to_hrb'] ?? '')),
-            trim((string) ($header['bill_to_vat'] ?? '')),
-            trim((string) ($header['supplier_number'] ?? 'NEW')) ?: 'NEW',
-            trim((string) ($header['cost_center'] ?? '')),
-            trim((string) ($header['orderer'] ?? '')),
+            invoice_resolve_bill_field($header, $invoice, 'bill_to_address'),
+            invoice_resolve_bill_field($header, $invoice, 'bill_to_hrb'),
+            invoice_resolve_bill_field($header, $invoice, 'bill_to_vat'),
+            invoice_resolve_supplier_number($header, $invoice),
+            invoice_resolve_bill_field($header, $invoice, 'cost_center'),
+            invoice_resolve_bill_field($header, $invoice, 'orderer'),
             invoice_resolve_company_field($header, $invoice, $company, 'company_name'),
             invoice_resolve_company_field($header, $invoice, $company, 'company_bic'),
             invoice_resolve_company_field($header, $invoice, $company, 'company_iban'),

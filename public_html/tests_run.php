@@ -6363,6 +6363,72 @@ try {
         fail('legacy Topurlz branding upgrade failed' . ($legacyErr !== '' ? ': ' . $legacyErr : ''));
     }
 
+    $billPreserveOk = false;
+    $billPreserveErr = '';
+    try {
+        $billKeepId = create_blank_invoice((int) $adminUser['id']);
+        update_blank_invoice((int) $billKeepId, [
+            'invoice_date' => date('Y-m-d'),
+            'admin_note' => '',
+            'bill_to_name' => 'keep-bill@example.com',
+            'bill_to_address' => '12 Keep Street',
+            'bill_to_hrb' => 'HRB-KEEP',
+            'bill_to_vat' => 'VAT-KEEP',
+            'supplier_number' => 'SUP-KEEP',
+            'cost_center' => 'CC-KEEP',
+            'orderer' => 'Orderer Keep',
+            'company_name' => 'Teqno Ltd',
+            'company_iban' => 'BE04905543949331',
+            'company_bic' => 'TRWIBEB1XXX',
+            'company_phone' => '+447445152374',
+            'company_address' => '20 Wenlock Road',
+            'company_reg_no' => '16607074',
+            'vat_note' => 'Not VAT registered – no VAT charged.',
+            'company_logo' => '',
+        ], [
+            ['description' => 'Keep line', 'amount' => 10, 'qty' => 1],
+        ], 'done');
+        // Simulate a Save that blanks Bill to (autofill / empty POST) while changing company.
+        update_invoice_party_fields((int) $billKeepId, [
+            'invoice_date' => date('Y-m-d'),
+            'admin_note' => 'party only',
+            'bill_to_name' => '',
+            'bill_to_address' => '12 Keep Street',
+            'bill_to_hrb' => 'HRB-KEEP',
+            'bill_to_vat' => 'VAT-KEEP',
+            'supplier_number' => 'SUP-KEEP',
+            'cost_center' => 'CC-KEEP',
+            'orderer' => 'Orderer Keep',
+            'company_name' => 'Teqno Ltd',
+            'company_iban' => 'BE04905543949331',
+            'company_bic' => 'TRWIBEB1XXX',
+            'company_phone' => '+447445152374',
+            'company_address' => '20 Wenlock Road',
+            'company_reg_no' => '16607074',
+            'vat_note' => 'Not VAT registered – no VAT charged.',
+            'currency' => 'EUR',
+            'company_logo' => '',
+        ]);
+        $kept = get_invoice((int) $billKeepId);
+        $resolvedEmpty = invoice_resolve_bill_to_name(
+            ['bill_to_name' => ''],
+            ['bill_to_name' => 'keep-bill@example.com', 'client_name' => 'keep-bill@example.com']
+        );
+        $billPreserveOk = $kept
+            && (string) ($kept['bill_to_name'] ?? '') === 'keep-bill@example.com'
+            && (string) ($kept['bill_to_address'] ?? '') === '12 Keep Street'
+            && (string) ($kept['bill_to_hrb'] ?? '') === 'HRB-KEEP'
+            && $resolvedEmpty === 'keep-bill@example.com';
+        delete_invoice((int) $billKeepId);
+    } catch (Throwable $billEx) {
+        $billPreserveErr = $billEx->getMessage();
+    }
+    if ($billPreserveOk) {
+        pass('empty Bill to POST does not wipe saved bill-as on party save');
+    } else {
+        fail('Bill to preserve failed' . ($billPreserveErr !== '' ? ': ' . $billPreserveErr : ''));
+    }
+
     $dropA = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
     $dropB = add_order_pipeline_row((int) $adminUser['id'], 'groupdrop@example.com');
     update_order_item((int) $dropA, 0, [

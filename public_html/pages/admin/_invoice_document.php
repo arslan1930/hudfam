@@ -130,38 +130,56 @@ $docEditable = $editableLines || $editableCompany || $editableBill;
       <div class="invoice-party-label">Bill to</div>
       <?php if ($editableBill): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="bill_to_name"
-               value="<?= h($billAs) ?>" placeholder="Email or name (optional)">
+               value="<?= h($billAs) ?>" placeholder="Email or name (optional)"
+               autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         <textarea class="invoice-edit-textarea" name="bill_to_address" rows="2"
-                  placeholder="Address (optional)"><?= h((string) $invoice['bill_to_address']) ?></textarea>
+                  placeholder="Address (optional)"
+                  autocomplete="off" data-lpignore="true" data-1p-ignore="true"><?= h((string) $invoice['bill_to_address']) ?></textarea>
         <div class="invoice-party-lines invoice-edit-party-lines">
-          <div><span>Company reg / HRB</span> <input name="bill_to_hrb" value="<?= h($invoice['bill_to_hrb']) ?>" placeholder="—"></div>
-          <div><span>Ust-IdNr</span> <input name="bill_to_vat" value="<?= h($invoice['bill_to_vat']) ?>" placeholder="—"></div>
-          <div><span>Supplier number</span> <input name="supplier_number" value="<?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?>"></div>
-          <div><span>Cost center</span> <input name="cost_center" value="<?= h($invoice['cost_center']) ?>" placeholder="—"></div>
-          <div><span>Orderer</span> <input name="orderer" value="<?= h($invoice['orderer']) ?>" placeholder="—"></div>
+          <div><span>Company reg / HRB</span> <input name="bill_to_hrb" value="<?= h($invoice['bill_to_hrb']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Ust-IdNr</span> <input name="bill_to_vat" value="<?= h($invoice['bill_to_vat']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Supplier number</span> <input name="supplier_number" value="<?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?>" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Cost center</span> <input name="cost_center" value="<?= h($invoice['cost_center']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Orderer</span> <input name="orderer" value="<?= h($invoice['orderer']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
         </div>
       <?php else: ?>
+        <?php
+          $billAddress = trim((string) ($invoice['bill_to_address'] ?? ''));
+          $billHrb = trim((string) ($invoice['bill_to_hrb'] ?? ''));
+          $billVat = trim((string) ($invoice['bill_to_vat'] ?? ''));
+          $billSupplier = trim((string) ($invoice['supplier_number'] ?? ''));
+          if ($billSupplier === '') {
+              $billSupplier = 'NEW';
+          }
+          $billCost = trim((string) ($invoice['cost_center'] ?? ''));
+          $billOrderer = trim((string) ($invoice['orderer'] ?? ''));
+          // Print/PDF must show the same Bill to block as the editor — never drop
+          // saved fields just because neighboring optionals are empty.
+          $showBillDetails = $billAddress !== '' || $billHrb !== '' || $billVat !== ''
+              || $billCost !== '' || $billOrderer !== '' || strtoupper($billSupplier) !== 'NEW'
+              || $showExtraBill || $billAs !== '';
+        ?>
         <?php if ($billAs !== ''): ?>
           <div class="invoice-doc-strong"><?= h($billAs) ?></div>
         <?php endif; ?>
         <div class="invoice-party-lines">
-          <?php if (trim((string) $invoice['bill_to_address']) !== ''): ?>
-            <div class="invoice-doc-address"><?= nl2br(h((string) $invoice['bill_to_address'])) ?></div>
+          <?php if ($billAddress !== ''): ?>
+            <div class="invoice-doc-address"><?= nl2br(h($billAddress), false) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['bill_to_hrb']) !== ''): ?>
-            <div><span>Company reg / HRB</span> <?= h($invoice['bill_to_hrb']) ?></div>
+          <?php if ($billHrb !== ''): ?>
+            <div><span>Company reg / HRB</span> <?= h($billHrb) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['bill_to_vat']) !== ''): ?>
-            <div><span>Ust-IdNr</span> <?= h($invoice['bill_to_vat']) ?></div>
+          <?php if ($billVat !== ''): ?>
+            <div><span>Ust-IdNr</span> <?= h($billVat) ?></div>
           <?php endif; ?>
-          <?php if ($showExtraBill): ?>
-            <div><span>Supplier number</span> <?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?></div>
+          <?php if ($showBillDetails): ?>
+            <div><span>Supplier number</span> <?= h($billSupplier) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['cost_center']) !== ''): ?>
-            <div><span>Cost center</span> <?= h($invoice['cost_center']) ?></div>
+          <?php if ($billCost !== ''): ?>
+            <div><span>Cost center</span> <?= h($billCost) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['orderer']) !== ''): ?>
-            <div><span>Orderer</span> <?= h($invoice['orderer']) ?></div>
+          <?php if ($billOrderer !== ''): ?>
+            <div><span>Orderer</span> <?= h($billOrderer) ?></div>
           <?php endif; ?>
         </div>
       <?php endif; ?>

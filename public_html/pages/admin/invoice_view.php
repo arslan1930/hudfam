@@ -399,7 +399,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 
 <?php if ($editable): ?>
 <form method="post" id="blank-invoice-form" class="invoice-blank-edit-form"
-      enctype="multipart/form-data"
+      enctype="multipart/form-data" autocomplete="off"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_blank">
@@ -413,7 +413,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 </form>
 <?php elseif ($editableGenerated): ?>
 <form method="post" id="generated-invoice-form" class="invoice-blank-edit-form"
-      enctype="multipart/form-data"
+      enctype="multipart/form-data" autocomplete="off"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_bill">
@@ -426,7 +426,7 @@ render_header('Invoice ' . $invoice['invoice_number'], 'admin');
 </form>
 <?php elseif ($editablePartyOnly): ?>
 <form method="post" id="party-invoice-form" class="invoice-blank-edit-form"
-      enctype="multipart/form-data"
+      enctype="multipart/form-data" autocomplete="off"
       action="index.php?page=admin_invoice_view&amp;id=<?= (int) $id ?>" data-no-draft>
   <?= csrf_field() ?>
   <input type="hidden" name="action" value="save_party">

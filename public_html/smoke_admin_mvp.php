@@ -2096,7 +2096,10 @@ if (!is_file($root . '/assets/img/teqno-logo.png')
     || !str_contains($invoicesLibTypeahead, 'function invoice_display_company_name')
     || !str_contains($invoicesLibTypeahead, 'function invoice_migrate_legacy_topurlz_branding')
     || !str_contains($invoicesLibTypeahead, 'function invoice_resolve_company_field')
+    || !str_contains($invoicesLibTypeahead, 'function invoice_resolve_bill_to_name')
     || !str_contains($invoiceDocSrc, 'invoice_display_company_name')
+    || !str_contains($invoiceDocSrc, 'Print/PDF must show the same Bill to')
+    || !str_contains($invoiceViewCsrf, 'autocomplete="off"')
     || str_contains(file_get_contents($root . '/pages/admin/invoice_generate.php') ?: '', 'Bank / supplier details (Topurlz)')
     || str_contains(file_get_contents($root . '/pages/admin/invoices.php') ?: '', 'printable Topurlz bills')) {
     fail('missing Teqno Ltd default logo branding');
