@@ -220,4 +220,54 @@
       applyStayAjaxSuccess(form, data);
     });
   });
+
+  // --- Country-jump selects: never change value on mouse-wheel / trackpad scroll ---
+  // These selects submit on change (navigate to another country). A focused or
+  // hovered <select> steals wheel events in browsers, so scrolling a long sheet
+  // silently changes the country. Block that and keep the page scrolling.
+  var COUNTRY_JUMP_SEL =
+    'select[data-sheet-country-jump], .sheet-country-jump select, .camp-country-jump select';
+
+  function isCountryJumpSelect(el) {
+    return !!(el && el.matches && el.tagName === 'SELECT' && el.matches(COUNTRY_JUMP_SEL));
+  }
+
+  function blurCountryJump(el) {
+    if (!isCountryJumpSelect(el)) return;
+    try {
+      el.blur();
+    } catch (err) { /* ignore */ }
+  }
+
+  document.addEventListener(
+    'wheel',
+    function (e) {
+      var target = e.target;
+      var active = document.activeElement;
+      var sel = null;
+      if (isCountryJumpSelect(target)) {
+        sel = target;
+      } else if (isCountryJumpSelect(active)) {
+        // Some engines still apply wheel to a focused select even when the
+        // pointer is over the table below.
+        sel = active;
+      }
+      if (!sel) return;
+      e.preventDefault();
+      blurCountryJump(sel);
+      var dy = typeof e.deltaY === 'number' ? e.deltaY : 0;
+      if (dy !== 0) {
+        window.scrollBy(0, dy);
+      }
+    },
+    { capture: true, passive: false }
+  );
+
+  window.addEventListener(
+    'scroll',
+    function () {
+      blurCountryJump(document.activeElement);
+    },
+    { passive: true }
+  );
 })();

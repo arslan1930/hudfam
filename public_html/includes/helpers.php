@@ -513,7 +513,10 @@ function render_sheet_country_jump(
     echo '<h1 class="camp-sheet-title">';
     echo '<label class="with-info camp-country-jump-label" for="' . h($selectId) . '">';
     echo '<span class="visually-hidden">' . h($ariaLabel) . '</span>';
-    echo '<select id="' . h($selectId) . '" name="' . h($selectName) . '" onchange="this.form.submit()"'
+    // data-sheet-country-jump: stay-scroll.js blocks wheel/scroll from changing this
+    // (native <select> + onchange submit otherwise jumps country while scrolling the sheet).
+    echo '<select id="' . h($selectId) . '" class="sheet-country-jump-select" name="' . h($selectName) . '"'
+        . ' data-sheet-country-jump onchange="this.form.submit()"'
         . ' title="Open another country without going back" aria-label="' . h($ariaLabel) . '">';
     foreach ($clean as $opt) {
         $sel = (string) $opt['value'] === $currentValue ? ' selected' : '';

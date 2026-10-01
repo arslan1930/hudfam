@@ -2195,6 +2195,13 @@ if (!preg_match('/var req = postStayAjax\(form\);\s*sel\.disabled = true/s', $st
 } else {
     ok('stay-ajax collects FormData before disabling select');
 }
+if (!str_contains($stayScrollJs, 'data-sheet-country-jump')
+    || !str_contains($stayScrollJs, 'isCountryJumpSelect')
+    || !preg_match("/addEventListener\\(\\s*['\"]wheel['\"]/", $stayScrollJs)) {
+    fail('stay-scroll missing country-jump wheel guard');
+} else {
+    ok('stay-scroll blocks wheel on country-jump selects');
+}
 if (!str_contains($teamDepts, 'team_can_set_department_task_status')
     || !str_contains($teamDepts, 'Only the assignee can update this task')) {
     fail('team departments missing assignee status ACL');
@@ -3467,6 +3474,8 @@ if (!str_contains($campUi, 'href="#camp-fill-gaps"')
 }
 $sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
 if (!str_contains($helpersSmoke, 'function render_sheet_country_jump')
+    || !str_contains($helpersSmoke, 'data-sheet-country-jump')
+    || !str_contains($helpersSmoke, 'sheet-country-jump-select')
     || !str_contains($adminProspects, 'prospect-country-jump')
     || !str_contains($adminProspects, 'list_prospect_country_nav')
     || !str_contains($prospectsLib, 'function list_prospect_country_nav')

@@ -2546,6 +2546,7 @@ input[type=checkbox], input[type=radio] { width: auto; display: inline-block; }
   gap: 0.4rem;
 }
 .camp-country-jump-select,
+.sheet-country-jump-select,
 .camp-country-jump select,
 .sheet-country-jump select {
   font: inherit;
