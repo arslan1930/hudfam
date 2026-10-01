@@ -2196,11 +2196,14 @@ if (!preg_match('/var req = postStayAjax\(form\);\s*sel\.disabled = true/s', $st
     ok('stay-ajax collects FormData before disabling select');
 }
 if (!str_contains($stayScrollJs, 'data-sheet-country-jump')
-    || !str_contains($stayScrollJs, 'isCountryJumpSelect')
-    || !preg_match("/addEventListener\\(\\s*['\"]wheel['\"]/", $stayScrollJs)) {
-    fail('stay-scroll missing country-jump wheel guard');
+    || !str_contains($stayScrollJs, 'data-wheel-nav-select')
+    || !str_contains($stayScrollJs, 'isWheelNavSelect')
+    || !str_contains($stayScrollJs, 'wheelDeltaPixels')
+    || !preg_match("/addEventListener\\(\\s*['\"]wheel['\"]/", $stayScrollJs)
+    || !str_contains($helpersSmoke, 'data-wheel-nav-select')) {
+    fail('stay-scroll missing country-jump / per-page wheel guard');
 } else {
-    ok('stay-scroll blocks wheel on country-jump selects');
+    ok('stay-scroll blocks wheel on country-jump and per-page selects');
 }
 if (!str_contains($teamDepts, 'team_can_set_department_task_status')
     || !str_contains($teamDepts, 'Only the assignee can update this task')) {

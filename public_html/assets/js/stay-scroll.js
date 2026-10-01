@@ -221,22 +221,38 @@
     });
   });
 
-  // --- Country-jump selects: never change value on mouse-wheel / trackpad scroll ---
-  // These selects submit on change (navigate to another country). A focused or
-  // hovered <select> steals wheel events in browsers, so scrolling a long sheet
-  // silently changes the country. Block that and keep the page scrolling.
-  var COUNTRY_JUMP_SEL =
-    'select[data-sheet-country-jump], .sheet-country-jump select, .camp-country-jump select';
+  // --- Auto-submit nav selects: never change value on mouse-wheel / trackpad ---
+  // Country-jump and Per page <select onchange=submit> steal wheel events when
+  // focused/hovered, so scrolling a long sheet silently navigates away.
+  var WHEEL_NAV_SEL = [
+    'select[data-sheet-country-jump]',
+    'select[data-wheel-nav-select]',
+    '.sheet-country-jump select',
+    '.camp-country-jump select',
+    '.sheet-per-page-filter select',
+    '#sheet_per_page_select'
+  ].join(', ');
 
-  function isCountryJumpSelect(el) {
-    return !!(el && el.matches && el.tagName === 'SELECT' && el.matches(COUNTRY_JUMP_SEL));
+  function isWheelNavSelect(el) {
+    return !!(el && el.matches && el.tagName === 'SELECT' && el.matches(WHEEL_NAV_SEL));
   }
 
-  function blurCountryJump(el) {
-    if (!isCountryJumpSelect(el)) return;
+  function blurWheelNavSelect(el) {
+    if (!isWheelNavSelect(el)) return;
     try {
       el.blur();
     } catch (err) { /* ignore */ }
+  }
+
+  function wheelDeltaPixels(e) {
+    var dy = typeof e.deltaY === 'number' ? e.deltaY : 0;
+    // Firefox often reports lines/pages; scrollBy expects CSS pixels.
+    if (e.deltaMode === 1) {
+      dy *= 16;
+    } else if (e.deltaMode === 2) {
+      dy *= window.innerHeight || 800;
+    }
+    return dy;
   }
 
   document.addEventListener(
@@ -245,17 +261,17 @@
       var target = e.target;
       var active = document.activeElement;
       var sel = null;
-      if (isCountryJumpSelect(target)) {
+      if (isWheelNavSelect(target)) {
         sel = target;
-      } else if (isCountryJumpSelect(active)) {
+      } else if (isWheelNavSelect(active)) {
         // Some engines still apply wheel to a focused select even when the
         // pointer is over the table below.
         sel = active;
       }
       if (!sel) return;
       e.preventDefault();
-      blurCountryJump(sel);
-      var dy = typeof e.deltaY === 'number' ? e.deltaY : 0;
+      blurWheelNavSelect(sel);
+      var dy = wheelDeltaPixels(e);
       if (dy !== 0) {
         window.scrollBy(0, dy);
       }
@@ -266,7 +282,7 @@
   window.addEventListener(
     'scroll',
     function () {
-      blurCountryJump(document.activeElement);
+      blurWheelNavSelect(document.activeElement);
     },
     { passive: true }
   );

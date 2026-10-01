@@ -815,7 +815,9 @@ function render_sheet_per_page_filter(array $baseQuery, int $current): void
         echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
     }
     echo '<label for="sheet_per_page_select">Per page</label>';
-    echo '<select id="sheet_per_page_select" name="per_page" onchange="this.form.submit()" title="How many rows to show on each page. Default 100 keeps large Emails data lists from freezing the browser.">';
+    // data-wheel-nav-select: stay-scroll.js blocks wheel from changing per_page mid-scroll.
+    echo '<select id="sheet_per_page_select" name="per_page" data-wheel-nav-select'
+        . ' onchange="this.form.submit()" title="How many rows to show on each page. Default 100 keeps large Emails data lists from freezing the browser.">';
     foreach (sheet_per_page_options() as $n) {
         echo '<option value="' . (int) $n . '"' . ($n === $current ? ' selected' : '') . '>'
             . (int) $n
