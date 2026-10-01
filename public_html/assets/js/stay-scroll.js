@@ -221,17 +221,16 @@
     });
   });
 
-  // --- Auto-submit nav selects: never change value on mouse-wheel / trackpad ---
-  // Country-jump and Per page <select onchange=submit> steal wheel events when
-  // focused/hovered, so scrolling a long sheet silently navigates away.
+  // --- Nav controls that must not react to mouse-wheel / trackpad scroll ---
+  // Country jump is a <details> link menu (wheel-safe). Per page is still a
+  // <select>: only submit after an intentional pointer/keyboard change; revert
+  // accidental wheel changes (preventDefault is too late in some browsers).
   var WHEEL_NAV_SEL = [
-    'select[data-sheet-country-jump]',
     'select[data-wheel-nav-select]',
-    '.sheet-country-jump select',
-    '.camp-country-jump select',
     '.sheet-per-page-filter select',
     '#sheet_per_page_select'
   ].join(', ');
+  var armedNavSelect = null;
 
   function isWheelNavSelect(el) {
     return !!(el && el.matches && el.tagName === 'SELECT' && el.matches(WHEEL_NAV_SEL));
@@ -242,6 +241,13 @@
     try {
       el.blur();
     } catch (err) { /* ignore */ }
+  }
+
+  function closeCountryJumpMenus() {
+    var open = document.querySelectorAll('.sheet-country-jump-details[open]');
+    for (var i = 0; i < open.length; i++) {
+      open[i].removeAttribute('open');
+    }
   }
 
   function wheelDeltaPixels(e) {
@@ -255,6 +261,77 @@
     return dy;
   }
 
+  function rememberNavValue(sel) {
+    if (!isWheelNavSelect(sel)) return;
+    sel.setAttribute('data-nav-value', String(sel.value || ''));
+  }
+
+  document.addEventListener(
+    'focusin',
+    function (e) {
+      rememberNavValue(e.target);
+    },
+    true
+  );
+
+  document.addEventListener(
+    'pointerdown',
+    function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var sel = t.closest(WHEEL_NAV_SEL);
+      if (sel) {
+        rememberNavValue(sel);
+        armedNavSelect = sel;
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    'keydown',
+    function (e) {
+      var sel = e.target;
+      if (!isWheelNavSelect(sel)) return;
+      var key = e.key || '';
+      if (
+        key === 'Enter' ||
+        key === ' ' ||
+        key === 'ArrowUp' ||
+        key === 'ArrowDown' ||
+        key === 'Home' ||
+        key === 'End' ||
+        key === 'PageUp' ||
+        key === 'PageDown'
+      ) {
+        rememberNavValue(sel);
+        armedNavSelect = sel;
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    'change',
+    function (e) {
+      var sel = e.target;
+      if (!isWheelNavSelect(sel)) return;
+      if (armedNavSelect !== sel) {
+        var prev = sel.getAttribute('data-nav-value');
+        if (prev !== null && String(sel.value) !== String(prev)) {
+          sel.value = prev;
+        }
+        return;
+      }
+      armedNavSelect = null;
+      rememberNavValue(sel);
+      if (sel.form) {
+        sel.form.submit();
+      }
+    },
+    true
+  );
+
   document.addEventListener(
     'wheel',
     function (e) {
@@ -264,13 +341,16 @@
       if (isWheelNavSelect(target)) {
         sel = target;
       } else if (isWheelNavSelect(active)) {
-        // Some engines still apply wheel to a focused select even when the
-        // pointer is over the table below.
         sel = active;
       }
       if (!sel) return;
       e.preventDefault();
+      armedNavSelect = null;
       blurWheelNavSelect(sel);
+      var prev = sel.getAttribute('data-nav-value');
+      if (prev !== null && String(sel.value) !== String(prev)) {
+        sel.value = prev;
+      }
       var dy = wheelDeltaPixels(e);
       if (dy !== 0) {
         window.scrollBy(0, dy);
@@ -282,8 +362,18 @@
   window.addEventListener(
     'scroll',
     function () {
+      closeCountryJumpMenus();
       blurWheelNavSelect(document.activeElement);
+      if (isWheelNavSelect(document.activeElement)) {
+        armedNavSelect = null;
+      }
     },
     { passive: true }
   );
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeCountryJumpMenus();
+    }
+  });
 })();

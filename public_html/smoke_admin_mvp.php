@@ -2195,15 +2195,18 @@ if (!preg_match('/var req = postStayAjax\(form\);\s*sel\.disabled = true/s', $st
 } else {
     ok('stay-ajax collects FormData before disabling select');
 }
-if (!str_contains($stayScrollJs, 'data-sheet-country-jump')
-    || !str_contains($stayScrollJs, 'data-wheel-nav-select')
+if (!str_contains($stayScrollJs, 'data-wheel-nav-select')
     || !str_contains($stayScrollJs, 'isWheelNavSelect')
+    || !str_contains($stayScrollJs, 'armedNavSelect')
+    || !str_contains($stayScrollJs, 'closeCountryJumpMenus')
     || !str_contains($stayScrollJs, 'wheelDeltaPixels')
     || !preg_match("/addEventListener\\(\\s*['\"]wheel['\"]/", $stayScrollJs)
-    || !str_contains($helpersSmoke, 'data-wheel-nav-select')) {
-    fail('stay-scroll missing country-jump / per-page wheel guard');
+    || !str_contains($helpersSmoke, 'data-wheel-nav-select')
+    || !str_contains($helpersSmoke, 'sheet-country-jump-details')
+    || !str_contains($helpersSmoke, 'sheet-country-jump-option')) {
+    fail('stay-scroll / country jump missing wheel-safe nav controls');
 } else {
-    ok('stay-scroll blocks wheel on country-jump and per-page selects');
+    ok('country jump link menu + per-page intentional submit');
 }
 if (!str_contains($teamDepts, 'team_can_set_department_task_status')
     || !str_contains($teamDepts, 'Only the assignee can update this task')) {
@@ -3468,8 +3471,8 @@ if (!str_contains($campUi, 'href="#camp-fill-gaps"')
     || !str_contains($campLibSmokeUx, 'function list_email_campaign_project_country_nav')
     || !str_contains($campUi, 'camp-country-jump')
     || !str_contains($campUi, 'render_sheet_country_jump')
-    || !str_contains($cssUi, '.camp-country-jump select')
-    || !str_contains($cssUi, '.sheet-country-jump select')
+    || !str_contains($cssUi, '.sheet-country-jump-summary')
+    || !str_contains($cssUi, '.sheet-country-jump-menu')
     || !str_contains($cssUi, '.swe-checkpoint-compact .with-info-label')) {
     fail('campaign sheet missing Fill gaps header, chip counts, or language default');
 } else {
@@ -3478,7 +3481,10 @@ if (!str_contains($campUi, 'href="#camp-fill-gaps"')
 $sweLibSmoke = file_get_contents($root . '/includes/sites_with_emails.php') ?: '';
 if (!str_contains($helpersSmoke, 'function render_sheet_country_jump')
     || !str_contains($helpersSmoke, 'data-sheet-country-jump')
-    || !str_contains($helpersSmoke, 'sheet-country-jump-select')
+    || !str_contains($helpersSmoke, 'sheet-country-jump-details')
+    || !str_contains($helpersSmoke, 'sheet-country-jump-summary')
+    || str_contains($helpersSmoke, 'onchange="this.form.submit()"')
+    || !str_contains($cssUi, '.sheet-country-jump-menu')
     || !str_contains($adminProspects, 'prospect-country-jump')
     || !str_contains($adminProspects, 'list_prospect_country_nav')
     || !str_contains($prospectsLib, 'function list_prospect_country_nav')

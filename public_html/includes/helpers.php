@@ -499,7 +499,16 @@ function render_sheet_country_jump(
         $fallback = $currentValue !== '' ? $currentValue : 'Country';
         $clean[] = ['value' => $currentValue !== '' ? $currentValue : 'country', 'label' => $fallback];
     }
-    echo '<form class="sheet-country-jump camp-country-jump" method="get" action="index.php" data-no-draft>';
+    $currentLabel = $currentValue !== '' ? $currentValue : 'Country';
+    foreach ($clean as $opt) {
+        if ((string) $opt['value'] === $currentValue) {
+            $currentLabel = (string) $opt['label'];
+            break;
+        }
+    }
+    // Link menu (not <select>): mouse-wheel must never change country while scrolling
+    // a long sheet. Native <select onchange=submit> changes value on wheel/focus.
+    $baseParams = [];
     foreach ($hiddenQuery as $key => $value) {
         if ($value === '' || $value === null) {
             continue;
@@ -508,25 +517,32 @@ function render_sheet_country_jump(
         if ($k === $selectName || $k === 'p' || $k === 'q') {
             continue;
         }
-        echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
+        $baseParams[$k] = (string) $value;
     }
+    echo '<div class="sheet-country-jump camp-country-jump" data-no-draft data-sheet-country-jump>';
     echo '<h1 class="camp-sheet-title">';
-    echo '<label class="with-info camp-country-jump-label" for="' . h($selectId) . '">';
+    echo '<div class="with-info camp-country-jump-label">';
     echo '<span class="visually-hidden">' . h($ariaLabel) . '</span>';
-    // data-sheet-country-jump: stay-scroll.js blocks wheel/scroll from changing this
-    // (native <select> + onchange submit otherwise jumps country while scrolling the sheet).
-    echo '<select id="' . h($selectId) . '" class="sheet-country-jump-select" name="' . h($selectName) . '"'
-        . ' data-sheet-country-jump onchange="this.form.submit()"'
+    echo '<details class="sheet-country-jump-details">';
+    echo '<summary id="' . h($selectId) . '" class="sheet-country-jump-summary sheet-country-jump-select"'
         . ' title="Open another country without going back" aria-label="' . h($ariaLabel) . '">';
+    echo '<span class="sheet-country-jump-current">' . h($currentLabel) . '</span>';
+    echo '</summary>';
+    echo '<div class="sheet-country-jump-menu" role="listbox" aria-label="' . h($ariaLabel) . '">';
     foreach ($clean as $opt) {
-        $sel = (string) $opt['value'] === $currentValue ? ' selected' : '';
-        echo '<option value="' . h($opt['value']) . '"' . $sel . '>' . h($opt['label']) . '</option>';
+        $params = $baseParams;
+        $params[$selectName] = (string) $opt['value'];
+        $href = 'index.php?' . http_build_query($params);
+        $isCurrent = (string) $opt['value'] === $currentValue;
+        echo '<a class="sheet-country-jump-option' . ($isCurrent ? ' is-current' : '') . '"'
+            . ' role="option" href="' . h($href) . '"'
+            . ($isCurrent ? ' aria-current="page"' : '')
+            . '>' . h((string) $opt['label']) . '</a>';
     }
-    echo '</select>';
+    echo '</div></details>';
     echo info_icon($infoTip, 'About this country sheet');
-    echo '</label>';
-    echo '<noscript><button class="btn small" type="submit">Open</button></noscript>';
-    echo '</h1></form>';
+    echo '</div>';
+    echo '</h1></div>';
 }
 
 /**
@@ -815,9 +831,11 @@ function render_sheet_per_page_filter(array $baseQuery, int $current): void
         echo '<input type="hidden" name="' . h($k) . '" value="' . h((string) $value) . '">';
     }
     echo '<label for="sheet_per_page_select">Per page</label>';
-    // data-wheel-nav-select: stay-scroll.js blocks wheel from changing per_page mid-scroll.
+    // No inline onchange: stay-scroll.js submits only on intentional change
+    // (wheel on a focused <select> must not reload the sheet).
     echo '<select id="sheet_per_page_select" name="per_page" data-wheel-nav-select'
-        . ' onchange="this.form.submit()" title="How many rows to show on each page. Default 100 keeps large Emails data lists from freezing the browser.">';
+        . ' data-nav-value="' . (int) $current . '"'
+        . ' title="How many rows to show on each page. Default 100 keeps large Emails data lists from freezing the browser.">';
     foreach (sheet_per_page_options() as $n) {
         echo '<option value="' . (int) $n . '"' . ($n === $current ? ' selected' : '') . '>'
             . (int) $n

@@ -683,6 +683,8 @@ if (preg_match('/project=(\d+)/', $r['body'], $projM)) {
             && str_contains($rSheet['body'], 'data-camp-copy-domains')
             && str_contains($rSheet['body'], 'id="camp-country-jump"')
             && str_contains($rSheet['body'], 'data-sheet-country-jump')
+            && str_contains($rSheet['body'], 'sheet-country-jump-details')
+            && str_contains($rSheet['body'], 'sheet-country-jump-option')
             && str_contains($rSheet['body'], 'value="fill_gaps"')
             && str_contains($rSheet['body'], 'Import')
             && !str_contains($rSheet['body'], 'Fatal error')) {
