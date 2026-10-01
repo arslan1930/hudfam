@@ -7,7 +7,7 @@ ensure_email_campaign_schema();
 
 if (user_is_department_scoped($user) && !user_in_communication_team($user)) {
     flash('error', 'This tool is for Communication Team members.');
-    redirect('index.php?page=team_departments');
+    redirect(team_home_url());
 }
 
 $base = 'index.php?page=team_email_campaigns';
@@ -19,28 +19,33 @@ if ((string) get('ajax') === 'suggest') {
     $q = (string) get('q');
     $projectId = (int) get('project_id');
     $sheetId = (int) get('sheet_id'); // legacy
-    if ($projectId > 0) {
-        $project = get_email_campaign_project($projectId);
-        if (!$project || !email_campaign_project_team_visible($project)) {
-            echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
-            exit;
+    $flags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS;
+    try {
+        if ($projectId > 0) {
+            $project = get_email_campaign_project($projectId);
+            if (!$project || !email_campaign_project_team_visible($project)) {
+                echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []], $flags);
+                exit;
+            }
+            $suggestions = search_email_campaign_suggestions_for_project($projectId, $q, 25);
+        } elseif ($sheetId > 0) {
+            $sheet = get_email_campaign_sheet($sheetId);
+            if (!$sheet || !email_campaign_sheet_team_visible($sheet)) {
+                echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []], $flags);
+                exit;
+            }
+            $suggestions = search_email_campaign_suggestions($sheetId, $q, 25);
+        } else {
+            $suggestions = search_email_campaign_suggestions_all($q, 25);
         }
-        $suggestions = search_email_campaign_suggestions_for_project($projectId, $q, 25);
-    } elseif ($sheetId > 0) {
-        $sheet = get_email_campaign_sheet($sheetId);
-        if (!$sheet || !email_campaign_sheet_team_visible($sheet)) {
-            echo json_encode(['ok' => true, 'q' => $q, 'suggestions' => []]);
-            exit;
-        }
-        $suggestions = search_email_campaign_suggestions($sheetId, $q, 25);
-    } else {
-        $suggestions = search_email_campaign_suggestions_all($q, 25);
+        echo json_encode([
+            'ok' => true,
+            'q' => $q,
+            'suggestions' => $suggestions,
+        ], $flags);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'q' => $q, 'suggestions' => [], 'error' => 'Search failed.'], $flags);
     }
-    echo json_encode([
-        'ok' => true,
-        'q' => $q,
-        'suggestions' => $suggestions,
-    ]);
     exit;
 }
 
@@ -85,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $projectName = email_campaign_sheet_project_name($sheet);
 
     if ($action === 'delete_row') {
-        $result = delete_email_campaign_row($sid, $rowId);
+        $result = delete_email_campaign_row($sid, $rowId, true, $user);
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Delete failed.')], 404);
         }
@@ -100,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'delete_email') {
-        $result = remove_email_from_email_campaign_row($sid, $rowId, (string) post('email'));
+        $result = remove_email_from_email_campaign_row($sid, $rowId, (string) post('email'), $user);
         if (!$result['ok']) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
         }
@@ -132,7 +137,7 @@ $visibleCount = count(list_email_campaign_projects(true));
 
 render_header('Campaign search', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Campaign search'],
 ]);
 ?>
@@ -150,6 +155,7 @@ render_breadcrumbs([
     <a class="btn secondary" href="index.php?page=team_email_campaigns_drafts">Campaign drafts</a>
   </div>
 </div>
+<?= guide_campaign_search() ?>
 <?php
 render_email_campaign_super_search($base);
 render_footer('team');

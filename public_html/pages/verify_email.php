@@ -30,5 +30,6 @@ render_header('Verify email');
       <p><a class="btn" href="index.php?page=login">Sign in</a></p>
     <?php endif; ?>
   </div>
+  <?php render_project_credit(); ?>
 </div>
 <?php render_footer(); ?>

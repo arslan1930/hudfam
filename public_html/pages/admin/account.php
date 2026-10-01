@@ -86,6 +86,8 @@ render_header('Account', 'admin');
   </div>
 </div>
 
+<?= guide_admin_account() ?>
+
 <div class="grid" style="grid-template-columns:1fr 1fr">
   <div class="card">
     <h2>Email</h2>
@@ -99,6 +101,7 @@ render_header('Account', 'admin');
       <?php endif; ?>
     </p>
     <form method="post">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="save_email">
       <label>Admin email</label>
       <input type="email" name="email" value="<?= h((string) $row['email']) ?>" placeholder="you@company.com">
@@ -106,6 +109,7 @@ render_header('Account', 'admin');
     </form>
     <?php if (trim((string) $row['email']) !== '' && !$verified): ?>
       <form method="post" style="margin-top:0.75rem">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="send_verify">
         <button class="btn secondary" type="submit">Send verification email</button>
       </form>
@@ -115,6 +119,7 @@ render_header('Account', 'admin');
   <div class="card">
     <h2>Password</h2>
     <form method="post">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="change_password">
       <label>Current password</label>
       <input type="password" name="current_password" required autocomplete="current-password">
@@ -128,6 +133,7 @@ render_header('Account', 'admin');
     <h3 style="margin:0 0 0.4rem;font-size:1rem">Forgot current password?</h3>
     <?php if ($verified): ?>
       <form method="post">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="send_reset">
         <p class="help">Sends a 2-hour reset link to <?= h((string) $row['email']) ?>.</p>
         <button class="btn secondary" type="submit">Email me a reset link</button>

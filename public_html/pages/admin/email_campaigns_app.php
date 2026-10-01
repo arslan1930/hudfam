@@ -44,8 +44,31 @@ if ($sheetId > 0) {
     if ($sentFilter !== '0' && $sentFilter !== '1') {
         $sentFilter = '';
     }
+    $batchFilter = max(0, (int) get('batch'));
     $pageNum = max(1, (int) get('p', 1));
     $perPage = resolve_sheet_per_page();
+
+    if ((string) get('export') === 'domains') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_domains_plain($sheetId, $sentExport);
+    }
+    if ((string) get('export') === 'emails') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_emails_plain($sheetId, $sentExport);
+    }
+    if ((string) get('export') === 'csv') {
+        $sentExport = (string) get('sent');
+        if ($sentExport !== '0' && $sentExport !== '1') {
+            $sentExport = null;
+        }
+        stream_email_campaign_csv($sheetId, $sentExport);
+    }
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) post('action');
@@ -63,15 +86,25 @@ if ($sheetId > 0) {
         if ($returnSent !== '') {
             $back .= '&sent=' . $returnSent;
         }
+        $returnBatch = max(0, (int) post('batch'));
+        if ($returnBatch > 0) {
+            $back .= '&batch=' . $returnBatch;
+        }
         $back = append_sheet_per_page_query($back, $returnPerPage);
         if ($returnP > 1) {
             $back .= '&p=' . $returnP;
         }
         $wantsJson = (string) post('ajax') === '1'
             || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
-        $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson): void {
+        $histKey = function_exists('sheet_history_key')
+            ? sheet_history_key('campaign', (string) $sheetId)
+            : ('campaign:' . $sheetId);
+        $jsonOut = static function (array $payload, int $code = 200) use ($wantsJson, $histKey): void {
             if (!$wantsJson) {
                 return;
+            }
+            if (function_exists('sheet_history_state')) {
+                $payload += sheet_history_state($histKey);
             }
             http_response_code($code);
             header('Content-Type: application/json; charset=utf-8');
@@ -88,7 +121,7 @@ if ($sheetId > 0) {
                     (string) post('email4'),
                 ];
                 if ($rowId > 0) {
-                    $result = save_email_campaign_row($sheetId, $rowId, (string) post('domain'), $emails);
+                    $result = save_email_campaign_row($sheetId, $rowId, (string) post('domain'), $emails, $user);
                 } else {
                     $result = upsert_email_campaign_row($sheetId, (string) post('domain'), $emails);
                 }
@@ -108,7 +141,7 @@ if ($sheetId > 0) {
             }
             if ($action === 'remove_site') {
                 $rowId = (int) post('site_id');
-                $del = delete_email_campaign_row($sheetId, $rowId);
+                $del = delete_email_campaign_row($sheetId, $rowId, true, $user);
                 if ($wantsJson) {
                     $jsonOut([
                         'ok' => !empty($del['ok']),
@@ -122,11 +155,42 @@ if ($sheetId > 0) {
                     : (string) ($del['error'] ?? 'Could not remove row.'));
                 redirect($back);
             }
+            if ($action === 'remove_selected') {
+                $ids = function_exists('parse_posted_id_list')
+                    ? parse_posted_id_list(post('site_ids'))
+                    : [];
+                $del = delete_email_campaign_rows_by_ids($sheetId, $ids, $user);
+                $left = count_email_campaign_rows($sheetId);
+                if ($wantsJson) {
+                    $jsonOut(
+                        $del + [
+                            'site_count' => $left,
+                        ] + count_email_campaign_sent_stats($sheetId),
+                        !empty($del['ok']) ? 200 : 400
+                    );
+                }
+                flash($del['ok'] ? 'ok' : 'error', $del['ok']
+                    ? 'Removed ' . (int) $del['count'] . ' selected site' . ((int) $del['count'] === 1 ? '' : 's') . '.'
+                    : (string) ($del['error'] ?? 'Could not remove selected rows.'));
+                redirect($back);
+            }
+            if ($action === 'undo_last' || $action === 'redo_last') {
+                $result = $action === 'redo_last'
+                    ? sheet_history_apply_redo($histKey)
+                    : sheet_history_apply_undo($histKey);
+                if ($wantsJson) {
+                    $jsonOut($result + count_email_campaign_sent_stats($sheetId), !empty($result['ok']) ? 200 : 400);
+                }
+                flash($result['ok'] ? 'ok' : 'error', $result['ok']
+                    ? ($action === 'redo_last' ? 'Redid last change.' : 'Undid last change.')
+                    : (string) ($result['error'] ?? 'Could not undo/redo.'));
+                redirect($back);
+            }
             // Campaign emailed progress — same rule as Sites with emails - Admin, per sheet.
             if ($action === 'mark_email_sent') {
                 $rowId = (int) post('site_id');
                 $sent = (string) post('email_sent') === '1';
-                $result = set_email_campaign_row_email_sent($sheetId, $rowId, $sent);
+                $result = set_email_campaign_row_email_sent($sheetId, $rowId, $sent, $user);
                 if ($wantsJson) {
                     $jsonOut(
                         $result + count_email_campaign_sent_stats($sheetId),
@@ -146,7 +210,12 @@ if ($sheetId > 0) {
             }
             if ($action === 'mark_emailed_up_to') {
                 $rowId = (int) post('site_id');
-                $result = mark_email_campaign_emailed_up_to($sheetId, $rowId);
+                $result = mark_email_campaign_emailed_up_to(
+                    $sheetId,
+                    $rowId,
+                    (string) post('batch_name'),
+                    $user
+                );
                 if ($wantsJson) {
                     $jsonOut(
                         $result + count_email_campaign_sent_stats($sheetId),
@@ -159,7 +228,11 @@ if ($sheetId > 0) {
                     flash(
                         'ok',
                         'Marked emailed up to ' . (string) ($result['domain'] ?? 'site')
-                        . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked.'
+                        . ' · ' . (int) ($result['marked'] ?? 0) . ' newly marked'
+                        . ((string) ($result['batch_name'] ?? '') !== ''
+                            ? ' · batch “' . (string) $result['batch_name'] . '”'
+                            : '')
+                        . '.'
                     );
                 }
                 redirect($back);
@@ -207,14 +280,8 @@ if ($sheetId > 0) {
             }
             if ($action === 'paste') {
                 $result = paste_email_campaign_rows($sheetId, (string) post('paste_text'));
-                $msg = 'Added to sheet: '
-                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped'] . ' skipped';
-                }
-                $msg .= '.';
-                if ($result['errors'] !== []) {
-                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 8));
+                $msg = email_campaign_bulk_result_message('Added to sheet', $result);
+                if (($result['errors'] ?? []) !== []) {
                     flash('error', $msg);
                 } else {
                     flash('ok', $msg);
@@ -226,14 +293,8 @@ if ($sheetId > 0) {
             }
             if ($action === 'import_file') {
                 $result = import_email_campaign_rows_from_upload($sheetId, $_FILES['import_file'] ?? null);
-                $msg = 'Imported file into sheet: '
-                    . (int) $result['added'] . ' new, ' . (int) $result['updated'] . ' updated';
-                if ((int) ($result['skipped'] ?? 0) > 0) {
-                    $msg .= ', ' . (int) $result['skipped'] . ' skipped';
-                }
-                $msg .= ' · ' . (int) ($result['lines'] ?? 0) . ' data line(s).';
-                if ($result['errors'] !== []) {
-                    $msg .= ' Issues: ' . implode('; ', array_slice($result['errors'], 0, 8));
+                $msg = email_campaign_bulk_result_message('Imported file into sheet', $result);
+                if (($result['errors'] ?? []) !== []) {
                     flash('error', $msg);
                 } else {
                     flash('ok', $msg);
@@ -243,12 +304,25 @@ if ($sheetId > 0) {
                 redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
             }
             if ($action === 'import') {
-                $source = (string) post('source') === 'admin' ? 'admin' : 'admin_all';
-                // Always new sites only — never update rows already on the sheet.
-                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'new_only');
-                $label = $source === 'admin' ? 'Sites with emails - Admin' : 'All sites with emails - Final';
-                $msg = 'Imported new sites into ' . $sheetCountry . ' from ' . $label . ': '
-                    . (int) $result['imported'] . ' new';
+                $sourceRaw = (string) post('source');
+                $source = match ($sourceRaw) {
+                    'admin' => 'admin',
+                    'team' => 'team',
+                    default => 'admin_all',
+                };
+                // Skip identical domain+emails; replace when emails differ; add new domains.
+                // Team/Admin/Final source rows are never deleted.
+                $result = import_email_campaign_sheet_from_swe($sheetId, $source, $sheetCountry, 'replace');
+                $label = match ($source) {
+                    'team' => 'Team',
+                    'admin' => 'Admin',
+                    default => 'Final',
+                };
+                $msg = 'Imported into ' . $sheetCountry . ' from ' . $label . ': '
+                    . (int) $result['imported'] . ' new, ' . (int) $result['updated'] . ' updated';
+                if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate(s) skipped';
+                }
                 if ((int) ($result['skipped_existing'] ?? 0) > 0) {
                     $msg .= ', ' . (int) $result['skipped_existing'] . ' already on sheet';
                 }
@@ -259,6 +333,29 @@ if ($sheetId > 0) {
                     $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
                 }
                 $msg .= '.';
+                if ($source === 'team') {
+                    $msg .= ' Team sheet marked fetched to '
+                        . email_campaign_sheet_project_name($sheet)
+                        . ' (Team data stayed).';
+                }
+                flash('ok', $msg);
+                $totalAfter = count_email_campaign_rows($sheetId);
+                $lastPage = max(1, (int) ceil($totalAfter / $perPage));
+                redirect($campBase . '&sheet=' . $sheetId . '&p=' . $lastPage);
+            }
+            if ($action === 'fill_gaps') {
+                $result = fill_email_campaign_gaps_from_archives($sheetId, $sheetCountry);
+                $n = (int) ($result['would_add'] ?? $result['imported'] ?? 0);
+                $u = (int) ($result['would_update'] ?? $result['updated'] ?? 0);
+                $msg = 'Filled gaps from Final + Admin into ' . $sheetCountry . ': '
+                    . $n . ' new, ' . $u . ' updated';
+                if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+                }
+                if ((int) ($result['skipped_empty'] ?? 0) > 0) {
+                    $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
+                }
+                $msg .= '. Admin and Final were not changed. Campaign emailed marks stayed on this sheet.';
                 flash('ok', $msg);
                 $totalAfter = count_email_campaign_rows($sheetId);
                 $lastPage = max(1, (int) ceil($totalAfter / $perPage));
@@ -280,11 +377,69 @@ if ($sheetId > 0) {
                 if ($ok) {
                     flash(
                         'ok',
-                        'Allowed “' . normalize_email_campaign_domain($domain) . '” again. '
-                        . 'Next Final/Admin import can add it if it still has emails.'
+                        'Allowed “' . normalize_email_campaign_domain($domain) . '” again '
+                        . '(including its previously removed emails). '
+                        . 'Import, paste, and + Add can add it if it has emails.'
                     );
                 } else {
                     flash('error', 'That site was not on the excluded list.');
+                }
+                redirect($back . '#camp-excluded');
+            }
+            if ($action === 'allow_excluded_email') {
+                $domain = (string) post('domain');
+                $email = (string) post('email');
+                $ok = clear_email_campaign_email_exclusion($sheetId, $domain, $email);
+                $domLabel = normalize_email_campaign_domain($domain);
+                $emLabel = function_exists('normalize_email_value')
+                    ? normalize_email_value($email)
+                    : strtolower(trim($email));
+                if ($wantsJson) {
+                    $jsonOut([
+                        'ok' => $ok,
+                        'domain' => $domLabel,
+                        'email' => $emLabel,
+                        'error' => $ok ? null : 'That email was not on the excluded list.',
+                        'message' => $ok
+                            ? ('Allowed “' . $emLabel . '” on ' . $domLabel . ' again.')
+                            : 'That email was not on the excluded list.',
+                    ], $ok ? 200 : 404);
+                }
+                if ($ok) {
+                    flash(
+                        'ok',
+                        'Allowed “' . $emLabel . '” on ' . $domLabel . ' again. '
+                        . 'Import, paste, and + Add can include that email.'
+                    );
+                } else {
+                    flash('error', 'That email was not on the excluded list.');
+                }
+                redirect($back . '#camp-excluded');
+            }
+            if ($action === 'allow_excluded_emails_for_domain') {
+                $domain = (string) post('domain');
+                $domLabel = normalize_email_campaign_domain($domain);
+                $n = clear_email_campaign_email_exclusions_for_domain($sheetId, $domain);
+                $ok = $n > 0;
+                if ($wantsJson) {
+                    $jsonOut([
+                        'ok' => $ok,
+                        'domain' => $domLabel,
+                        'cleared' => $n,
+                        'error' => $ok ? null : 'No excluded emails for that site.',
+                        'message' => $ok
+                            ? ('Allowed ' . $n . ' email' . ($n === 1 ? '' : 's') . ' on ' . $domLabel . ' again.')
+                            : 'No excluded emails for that site.',
+                    ], $ok ? 200 : 404);
+                }
+                if ($ok) {
+                    flash(
+                        'ok',
+                        'Allowed ' . $n . ' previously removed email' . ($n === 1 ? '' : 's')
+                        . ' on “' . $domLabel . '” again.'
+                    );
+                } else {
+                    flash('error', 'No excluded emails for that site.');
                 }
                 redirect($back . '#camp-excluded');
             }
@@ -321,9 +476,14 @@ if ($sheetId > 0) {
         }
     }
 
+    $openBatch = $batchFilter > 0 ? get_email_campaign_send_batch($batchFilter, $sheetId) : null;
+    if ($batchFilter > 0 && !$openBatch) {
+        $batchFilter = 0;
+    }
+    email_campaign_fill_blank_row_languages($sheetId, $sheetCountry);
     $inv = email_campaign_rows_inventory_query(
         $sheetId,
-        ['q' => $q, 'sent' => $sentFilter],
+        ['q' => $q, 'sent' => $sentFilter, 'batch' => $batchFilter],
         $pageNum,
         $perPage
     );
@@ -331,20 +491,52 @@ if ($sheetId > 0) {
     $total = (int) $inv['total'];
     $pages = (int) $inv['pages'];
     $pageNum = (int) $inv['page'];
-    $sheetTotal = ($q !== '' || $sentFilter !== '')
+    $sheetTotal = ($q !== '' || $sentFilter !== '' || $batchFilter > 0)
         ? count_email_campaign_rows($sheetId)
         : $total;
     $filledCount = $sheetTotal;
     $sentStats = count_email_campaign_sent_stats($sheetId);
     $excludedCount = count_email_campaign_excluded_domains($sheetId);
     $excludedDomains = list_email_campaign_excluded_domains($sheetId, 200);
+    $excludedEmailCount = count_email_campaign_excluded_emails($sheetId);
+    $excludedEmails = list_email_campaign_excluded_emails($sheetId, 200);
+    $excludedDomainSet = [];
+    foreach ($excludedDomains as $exDom) {
+        $d = (string) ($exDom['domain'] ?? '');
+        if ($d !== '') {
+            $excludedDomainSet[$d] = true;
+        }
+    }
+    $whoMap = map_email_campaign_latest_event_who($sheetId);
+    $sendBatches = list_email_campaign_send_batches($sheetId);
+    $sendBatchMap = [];
+    foreach ($sendBatches as $b) {
+        $sendBatchMap[(int) $b['id']] = $b;
+    }
+    if ($openBatch && isset($sendBatchMap[(int) ($openBatch['id'] ?? 0)])) {
+        $openBatch = $sendBatchMap[(int) $openBatch['id']];
+    }
+    $batchSuggest = trim((string) ($user['username'] ?? '')) !== ''
+        ? trim((string) $user['username']) . ' · ' . date('Y-m-d')
+        : 'Admin · ' . date('Y-m-d');
     $formAction = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
+    $domainsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=domains';
+    $domainsExportUnsentUrl = $domainsExportUrl . '&sent=0';
+    $domainsExportSentUrl = $domainsExportUrl . '&sent=1';
+    $emailsExportUrl = $campBase . '&sheet=' . $sheetId . '&export=emails';
+    $emailsExportUnsentUrl = $emailsExportUrl . '&sent=0';
+    $emailsExportSentUrl = $emailsExportUrl . '&sent=1';
+    $csvUrl = $campBase . '&sheet=' . $sheetId . '&export=csv';
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $csvUrl .= '&sent=' . $sentFilter;
+    }
     $qs = http_build_query(array_filter([
         'page' => 'admin_emails_data',
         'folder' => 'email_campaigns',
         'sheet' => $sheetId,
         'q' => $q,
         'sent' => $sentFilter,
+        'batch' => $batchFilter > 0 ? $batchFilter : null,
         'per_page' => $perPage,
     ], static fn ($v) => $v !== '' && $v !== null));
     $sheet = get_email_campaign_sheet($sheetId) ?: $sheet;
@@ -354,6 +546,29 @@ if ($sheetId > 0) {
     $projectHref = $sheetProjectId > 0
         ? ($campBase . '&project=' . $sheetProjectId)
         : $campBase;
+    $projectCountryNav = $sheetProjectId > 0
+        ? list_email_campaign_project_country_nav($sheetProjectId)
+        : [];
+    if ($projectCountryNav === []) {
+        $projectCountryNav[] = ['id' => $sheetId, 'country' => $sheetCountry];
+    } else {
+        $navHasCurrent = false;
+        foreach ($projectCountryNav as $navRow) {
+            if ((int) ($navRow['id'] ?? 0) === $sheetId) {
+                $navHasCurrent = true;
+                break;
+            }
+        }
+        if (!$navHasCurrent) {
+            array_unshift($projectCountryNav, ['id' => $sheetId, 'country' => $sheetCountry]);
+        }
+    }
+    $gapDiff = diff_email_campaign_vs_archives($sheetId, $sheetCountry, ['sample' => 20]);
+    $gapCounts = is_array($gapDiff['counts'] ?? null) ? $gapDiff['counts'] : [];
+    $gapSamples = is_array($gapDiff['samples'] ?? null) ? $gapDiff['samples'] : [];
+    $gapFillable = (int) ($gapCounts['fillable'] ?? 0);
+    $adminCountryUrl = $base . '&folder=sites_with_emails&country=' . rawurlencode($sheetCountry);
+    $finalCountryUrl = $base . '&folder=all_sites_with_emails&country=' . rawurlencode($sheetCountry);
 
     render_header($projectName . ' · ' . $sheetCountry, 'admin');
     render_breadcrumbs([
@@ -366,64 +581,88 @@ if ($sheetId > 0) {
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info($sheetCountry, 'Country sheet inside project “' . $projectName . '”. Data here is only for this country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.') ?></h1>
+        <?php
+        $campJumpOpts = [];
+        foreach ($projectCountryNav as $navRow) {
+            $navId = (int) ($navRow['id'] ?? 0);
+            $navName = (string) ($navRow['country'] ?? '');
+            if ($navId < 1 || $navName === '') {
+                continue;
+            }
+            $campJumpOpts[] = ['value' => (string) $navId, 'label' => $navName];
+        }
+        render_sheet_country_jump(
+            'sheet',
+            (string) $sheetId,
+            $campJumpOpts,
+            [
+                'page' => 'admin_emails_data',
+                'folder' => 'email_campaigns',
+                'per_page' => $perPage,
+            ],
+            'Country sheet inside project “' . $projectName . '”. Pick another country in this project from this list — you do not need to go back to the project. Data here is only for the open country. Communication Team search covers the whole project and updates this sheet when they delete a hit from ' . $sheetCountry . '.',
+            'camp-country-jump',
+            'Country in ' . $projectName
+        );
+        ?>
         <p class="muted">
           Project <strong><?= h($projectName) ?></strong> ·
           <span id="swe_total_label"><?= (int) $filledCount ?></span> site<?= (int) $filledCount === 1 ? '' : 's' ?>
-          <?= $q !== '' || $sentFilter !== '' ? ' · ' . (int) $total . ' shown' : '' ?>
+          <?= $q !== '' || $sentFilter !== '' || $batchFilter > 0 ? ' · ' . (int) $total . ' matching this filter' : '' ?>
           · <span id="swe_unsent_label"><?= (int) $sentStats['unsent'] ?></span> not emailed
           · <span id="swe_sent_label"><?= (int) $sentStats['sent'] ?></span> emailed
+          <?php if ($sendBatches !== []): ?>
+            · <a href="#camp-batches"><?= count($sendBatches) ?> send batch<?= count($sendBatches) === 1 ? '' : 'es' ?></a>
+          <?php endif; ?>
           · <?= (int) $perPage ?> per page · autosave ·
           Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
         </p>
       </div>
       <div class="actions">
         <?php render_task_presence('camp:' . $sheetId, 'Others on Email Sheet · ' . $sheetCountry); ?>
-        <button type="button" class="btn" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+        <a class="btn secondary" href="#camp-fill-gaps">Fill gaps</a>
         <a class="btn secondary" href="#camp-bulk-add">Paste / import</a>
-        <a class="btn secondary" href="<?= h($projectHref) ?>">Project countries</a>
+        <a class="btn secondary" href="<?= h($projectHref) ?>">All countries</a>
       </div>
     </div>
     <p class="help">
       Admin fills <strong><?= h($sheetCountry) ?></strong> data for project <strong><?= h($projectName) ?></strong>.
-      Use <strong>+ Add site</strong>, paste, file import, or import from Final.
-      Track send progress with the same <strong>emailed</strong> rule as Sites with emails - Admin (this sheet only).
+      Use <strong>+ Add site</strong>, paste, file import, Fill gaps from Admin + Final, or import from Team / Admin / Final.
     </p>
 
-    <div class="card swe-checkpoint-rule" style="margin-bottom:1rem">
-      <h2 style="margin:0 0 0.45rem"><?= label_with_info('Emailed selection rule', 'How Mark emailed / Mark up to here / Clear up to here work on this Email campaign country sheet.') ?></h2>
-      <ol class="swe-checkpoint-steps">
-        <li><strong>Order:</strong> oldest sites at the top · newest adds at the bottom.</li>
-        <li><strong>Mark emailed:</strong> marks only that one site as done.</li>
-        <li><strong>Mark up to here:</strong> marks this site <em>and every site above it</em> as emailed (checkpoint).</li>
-        <li><strong>Clear up to here:</strong> clears emailed marks from the top through this site (redo that stretch).</li>
-        <li><strong>Clear all emailed:</strong> resets this country sheet for a full resend.</li>
-      </ol>
-      <p class="help" style="margin:0.55rem 0 0">
-        Highlighted rows = already emailed. Filters: All / Not emailed / Emailed.
-        Marks stay on this sheet only (other projects / countries are separate).
-      </p>
-    </div>
+    <?php
+    render_sheet_checkpoint_compact(
+        'How Mark emailed / Mark up to here / Clear up to here work on this Email campaign country sheet. '
+        . 'Order: oldest sites at the top, newest adds at the bottom. '
+        . 'Mark emailed: marks only that one site as done. '
+        . 'Mark up to here: marks this site and every site above it as emailed (checkpoint). '
+        . 'Clear up to here: clears emailed marks from the top through this site (redo that stretch). '
+        . 'Clear all emailed: resets this country sheet for a full resend. '
+        . 'Mark up to here names a send batch (Batch A, Batch B, …) and records who marked it. '
+        . 'The next stretch is a new batch. Status shows the batch name; Batches lists who emailed whom. '
+        . 'Highlighted rows = already emailed. Filters: All / Not emailed / Emailed. '
+        . 'Marks stay on this sheet only (other projects / countries are separate).'
+    );
+    ?>
 
     <div class="card">
       <div class="invoice-list-toolbar swe-list-toolbar" style="margin-bottom:0.75rem">
         <div>
-          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated — choose how many rows per page with the Per page filter (sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here.') ?></h2>
-          <p class="help" style="margin:0.25rem 0 0">
-            Paste up to 4 emails into any email box. Edits <strong>autosave</strong>.
-            Browse page by page — currently <?= (int) $perPage ?> per page.
-          </p>
+          <h2 style="margin:0"><?= label_with_info('Sites with emails', 'Same model as Our database: one country sheet, paginated — choose how many rows per page with the Per page filter (sheets can reach ~100K). Use + Add site for a single row. Clearing the last email removes the site. Use Status and Actions for emailed / up to here. Paste up to 4 emails into any email box. Edits autosave.') ?></h2>
           <p class="swe-sent-filters">
             <?php
             $sentLinks = [
-                '' => 'All',
-                '0' => 'Not emailed',
-                '1' => 'Emailed',
+                '' => 'All (' . (int) $filledCount . ')',
+                '0' => 'Not emailed (' . (int) $sentStats['unsent'] . ')',
+                '1' => 'Emailed (' . (int) $sentStats['sent'] . ')',
             ];
             foreach ($sentLinks as $val => $label):
                 $href = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
                 if ($q !== '') {
                     $href .= '&q=' . rawurlencode($q);
+                }
+                if ($batchFilter > 0) {
+                    $href .= '&batch=' . $batchFilter;
                 }
                 if ($val !== '') {
                     $href .= '&sent=' . $val;
@@ -434,8 +673,8 @@ if ($sheetId > 0) {
             <?php endforeach; ?>
             <?php if ((int) $sentStats['sent'] > 0): ?>
             <form method="post" action="<?= h($formAction) ?>" class="swe-clear-all-emailed"
-                  data-swe-clear-all-emailed
-                  onsubmit="return confirm('Clear ALL emailed marks on <?= h($sheetCountry) ?> in this project?\n\nYou can resend and track this sheet from scratch.');">
+                  data-swe-clear-all-emailed <?= confirm_data_attr('Clear ALL emailed marks on ' . $sheetCountry . " in this project?\n\nYou can resend and track this sheet from scratch.") ?>>
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_all_emailed">
               <input type="hidden" name="q" value="<?= h($q) ?>">
               <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
@@ -443,31 +682,162 @@ if ($sheetId > 0) {
               <?php if ($sentFilter !== ''): ?>
               <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
               <?php endif; ?>
+              <?php if ($batchFilter > 0): ?>
+              <input type="hidden" name="batch" value="<?= (int) $batchFilter ?>">
+              <?php endif; ?>
               <button class="btn secondary small" type="submit" title="Clear every emailed mark on this Email campaign sheet">
                 Clear all emailed
               </button>
             </form>
             <?php endif; ?>
           </p>
+          <?php render_sheet_tool_menu_open('Copy', 'Copy domains or emails'); ?>
+          <p class="sheet-tool-menu-label muted">This page (ticked rows)</p>
+          <div class="swe-copy-group" role="group" aria-label="Copy ticked rows on this page">
+            <button type="button" class="btn secondary small" data-camp-copy-selected-emails disabled
+                    title="Copy EMAIL 1–4 from ticked rows on this page (skips empty and invalid)">
+              Copy selected emails (this page)
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-selected-domains disabled
+                    title="Copy site names from ticked rows on this page">
+              Copy selected domains (this page)
+            </button>
+          </div>
+          <p class="sheet-tool-menu-label muted">Domains (this country)</p>
+          <div class="swe-copy-group" role="group" aria-label="Copy domains by sent status">
+            <button type="button" class="btn secondary small" data-camp-copy-domains
+                    data-export-url="<?= h($domainsExportUnsentUrl) ?>"
+                    data-copy-label="not emailed"
+                    title="Copy site names that are not marked emailed yet — whole country, ignores ticks"
+                    <?= ((int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
+              Copy not emailed domains
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-domains
+                    data-export-url="<?= h($domainsExportSentUrl) ?>"
+                    data-copy-label="emailed"
+                    title="Copy site names already marked emailed — whole country, ignores ticks"
+                    <?= ((int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
+              Copy emailed domains
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-domains
+                    data-export-url="<?= h($domainsExportUrl) ?>"
+                    data-copy-label="all"
+                    title="Copy every site name on this campaign country sheet — ignores ticks"
+                    <?= ((int) $filledCount > 0) ? '' : 'disabled' ?>>
+              Copy all domains
+            </button>
+          </div>
+          <p class="sheet-tool-menu-label muted">Emails (this country)</p>
+          <div class="swe-copy-group" role="group" aria-label="Copy emails by sent status">
+            <button type="button" class="btn secondary small" data-camp-copy-emails
+                    data-export-url="<?= h($emailsExportUnsentUrl) ?>"
+                    data-copy-label="not emailed"
+                    title="Copy emails from sites not marked emailed yet — whole country, ignores ticks"
+                    <?= ((int) $sentStats['unsent'] > 0) ? '' : 'disabled' ?>>
+              Copy not emailed emails
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-emails
+                    data-export-url="<?= h($emailsExportSentUrl) ?>"
+                    data-copy-label="emailed"
+                    title="Copy emails from sites already marked emailed — whole country, ignores ticks"
+                    <?= ((int) $sentStats['sent'] > 0) ? '' : 'disabled' ?>>
+              Copy emailed emails
+            </button>
+            <button type="button" class="btn secondary small" data-camp-copy-emails
+                    data-export-url="<?= h($emailsExportUrl) ?>"
+                    data-copy-label="all"
+                    title="Copy every email on this campaign country sheet — ignores ticks"
+                    <?= ((int) $filledCount > 0) ? '' : 'disabled' ?>>
+              Copy all emails
+            </button>
+          </div>
+          <?php render_sheet_tool_menu_close(); ?>
+          <?php render_sheet_tool_menu_open('Batches', 'Named send batches — who emailed which stretch'); ?>
+          <div id="camp-batches" class="swe-copy-group" role="group" aria-label="Send batches on this country sheet">
+            <?php if ($sendBatches === []): ?>
+              <p class="muted" style="margin:0">No send batches yet. Mark up to here names a batch (Batch A, then Batch B).</p>
+            <?php else: ?>
+              <?php foreach ($sendBatches as $b):
+                  $bid = (int) ($b['id'] ?? 0);
+                  $bName = (string) ($b['name'] ?? '');
+                  $bWho = email_campaign_send_batch_who_label($b);
+                  $bLive = (int) ($b['live_count'] ?? 0);
+                  $bOrig = (int) ($b['site_count'] ?? 0);
+                  $bWhen = (string) ($b['created_at'] ?? '');
+                  $bHref = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId . '&batch=' . $bid, $perPage);
+                  $bTitle = $bName . ' · ' . $bWho
+                      . ($bWhen !== '' ? ' · ' . $bWhen : '')
+                      . ' · ' . $bLive . ' still marked'
+                      . ($bOrig > 0 ? ' / ' . $bOrig . ' originally' : '');
+                  ?>
+                <a class="btn small <?= $batchFilter === $bid ? '' : 'secondary' ?>"
+                   href="<?= h($bHref) ?>"
+                   title="<?= h($bTitle) ?>">
+                  <?= h($bName !== '' ? $bName : 'Untitled') ?>
+                  · <?= h($bWho !== '' && $bWho !== '—' ? $bWho : 'unknown') ?>
+                  · <?= (int) $bLive ?><?= $bOrig > 0 && $bOrig !== $bLive ? '/' . $bOrig : '' ?>
+                </a>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+          <?php render_sheet_tool_menu_close(); ?>
+          <a class="btn secondary" href="<?= h($csvUrl) ?>"
+             title="Download this country sheet as CSV (opens in Excel). Whole sheet<?= $sentFilter === '0' ? ' · not emailed only' : ($sentFilter === '1' ? ' · emailed only' : '') ?>, ignores ticks.">
+            Download CSV / Excel
+          </a>
         </div>
-        <div class="actions" style="align-items:center;gap:0.5rem;flex-wrap:wrap">
-          <button type="button" class="btn small" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+        <div class="actions">
+          <button type="button" class="btn small" id="camp-add-toggle" data-camp-add-toggle title="Add one site + up to 4 emails">+ Add site</button>
+          <?php
+          render_sheet_edit_toolbar($formAction, sheet_history_key('campaign', (string) $sheetId), [
+              'q' => $q,
+              'p' => $pageNum,
+              'sent' => $sentFilter,
+              'batch' => $batchFilter,
+          ]);
+          ?>
           <label class="sheet-search swe-row-search-wrap" for="swe-row-search">
             <span class="visually-hidden">Search sites and emails</span>
-            <input id="swe-row-search" type="search" placeholder="Search site or email…"
+            <input id="swe-row-search" type="search" placeholder="Search site or email"
                    value="<?= h($q) ?>" autocomplete="off" spellcheck="false" data-no-draft
-                   <?= $filledCount < 1 && $q === '' && $sentFilter === '' ? 'disabled' : '' ?>
-                   title="Filter this page · Enter = next match · Ctrl/Cmd+Enter = search all pages">
+                   <?= $filledCount < 1 && $q === '' && $sentFilter === '' && $batchFilter < 1 ? 'disabled' : '' ?>
+                   title="Filters this page after you pause typing · Enter = next match · Ctrl/Cmd+Enter = search all pages">
             <span class="sheet-search-meta muted" data-swe-row-search-meta hidden></span>
           </label>
         </div>
       </div>
       <p class="help" id="swe_status" role="status" aria-live="polite" hidden></p>
 
+      <?php if ($openBatch):
+          $openWho = email_campaign_send_batch_who_label($openBatch);
+          $openLive = (int) ($openBatch['live_count'] ?? 0);
+          $openOrig = (int) ($openBatch['site_count'] ?? 0);
+          $openWhen = (string) ($openBatch['created_at'] ?? '');
+          $sheetAllHref = append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage);
+          ?>
+      <div class="card" id="camp-batch-open" style="margin:0 0 0.75rem">
+        <h2 style="margin:0"><?= h((string) ($openBatch['name'] ?? 'Send batch')) ?></h2>
+        <p class="muted" style="margin:0.35rem 0 0">
+          Sent by <strong><?= h($openWho !== '' && $openWho !== '—' ? $openWho : 'unknown') ?></strong>
+          <?php if ($openWhen !== ''): ?> · <?= h($openWhen) ?><?php endif; ?>
+          · <?= (int) $openOrig ?> originally
+          · <?= (int) $openLive ?> still marked
+        </p>
+        <p class="help" style="margin:0.35rem 0 0">
+          Sites and emails for this stretch are in the table<?= $openLive < 1 ? ' (none still marked — Clear unlinked them; this batch stays as history)' : '' ?>.
+        </p>
+        <p class="actions" style="margin:0.5rem 0 0">
+          <a class="btn secondary small" href="<?= h($sheetAllHref) ?>">Show all sites</a>
+        </p>
+      </div>
+      <?php endif; ?>
+
       <div class="table-wrap swe-sheet-wrap">
-        <table class="swe-table swe-sheet-table is-admin-checkpoint" id="camp-sheet-table">
+        <table class="swe-table swe-sheet-table is-admin-checkpoint is-dense sheet-cards-mobile" id="camp-sheet-table"
+               data-camp-batch-suggest="<?= h($batchSuggest) ?>">
           <thead>
             <tr>
+              <?php render_sheet_select_th(); ?>
               <th class="swe-col-site">Site</th>
               <th class="swe-col-lang">Language</th>
               <th class="swe-col-email">Email 1</th>
@@ -480,9 +850,11 @@ if ($sheetId > 0) {
           </thead>
           <tbody id="camp-sheet-tbody">
           <tr id="camp-add-row" class="camp-add-row" hidden data-swe-emails>
-            <td class="swe-td-site">
+            <td class="swe-td-check sheet-td-check" data-label="Select"></td>
+            <td class="swe-td-site" data-label="Site">
               <form method="post" action="<?= h($formAction) ?>" class="swe-row-form swe-add-form" id="camp-add-form"
                     autocomplete="off" data-show-processing="Adding site…">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="save_row">
                 <input type="hidden" name="site_id" value="0">
                 <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
@@ -490,26 +862,29 @@ if ($sheetId > 0) {
                 <?php if ($sentFilter !== ''): ?>
                 <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
                 <?php endif; ?>
+                <?php if ($batchFilter > 0): ?>
+                <input type="hidden" name="batch" value="<?= (int) $batchFilter ?>">
+                <?php endif; ?>
               </form>
               <label class="visually-hidden" for="camp_add_domain">Site</label>
               <input id="camp_add_domain" class="swe-domain" form="camp-add-form" name="domain" required
                      placeholder="example.com" spellcheck="false" autocomplete="off" aria-label="Site">
             </td>
-            <td class="swe-td-lang"><span class="swe-cell-text muted">—</span></td>
-            <td class="swe-td-email">
-              <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+            <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text muted">—</span></td>
+            <td class="swe-td-email" data-label="Email 1">
+              <?= render_clearable_email_input('email1', '', ['id' => 'camp_add_e1', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 1']) ?>
             </td>
-            <td class="swe-td-email">
-              <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+            <td class="swe-td-email" data-label="Email 2">
+              <?= render_clearable_email_input('email2', '', ['id' => 'camp_add_e2', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 2']) ?>
             </td>
-            <td class="swe-td-email">
-              <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+            <td class="swe-td-email" data-label="Email 3">
+              <?= render_clearable_email_input('email3', '', ['id' => 'camp_add_e3', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 3']) ?>
             </td>
-            <td class="swe-td-email">
-              <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+            <td class="swe-td-email" data-label="Email 4">
+              <?= render_clearable_email_input('email4', '', ['id' => 'camp_add_e4', 'swe' => true, 'form' => 'camp-add-form', 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
             </td>
-            <td class="swe-td-status"><span class="swe-status-badge is-open" data-swe-status>New</span></td>
-            <td class="swe-td-actions">
+            <td class="swe-td-status" data-label="Status"><span class="swe-status-badge is-open" data-swe-status>New</span></td>
+            <td class="swe-td-actions" data-label="Actions">
               <div class="swe-row-actions">
                 <button class="btn small" type="submit" form="camp-add-form">Add row</button>
                 <button class="btn secondary small" type="button" id="camp-add-cancel" data-camp-add-cancel>Cancel</button>
@@ -522,6 +897,9 @@ if ($sheetId > 0) {
               $domain = (string) $r['domain'];
               $lang = trim((string) ($r['language'] ?? ''));
               if ($lang === '') {
+                  $lang = email_campaign_default_language($sheetCountry);
+              }
+              if ($lang === '') {
                   $lang = '—';
               }
               $e1 = (string) $r['email1'];
@@ -530,7 +908,11 @@ if ($sheetId > 0) {
               $e4 = (string) $r['email4'];
               $hasEmail = $e1 !== '' || $e2 !== '' || $e3 !== '' || $e4 !== '';
               $isEmailed = (int) ($r['email_sent'] ?? 0) === 1;
-              $statusLabel = $isEmailed ? 'Emailed' : 'Not emailed';
+              $rowBatchId = (int) ($r['send_batch_id'] ?? 0);
+              $rowBatch = ($isEmailed && $rowBatchId > 0) ? ($sendBatchMap[$rowBatchId] ?? null) : null;
+              $emailedStatus = $isEmailed ? email_campaign_row_emailed_status($rowBatch) : null;
+              $statusLabel = $isEmailed ? (string) $emailedStatus['label'] : 'Not emailed';
+              $statusTitle = $isEmailed ? (string) $emailedStatus['title'] : '';
               $statusClass = $isEmailed ? 'is-emailed' : 'is-open';
               $hay = mb_strtolower($domain . ' ' . $lang . ' ' . $e1 . ' ' . $e2 . ' ' . $e3 . ' ' . $e4);
               ?>
@@ -538,8 +920,10 @@ if ($sheetId > 0) {
                 data-has-email="<?= $hasEmail ? '1' : '0' ?>"
                 data-email-sent="<?= $isEmailed ? '1' : '0' ?>"
                 class="<?= $isEmailed ? 'swe-row-emailed' : '' ?>">
-              <td class="swe-td-site">
+              <?php render_sheet_select_td($rid, $domain); ?>
+              <td class="swe-td-site" data-label="Site">
                 <form id="<?= h($formId) ?>" method="post" action="<?= h($formAction) ?>" class="swe-row-form" data-swe-save>
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="save_row">
                   <input type="hidden" name="site_id" value="<?= $rid ?>">
                   <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
@@ -547,112 +931,117 @@ if ($sheetId > 0) {
                   <?php if ($sentFilter !== ''): ?>
                   <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
                   <?php endif; ?>
+                  <?php if ($batchFilter > 0): ?>
+                  <input type="hidden" name="batch" value="<?= (int) $batchFilter ?>">
+                  <?php endif; ?>
                 </form>
-                <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
-                <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
-                       value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site">
+                <div class="swe-site-cell open-site-cell" data-open-site-cell>
+                  <label class="visually-hidden" for="camp-domain-<?= $rid ?>">Site</label>
+                  <input id="camp-domain-<?= $rid ?>" class="swe-domain" form="<?= h($formId) ?>" name="domain"
+                         value="<?= h($domain) ?>" required spellcheck="false" autocomplete="off" aria-label="Site"
+                         title="<?= h($domain) ?>"
+                         data-open-site-host>
+                  <?= render_open_site_anchor($domain) ?>
+                </div>
               </td>
-              <td class="swe-td-lang"><span class="swe-cell-text"><?= h($lang) ?></span></td>
-              <td class="swe-td-email">
-                <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 1', 'aria_label' => 'Clear email 1']) ?>
+              <td class="swe-td-lang" data-label="Language"><span class="swe-cell-text"><?= h($lang) ?></span></td>
+              <td class="swe-td-email" data-label="Email 1">
+                <?= render_clearable_email_input('email1', $e1, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 1']) ?>
               </td>
-              <td class="swe-td-email">
-                <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 2', 'aria_label' => 'Clear email 2']) ?>
+              <td class="swe-td-email" data-label="Email 2">
+                <?= render_clearable_email_input('email2', $e2, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 2']) ?>
               </td>
-              <td class="swe-td-email">
-                <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 3', 'aria_label' => 'Clear email 3']) ?>
+              <td class="swe-td-email" data-label="Email 3">
+                <?= render_clearable_email_input('email3', $e3, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 3']) ?>
               </td>
-              <td class="swe-td-email">
-                <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => 'email 4', 'aria_label' => 'Clear email 4']) ?>
+              <td class="swe-td-email" data-label="Email 4">
+                <?= render_clearable_email_input('email4', $e4, ['swe' => true, 'form' => $formId, 'placeholder' => '+', 'aria_label' => 'Clear email 4']) ?>
               </td>
-              <td class="swe-td-status">
-                <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status><?= h($statusLabel) ?></span>
+              <td class="swe-td-status" data-label="Status">
+                <span class="swe-status-badge <?= h($statusClass) ?>" data-swe-status
+                      <?= $statusTitle !== '' ? 'title="' . h($statusTitle) . '"' : '' ?>><?= h($statusLabel) ?></span>
               </td>
-              <td class="swe-td-actions">
+              <td class="swe-td-actions" data-label="Actions">
                 <div class="swe-row-actions">
-                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="submit"
-                          form="camp-mark-<?= $rid ?>"
-                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
-                    <?= $isEmailed ? 'Clear emailed' : 'Mark emailed' ?>
+                  <button class="btn small <?= $isEmailed ? 'secondary' : '' ?>" type="button"
+                          data-sheet-action="mark" data-site-id="<?= $rid ?>"
+                          data-email-sent="<?= $isEmailed ? '0' : '1' ?>" data-domain="<?= h($domain) ?>"
+                          title="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>"
+                          aria-label="<?= $isEmailed ? 'Clear emailed mark on this site only' : 'Mark this site as emailed' ?>">
+                    <?= $isEmailed ? 'Undo mark' : 'Mark emailed' ?>
                   </button>
-                  <button class="btn secondary small" type="submit" form="camp-upto-<?= $rid ?>"
+                  <?php render_sheet_row_more_open(); ?>
+                  <button class="btn secondary small" type="button"
+                          data-sheet-action="upto" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
                           title="Mark this site and every older site above it as emailed"
-                          onclick="return confirm('Mark emailed UP TO <?= h($domain) ?>?\n\nEvery older site from the top through this row will be marked emailed on this sheet.');">
+                          data-confirm="Mark emailed UP TO <?= h($domain) ?>?&#10;&#10;Every older site from the top through this row will be marked emailed on this sheet.">
                     Up to here
                   </button>
-                  <button class="btn secondary small" type="submit" form="camp-clear-upto-<?= $rid ?>"
+                  <button class="btn secondary small" type="button"
+                          data-sheet-action="clear-upto" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
                           title="Clear emailed marks from the top through this site"
-                          onclick="return confirm('Clear emailed UP TO <?= h($domain) ?>?\n\nEvery older emailed site from the top through this row will be unmarked on this sheet.');">
+                          data-confirm="Clear emailed UP TO <?= h($domain) ?>?&#10;&#10;Every older emailed site from the top through this row will be unmarked on this sheet.">
                     Clear up to
                   </button>
-                  <button class="btn secondary small" type="submit" form="camp-remove-<?= $rid ?>"
-                          onclick="return confirm('Remove complete row for <?= h($domain) ?>?');">Remove</button>
+                  <button class="btn secondary small" type="button"
+                          data-sheet-action="remove" data-site-id="<?= $rid ?>" data-domain="<?= h($domain) ?>"
+                          data-confirm="Remove complete row for <?= h($domain) ?>?">Remove</button>
+                  <?php render_sheet_row_more_close(); ?>
                 </div>
-                <form id="camp-mark-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-mark hidden>
-                  <input type="hidden" name="action" value="mark_email_sent">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="email_sent" value="<?= $isEmailed ? '0' : '1' ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>">
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
-                <form id="camp-upto-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-mark-upto hidden>
-                  <input type="hidden" name="action" value="mark_emailed_up_to">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>">
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
-                <form id="camp-clear-upto-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-clear-upto hidden>
-                  <input type="hidden" name="action" value="clear_emailed_up_to">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>">
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
-                <form id="camp-remove-<?= $rid ?>" method="post" action="<?= h($formAction) ?>" data-swe-remove hidden>
-                  <input type="hidden" name="action" value="remove_site">
-                  <input type="hidden" name="site_id" value="<?= $rid ?>">
-                  <input type="hidden" name="q" value="<?= h($q) ?>" data-swe-q>
-                  <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
-                  <?php if ($sentFilter !== ''): ?>
-                  <input type="hidden" name="sent" value="<?= h($sentFilter) ?>">
-                  <?php endif; ?>
-                </form>
               </td>
             </tr>
           <?php endforeach; ?>
           </tbody>
         </table>
       </div>
+      <?php
+      render_sheet_shared_row_action_forms($formAction, 'camp', [
+          'q' => $q,
+          'p' => $pageNum,
+          'sent' => $sentFilter,
+          'batch' => $batchFilter,
+          'mark' => true,
+          'push' => false,
+          'remove' => true,
+      ]);
+      ?>
       <p class="help sheet-search-empty" data-swe-row-search-empty hidden>
-        No matching <strong>site + emails</strong> rows on this page. Try Ctrl/Cmd+Enter to search all pages.
+        No search matches on this page. Try Ctrl/Cmd+Enter to search all pages.
       </p>
-      <?php if ($rows === [] && $q === '' && $sentFilter === ''): ?>
+      <?php if ($rows === [] && $q === '' && $sentFilter === '' && $batchFilter < 1): ?>
       <div class="empty-state" id="camp-empty-state">
         <p>No sites in this sheet yet.</p>
-        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, or <strong>Import from Final (new sites only)</strong>.</p>
+        <p class="muted">Admin adds data here: <strong>+ Add site</strong>, paste, file import, <strong>Fill gaps from Admin + Final</strong>, or <strong>Import from Team / Admin / Final</strong>.</p>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
           <button type="button" class="btn" data-camp-add-toggle>+ Add site</button>
+          <a class="btn secondary" href="#camp-fill-gaps">Fill gaps</a>
           <a class="btn secondary" href="#camp-bulk-add">Paste / import file</a>
         </p>
       </div>
-      <?php elseif ($rows === [] && ($q !== '' || $sentFilter !== '')): ?>
+      <?php elseif ($rows === [] && ($q !== '' || $sentFilter !== '' || $batchFilter > 0)): ?>
       <div class="empty-state">
-        <?php if ($sentFilter === '0'): ?>
+        <?php if ($openBatch): ?>
+          <p>No sites still marked in this batch<?= $q !== '' ? ' matching this search' : '' ?>.</p>
+          <p class="muted">Clear up to here unlinks rows from the batch; the batch stays so you can see who sent it.</p>
+        <?php elseif ($sentFilter === '0'): ?>
           <p>No unmarked sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
-          <p class="muted">New imports and adds appear here until you mark them emailed.</p>
+          <?php if ($q === '' && (int) $sentStats['sent'] > 0): ?>
+            <p class="muted">
+              <?= (int) $sentStats['sent'] ?> site<?= (int) $sentStats['sent'] === 1 ? ' is' : 's are' ?> emailed.
+              Open
+              <a href="<?= h(append_sheet_per_page_query($campBase . '&sheet=' . $sheetId . '&sent=1', $perPage)) ?>">Emailed</a>
+              or
+              <a href="<?= h(append_sheet_per_page_query($campBase . '&sheet=' . $sheetId, $perPage)) ?>">All</a>
+              to see them.
+            </p>
+          <?php else: ?>
+            <p class="muted">New imports and adds appear here until you mark them emailed.</p>
+          <?php endif; ?>
         <?php elseif ($sentFilter === '1'): ?>
           <p>No emailed sites<?= $q !== '' ? ' matching this search' : '' ?>.</p>
           <p class="muted">Use “Mark emailed” or “Mark up to here” while working the campaign.</p>
         <?php else: ?>
-          <p>No sites match “<?= h($q) ?>”.</p>
+          <p>No search matches<?= $q !== '' ? ' for “' . h($q) . '”' : '' ?>.</p>
         <?php endif; ?>
         <p class="actions" style="justify-content:center;margin-top:0.75rem">
           <a class="btn secondary" href="<?= h($formAction) ?>">Clear filters</a>
@@ -664,7 +1053,11 @@ if ($sheetId > 0) {
           <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum - 1 ?>">Prev</a>
         <?php endif; ?>
         <?php if ($pages > 1 || $total > 0): ?>
-        <span class="muted">Page <?= (int) $pageNum ?> / <?= (int) $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?><?= $q !== '' ? ' matches' : '' ?></span>
+        <span class="muted" data-sheet-page-status
+              data-page="<?= (int) $pageNum ?>"
+              data-pages="<?= (int) $pages ?>"
+              data-on-page="<?= (int) count($rows) ?>"
+              data-total="<?= (int) $total ?>">Page <?= (int) $pageNum ?> / <?= (int) $pages ?> · showing <?= count($rows) ?> of <?= (int) $total ?><?= $q !== '' ? ' matches' : '' ?></span>
         <?php endif; ?>
         <?php if ($pageNum < $pages): ?>
           <a href="?<?= h($qs) ?>&amp;p=<?= $pageNum + 1 ?>">Next</a>
@@ -682,15 +1075,18 @@ if ($sheetId > 0) {
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-bulk-add">
-      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email.') ?></h2>
+      <h2><?= label_with_info('Add many sites (paste or file)', 'Admin bulk entry. Paste 1000+ lines, or import CSV / Excel (.xlsx) / TXT. One line or row per site: site + up to 4 emails. Each site needs at least one email. Previously removed sites/emails on this sheet are skipped (use Allow again to restore).') ?></h2>
       <p class="help">
         Columns: <strong>Site name, Email 1, Email 2, Email 3, Email 4</strong>
         (comma, tab, or semicolon). Header row is optional and skipped.
+        Extra columns after email 4 are ignored. Each site needs at least one email.
         Built for large lists — paste or upload thousands of rows at once.
+        Sites or emails previously removed from this sheet are not re-added.
       </p>
 
       <form method="post" action="<?= h($formAction) ?>" style="margin-top:0.85rem"
             data-show-processing="Adding pasted sites…">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="paste">
         <label for="camp_paste_text">Paste sites + emails</label>
         <textarea id="camp_paste_text" name="paste_text" class="inventory-box camp-bulk-paste" rows="14"
@@ -704,13 +1100,14 @@ if ($sheetId > 0) {
 
       <form method="post" action="<?= h($formAction) ?>" enctype="multipart/form-data"
             data-show-processing="Importing file…">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="import_file">
         <label for="camp_import_file">Import from CSV, Excel, or TXT</label>
         <input id="camp_import_file" type="file" name="import_file" required
                accept=".csv,.txt,.tsv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
         <p class="help" style="margin-top:0.35rem">
           Accepts <strong>.csv</strong>, <strong>.xlsx</strong> (Excel), and <strong>.txt</strong> / <strong>.tsv</strong>.
-          First columns = site + up to 4 emails. Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
+          First columns = site + up to 4 emails (extra columns ignored). Old <code>.xls</code> → save as CSV or <code>.xlsx</code> first.
         </p>
         <p class="actions" style="margin-top:0.75rem">
           <button class="btn" type="submit">Import file into sheet</button>
@@ -718,34 +1115,88 @@ if ($sheetId > 0) {
       </form>
     </div>
 
-    <div class="card" style="margin-top:1rem">
-      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds only new sites from Final or Admin. Sites already on this sheet are left unchanged. Sites removed from this sheet are never re-added. Archives are not changed.') ?></h2>
+    <div class="card" style="margin-top:1rem" id="camp-fill-gaps">
+      <h2><?= label_with_info('Fill gaps from Admin + Final', 'Copies missing and different-email sites from Final then Admin into this country campaign sheet only. Admin emails win when both have the domain. Previously removed sites stay blocked unless you Allow again. Campaign emailed marks stay; new rows start unmarked. Admin, Final, and Team are not edited.') ?></h2>
       <p class="help">
-        Imports <strong>new sites only</strong> — skips anything already on the sheet, and never re-adds sites
-        that were removed (unless you Allow again below, or paste/+ Add them yourself).
+        Copies into this <strong><?= h($sheetCountry) ?></strong> campaign sheet only.
+        Admin, Final, and Team are not edited.
+        Previously removed domains stay blocked unless you Allow again.
+        Campaign emailed marks stay on this sheet; new rows start unmarked.
+      </p>
+      <p>
+        <strong><?= (int) ($gapCounts['add'] ?? 0) ?></strong> not on this sheet
+        · <strong><?= (int) ($gapCounts['update'] ?? 0) ?></strong> different emails
+        · <strong><?= (int) ($gapCounts['same'] ?? 0) ?></strong> already the same
+        · <strong><?= (int) ($gapCounts['empty'] ?? 0) ?></strong> no emails
+        · <strong><?= (int) ($gapCounts['excluded'] ?? 0) ?></strong> previously removed
+      </p>
+      <?php
+      $addSample = is_array($gapSamples['add'] ?? null) ? $gapSamples['add'] : [];
+      $updSample = is_array($gapSamples['update'] ?? null) ? $gapSamples['update'] : [];
+      ?>
+      <?php if ($addSample !== []): ?>
+      <p class="muted" style="margin:.4rem 0 0">Would add (sample): <?= h(implode(', ', $addSample)) ?></p>
+      <?php endif; ?>
+      <?php if ($updSample !== []): ?>
+      <p class="muted" style="margin:.4rem 0 0">Would update (sample): <?= h(implode(', ', $updSample)) ?></p>
+      <?php endif; ?>
+      <?php if ((int) ($gapCounts['empty'] ?? 0) > 0): ?>
+      <p class="muted" style="margin:.4rem 0 0">
+        Source rows with no emails cannot be imported.
+        Add emails on <a href="<?= h($adminCountryUrl) ?>">Admin <?= h($sheetCountry) ?></a> first
+        (Final: <a href="<?= h($finalCountryUrl) ?>"><?= h($sheetCountry) ?></a>).
+      </p>
+      <?php endif; ?>
+      <form method="post" action="<?= h($formAction) ?>" style="margin-top:.85rem"
+            data-show-processing="Filling gaps…" <?= confirm_data_attr(
+                'Fill gaps from Final then Admin into ' . $sheetCountry . "?\n\nCampaign emailed marks stay on this sheet.\nAdmin and Final are not changed."
+            ) ?>>
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="fill_gaps">
+        <p class="actions" style="margin-top:0.75rem">
+          <button class="btn" type="submit"<?= $gapFillable === 0 ? ' disabled' : '' ?>>Fill gaps</button>
+        </p>
+      </form>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+      <h2><?= label_with_info('Import ' . $sheetCountry . ' from archive', 'Adds new sites from Team, Final, or Admin. Same domain with the same emails is skipped; different emails replace the sheet row. Source sheets are never deleted. Team sheets are stamped as fetched to this campaign. Sites and emails removed from this sheet are never re-added unless you Allow again.') ?></h2>
+      <p class="help">
+        Imports from Team, Final, or Admin — <strong>new sites</strong> are added, <strong>duplicate domains with the same emails</strong> are skipped,
+        and <strong>same domain with different emails</strong> replaces the sheet row.
+        <strong>Team data stays</strong> — importing only copies into this campaign and marks the Team country as fetched to <strong><?= h($projectName) ?></strong>.
+        This campaign’s emailed marks stay on this sheet only — other campaigns are not changed.
+        Paste / + Add also respect previously removed sites and emails.
+        Previously removed sites and emails are never re-added (use <strong>Allow again</strong> below if a removal was a mistake).
       </p>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Importing new sites…"
-            onsubmit="return confirm('Import NEW sites into <?= h($sheetCountry) ?>?\n\nSites already on this sheet stay unchanged.\nPreviously removed sites are not re-added.\n\nFinal/Admin archives are not changed.');">
+            data-show-processing="Importing sites…" <?= confirm_data_attr(
+                'Import into ' . $sheetCountry . "?\n\nNew sites are added.\nSame domain + same emails → skipped.\nSame domain + different emails → replaced.\nThis campaign’s emailed marks stay on this sheet only.\nOther campaigns are not changed.\nTeam/Admin/Final source rows are not deleted.\nPreviously removed sites and emails are not re-added."
+            ) ?>>
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="import">
         <label for="camp_import_source">Source</label>
         <select id="camp_import_source" name="source">
-          <option value="admin_all">All sites with emails - Final</option>
-          <option value="admin">Sites with emails - Admin</option>
+          <option value="team">Team</option>
+          <option value="admin_all">Final</option>
+          <option value="admin">Admin</option>
         </select>
         <p class="actions" style="margin-top:0.75rem">
-          <button class="btn" type="submit">Import new sites into sheet</button>
+          <button class="btn" type="submit">Import into sheet</button>
         </p>
       </form>
     </div>
 
     <div class="card" style="margin-top:1rem" id="camp-excluded">
-      <h2><?= label_with_info('Previously removed sites', 'Sites deleted from this Email Sheet (by Admin or Communication Team) are listed here so Final/Admin import never re-adds them. Allow again if a removal was a mistake.') ?></h2>
+      <h2><?= label_with_info('Previously removed', 'Sites and emails deleted from this Email Sheet (by Admin or Communication Team) stay blocked from import, paste, and + Add. Who is the person who last deleted that site or email. Allow again does not erase the name — it only lets the site/email be added again.') ?></h2>
+
+      <h3 style="margin:0.85rem 0 0.45rem;font-size:1rem">Sites</h3>
       <?php if ($excludedCount < 1): ?>
         <p class="muted" style="margin:0">No excluded sites yet. When a site is removed from this sheet, it appears here.</p>
       <?php else: ?>
         <p class="help" style="margin-top:0">
-          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from archive import.
+          <?= (int) $excludedCount ?> site<?= $excludedCount === 1 ? '' : 's' ?> blocked from re-add (import, paste, and + Add).
+          Allow again also clears that site’s previously removed emails.
           <?php if ($excludedCount > count($excludedDomains)): ?>
             Showing first <?= count($excludedDomains) ?>.
           <?php endif; ?>
@@ -755,25 +1206,114 @@ if ($sheetId > 0) {
             <thead>
               <tr>
                 <th>Site</th>
+                <th>Who</th>
                 <th>Removed</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-            <?php foreach ($excludedDomains as $ex): ?>
+            <?php foreach ($excludedDomains as $ex):
+                $exDomain = (string) $ex['domain'];
+                $exWho = email_campaign_who_for_exclusion($whoMap, 'delete_site', $exDomain);
+                ?>
               <tr>
-                <td><code><?= h((string) $ex['domain']) ?></code></td>
+                <td><code><?= h($exDomain) ?></code></td>
+                <td><?= h($exWho) ?></td>
                 <td class="muted"><?= h((string) $ex['excluded_at']) ?></td>
                 <td class="num">
                   <form method="post" action="<?= h($formAction) ?>" style="display:inline"
                         data-stay-ajax data-stay-remove-row>
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="allow_excluded_domain">
                     <input type="hidden" name="domain" value="<?= h((string) $ex['domain']) ?>">
                     <input type="hidden" name="q" value="<?= h($q) ?>">
                     <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
                     <button class="btn secondary small" type="submit"
-                            title="Let the next Final/Admin import add this site again">Allow again</button>
+                            title="Let import, paste, and + Add add this site again">Allow again</button>
                   </form>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      <?php endif; ?>
+
+      <h3 style="margin:1.15rem 0 0.45rem;font-size:1rem">Emails</h3>
+      <?php if ($excludedEmailCount < 1): ?>
+        <p class="muted" style="margin:0">No excluded emails yet. When a single email is removed (and the site stays), it appears here.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $excludedEmailCount ?> email<?= $excludedEmailCount === 1 ? '' : 's' ?> blocked from re-add on this sheet.
+          <?php if ($excludedEmailCount > count($excludedEmails)): ?>
+            Showing first <?= count($excludedEmails) ?>.
+          <?php endif; ?>
+        </p>
+        <div class="table-wrap">
+          <table class="extracted-country-table">
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Email</th>
+                <th>Who</th>
+                <th>Removed</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php
+            $emailsPerDomain = [];
+            foreach ($excludedEmails as $exCountRow) {
+                $dKey = (string) ($exCountRow['domain'] ?? '');
+                if ($dKey === '') {
+                    continue;
+                }
+                $emailsPerDomain[$dKey] = ($emailsPerDomain[$dKey] ?? 0) + 1;
+            }
+            $emailAllowAllShown = [];
+            foreach ($excludedEmails as $exEm):
+                $emDomain = (string) ($exEm['domain'] ?? '');
+                $emAddr = (string) ($exEm['email'] ?? '');
+                $siteAlsoBlocked = isset($excludedDomainSet[$emDomain]);
+                $emWho = email_campaign_who_for_exclusion($whoMap, 'remove_email', $emDomain, $emAddr);
+                ?>
+              <tr>
+                <td>
+                  <code><?= h($emDomain) ?></code>
+                  <?php if ($siteAlsoBlocked): ?>
+                    <span class="muted" style="display:block;font-size:0.85em">Site also blocked above</span>
+                  <?php endif; ?>
+                </td>
+                <td><code><?= h($emAddr) ?></code></td>
+                <td><?= h($emWho) ?></td>
+                <td class="muted"><?= h((string) ($exEm['excluded_at'] ?? '')) ?></td>
+                <td class="num">
+                  <form method="post" action="<?= h($formAction) ?>" style="display:inline"
+                        data-stay-ajax data-stay-remove-row>
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="allow_excluded_email">
+                    <input type="hidden" name="domain" value="<?= h($emDomain) ?>">
+                    <input type="hidden" name="email" value="<?= h($emAddr) ?>">
+                    <input type="hidden" name="q" value="<?= h($q) ?>">
+                    <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                    <button class="btn secondary small" type="submit"
+                            title="Let this email be added again on this site">Allow again</button>
+                  </form>
+                  <?php if ($emDomain !== ''
+                      && ($emailsPerDomain[$emDomain] ?? 0) > 1
+                      && empty($emailAllowAllShown[$emDomain])):
+                      $emailAllowAllShown[$emDomain] = true;
+                      ?>
+                    <form method="post" action="<?= h($formAction) ?>" style="display:inline;margin-left:0.35rem">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="action" value="allow_excluded_emails_for_domain">
+                      <input type="hidden" name="domain" value="<?= h($emDomain) ?>">
+                      <input type="hidden" name="q" value="<?= h($q) ?>">
+                      <input type="hidden" name="p" value="<?= (int) $pageNum ?>">
+                      <button class="btn secondary small" type="submit"
+                              title="Allow all previously removed emails on this site">Allow all for site</button>
+                    </form>
+                  <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -788,11 +1328,12 @@ if ($sheetId > 0) {
       <p class="help">
         <?php if ($teamVisible): ?>
           Communication Team sees one search bar for project <strong><?= h($projectName) ?></strong>
-          covering every country in it. Deletes that match <strong><?= h($sheetCountry) ?></strong> update this sheet.
+          covering every country in it. Deletes that match <strong><?= h($sheetCountry) ?></strong> update this sheet
+          and show under <a href="#camp-excluded">Previously removed</a> with who deleted them.
         <?php else: ?>
           Communication Team search is <strong>hidden</strong> for this project.
           Turn it on from
-          <a href="<?= h($projectHref) ?>">Project countries</a>.
+          <a href="<?= h($projectHref) ?>">All countries</a>.
         <?php endif; ?>
       </p>
     </div>
@@ -800,14 +1341,20 @@ if ($sheetId > 0) {
     <div class="card" style="margin-top:1rem">
       <h2>Danger zone</h2>
       <form method="post" action="<?= h($formAction) ?>"
-            data-show-processing="Deleting country sheet…"
-            onsubmit="return confirm('Remove <?= h($sheetCountry) ?> from project “<?= h($projectName) ?>” and delete all its rows?');">
+            data-show-processing="Deleting country sheet…" <?= confirm_data_attr(
+                'Remove ' . $sheetCountry . ' from project “' . $projectName . "”?\n\n"
+                . "This deletes this country’s campaign rows and the “fetched to " . $projectName . "” stamp on Team.\n"
+                . "Other campaigns are not affected.\nTeam sites stay."
+            ) ?>>
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_sheet">
         <button class="btn danger" type="submit">Remove country from project</button>
       </form>
     </div>
     <?= email_field_clear_script_tag() ?>
+    <script src="<?= h(script_asset_url('js/sheet-select-undo.js')) ?>" defer></script>
     <script src="<?= h(script_asset_url('js/email-campaign-sheet.js')) ?>" defer></script>
+    <?= open_site_script_tag() ?>
     <?php
     render_footer('admin');
     return;
@@ -911,7 +1458,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (string) post('body'),
                 (string) post('category'),
                 $draftId,
-                (int) ($user['id'] ?? 0)
+                (int) ($user['id'] ?? 0),
+                (string) post('subject')
             );
             if (empty($result['ok'])) {
                 flash('error', (string) ($result['error'] ?? 'Could not save draft.'));
@@ -922,12 +1470,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($action === 'delete_draft') {
             $pid = (int) post('project_id');
-            $result = delete_email_campaign_draft($pid, (int) post('draft_id'));
+            $result = delete_email_campaign_draft($pid, (int) post('draft_id'), $user);
             flash(
                 !empty($result['ok']) ? 'ok' : 'error',
                 !empty($result['ok'])
                     ? ('Deleted draft “' . (string) ($result['title'] ?? 'draft') . '”.')
                     : (string) ($result['error'] ?? 'Could not delete draft.')
+            );
+            redirect($campBase . '&project=' . $pid . '#project-drafts');
+        }
+        if ($action === 'move_draft') {
+            $pid = (int) post('project_id');
+            $result = move_email_campaign_draft(
+                $pid,
+                (int) post('draft_id'),
+                (string) post('direction'),
+                $user
+            );
+            flash(
+                !empty($result['ok']) ? 'ok' : 'error',
+                !empty($result['ok'])
+                    ? 'Draft order updated.'
+                    : (string) ($result['error'] ?? 'Could not move draft.')
             );
             redirect($campBase . '&project=' . $pid . '#project-drafts');
         }
@@ -1084,6 +1648,10 @@ if ($projectIdParam > 0) {
         $editDraft = null;
         $editDraftId = 0;
     }
+    $removedEvents = list_email_campaign_row_events(null, $projectIdParam, 200);
+    $removedCount = count_email_campaign_row_events(null, $projectIdParam);
+    $projectBatches = list_email_campaign_send_batches(null, $projectIdParam, 200);
+    $projectBatchCount = count($projectBatches);
 
     render_header($projectName, 'admin');
     render_breadcrumbs([
@@ -1100,11 +1668,17 @@ if ($projectIdParam > 0) {
           <?= (int) $countryCount ?> countr<?= $countryCount === 1 ? 'y' : 'ies' ?>
           · <?= (int) $siteTotal ?> site<?= (int) $siteTotal === 1 ? '' : 's' ?>
           · Team search: <strong><?= $teamVisible ? 'shown' : 'hidden' ?></strong>
+          <?php if ($projectBatchCount > 0): ?>
+            · <a href="#camp-batches"><?= (int) $projectBatchCount ?> send batch<?= $projectBatchCount === 1 ? '' : 'es' ?></a>
+          <?php endif; ?>
+          <?php if ($removedCount > 0): ?>
+            · <a href="#camp-removed"><?= (int) $removedCount ?> removed</a>
+          <?php endif; ?>
         </p>
       </div>
       <div class="actions">
         <?php if ($availableCountries): ?>
-          <a class="btn" href="#add-country">Add country</a>
+          <a class="btn secondary" href="#add-country">Add country</a>
         <?php endif; ?>
         <a class="btn secondary" href="<?= h($campBase) ?>">All projects</a>
       </div>
@@ -1165,9 +1739,10 @@ if ($projectIdParam > 0) {
                   </td>
                   <td class="num">
                     <div class="camp-hub-row-actions">
-                      <a class="btn small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
+                      <a class="btn secondary small" href="<?= h($campBase) ?>&amp;sheet=<?= (int) $s['id'] ?>">Open</a>
                       <form method="post" action="<?= h($projectForm) ?>"
-                            onsubmit="return confirm(<?= h(json_encode('Remove “' . $cName . '” from this project?', JSON_UNESCAPED_UNICODE)) ?>);">
+                            <?= confirm_data_attr('Remove “' . $cName . '” from this project?') ?>>
+                        <?= csrf_field() ?>
                         <input type="hidden" name="action" value="delete_country">
                         <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
                         <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
@@ -1207,6 +1782,7 @@ if ($projectIdParam > 0) {
           <?php else: ?>
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" autocomplete="off"
                 data-show-processing="Adding country…">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="add_country">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <div class="camp-hub-field">
@@ -1232,6 +1808,7 @@ if ($projectIdParam > 0) {
           </div>
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" autocomplete="off"
                 data-show-processing="Saving project…">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="save_project_settings">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <div class="camp-hub-field">
@@ -1263,25 +1840,69 @@ if ($projectIdParam > 0) {
           </div>
           <?php if ($projectDrafts): ?>
           <ul class="camp-admin-drafts-list">
-            <?php foreach ($projectDrafts as $d):
+            <?php
+            $adminDraftTotal = count($projectDrafts);
+            foreach ($projectDrafts as $adi => $d):
                 $did = (int) $d['id'];
+                $adminCat = (string) ($d['category'] ?? '');
+                $adminCanUp = $adi > 0
+                    && (string) ($projectDrafts[$adi - 1]['category'] ?? '') === $adminCat;
+                $adminCanDown = $adi < ($adminDraftTotal - 1)
+                    && (string) ($projectDrafts[$adi + 1]['category'] ?? '') === $adminCat;
+                $adminSizeWarn = email_campaign_draft_size_warning((string) ($d['body'] ?? ''));
                 ?>
               <li>
                 <div class="camp-admin-draft-meta">
                   <strong><?= h((string) $d['title']) ?></strong>
                   <span class="muted" style="font-size:0.82rem">
-                    <?= h(email_campaign_draft_category_label((string) $d['category'])) ?>
+                    <?= h(email_campaign_draft_category_label($adminCat)) ?>
                   </span>
+                  <?php if (trim((string) ($d['subject'] ?? '')) !== ''): ?>
+                  <span class="help" style="display:block;margin-top:0.15rem">
+                    Subject: <?= h((string) $d['subject']) ?>
+                  </span>
+                  <?php endif; ?>
+                  <?php
+                    $adminAttr = email_campaign_draft_attribution($d);
+                    if ($adminAttr !== ''):
+                  ?>
+                  <span class="help" style="display:block;margin-top:0.2rem"><?= h($adminAttr) ?></span>
+                  <?php endif; ?>
+                  <?php if ($adminSizeWarn !== ''): ?>
+                  <span class="help camp-draft-size-warn" style="display:block;margin-top:0.2rem"><?= h($adminSizeWarn) ?></span>
+                  <?php endif; ?>
                 </div>
                 <div class="actions">
+                  <?php if ($adminCanUp): ?>
+                  <form method="post" action="<?= h($projectForm) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="move_draft">
+                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                    <input type="hidden" name="draft_id" value="<?= $did ?>">
+                    <input type="hidden" name="direction" value="up">
+                    <button class="btn secondary small" type="submit" title="Move up">↑</button>
+                  </form>
+                  <?php endif; ?>
+                  <?php if ($adminCanDown): ?>
+                  <form method="post" action="<?= h($projectForm) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="move_draft">
+                    <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
+                    <input type="hidden" name="draft_id" value="<?= $did ?>">
+                    <input type="hidden" name="direction" value="down">
+                    <button class="btn secondary small" type="submit" title="Move down">↓</button>
+                  </form>
+                  <?php endif; ?>
                   <a class="btn secondary small" href="<?= h($projectForm) ?>&amp;edit_draft=<?= $did ?>#project-drafts">Edit</a>
-                  <form method="post" action="<?= h($projectForm) ?>"
-                        onsubmit="return confirm(<?= h(json_encode('Delete draft “' . (string) $d['title'] . '”?', JSON_UNESCAPED_UNICODE)) ?>);">
+                  <?php if (email_campaign_user_can_delete_draft($user, $d)): ?>
+                  <form method="post" action="<?= h($projectForm) ?>" <?= confirm_data_attr('Delete draft “' . (string) $d['title'] . '”?') ?>>
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete_draft">
                     <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
                     <input type="hidden" name="draft_id" value="<?= $did ?>">
                     <button class="btn danger small" type="submit">Delete</button>
                   </form>
+                  <?php endif; ?>
                 </div>
               </li>
             <?php endforeach; ?>
@@ -1291,7 +1912,8 @@ if ($projectIdParam > 0) {
           <?php endif; ?>
 
           <form method="post" action="<?= h($projectForm) ?>" class="camp-hub-create-form" style="margin-top:1rem"
-                autocomplete="off" data-show-processing="Saving draft…">
+                autocomplete="off" data-no-draft data-show-processing="Saving draft…">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="save_draft">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <input type="hidden" name="draft_id" value="<?= $editDraft ? (int) $editDraft['id'] : 0 ?>">
@@ -1303,6 +1925,21 @@ if ($projectIdParam > 0) {
               <input id="admin_draft_title" name="title" required maxlength="180"
                      value="<?= h((string) ($editDraft['title'] ?? '')) ?>"
                      placeholder="e.g. First outreach">
+            </div>
+            <div class="camp-hub-field">
+              <label for="admin_draft_subject">Subject <span class="muted">(optional)</span></label>
+              <input id="admin_draft_subject" name="subject" maxlength="255"
+                     value="<?= h((string) ($editDraft['subject'] ?? '')) ?>"
+                     placeholder="e.g. Idea for {domain}"
+                     data-camp-draft-subject-input>
+              <p class="help" style="margin:0.3rem 0 0">
+                Tokens:
+                <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
+                  <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
+                          data-camp-draft-token-target="admin_draft_subject"
+                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
+                <?php endforeach; ?>
+              </p>
             </div>
             <div class="camp-hub-field">
               <label for="admin_draft_category">Category</label>
@@ -1318,8 +1955,17 @@ if ($projectIdParam > 0) {
             <div class="camp-hub-field">
               <label for="admin_draft_body">Draft text</label>
               <p class="help" style="margin:0 0 0.45rem">
-                Bold / italic / underline / headings / images are kept when Communication copies into email.
+                Bold / italic / underline / headings / lists / http(s) links / images are kept when Communication copies into email.
+                Optional subject + tokens ({domain}, {country}, {language}, {name}, {site}).
                 Paste a screenshot or use Image (auto-compressed).
+              </p>
+              <p class="help" style="margin:0 0 0.45rem">
+                Insert into body:
+                <?php foreach (email_campaign_draft_token_defs() as $tok => $tokLabel): ?>
+                  <button type="button" class="btn secondary small" data-camp-draft-token="{<?= h($tok) ?>}"
+                          data-camp-draft-token-target="body"
+                          title="<?= h($tokLabel) ?>">{<?= h($tok) ?></button>
+                <?php endforeach; ?>
               </p>
               <?php
               render_email_campaign_draft_editor(
@@ -1341,10 +1987,13 @@ if ($projectIdParam > 0) {
 
         <section class="card" style="margin-top:1rem">
           <h2>Danger zone</h2>
-          <p class="muted">Deletes this project and all of its country sheets, contacts, and drafts. This cannot be undone.</p>
+          <p class="muted">Deletes this project and all of its country sheets, contacts, drafts, and Team “fetched to this campaign” stamps. Team sites stay. Other campaigns are not affected.</p>
           <form method="post" action="<?= h($projectForm) ?>"
-                data-show-processing="Deleting project…"
-                onsubmit="return confirm(<?= h(json_encode('Delete project “' . $projectName . '” and all country sheets and drafts inside it?', JSON_UNESCAPED_UNICODE)) ?>);">
+                data-show-processing="Deleting project…" <?= confirm_data_attr(
+                    'Delete project “' . $projectName . '” and all country sheets and drafts inside it?'
+                    . "\n\nTeam “fetched to " . $projectName . '” stamps for those sheets are removed. Team sites stay. Other campaigns are not affected.'
+                ) ?>>
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="delete_project">
             <input type="hidden" name="project_id" value="<?= (int) $projectIdParam ?>">
             <button class="btn danger" type="submit">Delete whole project</button>
@@ -1352,6 +2001,160 @@ if ($projectIdParam > 0) {
         </section>
       </aside>
     </div>
+
+    <div class="card" style="margin-top:1rem" id="camp-batches">
+      <h2><?= label_with_info('Send batches', 'Who marked emailed on a country sheet, and which named stretch (Batch A, Batch B). Mark up to here names a batch. Open shows the sites and emails still tagged to that stretch.') ?></h2>
+      <?php if ($projectBatchCount < 1): ?>
+        <p class="muted" style="margin:0">No send batches yet. On a country sheet, Mark up to here names a batch and records who marked it.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $projectBatchCount ?> batch<?= $projectBatchCount === 1 ? '' : 'es' ?>
+          on this project.
+          <?php if ($projectBatchCount > count($projectBatches)): ?>
+            Showing the <?= count($projectBatches) ?> most recent.
+          <?php endif; ?>
+        </p>
+        <div class="invoice-list-toolbar camp-hub-toolbar">
+          <label class="sheet-search" for="camp-project-batch-search">
+            <span class="visually-hidden">Search send batches</span>
+            <input id="camp-project-batch-search" type="search" placeholder="Find a batch, person, or country…"
+                   autocomplete="off" spellcheck="false" data-no-draft>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="extracted-country-table camp-hub-table" id="camp-project-batch-table">
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Country</th>
+                <th>Who</th>
+                <th class="num">Sites</th>
+                <th>When</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($projectBatches as $b):
+                $bName = (string) ($b['name'] ?? '');
+                $bCountry = (string) ($b['country'] ?? '');
+                $bWho = email_campaign_send_batch_who_label($b);
+                $bLive = (int) ($b['live_count'] ?? 0);
+                $bOrig = (int) ($b['site_count'] ?? 0);
+                $bWhen = (string) ($b['created_at'] ?? '');
+                $bSheet = (int) ($b['sheet_id'] ?? 0);
+                $bId = (int) ($b['id'] ?? 0);
+                $bHref = $bSheet > 0 && $bId > 0
+                    ? ($campBase . '&sheet=' . $bSheet . '&batch=' . $bId)
+                    : $projectForm;
+                $bCount = (string) $bLive . ($bOrig > 0 && $bOrig !== $bLive ? '/' . $bOrig : '');
+                $bHay = mb_strtolower($bName . ' ' . $bCountry . ' ' . $bWho);
+                ?>
+              <tr data-camp-batch-row data-search="<?= h($bHay) ?>">
+                <td><?= h($bName !== '' ? $bName : 'Untitled') ?></td>
+                <td><?= h($bCountry !== '' ? $bCountry : '—') ?></td>
+                <td><?= h($bWho !== '' && $bWho !== '—' ? $bWho : '—') ?></td>
+                <td class="num" title="Still marked / originally"><?= h($bCount) ?></td>
+                <td class="muted"><?= h($bWhen !== '' ? $bWhen : '—') ?></td>
+                <td class="num">
+                  <a class="btn secondary small" href="<?= h($bHref) ?>">Open</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <script>
+        (function () {
+          var input = document.getElementById('camp-project-batch-search');
+          if (!input) return;
+          input.addEventListener('input', function () {
+            var q = String(input.value || '').trim().toLowerCase();
+            document.querySelectorAll('[data-camp-batch-row]').forEach(function (row) {
+              row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+            });
+          });
+        })();
+        </script>
+      <?php endif; ?>
+    </div>
+
+    <div class="card" style="margin-top:1rem" id="camp-removed">
+      <h2><?= label_with_info('Removed', 'Who deleted a site or email on any country sheet in this project. Communication Team share one search bar — this list is how Admin sees who removed what. Allow again on a country sheet does not erase these rows.') ?></h2>
+      <?php if ($removedCount < 1): ?>
+        <p class="muted" style="margin:0">Nothing removed yet. Team or Admin deletes from a country sheet appear here with the site name and who did it.</p>
+      <?php else: ?>
+        <p class="help" style="margin-top:0">
+          <?= (int) $removedCount ?> removal<?= $removedCount === 1 ? '' : 's' ?>
+          recorded on this project.
+          <?php if ($removedCount > count($removedEvents)): ?>
+            Showing the <?= count($removedEvents) ?> most recent.
+          <?php endif; ?>
+        </p>
+        <div class="invoice-list-toolbar camp-hub-toolbar">
+          <label class="sheet-search" for="camp-project-removed-search">
+            <span class="visually-hidden">Search removed sites</span>
+            <input id="camp-project-removed-search" type="search" placeholder="Find a site, email, or person…"
+                   autocomplete="off" spellcheck="false" data-no-draft>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="extracted-country-table camp-hub-table" id="camp-project-removed-table">
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th>Site</th>
+                <th>What</th>
+                <th>Who</th>
+                <th>When</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($removedEvents as $ev):
+                $evCountry = (string) ($ev['country'] ?? '');
+                $evDomain = (string) ($ev['domain'] ?? '');
+                $evEmail = (string) ($ev['email'] ?? '');
+                $evAction = (string) ($ev['action'] ?? '');
+                $evWhat = $evAction === 'remove_email'
+                    ? ('Email · ' . ($evEmail !== '' ? $evEmail : '—'))
+                    : 'Site';
+                $evWho = email_campaign_event_who_label($ev);
+                $evWhen = (string) ($ev['created_at'] ?? '');
+                $evSheet = (int) ($ev['sheet_id'] ?? 0);
+                $evHref = $evSheet > 0
+                    ? ($campBase . '&sheet=' . $evSheet . '#camp-excluded')
+                    : $projectForm;
+                $evHay = mb_strtolower($evCountry . ' ' . $evDomain . ' ' . $evEmail . ' ' . $evWhat . ' ' . $evWho);
+                ?>
+              <tr data-camp-removed-row data-search="<?= h($evHay) ?>">
+                <td><?= h($evCountry !== '' ? $evCountry : '—') ?></td>
+                <td><code><?= h($evDomain !== '' ? $evDomain : '—') ?></code></td>
+                <td><?= h($evWhat) ?></td>
+                <td><?= h($evWho) ?></td>
+                <td class="muted"><?= h($evWhen !== '' ? $evWhen : '—') ?></td>
+                <td class="num">
+                  <a class="btn secondary small" href="<?= h($evHref) ?>">Open</a>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+        <script>
+        (function () {
+          var input = document.getElementById('camp-project-removed-search');
+          if (!input) return;
+          input.addEventListener('input', function () {
+            var q = String(input.value || '').trim().toLowerCase();
+            document.querySelectorAll('[data-camp-removed-row]').forEach(function (row) {
+              row.hidden = !(!q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1);
+            });
+          });
+        })();
+        </script>
+      <?php endif; ?>
+    </div>
+
     <script src="<?= h(script_asset_url('js/email-campaign-drafts.js')) ?>" defer></script>
     <?php
     render_footer('admin');
@@ -1378,7 +2181,7 @@ $projectCount = count($projects);
     </p>
   </div>
   <div class="actions">
-    <a class="btn" href="#create-project">Create project</a>
+    <a class="btn secondary" href="#create-project">Create project</a>
     <a class="btn secondary" href="<?= h($base) ?>">All folders</a>
   </div>
 </div>
@@ -1475,6 +2278,7 @@ $projectCount = count($projects);
               <td>
                 <form method="post" action="<?= h($campBase) ?>" class="camp-hub-team-form"
                       data-stay-ajax data-stay-team-toggle>
+                  <?= csrf_field() ?>
                   <input type="hidden" name="action" value="toggle_project_team_search">
                   <input type="hidden" name="project_id" value="<?= (int) $p['id'] ?>">
                   <input type="hidden" name="team_search_visible" value="<?= $visible ? '0' : '1' ?>">
@@ -1487,9 +2291,10 @@ $projectCount = count($projects);
               </td>
               <td class="num">
                 <div class="camp-hub-row-actions">
-                  <a class="btn small" href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">Open</a>
+                  <a class="btn secondary small" href="<?= h($campBase) ?>&amp;project=<?= (int) $p['id'] ?>">Open</a>
                   <form method="post" action="<?= h($campBase) ?>"
-                        onsubmit="return confirm(<?= h(json_encode('Delete project “' . $pName . '” and all its countries?', JSON_UNESCAPED_UNICODE)) ?>);">
+                        <?= confirm_data_attr('Delete project “' . $pName . '” and all its countries?') ?>>
+                    <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete_project">
                     <input type="hidden" name="project_id" value="<?= (int) $p['id'] ?>">
                     <button class="btn secondary small" type="submit">Delete</button>
@@ -1523,6 +2328,7 @@ $projectCount = count($projects);
     </div>
     <form method="post" action="<?= h($campBase) ?>" class="camp-hub-create-form" autocomplete="off"
           data-show-processing="Creating project…">
+      <?= csrf_field() ?>
       <input type="hidden" name="action" value="create_project">
 
       <div class="camp-hub-field">

@@ -8,7 +8,7 @@
  * If mail() fails, fill SMTP (smtp.hostinger.com, port 465, ssl).
  */
 return [
-    'db_host' => 'localhost',
+    'db_host' => '127.0.0.1', // Hostinger: use the host from hPanel. Avoid localhost (PHP/MySQL sockets often differ).
     'db_name' => 'your_database_name',
     'db_user' => 'your_database_user',
     'db_pass' => 'your_database_password',

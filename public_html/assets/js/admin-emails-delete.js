@@ -25,6 +25,13 @@
     var timer = null;
     var abortCtrl = null;
 
+    function csrfToken() {
+      var field = root.querySelector('input[name="_csrf"]');
+      if (field && field.value) return field.value;
+      var meta = document.querySelector('meta[name="csrf-token"]');
+      return meta ? String(meta.getAttribute('content') || '') : '';
+    }
+
     function setStatus(msg, isError) {
       if (!statusEl) return;
       if (!msg) {
@@ -55,6 +62,9 @@
       var emails = (selected && selected.emails) || [];
       if (emailPick) {
         emailPick.hidden = !(mode === 'email' && emails.length > 0);
+      }
+      if (applyBtn) {
+        applyBtn.textContent = mode === 'email' ? 'Remove email' : 'Delete site';
       }
       if (emailSelect && mode === 'email') {
         emailSelect.innerHTML = '';
@@ -202,6 +212,9 @@
     }
 
     function postAction(body) {
+      var payload = body || {};
+      var tok = csrfToken();
+      if (tok && payload._csrf == null) payload._csrf = tok;
       return fetch(postUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -209,7 +222,7 @@
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           Accept: 'application/json'
         },
-        body: new URLSearchParams(body).toString()
+        body: new URLSearchParams(payload).toString()
       }).then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok || !data || data.ok === false) {
@@ -238,13 +251,11 @@
         var confirmMsg = isLastEmail
           ? 'Remove this email from Sites with emails - Admin?\n\n'
             + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
-            + '\n\nThis is the only email — the site row will also be deleted from Admin + Final (no empty-email sites).'
+            + '\n\nThis is the only email — the Admin working-list row is deleted. Final keeps its archive copy.'
           : 'Remove only this email from Sites with emails - Admin?\n\n'
             + 'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmail: ' + email
             + '\n\nSite name stays; other emails remain.';
-        if (!window.confirm(confirmMsg)) {
-          return;
-        }
+        var runEmailDelete = function () {
         postAction({
           ajax: '1',
           action: 'delete_email',
@@ -271,16 +282,22 @@
           .catch(function (err) {
             setStatus(err.message || 'Could not remove email.', true);
           });
+        };
+        if (typeof window.txfConfirm === 'function') {
+          window.txfConfirm(confirmMsg).then(function (ok) { if (ok) runEmailDelete(); });
+          return;
+        }
+        if (!window.confirm(confirmMsg)) {
+          return;
+        }
+        runEmailDelete();
         return;
       }
 
-      if (!window.confirm(
-        'Delete BOTH site name and all emails from Sites with emails - Admin?\n\n' +
+      var rowMsg = 'Delete BOTH site name and all emails from Sites with emails - Admin?\n\n' +
         'Country: ' + countryLabel + '\nSite: ' + selected.domain + '\nEmails: ' +
-        ((selected.emails || []).join(', ') || '(none)')
-      )) {
-        return;
-      }
+        ((selected.emails || []).join(', ') || '(none)');
+      var runRowDelete = function () {
       postAction({
         ajax: '1',
         action: 'delete_row',
@@ -300,6 +317,15 @@
         .catch(function (err) {
           setStatus(err.message || 'Could not delete.', true);
         });
+      };
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(rowMsg).then(function (ok) { if (ok) runRowDelete(); });
+        return;
+      }
+      if (!window.confirm(rowMsg)) {
+        return;
+      }
+      runRowDelete();
     }
 
     if (input) {
@@ -308,7 +334,7 @@
         selected = null;
         renderSelected();
         if (timer) window.clearTimeout(timer);
-        timer = window.setTimeout(function () { fetchSuggest(q); }, 180);
+        timer = window.setTimeout(function () { fetchSuggest(q); }, 280);
       });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'ArrowDown') {

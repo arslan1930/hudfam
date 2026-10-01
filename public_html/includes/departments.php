@@ -21,6 +21,9 @@ function ensure_departments_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
 
     $pdo->exec(
@@ -96,6 +99,9 @@ function ensure_departments_schema(): void
     }
 
     seed_departments_if_empty();
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 function seed_departments_if_empty(): void
@@ -208,13 +214,16 @@ function department_tool_pages_for_user(array $user): array
             } elseif ($slug === 'site_extracting') {
                 $pages[] = 'team_extracting';
                 $pages[] = 'team_extract_batch';
+                $pages[] = 'team_semrush_research';
+                $pages[] = 'team_semrush_sheet';
             } elseif ($slug === 'email_extracting') {
                 $pages[] = 'team_sites_emails';
-                $pages[] = 'team_admin_emails_delete';
+                $pages[] = 'team_admin_emails_search';
             } elseif ($slug === 'communication') {
                 $pages[] = 'team_email_campaigns';
                 $pages[] = 'team_email_campaigns_drafts';
-                $pages[] = 'team_admin_emails_delete';
+                $pages[] = 'team_admin_emails_search';
+                $pages[] = 'team_site_prices';
             }
         }
     } catch (Throwable $e) {
@@ -223,14 +232,234 @@ function department_tool_pages_for_user(array $user): array
     return array_values(array_unique($pages));
 }
 
+/** Primary Team tool page for a department slug (empty when the folder has no dedicated tool). */
+function department_primary_tool_page(string $slug): string
+{
+    return match ($slug) {
+        'site_finding' => 'team_prospect_check',
+        'site_extracting' => 'team_extracting',
+        'email_extracting' => 'team_sites_emails',
+        'communication' => 'team_email_campaigns',
+        default => '',
+    };
+}
+
+/** Dashboard task Open target — department tool when one exists, otherwise the folder. */
+function department_primary_tool_url(string $slug): string
+{
+    $page = department_primary_tool_page($slug);
+    if ($page === '') {
+        return 'index.php?page=team_departments&folder=' . rawurlencode($slug);
+    }
+    return 'index.php?page=' . $page;
+}
+
+function department_folder_url(string $slug): string
+{
+    return 'index.php?page=team_departments&folder=' . rawurlencode($slug);
+}
+
+/** Team landing after login, password change, ACL deny, and 404 home. Always Your work. */
+function team_home_url(): string
+{
+    return 'index.php?page=team_dashboard';
+}
+
+function department_tasks_have_due_date(array $tasks): bool
+{
+    foreach ($tasks as $task) {
+        if (!is_array($task)) {
+            continue;
+        }
+        if (trim((string) ($task['due_date'] ?? '')) !== '') {
+            return true;
+        }
+    }
+    return false;
+}
+
+function department_task_open_label(string $slug): string
+{
+    return match ($slug) {
+        'site_finding' => 'Open Filter & add',
+        'site_extracting' => 'Open Extracting sites',
+        'email_extracting' => 'Open Sites with emails',
+        'communication' => 'Open Campaign search',
+        default => 'Open',
+    };
+}
+
+function department_task_assignee_label(array $task): string
+{
+    if ((int) ($task['assigned_to'] ?? 0) < 1) {
+        return 'Whole department';
+    }
+    $name = trim((string) ($task['assigned_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($task['assigned_username'] ?? ''));
+    }
+    return $name !== '' ? $name : 'Assigned';
+}
+
+function department_task_creator_label(array $task): string
+{
+    $name = trim((string) ($task['created_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($task['created_username'] ?? ''));
+    }
+    return $name;
+}
+
+function department_task_title_key(string $title): string
+{
+    $title = preg_replace('/\s+/u', ' ', trim($title)) ?? '';
+    return mb_strtolower($title);
+}
+
+/** Open/in-progress task in this department with the same title (ignoring case/spacing). */
+function find_similar_open_department_task(int $departmentId, string $title, ?int $exceptId = null): ?array
+{
+    $key = department_task_title_key($title);
+    if ($departmentId < 1 || $key === '') {
+        return null;
+    }
+    foreach (list_department_tasks($departmentId) as $task) {
+        if (!in_array((string) ($task['status'] ?? ''), ['open', 'in_progress'], true)) {
+            continue;
+        }
+        if ($exceptId !== null && (int) ($task['id'] ?? 0) === $exceptId) {
+            continue;
+        }
+        if (department_task_title_key((string) ($task['title'] ?? '')) === $key) {
+            return $task;
+        }
+    }
+    return null;
+}
+
+function department_task_draft_store(array $data): void
+{
+    $_SESSION['txf_dept_task_draft'] = $data;
+}
+
+function department_task_draft_take(int $departmentId): array
+{
+    $draft = $_SESSION['txf_dept_task_draft'] ?? null;
+    unset($_SESSION['txf_dept_task_draft']);
+    if (!is_array($draft) || (int) ($draft['department_id'] ?? 0) !== $departmentId) {
+        return [];
+    }
+    return $draft;
+}
+
+/**
+ * True when this Team user may open a page (department tool ACL).
+ * Admins always true. Waiting (no dept) users only core waiting pages.
+ */
+function team_page_unlocked(array $user, string $page): bool
+{
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    if (($user['role'] ?? '') !== 'team') {
+        return false;
+    }
+    if ($page === 'team_admin_emails_delete') {
+        $page = 'team_admin_emails_search';
+    }
+    $core = ['team_dashboard', 'team_departments', 'account_password', 'presence_ping', 'login', 'logout'];
+    if (team_user_awaits_department($user)) {
+        return in_array($page, $core, true);
+    }
+    if (!user_is_department_scoped($user)) {
+        return true;
+    }
+    $allowed = array_merge($core, department_tool_pages_for_user($user));
+    // Legacy stubs redirect into Filter & add when that tool is unlocked.
+    if (in_array($page, ['team_prospects', 'team_prospect_form'], true)
+        && in_array('team_prospect_check', $allowed, true)) {
+        return true;
+    }
+    return in_array($page, $allowed, true);
+}
+
+/** Clear Semrush country: Admin or Site Finding. Extracting can view/edit but not wipe a country. */
+function team_can_clear_semrush_country(array $user): bool
+{
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    return team_page_unlocked($user, 'team_prospect_check');
+}
+
+/** Team members of a department (and Admin) may create/reassign tasks there. */
+function team_can_assign_department_tasks(array $user, int $departmentId): bool
+{
+    if ($departmentId < 1) {
+        return false;
+    }
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    if (($user['role'] ?? '') !== 'team') {
+        return false;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    return $uid > 0 && user_in_department($uid, $departmentId);
+}
+
+/**
+ * Assign an existing department task to a current member (or whole department).
+ * Does not add people to the department — Admin does that.
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function set_department_task_assignee(int $taskId, ?int $assignedTo, array $actor): array
+{
+    ensure_departments_schema();
+    $task = get_department_task($taskId);
+    if (!$task) {
+        return ['ok' => false, 'error' => 'Task not found.'];
+    }
+    $departmentId = (int) ($task['department_id'] ?? 0);
+    if (!team_can_assign_department_tasks($actor, $departmentId)) {
+        return ['ok' => false, 'error' => 'You can only assign tasks in your department.'];
+    }
+    if ($assignedTo !== null && $assignedTo > 0) {
+        if (!user_in_department($assignedTo, $departmentId)) {
+            return ['ok' => false, 'error' => 'Assign only to someone in this department.'];
+        }
+    } else {
+        $assignedTo = null;
+    }
+    db()->prepare(
+        'UPDATE department_tasks SET assigned_to=?, updated_at=NOW() WHERE id=?'
+    )->execute([$assignedTo, $taskId]);
+    return ['ok' => true];
+}
+
+/** Team may change status on own assigned tasks or unassigned (whole department) tasks. Admin always. */
+function team_can_set_department_task_status(array $user, array $task): bool
+{
+    if (($user['role'] ?? '') === 'admin') {
+        return true;
+    }
+    $assignee = (int) ($task['assigned_to'] ?? 0);
+    $uid = (int) ($user['id'] ?? 0);
+    if ($uid < 1) {
+        return false;
+    }
+    return $assignee < 1 || $assignee === $uid;
+}
+
 /** Short help for Admin department member assignment. */
 function department_tools_help(string $slug): string
 {
     return match ($slug) {
         'site_finding' => 'Members also get Filter & add, Semrush Research, and Site adding history (not only tasks).',
-        'site_extracting' => 'Members also get Extracting sites / Results + Push (not only tasks).',
-        'email_extracting' => 'Members also get Sites with emails – Team and Admin emails search/delete.',
-        'communication' => 'Members also get Admin emails search, Campaign search, and Campaign drafts.',
+        'site_extracting' => 'Members also get Extracting sites / Results + Push, and Semrush Research (not only tasks). Clear country stays with Site Finding and Admin.',
+        'email_extracting' => 'Members get Sites with emails – Team (add emails / none, then Push to Admin) and Admin emails search/delete. Open What is this? on Sites with emails for the checklist.',
+        'communication' => 'Members also get Website prices, Admin emails search, Campaign search, and Campaign drafts.',
         default => 'Members see this department’s tasks (and tools from any other departments you assign).',
     };
 }
@@ -315,6 +544,69 @@ function remove_department_member(int $departmentId, int $userId): bool
 }
 
 /**
+ * Clear assignee on open/in_progress tasks for a user in one department.
+ * Done tasks keep their historical assignee.
+ *
+ * @return int number of tasks updated
+ */
+function clear_open_department_task_assignees(int $departmentId, int $userId): int
+{
+    ensure_departments_schema();
+    if ($departmentId <= 0 || $userId <= 0) {
+        return 0;
+    }
+    $stmt = db()->prepare(
+        "UPDATE department_tasks
+         SET assigned_to=NULL, updated_at=NOW()
+         WHERE department_id=? AND assigned_to=?
+           AND status IN ('open','in_progress')"
+    );
+    $stmt->execute([$departmentId, $userId]);
+    return (int) $stmt->rowCount();
+}
+
+/** Count open/in_progress tasks assigned to this user in the department. */
+function count_open_department_tasks_for_assignee(int $departmentId, int $userId): int
+{
+    ensure_departments_schema();
+    if ($departmentId <= 0 || $userId <= 0) {
+        return 0;
+    }
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM department_tasks
+         WHERE department_id=? AND assigned_to=?
+           AND status IN ('open','in_progress')"
+    );
+    $stmt->execute([$departmentId, $userId]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Residue left when deactivating a Team user (memberships + open assignees).
+ * Does not auto-remove — Admin reviews under Departments.
+ *
+ * @return array{memberships:int,open_tasks:int}
+ */
+function user_deactivation_residue(int $userId): array
+{
+    ensure_departments_schema();
+    if ($userId < 1) {
+        return ['memberships' => 0, 'open_tasks' => 0];
+    }
+    $m = db()->prepare('SELECT COUNT(*) FROM department_members WHERE user_id=?');
+    $m->execute([$userId]);
+    $t = db()->prepare(
+        "SELECT COUNT(*) FROM department_tasks
+         WHERE assigned_to=? AND status IN ('open','in_progress')"
+    );
+    $t->execute([$userId]);
+    return [
+        'memberships' => (int) $m->fetchColumn(),
+        'open_tasks' => (int) $t->fetchColumn(),
+    ];
+}
+
+/**
  * @return array{member_count:int,open_tasks:int,total_tasks:int}
  */
 function department_stats(int $departmentId): array
@@ -328,31 +620,100 @@ function department_stats(int $departmentId): array
     $open->execute([$departmentId]);
     $total = db()->prepare('SELECT COUNT(*) FROM department_tasks WHERE department_id=?');
     $total->execute([$departmentId]);
+    $overdue = db()->prepare(
+        "SELECT COUNT(*) FROM department_tasks
+         WHERE department_id=?
+           AND status IN ('open','in_progress')
+           AND due_date IS NOT NULL
+           AND due_date < CURDATE()"
+    );
+    $overdue->execute([$departmentId]);
     return [
         'member_count' => (int) $members->fetchColumn(),
         'open_tasks' => (int) $open->fetchColumn(),
         'total_tasks' => (int) $total->fetchColumn(),
+        'overdue_count' => (int) $overdue->fetchColumn(),
     ];
 }
 
 /**
+ * Admin dashboard summary for Departments.
+ *
+ * @return array{departments:int,members:int,open_tasks:int,unassigned_team:int}
+ */
+function departments_dashboard_stats(): array
+{
+    ensure_departments_schema();
+    $departments = (int) db()->query(
+        'SELECT COUNT(*) FROM departments WHERE is_active=1'
+    )->fetchColumn();
+    $members = (int) db()->query(
+        'SELECT COUNT(DISTINCT m.user_id)
+         FROM department_members m
+         INNER JOIN users u ON u.id = m.user_id
+         WHERE u.is_active = 1'
+    )->fetchColumn();
+    $open = (int) db()->query(
+        "SELECT COUNT(*) FROM department_tasks t
+         INNER JOIN departments d ON d.id = t.department_id AND d.is_active=1
+         WHERE t.status IN ('open','in_progress')"
+    )->fetchColumn();
+    $unassigned = (int) db()->query(
+        "SELECT COUNT(*) FROM users u
+         WHERE u.role='team' AND u.is_active=1
+           AND NOT EXISTS (
+             SELECT 1 FROM department_members m WHERE m.user_id = u.id
+           )"
+    )->fetchColumn();
+    return [
+        'departments' => $departments,
+        'members' => $members,
+        'open_tasks' => $open,
+        'unassigned_team' => $unassigned,
+    ];
+}
+
+/**
+ * @param array{status?:string,assignee?:string,for_user_id?:int,q?:string} $opts
+ *        status: ''|open|in_progress|done|overdue
+ *        assignee: ''|all|mine|unassigned|whole|assigned
  * @return list<array<string,mixed>>
  */
 function list_department_tasks(
     int $departmentId,
     string $status = '',
-    ?int $forUserId = null
+    ?int $forUserId = null,
+    string $assigneeFilter = '',
+    string $q = ''
 ): array {
     ensure_departments_schema();
     $where = ['t.department_id = ?'];
     $params = [$departmentId];
-    if ($status !== '' && in_array($status, ['open', 'in_progress', 'done'], true)) {
+    if ($status === 'overdue') {
+        $where[] = "t.status IN ('open','in_progress')
+                    AND t.due_date IS NOT NULL
+                    AND t.due_date < CURDATE()";
+    } elseif ($status !== '' && in_array($status, ['open', 'in_progress', 'done'], true)) {
         $where[] = 't.status = ?';
         $params[] = $status;
     }
-    if ($forUserId !== null) {
-        // Members see all department tasks; optional filter for "assigned to me"
-        // kept as membership gate outside this function.
+    if ($assigneeFilter === 'mine' && $forUserId !== null && $forUserId > 0) {
+        $where[] = 't.assigned_to = ?';
+        $params[] = $forUserId;
+    } elseif ($assigneeFilter === 'unassigned') {
+        $where[] = 't.assigned_to IS NULL';
+    } elseif ($assigneeFilter === 'whole') {
+        // Explicit whole-department tasks (no personal assignee).
+        $where[] = 't.assigned_to IS NULL';
+    } elseif ($assigneeFilter === 'assigned') {
+        $where[] = 't.assigned_to IS NOT NULL';
+    }
+    $q = trim($q);
+    if ($q !== '') {
+        $where[] = '(t.title LIKE ? OR IFNULL(t.notes, \'\') LIKE ?)';
+        $like = '%' . $q . '%';
+        $params[] = $like;
+        $params[] = $like;
     }
     $whereSql = implode(' AND ', $where);
     $stmt = db()->prepare(
@@ -367,11 +728,31 @@ function list_department_tasks(
          WHERE {$whereSql}
          ORDER BY
            FIELD(t.status, 'open', 'in_progress', 'done'),
+           CASE
+             WHEN t.status IN ('open','in_progress')
+              AND t.due_date IS NOT NULL
+              AND t.due_date < CURDATE() THEN 0
+             ELSE 1
+           END,
            t.due_date IS NULL, t.due_date ASC,
            t.id DESC"
     );
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/** True when an open/in_progress task is past its due date. */
+function department_task_is_overdue(array $task): bool
+{
+    $status = (string) ($task['status'] ?? '');
+    if (!in_array($status, ['open', 'in_progress'], true)) {
+        return false;
+    }
+    $due = trim((string) ($task['due_date'] ?? ''));
+    if ($due === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
+        return false;
+    }
+    return $due < date('Y-m-d');
 }
 
 function get_department_task(int $taskId): ?array
@@ -384,7 +765,7 @@ function get_department_task(int $taskId): ?array
 }
 
 /**
- * @return array{ok:bool,error?:string,id?:int}
+ * @return array{ok:bool,error?:string,id?:int,added_member?:bool}
  */
 function save_department_task(
     int $departmentId,
@@ -394,7 +775,8 @@ function save_department_task(
     ?int $assignedTo,
     ?string $dueDate,
     array $actor,
-    ?int $taskId = null
+    ?int $taskId = null,
+    bool $autoAddMember = true
 ): array {
     ensure_departments_schema();
     $title = trim($title);
@@ -415,23 +797,41 @@ function save_department_task(
             return ['ok' => false, 'error' => 'Due date must be YYYY-MM-DD.'];
         }
     }
+    $addedMember = false;
+    $existing = null;
+    if ($taskId !== null && $taskId > 0) {
+        $existing = get_department_task($taskId);
+        if (!$existing || (int) $existing['department_id'] !== $departmentId) {
+            return ['ok' => false, 'error' => 'Task not found.'];
+        }
+    }
     if ($assignedTo !== null && $assignedTo > 0) {
         $assignee = db()->prepare(
             "SELECT id, role, is_active FROM users WHERE id=? LIMIT 1"
         );
         $assignee->execute([$assignedTo]);
         $assigneeRow = $assignee->fetch(PDO::FETCH_ASSOC);
-        if (!$assigneeRow || (int) ($assigneeRow['is_active'] ?? 0) !== 1) {
-            return ['ok' => false, 'error' => 'Assignee user not found or inactive.'];
-        }
-        if (($assigneeRow['role'] ?? '') !== 'team') {
+        if (!$assigneeRow || ($assigneeRow['role'] ?? '') !== 'team') {
             return ['ok' => false, 'error' => 'Tasks can only be assigned to Team users.'];
         }
-        // Auto-add assignee to the department so tools unlock for them.
-        if (!user_in_department($assignedTo, $departmentId)) {
+        $keepingSameAssignee = $existing
+            && (int) ($existing['assigned_to'] ?? 0) === (int) $assignedTo;
+        // Allow keeping a historical (inactive / removed) assignee on edit;
+        // new assignments still require an active Team user.
+        if ((int) ($assigneeRow['is_active'] ?? 0) !== 1 && !$keepingSameAssignee) {
+            return ['ok' => false, 'error' => 'Assignee user not found or inactive.'];
+        }
+        // Auto-add assignee to the department so tools unlock for them (Admin only).
+        if ($autoAddMember
+            && (int) ($assigneeRow['is_active'] ?? 0) === 1
+            && !user_in_department($assignedTo, $departmentId)) {
             if (!add_department_member($departmentId, $assignedTo, $actor)) {
                 return ['ok' => false, 'error' => 'Could not add assignee to this department.'];
             }
+            $addedMember = true;
+        } elseif (!$autoAddMember && !user_in_department($assignedTo, $departmentId)
+            && !$keepingSameAssignee) {
+            return ['ok' => false, 'error' => 'Assign only to someone in this department.'];
         }
     } else {
         $assignedTo = null;
@@ -440,17 +840,13 @@ function save_department_task(
     $actorId = (int) ($actor['id'] ?? 0) ?: null;
 
     try {
-        if ($taskId !== null && $taskId > 0) {
-            $existing = get_department_task($taskId);
-            if (!$existing || (int) $existing['department_id'] !== $departmentId) {
-                return ['ok' => false, 'error' => 'Task not found.'];
-            }
+        if ($existing) {
             db()->prepare(
                 'UPDATE department_tasks
                  SET title=?, notes=?, status=?, assigned_to=?, due_date=?, updated_at=NOW()
                  WHERE id=?'
             )->execute([$title, $notes !== '' ? $notes : null, $status, $assignedTo, $due, $taskId]);
-            return ['ok' => true, 'id' => $taskId];
+            return ['ok' => true, 'id' => $taskId, 'added_member' => $addedMember];
         }
 
         db()->prepare(
@@ -466,7 +862,7 @@ function save_department_task(
             $actorId,
             $due,
         ]);
-        return ['ok' => true, 'id' => (int) db()->lastInsertId()];
+        return ['ok' => true, 'id' => (int) db()->lastInsertId(), 'added_member' => $addedMember];
     } catch (Throwable $e) {
         return ['ok' => false, 'error' => 'Could not save task. Try again or run upgrade.php.'];
     }
@@ -490,7 +886,7 @@ function update_department_task_status(int $taskId, string $status): bool
         'UPDATE department_tasks SET status=?, updated_at=NOW() WHERE id=?'
     );
     $stmt->execute([$status, $taskId]);
-    return $stmt->rowCount() > 0;
+    return true;
 }
 
 /**
@@ -503,10 +899,16 @@ function list_open_tasks_for_user(int $userId, int $limit = 50): array
     ensure_departments_schema();
     $limit = max(1, min(200, $limit));
     $stmt = db()->prepare(
-        "SELECT t.*, d.name AS department_name, d.slug AS department_slug
+        "SELECT t.*, d.name AS department_name, d.slug AS department_slug,
+                au.username AS assigned_username,
+                au.full_name AS assigned_name,
+                cu.username AS created_username,
+                cu.full_name AS created_name
          FROM department_tasks t
          INNER JOIN departments d ON d.id = t.department_id
          INNER JOIN department_members m ON m.department_id = t.department_id AND m.user_id = ?
+         LEFT JOIN users au ON au.id = t.assigned_to
+         LEFT JOIN users cu ON cu.id = t.created_by
          WHERE t.status IN ('open','in_progress') AND d.is_active=1
          ORDER BY FIELD(t.status, 'open', 'in_progress'),
                   t.due_date IS NULL, t.due_date ASC, t.id DESC

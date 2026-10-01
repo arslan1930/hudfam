@@ -15,6 +15,9 @@ function ensure_admin_new_data_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS admin_data_signals (
@@ -34,6 +37,9 @@ function ensure_admin_new_data_schema(): void
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 /**
@@ -155,12 +161,19 @@ function admin_new_data_flags(?array $user = null): array
 }
 
 /**
- * New badges removed sitewide — kept as a no-op so older call sites stay safe.
+ * New badge HTML. Re-enabled only for emails_admin (Sites with emails - Admin).
+ * Our database / Extracted stay off until a later decision.
  */
 function admin_new_badge_html(string $section, ?array $user = null): string
 {
-    unset($section, $user);
-    return '';
+    $section = admin_new_data_normalize_section($section);
+    if ($section !== 'emails_admin') {
+        return '';
+    }
+    if (!admin_has_new_data($section, $user)) {
+        return '';
+    }
+    return ' <span class="admin-new-badge" title="New data — open a country to clear">New</span>';
 }
 
 /**
