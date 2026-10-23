@@ -29,6 +29,7 @@ cd public_html && php -S 127.0.0.1:8080     # http://127.0.0.1:8080
 
 ### Lint / test / run
 
-- **Lint (syntax check):** `find public_html -name '*.php' -exec php -l {} \;` — the repo has no other linter and no automated test suite.
+- **Lint (syntax check):** `find public_html tests -name '*.php' -exec php -l {} \;`
+- **Smoke (no DB):** `php tests/smoke_admin_mvp.php`
 - **Run:** `php -S 127.0.0.1:8080` from `public_html/` (see above).
-- **Seed logins:** `admin` / `admin123`, `admin2` / `admin123`, `teammate` / `team123`.
+- **Seed logins:** Fresh `install.php` prints one-time passwords (forced change on first login). Older snapshots may still have demo users — they are forced to change if still on `admin123` / `team123`.

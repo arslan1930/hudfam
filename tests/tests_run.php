@@ -1,27 +1,29 @@
 <?php
 /**
- * Local integration smoke test — run: php tests_run.php
- * Not for production. Safe to delete after testing.
+ * Local integration smoke test — run: php tests/tests_run.php
+ * Not for production. Uses the app DB; keep out of the web root.
  */
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
-session_start();
 
-require __DIR__ . '/includes/helpers.php';
-require __DIR__ . '/includes/db.php';
-require __DIR__ . '/includes/auth.php';
-require __DIR__ . '/includes/geo.php';
-require __DIR__ . '/includes/prospects.php';
-require __DIR__ . '/includes/extracting.php';
-require __DIR__ . '/includes/extracted.php';
-require __DIR__ . '/includes/sites_with_emails.php';
-require __DIR__ . '/includes/email_campaigns.php';
-require __DIR__ . '/includes/admin_new_data.php';
-require __DIR__ . '/includes/departments.php';
-require __DIR__ . '/includes/orders.php';
-require __DIR__ . '/includes/invoices.php';
-require __DIR__ . '/includes/presence.php';
-require __DIR__ . '/includes/semrush_research.php';
+$appRoot = dirname(__DIR__) . '/public_html';
+require $appRoot . '/includes/helpers.php';
+require $appRoot . '/includes/security.php';
+start_app_session();
+require $appRoot . '/includes/db.php';
+require $appRoot . '/includes/auth.php';
+require $appRoot . '/includes/geo.php';
+require $appRoot . '/includes/prospects.php';
+require $appRoot . '/includes/extracting.php';
+require $appRoot . '/includes/extracted.php';
+require $appRoot . '/includes/sites_with_emails.php';
+require $appRoot . '/includes/email_campaigns.php';
+require $appRoot . '/includes/admin_new_data.php';
+require $appRoot . '/includes/departments.php';
+require $appRoot . '/includes/orders.php';
+require $appRoot . '/includes/invoices.php';
+require $appRoot . '/includes/presence.php';
+require $appRoot . '/includes/semrush_research.php';
 
 $errors = [];
 $ok = [];

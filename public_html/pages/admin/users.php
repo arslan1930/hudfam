@@ -230,6 +230,7 @@ render_header('Admins & users', 'admin');
 <div class="card">
   <h2><?= $edit ? 'Edit user' : 'New admin / team user' ?></h2>
   <form method="post" action="index.php?page=admin_users">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="id" value="<?= (int)($edit['id'] ?? 0) ?>">
     <label>Username</label>

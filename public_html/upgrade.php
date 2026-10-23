@@ -2,9 +2,14 @@
 /**
  * One-time upgrade for existing Hostinger installs.
  * Requires a logged-in Admin session. Delete this file after running.
+ *
+ * Note: .htaccess denies upgrade.php once config.php exists. Temporarily
+ * comment that deny rule in .htaccess before opening this page, then restore it.
  */
-session_start();
 require __DIR__ . '/includes/helpers.php';
+require __DIR__ . '/includes/security.php';
+send_security_headers();
+start_app_session();
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 
@@ -26,6 +31,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 }
 
 if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     try {
         require __DIR__ . '/includes/geo.php';
         require __DIR__ . '/includes/prospects.php';
@@ -159,9 +165,11 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="<?= h(csrf_token()) ?>">
   <title>Upgrade TechxForm</title>
   <link rel="stylesheet" href="asset.php?f=css/app.css">
-  <link rel="stylesheet" href="assets/css/app.css">
+  <script src="asset.php?f=js/csrf.js"></script>
 </head>
 <body>
 <div class="login-wrap">
@@ -179,9 +187,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php render_alert_box('ok', 'Upgrade complete.'); ?>
       <ul class="help"><?php foreach ($notes as $n): ?><li><?= htmlspecialchars($n) ?></li><?php endforeach; ?></ul>
       <p><a href="index.php?page=admin_dashboard">Open Admin dashboard</a></p>
-      <p class="help"><strong>Delete upgrade.php now.</strong></p>
+      <p class="help"><strong>Delete upgrade.php now.</strong> Re-enable the .htaccess deny rule if you commented it out.</p>
     <?php elseif (!$locked): ?>
       <form method="post">
+        <?= csrf_field() ?>
         <button class="btn" type="submit">Run upgrade</button>
       </form>
     <?php endif; ?>

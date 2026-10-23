@@ -1,7 +1,7 @@
 <?php
 /**
  * HTTP smoke test against php -S 127.0.0.1:8080
- * php tests_http.php
+ * Run: php tests/tests_http.php
  */
 $base = getenv('TXF_BASE') ?: 'http://127.0.0.1:8080';
 $cookie = sys_get_temp_dir() . '/txf_http_cookie.txt';
@@ -54,28 +54,49 @@ function location(array $res): string
     return '';
 }
 
+function extract_csrf(string $html): string
+{
+    if (preg_match('/name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']/', $html, $m)) {
+        return $m[1];
+    }
+    if (preg_match('/name=["\']_csrf["\']\s+value=["\']([^"\']+)["\']/', $html, $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+function login_post(string $base, string $username, string $password): array
+{
+    $r = req('GET', $base . '/index.php?page=login');
+    $csrf = extract_csrf($r['body']);
+    $body = ['username' => $username, 'password' => $password];
+    if ($csrf !== '') {
+        $body['_csrf'] = $csrf;
+    }
+    return req('POST', $base . '/index.php?page=login', [
+        'body' => http_build_query($body),
+    ]);
+}
+
 // Login page
 $r = req('GET', $base . '/index.php?page=login');
-if ($r['status'] === 200 && str_contains($r['body'], 'name="username"')) {
+$csrf = extract_csrf($r['body']);
+if ($r['status'] === 200 && str_contains($r['body'], 'name="username"') && $csrf !== '') {
     pass('login page');
 } else {
-    fail('login page status=' . $r['status'] . ' err=' . $r['error']);
+    fail('login page status=' . $r['status'] . ' csrf=' . ($csrf !== '' ? 'yes' : 'no') . ' err=' . $r['error']);
 }
 
 // Bad login
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'admin', 'password' => 'wrong']),
-]);
-if ($r['status'] === 200 && (str_contains($r['body'], 'Invalid') || str_contains($r['body'], 'invalid'))) {
+$r = login_post($base, 'admin', 'wrong');
+if ($r['status'] === 200 && (str_contains($r['body'], 'Invalid') || str_contains($r['body'], 'invalid') || str_contains($r['body'], 'Too many'))) {
     pass('bad login stays on form');
 } else {
     fail('bad login unexpected status=' . $r['status']);
 }
 
 // Admin login
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'admin', 'password' => 'TestAdmin9x']),
-]);
+$r = login_post($base, 'admin', 'TestAdmin9x');
 $loc = location($r);
 if ($r['status'] >= 300 && $r['status'] < 400 && str_contains($loc, 'admin_dashboard')) {
     pass('admin login redirect');
@@ -94,10 +115,17 @@ foreach (
         'admin_orders' => ['Order'],
         'admin_invoices' => ['Invoice'],
         'admin_users' => ['Users'],
+        'admin_account' => ['Admin account'],
         'account_password' => ['Change password'],
+        'forgot_password' => ['Forgot password'],
     ] as $page => $needles
 ) {
     $r = req('GET', $base . '/index.php?page=' . $page);
+    // Logged-in users are redirected away from forgot_password
+    if ($page === 'forgot_password' && $r['status'] >= 300 && $r['status'] < 400) {
+        pass("page $page (redirect when logged in)");
+        continue;
+    }
     $bad = [];
     foreach ($needles as $n) {
         if (!str_contains($r['body'], $n)) {
@@ -120,7 +148,7 @@ if (str_contains($r['body'], 'data-nav-toggle') && str_contains($r['body'], 'id=
 }
 
 // Assets
-foreach (['/asset.php?f=css/app.css', '/asset.php?f=js/nav-shell.js', '/asset.php?f=js/sites-with-emails.js'] as $path) {
+foreach (['/asset.php?f=css/app.css', '/asset.php?f=js/nav-shell.js', '/asset.php?f=js/sites-with-emails.js', '/asset.php?f=js/csrf.js'] as $path) {
     $r = req('GET', $base . $path);
     if ($r['status'] === 200 && strlen($r['body']) > 50) {
         pass('asset ' . $path);
@@ -129,27 +157,27 @@ foreach (['/asset.php?f=css/app.css', '/asset.php?f=js/nav-shell.js', '/asset.ph
     }
 }
 
-// install.php locked
+// install.php locked (app lock and/or .htaccess deny when config.php exists)
 $r = req('GET', $base . '/install.php');
-if ($r['status'] === 403 || str_contains($r['body'], 'Install locked')) {
+if ($r['status'] === 403 || str_contains($r['body'], 'Install locked') || str_contains($r['body'], 'Forbidden')) {
     pass('install.php locked');
 } else {
     fail('install.php not locked status=' . $r['status']);
 }
 
-// upgrade.php requires admin (we are logged in as admin — should show form or complete UI, not 403 login wall)
+// upgrade.php: php -S may still serve it; Apache .htaccess denies after install.
 $r = req('GET', $base . '/upgrade.php');
-if ($r['status'] === 200 && (str_contains($r['body'], 'Run upgrade') || str_contains($r['body'], 'Upgrade complete') || str_contains($r['body'], 'Upgrade'))) {
-    pass('upgrade.php admin access');
+if ($r['status'] === 403 || str_contains($r['body'], 'Forbidden')) {
+    pass('upgrade.php denied after install');
+} elseif ($r['status'] === 200 && (str_contains($r['body'], 'Run upgrade') || str_contains($r['body'], 'Upgrade'))) {
+    pass('upgrade.php admin access (dev server)');
 } else {
     fail('upgrade.php unexpected status=' . $r['status']);
 }
 
 // Logout + team login
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'teammate', 'password' => 'TestTeam8z']),
-]);
+$r = login_post($base, 'teammate', 'TestTeam8z');
 $loc = location($r);
 if ($r['status'] >= 300 && $r['status'] < 400 && (str_contains($loc, 'team_dashboard') || str_contains($loc, 'team_departments'))) {
     pass('team login redirect');
@@ -184,9 +212,7 @@ foreach (
 
 // Dept-scoped finder cannot open extracting
 req('GET', $base . '/index.php?page=logout');
-$r = req('POST', $base . '/index.php?page=login', [
-    'body' => http_build_query(['username' => 'finder', 'password' => 'DeptTest9x']),
-]);
+$r = login_post($base, 'finder', 'DeptTest9x');
 $r = req('GET', $base . '/index.php?page=team_prospect_check');
 if ($r['status'] === 200 && (str_contains($r['body'], 'Filter') || str_contains($r['body'], 'Paste'))) {
     pass('finder can open Filter & add');
@@ -198,7 +224,6 @@ $loc = location($r);
 if (($r['status'] >= 300 && str_contains($loc, 'team_departments')) || str_contains($r['body'], 'only shows')) {
     pass('finder blocked from Extracting');
 } else {
-    // may redirect with flash via 302
     if ($r['status'] >= 300 && $r['status'] < 400) {
         pass('finder blocked from Extracting (redirect)');
     } else {

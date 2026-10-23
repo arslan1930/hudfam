@@ -1,9 +1,13 @@
 <?php
-session_start();
-
 require __DIR__ . '/includes/helpers.php';
+require __DIR__ . '/includes/security.php';
+send_security_headers();
+start_app_session();
+
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
+require __DIR__ . '/includes/account.php';
+require __DIR__ . '/includes/mail.php';
 require __DIR__ . '/includes/geo.php';
 require __DIR__ . '/includes/prospects.php';
 require __DIR__ . '/includes/extracting.php';
@@ -56,8 +60,12 @@ $routes = [
     'login' => 'pages/login.php',
     'logout' => 'pages/logout.php',
     'account_password' => 'pages/account_password.php',
+    'forgot_password' => 'pages/forgot_password.php',
+    'reset_password' => 'pages/reset_password.php',
+    'verify_email' => 'pages/verify_email.php',
 
     'admin_dashboard' => 'pages/admin/dashboard.php',
+    'admin_account' => 'pages/admin/account.php',
     'admin_departments' => 'pages/admin/departments.php',
     'admin_prospects' => 'pages/admin/prospects.php',
     'admin_prospect_add' => 'pages/admin/prospect_add.php',
@@ -94,9 +102,14 @@ $routes = [
 
 if (!isset($routes[$page])) {
     http_response_code(404);
-    echo 'Page not found.';
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
+    echo '<meta name="robots" content="noindex,nofollow"><title>Page not found</title></head><body>';
+    echo '<h1>Page not found</h1><p><a href="index.php">Go to login</a></p></body></html>';
     exit;
 }
+
+// CSRF on every state-changing request (forms + AJAX).
+require_csrf();
 
 // Must change weak/default password before using the app.
 $cu = current_user();

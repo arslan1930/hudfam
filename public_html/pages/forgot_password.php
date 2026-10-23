@@ -30,6 +30,7 @@ render_header('Forgot password');
     <?php if ($message): ?><ul class="messages"><li><?= h($message) ?></li></ul><?php endif; ?>
     <?php if (!$message): ?>
     <form method="post">
+      <?= csrf_field() ?>
       <label>Admin email</label>
       <input type="email" name="email" required autofocus placeholder="you@company.com">
       <p style="margin-top:1.1rem"><button class="btn" type="submit">Send reset link</button></p>
