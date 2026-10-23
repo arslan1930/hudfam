@@ -1356,7 +1356,7 @@ if (substr_count($campAppSmoke, 'csrf_field()') < 21
     ok('Campaign csrf_field on POST forms');
 }
 if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
-    || !str_contains($sweAppSmoke, '<div class="table-wrap">')
+    || !str_contains($sweAppSmoke, 'class="table-wrap')
     || !str_contains($sweAppSmoke, 'also creates the Admin working-list row')
     || !str_contains($sweAppSmoke, 'Open an empty country')
     || !str_contains($sweAppSmoke, 'data-no-draft')
@@ -1367,6 +1367,24 @@ if (!str_contains($sweAppSmoke, 'id="swe-country-table"')
     fail('SWE country list missing table-wrap or Final add-site copy');
 } else {
     ok('SWE country list table-wrap + Final add-site copy');
+}
+if (!str_contains($sweAppSmoke, 'Team Push list')
+    || !str_contains($sweAppSmoke, 'swe-country-sortable')
+    || !str_contains($sweAppSmoke, 'swe-country-totals')
+    || !str_contains($sweAppSmoke, 'swe-country-new-pill')
+    || !str_contains($sweAppSmoke, 'data-sort-key="missing"')
+    || !str_contains($sweAppSmoke, 'data-sort-key="coverage"')
+    || !str_contains($sweAppSmoke, 'mark_country_seen')
+    || !str_contains($sweAppSmoke, 'Mark all countries as seen?')
+    || !str_contains($sweLibSmoke, "'missing' =>")
+    || !str_contains($sweLibSmoke, "'coverage' =>")
+    || !str_contains($sweLibSmoke, "'emailed' =>")
+    || !str_contains($sweLibSmoke, 'last_synced_at')
+    || !str_contains($sweLibSmoke, 'ORDER BY total DESC')
+    || str_contains($sweAppSmoke, '>Open</button>')) {
+    fail('SWE Team Push country list missing sort/totals/coverage/mark-seen UI');
+} else {
+    ok('SWE Team Push country list sort + totals + coverage + mark-seen');
 }
 if (!str_contains($sweLibSmoke, 'function merge_swe_email_slots_prefer_admin_stats')
     || !str_contains($sweLibSmoke, 'skipped_full_slots')

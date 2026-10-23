@@ -1745,6 +1745,66 @@ html.ui-v2 .sheet-tool-menu-panel .btn {
   justify-content: flex-start;
 }
 
+/* Team Push / SWE by-country list */
+html.ui-v2 .swe-country-summary {
+  color: var(--muted);
+}
+html.ui-v2 .swe-country-summary strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+html.ui-v2 .swe-country-new {
+  color: #fdba74;
+}
+html.ui-v2 .swe-country-new-pill {
+  color: #ffedd5;
+  background: rgba(251, 146, 60, 0.22);
+  border-color: rgba(251, 146, 60, 0.55);
+}
+html.ui-v2 .swe-country-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+html.ui-v2 .swe-country-sortable thead th {
+  background: var(--bg-2);
+  color: var(--muted);
+  border-bottom-color: var(--line);
+  box-shadow: 0 1px 0 var(--line);
+}
+html.ui-v2 .swe-country-sortable tfoot.swe-country-totals th,
+html.ui-v2 .swe-country-sortable tfoot.swe-country-totals td {
+  background: var(--bg-2);
+  color: var(--ink);
+  border-top-color: var(--line);
+  box-shadow: 0 -1px 0 var(--line);
+}
+html.ui-v2 .swe-sort-btn {
+  color: inherit;
+}
+html.ui-v2 .swe-sort-btn:hover {
+  color: var(--heading);
+}
+html.ui-v2 .swe-sort-btn.is-active {
+  color: var(--heading);
+}
+html.ui-v2 #swe-country-table tbody tr[data-swe-country-row]:hover td {
+  background: rgba(148, 163, 184, 0.12);
+}
+html.ui-v2 #swe-country-table .extracted-country-link {
+  color: #7dd3fc;
+}
+html.ui-v2 #swe-country-table .extracted-country-link:hover {
+  color: #bae6fd;
+}
+html.ui-v2 .swe-country-ts {
+  color: var(--muted);
+}
+html.ui-v2 .swe-country-seen-cell .btn.small {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+}
+
 @media print {
   html.ui-v2 .ui-skip {
     display: none !important;

@@ -1139,7 +1139,12 @@ function push_sites_with_emails_team_to_admin(
 function list_sites_with_emails_country_rows(string $scope = 'team'): array
 {
     ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
     $table = swe_table($scope);
+    // Admin working list has email_sent (contacted/emailed). Other scopes do not.
+    $emailedSelect = $scope === 'admin'
+        ? ", COALESCE(SUM(CASE WHEN email_sent=1 THEN 1 ELSE 0 END), 0) AS emailed"
+        : ', 0 AS emailed';
     $sql = "SELECT TRIM(country) AS country,
                    MAX(region) AS region,
                    MAX(language) AS language,
@@ -1149,24 +1154,61 @@ function list_sites_with_emails_country_rows(string $scope = 'team'): array
                             OR (email2<>'' AND email2<>'none')
                             OR (email3<>'' AND email3<>'none')
                             OR (email4<>'' AND email4<>'none') THEN 1 ELSE 0 END
-                   ) AS with_emails,
+                   ) AS with_emails
+                   {$emailedSelect},
                    MAX(updated_at) AS last_pushed_at
             FROM {$table}
             WHERE TRIM(country) <> ''
             GROUP BY TRIM(country)
-            ORDER BY last_pushed_at DESC, country ASC";
+            ORDER BY total DESC, country ASC";
     $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    // Final archive last sync per country (known table; Admin list only).
+    $finalSynced = [];
+    if ($scope === 'admin') {
+        try {
+            $syncRows = db()->query(
+                "SELECT TRIM(country) AS country, MAX(updated_at) AS last_synced_at
+                 FROM sites_with_emails_admin_all
+                 WHERE TRIM(country) <> ''
+                 GROUP BY TRIM(country)"
+            )->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            foreach ($syncRows as $sr) {
+                $raw = (string) ($sr['country'] ?? '');
+                $canon = resolve_canonical_country($raw);
+                $label = $canon ? $canon['name'] : $raw;
+                if ($label === '') {
+                    continue;
+                }
+                $finalSynced[$label] = $sr['last_synced_at'] !== null
+                    ? (string) $sr['last_synced_at']
+                    : null;
+            }
+        } catch (Throwable $e) {
+            $finalSynced = [];
+        }
+    }
+
     $out = [];
     foreach ($rows as $row) {
         $name = (string) $row['country'];
         $canon = resolve_canonical_country($name);
+        $label = $canon ? $canon['name'] : $name;
+        $total = (int) $row['total'];
+        $withEmails = (int) $row['with_emails'];
+        $missing = max(0, $total - $withEmails);
+        $coverage = $total > 0 ? round(100 * $withEmails / $total, 1) : 0.0;
         $out[] = [
-            'country' => $canon ? $canon['name'] : $name,
+            'country' => $label,
             'region' => $canon ? $canon['region'] : (string) ($row['region'] ?? ''),
             'language' => $canon ? $canon['language'] : (string) ($row['language'] ?? ''),
-            'total' => (int) $row['total'],
-            'with_emails' => (int) $row['with_emails'],
+            'total' => $total,
+            'with_emails' => $withEmails,
+            'missing' => $missing,
+            'coverage' => $coverage,
+            'emailed' => (int) ($row['emailed'] ?? 0),
             'last_pushed_at' => $row['last_pushed_at'] !== null ? (string) $row['last_pushed_at'] : null,
+            'last_synced_at' => $finalSynced[$label] ?? null,
         ];
     }
     return $out;
