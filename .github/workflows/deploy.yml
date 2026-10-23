@@ -1,5 +1,9 @@
-# Safe Hostinger deploy: lint PHP, then FTP sync ONLY public_html/ → document root.
-# Never wipes the remote tree (dangerous-clean-slate: false). Never uploads config.php or uploads/.
+# Safe Hostinger deploy: lint PHP, then lftp mirror ONLY public_html/ → document root.
+# Never deletes remote files (no --delete). Never uploads config.php or uploads/.
+#
+# FTPS note: Hostinger often needs FTP over TLS with an unverified cert from CI.
+# We set ssl:verify-certificate no as an explicit fallback (traffic is still TLS when
+# the server offers it; ftp:ssl-allow true). Prefer fixing the host cert if possible.
 name: Deploy to Hostinger
 
 on:
@@ -29,18 +33,48 @@ jobs:
             php -l "$f"
           done
 
-      - name: FTP deploy public_html/ to server document root
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./public_html/
-          # Optional; default document root. Must end with /.
-          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            config.php
-            uploads/**
+      - name: Install lftp
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp
+
+      - name: lftp mirror public_html/ to document root
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          # Optional; default document root. Prefer a path ending with /.
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FTP_SERVER:-}" || -z "${FTP_USERNAME:-}" || -z "${FTP_PASSWORD:-}" ]]; then
+            echo "Missing required secrets: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD" >&2
+            exit 1
+          fi
+          REMOTE_DIR="${FTP_SERVER_DIR:-./}"
+          if [[ -z "${REMOTE_DIR// }" ]]; then
+            REMOTE_DIR="./"
+          fi
+
+          # lftp reads LFTP_PASSWORD when -u has no password (keeps it out of argv).
+          export LFTP_PASSWORD="$FTP_PASSWORD"
+
+          lftp <<EOF
+          set cmd:fail-exit true
+          set net:max-retries 10
+          set net:persist-retries 5
+          set net:timeout 60
+          set net:reconnect-interval-base 10
+          set net:reconnect-interval-multiplier 2
+          set net:reconnect-interval-max 120
+          set ftp:passive-mode true
+          set ftp:ssl-allow true
+          set ssl:verify-certificate no
+          set ftp:list-options -a
+          set mirror:parallel-transfer-count 2
+          open -u ${FTP_USERNAME} ftp://${FTP_SERVER}
+          cd ${REMOTE_DIR}
+          lcd public_html
+          mirror --reverse --only-newer --parallel=2 --verbose --exclude-glob config.php --exclude-glob uploads --exclude-glob uploads/** --exclude-glob .git* --exclude-glob **/.git* --exclude-glob **/.git*/**
+          bye
+          EOF

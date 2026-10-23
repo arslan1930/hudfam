@@ -49,9 +49,11 @@ Do **not** leave `tests_run.php`, `tests_http.php`, `smoke_admin_mvp.php`, or `r
 
 ### Auto-deploy from GitHub (FTP)
 
-Workflow: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). On every push to `main` (and via **Actions → Deploy to Hostinger → Run workflow**), it runs `php -l` on all PHP under `public_html/`, then uploads **only** `public_html/` to the Hostinger document root with [SamKirkland/FTP-Deploy-Action@v4.3.5](https://github.com/SamKirkland/FTP-Deploy-Action).
+Workflow: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). On every push to `main` (and via **Actions → Deploy to Hostinger → Run workflow**), it runs `php -l` on all PHP under `public_html/`, then uploads **only** `public_html/` to the Hostinger document root with **lftp** (`mirror --reverse --only-newer`, passive mode, no `--delete`).
 
-**Important:** Hostinger’s built-in Git deploy copies the whole repo (so you get a nested `public_html/` and a wiped site). Leave that Git integration **disabled**. Use this workflow instead — it maps `public_html/` → document root and never deletes remote files (`dangerous-clean-slate: false`).
+**Important:** Hostinger’s built-in Git deploy copies the whole repo (so you get a nested `public_html/` and a wiped site). Leave that Git integration **disabled**. Use this workflow instead — it maps `public_html/` → document root and never deletes remote files.
+
+FTPS certificate verification is disabled in CI (`ssl:verify-certificate no`) because Hostinger’s FTP TLS cert often does not match the FTP hostname from GitHub runners; traffic still uses TLS when the server offers it (`ftp:ssl-allow true`). Prefer a correctly issued host cert when Hostinger provides one.
 
 Add these repository secrets (**Settings → Secrets and variables → Actions**):
 
