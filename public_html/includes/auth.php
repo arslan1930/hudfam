@@ -7,6 +7,9 @@ function ensure_users_auth_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     try {
         $pdo = db();
         $cols = $pdo->query('SHOW COLUMNS FROM users')->fetchAll(PDO::FETCH_COLUMN);
@@ -16,6 +19,17 @@ function ensure_users_auth_schema(): void
                  ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0
                  AFTER is_active"
             );
+            $cols[] = 'must_change_password';
+        }
+        if (!in_array('session_version', $cols, true)) {
+            $pdo->exec(
+                "ALTER TABLE users
+                 ADD COLUMN session_version INT NOT NULL DEFAULT 1
+                 AFTER must_change_password"
+            );
+        }
+        if (function_exists('txf_schema_mark_current')) {
+            txf_schema_mark_current(__FUNCTION__);
         }
     } catch (Throwable $e) {
         // Table may not exist during very early install.
@@ -28,9 +42,162 @@ function known_weak_passwords(): array
     return ['admin123', 'team123'];
 }
 
+/**
+ * One-time temporary password for Admin → Users (create / generate-on-edit).
+ * Mixed alphabet, no ambiguous 0/O/I/l/1; never a known demo default.
+ */
+function generate_temp_password(int $length = 14): string
+{
+    $length = max(12, min(64, $length));
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+    $n = strlen($alphabet);
+    $out = '';
+    for ($i = 0; $i < $length; $i++) {
+        $out .= $alphabet[random_int(0, $n - 1)];
+    }
+    if (in_array($out, known_weak_passwords(), true)) {
+        return generate_temp_password($length);
+    }
+    return $out;
+}
+
+/**
+ * Admin → Users list URL. Empty filters are omitted so links stay short.
+ *
+ * @param array<string,mixed> $state
+ * @param array<string,mixed> $overrides
+ */
+function admin_users_url(array $state, array $overrides = []): string
+{
+    $params = array_merge([
+        'q' => '',
+        'role' => '',
+        'active' => '',
+        'awaiting' => '',
+        'must_change' => '',
+        'edit' => '',
+        'p' => '1',
+    ], $state, $overrides);
+    $bits = ['page=admin_users'];
+    $q = trim((string) ($params['q'] ?? ''));
+    if ($q !== '') {
+        $bits[] = 'q=' . rawurlencode($q);
+    }
+    foreach (['role', 'active', 'awaiting', 'must_change'] as $k) {
+        $v = trim((string) ($params[$k] ?? ''));
+        if ($v === '') {
+            continue;
+        }
+        $bits[] = rawurlencode($k) . '=' . rawurlencode($v);
+    }
+    $edit = (int) ($params['edit'] ?? 0);
+    if ($edit > 0) {
+        $bits[] = 'edit=' . $edit;
+    }
+    $p = max(1, (int) ($params['p'] ?? 1));
+    if ($p > 1) {
+        $bits[] = 'p=' . $p;
+    }
+    return 'index.php?' . implode('&', $bits);
+}
+
+function username_format_error(string $username): string
+{
+    $username = trim($username);
+    if ($username === '') {
+        return 'Username required.';
+    }
+    if (preg_match('/\s/', $username)) {
+        return 'Username cannot contain spaces.';
+    }
+    if (strlen($username) > 100) {
+        return 'Username is too long.';
+    }
+    return '';
+}
+
+function username_taken_by_other(string $username, int $excludeId = 0): bool
+{
+    $username = trim($username);
+    if ($username === '') {
+        return false;
+    }
+    $stmt = db()->prepare(
+        'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id <> ? LIMIT 1'
+    );
+    $stmt->execute([$username, $excludeId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function current_user(): ?array
 {
+    if (!isset($_SESSION['user']) || !is_array($_SESSION['user'])) {
+        return null;
+    }
+    txf_sync_session_user();
     return $_SESSION['user'] ?? null;
+}
+
+/**
+ * Reload is_active, role, and session_version from the DB. Logs out when the
+ * account is gone, deactivated, or the session was invalidated (password/role).
+ */
+function txf_sync_session_user(): void
+{
+    $id = (int) ($_SESSION['user']['id'] ?? 0);
+    if ($id < 1) {
+        logout_user();
+        return;
+    }
+    try {
+        ensure_users_auth_schema();
+        $stmt = db()->prepare(
+            'SELECT id, username, full_name, role, is_active, must_change_password, session_version
+             FROM users WHERE id=? LIMIT 1'
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (Throwable $e) {
+        return;
+    }
+    if (!$row || (int) ($row['is_active'] ?? 0) !== 1) {
+        logout_user();
+        flash('error', 'Please sign in again.');
+        return;
+    }
+    $sessVer = (int) ($_SESSION['user']['session_version'] ?? 1);
+    $dbVer = (int) ($row['session_version'] ?? 1);
+    if ($sessVer !== $dbVer) {
+        logout_user();
+        flash('error', 'Please sign in again.');
+        return;
+    }
+    $_SESSION['user']['id'] = (int) $row['id'];
+    $_SESSION['user']['username'] = (string) $row['username'];
+    $_SESSION['user']['full_name'] = (string) $row['full_name'];
+    $_SESSION['user']['role'] = (string) $row['role'];
+    $_SESSION['user']['must_change_password'] = (int) ($row['must_change_password'] ?? 0);
+    $_SESSION['user']['session_version'] = $dbVer;
+    $_SESSION['must_change_password'] = (int) ($row['must_change_password'] ?? 0) === 1;
+}
+
+/** Invalidate other browsers. Pass true to keep this request’s session. */
+function bump_user_session_version(int $userId, bool $keepCurrentSession = false): void
+{
+    if ($userId < 1) {
+        return;
+    }
+    try {
+        ensure_users_auth_schema();
+        db()->prepare('UPDATE users SET session_version = session_version + 1 WHERE id=?')->execute([$userId]);
+        if ($keepCurrentSession && isset($_SESSION['user']) && (int) ($_SESSION['user']['id'] ?? 0) === $userId) {
+            $st = db()->prepare('SELECT session_version FROM users WHERE id=? LIMIT 1');
+            $st->execute([$userId]);
+            $_SESSION['user']['session_version'] = (int) $st->fetchColumn();
+        }
+    } catch (Throwable $e) {
+        // Column may still be adding.
+    }
 }
 
 function require_login(): array
@@ -145,6 +312,7 @@ function attempt_login(string $username, string $password): bool
         'full_name' => $user['full_name'],
         'role' => $user['role'],
         'must_change_password' => $mustChange ? 1 : 0,
+        'session_version' => (int) ($user['session_version'] ?? 1),
     ];
     $_SESSION['must_change_password'] = $mustChange;
     return true;
@@ -181,6 +349,7 @@ function change_user_password(int $userId, string $currentPassword, string $newP
     }
     db()->prepare('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?')
         ->execute([password_hash($newPassword, PASSWORD_DEFAULT), $userId]);
+    bump_user_session_version($userId, true);
     clear_must_change_password_flag($userId);
     return '';
 }
@@ -211,6 +380,88 @@ function flag_users_with_weak_passwords(): int
 function logout_user(): void
 {
     unset($_SESSION['user'], $_SESSION['must_change_password']);
+    $canRotate = PHP_SAPI !== 'cli'
+        && session_status() === PHP_SESSION_ACTIVE
+        && !headers_sent();
+    if (!$canRotate) {
+        return;
+    }
+    $_SESSION = [];
+    $params = session_get_cookie_params();
+    setcookie(session_name(), '', [
+        'expires' => time() - 42000,
+        'path' => $params['path'] ?? '/',
+        'domain' => $params['domain'] ?? '',
+        'secure' => (bool) ($params['secure'] ?? false),
+        'httponly' => (bool) ($params['httponly'] ?? true),
+        'samesite' => (string) ($params['samesite'] ?? 'Lax'),
+    ]);
+    session_destroy();
+    txf_secure_session_start();
+    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+        session_regenerate_id(true);
+    }
+}
+
+const LOGIN_THROTTLE_MAX = 12;
+const LOGIN_THROTTLE_WINDOW = 600;
+
+function login_throttle_key(string $login): string
+{
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '0');
+    $ip = preg_replace('/[^0-9a-fA-F:.]/', '', $ip) ?: '0';
+    return hash('sha256', $ip . '|' . mb_strtolower(trim($login)));
+}
+
+function login_throttle_file(string $login): string
+{
+    return sys_get_temp_dir() . '/txf_login_' . login_throttle_key($login);
+}
+
+function login_throttle_blocked(string $login): bool
+{
+    $path = login_throttle_file($login);
+    if (!is_file($path)) {
+        return false;
+    }
+    $raw = @file_get_contents($path);
+    $pack = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($pack)) {
+        return false;
+    }
+    $start = (int) ($pack['start'] ?? 0);
+    $n = (int) ($pack['n'] ?? 0);
+    if ($start < 1 || (time() - $start) > LOGIN_THROTTLE_WINDOW) {
+        @unlink($path);
+        return false;
+    }
+    return $n >= LOGIN_THROTTLE_MAX;
+}
+
+function login_throttle_note_failure(string $login): void
+{
+    $path = login_throttle_file($login);
+    $now = time();
+    $n = 1;
+    $start = $now;
+    if (is_file($path)) {
+        $raw = @file_get_contents($path);
+        $pack = is_string($raw) ? json_decode($raw, true) : null;
+        if (is_array($pack) && (int) ($pack['start'] ?? 0) > 0
+            && ($now - (int) $pack['start']) <= LOGIN_THROTTLE_WINDOW) {
+            $start = (int) $pack['start'];
+            $n = (int) ($pack['n'] ?? 0) + 1;
+        }
+    }
+    @file_put_contents($path, json_encode(['start' => $start, 'n' => $n]), LOCK_EX);
+}
+
+function login_throttle_clear(string $login): void
+{
+    $path = login_throttle_file($login);
+    if (is_file($path)) {
+        @unlink($path);
+    }
 }
 
 function is_admin(?array $user = null): bool

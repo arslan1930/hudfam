@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  var INTERVAL_MS = 18000;
+  var INTERVAL_MS = 30000;
   var nodes = document.querySelectorAll('[data-task-presence]');
   if (!nodes.length) return;
 
@@ -40,12 +40,17 @@
     if (!key) return;
     var body = new URLSearchParams();
     body.set('task_key', key);
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    var csrf = meta ? String(meta.getAttribute('content') || '') : '';
+    if (csrf) body.set('_csrf', csrf);
+    var headers = {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      Accept: 'application/json'
+    };
+    if (csrf) headers['X-CSRF-Token'] = csrf;
     fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        Accept: 'application/json'
-      },
+      headers: headers,
       body: body.toString(),
       credentials: 'same-origin',
       cache: 'no-store'
@@ -67,6 +72,7 @@
   }
 
   function pingAll() {
+    if (document.hidden) return;
     nodes.forEach(ping);
   }
 

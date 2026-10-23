@@ -14,6 +14,9 @@ function ensure_extract_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS extract_batches (
@@ -58,6 +61,23 @@ function ensure_extract_schema(): void
         }
     } catch (Throwable $e) {
         // ignore if permissions/table differ
+    }
+    foreach ([
+        'last_pushed_at' => 'TIMESTAMP NULL DEFAULT NULL',
+        'sites_writer_id' => 'INT NULL DEFAULT NULL',
+        'sites_writer_at' => 'TIMESTAMP NULL DEFAULT NULL',
+    ] as $colName => $ddl) {
+        try {
+            $col = $pdo->query("SHOW COLUMNS FROM extract_batches LIKE " . $pdo->quote($colName))->fetch(PDO::FETCH_ASSOC);
+            if (!$col) {
+                $pdo->exec("ALTER TABLE extract_batches ADD COLUMN {$colName} {$ddl}");
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
     }
 }
 
@@ -119,7 +139,7 @@ function get_or_create_extract_batch(
  * Dual path: push newly added domains into the country's Sites list box.
  *
  * @param list<array{domain:string,prospect_site_id?:int|null}>|list<string> $domains
- * @return array{batch_id:int,added:int}
+ * @return array{batch_id:int,added:int,failed:int,error:string}
  */
 function add_domains_to_extract_sites(
     array $domains,
@@ -153,65 +173,247 @@ function add_domains_to_extract_sites(
         ];
     }
     if ($rows === []) {
-        return ['batch_id' => 0, 'added' => 0];
+        return ['batch_id' => 0, 'added' => 0, 'failed' => 0, 'error' => ''];
     }
 
+    // Caller must already de-dupe against this country’s Our database
+    // (filter_domains_routed_against_prospects / add_prospect_domains). Do not
+    // re-check prospect_sites here — rows were often just inserted there.
     $batchId = get_or_create_extract_batch($country, $user, $language, $region);
     $ins = db()->prepare(
         'INSERT INTO extract_batch_sites (batch_id, domain, prospect_site_id, added_by)
-         VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE
-           prospect_site_id = COALESCE(VALUES(prospect_site_id), prospect_site_id)'
+         VALUES (?,?,?,?)'
     );
+    $drop = db()->prepare('DELETE FROM extract_batch_sites WHERE batch_id=? AND domain=?');
     $added = 0;
+    $failed = 0;
+    $failMsg = '';
     $uid = (int) ($user['id'] ?? 0) ?: null;
     // Insert newest-first among this batch so ORDER BY id DESC shows paste order at top.
+    // Drop any leftover Extracting row first so a re-add after Our database
+    // delete is a new row at the top, not a silent unique-key no-op.
     foreach (array_reverse($rows) as $row) {
         try {
+            $drop->execute([$batchId, $row['domain']]);
             $ins->execute([
                 $batchId,
                 $row['domain'],
                 $row['prospect_site_id'] ?: null,
                 $uid,
             ]);
-            // rowCount is 1 for insert, 2 for update on MySQL; only count fresh inserts
             if ($ins->rowCount() === 1) {
                 $added++;
             }
         } catch (PDOException $e) {
-            // skip bad row
+            $failed++;
+            if ($failMsg === '') {
+                $failMsg = $e->getMessage();
+            }
         }
     }
     refresh_extract_batch_site_count($batchId);
 
-    return ['batch_id' => $batchId, 'added' => $added];
+    return ['batch_id' => $batchId, 'added' => $added, 'failed' => $failed, 'error' => $failMsg];
 }
 
 /**
  * @return list<array<string,mixed>>
  */
-function list_extract_batches(int $limit = 200): array
+function list_extract_batches(int $limit = 2000): array
 {
     ensure_extract_schema();
     purge_expired_empty_extract_batches();
-    $limit = max(1, min(500, $limit));
+    $limit = max(1, min(10000, $limit));
     // Hide empty countries here; they may still be open on the batch page until leave / 1 hour.
-    $sql = "SELECT b.*, u.username, u.full_name
+    // Live COUNT so a stale extract_batches.site_count cannot disagree with the Sites list.
+    $sql = "SELECT b.*, u.username, u.full_name,
+                   w.username AS sites_writer_username, w.full_name AS sites_writer_name,
+                   COALESCE(c.n, 0) AS live_site_count
             FROM extract_batches b
             LEFT JOIN users u ON u.id = b.created_by
-            WHERE b.site_count > 0
+            LEFT JOIN users w ON w.id = b.sites_writer_id
+            LEFT JOIN (
+                SELECT batch_id, COUNT(*) AS n FROM extract_batch_sites GROUP BY batch_id
+            ) c ON c.batch_id = b.id
+            WHERE COALESCE(c.n, 0) > 0
             ORDER BY b.updated_at DESC, b.country ASC
             LIMIT {$limit}";
-    return db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($rows as &$row) {
+        $row['site_count'] = (int) ($row['live_site_count'] ?? 0);
+        unset($row['live_site_count']);
+    }
+    unset($row);
+
+    return $rows;
+}
+
+/** Hub clock: YYYY-MM-DD HH:MM (empty string stays empty). */
+function extract_hub_stamp(string $at): string
+{
+    $at = trim($at);
+    if ($at === '') {
+        return '';
+    }
+    return substr($at, 0, 16);
+}
+
+/**
+ * Sum waiting Sites across hub rows (already live counts, filled countries only).
+ *
+ * @param list<array<string,mixed>> $batches
+ * @return array{countries:int,sites:int}
+ */
+function extract_hub_waiting_summary(array $batches): array
+{
+    $sites = 0;
+    $countries = 0;
+    foreach ($batches as $b) {
+        if (!is_array($b)) {
+            continue;
+        }
+        $n = (int) ($b['site_count'] ?? 0);
+        if ($n < 1) {
+            continue;
+        }
+        $countries++;
+        $sites += $n;
+    }
+    return ['countries' => $countries, 'sites' => $sites];
+}
+
+/**
+ * Queue cues for one hub row. Stale = Updated ≥ 7 days ago.
+ * Quiet = stale and never Push'd. Large = 500+ waiting.
+ *
+ * @param array<string,mixed> $batch
+ * @return array{large:bool,stale:bool,quiet:bool}
+ */
+function extract_hub_row_cues(array $batch, ?int $nowTs = null): array
+{
+    $nowTs = $nowTs ?? time();
+    $count = (int) ($batch['site_count'] ?? 0);
+    $updated = trim((string) ($batch['updated_at'] ?? ''));
+    $push = trim((string) ($batch['last_pushed_at'] ?? ''));
+    $updatedTs = $updated !== '' ? strtotime($updated) : false;
+    $stale = $updatedTs !== false && ($nowTs - $updatedTs) >= 7 * 86400;
+    return [
+        'large' => $count >= 500,
+        'stale' => $stale,
+        'quiet' => $stale && $push === '',
+    ];
+}
+
+/**
+ * Cheap Extracting country switcher (id + country). Filled Sites lists only;
+ * include $currentId even when that batch is empty so the open sheet stays in the list.
+ *
+ * @return list<array{id:int,country:string}>
+ */
+function list_extract_batch_country_nav(int $currentId = 0): array
+{
+    ensure_extract_schema();
+    // Do not purge here: an open empty sheet must stay in the switcher.
+    // Hub list_extract_batches() still removes countries empty for 1 hour.
+    $currentId = max(0, $currentId);
+    $sql = 'SELECT b.id, b.country FROM extract_batches b WHERE (EXISTS (SELECT 1 FROM extract_batch_sites s WHERE s.batch_id = b.id)';
+    if ($currentId > 0) {
+        $sql .= ' OR b.id = ' . $currentId;
+    }
+    $sql .= ') ORDER BY b.country ASC, b.id ASC';
+    $out = [];
+    $seen = [];
+    foreach (db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $id = (int) ($row['id'] ?? 0);
+        $raw = trim((string) ($row['country'] ?? ''));
+        if ($id < 1 || $raw === '' || isset($seen[$id])) {
+            continue;
+        }
+        $seen[$id] = true;
+        $canon = function_exists('resolve_canonical_country')
+            ? resolve_canonical_country($raw)
+            : null;
+        $out[] = [
+            'id' => $id,
+            'country' => $canon ? (string) $canon['name'] : $raw,
+        ];
+    }
+    return $out;
+}
+
+function stamp_extract_batch_last_pushed(?int $batchId): void
+{
+    if ($batchId === null || $batchId < 1) {
+        return;
+    }
+    ensure_extract_schema();
+    try {
+        db()->prepare('UPDATE extract_batches SET last_pushed_at=NOW() WHERE id=?')->execute([$batchId]);
+    } catch (Throwable $e) {
+        // ignore missing column on very old installs
+    }
+}
+
+function stamp_extract_sites_writer(int $batchId, ?int $userId): void
+{
+    if ($batchId < 1) {
+        return;
+    }
+    ensure_extract_schema();
+    try {
+        db()->prepare(
+            'UPDATE extract_batches SET sites_writer_id=?, sites_writer_at=NOW() WHERE id=?'
+        )->execute([$userId !== null && $userId > 0 ? $userId : null, $batchId]);
+    } catch (Throwable $e) {
+        // ignore
+    }
+}
+
+/**
+ * @return array{ok:bool,conflict?:bool,error?:string,writer_name?:string,writer_at?:string}|null
+ */
+function extract_sites_writer_conflict(int $batchId, ?int $actorId, string $clientAt): ?array
+{
+    $batch = get_extract_batch($batchId);
+    if (!$batch) {
+        return ['ok' => false, 'error' => 'Batch not found.'];
+    }
+    $dbAt = trim((string) ($batch['sites_writer_at'] ?? ''));
+    $dbWriter = (int) ($batch['sites_writer_id'] ?? 0);
+    if ($clientAt === '' || $dbAt === '' || $dbWriter < 1) {
+        return null;
+    }
+    if ($actorId !== null && $actorId > 0 && $dbWriter === $actorId) {
+        return null;
+    }
+    if (strcmp($dbAt, $clientAt) <= 0) {
+        return null;
+    }
+    $name = trim((string) (($batch['sites_writer_name'] ?? '') !== ''
+        ? $batch['sites_writer_name']
+        : ($batch['sites_writer_username'] ?? '')));
+    if ($name === '') {
+        $name = 'Someone';
+    }
+    return [
+        'ok' => false,
+        'conflict' => true,
+        'error' => $name . ' saved this Sites list at ' . substr($dbAt, 0, 16)
+            . '. Reload to avoid overwriting.',
+        'writer_name' => $name,
+        'writer_at' => $dbAt,
+    ];
 }
 
 function get_extract_batch(int $batchId): ?array
 {
     ensure_extract_schema();
     $stmt = db()->prepare(
-        'SELECT b.*, u.username, u.full_name
+        'SELECT b.*, u.username, u.full_name,
+                w.username AS sites_writer_username, w.full_name AS sites_writer_name
          FROM extract_batches b
          LEFT JOIN users u ON u.id = b.created_by
+         LEFT JOIN users w ON w.id = b.sites_writer_id
          WHERE b.id=? LIMIT 1'
     );
     $stmt->execute([$batchId]);
@@ -340,11 +542,17 @@ function set_extract_batch_domains_from_text(int $batchId, string $raw, ?int $ad
     }
 
     $siteCount = refresh_extract_batch_site_count($batchId);
+    stamp_extract_sites_writer($batchId, $addedBy);
+    $fresh = get_extract_batch($batchId) ?? [];
     return [
         'site_count' => $siteCount,
         'domains' => get_extract_batch_domains($batchId),
         'removed' => count($toRemove),
         'added' => count($toAdd),
+        'writer_name' => trim((string) (($fresh['sites_writer_name'] ?? '') !== ''
+            ? $fresh['sites_writer_name']
+            : ($fresh['sites_writer_username'] ?? ''))),
+        'writer_at' => (string) ($fresh['sites_writer_at'] ?? ''),
     ];
 }
 
@@ -398,6 +606,40 @@ function remove_extract_batch_domains(int $batchId, array $domains): array
 }
 
 /**
+ * Extracting batch id for a country, or 0 if none (does not create a row).
+ */
+function find_extract_batch_id_for_country(string $country): int
+{
+    ensure_extract_schema();
+    $country = trim($country);
+    if ($country === '') {
+        return 0;
+    }
+    $canon = function_exists('resolve_canonical_country') ? resolve_canonical_country($country) : null;
+    if (is_array($canon) && ($canon['name'] ?? '') !== '') {
+        $country = (string) $canon['name'];
+    }
+    $stmt = db()->prepare('SELECT id FROM extract_batches WHERE country=? LIMIT 1');
+    $stmt->execute([$country]);
+    return (int) $stmt->fetchColumn();
+}
+
+/**
+ * Drop domains from that country’s Extracting Sites list only.
+ * Used when Admin removes the same domains from Our database.
+ *
+ * @param list<string> $domains
+ */
+function remove_domains_from_extract_sites_for_country(string $country, array $domains): int
+{
+    $batchId = find_extract_batch_id_for_country($country);
+    if ($batchId < 1) {
+        return 0;
+    }
+    return count(remove_extract_batch_domains($batchId, $domains));
+}
+
+/**
  * @param list<array{domain:string,prospect_site_id?:int|null,added_by?:int|null}> $rows
  */
 function restore_extract_batch_domains(int $batchId, array $rows): int
@@ -444,10 +686,29 @@ function save_extract_batch_results(int $batchId, string $resultsText): void
     )->execute([$resultsText, $batchId]);
 }
 
+/**
+ * Ready roots to keep in Extracting Results after Push.
+ * https/paths/www/subdomains become apex domains. If nothing is Ready, keep the
+ * original paste so the person can still edit.
+ */
+function extract_results_text_for_persist(string $raw): string
+{
+    $parsed = function_exists('parse_extracted_sites_input')
+        ? parse_extracted_sites_input($raw)
+        : (function_exists('parse_domain_list_strict') ? parse_domain_list_strict($raw) : null);
+    if (!is_array($parsed) || ($parsed['valid'] ?? []) === []) {
+        return $raw;
+    }
+    return (string) $parsed['valid_text'];
+}
+
 function count_extract_batches(): int
 {
     ensure_extract_schema();
-    return (int) db()->query('SELECT COUNT(*) FROM extract_batches WHERE site_count > 0')->fetchColumn();
+    return (int) db()->query(
+        'SELECT COUNT(*) FROM extract_batches b
+         WHERE EXISTS (SELECT 1 FROM extract_batch_sites s WHERE s.batch_id = b.id)'
+    )->fetchColumn();
 }
 
 function extract_request_wants_json(): bool

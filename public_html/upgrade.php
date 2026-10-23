@@ -3,8 +3,9 @@
  * One-time upgrade for existing Hostinger installs.
  * Requires a logged-in Admin session. Delete this file after running.
  */
-session_start();
 require __DIR__ . '/includes/helpers.php';
+txf_secure_session_start();
+txf_send_security_headers();
 require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 
@@ -35,6 +36,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require __DIR__ . '/includes/email_campaigns.php';
         require __DIR__ . '/includes/admin_new_data.php';
         require __DIR__ . '/includes/departments.php';
+
+        if (function_exists('txf_schema_clear_stamps')) {
+            txf_schema_clear_stamps();
+        }
 
         $pdo = db();
 
@@ -100,6 +105,10 @@ if (!$locked && !$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         require_once __DIR__ . '/includes/orders.php';
         ensure_order_schema();
         $notes[] = 'order_clients / order_items (Order management) OK';
+
+        require_once __DIR__ . '/includes/site_prices.php';
+        ensure_site_prices_schema();
+        $notes[] = 'site_price_rows / site_price_statuses (Website prices) OK';
 
         require_once __DIR__ . '/includes/invoices.php';
         ensure_invoice_schema();

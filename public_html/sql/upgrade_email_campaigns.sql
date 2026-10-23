@@ -43,15 +43,91 @@ CREATE TABLE IF NOT EXISTS email_campaign_rows (
 --   ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent,
 --   ADD INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent);
 
+-- Domains / emails removed on purpose — never re-add until Allow again
+CREATE TABLE IF NOT EXISTS email_campaign_excluded_domains (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_email_campaign_excluded (sheet_id, domain),
+  INDEX (sheet_id),
+  INDEX (domain),
+  CONSTRAINT fk_email_campaign_excluded_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS email_campaign_excluded_emails (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_email_campaign_excluded_email (sheet_id, domain, email),
+  INDEX (sheet_id),
+  INDEX (sheet_id, domain),
+  CONSTRAINT fk_email_campaign_excluded_email_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Who deleted a site / removed an email (survives Allow again)
+CREATE TABLE IF NOT EXISTS email_campaign_row_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  project_id INT NULL,
+  user_id INT NULL,
+  username VARCHAR(100) NOT NULL DEFAULT '',
+  full_name VARCHAR(180) NOT NULL DEFAULT '',
+  action VARCHAR(32) NOT NULL,
+  domain VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_camp_row_events_sheet (sheet_id, created_at),
+  INDEX idx_camp_row_events_project (project_id, created_at),
+  INDEX idx_camp_row_events_user (user_id),
+  INDEX idx_camp_row_events_domain (sheet_id, domain, action),
+  CONSTRAINT fk_camp_row_event_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+  CONSTRAINT fk_camp_row_event_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Named send batches: who marked emailed (Mark up to here / Mark emailed).
+-- Survives Clear up to here (rows unlink send_batch_id; the batch row stays as history).
+CREATE TABLE IF NOT EXISTS email_campaign_send_batches (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sheet_id INT NOT NULL,
+  project_id INT NULL,
+  name VARCHAR(180) NOT NULL,
+  user_id INT NULL,
+  username VARCHAR(100) NOT NULL DEFAULT '',
+  full_name VARCHAR(180) NOT NULL DEFAULT '',
+  site_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_camp_send_batch_sheet (sheet_id, created_at),
+  INDEX idx_camp_send_batch_project (project_id, created_at),
+  INDEX idx_camp_send_batch_user (user_id),
+  CONSTRAINT fk_camp_send_batch_sheet
+    FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+  CONSTRAINT fk_camp_send_batch_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Existing installs: send_batch_id on campaign rows (use /upgrade.php or ensure_email_campaign_schema()).
+-- ALTER TABLE email_campaign_rows
+--   ADD COLUMN send_batch_id INT NULL AFTER email_sent_at,
+--   ADD INDEX idx_email_campaign_send_batch (send_batch_id);
+
 -- Communication / Admin: reusable outreach drafts per project
 CREATE TABLE IF NOT EXISTS email_campaign_drafts (
   id INT AUTO_INCREMENT PRIMARY KEY,
   project_id INT NOT NULL,
   category VARCHAR(40) NOT NULL DEFAULT 'custom',
   title VARCHAR(180) NOT NULL,
+  subject VARCHAR(255) NOT NULL DEFAULT '',
   body MEDIUMTEXT NOT NULL,
   sort_order INT NOT NULL DEFAULT 0,
   created_by INT NULL,
+  updated_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX (project_id),

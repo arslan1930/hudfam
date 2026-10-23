@@ -1,0 +1,46 @@
+# Safe Hostinger deploy: lint PHP, then FTP sync ONLY public_html/ → document root.
+# Never wipes the remote tree (dangerous-clean-slate: false). Never uploads config.php or uploads/.
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint-and-deploy:
+    name: Lint and FTP deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP syntax check (public_html)
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find public_html -type f -name '*.php' -print0 | sort -z)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No PHP files under public_html/" >&2
+            exit 1
+          fi
+          echo "Checking ${#files[@]} PHP files…"
+          for f in "${files[@]}"; do
+            php -l "$f"
+          done
+
+      - name: FTP deploy public_html/ to server document root
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./public_html/
+          # Optional; default document root. Must end with /.
+          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            config.php
+            uploads/**

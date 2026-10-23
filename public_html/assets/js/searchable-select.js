@@ -45,6 +45,7 @@
     input.className = 'ss-input';
     input.autocomplete = 'off';
     input.spellcheck = false;
+    input.setAttribute('data-no-draft', '');
     input.setAttribute('role', 'combobox');
     input.setAttribute('aria-autocomplete', 'list');
     input.setAttribute('aria-expanded', 'false');

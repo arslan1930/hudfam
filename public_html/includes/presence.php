@@ -10,6 +10,9 @@ function ensure_task_presence_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     db()->exec(
         "CREATE TABLE IF NOT EXISTS task_presence (
           id INT AUTO_INCREMENT PRIMARY KEY,
@@ -24,6 +27,9 @@ function ensure_task_presence_schema(): void
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 function normalize_task_presence_key(string $taskKey): string

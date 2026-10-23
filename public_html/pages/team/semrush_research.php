@@ -8,10 +8,16 @@ ensure_semrush_research_schema();
 
 $hub = semrush_hub_url(false);
 $isAdmin = is_admin($user);
+$canClear = team_can_clear_semrush_country($user);
+$canFilter = team_page_unlocked($user, 'team_prospect_check');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) post('action');
     if ($action === 'clear_country') {
+        if (!$canClear) {
+            flash('error', 'Clear country is for Site Finding and Admin.');
+            redirect($hub);
+        }
         $result = clear_semrush_country((string) post('country'));
         flash(
             !empty($result['ok']) ? 'ok' : 'error',
@@ -30,30 +36,37 @@ $folders = list_semrush_country_rows();
 
 render_header('Semrush Research', 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Semrush Research'],
 ]);
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Semrush Research', 'Site names copied from Extracting Results Push (same country / TLD routing), plus optional Admin seed. Open a country to edit, copy, undo/redo, comment, or clear the full country batch (sites + comments). Does not change Extracted Sites.') ?></h1>
+    <h1><?= label_with_info('Semrush Research', 'Site names copied from Extracting Results Push (same country / TLD routing), plus optional Admin seed. Open a country to edit, copy, undo/redo, or comment. Site Finding and Admin can clear the full country batch. Does not change Extracted Sites.') ?></h1>
     <p class="muted">
       <?= count($folders) ?> countr<?= count($folders) === 1 ? 'y' : 'ies' ?> with research sites · site names only
     </p>
+    <p class="help" style="margin:0.35rem 0 0">
+      Filled from Extracting Push; Clear is Site Finding / Admin.
+    </p>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+    <?php if ($canFilter): ?>
+      <a class="btn secondary" href="index.php?page=team_prospect_check">Filter &amp; add</a>
+    <?php endif; ?>
     <?php if ($isAdmin): ?>
-      <a class="btn" href="<?= h(semrush_hub_url(true)) ?>">Admin seed sites</a>
+      <a class="btn secondary" href="<?= h(semrush_hub_url(true)) ?>">Admin seed sites</a>
     <?php endif; ?>
   </div>
 </div>
+<?= guide_semrush_team() ?>
 
 <?php if ($folders === []): ?>
 <div class="card">
   <div class="empty-state">
     <p>No Semrush Research countries yet.</p>
     <p class="muted">
+      Filled from Extracting Push; Clear is Site Finding / Admin.
       When Extracting Results are pushed, a copy of those site names lands here (same country / TLD folders).
       <?php if ($isAdmin): ?>
         You can also <a href="<?= h(semrush_hub_url(true)) ?>">seed sites as Admin</a>.
@@ -86,13 +99,15 @@ render_breadcrumbs([
           <td><?= (int) $f['total'] ?></td>
           <td class="muted"><?= h(substr((string) $f['updated_at'], 0, 16)) ?></td>
           <td class="actions">
-            <a class="btn small" href="<?= h($href) ?>">Open sheet</a>
-            <form method="post" action="<?= h($hub) ?>" style="display:inline"
-                  onsubmit="return confirm('Clear ALL Semrush sites and comments for <?= h($c) ?>? Extracted Sites stay unchanged.');">
+            <a class="btn secondary small" href="<?= h($href) ?>">Open sheet</a>
+            <?php if ($canClear): ?>
+            <form method="post" action="<?= h($hub) ?>" style="display:inline" <?= confirm_data_attr('Clear ALL Semrush sites and comments for ' . $c . '? Extracted Sites stay unchanged.') ?>>
+              <?= csrf_field() ?>
               <input type="hidden" name="action" value="clear_country">
               <input type="hidden" name="country" value="<?= h($c) ?>">
               <button class="btn danger small" type="submit">Clear country</button>
             </form>
+            <?php endif; ?>
           </td>
         </tr>
       <?php endforeach; ?>

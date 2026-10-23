@@ -14,18 +14,28 @@
     var emailSelect = root.querySelector('[data-camp-email-select]');
     var applyBtn = root.querySelector('[data-camp-apply]');
     var clearBtn = root.querySelector('[data-camp-clear]');
+    var draftsLink = root.querySelector('[data-camp-open-drafts]');
     var modeInputs = root.querySelectorAll('[data-camp-mode]');
 
     var sheetId = root.getAttribute('data-sheet-id') || '';
     var sheetName = root.getAttribute('data-sheet-name') || 'sheet';
     var suggestUrl = root.getAttribute('data-suggest-url') || '';
     var postUrl = root.getAttribute('data-post-url') || window.location.href;
+    var draftsBase = root.getAttribute('data-drafts-url') || 'index.php?page=team_email_campaigns_drafts';
+    var projectId = root.getAttribute('data-project-id') || '';
 
     var suggestions = [];
     var activeIndex = -1;
     var selected = null;
     var timer = null;
     var abortCtrl = null;
+
+    function csrfToken() {
+      var field = root.querySelector('input[name="_csrf"]');
+      if (field && field.value) return field.value;
+      var meta = document.querySelector('meta[name="csrf-token"]');
+      return meta ? String(meta.getAttribute('content') || '') : '';
+    }
 
     function setStatus(msg, isError) {
       if (!statusEl) return;
@@ -57,6 +67,9 @@
       var emails = (selected && selected.emails) || [];
       if (emailPick) {
         emailPick.hidden = !(mode === 'email' && emails.length > 0);
+      }
+      if (applyBtn) {
+        applyBtn.textContent = mode === 'email' ? 'Remove email' : 'Delete site';
       }
       if (emailSelect && mode === 'email') {
         emailSelect.innerHTML = '';
@@ -111,9 +124,33 @@
       list.hidden = false;
     }
 
+    function syncDraftsLink() {
+      if (!draftsLink) return;
+      if (!selected || !selected.domain) {
+        draftsLink.hidden = true;
+        draftsLink.setAttribute('href', '#');
+        return;
+      }
+      var url = draftsBase;
+      var pid = selected.projectId || projectId;
+      if (pid && url.indexOf('project=') === -1) {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'project=' + encodeURIComponent(pid);
+      }
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'domain=' + encodeURIComponent(selected.domain);
+      if (selected.country) {
+        url += '&country=' + encodeURIComponent(selected.country);
+      }
+      if (selected.language) {
+        url += '&language=' + encodeURIComponent(selected.language);
+      }
+      draftsLink.href = url;
+      draftsLink.hidden = false;
+    }
+
     function renderSelected() {
       if (!selectedBox || !selected) {
         if (selectedBox) selectedBox.hidden = true;
+        syncDraftsLink();
         return;
       }
       selectedBox.hidden = false;
@@ -148,6 +185,7 @@
         });
       }
       syncEmailPick();
+      syncDraftsLink();
     }
 
     function selectSuggestion(idx) {
@@ -158,6 +196,8 @@
         sheetId: item.sheet_id || sheetId,
         domain: item.domain,
         country: item.country,
+        language: item.language || '',
+        projectId: item.project_id || projectId,
         projectName: item.project_name || sheetName || '',
         emails: (item.emails || []).slice(),
         matchType: item.match_type || 'domain',
@@ -169,7 +209,7 @@
       setStatus(
         'Selected ' + item.domain + ' · ' +
         ((item.emails || []).join(', ') || 'no emails') +
-        '. Choose action, then press Enter to confirm.'
+        '. Choose action, then press Enter to confirm — or Open drafts for site.'
       );
     }
 
@@ -177,7 +217,7 @@
       if (abortCtrl) {
         try { abortCtrl.abort(); } catch (e) {}
       }
-      if (!suggestUrl || q.length < 2) {
+      if (!suggestUrl || q.length < 3) {
         suggestions = [];
         hideSuggest();
         return;
@@ -194,7 +234,7 @@
           suggestions = (data && data.suggestions) || [];
           activeIndex = suggestions.length ? 0 : -1;
           renderSuggest();
-          if (!suggestions.length && q.length >= 2) {
+          if (!suggestions.length && q.length >= 3) {
             setStatus('No matches in “' + sheetName + '”.', true);
           } else if (suggestions.length) {
             setStatus(
@@ -211,6 +251,9 @@
     }
 
     function postAction(body) {
+      var payload = body || {};
+      var tok = csrfToken();
+      if (tok && payload._csrf == null) payload._csrf = tok;
       return fetch(postUrl, {
         method: 'POST',
         credentials: 'same-origin',
@@ -218,7 +261,7 @@
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           Accept: 'application/json'
         },
-        body: new URLSearchParams(body).toString()
+        body: new URLSearchParams(payload).toString()
       }).then(function (res) {
         return res.json().then(function (data) {
           if (!res.ok || !data || data.ok === false) {
@@ -251,48 +294,52 @@
           : 'Remove only this email from ' + countryLabel + ' sheet?\n\n'
             + 'Site: ' + selected.domain + '\nEmail: ' + email
             + '\n\nSite name stays; other emails remain.';
+        var runEmailDelete = function () {
+          postAction({
+            ajax: '1',
+            action: 'delete_email',
+            sheet_id: sid,
+            row_id: String(selected.id),
+            email: email
+          })
+            .then(function (data) {
+              setStatus(data.message || 'Email removed.');
+              if (data.row_deleted) {
+                selected = null;
+                renderSelected();
+                if (input) {
+                  input.value = '';
+                  input.focus();
+                }
+                suggestions = [];
+                hideSuggest();
+                return;
+              }
+              selected.emails = data.emails || [];
+              selected.focusEmail = null;
+              renderSelected();
+            })
+            .catch(function (err) {
+              setStatus(err.message || 'Could not remove email.', true);
+            });
+        };
+        if (typeof window.txfConfirm === 'function') {
+          window.txfConfirm(confirmMsg).then(function (ok) { if (ok) runEmailDelete(); });
+          return;
+        }
         if (!window.confirm(confirmMsg)) {
           return;
         }
-        postAction({
-          ajax: '1',
-          action: 'delete_email',
-          sheet_id: sid,
-          row_id: String(selected.id),
-          email: email
-        })
-          .then(function (data) {
-            setStatus(data.message || 'Email removed.');
-            if (data.row_deleted) {
-              selected = null;
-              renderSelected();
-              if (input) {
-                input.value = '';
-                input.focus();
-              }
-              suggestions = [];
-              hideSuggest();
-              return;
-            }
-            selected.emails = data.emails || [];
-            selected.focusEmail = null;
-            renderSelected();
-          })
-          .catch(function (err) {
-            setStatus(err.message || 'Could not remove email.', true);
-          });
+        runEmailDelete();
         return;
       }
 
       var sid = String(selected.sheetId || sheetId || '');
       var countryLabel = selected.country || sheetName;
-      if (!window.confirm(
-        'Delete BOTH site name and all emails from ' + countryLabel + ' sheet?\n\n' +
+      var rowMsg = 'Delete BOTH site name and all emails from ' + countryLabel + ' sheet?\n\n' +
         'Site: ' + selected.domain + '\nEmails: ' +
-        ((selected.emails || []).join(', ') || '(none)')
-      )) {
-        return;
-      }
+        ((selected.emails || []).join(', ') || '(none)');
+      var runRowDelete = function () {
       postAction({
         ajax: '1',
         action: 'delete_row',
@@ -313,6 +360,15 @@
         .catch(function (err) {
           setStatus(err.message || 'Could not delete.', true);
         });
+      };
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(rowMsg).then(function (ok) { if (ok) runRowDelete(); });
+        return;
+      }
+      if (!window.confirm(rowMsg)) {
+        return;
+      }
+      runRowDelete();
     }
 
     if (input) {
@@ -321,7 +377,7 @@
         selected = null;
         renderSelected();
         if (timer) window.clearTimeout(timer);
-        timer = window.setTimeout(function () { fetchSuggest(q); }, 180);
+        timer = window.setTimeout(function () { fetchSuggest(q); }, 280);
       });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'ArrowDown') {

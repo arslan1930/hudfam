@@ -14,6 +14,11 @@
   var isCheckpointSheet = !!(document.querySelector('.swe-sheet-table.is-admin-checkpoint')
     || document.querySelector('[data-swe-mark]'));
 
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? String(meta.getAttribute('content') || '') : '';
+  }
+
   function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
     if (!msg) {
@@ -125,7 +130,9 @@
     var emails = Array.prototype.map.call(row.querySelectorAll('[data-swe-email]'), function (el) {
       return String(el.value || '').trim().toLowerCase();
     });
-    var hasEmail = emails.some(function (e) { return e !== ''; });
+    var hasEmail = emails.some(function (e) {
+      return e !== '' && e.indexOf('@') !== -1;
+    });
     row.setAttribute('data-search', [domain, lang].concat(emails).filter(Boolean).join(' '));
     row.setAttribute('data-has-email', hasEmail ? '1' : '0');
     // Checkpoint sheets use Emailed / Not emailed — do not overwrite from email readiness.
@@ -148,10 +155,24 @@
     if (typeof data.unsent === 'number' && unsentLabel) {
       unsentLabel.textContent = String(data.unsent);
     }
+    document.querySelectorAll('[data-camp-copy-domains], [data-camp-copy-emails]').forEach(function (btn) {
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      if (label === 'not emailed') {
+        btn.disabled = !(typeof data.unsent === 'number' && data.unsent > 0);
+      } else if (label === 'emailed') {
+        btn.disabled = !(typeof data.sent === 'number' && data.sent > 0);
+      } else {
+        var total = typeof data.total === 'number'
+          ? data.total
+          : ((typeof data.sent === 'number' ? data.sent : 0)
+            + (typeof data.unsent === 'number' ? data.unsent : 0));
+        btn.disabled = total < 1;
+      }
+    });
   }
 
   /** Update one campaign row's emailed UI without reloading (keeps scroll position). */
-  function setRowEmailedState(row, emailed) {
+  function setRowEmailedState(row, emailed, batchInfo) {
     if (!row) return;
     var sent = !!emailed;
     row.setAttribute('data-email-sent', sent ? '1' : '0');
@@ -162,43 +183,106 @@
       status.classList.toggle('is-emailed', sent);
       status.classList.toggle('is-open', !sent);
       status.classList.remove('is-ready', 'is-archive');
-      status.textContent = sent ? 'Emailed' : 'Not emailed';
+      var label = sent ? 'Emailed' : 'Not emailed';
+      var title = '';
+      if (sent && batchInfo && batchInfo.name) {
+        label = 'Emailed · ' + String(batchInfo.name);
+        if (batchInfo.who) {
+          title = 'Sent by ' + String(batchInfo.who);
+        }
+      }
+      status.textContent = label;
+      if (title) {
+        status.title = title;
+      } else {
+        status.removeAttribute('title');
+      }
     }
 
-    var siteId = row.getAttribute('data-site-id');
-    var markBtn = row.querySelector('button[form="camp-mark-' + siteId + '"], button[form^="camp-mark-"]');
+    var markBtn = row.querySelector('[data-sheet-action="mark"]');
     if (markBtn) {
-      markBtn.textContent = sent ? 'Clear emailed' : 'Mark emailed';
-      markBtn.title = sent
+      var markTitle = sent
         ? 'Clear emailed mark on this site only'
         : 'Mark this site as emailed';
+      markBtn.textContent = sent ? 'Undo mark' : 'Mark emailed';
+      markBtn.title = markTitle;
+      markBtn.setAttribute('aria-label', markTitle);
       markBtn.classList.toggle('secondary', sent);
-    }
-
-    var markForm = document.getElementById('camp-mark-' + siteId);
-    if (markForm) {
-      var sentInput = markForm.querySelector('[name="email_sent"]');
-      if (sentInput) sentInput.value = sent ? '0' : '1';
+      markBtn.setAttribute('data-email-sent', sent ? '0' : '1');
     }
   }
 
-  function applyEmailedUpTo(siteId, emailed) {
+  function batchInfoFromData(data) {
+    if (!data || !data.batch_name) return null;
+    return {
+      name: String(data.batch_name || ''),
+      who: String(data.batch_who || '')
+    };
+  }
+
+  function applyEmailedUpTo(siteId, emailed, batchInfo) {
     var maxId = parseInt(siteId, 10) || 0;
     document.querySelectorAll('[data-swe-row][data-site-id]').forEach(function (row) {
       var id = parseInt(row.getAttribute('data-site-id') || '0', 10);
       if (id > 0 && id <= maxId) {
-        setRowEmailedState(row, emailed);
+        if (emailed && row.getAttribute('data-email-sent') === '1') {
+          return;
+        }
+        setRowEmailedState(row, emailed, emailed ? batchInfo : null);
       }
     });
+  }
+
+  var filterTimer = null;
+  function sheetActionRows() {
+    return document.querySelectorAll('[data-swe-row]');
+  }
+  function closeSheetMenus() {
+    document.querySelectorAll('details.sheet-row-more[open], details.sheet-tool-menu[open]').forEach(function (d) {
+      d.open = false;
+    });
+  }
+  function clearServerSheetSearch() {
+    if (!searchInput || String(searchInput.value || '').trim()) return false;
+    try {
+      var url = new URL(window.location.href);
+      if (!String(url.searchParams.get('q') || '').trim()) return false;
+      url.searchParams.delete('q');
+      url.searchParams.delete('p');
+      window.location.assign(url.toString());
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+  function scheduleFilterRows() {
+    if (filterTimer) window.clearTimeout(filterTimer);
+    var q = searchInput ? String(searchInput.value || '').trim() : '';
+    if (!q) {
+      filterTimer = null;
+      filterRows();
+      return;
+    }
+    filterTimer = window.setTimeout(function () {
+      filterTimer = null;
+      filterRows();
+    }, 160);
+  }
+  function maybeRefilter() {
+    if (searchInput && String(searchInput.value || '').trim()) {
+      scheduleFilterRows();
+    }
   }
 
   function filterRows() {
     if (!searchInput) return;
     var q = String(searchInput.value || '').trim().toLowerCase();
+    closeSheetMenus();
+    if (!q && clearServerSheetSearch()) return;
     matchRows = [];
     clearHits();
     var shown = 0;
-    document.querySelectorAll('[data-swe-row]').forEach(function (row) {
+    sheetActionRows().forEach(function (row) {
       var hit = !q || String(row.getAttribute('data-search') || '').indexOf(q) !== -1;
       row.hidden = !hit;
       if (hit) {
@@ -212,18 +296,24 @@
         meta.hidden = true;
         meta.textContent = '';
         matchIndex = -1;
-        return;
+      } else {
+        meta.hidden = false;
+        meta.textContent = !matchRows.length
+          ? '0 · Enter = next · Ctrl+Enter = all pages'
+          : (matchIndex >= 0
+            ? (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails'
+            : matchRows.length + ' · site + emails · Enter = next');
       }
-      meta.hidden = false;
-      meta.textContent = !matchRows.length
-        ? '0 · Enter = next · Ctrl+Enter = all pages'
-        : (matchIndex >= 0
-          ? (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails'
-          : matchRows.length + ' · site + emails · Enter = next');
     }
     document.querySelectorAll('[data-swe-q]').forEach(function (el) {
       el.value = String(searchInput.value || '');
     });
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.sync === 'function') {
+      window.SheetSelectUndo.sync();
+    }
+    if (window.SheetSelectUndo && typeof window.SheetSelectUndo.syncPageStatus === 'function') {
+      window.SheetSelectUndo.syncPageStatus(shown, !!q);
+    }
   }
 
   function jump(dir) {
@@ -236,7 +326,7 @@
     var row = matchRows[matchIndex];
     clearHits();
     row.classList.add('sheet-search-hit');
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: 'auto' });
     if (meta) {
       meta.textContent = (matchIndex + 1) + ' of ' + matchRows.length + ' · site + emails';
     }
@@ -245,11 +335,19 @@
   if (searchInput) {
     searchInput.addEventListener('input', function () {
       matchIndex = -1;
-      filterRows();
+      scheduleFilterRows();
+    });
+    searchInput.addEventListener('search', function () {
+      matchIndex = -1;
+      scheduleFilterRows();
     });
     searchInput.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
+      if (filterTimer) {
+        window.clearTimeout(filterTimer);
+        filterTimer = null;
+      }
       if (e.ctrlKey || e.metaKey) {
         var url = new URL(window.location.href);
         var q = String(searchInput.value || '').trim();
@@ -261,8 +359,42 @@
       }
       jump(e.shiftKey ? -1 : 1);
     });
-    filterRows();
+    if (String(searchInput.value || '').trim()) {
+      filterRows();
+    }
   }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-sheet-action]') : null;
+    if (!btn || btn.disabled) return;
+    var kind = String(btn.getAttribute('data-sheet-action') || '');
+    var form = document.getElementById('camp-shared-' + kind)
+      || document.getElementById('swe-shared-' + kind);
+    if (!form) return;
+    e.preventDefault();
+    var confirmMsg = btn.getAttribute('data-confirm');
+    function submitCampAction() {
+      var siteInput = form.querySelector('[name="site_id"]');
+      if (siteInput) siteInput.value = String(btn.getAttribute('data-site-id') || '');
+      if (kind === 'mark') {
+        var sentInput = form.querySelector('[name="email_sent"]');
+        if (sentInput) sentInput.value = String(btn.getAttribute('data-email-sent') || '1');
+      }
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    }
+    if (confirmMsg) {
+      if (typeof window.txfConfirm === 'function') {
+        window.txfConfirm(confirmMsg).then(function (ok) { if (ok) submitCampAction(); });
+        return;
+      }
+      if (!window.confirm(confirmMsg)) return;
+    }
+    submitCampAction();
+  });
 
   function removeRowFromDom(siteId, siteCount) {
     var gone = document.querySelector('[data-swe-row][data-site-id="' + siteId + '"]');
@@ -283,6 +415,8 @@
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    var tok = csrfToken();
+    if (tok) body.set('_csrf', tok);
     form.setAttribute('data-busy', '1');
     return fetch(form.getAttribute('action') || window.location.href, {
       method: 'POST',
@@ -326,7 +460,7 @@
         }
         refreshRowSearchIndex(row);
         setStatus(opts.quiet ? 'Autosaved.' : 'Saved.');
-        filterRows();
+        maybeRefilter();
         return data;
       })
       .catch(function (err) {
@@ -364,7 +498,7 @@
     var form = saveFormOf(input);
     var row = input.closest('[data-swe-row]');
     refreshRowSearchIndex(row);
-    filterRows();
+    maybeRefilter();
     setStatus('Pasted ' + Math.min(multi.length, 4) + ' emails.');
     if (form) {
       var prev = autosaveTimers.get(form);
@@ -383,7 +517,7 @@
     var form = saveFormOf(input);
     if (!form) return;
     refreshRowSearchIndex(input.closest('[data-swe-row]'));
-    filterRows();
+    maybeRefilter();
     scheduleAutosave(form);
     if (input.matches('[data-swe-email]') && String(input.value || '').trim() === '') {
       setStatus('Email cleared.');
@@ -409,6 +543,8 @@
     }
     var body = new URLSearchParams(new FormData(form));
     body.set('ajax', '1');
+    var tok = csrfToken();
+    if (tok) body.set('_csrf', tok);
     form.setAttribute('data-busy', '1');
     return fetch(form.getAttribute('action') || window.location.href, {
       method: 'POST',
@@ -459,6 +595,9 @@
           setRowEmailedState(row, false);
         });
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           'Cleared all emailed marks'
           + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' sites' : '')
@@ -482,8 +621,11 @@
         var id = result.siteId;
         var rowEl = document.querySelector('[data-swe-row][data-site-id="' + id + '"]');
         var nextSent = typeof data.email_sent === 'boolean' ? data.email_sent : markSent;
-        setRowEmailedState(rowEl, nextSent);
+        setRowEmailedState(rowEl, nextSent, nextSent ? batchInfoFromData(data) : null);
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           (nextSent ? 'Marked emailed: ' : 'Cleared emailed mark: ')
           + (data.domain || 'site')
@@ -495,15 +637,37 @@
 
     if (form.matches('[data-swe-mark-upto]')) {
       e.preventDefault();
+      var suggestEl = document.querySelector('[data-camp-batch-suggest]');
+      var suggest = suggestEl ? String(suggestEl.getAttribute('data-camp-batch-suggest') || '') : '';
+      var batchName = window.prompt(
+        'Name this send batch (Team 1 = Batch A, next stretch = Batch B).',
+        suggest
+      );
+      if (batchName === null) {
+        form.removeAttribute('data-busy');
+        return;
+      }
+      var hidden = form.querySelector('[name="batch_name"]');
+      if (!hidden) {
+        hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'batch_name';
+        form.appendChild(hidden);
+      }
+      hidden.value = String(batchName).trim();
       setStatus('Marking emailed up to here…', false, true);
       postAjaxForm(form, 'Could not mark checkpoint').then(function (result) {
         if (!result) return;
         var data = result.data;
-        applyEmailedUpTo(result.siteId, true);
+        applyEmailedUpTo(result.siteId, true, batchInfoFromData(data));
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           'Marked emailed up to ' + (data.domain || 'site')
           + (typeof data.marked === 'number' ? ' · ' + data.marked + ' newly marked' : '')
+          + (data.batch_name ? ' · batch “' + data.batch_name + '”' : '')
           + '.'
         );
         form.removeAttribute('data-busy');
@@ -519,6 +683,9 @@
         var data = result.data;
         applyEmailedUpTo(result.siteId, false);
         updateSentStats(data);
+        if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+          window.SheetSelectUndo.applyState(data);
+        }
         setStatus(
           'Cleared emailed up to ' + (data.domain || 'site')
           + (typeof data.cleared === 'number' ? ' · ' + data.cleared + ' cleared' : '')
@@ -540,6 +707,9 @@
       }
       removeRowFromDom(result.siteId, result.data.site_count);
       updateSentStats(result.data);
+      if (window.SheetSelectUndo && typeof window.SheetSelectUndo.applyState === 'function') {
+        window.SheetSelectUndo.applyState(result.data);
+      }
       setStatus('Removed ' + (result.data.domain || 'site') + '.');
       form.removeAttribute('data-busy');
       hideProcessing();
@@ -590,4 +760,90 @@
   if (window.location.hash === '#add-site') {
     openAddRow();
   }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        if (!document.execCommand('copy')) reject(new Error('Copy failed'));
+        else resolve();
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
+  function bindCopyPlainButton(btn, kind) {
+    if (!btn) return;
+    var noun = kind === 'email' ? 'email' : 'domain';
+    var nouns = kind === 'email' ? 'emails' : 'domains';
+    btn.addEventListener('click', function () {
+      var url = btn.getAttribute('data-export-url');
+      if (!url) return;
+      var label = String(btn.getAttribute('data-copy-label') || 'all');
+      var wasDisabled = btn.disabled;
+      btn.disabled = true;
+      var loading =
+        label === 'not emailed' ? 'Loading not-emailed ' + nouns + '…'
+          : label === 'emailed' ? 'Loading emailed ' + nouns + '…'
+            : 'Loading ' + nouns + '…';
+      setStatus(loading, false, true);
+      showProcessing(loading);
+      fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/plain' } })
+        .then(function (res) {
+          if (!res.ok) throw new Error('Could not load ' + nouns + '.');
+          return res.text();
+        })
+        .then(function (text) {
+          text = String(text || '').replace(/\r\n/g, '\n').trim();
+          if (!text) {
+            throw new Error(
+              label === 'not emailed' ? 'No not-emailed ' + nouns + ' to copy.'
+                : label === 'emailed' ? 'No emailed ' + nouns + ' to copy.'
+                  : 'No ' + nouns + ' to copy yet.'
+            );
+          }
+          var lines = text.split('\n').filter(Boolean);
+          return copyText(text).then(function () {
+            var kindLabel =
+              label === 'not emailed' ? ' not-emailed'
+                : label === 'emailed' ? ' emailed'
+                  : '';
+            setStatus(
+              'Copied ' + lines.length + kindLabel + ' '
+                + (lines.length === 1 ? noun : nouns)
+                + ' from this country sheet.'
+            );
+          });
+        })
+        .catch(function (err) {
+          setStatus(err.message || 'Copy failed.', true);
+        })
+        .then(function () {
+          hideProcessing();
+          btn.disabled = wasDisabled;
+        });
+    });
+  }
+
+  function bindCopyDomainsButton(btn) {
+    bindCopyPlainButton(btn, 'domain');
+  }
+
+  document.querySelectorAll('[data-camp-copy-domains]').forEach(bindCopyDomainsButton);
+  document.querySelectorAll('[data-camp-copy-emails]').forEach(function (btn) {
+    bindCopyPlainButton(btn, 'email');
+  });
 })();
