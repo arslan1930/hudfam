@@ -53,7 +53,7 @@ Workflow: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). On eve
 
 **Important:** Hostinger’s built-in Git deploy copies the whole repo (so you get a nested `public_html/` and a wiped site). Leave that Git integration **disabled**. Use this workflow instead — it maps `public_html/` → document root and never deletes remote files.
 
-FTPS certificate verification is disabled in CI (`ssl:verify-certificate no`) because Hostinger’s FTP TLS cert often does not match the FTP hostname from GitHub runners; traffic still uses TLS when the server offers it (`ftp:ssl-allow true`). Prefer a correctly issued host cert when Hostinger provides one.
+FTPS certificate verification is disabled in CI (`ssl:verify-certificate no`) because Hostinger’s FTP TLS cert often does not match the FTP hostname from GitHub runners. The workflow first tries `ftp:ssl-allow true`; if login returns 530 it retries once with clear FTP (`ftp:ssl-allow false`), which is what Hostinger’s shared FTP commonly accepts from GitHub runners.
 
 Add these repository secrets (**Settings → Secrets and variables → Actions**):
 

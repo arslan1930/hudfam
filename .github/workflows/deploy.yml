@@ -1,9 +1,10 @@
 # Safe Hostinger deploy: lint PHP, then lftp mirror ONLY public_html/ → document root.
 # Never deletes remote files (no --delete). Never uploads config.php or uploads/.
 #
-# FTPS note: Hostinger often needs FTP over TLS with an unverified cert from CI.
-# We set ssl:verify-certificate no as an explicit fallback (traffic is still TLS when
-# the server offers it; ftp:ssl-allow true). Prefer fixing the host cert if possible.
+# FTPS note: Prefer `ftp:ssl-allow true` + `ssl:verify-certificate no` (Hostinger certs
+# often do not match the FTP hostname from GitHub runners). If AUTH TLS login returns
+# 530, we fall back once to clear FTP (`ftp:ssl-allow false`) — the same mode the
+# previous basic-ftp client used successfully against this host.
 name: Deploy to Hostinger
 
 on:
@@ -47,36 +48,38 @@ jobs:
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: |
           set -euo pipefail
-          if [[ -z "${FTP_SERVER:-}" || -z "${FTP_USERNAME:-}" || -z "${FTP_PASSWORD:-}" ]]; then
-            echo "Missing required secrets: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD" >&2
-            exit 1
-          fi
+          python3 <<'PY'
+          import os, re, subprocess, sys, tempfile
+          from pathlib import Path
 
-          # Trim accidental whitespace/CRLF from GitHub secrets.
-          trim() { echo -n "$1" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
-          FTP_SERVER="$(trim "$FTP_SERVER")"
-          FTP_USERNAME="$(trim "$FTP_USERNAME")"
-          FTP_PASSWORD="$(trim "$FTP_PASSWORD")"
-          REMOTE_DIR="$(trim "${FTP_SERVER_DIR:-./}")"
-          if [[ -z "${REMOTE_DIR}" ]]; then
-            REMOTE_DIR="./"
-          fi
+          def trim(s: str) -> str:
+              return re.sub(r"\s+$", "", re.sub(r"^\s+", "", (s or "").replace("\r", "")))
 
-          echo "FTP host=${FTP_SERVER} user_len=${#FTP_USERNAME} pass_len=${#FTP_PASSWORD} remote=${REMOTE_DIR}"
+          host = trim(os.environ.get("FTP_SERVER", ""))
+          user = trim(os.environ.get("FTP_USERNAME", ""))
+          password = trim(os.environ.get("FTP_PASSWORD", ""))
+          remote = trim(os.environ.get("FTP_SERVER_DIR") or "./") or "./"
+          if not host or not user or not password:
+              print("Missing required secrets: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD", file=sys.stderr)
+              sys.exit(1)
 
-          # netrc keeps passwords with commas/special chars out of open -u parsing.
-          LFTP_HOME="$(mktemp -d)"
-          cleanup() { rm -rf "$LFTP_HOME"; }
-          trap cleanup EXIT
-          {
-            printf 'machine %s\n' "$FTP_SERVER"
-            printf 'login %s\n' "$FTP_USERNAME"
-            printf 'password %s\n' "$FTP_PASSWORD"
-          } > "$LFTP_HOME/.netrc"
-          chmod 600 "$LFTP_HOME/.netrc"
+          print(f"FTP host={host} user_len={len(user)} pass_len={len(password)} remote={remote}")
 
-          # SSL settings must be applied before open (do not pass host on argv).
-          HOME="$LFTP_HOME" lftp <<EOF
+          def lftp_quote(s: str) -> str:
+              return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+          excludes = (
+              "--exclude-glob config.php "
+              "--exclude-glob uploads "
+              "--exclude-glob uploads/** "
+              "--exclude-glob .git* "
+              "--exclude-glob **/.git* "
+              "--exclude-glob **/.git*/**"
+          )
+
+          def script(ssl_allow: bool) -> str:
+              ssl = "true" if ssl_allow else "false"
+              return f"""
           set cmd:fail-exit true
           set net:max-retries 5
           set net:persist-retries 3
@@ -85,13 +88,40 @@ jobs:
           set net:reconnect-interval-multiplier 2
           set net:reconnect-interval-max 60
           set ftp:passive-mode true
-          set ftp:ssl-allow true
+          set ftp:ssl-allow {ssl}
           set ssl:verify-certificate no
           set ftp:list-options -a
           set mirror:parallel-transfer-count 2
-          open ftp://${FTP_SERVER}
-          cd ${REMOTE_DIR}
+          open ftp://{host}
+          user {lftp_quote(user)} {lftp_quote(password)}
+          cd {lftp_quote(remote)}
           lcd public_html
-          mirror --reverse --only-newer --parallel=2 --verbose --exclude-glob config.php --exclude-glob uploads --exclude-glob uploads/** --exclude-glob .git* --exclude-glob **/.git* --exclude-glob **/.git*/**
+          mirror --reverse --only-newer --parallel=2 --verbose {excludes}
           bye
-          EOF
+          """
+
+          def run_lftp(ssl_allow: bool) -> int:
+              mode = "TLS allowed" if ssl_allow else "clear FTP (ssl-allow false)"
+              print(f"==> lftp mirror ({mode})")
+              with tempfile.NamedTemporaryFile("w", suffix=".lftp", delete=False) as fh:
+                  fh.write(script(ssl_allow))
+                  path = fh.name
+              try:
+                  proc = subprocess.run(["lftp", "-f", path], text=True)
+                  return proc.returncode
+              finally:
+                  Path(path).unlink(missing_ok=True)
+
+          # Preferred: TLS when the server offers it (verify-certificate no fallback).
+          rc = run_lftp(True)
+          if rc == 0:
+              sys.exit(0)
+
+          print(
+              "TLS/login attempt failed; retrying once with ftp:ssl-allow false "
+              "(Hostinger often accepts plain FTP on :21 from CI).",
+              file=sys.stderr,
+          )
+          rc = run_lftp(False)
+          sys.exit(rc)
+          PY
