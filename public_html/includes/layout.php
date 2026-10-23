@@ -49,12 +49,16 @@ function render_header(string $title, string $panel = ''): void
 
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">';
     echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+    echo '<meta name="robots" content="noindex, nofollow">';
+    echo '<meta name="csrf-token" content="' . h(csrf_token()) . '">';
     echo '<title>' . h($title) . ' · ' . h($app) . '</title>';
     if ($base !== '') {
         echo '<base href="' . h($base . '/') . '">';
     }
     // One stylesheet URL (asset.php) — avoid loading CSS twice (parse cost / jank).
     echo '<link rel="stylesheet" href="' . h($cssPhp) . '">';
+    // CSRF helper for forms + fetch/XHR (login pages included).
+    echo '<script src="' . h(script_asset_url('js/csrf.js')) . '"></script>';
     // Early scroll restore after same-page POST actions (before paint when possible).
     echo '<script>';
     echo '(function(){try{var p=sessionStorage.getItem("hf_stay_path"),y=sessionStorage.getItem("hf_stay_y");';
@@ -108,6 +112,7 @@ function render_header(string $title, string $panel = ''): void
                 'admin_orders' => ['Order management', 'Client sheets · prices · live URLs'],
                 'admin_invoices' => ['Invoices', 'Generate printable client invoices'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
+                'admin_account' => ['Account', 'Email verify · password reset'],
             ],
         ];
     } else {
@@ -168,7 +173,7 @@ function render_header(string $title, string $panel = ''): void
                 if (!empty($toolSet['team_admin_emails_delete'])) {
                     $groups['Main']['team_admin_emails_delete'] = [
                         'Admin emails search',
-                        'Sites with emails - Admin · all countries',
+                        'Search Sites with emails - Admin · all countries',
                     ];
                 }
                 if (!empty($toolSet['team_email_campaigns'])) {
@@ -201,7 +206,7 @@ function render_header(string $title, string $panel = ''): void
                     'team_semrush_research' => ['Semrush Research', 'From Extracting Push · edit, comment, clear country'],
                     'team_extracting' => ['Extracting sites', 'Sites list + Extracting Results per country'],
                     'team_sites_emails' => ['Sites with emails - Team', 'Add emails · Push final list to Admin'],
-                    'team_admin_emails_delete' => ['Admin emails search', 'Sites with emails - Admin · all countries'],
+                    'team_admin_emails_delete' => ['Admin emails search', 'Search Sites with emails - Admin · all countries'],
                     'team_email_campaigns' => ['Campaign search', 'Email campaign sheets · all countries'],
                     'team_email_campaigns_drafts' => ['Campaign drafts', 'Formatted outreach per project · copy for email'],
                     'team_departments' => ['My departments', 'If Admin assigns you to a department'],

@@ -3,8 +3,10 @@
  * One-time installer for Hostinger shared hosting.
  * Open https://yourdomain.com/install.php then delete this file.
  */
-session_start();
 require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/security.php';
+send_security_headers();
+start_app_session();
 
 $error = '';
 $done = false;
@@ -15,7 +17,8 @@ $justInstalled = false;
 if (file_exists(__DIR__ . '/config.php')) {
     http_response_code(403);
     header('Content-Type: text/html; charset=utf-8');
-    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Install locked</title>';
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow">';
+    echo '<title>Install locked</title>';
     echo '<link rel="stylesheet" href="asset.php?f=css/app.css"></head><body><div class="login-wrap"><div class="login-card">';
     echo '<h1>Install locked</h1>';
     echo '<p>This site already has <code>config.php</code>. Installer will not run again.</p>';
@@ -26,6 +29,7 @@ if (file_exists(__DIR__ . '/config.php')) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $host = trim($_POST['db_host'] ?? 'localhost');
     $name = trim($_POST['db_name'] ?? '');
     $user = trim($_POST['db_user'] ?? '');
@@ -138,6 +142,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             . "    'smtp_user' => '',\n"
             . "    'smtp_pass' => '',\n"
             . "    'smtp_secure' => 'ssl',\n"
+            . "    'invoice_company_name' => '',\n"
+            . "    'invoice_company_bic' => '',\n"
+            . "    'invoice_company_iban' => '',\n"
+            . "    'invoice_company_phone' => '',\n"
+            . "    'invoice_company_address' => '',\n"
+            . "    'invoice_company_reg_no' => '',\n"
+            . "    'invoice_vat_note' => 'Not VAT registered – no VAT charged.',\n"
             . "];\n";
         if (file_put_contents(__DIR__ . '/config.php', $configPhp) === false) {
             throw new RuntimeException('Could not write config.php. Create it manually from config.sample.php.');
@@ -155,9 +166,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="<?= h(csrf_token()) ?>">
   <title>Install TechxForm</title>
   <link rel="stylesheet" href="asset.php?f=css/app.css">
-  <link rel="stylesheet" href="assets/css/app.css">
+  <script src="asset.php?f=js/csrf.js"></script>
 </head>
 <body>
 <div class="login-wrap">
@@ -177,6 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <p class="muted">Enter MySQL details from Hostinger hPanel → Databases.</p>
       <?php if ($error): render_alert_box('error', $error); endif; ?>
       <form method="post">
+        <?= csrf_field() ?>
         <label>App name</label>
         <input name="app_name" value="TechxForm">
         <label>DB host</label>

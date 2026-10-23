@@ -144,17 +144,25 @@ function ensure_invoice_schema(): void
     }
 }
 
-/** Default supplier / bank block (matches sample invoice). */
+/**
+ * Supplier / bank block for invoices.
+ * Prefer keys in config.php (see config.sample.php); fall back to empty-safe defaults.
+ */
 function invoice_company_defaults(): array
 {
+    $cfg = function_exists('app_config') ? app_config() : [];
+    $pick = static function (string $key, string $fallback) use ($cfg): string {
+        $v = trim((string) ($cfg[$key] ?? ''));
+        return $v !== '' ? $v : $fallback;
+    };
     return [
-        'company_name' => 'Topurlz Ltd',
-        'company_bic' => 'TRWIBEB1XXX',
-        'company_iban' => 'BE04905543949331',
-        'company_phone' => '+447445152374',
-        'company_address' => '20 Wenlock Road, London, England, N1 7GU',
-        'company_reg_no' => '16607074',
-        'vat_note' => 'Not VAT registered – no VAT charged.',
+        'company_name' => $pick('invoice_company_name', 'Your Company Ltd'),
+        'company_bic' => $pick('invoice_company_bic', ''),
+        'company_iban' => $pick('invoice_company_iban', ''),
+        'company_phone' => $pick('invoice_company_phone', ''),
+        'company_address' => $pick('invoice_company_address', ''),
+        'company_reg_no' => $pick('invoice_company_reg_no', ''),
+        'vat_note' => $pick('invoice_vat_note', 'Not VAT registered – no VAT charged.'),
     ];
 }
 

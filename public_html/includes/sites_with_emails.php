@@ -1458,8 +1458,14 @@ function search_sites_with_emails_admin_suggestions(string $q, int $limit = 20):
 /**
  * Communication Team / Email Extracting: super search UI for Sites with emails - Admin.
  */
-function render_sites_with_emails_admin_super_search(string $postBase = 'index.php?page=team_admin_emails_delete'): void
-{
+/**
+ * Super search across Sites with emails - Admin.
+ * @param bool $allowDelete When true (Admin), show delete / remove-email actions.
+ */
+function render_sites_with_emails_admin_super_search(
+    string $postBase = 'index.php?page=team_admin_emails_delete',
+    bool $allowDelete = false
+): void {
     ensure_sites_with_emails_schema();
     $total = 0;
     $countries = 0;
@@ -1474,30 +1480,38 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
         $total = 0;
         $countries = 0;
     }
-    $uid = 'swe-admin-super-' . substr(md5($postBase), 0, 6);
+    $uid = 'swe-admin-super-' . substr(md5($postBase . ($allowDelete ? '1' : '0')), 0, 6);
+    $tip = $allowDelete
+        ? 'Type a site or email across all countries in Sites with emails - Admin. Choose delete both or remove only email, then Enter + confirm. If you remove the last email on a site, the whole site row is deleted from Admin and Final.'
+        : 'Type a site or email across all countries in Sites with emails - Admin. Results show site + email + country. Deletes are Admin-only.';
     ?>
   <div class="card camp-search-card swe-admin-delete-card" style="margin-bottom:1rem"
        data-swe-admin-delete
+       data-allow-delete="<?= $allowDelete ? '1' : '0' ?>"
        data-suggest-url="<?= h($postBase) ?>&amp;ajax=suggest"
        data-post-url="<?= h($postBase) ?>">
-    <h2 style="margin-top:0"><?= label_with_info('Admin emails search', 'Type a site or email across all countries in Sites with emails - Admin. Choose delete both or remove only email, then Enter + confirm. If you remove the last email on a site, the whole site row is deleted from Admin and Final.') ?></h2>
+    <h2 style="margin-top:0"><?= label_with_info('Admin emails search', $tip) ?></h2>
     <p class="help muted" style="margin-top:0">
       <?= (int) $countries ?> countr<?= (int) $countries === 1 ? 'y' : 'ies' ?> ·
       <?= (int) $total ?> site<?= (int) $total === 1 ? '' : 's' ?> ·
-      search site or email across all countries · updates that country’s Admin row
+      search site or email across all countries
+      <?= $allowDelete ? ' · updates that country’s Admin row' : ' · view only (Team)' ?>
     </p>
     <label class="swe-admin-delete-label" for="<?= h($uid) ?>"><?= label_with_info('Search site name or email', 'Live suggestions from Sites with emails - Admin. Results always show site + email + country together.') ?></label>
     <div class="swe-admin-delete-search">
       <input id="<?= h($uid) ?>" type="search" class="swe-admin-delete-input" data-swe-q
              placeholder="Type site or email (all countries)…"
              autocomplete="off" spellcheck="false" data-no-draft
-             title="Type to search all countries · Arrow keys · Enter to select / confirm">
+             title="Type to search all countries · Arrow keys · Enter to select">
       <ul class="swe-admin-delete-suggest" data-swe-suggest hidden></ul>
     </div>
     <p class="help camp-status" data-swe-status hidden></p>
     <div class="swe-admin-delete-selected" data-swe-selected hidden>
       <h3 style="margin-top:1rem">Selected</h3>
-      <p class="help">Site name + emails + country stay together. Pick an action, then press Enter (confirm first).</p>
+      <p class="help">
+        Site name + emails + country stay together.
+        <?= $allowDelete ? 'Pick an action, then press Enter (confirm first).' : 'Ask Admin to delete or edit from Emails data.' ?>
+      </p>
       <div class="swe-admin-delete-panel">
         <div>
           <div class="muted" style="font-size:0.82rem">Site name</div>
@@ -1510,6 +1524,7 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
           <p class="help" data-swe-no-emails hidden>No emails on this site.</p>
         </div>
       </div>
+      <?php if ($allowDelete): ?>
       <fieldset class="camp-action-fieldset">
         <legend class="visually-hidden">Update action</legend>
         <label class="camp-action-choice">
@@ -1529,6 +1544,11 @@ function render_sites_with_emails_admin_super_search(string $postBase = 'index.p
         <button type="button" class="btn danger" data-swe-apply>Update (Enter)</button>
         <button type="button" class="btn secondary" data-swe-clear>Clear selection</button>
       </div>
+      <?php else: ?>
+      <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
+        <button type="button" class="btn secondary" data-swe-clear>Clear selection</button>
+      </div>
+      <?php endif; ?>
     </div>
   </div>
     <?php

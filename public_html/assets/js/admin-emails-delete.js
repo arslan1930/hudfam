@@ -18,6 +18,7 @@
 
     var suggestUrl = root.getAttribute('data-suggest-url') || '';
     var postUrl = root.getAttribute('data-post-url') || window.location.href;
+    var allowDelete = root.getAttribute('data-allow-delete') === '1';
 
     var suggestions = [];
     var activeIndex = -1;
@@ -160,7 +161,7 @@
         'Selected ' + item.domain + ' · ' +
         ((item.emails || []).join(', ') || 'no emails') +
         (item.country ? ' · ' + item.country : '') +
-        '. Choose action, then press Enter to confirm.'
+        (allowDelete ? '. Choose action, then press Enter to confirm.' : '. View only — deletes are Admin-only.')
       );
     }
 
@@ -222,6 +223,10 @@
 
     function applyUpdate() {
       if (!selected) return;
+      if (!allowDelete) {
+        setStatus('Deleting Admin email archive rows is Admin-only.', true);
+        return;
+      }
       var mode = currentMode();
       var countryLabel = selected.country || 'Admin';
 
@@ -335,7 +340,7 @@
             selectSuggestion(activeIndex);
             return;
           }
-          if (selected) {
+          if (selected && allowDelete) {
             applyUpdate();
           }
         }

@@ -1,7 +1,7 @@
 <?php
 /**
  * Team tool: super search Sites with emails - Admin across all countries.
- * Used by Email Extracting and Communication Team.
+ * Search / browse only — deleting Admin archive rows is Admin-only.
  */
 $user = require_team();
 ensure_sites_with_emails_schema();
@@ -42,75 +42,19 @@ if ((string) get('ajax') === 'suggest') {
     exit;
 }
 
+// Team must not mutate Admin email archive.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = (string) post('action');
     $wantsJson = (string) post('ajax') === '1'
         || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
-
-    $json = static function (array $payload, int $code = 200) use ($wantsJson, $base): void {
-        if ($wantsJson) {
-            header('Content-Type: application/json; charset=utf-8');
-            http_response_code($code);
-            echo json_encode($payload);
-            exit;
-        }
-        if (!empty($payload['ok'])) {
-            flash('ok', (string) ($payload['message'] ?? 'Done.'));
-        } else {
-            flash('error', (string) ($payload['error'] ?? 'Could not complete.'));
-        }
-        redirect($base);
-    };
-
-    if ($action === 'delete_row') {
-        $siteId = (int) post('site_id');
-        $before = get_site_with_emails($siteId, 'admin');
-        $result = delete_sites_with_emails_admin_row($siteId);
-        if (!$result['ok']) {
-            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Delete failed.')], 404);
-        }
-        $country = $before ? (string) $before['country'] : '';
-        $json([
-            'ok' => true,
-            'message' => 'Deleted ' . (string) $result['domain']
-                . ($country !== '' ? ' (' . $country . ')' : '')
-                . ' from Sites with emails - Admin.',
-            'domain' => (string) $result['domain'],
-            'country' => $country,
-            'mode' => 'row',
-        ]);
+    $msg = 'Deleting Admin email archive rows is Admin-only. Ask an Admin to update Emails data.';
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => $msg]);
+        exit;
     }
-
-    if ($action === 'delete_email') {
-        $siteId = (int) post('site_id');
-        $before = get_site_with_emails($siteId, 'admin');
-        $result = remove_email_from_sites_with_emails_admin($siteId, (string) post('email'));
-        if (!$result['ok']) {
-            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
-        }
-        $country = $before ? (string) $before['country'] : '';
-        $rowDeleted = !empty($result['row_deleted']);
-        $msg = $rowDeleted
-            ? 'Removed last email from ' . (string) $result['domain']
-                . ($country !== '' ? ' (' . $country . ')' : '')
-                . ' · site row deleted from Admin + Final (no empty-email sites).'
-            : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
-                . ($country !== '' ? ' (' . $country . ')' : '')
-                . '. Site name kept in Admin.';
-        $json([
-            'ok' => true,
-            'message' => $msg,
-            'domain' => (string) $result['domain'],
-            'country' => $country,
-            'emails' => $result['emails'] ?? [],
-            'removed' => (string) ($result['removed'] ?? ''),
-            'site_id' => $siteId,
-            'mode' => $rowDeleted ? 'row' : 'email',
-            'row_deleted' => $rowDeleted,
-        ]);
-    }
-
-    $json(['ok' => false, 'error' => 'Unknown action.'], 400);
+    flash('error', $msg);
+    redirect($base);
 }
 
 $inCommunication = function_exists('user_in_communication_team') && user_in_communication_team($user);
@@ -123,12 +67,11 @@ render_breadcrumbs([
 ?>
 <div class="topbar">
   <div>
-    <h1><?= label_with_info('Admin emails search', 'Super search across every country in Sites with emails - Admin. Results always show site + email + country. Enter confirms delete-both or remove-email-only on that country’s row.') ?></h1>
+    <h1><?= label_with_info('Admin emails search', 'Super search across every country in Sites with emails - Admin. Results show site + email + country. Deletes are Admin-only (Emails data).') ?></h1>
     <p class="muted">
       Search <strong>Sites with emails - Admin</strong> across <strong>all countries</strong>.
       Results show <strong>site + email + country</strong>.
-      Choose delete both or remove only email, then press <strong>Enter</strong> (confirm first).
-      Removing the <strong>last</strong> email also deletes the site row.
+      To delete a row or remove an email, ask Admin (Emails data).
     </p>
   </div>
   <div class="actions">
@@ -140,5 +83,5 @@ render_breadcrumbs([
   </div>
 </div>
 <?php
-render_sites_with_emails_admin_super_search($base);
+render_sites_with_emails_admin_super_search($base, false);
 render_footer('team');

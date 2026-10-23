@@ -14,7 +14,17 @@ DirectoryIndex index.php index.html
   # Do not expose private PHP folders as URLs
   RewriteRule ^(includes|pages|sql)(/|$) - [F,L]
 
-  # Real files (CSS, JS, images, asset.php, install.php, etc.) — serve as-is
+  # After install (config.php exists): block one-time installer + upgrade.
+  # To run upgrade.php on Hostinger: temporarily comment the next 3 lines,
+  # sign in as Admin, open upgrade.php once, delete upgrade.php, restore these lines.
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteCond %{DOCUMENT_ROOT}/config.php -f
+  RewriteRule ^(install|upgrade)\.php$ - [F,L]
+
+  # Never serve leftover reset / test scripts from the web root
+  RewriteRule ^(reset_admin_once|tests_run|tests_http|smoke_admin_mvp)\.php$ - [F,L]
+
+  # Real files (CSS, JS, images, asset.php, etc.) — serve as-is
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
@@ -37,3 +47,14 @@ DirectoryIndex index.php index.html
     Require all denied
   </IfModule>
 </Files>
+
+# Extra deny for one-time / test scripts (belt and suspenders with RewriteRule above)
+<FilesMatch "^(reset_admin_once|tests_run|tests_http|smoke_admin_mvp)\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>

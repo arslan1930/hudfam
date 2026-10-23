@@ -6,6 +6,9 @@
  * Mail: used for Admin email verification + Admin password reset only.
  * On Hostinger, set mail_from to an address on your domain (often enough with mail()).
  * If mail() fails, fill SMTP (smtp.hostinger.com, port 465, ssl).
+ *
+ * Invoice company block: shown on printable invoices (Admin → Invoices).
+ * Leave blank to show empty fields until you fill them in.
  */
 return [
     'db_host' => 'localhost',
@@ -23,4 +26,13 @@ return [
     'smtp_user' => '',
     'smtp_pass' => '',
     'smtp_secure' => 'ssl', // ssl or tls
+
+    // Invoice supplier / bank details (Admin → Invoices)
+    'invoice_company_name' => 'Your Company Ltd',
+    'invoice_company_bic' => 'YOURBICXXX',
+    'invoice_company_iban' => 'XX00XXXX000000000000',
+    'invoice_company_phone' => '+00 000 000 0000',
+    'invoice_company_address' => "Street address\nCity, Country",
+    'invoice_company_reg_no' => '00000000',
+    'invoice_vat_note' => 'Not VAT registered – no VAT charged.',
 ];

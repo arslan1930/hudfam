@@ -19,6 +19,86 @@ if (function_exists('clear_admin_new_data')) {
     clear_admin_new_data('emails_admin', $user);
 }
 
+// JSON suggest for Admin archive super search (hub)
+if ($folder === '' && (string) get('ajax') === 'suggest') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $q = (string) get('q');
+    echo json_encode([
+        'ok' => true,
+        'q' => $q,
+        'suggestions' => search_sites_with_emails_admin_suggestions($q, 25),
+    ]);
+    exit;
+}
+
+// Admin-only: delete archive row / remove email from hub search
+if ($folder === '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string) post('action');
+    $wantsJson = (string) post('ajax') === '1'
+        || str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json');
+    $json = static function (array $payload, int $code = 200) use ($wantsJson, $base): void {
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code($code);
+            echo json_encode($payload);
+            exit;
+        }
+        if (!empty($payload['ok'])) {
+            flash('ok', (string) ($payload['message'] ?? 'Done.'));
+        } else {
+            flash('error', (string) ($payload['error'] ?? 'Could not complete.'));
+        }
+        redirect($base);
+    };
+    if ($action === 'delete_row') {
+        $siteId = (int) post('site_id');
+        $before = get_site_with_emails($siteId, 'admin');
+        $result = delete_sites_with_emails_admin_row($siteId);
+        if (!$result['ok']) {
+            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Delete failed.')], 404);
+        }
+        $country = $before ? (string) $before['country'] : '';
+        $json([
+            'ok' => true,
+            'message' => 'Deleted ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . ' from Sites with emails - Admin.',
+            'domain' => (string) $result['domain'],
+            'country' => $country,
+            'mode' => 'row',
+        ]);
+    }
+    if ($action === 'delete_email') {
+        $siteId = (int) post('site_id');
+        $before = get_site_with_emails($siteId, 'admin');
+        $result = remove_email_from_sites_with_emails_admin($siteId, (string) post('email'));
+        if (!$result['ok']) {
+            $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not remove email.')], 400);
+        }
+        $country = $before ? (string) $before['country'] : '';
+        $rowDeleted = !empty($result['row_deleted']);
+        $msg = $rowDeleted
+            ? 'Removed last email from ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . ' · site row deleted from Admin + Final (no empty-email sites).'
+            : 'Removed ' . (string) $result['removed'] . ' from ' . (string) $result['domain']
+                . ($country !== '' ? ' (' . $country . ')' : '')
+                . '. Site name kept in Admin.';
+        $json([
+            'ok' => true,
+            'message' => $msg,
+            'domain' => (string) $result['domain'],
+            'country' => $country,
+            'emails' => $result['emails'] ?? [],
+            'removed' => (string) ($result['removed'] ?? ''),
+            'site_id' => $siteId,
+            'mode' => $rowDeleted ? 'row' : 'email',
+            'row_deleted' => $rowDeleted,
+        ]);
+    }
+}
+
 // --- Hub ---
 if ($folder === '') {
     $sweCountryRows = list_sites_with_emails_country_rows('admin');
@@ -76,6 +156,8 @@ if ($folder === '') {
       </div>
     </div>
     <?php endif; ?>
+
+    <?php render_sites_with_emails_admin_super_search($base, true); ?>
 
     <div class="card">
       <div class="folders emails-data-folders">

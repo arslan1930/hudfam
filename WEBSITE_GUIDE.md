@@ -200,7 +200,7 @@ What you see depends on department assignment.
 | **Semrush Research** | Site Finding | Edit / comment / clear research sheets |
 | **Extracting sites** | Site Extracting | Sites list + Extracting Results + Push |
 | **Sites with emails – Team** | Email Extracting | Add emails, Push to Admin |
-| **Admin emails search** | Email / Communication | Search Admin email archive; cleanup / delete emails |
+| **Admin emails search** | Email / Communication | Search Admin email archive (view only; deletes are Admin-only under Emails data) |
 | **Campaign search** | Communication | Search campaign sheets across countries |
 | **Campaign drafts** | Communication | Formatted outreach drafts per project |
 
@@ -314,11 +314,14 @@ On upgrades: Admin runs `upgrade.php` once, then delete it.
 ## 11. Technical notes (developers / deployers)
 
 - Config: `public_html/config.php` (from `config.sample.php` / installer); **git-ignored**
+- Invoice company / bank details: `invoice_company_*` keys in `config.php`
 - DB host tip on some VMs: use `127.0.0.1` (TCP), not `localhost` (socket path issues)
 - Required PHP extensions: `pdo_mysql`, `mbstring`
 - Assets go through `asset.php` (avoid double-loading CSS)
+- CSRF on all POSTs; secure session cookies; login throttle; `noindex` + security headers
 - Schema evolves via `ensure_*_schema()` helpers and/or `upgrade.php` + `sql/upgrade_*.sql`
 - No Composer / npm build step — upload `public_html/` contents and run install / upgrade
+- CLI tests live in repo `tests/` (not the web root). CI runs `php -l` + `tests/smoke_admin_mvp.php`.
 
 ### Local preview (optional)
 
@@ -334,8 +337,8 @@ php -S 127.0.0.1:8080
 
 | Page key | Audience |
 |----------|----------|
-| `login` / `logout` / `account_password` | Everyone |
-| `admin_dashboard` … `admin_users` | Admin |
+| `login` / `logout` / `account_password` / `forgot_password` / `reset_password` / `verify_email` | Everyone (forgot/reset/verify = Admin email flow) |
+| `admin_dashboard` … `admin_users` / `admin_account` | Admin |
 | `team_dashboard` / `team_departments` | Team |
 | `team_prospect_check` | Site Finding |
 | `team_extracting` | Site Extracting |
