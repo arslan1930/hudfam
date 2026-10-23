@@ -489,14 +489,25 @@ if (!$inCountry) {
     if ($sweScope === 'admin' && function_exists('swe_admin_clear_visit_since')) {
         swe_admin_clear_visit_since($sweUser);
     }
-    if ($sweScope === 'admin' && $_SERVER['REQUEST_METHOD'] === 'POST'
-        && (string) post('action') === 'mark_all_countries_seen') {
-        require_csrf();
-        if (function_exists('swe_admin_mark_all_countries_seen')) {
-            swe_admin_mark_all_countries_seen($sweUser);
+    if ($sweScope === 'admin' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $hubAction = (string) post('action');
+        if ($hubAction === 'mark_all_countries_seen') {
+            require_csrf();
+            if (function_exists('swe_admin_mark_all_countries_seen')) {
+                swe_admin_mark_all_countries_seen($sweUser);
+            }
+            flash('ok', 'Marked all countries as seen.');
+            redirect($sweBase);
         }
-        flash('ok', 'Marked all countries as seen.');
-        redirect($sweBase);
+        if ($hubAction === 'mark_country_seen') {
+            require_csrf();
+            $markCountry = trim((string) post('country'));
+            if ($markCountry !== '' && function_exists('swe_admin_mark_country_seen')) {
+                swe_admin_mark_country_seen($sweUser, $markCountry);
+                flash('ok', 'Marked ' . $markCountry . ' as seen.');
+            }
+            redirect($sweBase);
+        }
     }
 
     $countryRows = list_sites_with_emails_country_rows($sweScope);
@@ -531,24 +542,50 @@ if (!$inCountry) {
         }
     }
     $showWithEmailsCol = !$isAdminAll;
-    $countryTableCols = 3; // Country · Sites · Open
+    $showEmailedCol = ($sweScope === 'admin');
+    $showNewCol = ($sweScope === 'admin');
+    $showTimestamps = ($sweScope === 'admin');
+    $showMarkSeen = ($sweScope === 'admin');
+    $grandMissing = max(0, (int) $grandTotal - (int) $emailSites);
+    $grandEmailed = 0;
+    if ($showEmailedCol) {
+        foreach ($countryRows as $r) {
+            $grandEmailed += (int) ($r['emailed'] ?? 0);
+        }
+    }
+    $grandCoverage = $grandTotal > 0 ? round(100 * $emailSites / $grandTotal, 1) : 0.0;
+    // Display title: Admin working list is the Team Push list (routes/folder keys unchanged).
+    $sweListTitle = $sweScope === 'admin' ? 'Team Push list' : $sweLabel;
+    $countryTableCols = 2; // Country · Sites
     if ($showWithEmailsCol) {
+        $countryTableCols += 3; // With emails · Missing · %
+    }
+    if ($showEmailedCol) {
         $countryTableCols++;
+    }
+    if ($showNewCol) {
+        $countryTableCols++;
+    }
+    if ($showTimestamps) {
+        $countryTableCols += 2; // Last updated · Last synced
     }
     if ($isTeam) {
-        $countryTableCols++;
+        $countryTableCols++; // Last Push
+    }
+    if ($showMarkSeen) {
+        $countryTableCols++; // Mark seen
     }
 
-    render_header($sweLabel, $swePanel);
+    render_header($sweListTitle, $swePanel);
     $crumbs = $isAdmin
         ? [
             ['label' => 'Dashboard', 'href' => 'index.php?page=admin_dashboard'],
             ['label' => $sweAdminHubLabel, 'href' => $sweAdminHub],
-            ['label' => $sweLabel],
+            ['label' => $sweListTitle],
         ]
         : [
             ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
-            ['label' => $sweLabel],
+            ['label' => $sweListTitle],
         ];
     render_breadcrumbs($crumbs);
     if ($isAdminAll && function_exists('guide_emails_data')) {
@@ -556,53 +593,44 @@ if (!$inCountry) {
     } elseif ($isTeam && function_exists('guide_sites_emails_team')) {
         echo guide_sites_emails_team();
     }
+    $listInfo = $isTeam
+        ? 'Working copy for Email Extracting: site names arrive from Extracting Results Push. Add emails (or none), then Push to Admin — pushed rows leave this list. Empty rows stay here. Open What is this? for the full checklist.'
+        : ($isAdminAll
+            ? 'Final keeps a copy after Mark emailed or Remove on Admin. Not linked to Team. Open a folder in the list; paste and import are on that country sheet (and also create the Admin working-list row).'
+            : 'Working list from Team Push (Sites with emails - Admin). Emailed checkpoint lives here; rows also sync to Final. Communication Team can super-search this data. Missing = sites without a real email (none does not count). Coverage = with-emails ÷ sites.');
     ?>
     <div class="topbar">
       <div>
-        <h1><?= label_with_info(
-            $sweLabel,
-            $isTeam
-                ? 'Working copy for Email Extracting: site names arrive from Extracting Results Push. Add emails (or none), then Push to Admin — pushed rows leave this list. Empty rows stay here. Open What is this? for the full checklist.'
-                : ($isAdminAll
-                    ? 'Final keeps a copy after Mark emailed or Remove on Admin. Not linked to Team. Open a folder in the list; paste and import are on that country sheet (and also create the Admin working-list row).'
-                    : 'Working list from Team Push. Mark emailed removes the site from this list after Final has a copy. Communication Team can super-search this data.')
-        ) ?></h1>
-        <p class="muted">
-          <?php if ($isTeam): ?>
-            Email Extracting working list · sites from Extracting Results → Push ·
-            add emails (or <strong>none</strong>) · Push to Sites with emails - Admin ·
-            pushed rows leave · empty rows stay ·
-          <?php elseif ($isAdminAll): ?>
-            Final keeps a copy after Mark emailed or Remove on Admin.
-            Open a folder in the list — paste and import are on that sheet.
-          <?php else: ?>
-            Working list from Team Push · emailed checkpoint here · also synced to Final ·
+        <h1><?= label_with_info($sweListTitle, $listInfo) ?></h1>
+        <p class="muted swe-country-summary">
+          <span><strong><?= number_format(count($countryRows)) ?></strong> countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?></span>
+          <span><strong><?= number_format((int) $grandTotal) ?></strong> sites</span>
+          <?php if ($showWithEmailsCol): ?>
+            <span><strong><?= number_format((int) $emailSites) ?></strong> with emails</span>
+            <span><strong><?= number_format((int) $grandMissing) ?></strong> missing</span>
+            <span><strong><?= h(rtrim(rtrim(number_format($grandCoverage, 1), '0'), '.')) ?>%</strong> coverage</span>
           <?php endif; ?>
-        </p>
-        <p class="muted">
-          <strong><?= count($countryRows) ?></strong>
-          countr<?= count($countryRows) === 1 ? 'y' : 'ies' ?>
-          · <strong><?= (int) $grandTotal ?></strong>
-          site<?= (int) $grandTotal === 1 ? '' : 's' ?>
-          <?php if (!$isAdminAll || (int) $emailSites !== (int) $grandTotal): ?>
-            · <strong><?= (int) $emailSites ?></strong>
-            with email<?= (int) $emailSites === 1 ? '' : 's' ?>
+          <?php if ($showEmailedCol): ?>
+            <span><strong><?= number_format((int) $grandEmailed) ?></strong> emailed</span>
           <?php endif; ?>
-          <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
-            · <span class="swe-country-new">+<?= (int) $adminNewCountryTotal ?> new</span>
+          <?php if ($showNewCol && $adminNewCountryTotal > 0): ?>
+            <span class="swe-country-new-pill" title="New sites since your last visit">+<?= number_format((int) $adminNewCountryTotal) ?> new</span>
           <?php endif; ?>
         </p>
       </div>
       <div class="actions">
         <?php if ($isAdmin): ?>
           <?php if ($sweScope === 'admin' && $adminNewCountryTotal > 0): ?>
-            <form method="post" action="<?= h($sweBase) ?>" style="display:inline">
+            <form method="post" action="<?= h($sweBase) ?>" style="display:inline"
+                  data-confirm="Mark all countries as seen?&#10;&#10;This clears every New badge on the Team Push list for your account.">
               <?= csrf_field() ?>
               <input type="hidden" name="action" value="mark_all_countries_seen">
-              <button class="btn secondary" type="submit">Mark all countries seen</button>
+              <button class="btn" type="submit">Mark all countries seen</button>
             </form>
+            <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
+          <?php else: ?>
+            <a class="btn" href="<?= h($sweAdminHub) ?>">All folders</a>
           <?php endif; ?>
-          <a class="btn secondary" href="<?= h($sweAdminHub) ?>">All folders</a>
         <?php else: ?>
           <?php if (team_page_unlocked($sweUser, 'team_admin_emails_search')): ?>
             <a class="btn secondary" href="index.php?page=team_admin_emails_search">Admin emails search</a>
@@ -694,36 +722,83 @@ if (!$inCountry) {
       <?php if ($isAdminAll): ?>
       <p class="help" style="margin:0 0 0.65rem">Open a folder. Adding a site on that sheet also creates the Admin working-list row.</p>
       <?php endif; ?>
-      <div class="table-wrap">
-      <table class="extracted-country-table" id="swe-country-table">
+      <div class="table-wrap swe-country-table-wrap">
+      <table class="extracted-country-table swe-country-sortable" id="swe-country-table"
+             data-default-sort="sites" data-default-dir="desc">
         <thead>
           <tr>
-            <th>Country</th>
-            <th class="num">Sites</th>
+            <th scope="col">
+              <button type="button" class="swe-sort-btn" data-sort-key="country" data-sort-type="text">Country</button>
+            </th>
+            <th scope="col" class="num">
+              <button type="button" class="swe-sort-btn is-active" data-sort-key="sites" data-sort-type="num" data-sort-dir="desc">Sites</button>
+            </th>
             <?php if ($showWithEmailsCol): ?>
-            <th class="num">With emails</th>
+            <th scope="col" class="num">
+              <button type="button" class="swe-sort-btn" data-sort-key="with_emails" data-sort-type="num">With emails</button>
+            </th>
+            <th scope="col" class="num">
+              <button type="button" class="swe-sort-btn" data-sort-key="missing" data-sort-type="num">Missing</button>
+            </th>
+            <th scope="col" class="num">
+              <button type="button" class="swe-sort-btn" data-sort-key="coverage" data-sort-type="num">%</button>
+            </th>
+            <?php endif; ?>
+            <?php if ($showEmailedCol): ?>
+            <th scope="col" class="num">
+              <button type="button" class="swe-sort-btn" data-sort-key="emailed" data-sort-type="num" title="Marked emailed on this list">Emailed</button>
+            </th>
+            <?php endif; ?>
+            <?php if ($showNewCol): ?>
+            <th scope="col" class="num">
+              <button type="button" class="swe-sort-btn" data-sort-key="new" data-sort-type="num">New</button>
+            </th>
+            <?php endif; ?>
+            <?php if ($showTimestamps): ?>
+            <th scope="col">
+              <button type="button" class="swe-sort-btn" data-sort-key="updated" data-sort-type="text">Last updated</button>
+            </th>
+            <th scope="col">
+              <button type="button" class="swe-sort-btn" data-sort-key="synced" data-sort-type="text">Last synced to Final</button>
+            </th>
             <?php endif; ?>
             <?php if ($isTeam): ?>
-            <th>Last Push</th>
+            <th scope="col">Last Push</th>
             <?php endif; ?>
-            <th><span class="visually-hidden">Open</span></th>
+            <?php if ($showMarkSeen): ?>
+            <th scope="col"><span class="visually-hidden">Mark seen</span></th>
+            <?php endif; ?>
           </tr>
         </thead>
         <tbody>
         <?php foreach ($countryRows as $r):
             $cName = (string) $r['country'];
             $openHref = $sweBase . '&country=' . rawurlencode($cName);
-            $hay = mb_strtolower($cName . ' ' . (int) $r['total'] . ' sites');
+            $totalN = (int) $r['total'];
+            $withN = (int) $r['with_emails'];
+            $missingN = (int) ($r['missing'] ?? max(0, $totalN - $withN));
+            $coverageN = (float) ($r['coverage'] ?? ($totalN > 0 ? round(100 * $withN / $totalN, 1) : 0));
+            $emailedN = (int) ($r['emailed'] ?? 0);
             $newN = (int) ($adminNewByCountry[$cName] ?? 0);
+            $updatedAt = trim((string) ($r['last_pushed_at'] ?? ''));
+            $syncedAt = trim((string) ($r['last_synced_at'] ?? ''));
+            $hay = mb_strtolower($cName . ' ' . $totalN . ' sites');
             ?>
-          <tr data-swe-country-row data-search="<?= h($hay) ?>">
+          <tr data-swe-country-row data-search="<?= h($hay) ?>"
+              data-sort-country="<?= h(mb_strtolower($cName)) ?>"
+              data-sort-sites="<?= (int) $totalN ?>"
+              data-sort-with_emails="<?= (int) $withN ?>"
+              data-sort-missing="<?= (int) $missingN ?>"
+              data-sort-coverage="<?= h((string) $coverageN) ?>"
+              data-sort-emailed="<?= (int) $emailedN ?>"
+              data-sort-new="<?= (int) $newN ?>"
+              data-sort-updated="<?= h($updatedAt) ?>"
+              data-sort-synced="<?= h($syncedAt) ?>"
+              title="Open <?= h($cName) ?>">
             <td>
               <a class="extracted-country-link" href="<?= h($openHref) ?>">
                 <?= h($cName) ?>
               </a>
-              <?php if ($newN > 0): ?>
-                <span class="swe-country-new" title="New sites since your last visit">+<?= $newN ?> new</span>
-              <?php endif; ?>
               <?php
               $countryFetches = $teamFetchesByCountry[$cName] ?? [];
               if ($countryFetches !== [] && function_exists('render_email_campaign_fetch_stamps')):
@@ -733,16 +808,30 @@ if (!$inCountry) {
                 </div>
               <?php endif; ?>
             </td>
-            <td class="num">
-              <a class="extracted-country-count" href="<?= h($openHref) ?>" title="Open <?= h($cName) ?>">
-                <?= (int) $r['total'] ?>
-              </a>
-            </td>
+            <td class="num"><?= number_format($totalN) ?></td>
             <?php if ($showWithEmailsCol): ?>
-            <td class="num muted"><?= (int) $r['with_emails'] ?></td>
+            <td class="num"><?= number_format($withN) ?></td>
+            <td class="num"><?= number_format($missingN) ?></td>
+            <td class="num"><?= h(rtrim(rtrim(number_format($coverageN, 1), '0'), '.')) ?>%</td>
+            <?php endif; ?>
+            <?php if ($showEmailedCol): ?>
+            <td class="num"><?= number_format($emailedN) ?></td>
+            <?php endif; ?>
+            <?php if ($showNewCol): ?>
+            <td class="num">
+              <?php if ($newN > 0): ?>
+                <span class="swe-country-new-pill" title="New sites since your last visit">+<?= number_format($newN) ?></span>
+              <?php else: ?>
+                <span class="muted">—</span>
+              <?php endif; ?>
+            </td>
+            <?php endif; ?>
+            <?php if ($showTimestamps): ?>
+            <td class="muted swe-country-ts"><?= $updatedAt !== '' ? h(substr($updatedAt, 0, 16)) : '—' ?></td>
+            <td class="muted swe-country-ts"><?= $syncedAt !== '' ? h(substr($syncedAt, 0, 16)) : '—' ?></td>
             <?php endif; ?>
             <?php if ($isTeam):
-                $lp = trim((string) ($r['last_pushed_at'] ?? ''));
+                $lp = $updatedAt;
                 $recentPush = false;
                 if ($lp !== '') {
                     $ts = strtotime($lp);
@@ -756,15 +845,54 @@ if (!$inCountry) {
               <?php endif; ?>
             </td>
             <?php endif; ?>
-            <td class="num">
-              <a class="btn secondary small" href="<?= h($openHref) ?>">Open</a>
+            <?php if ($showMarkSeen): ?>
+            <td class="num swe-country-seen-cell">
+              <?php if ($newN > 0): ?>
+              <form method="post" action="<?= h($sweBase) ?>" class="swe-mark-seen-form"
+                    data-confirm="Mark <?= h($cName) ?> as seen?&#10;&#10;Clears the New badge for this country on your account.">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="mark_country_seen">
+                <input type="hidden" name="country" value="<?= h($cName) ?>">
+                <button class="btn secondary small" type="submit" title="Mark <?= h($cName) ?> seen">Seen</button>
+              </form>
+              <?php else: ?>
+                <span class="muted">—</span>
+              <?php endif; ?>
             </td>
+            <?php endif; ?>
           </tr>
         <?php endforeach; ?>
           <tr class="sheet-search-empty" data-swe-country-search-empty hidden>
             <td colspan="<?= (int) $countryTableCols ?>" class="muted">No countries match your search.</td>
           </tr>
         </tbody>
+        <tfoot class="swe-country-totals">
+          <tr>
+            <th scope="row">Totals</th>
+            <td class="num" data-total-sites><?= number_format((int) $grandTotal) ?></td>
+            <?php if ($showWithEmailsCol): ?>
+            <td class="num" data-total-with><?= number_format((int) $emailSites) ?></td>
+            <td class="num" data-total-missing><?= number_format((int) $grandMissing) ?></td>
+            <td class="num" data-total-coverage><?= h(rtrim(rtrim(number_format($grandCoverage, 1), '0'), '.')) ?>%</td>
+            <?php endif; ?>
+            <?php if ($showEmailedCol): ?>
+            <td class="num" data-total-emailed><?= number_format((int) $grandEmailed) ?></td>
+            <?php endif; ?>
+            <?php if ($showNewCol): ?>
+            <td class="num" data-total-new><?= $adminNewCountryTotal > 0 ? ('+' . number_format((int) $adminNewCountryTotal)) : '—' ?></td>
+            <?php endif; ?>
+            <?php if ($showTimestamps): ?>
+            <td></td>
+            <td></td>
+            <?php endif; ?>
+            <?php if ($isTeam): ?>
+            <td></td>
+            <?php endif; ?>
+            <?php if ($showMarkSeen): ?>
+            <td></td>
+            <?php endif; ?>
+          </tr>
+        </tfoot>
       </table>
       </div>
       <?php else: ?>
@@ -789,13 +917,62 @@ if (!$inCountry) {
     ?>
     <script>
     (function () {
+      var table = document.getElementById('swe-country-table');
+      var tbody = table ? table.tBodies[0] : null;
+
       document.querySelectorAll('[data-swe-country-row]').forEach(function (row) {
         row.addEventListener('click', function (e) {
-          if (e.target.closest('a, button, input, label, select, textarea')) return;
+          if (e.target.closest('a, button, input, label, select, textarea, form')) return;
           var a = row.querySelector('a.extracted-country-link');
           if (a && a.href) window.location.href = a.href;
         });
       });
+
+      function sortRows(key, type, dir) {
+        if (!tbody) return;
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('[data-swe-country-row]'));
+        var emptyRow = tbody.querySelector('[data-swe-country-search-empty]');
+        rows.sort(function (a, b) {
+          var av = a.getAttribute('data-sort-' + key) || '';
+          var bv = b.getAttribute('data-sort-' + key) || '';
+          var cmp = 0;
+          if (type === 'num') {
+            cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0);
+          } else {
+            cmp = String(av).localeCompare(String(bv), undefined, { sensitivity: 'base' });
+          }
+          if (cmp === 0) {
+            cmp = String(a.getAttribute('data-sort-country') || '')
+              .localeCompare(String(b.getAttribute('data-sort-country') || ''), undefined, { sensitivity: 'base' });
+          }
+          return dir === 'desc' ? -cmp : cmp;
+        });
+        rows.forEach(function (row) { tbody.appendChild(row); });
+        if (emptyRow) tbody.appendChild(emptyRow);
+      }
+
+      if (table) {
+        table.querySelectorAll('.swe-sort-btn').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var key = btn.getAttribute('data-sort-key') || 'sites';
+            var type = btn.getAttribute('data-sort-type') || 'text';
+            var cur = btn.getAttribute('data-sort-dir') || '';
+            var next = cur === 'asc' ? 'desc' : (cur === 'desc' ? 'asc' : (type === 'num' ? 'desc' : 'asc'));
+            table.querySelectorAll('.swe-sort-btn').forEach(function (b) {
+              b.classList.remove('is-active');
+              b.removeAttribute('data-sort-dir');
+              b.removeAttribute('aria-sort');
+            });
+            btn.classList.add('is-active');
+            btn.setAttribute('data-sort-dir', next);
+            btn.setAttribute('aria-sort', next === 'asc' ? 'ascending' : 'descending');
+            sortRows(key, type, next);
+          });
+        });
+      }
+
       var input = document.getElementById('swe-country-search');
       if (!input) return;
       var matchRows = [], matchIndex = -1;

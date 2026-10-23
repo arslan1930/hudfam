@@ -224,7 +224,7 @@ if ($folder === '') {
       <div class="folders emails-data-folders">
         <div class="folder-with-info">
           <a class="folder<?= $adminEmailsNew ? ' has-admin-new' : '' ?>" href="<?= h($base) ?>&amp;folder=sites_with_emails">
-            <h3>Admin<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h3>
+            <h3>Team Push list<?= function_exists('admin_new_badge_html') ? admin_new_badge_html('emails_admin', $user) : '' ?></h3>
             <p class="muted">
               Working list from Team Push · emailed checkpoint here ·
               <?= (int) $sweCountryCount ?> countr<?= $sweCountryCount === 1 ? 'y' : 'ies' ?>
