@@ -21,7 +21,9 @@ function nav_is_active(string $navPage, string $current): bool
         'admin_departments' => [],
         'admin_orders' => ['admin_order_sheet'],
         'admin_invoices' => ['admin_invoice_generate', 'admin_invoice_manual', 'admin_invoice_view'],
+        'admin_search' => [],
         'admin_semrush_research' => ['admin_semrush_sheet'],
+        'admin_site_prices' => [],
         'team_prospect_check' => [],
         'team_prospect_batches' => ['team_prospect_batch'],
         'team_semrush_research' => ['team_semrush_sheet'],
@@ -131,21 +133,29 @@ function render_header(string $title, string $panel = ''): void
     echo '<nav aria-label="' . h($roleLabel) . ' navigation">';
 
     if ($panel === 'admin') {
+        // Workflow order: find → research → extract → emails → commercial → office
         $groups = [
-            'Work' => [
-                'admin_dashboard' => ['Dashboard', 'Overview'],
-                'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
+            'Home' => [
+                'admin_dashboard' => ['Dashboard', 'Stats · funnel · search'],
+                'admin_search' => ['Search', 'Domains · emails · orders'],
+            ],
+            'Inventory' => [
                 'admin_prospects' => ['Our database', 'Country folders · add sites · browse'],
                 'admin_prospect_batches' => ['Site adding history', 'Who added what, by day'],
                 'admin_semrush_research' => ['Semrush Research', 'Site Finding copy · Extracting Push + optional seed'],
+                'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
+            ],
+            'Outreach' => [
                 'admin_extracted' => ['Extracted Sites', 'From Team Extracting Results Push'],
                 'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign'],
             ],
-            'Office' => [
+            'Commercial' => [
                 'admin_orders&folder=processing' => ['Order management', 'Processing'],
                 'admin_orders&folder=completed' => ['Completed orders', 'Unpaid LIVE · invoices'],
-                'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates'],
                 'admin_invoices&filter=unpaid' => ['Invoices', 'Waiting bills from unpaid LIVE'],
+            ],
+            'Office' => [
+                'admin_departments' => ['Departments', 'Site Finding · Extracting · Email · Communication'],
                 'admin_users' => ['Users', 'Admin and Team logins'],
                 'admin_account' => ['Account', 'Email verify · password'],
             ],
