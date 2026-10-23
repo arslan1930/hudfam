@@ -40,8 +40,10 @@ $requiredFiles = [
     'includes/prospects.php',
     'includes/prospect_niches.php',
     'assets/js/niche-chips.js',
+    'includes/admin_dashboard.php',
     'pages/account_password.php',
     'pages/admin/dashboard.php',
+    'pages/admin/search.php',
     'pages/admin/prospect_batches.php',
     'pages/admin/prospect_batch.php',
     'pages/admin/invoice_manual.php',
@@ -146,10 +148,41 @@ if (!str_contains($index, "'account_password'")) {
 } else {
     ok('account_password route');
 }
+if (!str_contains($index, "'admin_search'")) {
+    fail('index.php missing admin_search route');
+} else {
+    ok('admin_search route');
+}
+if (!str_contains($index, 'admin_dashboard.php')) {
+    fail('index.php missing admin_dashboard include');
+} else {
+    ok('admin_dashboard include');
+}
 if (!str_contains($index, 'user_must_change_password')) {
     fail('index.php missing password force gate');
 } else {
     ok('password force gate');
+}
+
+$dashPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
+foreach (['admin_dashboard_build', 'dashboard-range', 'dashboard-funnel', 'Team leaderboard', 'admin_search'] as $needle) {
+    if (!str_contains($dashPage, $needle)) {
+        fail("dashboard.php missing {$needle}");
+    } else {
+        ok("dashboard {$needle}");
+    }
+}
+if (str_contains($dashPage, 'render_dashboard_help') || str_contains($dashPage, 'launch-cards')) {
+    fail('dashboard still has help block or launch-card grid');
+} else {
+    ok('dashboard no duplicate launch-cards / help block');
+}
+
+$layout = file_get_contents($root . '/includes/layout.php') ?: '';
+if (!str_contains($layout, "'Inventory'") || !str_contains($layout, "'Outreach'") || !str_contains($layout, "'Commercial'")) {
+    fail('layout missing workflow sidebar groups');
+} else {
+    ok('layout workflow sidebar groups');
 }
 
 $auth = file_get_contents($root . '/includes/auth.php') ?: '';
@@ -1428,7 +1461,8 @@ if (!str_contains($helpersSmoke, 'function table_has_any_row')
     || !str_contains($campSearchJsSmoke, 'fetchSuggest(q); }, 280')
     || !str_contains($campSearchJsSmoke, 'q.length < 3')
     || !str_contains($navJsSmoke, "addEventListener('change'")
-    || !str_contains($dashSmoke, 'cached_count_result')
+    || (!str_contains($dashSmoke, 'cached_count_result')
+        && !str_contains($helpersSmoke, 'function cached_count_result'))
     || !str_contains($geoSmoke, 'SELECT 1 FROM countries LIMIT 1')
     || !str_contains($sweJsSmoke, "behavior: 'auto'")) {
     fail('sitewide smoothness missing LIMIT 1 schema / prefix campaign search / debounce / hidden presence');
@@ -1829,13 +1863,12 @@ if (!str_contains($orderSheet, 'unpaid LIVE') && !str_contains($orderSheet, 'unp
 }
 
 $dashboardPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
-if (!str_contains($dashboardPage, 'order_management_dashboard_stats')
-    || !str_contains($dashboardPage, 'unpaid LIVE')) {
-    fail('dashboard missing order unpaid LIVE stats');
+if (!str_contains($dashboardPage, 'admin_dashboard_build')
+    || !str_contains($dashboardPage, 'Unpaid LIVE')) {
+    fail('dashboard missing unpaid LIVE money card');
 } else {
-    ok('dashboard order unpaid LIVE stats');
+    ok('dashboard unpaid LIVE money card');
 }
-
 $ordersLib = file_get_contents($root . '/includes/orders.php') ?: '';
 foreach (['order_client_name_taken', 'count_invoices_for_order_client', 'set_order_client_archived', 'count_order_client_unpaid_live', 'order_management_dashboard_stats', 'count_order_clients', 'list_order_pipeline_rows', 'count_order_pipeline_rows', 'add_order_pipeline_row', 'order_mark_completed', 'order_sync_from_site_price_row', 'order_reconcile_processing_from_website_prices', 'order_live_urls_from_rows', 'order_site_names_from_rows', 'order_pipeline_download_txt', 'list_order_pipeline_ids', 'list_order_pipeline_client_labels', 'order_invoice_generate_push_cta', 'order_wp_sheet_url', 'normalize_order_pipeline_origin', 'order_pipeline_pick_processing_origin', 'order_normalize_article_doc_url'] as $omFn) {
     if (!str_contains($ordersLib, "function {$omFn}")) {
@@ -2287,88 +2320,47 @@ if (!str_contains($deptLib, "\$page === 'team_admin_emails_delete'")
 }
 
 $dashPage = file_get_contents($root . '/pages/admin/dashboard.php') ?: '';
-if (!str_contains($dashPage, 'departments_dashboard_stats')
-    || !str_contains($dashPage, 'team awaiting assignment')) {
-    fail('dashboard missing departments live stats');
+$dashLib = file_get_contents($root . '/includes/admin_dashboard.php') ?: '';
+if (!str_contains($dashLib, 'team awaiting assignment')
+    || !str_contains($dashLib, 'admin_users&awaiting=1')) {
+    fail('dashboard helpers missing departments awaiting-assignment alert');
 } else {
-    ok('dashboard departments live stats');
+    ok('dashboard departments awaiting-assignment alert');
 }
-if (str_contains($dashPage, 'each country has its own URL database')
-    || str_contains($dashPage, 'Site adding history days')
-    || !str_contains($dashPage, 'Filter this page')
-    || !str_contains($dashPage, 'index.php?page=admin_users')
-    || !str_contains($dashPage, 'admin_users&awaiting=1')
-    || !str_contains($dashPage, 'has-admin-new')
-    || !str_contains($dashPage, "admin_new_badge_html('emails_admin'")
-    || !str_contains($dashPage, 'table-wrap')
-    || !str_contains($dashPage, 'admin_prospect_batches">See all')
-    || !str_contains($dashPage, 'id="dashboard-recent-card"')
-    || !str_contains($dashPage, 'recentCard.hidden')) {
-    fail('dashboard missing chrome: Users card, Emails New, recent-adds wrap, copy');
+if (!str_contains($dashPage, 'admin_dashboard_build')
+    || !str_contains($dashPage, 'dashboard-range')
+    || !str_contains($dashPage, 'dashboard-funnel')
+    || !str_contains($dashPage, 'Team leaderboard')
+    || !str_contains($dashPage, 'admin_search')
+    || str_contains($dashPage, 'launch-cards')
+    || str_contains($dashPage, 'render_dashboard_help')) {
+    fail('dashboard missing redesign chrome (range/funnel/leaderboard/search) or still has launch-cards');
 } else {
-    ok('dashboard chrome: Users, Emails New, recent wrap, copy');
+    ok('dashboard redesign chrome');
 }
-if (!str_contains($dashPage, 'data-dashboard-attention')
-    || !str_contains($dashPage, 'count_sites_with_emails')
-    || !str_contains($dashPage, 'count_email_campaign_sheets')
-    || !str_contains($dashPage, 'count_email_campaign_projects')
-    || !str_contains($dashPage, 'count_invoices_by_work_status')
-    || !str_contains($dashPage, 'count_invoices_unpaid')
-    || !str_contains($dashPage, 'draft invoice')) {
-    fail('dashboard missing attention strip / email / invoice counts');
-} else {
-    ok('dashboard attention strip and email/invoice counts');
-}
-if (str_contains($dashPage, 'admin_invoices&q=draft')
-    || !str_contains($dashPage, 'admin_invoices&filter=draft')
-    || !str_contains($dashPage, 'admin_invoices&filter=unpaid')
-    || str_contains($dashPage, 'drafts listed underneath')) {
-    fail('dashboard invoice tiles must use filter= and keep drafts off the unpaid tile');
-} else {
-    ok('dashboard Draft/Unpaid tiles use invoice filter');
-}
-if (str_contains($dashPage, ". ' unpaid LIVE'")
-    || str_contains($dashPage, '\' unpaid LIVE\'')) {
-    fail('dashboard attention still duplicates unpaid LIVE');
-} else {
-    ok('dashboard unpaid LIVE is the stat tile only');
-}
-if (!str_contains($dashPage, 'admin_users&must_change=1')
-    || !str_contains($dashPage, 'must change password')) {
-    fail('dashboard missing must-change password chip');
-} else {
-    ok('dashboard must-change password chip');
-}
-if (!str_contains($dashPage, 'Emails Admin')
-    || !str_contains($dashPage, 'URLs (all countries)')
-    || !str_contains($dashPage, 'Could not load')
-    || !str_contains($dashPage, 'render_admin_dashboard_stat')
+if ((!str_contains($dashPage, 'admin_invoices&filter=unpaid')
+        && !str_contains($dashPage, 'admin_invoices&amp;filter=unpaid'))
+    || (!str_contains($dashPage, 'folder=completed') || !str_contains($dashPage, 'status=unpaid'))
     || !str_contains($dashPage, 'Unpaid LIVE')
-    || !str_contains($dashPage, 'Waiting invoices')
-    || !str_contains($dashPage, 'Waiting > 14 days')
-    || !str_contains($dashPage, 'count_invoices_waiting_older_than')
-    || !str_contains($dashPage, 'dashboard-waiting-bills')
-    || !str_contains($dashPage, 'Campaign sheets')) {
-    fail('dashboard stats tiles missing pipeline labels');
+    || !str_contains($dashPage, 'Waiting invoices')) {
+    fail('dashboard money cards missing live unpaid LIVE / waiting invoice links');
 } else {
-    ok('dashboard stats match pipeline');
+    ok('dashboard money cards use live filters');
 }
 if (!str_contains($dashPage, 'render_workflow')
-    || !str_contains($dashPage, "'Departments'")
-    || !str_contains($dashPage, "'Extracted Sites'")
+    || !str_contains($dashPage, "'Our database'")
     || !str_contains($dashPage, "'Emails data'")
-    || !str_contains($dashPage, "'Orders + Invoices'")) {
+    || !str_contains($dashPage, "'Orders'")
+    || !str_contains($dashPage, "'Invoices'")) {
     fail('dashboard missing workflow strip');
 } else {
     ok('dashboard workflow strip');
 }
-if (!str_contains($dashPage, 'Recent Our database adds')
-    || !str_contains($dashPage, 'count_site_price_rows_by_lane')
-    || !str_contains($dashPage, 'cards, stats, and chips')
-    || str_contains($dashPage, 'btn secondary" href="index.php?page=admin_prospects#add-sites">Our database')) {
-    fail('dashboard missing WP lanes / filter stats+chips / recent heading, or extra Our database button');
+if (!str_contains($dashPage, 'Recent adds')
+    || !str_contains($dashPage, 'Updated')) {
+    fail('dashboard missing recent adds / Updated label');
 } else {
-    ok('dashboard WP lanes, filter, recent heading, no extra Our database button');
+    ok('dashboard recent adds and Updated label');
 }
 
 $legacyTasks = file_get_contents($root . '/pages/admin/tasks.php') ?: '';
@@ -3357,13 +3349,17 @@ $sheetHistUi = file_get_contents($root . '/includes/sheet_history.php') ?: '';
 $sweUi = file_get_contents($root . '/pages/sites_with_emails_app.php') ?: '';
 $campUi = file_get_contents($root . '/pages/admin/email_campaigns_app.php') ?: '';
 $cssUi = file_get_contents($root . '/assets/css/app.css') ?: '';
-if (!str_contains($layoutUiSmoke, "'Work' =>")
+if (!str_contains($layoutUiSmoke, "'Home' =>")
+    || !str_contains($layoutUiSmoke, "'Inventory' =>")
+    || !str_contains($layoutUiSmoke, "'Outreach' =>")
+    || !str_contains($layoutUiSmoke, "'Commercial' =>")
     || !str_contains($layoutUiSmoke, "'Office' =>")
+    || !str_contains($layoutUiSmoke, "'admin_search'")
     || !str_contains($layoutUiSmoke, "'admin_emails_data' => ['Emails data', 'Admin · Final · Campaign']")
     || !str_contains($layoutUiSmoke, "'admin_site_prices' => ['Website prices', 'Country sheets · publisher rates']")) {
-    fail('Admin sidebar missing Work vs Office groups');
+    fail('Admin sidebar missing workflow groups (Home/Inventory/Outreach/Commercial/Office)');
 } else {
-    ok('Admin sidebar Work vs Office');
+    ok('Admin sidebar workflow groups');
 }
 if (!str_contains($sheetHistUi, 'sheet-history-text')
     || !str_contains($sheetHistUi, '>Undo</span>')

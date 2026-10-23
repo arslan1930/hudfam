@@ -8,6 +8,7 @@ require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/account.php';
 require __DIR__ . '/includes/mail.php';
 require __DIR__ . '/includes/departments.php';
+require __DIR__ . '/includes/admin_dashboard.php';
 require __DIR__ . '/includes/layout.php';
 
 if (!file_exists(__DIR__ . '/config.php')) {
@@ -46,6 +47,7 @@ $routes = [
     'verify_email' => 'pages/verify_email.php',
 
     'admin_dashboard' => 'pages/admin/dashboard.php',
+    'admin_search' => 'pages/admin/search.php',
     'admin_departments' => 'pages/admin/departments.php',
     'admin_prospects' => 'pages/admin/prospects.php',
     'admin_prospect_add' => 'pages/admin/prospect_add.php',
