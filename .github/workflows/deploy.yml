@@ -51,15 +51,32 @@ jobs:
             echo "Missing required secrets: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD" >&2
             exit 1
           fi
-          REMOTE_DIR="${FTP_SERVER_DIR:-./}"
-          if [[ -z "${REMOTE_DIR// }" ]]; then
+
+          # Trim accidental whitespace/CRLF from GitHub secrets.
+          trim() { echo -n "$1" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
+          FTP_SERVER="$(trim "$FTP_SERVER")"
+          FTP_USERNAME="$(trim "$FTP_USERNAME")"
+          FTP_PASSWORD="$(trim "$FTP_PASSWORD")"
+          REMOTE_DIR="$(trim "${FTP_SERVER_DIR:-./}")"
+          if [[ -z "${REMOTE_DIR}" ]]; then
             REMOTE_DIR="./"
           fi
 
-          # Trailing comma = empty password → lftp uses LFTP_PASSWORD (not argv).
-          export LFTP_PASSWORD="$FTP_PASSWORD"
+          echo "FTP host=${FTP_SERVER} user_len=${#FTP_USERNAME} pass_len=${#FTP_PASSWORD} remote=${REMOTE_DIR}"
 
-          lftp <<EOF
+          # netrc keeps passwords with commas/special chars out of open -u parsing.
+          LFTP_HOME="$(mktemp -d)"
+          cleanup() { rm -rf "$LFTP_HOME"; }
+          trap cleanup EXIT
+          {
+            printf 'machine %s\n' "$FTP_SERVER"
+            printf 'login %s\n' "$FTP_USERNAME"
+            printf 'password %s\n' "$FTP_PASSWORD"
+          } > "$LFTP_HOME/.netrc"
+          chmod 600 "$LFTP_HOME/.netrc"
+
+          # SSL settings must be applied before open (do not pass host on argv).
+          HOME="$LFTP_HOME" lftp <<EOF
           set cmd:fail-exit true
           set net:max-retries 5
           set net:persist-retries 3
@@ -72,7 +89,7 @@ jobs:
           set ssl:verify-certificate no
           set ftp:list-options -a
           set mirror:parallel-transfer-count 2
-          open -u ${FTP_USERNAME}, ftp://${FTP_SERVER}
+          open ftp://${FTP_SERVER}
           cd ${REMOTE_DIR}
           lcd public_html
           mirror --reverse --only-newer --parallel=2 --verbose --exclude-glob config.php --exclude-glob uploads --exclude-glob uploads/** --exclude-glob .git* --exclude-glob **/.git* --exclude-glob **/.git*/**
