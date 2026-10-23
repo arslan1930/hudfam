@@ -1,0 +1,5 @@
+# Block script execution in uploaded invoice logos.
+<FilesMatch "\.(?i:php|phtml|php3|php4|php5|php7|php8|phar|cgi|pl|py|asp|aspx|sh)$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

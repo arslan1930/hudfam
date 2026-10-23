@@ -14,6 +14,7 @@ if (!$canon) {
 }
 $country = $canon['name'];
 $isAdmin = is_admin($user);
+$canClear = team_can_clear_semrush_country($user);
 $base = semrush_sheet_url($country, false);
 $hub = semrush_hub_url(false);
 
@@ -37,6 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     };
 
     if ($action === 'autosave_sites' || $action === 'save_sites') {
+        $conflict = semrush_sheet_writer_conflict($country, $user, (string) post('writer_at'));
+        if ($conflict) {
+            $conflict['domains'] = list_semrush_domains_for_country($country);
+            $json($conflict, 409);
+        }
         $result = set_semrush_domains_from_text($country, (string) post('sites_text'), $user);
         if (empty($result['ok'])) {
             $json(['ok' => false, 'error' => (string) ($result['error'] ?? 'Could not save.')], 400);
@@ -50,6 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'removed' => (int) ($result['removed'] ?? 0),
             'domains' => $result['domains'] ?? [],
             'empty' => $total < 1,
+            'writer_name' => (string) ($result['writer_name'] ?? ''),
+            'writer_at' => (string) ($result['writer_at'] ?? ''),
             'message' => 'Saved ' . $total . ' site name' . ($total === 1 ? '' : 's') . '.',
             'redirect' => $total < 1 ? $hub : null,
         ]);
@@ -72,6 +80,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'clear_all') {
+        if (!$canClear) {
+            flash('error', 'Clear country is for Site Finding and Admin.');
+            redirect($hub);
+        }
         $result = clear_semrush_country($country);
         flash(
             !empty($result['ok']) ? 'ok' : 'error',
@@ -90,6 +102,7 @@ $domains = list_semrush_domains_for_country($country);
 $sitesText = implode("\n", $domains);
 $comments = list_semrush_comments($country);
 $total = count($domains);
+$writer = semrush_sheet_writer($country);
 
 // Team: if Admin cleared the country, bounce to hub.
 if ($total < 1 && !$isAdmin) {
@@ -99,7 +112,7 @@ if ($total < 1 && !$isAdmin) {
 
 render_header('Semrush · ' . $country, 'team');
 render_breadcrumbs([
-    ['label' => 'Dashboard', 'href' => 'index.php?page=team_dashboard'],
+    ['label' => 'Your work', 'href' => 'index.php?page=team_dashboard'],
     ['label' => 'Semrush Research', 'href' => $hub],
     ['label' => $country],
 ]);
@@ -133,12 +146,12 @@ render_breadcrumbs([
     id="semrush_sites_shell"
     data-country="<?= h($country) ?>"
     data-post-url="<?= h($base) ?>"
+    data-writer-at="<?= h((string) ($writer['at'] ?? '')) ?>"
   >
     <div class="domains-paste-head">
       <label for="semrush_sites_text">Sites</label>
       <div class="sites-list-actions">
-        <button type="button" class="btn secondary small" id="semrush_undo_btn" disabled>Undo</button>
-        <button type="button" class="btn secondary small" id="semrush_redo_btn" disabled>Redo</button>
+        <?php render_undo_redo_arrow_buttons('semrush_undo_btn', 'semrush_redo_btn'); ?>
         <button type="button" class="btn secondary small" id="semrush_copy_all">Copy all</button>
       </div>
     </div>
@@ -152,21 +165,24 @@ render_breadcrumbs([
     ><?= h($sitesText) ?></textarea>
     <p class="muted" style="margin:0.35rem 0 0">
       <span id="semrush_footer_count"><?= (int) $total ?> site<?= $total === 1 ? '' : 's' ?></span>
-      <span id="semrush_autosave_label" class="help" style="margin-left:0.5rem"></span>
+      <span id="semrush_autosave_label" class="help" style="margin-left:0.5rem"><?= h(last_writer_label((string) ($writer['name'] ?? ''), (string) ($writer['at'] ?? ''))) ?></span>
     </p>
     <p class="help" id="semrush_list_status" hidden></p>
   </div>
-  <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem"
-        onsubmit="return confirm('Clear ALL site names and comments for <?= h($country) ?>? Extracted Sites stay unchanged.');">
+  <?php if ($canClear): ?>
+  <form method="post" action="<?= h($base) ?>" style="margin-top:0.85rem" <?= confirm_data_attr('Clear ALL site names and comments for ' . $country . '? Extracted Sites stay unchanged.') ?>>
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="clear_all">
     <button class="btn danger small" type="submit">Clear country</button>
   </form>
+  <?php endif; ?>
 </div>
 
 <div class="card" style="margin-top:1rem" id="semrush-comments">
   <h2 style="margin:0 0 0.45rem">Comments</h2>
-  <p class="help" style="margin-top:0">Notes for this country sheet (visible to Site Finding + Admin).</p>
+  <p class="help" style="margin-top:0">Notes for this country sheet (visible to Site Finding, Site Extracting, and Admin).</p>
   <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-form" autocomplete="off">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="add_comment">
     <label for="semrush_comment_body">Add comment</label>
     <textarea id="semrush_comment_body" name="body" rows="3" required maxlength="4000"
@@ -192,8 +208,8 @@ render_breadcrumbs([
         </div>
         <div class="semrush-comment-body"><?= nl2br(h((string) $c['body'])) ?></div>
         <?php if ($canDel): ?>
-        <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-delete"
-              onsubmit="return confirm('Delete this comment?');">
+        <form method="post" action="<?= h($base) ?>#semrush-comments" class="semrush-comment-delete" <?= confirm_data_attr('Delete this comment?') ?>>
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="delete_comment">
           <input type="hidden" name="comment_id" value="<?= $cid ?>">
           <button class="btn secondary small" type="submit">Delete</button>

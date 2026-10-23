@@ -16,6 +16,9 @@ function ensure_email_campaign_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
 
     $pdo->exec(
@@ -66,12 +69,14 @@ function ensure_email_campaign_schema(): void
           email4 VARCHAR(255) NOT NULL DEFAULT '',
           email_sent TINYINT(1) NOT NULL DEFAULT 0,
           email_sent_at TIMESTAMP NULL DEFAULT NULL,
+          send_batch_id INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           UNIQUE KEY uniq_email_campaign_sheet_domain (sheet_id, domain),
           INDEX (sheet_id),
           INDEX idx_email_campaign_sheet_id (sheet_id, id),
           INDEX idx_email_campaign_sheet_sent (sheet_id, email_sent),
+          INDEX idx_email_campaign_send_batch (send_batch_id),
           INDEX (domain),
           INDEX (country),
           CONSTRAINT fk_email_campaign_row_sheet
@@ -94,6 +99,15 @@ function ensure_email_campaign_schema(): void
             $pdo->exec(
                 'ALTER TABLE email_campaign_rows
                  ADD COLUMN email_sent_at TIMESTAMP NULL DEFAULT NULL AFTER email_sent'
+            );
+        }
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_rows')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['send_batch_id'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_rows
+                 ADD COLUMN send_batch_id INT NULL AFTER email_sent_at,
+                 ADD INDEX idx_email_campaign_send_batch (send_batch_id)'
             );
         }
         $idx = $pdo->query('SHOW INDEX FROM email_campaign_rows')->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -130,6 +144,22 @@ function ensure_email_campaign_schema(): void
           INDEX (sheet_id),
           INDEX (domain),
           CONSTRAINT fk_email_campaign_excluded_sheet
+            FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    // Single emails removed on purpose — must not come back on re-add/import.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_excluded_emails (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sheet_id INT NOT NULL,
+          domain VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_email_campaign_excluded_email (sheet_id, domain, email),
+          INDEX (sheet_id),
+          INDEX (sheet_id, domain),
+          CONSTRAINT fk_email_campaign_excluded_email_sheet
             FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
@@ -174,9 +204,11 @@ function ensure_email_campaign_schema(): void
           project_id INT NOT NULL,
           category VARCHAR(40) NOT NULL DEFAULT 'custom',
           title VARCHAR(180) NOT NULL,
+          subject VARCHAR(255) NOT NULL DEFAULT '',
           body MEDIUMTEXT NOT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           created_by INT NULL,
+          updated_by INT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX (project_id),
@@ -188,6 +220,475 @@ function ensure_email_campaign_schema(): void
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    // Existing installs: track who last edited (Admin-only delete still uses role check).
+    try {
+        $cols = $pdo->query('SHOW COLUMNS FROM email_campaign_drafts')->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $have = array_fill_keys(array_map('strval', $cols), true);
+        if (!isset($have['updated_by'])) {
+            $pdo->exec(
+                'ALTER TABLE email_campaign_drafts
+                 ADD COLUMN updated_by INT NULL AFTER created_by'
+            );
+        }
+        if (!isset($have['subject'])) {
+            $pdo->exec(
+                "ALTER TABLE email_campaign_drafts
+                 ADD COLUMN subject VARCHAR(255) NOT NULL DEFAULT '' AFTER title"
+            );
+        }
+    } catch (Throwable $e) {
+        // ignore migration hiccups
+    }
+
+    // Who deleted a site / removed an email — survives Allow again.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_row_events (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sheet_id INT NOT NULL,
+          project_id INT NULL,
+          user_id INT NULL,
+          username VARCHAR(100) NOT NULL DEFAULT '',
+          full_name VARCHAR(180) NOT NULL DEFAULT '',
+          action VARCHAR(32) NOT NULL,
+          domain VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL DEFAULT '',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_camp_row_events_sheet (sheet_id, created_at),
+          INDEX idx_camp_row_events_project (project_id, created_at),
+          INDEX idx_camp_row_events_user (user_id),
+          INDEX idx_camp_row_events_domain (sheet_id, domain, action),
+          CONSTRAINT fk_camp_row_event_sheet
+            FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+          CONSTRAINT fk_camp_row_event_user
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    // Named send batches: who marked emailed (Mark up to here / Mark emailed).
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_send_batches (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          sheet_id INT NOT NULL,
+          project_id INT NULL,
+          name VARCHAR(180) NOT NULL,
+          user_id INT NULL,
+          username VARCHAR(100) NOT NULL DEFAULT '',
+          full_name VARCHAR(180) NOT NULL DEFAULT '',
+          site_count INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_camp_send_batch_sheet (sheet_id, created_at),
+          INDEX idx_camp_send_batch_project (project_id, created_at),
+          INDEX idx_camp_send_batch_user (user_id),
+          CONSTRAINT fk_camp_send_batch_sheet
+            FOREIGN KEY (sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE,
+          CONSTRAINT fk_camp_send_batch_user
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_source_fetches (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          campaign_sheet_id INT NOT NULL,
+          campaign_project_id INT NOT NULL DEFAULT 0,
+          campaign_name VARCHAR(180) NOT NULL DEFAULT '',
+          source_scope VARCHAR(20) NOT NULL DEFAULT 'team',
+          source_country VARCHAR(100) NOT NULL DEFAULT '',
+          imported INT NOT NULL DEFAULT 0,
+          updated_count INT NOT NULL DEFAULT 0,
+          skipped_duplicate INT NOT NULL DEFAULT 0,
+          fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_camp_source_fetch (source_scope, source_country, campaign_sheet_id),
+          INDEX (source_scope, source_country),
+          INDEX (campaign_sheet_id),
+          CONSTRAINT fk_camp_source_fetch_sheet
+            FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    email_campaign_ensure_source_fetch_cascade();
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
+}
+
+/**
+ * Older installs may have the fetches table without ON DELETE CASCADE.
+ */
+function email_campaign_ensure_source_fetch_cascade(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
+    try {
+        $pdo = db();
+        $dbName = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
+        if ($dbName === '') {
+            return;
+        }
+        $stmt = $pdo->prepare(
+            "SELECT CONSTRAINT_NAME, DELETE_RULE
+             FROM information_schema.REFERENTIAL_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = ?
+               AND TABLE_NAME = 'email_campaign_source_fetches'
+               AND CONSTRAINT_NAME = 'fk_camp_source_fetch_sheet'
+             LIMIT 1"
+        );
+        $stmt->execute([$dbName]);
+        $fk = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($fk && strtoupper((string) ($fk['DELETE_RULE'] ?? '')) === 'CASCADE') {
+            if (function_exists('txf_schema_mark_current')) {
+                txf_schema_mark_current(__FUNCTION__);
+            }
+            return;
+        }
+        if ($fk) {
+            $pdo->exec('ALTER TABLE email_campaign_source_fetches DROP FOREIGN KEY fk_camp_source_fetch_sheet');
+        }
+        $pdo->exec(
+            'ALTER TABLE email_campaign_source_fetches
+             ADD CONSTRAINT fk_camp_source_fetch_sheet
+             FOREIGN KEY (campaign_sheet_id) REFERENCES email_campaign_sheets(id) ON DELETE CASCADE'
+        );
+        if (function_exists('txf_schema_mark_current')) {
+            txf_schema_mark_current(__FUNCTION__);
+        }
+    } catch (Throwable $e) {
+        // ignore: table missing, no permission, or constraint already correct — do not stamp
+    }
+}
+
+/**
+ * Record (or refresh) that a campaign country sheet fetched a Sites-with-emails source country.
+ * Never mutates Team/Admin/Final rows.
+ *
+ * @param array{imported?:int,updated?:int,skipped_duplicate?:int} $stats
+ */
+function record_email_campaign_source_fetch(
+    int $campaignSheetId,
+    string $sourceScope,
+    string $sourceCountry,
+    array $stats = []
+): void {
+    ensure_email_campaign_schema();
+    $sheet = get_email_campaign_sheet($campaignSheetId);
+    if (!$sheet) {
+        return;
+    }
+    $sourceScope = function_exists('swe_normalize_scope')
+        ? swe_normalize_scope($sourceScope)
+        : $sourceScope;
+    $country = trim($sourceCountry);
+    if ($country === '') {
+        return;
+    }
+    $canon = function_exists('resolve_canonical_country')
+        ? resolve_canonical_country($country)
+        : null;
+    if (is_array($canon) && !empty($canon['name'])) {
+        $country = (string) $canon['name'];
+    }
+    $projectId = (int) ($sheet['project_id'] ?? 0);
+    $campaignName = email_campaign_sheet_project_name($sheet);
+    $imported = (int) ($stats['imported'] ?? 0);
+    $updated = (int) ($stats['updated'] ?? 0);
+    $skippedDup = (int) ($stats['skipped_duplicate'] ?? 0);
+
+    db()->prepare(
+        'INSERT INTO email_campaign_source_fetches
+           (campaign_sheet_id, campaign_project_id, campaign_name, source_scope, source_country,
+            imported, updated_count, skipped_duplicate, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,NOW())
+         ON DUPLICATE KEY UPDATE
+           campaign_project_id = VALUES(campaign_project_id),
+           campaign_name = VALUES(campaign_name),
+           imported = VALUES(imported),
+           updated_count = VALUES(updated_count),
+           skipped_duplicate = VALUES(skipped_duplicate),
+           fetched_at = NOW()'
+    )->execute([
+        $campaignSheetId,
+        $projectId,
+        $campaignName,
+        $sourceScope,
+        $country,
+        $imported,
+        $updated,
+        $skippedDup,
+    ]);
+}
+
+/**
+ * Fetch stamps for one SWE source country (Team / Admin / Final).
+ *
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_fetches_for_source(string $sourceScope, ?string $country = null): array
+{
+    ensure_email_campaign_schema();
+    $sourceScope = function_exists('swe_normalize_scope')
+        ? swe_normalize_scope($sourceScope)
+        : $sourceScope;
+    if ($country !== null && trim($country) !== '') {
+        $canon = function_exists('resolve_canonical_country')
+            ? resolve_canonical_country(trim($country))
+            : null;
+        $countryName = (is_array($canon) && !empty($canon['name']))
+            ? (string) $canon['name']
+            : trim($country);
+        $stmt = db()->prepare(
+            'SELECT * FROM email_campaign_source_fetches
+             WHERE source_scope=? AND source_country=?
+             ORDER BY fetched_at DESC, id DESC'
+        );
+        $stmt->execute([$sourceScope, $countryName]);
+    } else {
+        $stmt = db()->prepare(
+            'SELECT * FROM email_campaign_source_fetches
+             WHERE source_scope=?
+             ORDER BY source_country ASC, fetched_at DESC, id DESC'
+        );
+        $stmt->execute([$sourceScope]);
+    }
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
+ * Group fetch stamps by source country.
+ *
+ * @return array<string, list<array<string,mixed>>>
+ */
+function email_campaign_fetches_grouped_by_country(string $sourceScope): array
+{
+    $out = [];
+    foreach (list_email_campaign_fetches_for_source($sourceScope) as $row) {
+        $c = (string) ($row['source_country'] ?? '');
+        if ($c === '') {
+            continue;
+        }
+        $out[$c][] = $row;
+    }
+    return $out;
+}
+
+/**
+ * Render "Already fetched to campaign …" stamps.
+ *
+ * @param list<array<string,mixed>> $fetches
+ */
+function render_email_campaign_fetch_stamps(array $fetches): void
+{
+    if ($fetches === []) {
+        return;
+    }
+    echo '<ul class="swe-fetch-stamps">';
+    foreach ($fetches as $f) {
+        $name = trim((string) ($f['campaign_name'] ?? ''));
+        if ($name === '') {
+            $name = 'campaign';
+        }
+        $at = trim((string) ($f['fetched_at'] ?? ''));
+        echo '<li class="muted">Already fetched to campaign <strong>'
+            . h($name) . '</strong>';
+        if ($at !== '') {
+            echo ' · last fetch ' . h($at);
+        }
+        echo '</li>';
+    }
+    echo '</ul>';
+    echo '<p class="help swe-fetch-stamps-help">Each campaign keeps its own copy and emailed marks. This list only records who imported from this Team country.</p>';
+}
+
+/**
+ * Unique campaign-sheet domains, oldest first. $sentFilter: null/'' = all, '0' = not emailed, '1' = emailed.
+ *
+ * @return list<string>
+ */
+function collect_email_campaign_domains(int $sheetId, ?string $sentFilter = null): array
+{
+    ensure_email_campaign_schema();
+    $where = ['sheet_id = ?', "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $stmt = db()->prepare(
+        'SELECT domain FROM email_campaign_rows
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id ASC'
+    );
+    $stmt->execute($params);
+    $out = [];
+    $seen = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $d = trim((string) ($row['domain'] ?? ''));
+        if ($d === '') {
+            continue;
+        }
+        $key = mb_strtolower($d);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $out[] = $d;
+    }
+    return $out;
+}
+
+function stream_email_campaign_domains_plain(int $sheetId, ?string $sentFilter = null): void
+{
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    foreach (collect_email_campaign_domains($sheetId, $sentFilter) as $domain) {
+        echo $domain, "\n";
+    }
+    exit;
+}
+
+/**
+ * Unique campaign-sheet emails (EMAIL 1–4), oldest first.
+ * $sentFilter: null/'' = all, '0' = not emailed, '1' = emailed.
+ * Packed cells are split; invalid tokens (no @) are skipped.
+ *
+ * @return list<string>
+ */
+function collect_email_campaign_emails(int $sheetId, ?string $sentFilter = null): array
+{
+    ensure_email_campaign_schema();
+    $where = ['sheet_id = ?', "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $stmt = db()->prepare(
+        'SELECT email1, email2, email3, email4 FROM email_campaign_rows
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id ASC'
+    );
+    $stmt->execute($params);
+    $out = [];
+    $seen = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $slots = function_exists('email_slots_from_row')
+            ? email_slots_from_row($row)
+            : [
+                (string) ($row['email1'] ?? ''),
+                (string) ($row['email2'] ?? ''),
+                (string) ($row['email3'] ?? ''),
+                (string) ($row['email4'] ?? ''),
+            ];
+        foreach ($slots as $e) {
+            $e = trim((string) $e);
+            if ($e === '' || !str_contains($e, '@')) {
+                continue;
+            }
+            $key = mb_strtolower($e);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $e;
+        }
+    }
+    return $out;
+}
+
+function stream_email_campaign_emails_plain(int $sheetId, ?string $sentFilter = null): void
+{
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    foreach (collect_email_campaign_emails($sheetId, $sentFilter) as $email) {
+        echo $email, "\n";
+    }
+    exit;
+}
+
+/**
+ * Campaign country sheet rows for CSV/Excel (Site + EMAIL 1–4).
+ * $sentFilter: null/'' = all, '0' = not emailed, '1' = emailed.
+ *
+ * @return list<array{0:string,1:string,2:string,3:string,4:string}>
+ */
+function collect_email_campaign_csv_rows(int $sheetId, ?string $sentFilter = null): array
+{
+    ensure_email_campaign_schema();
+    $where = ['sheet_id = ?', "LEFT(domain, 8) <> '__blank_'"];
+    $params = [$sheetId];
+    if ($sentFilter === '0' || $sentFilter === '1') {
+        $where[] = 'email_sent = ?';
+        $params[] = (int) $sentFilter;
+    }
+    $stmt = db()->prepare(
+        'SELECT domain, email1, email2, email3, email4 FROM email_campaign_rows
+         WHERE ' . implode(' AND ', $where) . '
+         ORDER BY id ASC'
+    );
+    $stmt->execute($params);
+    $out = [];
+    $seen = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $d = trim((string) ($row['domain'] ?? ''));
+        if ($d === '') {
+            continue;
+        }
+        $key = mb_strtolower($d);
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $slots = function_exists('email_slots_from_row')
+            ? email_slots_from_row($row)
+            : [
+                (string) ($row['email1'] ?? ''),
+                (string) ($row['email2'] ?? ''),
+                (string) ($row['email3'] ?? ''),
+                (string) ($row['email4'] ?? ''),
+            ];
+        $out[] = [
+            $d,
+            (string) ($slots[0] ?? ''),
+            (string) ($slots[1] ?? ''),
+            (string) ($slots[2] ?? ''),
+            (string) ($slots[3] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function stream_email_campaign_csv(int $sheetId, ?string $sentFilter = null): void
+{
+    $sheet = get_email_campaign_sheet($sheetId);
+    $country = $sheet ? email_campaign_sheet_country($sheet) : 'campaign';
+    $safe = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $country) ?: 'campaign';
+    $suffix = match ($sentFilter) {
+        '0' => '-not-emailed',
+        '1' => '-emailed',
+        default => '',
+    };
+
+    header('Content-Type: text/csv; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: no-store');
+    header('Content-Disposition: attachment; filename="' . $safe . '-campaign-sites' . $suffix . '.csv"');
+
+    $out = fopen('php://output', 'wb');
+    if ($out === false) {
+        exit;
+    }
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['Site name', 'Email 1', 'Email 2', 'Email 3', 'Email 4']);
+    foreach (collect_email_campaign_csv_rows($sheetId, $sentFilter) as $row) {
+        fputcsv($out, $row);
+    }
+    fclose($out);
+    exit;
 }
 
 /**
@@ -336,7 +837,10 @@ function clear_email_campaign_domain_exclusion(int $sheetId, string $domainRaw):
         'DELETE FROM email_campaign_excluded_domains WHERE sheet_id=? AND domain=?'
     );
     $st->execute([$sheetId, $domain]);
-    return $st->rowCount() > 0;
+    $cleared = $st->rowCount() > 0;
+    // Allow again for the site also lifts per-email bans for that domain.
+    clear_email_campaign_email_exclusions_for_domain($sheetId, $domain);
+    return $cleared;
 }
 
 function is_email_campaign_domain_excluded(int $sheetId, string $domainRaw): bool
@@ -354,8 +858,204 @@ function is_email_campaign_domain_excluded(int $sheetId, string $domainRaw): boo
 }
 
 /**
- * @return list<array{id:int,domain:string,excluded_at:string}>
+ * Remember one email so paste/import/+ Add will not put it back on this sheet.
  */
+function exclude_email_campaign_email(int $sheetId, string $domainRaw, string $emailRaw): bool
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $email = function_exists('normalize_email_value')
+        ? normalize_email_value($emailRaw)
+        : strtolower(trim($emailRaw));
+    if ($sheetId < 1 || $domain === '' || str_starts_with($domain, '__blank_') || $email === '') {
+        return false;
+    }
+    db()->prepare(
+        'INSERT INTO email_campaign_excluded_emails (sheet_id, domain, email)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE excluded_at = VALUES(excluded_at)'
+    )->execute([$sheetId, $domain, $email]);
+    return true;
+}
+
+/**
+ * @param list<string> $emails
+ */
+function exclude_email_campaign_emails(int $sheetId, string $domainRaw, array $emails): int
+{
+    $n = 0;
+    foreach ($emails as $email) {
+        if (exclude_email_campaign_email($sheetId, $domainRaw, (string) $email)) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
+function clear_email_campaign_email_exclusion(int $sheetId, string $domainRaw, string $emailRaw): bool
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $email = function_exists('normalize_email_value')
+        ? normalize_email_value($emailRaw)
+        : strtolower(trim($emailRaw));
+    if ($sheetId < 1 || $domain === '' || $email === '') {
+        return false;
+    }
+    $st = db()->prepare(
+        'DELETE FROM email_campaign_excluded_emails
+         WHERE sheet_id=? AND domain=? AND email=?'
+    );
+    $st->execute([$sheetId, $domain, $email]);
+    return $st->rowCount() > 0;
+}
+
+function clear_email_campaign_email_exclusions_for_domain(int $sheetId, string $domainRaw): int
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    if ($sheetId < 1 || $domain === '') {
+        return 0;
+    }
+    $st = db()->prepare(
+        'DELETE FROM email_campaign_excluded_emails WHERE sheet_id=? AND domain=?'
+    );
+    $st->execute([$sheetId, $domain]);
+    return (int) $st->rowCount();
+}
+
+function is_email_campaign_email_excluded(int $sheetId, string $domainRaw, string $emailRaw): bool
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $email = function_exists('normalize_email_value')
+        ? normalize_email_value($emailRaw)
+        : strtolower(trim($emailRaw));
+    if ($sheetId < 1 || $domain === '' || $email === '') {
+        return false;
+    }
+    $st = db()->prepare(
+        'SELECT 1 FROM email_campaign_excluded_emails
+         WHERE sheet_id=? AND domain=? AND email=? LIMIT 1'
+    );
+    $st->execute([$sheetId, $domain, $email]);
+    return (int) $st->fetchColumn() > 0;
+}
+
+/**
+ * Drop previously removed emails from a slot list.
+ *
+ * @param array<int,string> $slots
+ * @return array{slots: array{0:string,1:string,2:string,3:string}, stripped: list<string>}
+ */
+function filter_email_campaign_slots_against_exclusions(
+    int $sheetId,
+    string $domainRaw,
+    array $slots,
+    ?array $excludedEmailMap = null
+): array {
+    $domain = normalize_email_campaign_domain($domainRaw);
+    $banned = [];
+    if ($excludedEmailMap !== null) {
+        $banned = $excludedEmailMap[$domain] ?? [];
+    }
+    $kept = [];
+    $stripped = [];
+    foreach ($slots as $raw) {
+        $email = function_exists('normalize_email_value')
+            ? normalize_email_value((string) $raw)
+            : strtolower(trim((string) $raw));
+        if ($email === '') {
+            continue;
+        }
+        $isBanned = $excludedEmailMap !== null
+            ? isset($banned[$email])
+            : is_email_campaign_email_excluded($sheetId, $domain, $email);
+        if ($isBanned) {
+            $stripped[] = $email;
+            continue;
+        }
+        $kept[] = $email;
+    }
+    while (count($kept) < 4) {
+        $kept[] = '';
+    }
+    $kept = array_slice($kept, 0, 4);
+    return [
+        'slots' => [$kept[0], $kept[1], $kept[2], $kept[3]],
+        'stripped' => $stripped,
+    ];
+}
+
+/**
+ * Load sheet exclusion sets for bulk paste/import (avoid N+1 lookups).
+ *
+ * @return array{domains: array<string,true>, emails: array<string, array<string,true>>}
+ */
+function load_email_campaign_exclusion_sets(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    $domains = [];
+    $emails = [];
+    if ($sheetId < 1) {
+        return ['domains' => $domains, 'emails' => $emails];
+    }
+    $stDom = db()->prepare(
+        'SELECT domain FROM email_campaign_excluded_domains WHERE sheet_id=?'
+    );
+    $stDom->execute([$sheetId]);
+    foreach ($stDom->fetchAll(PDO::FETCH_COLUMN) ?: [] as $d) {
+        $d = (string) $d;
+        if ($d !== '') {
+            $domains[$d] = true;
+        }
+    }
+    $stEm = db()->prepare(
+        'SELECT domain, email FROM email_campaign_excluded_emails WHERE sheet_id=?'
+    );
+    $stEm->execute([$sheetId]);
+    foreach ($stEm->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $d = (string) ($row['domain'] ?? '');
+        $e = (string) ($row['email'] ?? '');
+        if ($d === '' || $e === '') {
+            continue;
+        }
+        if (!isset($emails[$d])) {
+            $emails[$d] = [];
+        }
+        $emails[$d][$e] = true;
+    }
+    return ['domains' => $domains, 'emails' => $emails];
+}
+
+/**
+ * Emails currently stored on a campaign row.
+ *
+ * @param array<string,mixed> $row
+ * @return list<string>
+ */
+function email_campaign_row_email_list(array $row): array
+{
+    $out = [];
+    foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+        $e = function_exists('normalize_email_value')
+            ? normalize_email_value((string) ($row[$k] ?? ''))
+            : strtolower(trim((string) ($row[$k] ?? '')));
+        if ($e === '') {
+            continue;
+        }
+        if (function_exists('email_slot_is_real')) {
+            if (!email_slot_is_real($e)) {
+                continue;
+            }
+        } elseif ($e === 'none' || !str_contains($e, '@')) {
+            continue;
+        }
+        $out[] = $e;
+    }
+    return $out;
+}
+
 /**
  * @return list<array{id:int,domain:string,excluded_at:string}>
  */
@@ -391,6 +1091,430 @@ function count_email_campaign_excluded_domains(int $sheetId): int
     );
     $st->execute([$sheetId]);
     return (int) $st->fetchColumn();
+}
+
+/**
+ * @return list<array{id:int,domain:string,email:string,excluded_at:string}>
+ */
+function list_email_campaign_excluded_emails(int $sheetId, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(2000, $limit));
+    $st = db()->prepare(
+        "SELECT id, domain, email, excluded_at
+         FROM email_campaign_excluded_emails
+         WHERE sheet_id=?
+         ORDER BY domain ASC, email ASC
+         LIMIT {$limit}"
+    );
+    $st->execute([$sheetId]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'domain' => (string) ($row['domain'] ?? ''),
+            'email' => (string) ($row['email'] ?? ''),
+            'excluded_at' => (string) ($row['excluded_at'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function count_email_campaign_excluded_emails(int $sheetId): int
+{
+    ensure_email_campaign_schema();
+    $st = db()->prepare(
+        'SELECT COUNT(*) FROM email_campaign_excluded_emails WHERE sheet_id=?'
+    );
+    $st->execute([$sheetId]);
+    return (int) $st->fetchColumn();
+}
+
+/**
+ * Durable log of who deleted a site or removed an email. Not cleared by Allow again.
+ *
+ * @param array<string,mixed>|null $actor
+ */
+function record_email_campaign_row_event(
+    int $sheetId,
+    string $action,
+    string $domain,
+    string $email = '',
+    ?array $actor = null
+): void {
+    ensure_email_campaign_schema();
+    if (!in_array($action, ['delete_site', 'remove_email'], true)) {
+        return;
+    }
+    $domain = function_exists('normalize_email_campaign_domain')
+        ? normalize_email_campaign_domain($domain)
+        : strtolower(trim($domain));
+    if ($sheetId < 1 || $domain === '' || str_starts_with($domain, '__blank_')) {
+        return;
+    }
+    if ($actor === null && function_exists('current_user')) {
+        $cu = current_user();
+        $actor = is_array($cu) ? $cu : null;
+    }
+    $userId = (int) ($actor['id'] ?? 0);
+    $username = trim((string) ($actor['username'] ?? ''));
+    $fullName = trim((string) ($actor['full_name'] ?? ''));
+    $sheet = get_email_campaign_sheet($sheetId);
+    $projectId = $sheet ? (int) ($sheet['project_id'] ?? 0) : 0;
+    $emailNorm = '';
+    if ($action === 'remove_email') {
+        $emailNorm = function_exists('normalize_email_value')
+            ? normalize_email_value($email)
+            : strtolower(trim($email));
+    }
+    try {
+        db()->prepare(
+            'INSERT INTO email_campaign_row_events
+             (sheet_id, project_id, user_id, username, full_name, action, domain, email)
+             VALUES (?,?,?,?,?,?,?,?)'
+        )->execute([
+            $sheetId,
+            $projectId > 0 ? $projectId : null,
+            $userId > 0 ? $userId : null,
+            $username,
+            $fullName,
+            $action,
+            $domain,
+            $emailNorm,
+        ]);
+    } catch (Throwable $e) {
+        // Never fail the delete / remove.
+    }
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_row_events(?int $sheetId = null, ?int $projectId = null, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(2000, $limit));
+    $sql = 'SELECT e.id, e.sheet_id, e.project_id, e.user_id, e.username, e.full_name,
+                   e.action, e.domain, e.email, e.created_at,
+                   s.name AS country
+            FROM email_campaign_row_events e
+            LEFT JOIN email_campaign_sheets s ON s.id = e.sheet_id
+            WHERE 1=1';
+    $params = [];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND e.sheet_id=?';
+        $params[] = $sheetId;
+    }
+    if ($projectId !== null && $projectId > 0) {
+        $sql .= ' AND e.project_id=?';
+        $params[] = $projectId;
+    }
+    $sql .= " ORDER BY e.created_at DESC, e.id DESC LIMIT {$limit}";
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $out = [];
+    foreach ($rows as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'sheet_id' => (int) ($row['sheet_id'] ?? 0),
+            'project_id' => (int) ($row['project_id'] ?? 0),
+            'user_id' => (int) ($row['user_id'] ?? 0),
+            'username' => (string) ($row['username'] ?? ''),
+            'full_name' => (string) ($row['full_name'] ?? ''),
+            'action' => (string) ($row['action'] ?? ''),
+            'domain' => (string) ($row['domain'] ?? ''),
+            'email' => (string) ($row['email'] ?? ''),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'country' => (string) ($row['country'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+function count_email_campaign_row_events(?int $sheetId = null, ?int $projectId = null): int
+{
+    ensure_email_campaign_schema();
+    $sql = 'SELECT COUNT(*) FROM email_campaign_row_events WHERE 1=1';
+    $params = [];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND sheet_id=?';
+        $params[] = $sheetId;
+    }
+    if ($projectId !== null && $projectId > 0) {
+        $sql .= ' AND project_id=?';
+        $params[] = $projectId;
+    }
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    return (int) $st->fetchColumn();
+}
+
+/**
+ * Latest event per domain (delete_site) or domain+email (remove_email) on a sheet.
+ *
+ * @return array{delete_site:array<string,array<string,mixed>>,remove_email:array<string,array<string,mixed>>}
+ */
+function map_email_campaign_latest_event_who(int $sheetId): array
+{
+    $map = ['delete_site' => [], 'remove_email' => []];
+    if ($sheetId < 1) {
+        return $map;
+    }
+    foreach (list_email_campaign_row_events($sheetId, null, 2000) as $ev) {
+        $action = (string) ($ev['action'] ?? '');
+        $domain = (string) ($ev['domain'] ?? '');
+        if ($domain === '' || !isset($map[$action])) {
+            continue;
+        }
+        if ($action === 'remove_email') {
+            $key = $domain . "\0" . (string) ($ev['email'] ?? '');
+            if (!isset($map['remove_email'][$key])) {
+                $map['remove_email'][$key] = $ev;
+            }
+        } elseif (!isset($map['delete_site'][$domain])) {
+            $map['delete_site'][$domain] = $ev;
+        }
+    }
+    return $map;
+}
+
+/**
+ * Display label for an event actor (username snapshot, then full name).
+ *
+ * @param array<string,mixed> $event
+ */
+function email_campaign_event_who_label(array $event): string
+{
+    $user = trim((string) ($event['username'] ?? ''));
+    $full = trim((string) ($event['full_name'] ?? ''));
+    if ($user !== '' && $full !== '' && strcasecmp($user, $full) !== 0) {
+        return $user . ' · ' . $full;
+    }
+    if ($user !== '') {
+        return $user;
+    }
+    if ($full !== '') {
+        return $full;
+    }
+    return '—';
+}
+
+/**
+ * Who last deleted this excluded site (or this excluded email).
+ *
+ * @param array{delete_site:array<string,array<string,mixed>>,remove_email:array<string,array<string,mixed>>} $whoMap
+ */
+function email_campaign_who_for_exclusion(array $whoMap, string $action, string $domain, string $email = ''): string
+{
+    $ev = null;
+    if ($action === 'remove_email') {
+        $ev = $whoMap['remove_email'][$domain . "\0" . $email] ?? null;
+        // Whole-site delete stamps delete_site only; still show who on tombstoned emails.
+        if (!is_array($ev)) {
+            $ev = $whoMap['delete_site'][$domain] ?? null;
+        }
+    } else {
+        $ev = $whoMap['delete_site'][$domain] ?? null;
+    }
+    return is_array($ev) ? email_campaign_event_who_label($ev) : '—';
+}
+
+/**
+ * @param array<string,mixed>|null $actor
+ * @return array{id:int,username:string,full_name:string}
+ */
+function email_campaign_resolve_actor(?array $actor = null): array
+{
+    if ($actor === null && function_exists('current_user')) {
+        $cu = current_user();
+        $actor = is_array($cu) ? $cu : null;
+    }
+    return [
+        'id' => (int) ($actor['id'] ?? 0),
+        'username' => trim((string) ($actor['username'] ?? '')),
+        'full_name' => trim((string) ($actor['full_name'] ?? '')),
+    ];
+}
+
+function email_campaign_send_batch_who_label(array $batch): string
+{
+    return email_campaign_event_who_label($batch);
+}
+
+/**
+ * Status badge for an emailed campaign row: "Emailed · Batch A" + who in the title.
+ *
+ * @param array<string,mixed>|null $batch
+ * @return array{label:string,title:string}
+ */
+function email_campaign_row_emailed_status(?array $batch): array
+{
+    if (!is_array($batch) || $batch === []) {
+        return ['label' => 'Emailed', 'title' => ''];
+    }
+    $name = trim((string) ($batch['name'] ?? ''));
+    $who = email_campaign_send_batch_who_label($batch);
+    return [
+        'label' => $name !== '' ? ('Emailed · ' . $name) : 'Emailed',
+        'title' => ($who !== '' && $who !== '—') ? ('Sent by ' . $who) : '',
+    ];
+}
+
+function email_campaign_default_send_batch_name(?array $actor, int $count): string
+{
+    $who = email_campaign_resolve_actor($actor);
+    $label = $who['username'] !== '' ? $who['username'] : 'Admin';
+    $n = max(0, $count);
+    return $label . ' · ' . date('Y-m-d') . ' · ' . $n;
+}
+
+/**
+ * @param array<string,mixed>|null $actor
+ * @return array{ok:bool,id?:int,name?:string,error?:string}
+ */
+function create_email_campaign_send_batch(
+    int $sheetId,
+    string $name,
+    int $siteCount,
+    ?array $actor = null
+): array {
+    ensure_email_campaign_schema();
+    if ($sheetId < 1 || $siteCount < 1) {
+        return ['ok' => false, 'error' => 'Nothing to batch.'];
+    }
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
+        return ['ok' => false, 'error' => 'Sheet not found.'];
+    }
+    $who = email_campaign_resolve_actor($actor);
+    $name = trim($name);
+    if ($name === '') {
+        $name = email_campaign_default_send_batch_name($who, $siteCount);
+    }
+    if (mb_strlen($name) > 180) {
+        $name = mb_substr($name, 0, 180);
+    }
+    $projectId = (int) ($sheet['project_id'] ?? 0);
+    db()->prepare(
+        'INSERT INTO email_campaign_send_batches
+         (sheet_id, project_id, name, user_id, username, full_name, site_count)
+         VALUES (?,?,?,?,?,?,?)'
+    )->execute([
+        $sheetId,
+        $projectId > 0 ? $projectId : null,
+        $name,
+        $who['id'] > 0 ? $who['id'] : null,
+        $who['username'],
+        $who['full_name'],
+        $siteCount,
+    ]);
+    $id = (int) db()->lastInsertId();
+    return ['ok' => true, 'id' => $id, 'name' => $name];
+}
+
+function get_email_campaign_send_batch(int $batchId, ?int $sheetId = null): ?array
+{
+    ensure_email_campaign_schema();
+    if ($batchId < 1) {
+        return null;
+    }
+    $sql = 'SELECT b.*, s.name AS country,
+                   (SELECT COUNT(*) FROM email_campaign_rows r
+                    WHERE r.send_batch_id = b.id AND r.email_sent=1) AS live_count
+            FROM email_campaign_send_batches b
+            LEFT JOIN email_campaign_sheets s ON s.id = b.sheet_id
+            WHERE b.id=?';
+    $params = [$batchId];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND b.sheet_id=?';
+        $params[] = $sheetId;
+    }
+    $sql .= ' LIMIT 1';
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_send_batches(?int $sheetId = null, ?int $projectId = null, int $limit = 200): array
+{
+    ensure_email_campaign_schema();
+    $limit = max(1, min(500, $limit));
+    $sql = 'SELECT b.*, s.name AS country,
+                   (SELECT COUNT(*) FROM email_campaign_rows r
+                    WHERE r.send_batch_id = b.id AND r.email_sent=1) AS live_count
+            FROM email_campaign_send_batches b
+            LEFT JOIN email_campaign_sheets s ON s.id = b.sheet_id
+            WHERE 1=1';
+    $params = [];
+    if ($sheetId !== null && $sheetId > 0) {
+        $sql .= ' AND b.sheet_id=?';
+        $params[] = $sheetId;
+    }
+    if ($projectId !== null && $projectId > 0) {
+        $sql .= ' AND b.project_id=?';
+        $params[] = $projectId;
+    }
+    $sql .= " ORDER BY b.created_at DESC, b.id DESC LIMIT {$limit}";
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $out[] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'sheet_id' => (int) ($row['sheet_id'] ?? 0),
+            'project_id' => (int) ($row['project_id'] ?? 0),
+            'name' => (string) ($row['name'] ?? ''),
+            'user_id' => (int) ($row['user_id'] ?? 0),
+            'username' => (string) ($row['username'] ?? ''),
+            'full_name' => (string) ($row['full_name'] ?? ''),
+            'site_count' => (int) ($row['site_count'] ?? 0),
+            'live_count' => (int) ($row['live_count'] ?? 0),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'country' => (string) ($row['country'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+/**
+ * @return array<int,array<string,mixed>>
+ */
+function map_email_campaign_send_batches(int $sheetId): array
+{
+    $map = [];
+    foreach (list_email_campaign_send_batches($sheetId, null, 500) as $b) {
+        $map[(int) $b['id']] = $b;
+    }
+    return $map;
+}
+
+/**
+ * Sites currently tagged to a send batch (domain + emails).
+ *
+ * @return list<array<string,mixed>>
+ */
+function list_email_campaign_send_batch_rows(int $batchId, int $limit = 2000): array
+{
+    ensure_email_campaign_schema();
+    if ($batchId < 1) {
+        return [];
+    }
+    $limit = max(1, min(5000, $limit));
+    $st = db()->prepare(
+        "SELECT id, domain, email1, email2, email3, email4, email_sent, email_sent_at, send_batch_id
+         FROM email_campaign_rows
+         WHERE send_batch_id=? AND LEFT(domain, 8) <> '__blank_'
+         ORDER BY id ASC
+         LIMIT {$limit}"
+    );
+    $st->execute([$batchId]);
+    return $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 /**
@@ -526,6 +1650,45 @@ function list_email_campaign_projects(?bool $onlyTeamVisible = null): array
 function list_email_campaign_sheets_for_project(int $projectId): array
 {
     return list_email_campaign_sheets(null, $projectId);
+}
+
+/**
+ * Cheap country switcher list (id + name only — no row counts).
+ *
+ * @return list<array{id:int,country:string}>
+ */
+function list_email_campaign_project_country_nav(int $projectId): array
+{
+    if ($projectId < 1) {
+        return [];
+    }
+    ensure_email_campaign_schema();
+    $st = db()->prepare(
+        'SELECT id, name FROM email_campaign_sheets WHERE project_id = ? ORDER BY name ASC'
+    );
+    $st->execute([$projectId]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        $country = (string) ($row['name'] ?? '');
+        $canon = resolve_canonical_country($country);
+        $out[] = [
+            'id' => (int) $row['id'],
+            'country' => $canon ? $canon['name'] : $country,
+        ];
+    }
+    return $out;
+}
+
+function count_email_campaign_sheets(): int
+{
+    ensure_email_campaign_schema();
+    return (int) db()->query('SELECT COUNT(*) FROM email_campaign_sheets')->fetchColumn();
+}
+
+function count_email_campaign_projects(): int
+{
+    ensure_email_campaign_schema();
+    return (int) db()->query('SELECT COUNT(*) FROM email_campaign_projects')->fetchColumn();
 }
 
 /**
@@ -887,64 +2050,211 @@ function count_email_campaign_sent_stats(int $sheetId): array
 }
 
 /**
- * Mark one campaign sheet row emailed / not emailed.
+ * Snapshot of emailed flags (and send batch) for undo/redo.
  *
- * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int}
+ * @return array{id:int,email_sent:int,email_sent_at:mixed,send_batch_id:?int}
  */
-function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent): array
+function email_campaign_emailed_flag_row(array $row): array
+{
+    $batchId = (int) ($row['send_batch_id'] ?? 0);
+
+    return [
+        'id' => (int) ($row['id'] ?? 0),
+        'email_sent' => (int) ($row['email_sent'] ?? 0) === 1 ? 1 : 0,
+        'email_sent_at' => $row['email_sent_at'] ?? null,
+        'send_batch_id' => $batchId > 0 ? $batchId : null,
+    ];
+}
+
+/**
+ * @param list<mixed> $params
+ * @return list<array{id:int,email_sent:int,email_sent_at:mixed,send_batch_id:?int}>
+ */
+function email_campaign_emailed_flags_where(int $sheetId, string $extraWhere, array $params): array
+{
+    $sql = 'SELECT id, email_sent, email_sent_at, send_batch_id FROM email_campaign_rows WHERE sheet_id=?';
+    if ($extraWhere !== '') {
+        $sql .= ' AND ' . $extraWhere;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute(array_merge([$sheetId], $params));
+    $out = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $out[] = email_campaign_emailed_flag_row($row);
+    }
+    return $out;
+}
+
+/**
+ * @param list<array<string,mixed>> $flags
+ */
+function apply_email_campaign_emailed_flags(int $sheetId, array $flags): bool
+{
+    if ($sheetId < 1 || $flags === []) {
+        return false;
+    }
+    $n = 0;
+    foreach ($flags as $flag) {
+        if (!is_array($flag)) {
+            continue;
+        }
+        $id = (int) ($flag['id'] ?? 0);
+        if ($id < 1) {
+            continue;
+        }
+        $sent = (int) ($flag['email_sent'] ?? 0) === 1;
+        $batchId = (int) ($flag['send_batch_id'] ?? 0);
+        if ($sent) {
+            $at = trim((string) ($flag['email_sent_at'] ?? ''));
+            db()->prepare(
+                'UPDATE email_campaign_rows
+                 SET email_sent=1, email_sent_at=COALESCE(NULLIF(?, \'\'), NOW()), send_batch_id=?
+                 WHERE id=? AND sheet_id=?'
+            )->execute([$at, $batchId > 0 ? $batchId : null, $id, $sheetId]);
+        } else {
+            db()->prepare(
+                'UPDATE email_campaign_rows
+                 SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
+                 WHERE id=? AND sheet_id=?'
+            )->execute([$id, $sheetId]);
+        }
+        $n++;
+    }
+    if ($n > 0) {
+        touch_email_campaign_sheet($sheetId);
+    }
+    return $n > 0;
+}
+
+/**
+ * @param array<string,mixed>|null $actor
+ * @return array{ok:bool,error?:string,domain?:string,email_sent?:bool,sheet_id?:int,batch_id?:?int,batch_name?:string,batch_who?:string}
+ */
+function set_email_campaign_row_email_sent(int $sheetId, int $rowId, bool $sent, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
     }
+    $beforeSent = (int) ($row['email_sent'] ?? 0) === 1;
+    if ($beforeSent === $sent) {
+        $existingBatchId = (int) ($row['send_batch_id'] ?? 0);
+        $existing = $existingBatchId > 0 ? get_email_campaign_send_batch($existingBatchId, $sheetId) : null;
+        return [
+            'ok' => true,
+            'domain' => (string) $row['domain'],
+            'email_sent' => $sent,
+            'sheet_id' => $sheetId,
+            'batch_id' => $existing ? (int) $existing['id'] : null,
+            'batch_name' => $existing ? (string) $existing['name'] : '',
+            'batch_who' => $existing ? email_campaign_send_batch_who_label($existing) : '',
+        ];
+    }
+    $before = [email_campaign_emailed_flag_row($row)];
+    $batchId = 0;
+    $batchName = '';
+    $batchWho = '';
     if ($sent) {
+        $created = create_email_campaign_send_batch($sheetId, '', 1, $actor);
+        if (empty($created['ok'])) {
+            return ['ok' => false, 'error' => (string) ($created['error'] ?? 'Could not record send batch.')];
+        }
+        $batchId = (int) ($created['id'] ?? 0);
+        $batchName = (string) ($created['name'] ?? '');
+        $batchWho = email_campaign_send_batch_who_label(email_campaign_resolve_actor($actor));
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET email_sent=1, email_sent_at=NOW()
+             SET email_sent=1, email_sent_at=NOW(), send_batch_id=?
              WHERE id=? AND sheet_id=?'
-        )->execute([$rowId, $sheetId]);
+        )->execute([$batchId > 0 ? $batchId : null, $rowId, $sheetId]);
     } else {
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET email_sent=0, email_sent_at=NULL
+             SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
              WHERE id=? AND sheet_id=?'
         )->execute([$rowId, $sheetId]);
     }
     touch_email_campaign_sheet($sheetId);
+    $afterRow = get_email_campaign_row($rowId, $sheetId) ?: $row;
+    if (function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed(
+            'campaign',
+            (string) $sheetId,
+            $before,
+            [email_campaign_emailed_flag_row($afterRow)]
+        );
+    }
     return [
         'ok' => true,
         'domain' => (string) $row['domain'],
         'email_sent' => $sent,
         'sheet_id' => $sheetId,
+        'batch_id' => $batchId > 0 ? $batchId : null,
+        'batch_name' => $batchName,
+        'batch_who' => $batchWho,
     ];
 }
 
 /**
  * Checkpoint: mark every row on this sheet with id <= $rowId as emailed.
+ * Newly marked rows get a named send batch (who + which stretch).
  *
- * @return array{ok:bool,error?:string,marked?:int,domain?:string,sheet_id?:int}
+ * @param array<string,mixed>|null $actor
+ * @return array{ok:bool,error?:string,marked?:int,domain?:string,sheet_id?:int,batch_id?:?int,batch_name?:string,batch_who?:string}
  */
-function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
+function mark_email_campaign_emailed_up_to(int $sheetId, int $rowId, string $batchName = '', ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
     }
+    $before = email_campaign_emailed_flags_where(
+        $sheetId,
+        'id<=? AND email_sent=0 AND LEFT(domain, 8) <> \'__blank_\'',
+        [$rowId]
+    );
+    $batchId = 0;
+    $resolvedName = '';
+    $batchWho = '';
+    if ($before !== []) {
+        $created = create_email_campaign_send_batch($sheetId, $batchName, count($before), $actor);
+        if (empty($created['ok'])) {
+            return ['ok' => false, 'error' => (string) ($created['error'] ?? 'Could not name this send batch.')];
+        }
+        $batchId = (int) ($created['id'] ?? 0);
+        $resolvedName = (string) ($created['name'] ?? '');
+        $batchWho = email_campaign_send_batch_who_label(email_campaign_resolve_actor($actor));
+    }
     $st = db()->prepare(
         "UPDATE email_campaign_rows
-         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW())
+         SET email_sent=1, email_sent_at=COALESCE(email_sent_at, NOW()), send_batch_id=?
          WHERE sheet_id=? AND id<=? AND email_sent=0
            AND LEFT(domain, 8) <> '__blank_'"
     );
-    $st->execute([$sheetId, $rowId]);
+    $st->execute([$batchId > 0 ? $batchId : null, $sheetId, $rowId]);
     touch_email_campaign_sheet($sheetId);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = [
+            'id' => (int) $flag['id'],
+            'email_sent' => 1,
+            'email_sent_at' => $flag['email_sent_at'] ?: date('Y-m-d H:i:s'),
+            'send_batch_id' => $batchId > 0 ? $batchId : null,
+        ];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
+    }
     return [
         'ok' => true,
         'marked' => $st->rowCount(),
         'domain' => (string) $row['domain'],
         'sheet_id' => $sheetId,
+        'batch_id' => $batchId > 0 ? $batchId : null,
+        'batch_name' => $resolvedName,
+        'batch_who' => $batchWho,
     ];
 }
 
@@ -960,14 +2270,31 @@ function clear_email_campaign_emailed_up_to(int $sheetId, int $rowId): array
     if (!$row) {
         return ['ok' => false, 'error' => 'Site not found on this Email sheet.'];
     }
+    $before = email_campaign_emailed_flags_where(
+        $sheetId,
+        'id<=? AND email_sent=1 AND LEFT(domain, 8) <> \'__blank_\'',
+        [$rowId]
+    );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
-         SET email_sent=0, email_sent_at=NULL
+         SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
          WHERE sheet_id=? AND id<=? AND email_sent=1
            AND LEFT(domain, 8) <> '__blank_'"
     );
     $st->execute([$sheetId, $rowId]);
     touch_email_campaign_sheet($sheetId);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = [
+            'id' => (int) $flag['id'],
+            'email_sent' => 0,
+            'email_sent_at' => null,
+            'send_batch_id' => null,
+        ];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
+    }
     return [
         'ok' => true,
         'cleared' => $st->rowCount(),
@@ -987,14 +2314,31 @@ function clear_all_email_campaign_emailed(int $sheetId): array
     if (!get_email_campaign_sheet($sheetId)) {
         return ['ok' => false, 'error' => 'Sheet not found.'];
     }
+    $before = email_campaign_emailed_flags_where(
+        $sheetId,
+        'email_sent=1 AND LEFT(domain, 8) <> \'__blank_\'',
+        []
+    );
     $st = db()->prepare(
         "UPDATE email_campaign_rows
-         SET email_sent=0, email_sent_at=NULL
+         SET email_sent=0, email_sent_at=NULL, send_batch_id=NULL
          WHERE sheet_id=? AND email_sent=1
            AND LEFT(domain, 8) <> '__blank_'"
     );
     $st->execute([$sheetId]);
     touch_email_campaign_sheet($sheetId);
+    $after = [];
+    foreach ($before as $flag) {
+        $after[] = [
+            'id' => (int) $flag['id'],
+            'email_sent' => 0,
+            'email_sent_at' => null,
+            'send_batch_id' => null,
+        ];
+    }
+    if ($before !== [] && function_exists('sheet_history_push_emailed')) {
+        sheet_history_push_emailed('campaign', (string) $sheetId, $before, $after);
+    }
     return [
         'ok' => true,
         'cleared' => $st->rowCount(),
@@ -1006,14 +2350,14 @@ function clear_all_email_campaign_emailed(int $sheetId): array
  * Paginated Email Sheet rows — same model as Our database / Sites with emails.
  * Never load 100K rows into one page; use page + optional site/email search.
  *
- * @param array{q?:string,sent?:string} $filters sent: '', '0', '1'
+ * @param array{q?:string,sent?:string,batch?:int} $filters sent: '', '0', '1'; batch: send_batch_id
  * @return array{rows:list<array<string,mixed>>,total:int,pages:int,page:int,per_page:int}
  */
 function email_campaign_rows_inventory_query(
     int $sheetId,
     array $filters = [],
     int $page = 1,
-    int $perPage = 1000
+    int $perPage = 100
 ): array {
     ensure_email_campaign_schema();
     purge_blank_email_campaign_rows($sheetId);
@@ -1022,17 +2366,36 @@ function email_campaign_rows_inventory_query(
     $perPage = max(1, min(1000, $perPage));
     $q = trim((string) ($filters['q'] ?? ''));
     $sentFilter = (string) ($filters['sent'] ?? ''); // '', '0', '1'
+    $batchFilter = (int) ($filters['batch'] ?? 0);
 
     $where = ["sheet_id = ?", "LEFT(domain, 8) <> '__blank_'"];
     $params = [$sheetId];
     if ($q !== '') {
-        $where[] = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
-        $like = '%' . $q . '%';
-        array_push($params, $like, $like, $like, $like, $like);
+        $prefixLike = $q . '%';
+        $containsLike = '%' . $q . '%';
+        $useContains = mb_strlen($q) >= 3;
+        $prefixWhere = '(domain LIKE ? OR email1 LIKE ? OR email2 LIKE ? OR email3 LIKE ? OR email4 LIKE ?)';
+        $prefixParams = [$prefixLike, $prefixLike, $prefixLike, $prefixLike, $prefixLike];
+        $prefixCount = db()->prepare(
+            'SELECT COUNT(*) FROM email_campaign_rows WHERE ' . implode(' AND ', $where) . ' AND ' . $prefixWhere
+        );
+        $prefixCount->execute(array_merge($params, $prefixParams));
+        $prefixTotal = (int) $prefixCount->fetchColumn();
+        if ($prefixTotal > 0 || !$useContains) {
+            $where[] = $prefixWhere;
+            array_push($params, ...$prefixParams);
+        } else {
+            $where[] = $prefixWhere;
+            array_push($params, $containsLike, $containsLike, $containsLike, $containsLike, $containsLike);
+        }
     }
     if ($sentFilter === '0' || $sentFilter === '1') {
         $where[] = 'email_sent = ?';
         $params[] = (int) $sentFilter;
+    }
+    if ($batchFilter > 0) {
+        $where[] = 'send_batch_id = ?';
+        $params[] = $batchFilter;
     }
     $whereSql = implode(' AND ', $where);
 
@@ -1164,16 +2527,51 @@ function add_blank_email_campaign_rows(int $sheetId, int $count = 1): int
 }
 
 /**
+ * Country default language for campaign rows (Belgium → Dutch, …).
+ */
+function email_campaign_default_language(string $country): string
+{
+    $country = trim($country);
+    if ($country === '') {
+        return '';
+    }
+    $canon = function_exists('resolve_canonical_country') ? resolve_canonical_country($country) : null;
+    $lang = $canon ? trim((string) ($canon['language'] ?? '')) : '';
+    if ($lang !== '' && function_exists('normalize_site_language')) {
+        $lang = normalize_site_language($lang, $country);
+    }
+    return $lang;
+}
+
+/**
+ * Fill campaign rows that were saved with a blank language from the country default.
+ */
+function email_campaign_fill_blank_row_languages(int $sheetId, string $country): int
+{
+    $lang = email_campaign_default_language($country);
+    if ($sheetId < 1 || $lang === '') {
+        return 0;
+    }
+    $st = db()->prepare(
+        "UPDATE email_campaign_rows SET language=? WHERE sheet_id=? AND TRIM(IFNULL(language,''))=''"
+    );
+    $st->execute([$lang, $sheetId]);
+    return $st->rowCount();
+}
+
+/**
  * Save one site + up to 4 emails row (Sites with emails workflow).
  * Clearing the last email deletes the whole row.
  *
+ * @param array<string,mixed>|null $actor
  * @return array{ok:bool,error?:string,id?:int,domain?:string,row_deleted?:bool,emails?:list<string>}
  */
 function save_email_campaign_row(
     int $sheetId,
     int $rowId,
     string $domainRaw,
-    array $emails
+    array $emails,
+    ?array $actor = null
 ): array {
     ensure_email_campaign_schema();
     if (!get_email_campaign_sheet($sheetId)) {
@@ -1210,17 +2608,65 @@ function save_email_campaign_row(
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
-    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+
+    // Tombstone emails Admin cleared from this row (intentional remove).
+    $oldEmails = email_campaign_row_email_list($existing);
+    $oldDomain = normalize_email_campaign_domain((string) ($existing['domain'] ?? ''));
+    $newSet = [];
+    foreach ($slots as $s) {
+        if ($s !== '') {
+            $newSet[$s] = true;
+        }
+    }
+    foreach ($oldEmails as $oldEm) {
+        if (isset($newSet[$oldEm])) {
+            continue;
+        }
+        // Ban on the domain it left; if renaming, ban on the new name too.
+        if ($oldDomain !== '') {
+            exclude_email_campaign_email($sheetId, $oldDomain, $oldEm);
+        }
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_email($sheetId, $domain, $oldEm);
+        }
+    }
+
+    // Never put previously removed emails back.
+    $filtered = filter_email_campaign_slots_against_exclusions($sheetId, $domain, $slots);
+    $slots = $filtered['slots'];
+    $hasEmail = function_exists('email_slots_have_real')
+        ? email_slots_have_real($slots)
+        : ($slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '');
     if (!$hasEmail) {
+        $gone = email_campaign_row_email_list($existing);
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('campaign', (string) $sheetId, [$existing]);
+        }
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
-        exclude_email_campaign_domain($sheetId, $domain);
+        exclude_email_campaign_domain($sheetId, $oldDomain !== '' ? $oldDomain : $domain);
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_domain($sheetId, $domain);
+        }
+        exclude_email_campaign_emails($sheetId, $oldDomain !== '' ? $oldDomain : $domain, $gone);
+        if ($domain !== '' && $domain !== $oldDomain) {
+            exclude_email_campaign_emails($sheetId, $domain, $gone);
+        }
         touch_email_campaign_sheet($sheetId);
+        record_email_campaign_row_event($sheetId, 'delete_site', $oldDomain !== '' ? $oldDomain : $domain, '', $actor);
         return [
             'ok' => true,
             'id' => $rowId,
             'domain' => $domain,
             'row_deleted' => true,
             'emails' => [],
+        ];
+    }
+
+    // Block keeping/renaming onto a previously removed domain (unless Allow again).
+    if (is_email_campaign_domain_excluded($sheetId, $domain)) {
+        return [
+            'ok' => false,
+            'error' => $domain . ' was previously removed from this sheet. Use Allow again first.',
         ];
     }
 
@@ -1232,12 +2678,32 @@ function save_email_campaign_row(
         return ['ok' => false, 'error' => $domain . ' already exists in this sheet.'];
     }
 
+    $rowLang = trim((string) ($existing['language'] ?? ''));
+    if ($rowLang === '') {
+        $rowLang = email_campaign_default_language($sheetCountry);
+    }
     db()->prepare(
         'UPDATE email_campaign_rows
-         SET domain=?, country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         SET domain=?, country=?, language=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
-    )->execute([$domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $rowId, $sheetId]);
+    )->execute([
+        $domain,
+        $sheetCountry,
+        $rowLang,
+        $slots[0],
+        $slots[1],
+        $slots[2],
+        $slots[3],
+        $rowId,
+        $sheetId,
+    ]);
     touch_email_campaign_sheet($sheetId);
+    $eventDomain = $oldDomain !== '' ? $oldDomain : $domain;
+    foreach ($oldEmails as $oldEm) {
+        if (!isset($newSet[$oldEm])) {
+            record_email_campaign_row_event($sheetId, 'remove_email', $eventDomain, $oldEm, $actor);
+        }
+    }
     return [
         'ok' => true,
         'id' => $rowId,
@@ -1250,8 +2716,9 @@ function save_email_campaign_row(
 
 /**
  * Insert a new filled row (or upsert by domain).
+ * Previously removed domains/emails stay blocked until Admin Allow again.
  *
- * @return array{ok:bool,error?:string,id?:int,domain?:string}
+ * @return array{ok:bool,error?:string,id?:int,domain?:string,skipped_excluded?:bool,stripped_emails?:list<string>}
  */
 function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $emails): array
 {
@@ -1261,6 +2728,7 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
         return ['ok' => false, 'error' => 'Sheet not found.'];
     }
     $sheetCountry = email_campaign_sheet_country($sheet);
+    $sheetLang = email_campaign_default_language($sheetCountry);
     $host = extract_host_candidate($domainRaw);
     $domain = to_root_domain($host);
     if ($domain === '' || (function_exists('is_root_domain') && !is_root_domain($domain))) {
@@ -1268,43 +2736,90 @@ function upsert_email_campaign_row(int $sheetId, string $domainRaw, array $email
             return ['ok' => false, 'error' => 'Enter a valid site name (root domain).'];
         }
     }
+
+    if (is_email_campaign_domain_excluded($sheetId, $domain)) {
+        return [
+            'ok' => false,
+            'error' => $domain . ' was previously removed from this sheet. Use Allow again to re-add it.',
+            'skipped_excluded' => true,
+            'domain' => $domain,
+        ];
+    }
+
     $norm = normalize_email_slots($emails);
     if (!$norm['ok']) {
         return ['ok' => false, 'error' => (string) ($norm['error'] ?? 'Invalid email.')];
     }
     /** @var array{0:string,1:string,2:string,3:string} $slots */
     $slots = $norm['slots'] ?? ['', '', '', ''];
-    $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+    $filtered = filter_email_campaign_slots_against_exclusions($sheetId, $domain, $slots);
+    $slots = $filtered['slots'];
+    $hasEmail = function_exists('email_slots_have_real')
+        ? email_slots_have_real($slots)
+        : ($slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '');
     if (!$hasEmail) {
+        if ($filtered['stripped'] !== []) {
+            return [
+                'ok' => false,
+                'error' => $domain . ': all emails were previously removed from this sheet.',
+                'skipped_excluded' => true,
+                'domain' => $domain,
+                'stripped_emails' => $filtered['stripped'],
+            ];
+        }
         return ['ok' => false, 'error' => 'Add at least one email — each site must have email data.'];
     }
 
-    // Manual add / paste means Admin wants this site again — lift archive exclusion.
-    clear_email_campaign_domain_exclusion($sheetId, $domain);
-
     $find = db()->prepare(
-        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+        'SELECT id, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
     $find->execute([$sheetId, $domain]);
-    $existingId = (int) $find->fetchColumn();
+    $existing = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+    $existingId = $existing ? (int) ($existing['id'] ?? 0) : 0;
     if ($existingId > 0) {
+        $existingSlots = [
+            (string) ($existing['email1'] ?? ''),
+            (string) ($existing['email2'] ?? ''),
+            (string) ($existing['email3'] ?? ''),
+            (string) ($existing['email4'] ?? ''),
+        ];
+        if (email_campaign_slots_equal($existingSlots, $slots)) {
+            return [
+                'ok' => true,
+                'id' => $existingId,
+                'domain' => $domain,
+                'skipped_duplicate' => true,
+                'stripped_emails' => $filtered['stripped'],
+            ];
+        }
         db()->prepare(
             'UPDATE email_campaign_rows
-             SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+             SET country=?, language=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
              WHERE id=? AND sheet_id=?'
-        )->execute([$sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
+        )->execute([$sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId]);
         touch_email_campaign_sheet($sheetId);
-        return ['ok' => true, 'id' => $existingId, 'domain' => $domain];
+        return [
+            'ok' => true,
+            'id' => $existingId,
+            'domain' => $domain,
+            'stripped_emails' => $filtered['stripped'],
+        ];
     }
 
     db()->prepare(
         'INSERT INTO email_campaign_rows
-           (sheet_id, domain, country, email1, email2, email3, email4)
-         VALUES (?,?,?,?,?,?,?)'
-    )->execute([$sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3]]);
+           (sheet_id, domain, country, language, email1, email2, email3, email4)
+         VALUES (?,?,?,?,?,?,?,?)'
+    )->execute([$sheetId, $domain, $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3]]);
     $id = (int) db()->lastInsertId();
     touch_email_campaign_sheet($sheetId);
-    return ['ok' => true, 'id' => $id, 'domain' => $domain];
+    return [
+        'ok' => true,
+        'id' => $id,
+        'domain' => $domain,
+        'stripped_emails' => $filtered['stripped'],
+    ];
 }
 
 /**
@@ -1381,10 +2896,78 @@ function parse_email_campaign_bulk_line(string $line): ?array
 }
 
 /**
+ * Compare campaign email slots for equality (normalized, order-sensitive).
+ *
+ * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $a
+ * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $b
+ */
+function email_campaign_slots_equal(array $a, array $b): bool
+{
+    for ($i = 0; $i < 4; $i++) {
+        $left = strtolower(trim((string) ($a[$i] ?? '')));
+        $right = strtolower(trim((string) ($b[$i] ?? '')));
+        if ($left !== $right) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Human-readable result after Campaign paste / file import.
+ *
+ * @param array{
+ *   added?:int,updated?:int,skipped?:int,skipped_duplicate?:int,skipped_excluded?:int,
+ *   skipped_emails?:int,skipped_empty?:int,lines?:int,errors?:list<string>
+ * } $result
+ */
+function email_campaign_bulk_result_message(string $prefix, array $result): string
+{
+    $msg = $prefix . ': '
+        . (int) ($result['added'] ?? 0) . ' new, ' . (int) ($result['updated'] ?? 0) . ' updated';
+    if ((int) ($result['skipped_duplicate'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_duplicate'] . ' duplicate domain(s) skipped';
+    }
+    if ((int) ($result['skipped_excluded'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_excluded'] . ' previously removed (not re-added)';
+    }
+    if ((int) ($result['skipped_emails'] ?? 0) > 0) {
+        $n = (int) $result['skipped_emails'];
+        $msg .= ', ' . $n . ' previously removed email' . ($n === 1 ? '' : 's') . ' stripped';
+    }
+    if ((int) ($result['skipped_empty'] ?? 0) > 0) {
+        $msg .= ', ' . (int) $result['skipped_empty'] . ' skipped (no emails)';
+    }
+    $accounted = (int) ($result['skipped_duplicate'] ?? 0)
+        + (int) ($result['skipped_excluded'] ?? 0)
+        + (int) ($result['skipped_empty'] ?? 0);
+    $otherSkip = (int) ($result['skipped'] ?? 0) - $accounted;
+    if ($otherSkip > 0) {
+        $msg .= ', ' . $otherSkip . ' other skipped';
+    }
+    $msg .= '.';
+    if (isset($result['lines'])) {
+        $msg .= ' · ' . (int) $result['lines'] . ' data line(s).';
+    }
+    $errors = $result['errors'] ?? [];
+    if (is_array($errors) && $errors !== []) {
+        $msg .= ' Issues: ' . implode('; ', array_slice($errors, 0, 8));
+    }
+
+    return $msg;
+}
+
+/**
  * Paste / import lines: site.com,email@x.com  OR  site.com email1 email2 …
  * Tuned for Admin bulk entry (1000+ rows).
+ * Previously removed domains/emails are skipped (not re-added).
+ * Duplicate domains: identical emails → skip; different emails → replace.
  *
- * @return array{added:int,updated:int,skipped:int,errors:list<string>}
+ * @return array{
+ *   added:int,updated:int,skipped:int,skipped_excluded:int,skipped_emails:int,
+ *   skipped_duplicate:int,skipped_empty:int,errors:list<string>
+ * }
  */
 function paste_email_campaign_rows(int $sheetId, string $raw): array
 {
@@ -1395,6 +2978,7 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
         throw new InvalidArgumentException('Sheet not found.');
     }
     $sheetCountry = email_campaign_sheet_country($sheet);
+    $sheetLang = email_campaign_default_language($sheetCountry);
     $raw = str_replace(["\r\n", "\r"], "\n", (string) $raw);
     if (str_starts_with($raw, "\xEF\xBB\xBF")) {
         $raw = substr($raw, 3);
@@ -1403,22 +2987,33 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     $added = 0;
     $updated = 0;
     $skipped = 0;
+    $skippedExcluded = 0;
+    $skippedEmails = 0;
+    $skippedDuplicate = 0;
+    $skippedEmpty = 0;
     /** @var list<string> $errors */
     $errors = [];
+    /** @var array<string, array{0:string,1:string,2:string,3:string}> $seenDomains */
+    $seenDomains = [];
+
+    $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
+    $excludedDomains = $exclusionSets['domains'];
+    $excludedEmails = $exclusionSets['emails'];
 
     $pdo = db();
     $find = $pdo->prepare(
-        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+        'SELECT id, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
     $upd = $pdo->prepare(
         'UPDATE email_campaign_rows
-         SET country=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         SET country=?, language=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
          WHERE id=? AND sheet_id=?'
     );
     $ins = $pdo->prepare(
         'INSERT INTO email_campaign_rows
-           (sheet_id, domain, country, email1, email2, email3, email4)
-         VALUES (?,?,?,?,?,?,?)'
+           (sheet_id, domain, country, language, email1, email2, email3, email4)
+         VALUES (?,?,?,?,?,?,?,?)'
     );
 
     $pdo->beginTransaction();
@@ -1440,6 +3035,13 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
                     continue;
                 }
             }
+
+            if (isset($excludedDomains[$domain])) {
+                $skippedExcluded++;
+                $skipped++;
+                continue;
+            }
+
             $norm = normalize_email_slots($parsed['emails']);
             if (!$norm['ok']) {
                 if (count($errors) < 25) {
@@ -1450,30 +3052,79 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
             }
             /** @var array{0:string,1:string,2:string,3:string} $slots */
             $slots = $norm['slots'] ?? ['', '', '', ''];
-            $hasEmail = $slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '';
+            $filtered = filter_email_campaign_slots_against_exclusions(
+                $sheetId,
+                $domain,
+                $slots,
+                $excludedEmails
+            );
+            $slots = $filtered['slots'];
+            if ($filtered['stripped'] !== []) {
+                $skippedEmails += count($filtered['stripped']);
+            }
+            $hasEmail = function_exists('email_slots_have_real')
+                ? email_slots_have_real($slots)
+                : ($slots[0] !== '' || $slots[1] !== '' || $slots[2] !== '' || $slots[3] !== '');
             if (!$hasEmail) {
+                if ($filtered['stripped'] !== []) {
+                    $skippedExcluded++;
+                    $skipped++;
+                    continue;
+                }
                 if (count($errors) < 25) {
                     $errors[] = $domainRaw . ': Add at least one email — each site must have email data.';
                 }
+                $skippedEmpty++;
                 $skipped++;
                 continue;
             }
 
-            // Intentional paste/add lifts “never re-add” exclusion for this domain.
-            clear_email_campaign_domain_exclusion($sheetId, $domain);
+            // Same domain already handled in this paste with identical emails → skip.
+            if (isset($seenDomains[$domain]) && email_campaign_slots_equal($seenDomains[$domain], $slots)) {
+                $skippedDuplicate++;
+                $skipped++;
+                continue;
+            }
 
             $find->execute([$sheetId, $domain]);
-            $existingId = (int) $find->fetchColumn();
+            $existing = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+            $existingId = $existing ? (int) ($existing['id'] ?? 0) : 0;
             if ($existingId > 0) {
+                $existingSlots = [
+                    (string) ($existing['email1'] ?? ''),
+                    (string) ($existing['email2'] ?? ''),
+                    (string) ($existing['email3'] ?? ''),
+                    (string) ($existing['email4'] ?? ''),
+                ];
+                if (email_campaign_slots_equal($existingSlots, $slots)) {
+                    $skippedDuplicate++;
+                    $skipped++;
+                    $seenDomains[$domain] = $slots;
+                    continue;
+                }
                 $upd->execute([
-                    $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId,
+                    $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3], $existingId, $sheetId,
                 ]);
                 $updated++;
+                $seenDomains[$domain] = $slots;
+            } elseif (isset($seenDomains[$domain])) {
+                // Domain was inserted earlier in this paste with different emails — update that row.
+                $find->execute([$sheetId, $domain]);
+                $again = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+                $againId = $again ? (int) ($again['id'] ?? 0) : 0;
+                if ($againId > 0) {
+                    $upd->execute([
+                        $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3], $againId, $sheetId,
+                    ]);
+                    $updated++;
+                }
+                $seenDomains[$domain] = $slots;
             } else {
                 $ins->execute([
-                    $sheetId, $domain, $sheetCountry, $slots[0], $slots[1], $slots[2], $slots[3],
+                    $sheetId, $domain, $sheetCountry, $sheetLang, $slots[0], $slots[1], $slots[2], $slots[3],
                 ]);
                 $added++;
+                $seenDomains[$domain] = $slots;
             }
         }
         $pdo->commit();
@@ -1487,7 +3138,16 @@ function paste_email_campaign_rows(int $sheetId, string $raw): array
     if ($added > 0 || $updated > 0) {
         touch_email_campaign_sheet($sheetId);
     }
-    return ['added' => $added, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+    return [
+        'added' => $added,
+        'updated' => $updated,
+        'skipped' => $skipped,
+        'skipped_excluded' => $skippedExcluded,
+        'skipped_emails' => $skippedEmails,
+        'skipped_duplicate' => $skippedDuplicate,
+        'skipped_empty' => $skippedEmpty,
+        'errors' => $errors,
+    ];
 }
 
 /**
@@ -1544,13 +3204,24 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
     if (str_starts_with($raw, "\xEF\xBB\xBF")) {
         $raw = substr($raw, 3);
     }
+    if (str_starts_with($raw, "\xD0\xCF\x11\xE0")) {
+        throw new InvalidArgumentException(
+            'Old Excel .xls is not supported. Save as .xlsx or CSV (Excel → Save As → CSV UTF-8) and try again.'
+        );
+    }
+    if (str_starts_with($raw, "\xFF\xFE") || str_starts_with($raw, "\xFE\xFF")) {
+        throw new InvalidArgumentException(
+            'This file is UTF-16. Save as CSV UTF-8 or .xlsx and try again.'
+        );
+    }
     // Binary leftovers (zip/xlsx misnamed as .csv)
     if (str_starts_with($raw, 'PK')) {
         return read_email_campaign_xlsx_as_paste_text($path);
     }
 
     $raw = str_replace(["\r\n", "\r"], "\n", $raw);
-    $firstLine = (string) strtok($raw, "\n");
+    $nl = strpos($raw, "\n");
+    $firstLine = $nl === false ? $raw : substr($raw, 0, $nl);
     $delimiter = ',';
     $tabs = substr_count($firstLine, "\t");
     $semis = substr_count($firstLine, ';');
@@ -1561,17 +3232,17 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
         $delimiter = ';';
     }
 
-    $fh = fopen($path, 'rb');
+    // Parse the normalized text, not the original file — classic Mac (\r) CSVs
+    // otherwise become one giant row because fgetcsv only splits on \n.
+    $fh = fopen('php://temp', 'r+');
     if (!$fh) {
         throw new InvalidArgumentException('Could not read the uploaded file.');
     }
-    $bom = fread($fh, 3);
-    if ($bom !== "\xEF\xBB\xBF") {
-        rewind($fh);
-    }
+    fwrite($fh, $raw);
+    rewind($fh);
     $out = [];
     $rowNum = 0;
-    while (($row = fgetcsv($fh, 0, $delimiter)) !== false) {
+    while (($row = fgetcsv($fh, 0, $delimiter, '"', '')) !== false) {
         $rowNum++;
         if ($row === [null] || $row === false) {
             continue;
@@ -1604,6 +3275,165 @@ function email_campaign_rows_text_from_file_path(string $path, string $originalN
 }
 
 /**
+ * XPath that works on default-namespaced spreadsheetml (Excel) XML.
+ * registerXPathNamespace is per-element and is not inherited by children.
+ *
+ * @return list<\SimpleXMLElement>
+ */
+function email_campaign_xlsx_xpath(\SimpleXMLElement $el, string $localPath): array
+{
+    $desc = str_starts_with($localPath, '//') || str_starts_with($localPath, './/');
+    $trimmed = ltrim($localPath, './');
+    $names = preg_split('#/+#', $trimmed) ?: [];
+    $names = array_values(array_filter($names, static fn ($n) => $n !== '' && $n !== '.'));
+    if ($names === []) {
+        return [];
+    }
+    $steps = array_map(
+        static fn (string $n): string => '*[local-name()="' . $n . '"]',
+        $names
+    );
+    $expr = ($desc ? './/' : './') . implode('/', $steps);
+    $nodes = @$el->xpath($expr);
+    return is_array($nodes) ? $nodes : [];
+}
+
+/**
+ * Shared-string / inline-string text. Uses direct t + rich r/t, skipping rPh (phonetic).
+ */
+function email_campaign_xlsx_si_text(\SimpleXMLElement $si): string
+{
+    $direct = email_campaign_xlsx_xpath($si, './t');
+    if ($direct !== []) {
+        $buf = '';
+        foreach ($direct as $t) {
+            $buf .= (string) $t;
+        }
+        return trim($buf);
+    }
+    $parts = [];
+    foreach (email_campaign_xlsx_xpath($si, './r/t') as $t) {
+        $parts[] = (string) $t;
+    }
+    return trim(implode('', $parts));
+}
+
+function email_campaign_xlsx_cell_v(\SimpleXMLElement $c): string
+{
+    $nodes = email_campaign_xlsx_xpath($c, './v');
+    if ($nodes !== []) {
+        return trim((string) $nodes[0]);
+    }
+    return trim((string) ($c->v ?? ''));
+}
+
+/**
+ * Text inside one spreadsheetml cell (shared string, inline string, or cached value).
+ *
+ * @param list<string> $shared
+ */
+function email_campaign_xlsx_cell_text(\SimpleXMLElement $c, array $shared): string
+{
+    $type = strtolower(trim((string) ($c['t'] ?? '')));
+    $v = email_campaign_xlsx_cell_v($c);
+    if ($type === 's') {
+        if ($v === '') {
+            return '';
+        }
+        return trim((string) ($shared[(int) $v] ?? ''));
+    }
+    if ($type === 'inlinestr') {
+        $isNodes = email_campaign_xlsx_xpath($c, './is');
+        if ($isNodes === [] && isset($c->is)) {
+            $isNodes = [$c->is];
+        }
+        if ($isNodes !== []) {
+            $text = email_campaign_xlsx_si_text($isNodes[0]);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+    }
+    return $v;
+}
+
+/**
+ * First (visible) worksheet zip path from workbook.xml + rels.
+ * xl/worksheets/sheet1.xml is not always the leftmost tab.
+ */
+function email_campaign_xlsx_first_sheet_path(ZipArchive $zip): string
+{
+    $fallback = 'xl/worksheets/sheet1.xml';
+    $wb = $zip->getFromName('xl/workbook.xml');
+    $rels = $zip->getFromName('xl/_rels/workbook.xml.rels');
+    if (!is_string($wb) || $wb === '' || !is_string($rels) || $rels === '') {
+        return $fallback;
+    }
+    $wbXml = @simplexml_load_string($wb);
+    $relsXml = @simplexml_load_string($rels);
+    if ($wbXml === false || $relsXml === false) {
+        return $fallback;
+    }
+    $sheets = email_campaign_xlsx_xpath($wbXml, '//sheet');
+    if ($sheets === []) {
+        return $fallback;
+    }
+    $chosen = null;
+    foreach ($sheets as $sheet) {
+        $state = strtolower((string) ($sheet['state'] ?? ''));
+        if ($state === 'hidden' || $state === 'veryhidden') {
+            continue;
+        }
+        $chosen = $sheet;
+        break;
+    }
+    if ($chosen === null) {
+        $chosen = $sheets[0];
+    }
+    $rNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    $rid = '';
+    $rAttrs = $chosen->attributes($rNs);
+    if ($rAttrs && isset($rAttrs['id'])) {
+        $rid = (string) $rAttrs['id'];
+    }
+    if ($rid === '') {
+        $rid = (string) ($chosen['id'] ?? '');
+    }
+    if ($rid === '') {
+        return $fallback;
+    }
+    $relNodes = email_campaign_xlsx_xpath($relsXml, '//Relationship');
+    foreach ($relNodes as $rel) {
+        if ((string) ($rel['Id'] ?? '') !== $rid) {
+            continue;
+        }
+        $target = str_replace('\\', '/', trim((string) ($rel['Target'] ?? '')));
+        $target = ltrim($target, '/');
+        if ($target === '' || str_contains($target, 'chartsheets')) {
+            continue;
+        }
+        if (!str_starts_with($target, 'xl/')) {
+            $target = 'xl/' . $target;
+        }
+        return $target;
+    }
+    return $fallback;
+}
+
+function email_campaign_xlsx_col_index(string $ref, int $fallback): int
+{
+    if (preg_match('/^([A-Z]+)/', $ref, $m)) {
+        $col = 0;
+        $letters = $m[1];
+        for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
+            $col = $col * 26 + (ord($letters[$i]) - 64);
+        }
+        return $col - 1;
+    }
+    return $fallback;
+}
+
+/**
  * Minimal first-sheet .xlsx reader → paste text (site + up to 4 email columns).
  * No external spreadsheet library required.
  */
@@ -1612,6 +3442,11 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
     if (!class_exists('ZipArchive')) {
         throw new InvalidArgumentException(
             'Excel (.xlsx) needs PHP ZipArchive. Save the file as CSV and import that instead.'
+        );
+    }
+    if (!function_exists('simplexml_load_string')) {
+        throw new InvalidArgumentException(
+            'Excel (.xlsx) needs PHP SimpleXML. Save the file as CSV and import that instead.'
         );
     }
     $zip = new ZipArchive();
@@ -1624,20 +3459,13 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
     if (is_string($ssXml) && $ssXml !== '') {
         $sx = @simplexml_load_string($ssXml);
         if ($sx !== false) {
-            $sx->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-            $siNodes = $sx->xpath('//m:si') ?: [];
-            foreach ($siNodes as $si) {
-                $texts = $si->xpath('.//m:t') ?: [];
-                $buf = '';
-                foreach ($texts as $t) {
-                    $buf .= (string) $t;
-                }
-                $shared[] = $buf;
+            foreach (email_campaign_xlsx_xpath($sx, '//si') as $si) {
+                $shared[] = email_campaign_xlsx_si_text($si);
             }
         }
     }
 
-    $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+    $sheetXml = $zip->getFromName(email_campaign_xlsx_first_sheet_path($zip));
     if (!is_string($sheetXml) || $sheetXml === '') {
         // Fallback: first worksheet_* path
         for ($i = 0; $i < $zip->numFiles; $i++) {
@@ -1658,39 +3486,21 @@ function read_email_campaign_xlsx_as_paste_text(string $path): string
     if ($sheet === false) {
         throw new InvalidArgumentException('Could not parse the Excel worksheet. Save as CSV and try again.');
     }
-    $sheet->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-    $rowsXml = $sheet->xpath('//m:sheetData/m:row') ?: [];
+    $rowsXml = email_campaign_xlsx_xpath($sheet, '//sheetData/row');
     $out = [];
     $rowNum = 0;
     foreach ($rowsXml as $rowXml) {
         $rowNum++;
         $cells = [];
-        foreach ($rowXml->xpath('./m:c') ?: [] as $c) {
+        $seq = 0;
+        foreach (email_campaign_xlsx_xpath($rowXml, './c') as $c) {
             $ref = (string) ($c['r'] ?? '');
-            if (!preg_match('/^([A-Z]+)/', $ref, $m)) {
-                continue;
-            }
-            $col = 0;
-            $letters = $m[1];
-            for ($i = 0, $len = strlen($letters); $i < $len; $i++) {
-                $col = $col * 26 + (ord($letters[$i]) - 64);
-            }
-            $colIndex = $col - 1; // 0-based
+            $colIndex = email_campaign_xlsx_col_index($ref, $seq);
+            $seq++;
             if ($colIndex < 0 || $colIndex > 4) {
                 continue; // only site + 4 emails
             }
-            $type = (string) ($c['t'] ?? '');
-            $v = (string) ($c->v ?? '');
-            if ($type === 's') {
-                $v = $shared[(int) $v] ?? '';
-            } elseif ($type === 'inlineStr') {
-                $tNodes = $c->xpath('.//m:t') ?: [];
-                $v = '';
-                foreach ($tNodes as $t) {
-                    $v .= (string) $t;
-                }
-            }
-            $cells[$colIndex] = trim($v);
+            $cells[$colIndex] = email_campaign_xlsx_cell_text($c, $shared);
         }
         if ($cells === []) {
             continue;
@@ -1797,22 +3607,26 @@ function save_email_campaign_sheet_grid(
 }
 
 /**
- * Import rows from Sites with emails Admin or Final into a campaign sheet.
+ * Import rows from Sites with emails Team, Admin, or Final into a campaign sheet.
+ *
+ * Never copies emailed flags (email_sent) from the source or between campaigns.
+ * New domains land unmarked. Existing emailed marks on this sheet stay.
  *
  * Modes:
- * - new_only (default): add domains not on the sheet; never update existing; never re-add excluded.
- * - upsert: add new + update existing emails; still never re-add excluded (deleted on purpose).
+ * - replace (default): add new domains; identical emails → skip; different emails → replace.
+ * - new_only: add domains not on the sheet; never update existing; never re-add excluded.
+ * - upsert: add new + always update existing emails (even when identical); still never re-add excluded.
  *
  * @return array{
  *   imported:int,updated:int,skipped:int,
- *   skipped_existing:int,skipped_excluded:int,skipped_empty:int,mode:string
+ *   skipped_existing:int,skipped_duplicate:int,skipped_excluded:int,skipped_empty:int,skipped_emails:int,mode:string
  * }
  */
 function import_email_campaign_sheet_from_swe(
     int $sheetId,
     string $sourceScope = 'admin_all',
     ?string $country = null,
-    string $mode = 'new_only'
+    string $mode = 'replace'
 ): array {
     ensure_email_campaign_schema();
     ensure_sites_with_emails_schema();
@@ -1821,12 +3635,12 @@ function import_email_campaign_sheet_from_swe(
         throw new InvalidArgumentException('Sheet not found.');
     }
     $sourceScope = swe_normalize_scope($sourceScope);
-    if (!in_array($sourceScope, ['admin', 'admin_all'], true)) {
+    if (!in_array($sourceScope, ['admin', 'admin_all', 'team'], true)) {
         $sourceScope = 'admin_all';
     }
     $mode = strtolower(trim($mode));
-    if ($mode !== 'upsert') {
-        $mode = 'new_only';
+    if (!in_array($mode, ['new_only', 'upsert', 'replace'], true)) {
+        $mode = 'replace';
     }
     $table = swe_table($sourceScope);
     $pdo = db();
@@ -1857,19 +3671,30 @@ function import_email_campaign_sheet_from_swe(
            email3 = VALUES(email3),
            email4 = VALUES(email4),
            updated_at = NOW()'
+        // Never set email_sent here — emailed marks stay on this campaign sheet only.
     );
     $exists = $pdo->prepare(
-        'SELECT id FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
+        'SELECT id, email1, email2, email3, email4, email_sent
+         FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1'
     );
-    $excluded = $pdo->prepare(
-        'SELECT 1 FROM email_campaign_excluded_domains WHERE sheet_id=? AND domain=? LIMIT 1'
+    $upd = $pdo->prepare(
+        'UPDATE email_campaign_rows
+         SET country=?, language=?, region=?, email1=?, email2=?, email3=?, email4=?, updated_at=NOW()
+         WHERE id=? AND sheet_id=?'
+        // Never set email_sent here — emailed marks stay on this campaign sheet only.
     );
+
+    $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
+    $excludedDomains = $exclusionSets['domains'];
+    $excludedEmails = $exclusionSets['emails'];
 
     $imported = 0;
     $updated = 0;
     $skippedExisting = 0;
+    $skippedDuplicate = 0;
     $skippedExcluded = 0;
     $skippedEmpty = 0;
+    $skippedEmails = 0;
     while ($row = $sel->fetch(PDO::FETCH_ASSOC)) {
         $domainRaw = trim((string) ($row['domain'] ?? ''));
         if ($domainRaw === '') {
@@ -1888,20 +3713,40 @@ function import_email_campaign_sheet_from_swe(
                 (string) ($row['email3'] ?? ''),
                 (string) ($row['email4'] ?? ''),
             ];
-        // Same rule as Sites with emails: never import a site with empty emails.
-        if ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
+        // Campaign needs a sendable address — skip empty and "none" markers.
+        if (function_exists('email_slots_have_real')) {
+            if (!email_slots_have_real($slots)) {
+                $skippedEmpty++;
+                continue;
+            }
+        } elseif ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
             $skippedEmpty++;
             continue;
         }
 
-        $excluded->execute([$sheetId, $domain]);
-        if ((int) $excluded->fetchColumn() > 0) {
+        if (isset($excludedDomains[$domain])) {
+            $skippedExcluded++;
+            continue;
+        }
+
+        $filtered = filter_email_campaign_slots_against_exclusions(
+            $sheetId,
+            $domain,
+            $slots,
+            $excludedEmails
+        );
+        $slots = $filtered['slots'];
+        if ($filtered['stripped'] !== []) {
+            $skippedEmails += count($filtered['stripped']);
+        }
+        if ($slots[0] === '' && $slots[1] === '' && $slots[2] === '' && $slots[3] === '') {
             $skippedExcluded++;
             continue;
         }
 
         $exists->execute([$sheetId, $domain]);
-        $already = (int) $exists->fetchColumn() > 0;
+        $existing = $exists->fetch(PDO::FETCH_ASSOC) ?: null;
+        $already = $existing !== null;
         if ($mode === 'new_only' && $already) {
             $skippedExisting++;
             continue;
@@ -1911,7 +3756,9 @@ function import_email_campaign_sheet_from_swe(
             $sheetId,
             $domain,
             (string) ($row['country'] ?? ''),
-            (string) ($row['language'] ?? ''),
+            trim((string) ($row['language'] ?? '')) !== ''
+                ? (string) ($row['language'] ?? '')
+                : email_campaign_default_language((string) ($row['country'] ?? '')),
             (string) ($row['region'] ?? ''),
             $slots[0],
             $slots[1],
@@ -1925,24 +3772,360 @@ function import_email_campaign_sheet_from_swe(
             } else {
                 $skippedExisting++;
             }
-        } else {
+        } elseif ($mode === 'upsert') {
             $insUpsert->execute($params);
             if ($already) {
                 $updated++;
             } else {
                 $imported++;
             }
+        } else {
+            // replace: skip identical email data; update when emails differ.
+            if ($already) {
+                $existingSlots = [
+                    (string) ($existing['email1'] ?? ''),
+                    (string) ($existing['email2'] ?? ''),
+                    (string) ($existing['email3'] ?? ''),
+                    (string) ($existing['email4'] ?? ''),
+                ];
+                if (email_campaign_slots_equal($existingSlots, $slots)) {
+                    $skippedDuplicate++;
+                    continue;
+                }
+                $upd->execute([
+                    (string) ($row['country'] ?? ''),
+                    trim((string) ($row['language'] ?? '')) !== ''
+                        ? (string) ($row['language'] ?? '')
+                        : email_campaign_default_language((string) ($row['country'] ?? '')),
+                    (string) ($row['region'] ?? ''),
+                    $slots[0],
+                    $slots[1],
+                    $slots[2],
+                    $slots[3],
+                    (int) $existing['id'],
+                    $sheetId,
+                ]);
+                $updated++;
+            } else {
+                $insNew->execute($params);
+                if ($insNew->rowCount() > 0) {
+                    $imported++;
+                } else {
+                    $skippedExisting++;
+                }
+            }
         }
     }
     $pdo->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+    $countryStamp = null;
+    if ($country !== null && trim($country) !== '') {
+        $canonStamp = resolve_canonical_country(trim($country));
+        $countryStamp = $canonStamp ? $canonStamp['name'] : trim($country);
+        record_email_campaign_source_fetch($sheetId, $sourceScope, $countryStamp, [
+            'imported' => $imported,
+            'updated' => $updated,
+            'skipped_duplicate' => $skippedDuplicate,
+        ]);
+    }
     return [
         'imported' => $imported,
         'updated' => $updated,
-        'skipped' => $skippedEmpty + $skippedExisting + $skippedExcluded,
+        'skipped' => $skippedEmpty + $skippedExisting + $skippedExcluded + $skippedDuplicate,
         'skipped_existing' => $skippedExisting,
+        'skipped_duplicate' => $skippedDuplicate,
         'skipped_excluded' => $skippedExcluded,
         'skipped_empty' => $skippedEmpty,
+        'skipped_emails' => $skippedEmails,
         'mode' => $mode,
+        'source_scope' => $sourceScope,
+        'source_country' => $countryStamp,
+    ];
+}
+
+/**
+ * True when any of the four email slots is non-empty.
+ *
+ * @param array{0?:string,1?:string,2?:string,3?:string}|list<string> $slots
+ */
+function email_campaign_slots_have_email(array $slots): bool
+{
+    for ($i = 0; $i < 4; $i++) {
+        if (trim((string) ($slots[$i] ?? '')) !== '') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Domain → 4 email slots for one Sites-with-emails scope and country.
+ *
+ * @return array<string, array{0:string,1:string,2:string,3:string}>
+ */
+function email_campaign_source_slot_map(string $scope, string $country): array
+{
+    ensure_sites_with_emails_schema();
+    $scope = swe_normalize_scope($scope);
+    if (!in_array($scope, ['admin', 'admin_all', 'team'], true)) {
+        $scope = 'admin_all';
+    }
+    $canon = function_exists('resolve_canonical_country')
+        ? resolve_canonical_country(trim($country))
+        : null;
+    $countryName = $canon ? (string) $canon['name'] : trim($country);
+    if ($countryName === '') {
+        return [];
+    }
+    $table = swe_table($scope);
+    $sel = db()->prepare(
+        "SELECT domain, email1, email2, email3, email4 FROM {$table} WHERE country=? ORDER BY id ASC"
+    );
+    $sel->execute([$countryName]);
+    $out = [];
+    foreach ($sel as $row) {
+        $domain = normalize_email_campaign_domain((string) ($row['domain'] ?? ''));
+        if ($domain === '' || str_starts_with($domain, '__blank_')) {
+            continue;
+        }
+        $out[$domain] = email_slots_from_row($row);
+    }
+    return $out;
+}
+
+/**
+ * Domain → 4 email slots currently on this campaign sheet.
+ *
+ * @return array<string, array{0:string,1:string,2:string,3:string}>
+ */
+function email_campaign_sheet_slot_map(int $sheetId): array
+{
+    ensure_email_campaign_schema();
+    if ($sheetId < 1) {
+        return [];
+    }
+    $sel = db()->prepare(
+        'SELECT domain, email1, email2, email3, email4
+         FROM email_campaign_rows WHERE sheet_id=? ORDER BY id ASC'
+    );
+    $sel->execute([$sheetId]);
+    $out = [];
+    foreach ($sel as $row) {
+        $domain = normalize_email_campaign_domain((string) ($row['domain'] ?? ''));
+        if ($domain === '' || str_starts_with($domain, '__blank_')) {
+            continue;
+        }
+        $out[$domain] = email_slots_from_row($row);
+    }
+    return $out;
+}
+
+/**
+ * Compare this campaign country sheet to Admin + Final for the same country.
+ * Union: Final first, Admin emails win when both have the domain.
+ * Pure: does not write rows.
+ *
+ * @param array{domains?:bool,sample?:int} $opts
+ * @return array{
+ *   country:string,
+ *   add:list<string>,
+ *   update:list<string>,
+ *   same:list<string>,
+ *   empty:list<string>,
+ *   excluded:list<string>,
+ *   admin_only:list<string>,
+ *   final_only:list<string>,
+ *   counts:array<string,int>,
+ *   samples:array<string,list<string>>
+ * }
+ */
+function diff_email_campaign_vs_archives(int $sheetId, ?string $country = null, array $opts = []): array
+{
+    ensure_email_campaign_schema();
+    ensure_sites_with_emails_schema();
+    $sheet = get_email_campaign_sheet($sheetId);
+    if (!$sheet) {
+        throw new InvalidArgumentException('Sheet not found.');
+    }
+    $countryName = trim((string) ($country ?? ''));
+    if ($countryName === '') {
+        $countryName = email_campaign_sheet_country($sheet);
+    }
+    $canon = function_exists('resolve_canonical_country')
+        ? resolve_canonical_country($countryName)
+        : null;
+    if ($canon) {
+        $countryName = (string) $canon['name'];
+    }
+
+    $keepAll = !empty($opts['domains']);
+    $sampleLimit = max(0, (int) ($opts['sample'] ?? 20));
+
+    $finalMap = email_campaign_source_slot_map('admin_all', $countryName);
+    $adminMap = email_campaign_source_slot_map('admin', $countryName);
+    $campMap = email_campaign_sheet_slot_map($sheetId);
+    $exclusionSets = load_email_campaign_exclusion_sets($sheetId);
+    $excludedDomains = $exclusionSets['domains'];
+    $excludedEmails = $exclusionSets['emails'];
+
+    $union = $finalMap;
+    foreach ($adminMap as $domain => $slots) {
+        $union[$domain] = $slots;
+    }
+
+    $buckets = [
+        'add' => [],
+        'update' => [],
+        'same' => [],
+        'empty' => [],
+        'excluded' => [],
+        'admin_only' => [],
+        'final_only' => [],
+    ];
+    $counts = [
+        'add' => 0,
+        'update' => 0,
+        'same' => 0,
+        'empty' => 0,
+        'excluded' => 0,
+        'admin_only' => 0,
+        'final_only' => 0,
+        'fillable' => 0,
+    ];
+
+    $push = static function (string $bucket, string $domain) use (&$buckets, &$counts, $keepAll, $sampleLimit): void {
+        $counts[$bucket]++;
+        if ($keepAll || count($buckets[$bucket]) < $sampleLimit) {
+            $buckets[$bucket][] = $domain;
+        }
+    };
+
+    foreach ($adminMap as $domain => $_) {
+        if (!isset($finalMap[$domain])) {
+            $push('admin_only', $domain);
+        }
+    }
+    foreach ($finalMap as $domain => $_) {
+        if (!isset($adminMap[$domain])) {
+            $push('final_only', $domain);
+        }
+    }
+
+    foreach ($union as $domain => $slots) {
+        if (isset($excludedDomains[$domain])) {
+            $push('excluded', $domain);
+            continue;
+        }
+        $filtered = filter_email_campaign_slots_against_exclusions(
+            $sheetId,
+            $domain,
+            $slots,
+            $excludedEmails
+        );
+        $slots = $filtered['slots'];
+        if (!email_campaign_slots_have_email($slots)) {
+            if ($filtered['stripped'] !== []) {
+                $push('excluded', $domain);
+            } else {
+                $push('empty', $domain);
+            }
+            continue;
+        }
+        if (!isset($campMap[$domain])) {
+            $push('add', $domain);
+            continue;
+        }
+        if (email_campaign_slots_equal($campMap[$domain], $slots)) {
+            $push('same', $domain);
+        } else {
+            $push('update', $domain);
+        }
+    }
+    $counts['fillable'] = $counts['add'] + $counts['update'];
+
+    $samples = [];
+    foreach ($buckets as $key => $list) {
+        $samples[$key] = $keepAll ? array_slice($list, 0, $sampleLimit) : $list;
+    }
+
+    return [
+        'country' => $countryName,
+        'add' => $buckets['add'],
+        'update' => $buckets['update'],
+        'same' => $buckets['same'],
+        'empty' => $buckets['empty'],
+        'excluded' => $buckets['excluded'],
+        'admin_only' => $buckets['admin_only'],
+        'final_only' => $buckets['final_only'],
+        'counts' => $counts,
+        'samples' => $samples,
+    ];
+}
+
+/**
+ * Copy missing/different Admin+Final rows into this campaign sheet.
+ * Writes via existing import: Final first, then Admin (Admin emails win).
+ * Does not edit Admin or Final. Does not copy emailed marks.
+ *
+ * @return array{
+ *   country:string,
+ *   would_add:int,
+ *   would_update:int,
+ *   imported:int,
+ *   updated:int,
+ *   skipped_duplicate:int,
+ *   skipped_excluded:int,
+ *   skipped_empty:int,
+ *   skipped_emails:int,
+ *   final:array<string,mixed>,
+ *   admin:array<string,mixed>
+ * }
+ */
+function fill_email_campaign_gaps_from_archives(int $sheetId, ?string $country = null): array
+{
+    $diff = diff_email_campaign_vs_archives($sheetId, $country, ['sample' => 0]);
+    $countryName = (string) ($diff['country'] ?? '');
+    $wouldAdd = (int) ($diff['counts']['add'] ?? 0);
+    $wouldUpdate = (int) ($diff['counts']['update'] ?? 0);
+    $blankImport = [
+        'imported' => 0,
+        'updated' => 0,
+        'skipped_duplicate' => 0,
+        'skipped_excluded' => 0,
+        'skipped_empty' => 0,
+        'skipped_emails' => 0,
+    ];
+    if ($wouldAdd + $wouldUpdate < 1) {
+        return [
+            'country' => $countryName,
+            'would_add' => $wouldAdd,
+            'would_update' => $wouldUpdate,
+            'imported' => 0,
+            'updated' => 0,
+            'skipped_duplicate' => 0,
+            'skipped_excluded' => 0,
+            'skipped_empty' => 0,
+            'skipped_emails' => 0,
+            'final' => $blankImport,
+            'admin' => $blankImport,
+        ];
+    }
+    $fromFinal = import_email_campaign_sheet_from_swe($sheetId, 'admin_all', $countryName, 'replace');
+    $fromAdmin = import_email_campaign_sheet_from_swe($sheetId, 'admin', $countryName, 'replace');
+    $sum = static function (string $key) use ($fromFinal, $fromAdmin): int {
+        return (int) ($fromFinal[$key] ?? 0) + (int) ($fromAdmin[$key] ?? 0);
+    };
+    return [
+        'country' => $countryName,
+        'would_add' => $wouldAdd,
+        'would_update' => $wouldUpdate,
+        'imported' => $sum('imported'),
+        'updated' => $sum('updated'),
+        'skipped_duplicate' => $sum('skipped_duplicate'),
+        'skipped_excluded' => $sum('skipped_excluded'),
+        'skipped_empty' => $sum('skipped_empty'),
+        'skipped_emails' => $sum('skipped_emails'),
+        'final' => $fromFinal,
+        'admin' => $fromAdmin,
     ];
 }
 
@@ -1956,6 +4139,19 @@ function get_email_campaign_row(int $rowId, ?int $sheetId = null): ?array
         $stmt = db()->prepare('SELECT * FROM email_campaign_rows WHERE id=? LIMIT 1');
         $stmt->execute([$rowId]);
     }
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function get_email_campaign_row_by_domain(int $sheetId, string $domainRaw): ?array
+{
+    ensure_email_campaign_schema();
+    $domain = normalize_email_campaign_domain($domainRaw);
+    if ($sheetId < 1 || $domain === '') {
+        return null;
+    }
+    $stmt = db()->prepare('SELECT * FROM email_campaign_rows WHERE sheet_id=? AND domain=? LIMIT 1');
+    $stmt->execute([$sheetId, $domain]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row ?: null;
 }
@@ -1992,6 +4188,70 @@ function search_email_campaign_suggestions_all(string $q, int $limit = 20): arra
 }
 
 /**
+ * @param array<string,mixed> $row
+ * @return array{
+ *   id:int,sheet_id:int,domain:string,country:string,language:string,project_id:int,
+ *   project_name:string,emails:list<string>,match_type:string,matched_value:string,label:string
+ * }
+ */
+function email_campaign_suggestion_from_row(array $row, string $q): array
+{
+    $domain = (string) $row['domain'];
+    $country = trim((string) ($row['country'] ?? ''));
+    if ($country === '') {
+        $country = (string) ($row['sheet_country'] ?? '');
+    }
+    $project = trim((string) ($row['project_title'] ?? ''));
+    if ($project === '') {
+        $project = trim((string) ($row['project_name'] ?? ''));
+    }
+    if ($project === '') {
+        $project = $country;
+    }
+    $emails = [];
+    foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
+        $e = trim((string) ($row[$k] ?? ''));
+        if ($e !== '') {
+            $emails[] = $e;
+        }
+    }
+    $matchType = 'domain';
+    $matched = $domain;
+    $domainLower = mb_strtolower($domain);
+    if (!str_contains($domainLower, $q)) {
+        foreach ($emails as $e) {
+            if (str_contains(mb_strtolower($e), $q)) {
+                $matchType = 'email';
+                $matched = $e;
+                break;
+            }
+        }
+        if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
+            $matchType = 'country';
+            $matched = $country;
+        }
+        if ($matchType === 'domain' && str_contains(mb_strtolower($project), $q)) {
+            $matchType = 'project';
+            $matched = $project;
+        }
+    }
+    $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
+    return [
+        'id' => (int) $row['id'],
+        'sheet_id' => (int) $row['sheet_id'],
+        'domain' => $domain,
+        'country' => $country,
+        'language' => trim((string) ($row['language'] ?? '')),
+        'project_id' => (int) ($row['project_id'] ?? 0),
+        'project_name' => $project,
+        'emails' => $emails,
+        'match_type' => $matchType,
+        'matched_value' => $matched,
+        'label' => $domain . ' · ' . $emailPreview . ' · ' . $country . ' · ' . $project,
+    ];
+}
+
+/**
  * @return list<array{
  *   id:int,sheet_id:int,domain:string,country:string,project_name:string,emails:list<string>,
  *   match_type:string,matched_value:string,label:string
@@ -2006,7 +4266,7 @@ function search_email_campaign_suggestions_scoped(
 ): array {
     ensure_email_campaign_schema();
     $q = trim(mb_strtolower($q));
-    if ($q === '' || mb_strlen($q) < 2) {
+    if ($q === '' || mb_strlen($q) < 3) {
         return [];
     }
     if ($sheetId !== null) {
@@ -2028,102 +4288,142 @@ function search_email_campaign_suggestions_scoped(
         }
     }
     $limit = max(1, min(40, $limit));
-    $like = '%' . $q . '%';
-    $sql = "SELECT r.id, r.sheet_id, r.domain, r.country, r.email1, r.email2, r.email3, r.email4,
+    $prefix = $q . '%';
+    $contains = '%' . $q . '%';
+    $emailQ = str_contains($q, '@');
+    $pdo = db();
+
+    $scopeSql = '';
+    $scopeParams = [];
+    if ($sheetId !== null) {
+        $scopeSql = ' AND r.sheet_id = ?';
+        $scopeParams[] = $sheetId;
+    } elseif ($projectId !== null) {
+        $scopeSql = ' AND s.project_id = ?';
+        $scopeParams[] = $projectId;
+    } elseif ($onlyTeamVisible) {
+        $scopeSql = ' AND COALESCE(p.team_search_visible, s.team_search_visible) = 1';
+    }
+
+    $select = "SELECT r.id, r.sheet_id, r.domain, r.country, r.language, r.email1, r.email2, r.email3, r.email4,
                    s.name AS sheet_country, s.project_name, s.project_id,
                    p.name AS project_title
             FROM email_campaign_rows r
             INNER JOIN email_campaign_sheets s ON s.id = r.sheet_id
             LEFT JOIN email_campaign_projects p ON p.id = s.project_id
-            WHERE LEFT(r.domain, 8) <> '__blank_'
-              AND (
-                r.domain LIKE ?
-                OR r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?
-                OR s.name LIKE ?
-                OR s.project_name LIKE ?
-                OR p.name LIKE ?
-              )";
-    $params = [$like, $like, $like, $like, $like, $like, $like, $like];
-    if ($sheetId !== null) {
-        $sql .= ' AND r.sheet_id = ?';
-        $params[] = $sheetId;
-    } elseif ($projectId !== null) {
-        $sql .= ' AND s.project_id = ?';
-        $params[] = $projectId;
-    } elseif ($onlyTeamVisible) {
-        $sql .= ' AND COALESCE(p.team_search_visible, s.team_search_visible) = 1';
-    }
-    $sql .= " ORDER BY
-           CASE
-             WHEN r.domain = ? THEN 0
-             WHEN r.domain LIKE ? THEN 1
-             WHEN r.email1 = ? OR r.email2 = ? OR r.email3 = ? OR r.email4 = ? THEN 2
-             ELSE 3
-           END,
-           COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
-         LIMIT {$limit}";
-    $params = array_merge($params, [$q, $q . '%', $q, $q, $q, $q]);
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
+            WHERE r.domain NOT LIKE '__blank_%'";
 
     $out = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $domain = (string) $row['domain'];
-        $country = trim((string) ($row['country'] ?? ''));
-        if ($country === '') {
-            $country = (string) ($row['sheet_country'] ?? '');
-        }
-        $project = trim((string) ($row['project_title'] ?? ''));
-        if ($project === '') {
-            $project = trim((string) ($row['project_name'] ?? ''));
-        }
-        if ($project === '') {
-            $project = $country;
-        }
-        $emails = [];
-        foreach (['email1', 'email2', 'email3', 'email4'] as $k) {
-            $e = trim((string) ($row[$k] ?? ''));
-            if ($e !== '') {
-                $emails[] = $e;
+    $seen = [];
+    $take = static function (PDOStatement $stmt) use (&$out, &$seen, $q, $limit): void {
+        while (count($out) < $limit && ($row = $stmt->fetch(PDO::FETCH_ASSOC))) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id < 1 || isset($seen[$id])) {
+                continue;
             }
+            $seen[$id] = true;
+            $out[] = email_campaign_suggestion_from_row($row, $q);
         }
-        $matchType = 'domain';
-        $matched = $domain;
-        $domainLower = mb_strtolower($domain);
-        if (!str_contains($domainLower, $q)) {
-            foreach ($emails as $e) {
-                if (str_contains(mb_strtolower($e), $q)) {
-                    $matchType = 'email';
-                    $matched = $e;
-                    break;
-                }
-            }
-            if ($matchType === 'domain' && str_contains(mb_strtolower($country), $q)) {
-                $matchType = 'country';
-                $matched = $country;
-            }
-            if ($matchType === 'domain' && str_contains(mb_strtolower($project), $q)) {
-                $matchType = 'project';
-                $matched = $project;
-            }
-        }
-        $emailPreview = $emails !== [] ? implode(', ', $emails) : '(no emails)';
-        $out[] = [
-            'id' => (int) $row['id'],
-            'sheet_id' => (int) $row['sheet_id'],
-            'domain' => $domain,
-            'country' => $country,
-            'project_name' => $project,
-            'emails' => $emails,
-            'match_type' => $matchType,
-            'matched_value' => $matched,
-            'label' => $domain . ' · ' . $emailPreview . ' · ' . $country . ' · ' . $project,
-        ];
+    };
+
+    if (!$emailQ) {
+        // Indexed prefix on domain — typing a site name must stay fast on large sheets.
+        $sql = $select . '
+              AND r.domain LIKE ?' . $scopeSql . '
+            ORDER BY
+              CASE WHEN LOWER(r.domain) = ? THEN 0 ELSE 1 END,
+              COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+            LIMIT ' . (int) $limit;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(array_merge([$prefix], $scopeParams, [$q]));
+        $take($stmt);
     }
+
+    if (count($out) < $limit) {
+        $remain = $limit - count($out);
+        $notIn = '';
+        $params = [$contains, $contains, $contains, $contains];
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        $params = array_merge($params, $scopeParams);
+        if ($emailQ) {
+            $sql = $select . '
+              AND (r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?)
+              ' . $notIn . $scopeSql . '
+            ORDER BY
+              CASE
+                WHEN LOWER(r.email1) = ? OR LOWER(r.email2) = ? OR LOWER(r.email3) = ? OR LOWER(r.email4) = ? THEN 0
+                ELSE 1
+              END,
+              COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+            LIMIT ' . (int) $remain;
+            $params = array_merge($params, [$q, $q, $q, $q]);
+        } else {
+            $sql = $select . '
+              AND (r.email1 LIKE ? OR r.email2 LIKE ? OR r.email3 LIKE ? OR r.email4 LIKE ?)
+              ' . $notIn . $scopeSql . '
+            ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+            LIMIT ' . (int) $remain;
+        }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
+    if (!$emailQ && count($out) < $limit) {
+        $remain = $limit - count($out);
+        $notIn = '';
+        $params = [$contains, $contains, $contains];
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        $params = array_merge($params, $scopeParams);
+        $sql = $select . '
+          AND (s.name LIKE ? OR s.project_name LIKE ? OR p.name LIKE ?)
+          ' . $notIn . $scopeSql . '
+        ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+        LIMIT ' . (int) $remain;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
+    if (!$emailQ && count($out) < $limit) {
+        $remain = $limit - count($out);
+        $params = [$contains, $prefix];
+        $notIn = '';
+        if ($seen !== []) {
+            $placeholders = implode(',', array_fill(0, count($seen), '?'));
+            $notIn = ' AND r.id NOT IN (' . $placeholders . ')';
+            foreach (array_keys($seen) as $id) {
+                $params[] = $id;
+            }
+        }
+        $params = array_merge($params, $scopeParams);
+        // Domain contains (not prefix) — last resort, limited.
+        $sql = $select . '
+          AND r.domain LIKE ? AND r.domain NOT LIKE ?
+          ' . $notIn . $scopeSql . '
+        ORDER BY COALESCE(p.name, s.project_name) ASC, s.name ASC, r.domain ASC
+        LIMIT ' . (int) $remain;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $take($stmt);
+    }
+
     return $out;
 }
 
-function delete_email_campaign_row(int $sheetId, int $rowId): array
+function delete_email_campaign_row(int $sheetId, int $rowId, bool $recordHistory = true, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -2131,22 +4431,123 @@ function delete_email_campaign_row(int $sheetId, int $rowId): array
         return ['ok' => false, 'error' => 'Row not found in this email sheet.'];
     }
     $domain = (string) $row['domain'];
+    $emails = email_campaign_row_email_list($row);
     db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
     if (!str_starts_with($domain, '__blank_')) {
         exclude_email_campaign_domain($sheetId, $domain);
+        exclude_email_campaign_emails($sheetId, $domain, $emails);
+        record_email_campaign_row_event($sheetId, 'delete_site', $domain, '', $actor);
     }
     db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+    if ($recordHistory && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('campaign', (string) $sheetId, [$row]);
+    }
     return ['ok' => true, 'domain' => $domain];
+}
+
+/**
+ * @param list<int> $ids
+ * @return array{ok:bool,error?:string,removed:list<array{id:int,domain:string}>,count:int}
+ */
+function delete_email_campaign_rows_by_ids(int $sheetId, array $ids, ?array $actor = null): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($n) => $n > 0)));
+    $snaps = [];
+    $removed = [];
+    foreach ($ids as $id) {
+        $row = get_email_campaign_row($id, $sheetId);
+        if (!$row) {
+            continue;
+        }
+        $snaps[] = $row;
+        $del = delete_email_campaign_row($sheetId, $id, false, $actor);
+        if (!empty($del['ok'])) {
+            $removed[] = ['id' => $id, 'domain' => (string) ($del['domain'] ?? '')];
+        }
+    }
+    if ($snaps !== [] && function_exists('sheet_history_push_remove')) {
+        sheet_history_push_remove('campaign', (string) $sheetId, $snaps);
+    }
+    if ($removed === []) {
+        return ['ok' => false, 'error' => 'No matching rows to remove.', 'removed' => [], 'count' => 0];
+    }
+    return ['ok' => true, 'removed' => $removed, 'count' => count($removed)];
+}
+
+/**
+ * @param array<string,mixed> $snap
+ * @return array{ok:bool,id?:int,already?:bool,error?:string}
+ */
+function restore_email_campaign_row_snapshot(int $sheetId, array $snap): array
+{
+    ensure_email_campaign_schema();
+    if ($sheetId < 1) {
+        return ['ok' => false, 'error' => 'Missing sheet.'];
+    }
+    $domain = normalize_email_campaign_domain((string) ($snap['domain'] ?? ''));
+    if ($domain === '') {
+        return ['ok' => false, 'error' => 'Invalid site.'];
+    }
+    if (!str_starts_with($domain, '__blank_') && function_exists('clear_email_campaign_domain_exclusion')) {
+        clear_email_campaign_domain_exclusion($sheetId, $domain);
+    }
+    $existing = get_email_campaign_row_by_domain($sheetId, $domain);
+    if ($existing) {
+        return ['ok' => true, 'id' => (int) $existing['id'], 'already' => true];
+    }
+    $wantId = (int) ($snap['id'] ?? 0);
+    $country = (string) ($snap['country'] ?? '');
+    $language = (string) ($snap['language'] ?? '');
+    $region = (string) ($snap['region'] ?? '');
+    $e1 = (string) ($snap['email1'] ?? '');
+    $e2 = (string) ($snap['email2'] ?? '');
+    $e3 = (string) ($snap['email3'] ?? '');
+    $e4 = (string) ($snap['email4'] ?? '');
+    $sent = (int) ($snap['email_sent'] ?? 0) === 1 ? 1 : 0;
+    $sentAt = trim((string) ($snap['email_sent_at'] ?? ''));
+    $sentAt = $sentAt !== '' ? $sentAt : null;
+    $batchId = (int) ($snap['send_batch_id'] ?? 0);
+    $batchId = $batchId > 0 ? $batchId : null;
+    $created = trim((string) ($snap['created_at'] ?? ''));
+    $created = $created !== '' ? $created : null;
+    $cols = 'sheet_id, domain, country, language, region, email1, email2, email3, email4, email_sent, email_sent_at, send_batch_id, created_at';
+    $vals = '?,?,?,?,?,?,?,?,?,?,?,?,?';
+    $params = [$sheetId, $domain, $country, $language, $region, $e1, $e2, $e3, $e4, $sent, $sentAt, $batchId, $created];
+    try {
+        if ($wantId > 0) {
+            $chk = db()->prepare('SELECT id FROM email_campaign_rows WHERE id=? LIMIT 1');
+            $chk->execute([$wantId]);
+            if (!(int) $chk->fetchColumn()) {
+                db()->prepare(
+                    "INSERT INTO email_campaign_rows (id, {$cols}) VALUES (?, {$vals})"
+                )->execute(array_merge([$wantId], $params));
+                db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+                return ['ok' => true, 'id' => $wantId];
+            }
+        }
+        db()->prepare("INSERT INTO email_campaign_rows ({$cols}) VALUES ({$vals})")->execute($params);
+        $newId = (int) db()->lastInsertId();
+        db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+        return ['ok' => true, 'id' => $newId];
+    } catch (PDOException $e) {
+        $existing = get_email_campaign_row_by_domain($sheetId, $domain);
+        if ($existing) {
+            return ['ok' => true, 'id' => (int) $existing['id'], 'already' => true];
+        }
+        return ['ok' => false, 'error' => 'Could not restore site.'];
+    }
 }
 
 /**
  * Remove one email; keep site name when other emails remain.
  * If this was the last email on the site, delete the whole row
  * (no empty email rows in campaign sheets).
+ * Removed emails are tombstoned so paste/import cannot put them back.
  *
+ * @param array<string,mixed>|null $actor
  * @return array{ok:bool,error?:string,domain?:string,emails?:list<string>,removed?:string,row_deleted?:bool}
  */
-function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $email): array
+function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $email, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $row = get_email_campaign_row($rowId, $sheetId);
@@ -2181,11 +4582,17 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
     }
 
     $domain = (string) $row['domain'];
+    exclude_email_campaign_email($sheetId, $domain, $target);
+
     // Last email gone → drop the site row (no empty-email sites).
     if ($slots === []) {
+        if (function_exists('sheet_history_push_remove')) {
+            sheet_history_push_remove('campaign', (string) $sheetId, [$row]);
+        }
         db()->prepare('DELETE FROM email_campaign_rows WHERE id=? AND sheet_id=?')->execute([$rowId, $sheetId]);
         exclude_email_campaign_domain($sheetId, $domain);
         db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
+        record_email_campaign_row_event($sheetId, 'delete_site', $domain, '', $actor);
         return [
             'ok' => true,
             'domain' => $domain,
@@ -2206,6 +4613,7 @@ function remove_email_from_email_campaign_row(int $sheetId, int $rowId, string $
     db()->prepare('UPDATE email_campaign_sheets SET updated_at=NOW() WHERE id=?')->execute([$sheetId]);
 
     $left = array_values(array_filter($slots, static fn ($e) => $e !== ''));
+    record_email_campaign_row_event($sheetId, 'remove_email', $domain, $target, $actor);
     return [
         'ok' => true,
         'domain' => $domain,
@@ -2289,7 +4697,10 @@ function render_email_campaign_super_search(
        data-project-id="<?= $pid ?>"
        data-sheet-name="<?= h($project) ?>"
        data-suggest-url="<?= h($suggestUrl) ?>"
-       data-post-url="<?= h($postBase) ?>">
+       data-post-url="<?= h($postBase) ?>"
+       data-drafts-url="index.php?page=team_email_campaigns_drafts&amp;project=<?= $pid ?>">
+    <?= csrf_field() ?>
+    <noscript><p class="help muted">JavaScript is required to search and update these results.</p></noscript>
     <h2 style="margin-top:0"><?= label_with_info(
         $project,
         'Project search bar. Searches site + emails across every country Admin added to this project. Delete both or remove only email — updates the corresponding country sheet. Removing the last email also deletes the site row.'
@@ -2340,7 +4751,11 @@ function render_email_campaign_super_search(
         </div>
       </fieldset>
       <div class="actions" style="margin-top:0.85rem;flex-wrap:wrap;gap:0.5rem">
-        <button type="button" class="btn danger" data-camp-apply>Update (Enter)</button>
+        <button type="button" class="btn danger" data-camp-apply>Delete site</button>
+        <a class="btn secondary" data-camp-open-drafts href="#" hidden
+           title="Open Campaign drafts with this site filled into {domain}/{country} tokens">
+          Open drafts for site
+        </a>
         <button type="button" class="btn secondary" data-camp-clear>Clear selection</button>
       </div>
     </div>
@@ -2382,13 +4797,47 @@ function email_campaign_draft_category_label(string $category): string
 }
 
 /**
+ * Merge tokens available in draft subject/body.
+ *
+ * @return array<string,string> token without braces => help label
+ */
+function email_campaign_draft_token_defs(): array
+{
+    return [
+        'domain' => 'Site domain',
+        'site' => 'Site domain (same as domain)',
+        'country' => 'Country',
+        'language' => 'Language',
+        'name' => 'Contact name',
+    ];
+}
+
+/**
+ * Replace {domain}/{site}/{country}/{language}/{name} in HTML or plain text.
+ *
+ * @param array{domain?:string,site?:string,country?:string,language?:string,name?:string} $vars
+ */
+function expand_email_campaign_draft_tokens(string $text, array $vars): string
+{
+    $domain = trim((string) ($vars['domain'] ?? $vars['site'] ?? ''));
+    $map = [
+        '{domain}' => $domain,
+        '{site}' => $domain,
+        '{country}' => trim((string) ($vars['country'] ?? '')),
+        '{language}' => trim((string) ($vars['language'] ?? '')),
+        '{name}' => trim((string) ($vars['name'] ?? '')),
+    ];
+    return str_ireplace(array_keys($map), array_values($map), $text);
+}
+
+/**
  * Tags Communication may use in draft bodies (email-safe formatting).
  *
  * @return list<string>
  */
 function email_campaign_draft_allowed_tags(): array
 {
-    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'img'];
+    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'img', 'a', 'ul', 'ol', 'li'];
 }
 
 /** Max inline images (compressed data URIs) per draft. */
@@ -2448,8 +4897,8 @@ function email_campaign_draft_html_to_plain(string $html): string
         [
             '/<\s*img\b[^>]*>/i',
             '/<\s*br\s*\/?\s*>/i',
-            '/<\s*\/\s*(p|h1|h2|h3)\s*>/i',
-            '/<\s*(p|h1|h2|h3)(\s[^>]*)?>/i',
+            '/<\s*\/\s*(p|h1|h2|h3|li|ul|ol)\s*>/i',
+            '/<\s*(p|h1|h2|h3|li|ul|ol)(\s[^>]*)?>/i',
         ],
         ["\n[image]\n", "\n", "\n", "\n"],
         $html
@@ -2461,8 +4910,8 @@ function email_campaign_draft_html_to_plain(string $html): string
 }
 
 /**
- * Keep only email-safe formatting tags + compressed inline images.
- * Scripts, styles, links, and unsafe attributes are stripped.
+ * Keep only email-safe formatting tags, lists, http(s) links, and compressed inline images.
+ * Scripts, styles, and unsafe attributes/URLs are stripped.
  * (Regex-based so it works without the PHP xml/DOM extension.)
  */
 function sanitize_email_campaign_draft_html(string $html): string
@@ -2523,10 +4972,40 @@ function sanitize_email_campaign_draft_html(string $html): string
         $html
     ) ?? $html;
 
-    // Keep only formatting tags; unwrap everything else (links, spans, divs…).
-    $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3>');
+    // Pull out safe https links before strip_tags.
+    $links = [];
+    $html = preg_replace_callback(
+        '/<\s*a\b([^>]*)>(.*?)<\s*\/\s*a\s*>/is',
+        static function (array $m) use (&$links): string {
+            $attrs = (string) ($m[1] ?? '');
+            $inner = (string) ($m[2] ?? '');
+            $href = '';
+            if (preg_match('/\bhref\s*=\s*("|\')(.*?)\1/is', $attrs, $hm)) {
+                $href = html_entity_decode((string) $hm[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            } elseif (preg_match('/\bhref\s*=\s*([^\s>]+)/i', $attrs, $hm)) {
+                $href = html_entity_decode((string) $hm[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+            $href = trim($href);
+            if ($href === '' || !preg_match('#^https?://#i', $href)) {
+                // Keep inner text only when href is unsafe/missing.
+                return $inner;
+            }
+            // Block javascript: and data: disguised after decode.
+            if (preg_match('#^(javascript|data|vbscript):#i', $href)) {
+                return $inner;
+            }
+            $token = '%%CAMPLINK' . count($links) . '%%';
+            $links[] = '<a href="' . htmlspecialchars($href, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">'
+                . $inner . '</a>';
+            return $token;
+        },
+        $html
+    ) ?? $html;
 
-    // Strip attributes from remaining tags (onclick, style, href, etc.).
+    // Keep formatting + lists; unwrap everything else (spans, divs…).
+    $html = strip_tags($html, '<p><br><strong><b><em><i><u><h1><h2><h3><ul><ol><li>');
+
+    // Strip attributes from remaining tags (onclick, style, etc.).
     $html = preg_replace('/<\s*([a-z0-9]+)\b[^>]*>/i', '<$1>', $html) ?? $html;
     $html = preg_replace('/<\s*\/\s*([a-z0-9]+)\s*>/i', '</$1>', $html) ?? $html;
 
@@ -2542,6 +5021,26 @@ function sanitize_email_campaign_draft_html(string $html): string
     foreach ($images as $i => $imgHtml) {
         $html = str_replace('%%CAMPIMG' . $i . '%%', $imgHtml, $html);
     }
+    foreach ($links as $i => $linkHtml) {
+        // Re-sanitize link inner HTML (no nested tags beyond allowed already stripped).
+        $html = str_replace('%%CAMPLINK' . $i . '%%', $linkHtml, $html);
+    }
+
+    // Links were tokenized with raw inner HTML — strip any leftover attributes inside.
+    $html = preg_replace_callback(
+        '/<\s*a\s+href="([^"]+)"\s*>(.*?)<\s*\/\s*a\s*>/is',
+        static function (array $m): string {
+            $href = (string) ($m[1] ?? '');
+            $inner = strip_tags((string) ($m[2] ?? ''), '<strong><b><em><i><u>');
+            $inner = preg_replace('/<\s*([a-z0-9]+)\b[^>]*>/i', '<$1>', $inner) ?? $inner;
+            $inner = preg_replace('/<\s*\/\s*([a-z0-9]+)\s*>/i', '</$1>', $inner) ?? $inner;
+            if ($inner === '') {
+                $inner = $href;
+            }
+            return '<a href="' . $href . '">' . $inner . '</a>';
+        },
+        $html
+    ) ?? $html;
 
     $html = trim($html);
     $hasImg = (bool) preg_match('/<\s*img\b/i', $html);
@@ -2583,11 +5082,15 @@ function render_email_campaign_draft_editor(
         <button type="button" class="btn secondary small" data-camp-draft-cmd="h3" title="Subheading">Subhead</button>
         <button type="button" class="btn secondary small" data-camp-draft-cmd="p" title="Normal paragraph">Normal</button>
         <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="ul" title="Bullet list">• List</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="ol" title="Numbered list">1. List</button>
+        <button type="button" class="btn secondary small" data-camp-draft-cmd="link" title="Insert http(s) link">Link</button>
+        <span class="camp-draft-toolbar-sep" aria-hidden="true"></span>
         <button type="button" class="btn secondary small" data-camp-draft-image title="Add image from computer">Image</button>
         <input type="file" accept="image/*" multiple hidden data-camp-draft-image-input>
       </div>
       <p class="help camp-draft-image-hint" style="margin:0;padding:0.35rem 0.65rem 0;font-size:0.8rem">
-        Paste a screenshot or add Image — compressed for email paste (max <?= (int) email_campaign_draft_max_images() ?>).
+        Lists, links (https), paste a screenshot, or add Image — compressed for email paste (max <?= (int) email_campaign_draft_max_images() ?>).
       </p>
       <div class="camp-draft-surface<?= $emptyClass ?>"
            data-camp-draft-surface
@@ -2611,7 +5114,17 @@ function get_email_campaign_draft(int $draftId): ?array
     if ($draftId < 1) {
         return null;
     }
-    $stmt = db()->prepare('SELECT * FROM email_campaign_drafts WHERE id=? LIMIT 1');
+    $stmt = db()->prepare(
+        'SELECT d.*,
+                cu.username AS created_by_username,
+                cu.full_name AS created_by_name,
+                uu.username AS updated_by_username,
+                uu.full_name AS updated_by_name
+         FROM email_campaign_drafts d
+         LEFT JOIN users cu ON cu.id = d.created_by
+         LEFT JOIN users uu ON uu.id = d.updated_by
+         WHERE d.id=? LIMIT 1'
+    );
     $stmt->execute([$draftId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return $row ?: null;
@@ -2626,13 +5139,21 @@ function list_email_campaign_drafts(int $projectId, ?string $category = null): a
     if ($projectId < 1) {
         return [];
     }
-    $sql = 'SELECT * FROM email_campaign_drafts WHERE project_id=?';
+    $sql = 'SELECT d.*,
+                   cu.username AS created_by_username,
+                   cu.full_name AS created_by_name,
+                   uu.username AS updated_by_username,
+                   uu.full_name AS updated_by_name
+            FROM email_campaign_drafts d
+            LEFT JOIN users cu ON cu.id = d.created_by
+            LEFT JOIN users uu ON uu.id = d.updated_by
+            WHERE d.project_id=?';
     $params = [$projectId];
     if ($category !== null && $category !== '') {
-        $sql .= ' AND category=?';
+        $sql .= ' AND d.category=?';
         $params[] = normalize_email_campaign_draft_category($category);
     }
-    $sql .= ' ORDER BY category ASC, sort_order ASC, title ASC, id ASC';
+    $sql .= ' ORDER BY d.category ASC, d.sort_order ASC, d.title ASC, d.id ASC';
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -2650,6 +5171,159 @@ function count_email_campaign_drafts(int $projectId): int
 }
 
 /**
+ * Draft counts for many projects in one query (sidebar).
+ *
+ * @param list<int> $projectIds
+ * @return array<int,int> project_id => count
+ */
+function count_email_campaign_drafts_by_projects(array $projectIds): array
+{
+    ensure_email_campaign_schema();
+    $ids = [];
+    foreach ($projectIds as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $ids[$id] = 0;
+        }
+    }
+    if ($ids === []) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = db()->prepare(
+        "SELECT project_id, COUNT(*) AS c
+         FROM email_campaign_drafts
+         WHERE project_id IN ($placeholders)
+         GROUP BY project_id"
+    );
+    $stmt->execute(array_keys($ids));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $ids[(int) $row['project_id']] = (int) $row['c'];
+    }
+    return $ids;
+}
+
+/**
+ * Move a draft up/down within its project (+ category group).
+ *
+ * @return array{ok:bool,error?:string}
+ */
+function move_email_campaign_draft(int $projectId, int $draftId, string $direction, ?array $actor = null): array
+{
+    ensure_email_campaign_schema();
+    $draft = get_email_campaign_draft($draftId);
+    if (!$draft || (int) ($draft['project_id'] ?? 0) !== $projectId) {
+        return ['ok' => false, 'error' => 'Draft not found in this project.'];
+    }
+    $direction = strtolower(trim($direction)) === 'up' ? 'up' : 'down';
+    $list = list_email_campaign_drafts($projectId, (string) ($draft['category'] ?? ''));
+    $idx = -1;
+    foreach ($list as $i => $row) {
+        if ((int) ($row['id'] ?? 0) === $draftId) {
+            $idx = $i;
+            break;
+        }
+    }
+    if ($idx < 0) {
+        return ['ok' => false, 'error' => 'Draft not found in list.'];
+    }
+    $swapIdx = $direction === 'up' ? $idx - 1 : $idx + 1;
+    if ($swapIdx < 0 || $swapIdx >= count($list)) {
+        return ['ok' => true]; // already at edge
+    }
+    $a = $list[$idx];
+    $b = $list[$swapIdx];
+    $orderA = (int) ($a['sort_order'] ?? 0);
+    $orderB = (int) ($b['sort_order'] ?? 0);
+    // If tied, use id spacing so swap still changes order.
+    if ($orderA === $orderB) {
+        $orderA = $idx;
+        $orderB = $swapIdx;
+    }
+    $actorId = $actor ? (int) ($actor['id'] ?? 0) : 0;
+    $upd = db()->prepare(
+        'UPDATE email_campaign_drafts SET sort_order=?, updated_by=?, updated_at=NOW() WHERE id=? AND project_id=?'
+    );
+    $upd->execute([$orderB, $actorId > 0 ? $actorId : null, (int) $a['id'], $projectId]);
+    $upd->execute([$orderA, $actorId > 0 ? $actorId : null, (int) $b['id'], $projectId]);
+    return ['ok' => true];
+}
+
+/** Soft size hint for large drafts (data-URI images / long HTML). */
+function email_campaign_draft_size_warning(string $bodyHtml): string
+{
+    $len = strlen($bodyHtml);
+    $imgs = preg_match_all('/<\s*img\b/i', $bodyHtml) ?: 0;
+    if ($len > 400000 || $imgs >= 4) {
+        return 'This draft is large (images/HTML). Some email clients (especially Outlook) may strip pictures on paste.';
+    }
+    if ($len > 120000 || $imgs >= 2) {
+        return 'Tip: large inline images may not paste cleanly into every email client — prefer Copy plain if needed.';
+    }
+    return '';
+}
+
+/** Product rule B: Admin, or the draft’s creator, may delete. */
+function email_campaign_user_can_delete_draft(?array $user, ?array $draft = null): bool
+{
+    if (!$user) {
+        return false;
+    }
+    if (function_exists('is_admin') && is_admin($user)) {
+        return true;
+    }
+    if ($draft === null) {
+        return false;
+    }
+    $uid = (int) ($user['id'] ?? 0);
+    $createdBy = (int) ($draft['created_by'] ?? 0);
+    return $uid > 0 && $createdBy > 0 && $uid === $createdBy;
+}
+
+/**
+ * Display name for a draft author column (full name, else username).
+ */
+function email_campaign_draft_person_label(?string $fullName, ?string $username): string
+{
+    $full = trim((string) $fullName);
+    if ($full !== '') {
+        return $full;
+    }
+    $user = trim((string) $username);
+    return $user !== '' ? $user : '';
+}
+
+/**
+ * Short “Created by X · Updated …” line for draft cards.
+ */
+function email_campaign_draft_attribution(array $draft): string
+{
+    $created = email_campaign_draft_person_label(
+        isset($draft['created_by_name']) ? (string) $draft['created_by_name'] : null,
+        isset($draft['created_by_username']) ? (string) $draft['created_by_username'] : null
+    );
+    $updated = email_campaign_draft_person_label(
+        isset($draft['updated_by_name']) ? (string) $draft['updated_by_name'] : null,
+        isset($draft['updated_by_username']) ? (string) $draft['updated_by_username'] : null
+    );
+    $updatedAt = trim((string) ($draft['updated_at'] ?? ''));
+    $parts = [];
+    if ($created !== '') {
+        $parts[] = 'Created by ' . $created;
+    }
+    if ($updated !== '' && (int) ($draft['updated_by'] ?? 0) > 0) {
+        $bits = 'Updated by ' . $updated;
+        if ($updatedAt !== '') {
+            $bits .= ' · ' . $updatedAt;
+        }
+        $parts[] = $bits;
+    } elseif ($updatedAt !== '' && $created !== '') {
+        $parts[] = 'Updated ' . $updatedAt;
+    }
+    return implode(' · ', $parts);
+}
+
+/**
  * Create or update a project draft.
  *
  * @return array{ok:bool,error?:string,id?:int}
@@ -2660,7 +5334,8 @@ function save_email_campaign_draft(
     string $body,
     string $category = 'custom',
     int $draftId = 0,
-    int $actorId = 0
+    int $actorId = 0,
+    string $subject = ''
 ): array {
     ensure_email_campaign_schema();
     if (!get_email_campaign_project($projectId)) {
@@ -2673,11 +5348,16 @@ function save_email_campaign_draft(
     if (mb_strlen($title) > 180) {
         $title = mb_substr($title, 0, 180);
     }
+    $subject = trim($subject);
+    if (mb_strlen($subject) > 255) {
+        $subject = mb_substr($subject, 0, 255);
+    }
     $body = sanitize_email_campaign_draft_html($body);
     if ($body === '') {
         return ['ok' => false, 'error' => 'Draft text is required.'];
     }
     $category = normalize_email_campaign_draft_category($category);
+    $actor = $actorId > 0 ? $actorId : null;
 
     if ($draftId > 0) {
         $existing = get_email_campaign_draft($draftId);
@@ -2686,34 +5366,41 @@ function save_email_campaign_draft(
         }
         db()->prepare(
             'UPDATE email_campaign_drafts
-             SET category=?, title=?, body=?, updated_at=NOW()
+             SET category=?, title=?, subject=?, body=?, updated_by=?, updated_at=NOW()
              WHERE id=? AND project_id=?'
-        )->execute([$category, $title, $body, $draftId, $projectId]);
+        )->execute([$category, $title, $subject, $body, $actor, $draftId, $projectId]);
         return ['ok' => true, 'id' => $draftId];
     }
 
     db()->prepare(
-        'INSERT INTO email_campaign_drafts (project_id, category, title, body, created_by)
-         VALUES (?,?,?,?,?)'
+        'INSERT INTO email_campaign_drafts (project_id, category, title, subject, body, created_by, updated_by)
+         VALUES (?,?,?,?,?,?,?)'
     )->execute([
         $projectId,
         $category,
         $title,
+        $subject,
         $body,
-        $actorId > 0 ? $actorId : null,
+        $actor,
+        $actor,
     ]);
     return ['ok' => true, 'id' => (int) db()->lastInsertId()];
 }
 
 /**
+ * Delete a project draft. Product rule B: creator or Admin may delete.
+ *
  * @return array{ok:bool,error?:string,title?:string}
  */
-function delete_email_campaign_draft(int $projectId, int $draftId): array
+function delete_email_campaign_draft(int $projectId, int $draftId, ?array $actor = null): array
 {
     ensure_email_campaign_schema();
     $draft = get_email_campaign_draft($draftId);
     if (!$draft || (int) ($draft['project_id'] ?? 0) !== $projectId) {
         return ['ok' => false, 'error' => 'Draft not found in this project.'];
+    }
+    if ($actor !== null && !email_campaign_user_can_delete_draft($actor, $draft)) {
+        return ['ok' => false, 'error' => 'Only the draft creator or Admin can delete this draft.'];
     }
     db()->prepare('DELETE FROM email_campaign_drafts WHERE id=? AND project_id=?')
         ->execute([$draftId, $projectId]);

@@ -125,7 +125,11 @@
         });
       })
       .catch(function (err) {
-        window.alert(err.message || 'Update failed');
+        if (typeof window.txfAlert === 'function') {
+          window.txfAlert(err.message || 'Update failed');
+        } else {
+          window.alert(err.message || 'Update failed');
+        }
         form.removeAttribute('data-busy');
         return null;
       });
@@ -188,8 +192,10 @@
     var form = sel.form;
     if (!form || !form.matches || !form.matches('[data-stay-ajax]')) return;
     var prev = sel.getAttribute('data-prev-value');
+    // FormData omits disabled fields — collect the POST before locking the select.
+    var req = postStayAjax(form);
     sel.disabled = true;
-    postStayAjax(form).then(function (data) {
+    req.then(function (data) {
       sel.disabled = false;
       if (!data) {
         if (prev !== null && prev !== undefined) sel.value = prev;
@@ -213,5 +219,161 @@
       if (!data) return;
       applyStayAjaxSuccess(form, data);
     });
+  });
+
+  // --- Nav controls that must not react to mouse-wheel / trackpad scroll ---
+  // Country jump is a <details> link menu (wheel-safe). Per page is still a
+  // <select>: only submit after an intentional pointer/keyboard change; revert
+  // accidental wheel changes (preventDefault is too late in some browsers).
+  var WHEEL_NAV_SEL = [
+    'select[data-wheel-nav-select]',
+    '.sheet-per-page-filter select',
+    '#sheet_per_page_select'
+  ].join(', ');
+  var armedNavSelect = null;
+
+  function isWheelNavSelect(el) {
+    return !!(el && el.matches && el.tagName === 'SELECT' && el.matches(WHEEL_NAV_SEL));
+  }
+
+  function blurWheelNavSelect(el) {
+    if (!isWheelNavSelect(el)) return;
+    try {
+      el.blur();
+    } catch (err) { /* ignore */ }
+  }
+
+  function closeCountryJumpMenus() {
+    var open = document.querySelectorAll('.sheet-country-jump-details[open]');
+    for (var i = 0; i < open.length; i++) {
+      open[i].removeAttribute('open');
+    }
+  }
+
+  function wheelDeltaPixels(e) {
+    var dy = typeof e.deltaY === 'number' ? e.deltaY : 0;
+    // Firefox often reports lines/pages; scrollBy expects CSS pixels.
+    if (e.deltaMode === 1) {
+      dy *= 16;
+    } else if (e.deltaMode === 2) {
+      dy *= window.innerHeight || 800;
+    }
+    return dy;
+  }
+
+  function rememberNavValue(sel) {
+    if (!isWheelNavSelect(sel)) return;
+    sel.setAttribute('data-nav-value', String(sel.value || ''));
+  }
+
+  document.addEventListener(
+    'focusin',
+    function (e) {
+      rememberNavValue(e.target);
+    },
+    true
+  );
+
+  document.addEventListener(
+    'pointerdown',
+    function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var sel = t.closest(WHEEL_NAV_SEL);
+      if (sel) {
+        rememberNavValue(sel);
+        armedNavSelect = sel;
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    'keydown',
+    function (e) {
+      var sel = e.target;
+      if (!isWheelNavSelect(sel)) return;
+      var key = e.key || '';
+      if (
+        key === 'Enter' ||
+        key === ' ' ||
+        key === 'ArrowUp' ||
+        key === 'ArrowDown' ||
+        key === 'Home' ||
+        key === 'End' ||
+        key === 'PageUp' ||
+        key === 'PageDown'
+      ) {
+        rememberNavValue(sel);
+        armedNavSelect = sel;
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    'change',
+    function (e) {
+      var sel = e.target;
+      if (!isWheelNavSelect(sel)) return;
+      if (armedNavSelect !== sel) {
+        var prev = sel.getAttribute('data-nav-value');
+        if (prev !== null && String(sel.value) !== String(prev)) {
+          sel.value = prev;
+        }
+        return;
+      }
+      armedNavSelect = null;
+      rememberNavValue(sel);
+      if (sel.form) {
+        sel.form.submit();
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    'wheel',
+    function (e) {
+      var target = e.target;
+      var active = document.activeElement;
+      var sel = null;
+      if (isWheelNavSelect(target)) {
+        sel = target;
+      } else if (isWheelNavSelect(active)) {
+        sel = active;
+      }
+      if (!sel) return;
+      e.preventDefault();
+      armedNavSelect = null;
+      blurWheelNavSelect(sel);
+      var prev = sel.getAttribute('data-nav-value');
+      if (prev !== null && String(sel.value) !== String(prev)) {
+        sel.value = prev;
+      }
+      var dy = wheelDeltaPixels(e);
+      if (dy !== 0) {
+        window.scrollBy(0, dy);
+      }
+    },
+    { capture: true, passive: false }
+  );
+
+  window.addEventListener(
+    'scroll',
+    function () {
+      closeCountryJumpMenus();
+      blurWheelNavSelect(document.activeElement);
+      if (isWheelNavSelect(document.activeElement)) {
+        armedNavSelect = null;
+      }
+    },
+    { passive: true }
+  );
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeCountryJumpMenus();
+    }
   });
 })();

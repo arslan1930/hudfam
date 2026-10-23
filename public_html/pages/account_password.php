@@ -15,20 +15,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (is_admin()) {
                 redirect('index.php?page=admin_dashboard');
             }
-            $u = current_user() ?? $user;
-            redirect(
-                user_is_department_scoped($u)
-                    ? 'index.php?page=team_departments'
-                    : 'index.php?page=team_dashboard'
-            );
+            redirect(team_home_url());
         }
     }
 }
 
 $forced = user_must_change_password($user);
 $panel = is_admin() ? 'admin' : 'team';
+$home = is_admin() ? 'index.php?page=admin_dashboard' : 'index.php?page=team_dashboard';
 render_header('Change password', $panel);
 ?>
+<?php render_breadcrumbs([
+    ['label' => is_admin() ? 'Dashboard' : 'Your work', 'href' => $home],
+    ['label' => 'Change password'],
+]); ?>
 <div class="topbar">
   <div>
     <h1>Change password</h1>
@@ -43,6 +43,7 @@ render_header('Change password', $panel);
 <div class="card" style="max-width:28rem">
   <?php if ($error): render_alert_box('error', $error); endif; ?>
   <form method="post" action="index.php?page=account_password" autocomplete="off">
+    <?= csrf_field() ?>
     <label>Current password</label>
     <input type="password" name="current_password" required autofocus>
     <label>New password (min 8 characters)</label>
@@ -52,7 +53,9 @@ render_header('Change password', $panel);
     <p style="margin-top:1.1rem">
       <button class="btn" type="submit">Save new password</button>
       <?php if (!$forced): ?>
-        <a class="btn secondary" href="index.php?page=<?= is_admin() ? 'admin_dashboard' : 'team_dashboard' ?>">Cancel</a>
+        <a class="btn secondary" href="index.php?page=<?= is_admin()
+            ? 'admin_dashboard'
+            : 'team_dashboard' ?>">Cancel</a>
       <?php endif; ?>
     </p>
   </form>

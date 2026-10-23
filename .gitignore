@@ -20,3 +20,8 @@ db.sqlite3
 # Local preview DB
 public_html/hudfam.db
 *.db
+
+# Per-invoice logo uploads (keep folder via .gitkeep)
+public_html/uploads/invoice_logos/*
+!public_html/uploads/invoice_logos/.gitkeep
+!public_html/uploads/invoice_logos/.htaccess

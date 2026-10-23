@@ -5,15 +5,34 @@
  *
  * Expects $invoice + $items.
  * Set $editable = true for blank-invoice in-document editing (not for print).
+ * Set $editableLines = true to edit description / amount / qty on an unpaid invoice.
+ * Set $editableCompany = true to edit logo + From / bank / payment details (including paid).
+ * Set $editableBill = true to edit bill-as / date / note (including paid).
  */
 if (!isset($invoice) || !is_array($invoice)) {
     return;
 }
 $items = $items ?? [];
 $editable = !empty($editable);
-$logo = topurlz_logo_url();
-$logoFile = asset_url('assets/img/topurlz-logo.png');
-$logoSvg = asset_url('assets/img/topurlz-logo.svg');
+$editableLines = $editable || !empty($editableLines);
+$editableBill = $editable || !empty($editableBill);
+$editableCompany = $editable || !empty($editableCompany);
+$billAs = function_exists('invoice_display_bill_as')
+    ? invoice_display_bill_as($invoice)
+    : trim((string) ($invoice['bill_to_name'] ?? $invoice['client_name'] ?? ''));
+$showExtraBill = function_exists('invoice_has_extra_bill_details')
+    ? invoice_has_extra_bill_details($invoice)
+    : true;
+$companyName = function_exists('invoice_display_company_name')
+    ? invoice_display_company_name($invoice)
+    : (trim((string) ($invoice['company_name'] ?? '')) !== ''
+        ? (string) $invoice['company_name']
+        : 'Teqno Ltd');
+$logo = function_exists('invoice_logo_url') ? invoice_logo_url($invoice) : (function_exists('invoice_default_logo_url') ? invoice_default_logo_url() : topurlz_logo_url());
+$defaultLogo = function_exists('invoice_default_logo_url')
+    ? invoice_default_logo_url()
+    : (function_exists('topurlz_logo_url') ? topurlz_logo_url() : $logo);
+$hasCustomLogo = function_exists('invoice_logo_has_custom') && invoice_logo_has_custom($invoice);
 $lineNo = 0;
 $adminNote = function_exists('invoice_admin_note')
     ? invoice_admin_note($invoice)
@@ -21,26 +40,44 @@ $adminNote = function_exists('invoice_admin_note')
 
 /** Ensure at least one empty editable row when there are no items. */
 $editRows = $items;
-if ($editable && !$editRows) {
+if ($editableLines && !$editRows) {
     $editRows = [[
         'description' => '',
         'amount' => '',
         'qty' => 1,
         'line_total' => 0,
+        'order_item_ids' => '',
     ]];
 }
+$docEditable = $editableLines || $editableCompany || $editableBill;
 ?>
-<article class="invoice-doc<?= $editable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
+<article class="invoice-doc<?= $docEditable ? ' invoice-doc-editable' : '' ?>" aria-label="Invoice <?= h($invoice['invoice_number']) ?>">
   <header class="invoice-doc-logohead">
-    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="topUrlz"
-         onerror="this.onerror=null;this.src='<?= h($logoFile) ?>';this.onerror=function(){this.src='<?= h($logoSvg) ?>';};">
+    <img class="invoice-doc-logo" src="<?= h($logo) ?>" alt="<?= h($companyName) ?>"
+         data-invoice-logo-img
+         data-default-logo="<?= h($defaultLogo) ?>"
+         onerror="this.onerror=null;this.src='<?= h($defaultLogo) ?>';">
+    <?php if ($editableCompany): ?>
+      <div class="invoice-logo-edit no-print">
+        <label class="invoice-logo-upload">
+          <span class="btn secondary small">Change logo</span>
+          <input type="file" name="company_logo" accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif" data-invoice-logo-input>
+        </label>
+        <input type="hidden" name="company_logo_data" value="" data-invoice-logo-data>
+        <label class="invoice-logo-reset">
+          <input type="checkbox" name="company_logo_reset" value="1" data-invoice-logo-reset<?= $hasCustomLogo ? '' : ' disabled' ?>>
+          Use default logo
+        </label>
+        <span class="help" data-invoice-logo-hint>PNG, JPG, WEBP or GIF · under 2 MB · then save the invoice</span>
+      </div>
+    <?php endif; ?>
   </header>
 
   <section class="invoice-doc-ids">
     <div>
       <span class="invoice-k">Invoice No.</span>
       <strong><?= h($invoice['invoice_number']) ?></strong>
-      <?php if ($editable): ?>
+      <?php if ($editableBill): ?>
         <label class="visually-hidden" for="admin_note">Note</label>
         <div class="invoice-note-box invoice-doc-note-box has-note" data-invoice-note-box data-note-always-open>
           <textarea id="admin_note" class="invoice-edit-note" name="admin_note" maxlength="255"
@@ -53,7 +90,7 @@ if ($editable && !$editRows) {
     </div>
     <div>
       <span class="invoice-k">Date</span>
-      <?php if ($editable): ?>
+      <?php if ($editableBill): ?>
         <input class="invoice-edit-date" name="invoice_date" type="date"
                value="<?= h((string) $invoice['invoice_date']) ?>" required>
       <?php else: ?>
@@ -65,9 +102,9 @@ if ($editable && !$editRows) {
   <section class="invoice-doc-parties">
     <div class="invoice-party invoice-party-from">
       <div class="invoice-party-label">From / Bank details</div>
-      <?php if ($editable): ?>
+      <?php if ($editableCompany): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="company_name"
-               value="<?= h($invoice['company_name']) ?>" placeholder="Company name">
+               value="<?= h($companyName) ?>" placeholder="Company name" required>
         <div class="invoice-party-lines invoice-edit-party-lines">
           <div><span>BIC (SWIFT)</span> <input name="company_bic" value="<?= h($invoice['company_bic']) ?>"></div>
           <div><span>IBAN</span> <input name="company_iban" value="<?= h($invoice['company_iban']) ?>"></div>
@@ -78,7 +115,7 @@ if ($editable && !$editRows) {
         <input class="invoice-edit-input invoice-edit-vat" name="vat_note"
                value="<?= h($invoice['vat_note']) ?>" placeholder="VAT note">
       <?php else: ?>
-        <div class="invoice-doc-strong"><?= h($invoice['company_name']) ?></div>
+        <div class="invoice-doc-strong"><?= h($companyName) ?></div>
         <div class="invoice-party-lines">
           <div><span>BIC (SWIFT)</span> <?= h($invoice['company_bic']) ?></div>
           <div><span>IBAN</span> <?= h($invoice['company_iban']) ?></div>
@@ -91,43 +128,65 @@ if ($editable && !$editRows) {
     </div>
     <div class="invoice-party invoice-party-to">
       <div class="invoice-party-label">Bill to</div>
-      <?php if ($editable): ?>
+      <?php if ($editableBill): ?>
         <input class="invoice-edit-input invoice-edit-strong" name="bill_to_name"
-               value="<?= h($invoice['bill_to_name']) ?>" placeholder="Client / company name" required>
+               value="<?= h($billAs) ?>" placeholder="Email or name (optional)"
+               autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         <textarea class="invoice-edit-textarea" name="bill_to_address" rows="2"
-                  placeholder="Address"><?= h((string) $invoice['bill_to_address']) ?></textarea>
+                  placeholder="Address (optional)"
+                  autocomplete="off" data-lpignore="true" data-1p-ignore="true"><?= h((string) $invoice['bill_to_address']) ?></textarea>
         <div class="invoice-party-lines invoice-edit-party-lines">
-          <div><span>Company reg / HRB</span> <input name="bill_to_hrb" value="<?= h($invoice['bill_to_hrb']) ?>" placeholder="—"></div>
-          <div><span>Ust-IdNr</span> <input name="bill_to_vat" value="<?= h($invoice['bill_to_vat']) ?>" placeholder="—"></div>
-          <div><span>Supplier number</span> <input name="supplier_number" value="<?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?>"></div>
-          <div><span>Cost center</span> <input name="cost_center" value="<?= h($invoice['cost_center']) ?>" placeholder="—"></div>
-          <div><span>Orderer</span> <input name="orderer" value="<?= h($invoice['orderer']) ?>" placeholder="—"></div>
+          <div><span>Company reg / HRB</span> <input name="bill_to_hrb" value="<?= h($invoice['bill_to_hrb']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Ust-IdNr</span> <input name="bill_to_vat" value="<?= h($invoice['bill_to_vat']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Supplier number</span> <input name="supplier_number" value="<?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?>" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Cost center</span> <input name="cost_center" value="<?= h($invoice['cost_center']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
+          <div><span>Orderer</span> <input name="orderer" value="<?= h($invoice['orderer']) ?>" placeholder="—" autocomplete="off" data-lpignore="true" data-1p-ignore="true"></div>
         </div>
       <?php else: ?>
-        <div class="invoice-doc-strong"><?= h($invoice['bill_to_name']) ?></div>
+        <?php
+          $billAddress = trim((string) ($invoice['bill_to_address'] ?? ''));
+          $billHrb = trim((string) ($invoice['bill_to_hrb'] ?? ''));
+          $billVat = trim((string) ($invoice['bill_to_vat'] ?? ''));
+          $billSupplier = trim((string) ($invoice['supplier_number'] ?? ''));
+          if ($billSupplier === '') {
+              $billSupplier = 'NEW';
+          }
+          $billCost = trim((string) ($invoice['cost_center'] ?? ''));
+          $billOrderer = trim((string) ($invoice['orderer'] ?? ''));
+          // Print/PDF must show the same Bill to block as the editor — never drop
+          // saved fields just because neighboring optionals are empty.
+          $showBillDetails = $billAddress !== '' || $billHrb !== '' || $billVat !== ''
+              || $billCost !== '' || $billOrderer !== '' || strtoupper($billSupplier) !== 'NEW'
+              || $showExtraBill || $billAs !== '';
+        ?>
+        <?php if ($billAs !== ''): ?>
+          <div class="invoice-doc-strong"><?= h($billAs) ?></div>
+        <?php endif; ?>
         <div class="invoice-party-lines">
-          <?php if (trim((string) $invoice['bill_to_address']) !== ''): ?>
-            <div class="invoice-doc-address"><?= nl2br(h((string) $invoice['bill_to_address'])) ?></div>
+          <?php if ($billAddress !== ''): ?>
+            <div class="invoice-doc-address"><?= nl2br(h($billAddress), false) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['bill_to_hrb']) !== ''): ?>
-            <div><span>Company reg / HRB</span> <?= h($invoice['bill_to_hrb']) ?></div>
+          <?php if ($billHrb !== ''): ?>
+            <div><span>Company reg / HRB</span> <?= h($billHrb) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['bill_to_vat']) !== ''): ?>
-            <div><span>Ust-IdNr</span> <?= h($invoice['bill_to_vat']) ?></div>
+          <?php if ($billVat !== ''): ?>
+            <div><span>Ust-IdNr</span> <?= h($billVat) ?></div>
           <?php endif; ?>
-          <div><span>Supplier number</span> <?= h($invoice['supplier_number'] !== '' ? $invoice['supplier_number'] : 'NEW') ?></div>
-          <?php if (trim((string) $invoice['cost_center']) !== ''): ?>
-            <div><span>Cost center</span> <?= h($invoice['cost_center']) ?></div>
+          <?php if ($showBillDetails): ?>
+            <div><span>Supplier number</span> <?= h($billSupplier) ?></div>
           <?php endif; ?>
-          <?php if (trim((string) $invoice['orderer']) !== ''): ?>
-            <div><span>Orderer</span> <?= h($invoice['orderer']) ?></div>
+          <?php if ($billCost !== ''): ?>
+            <div><span>Cost center</span> <?= h($billCost) ?></div>
+          <?php endif; ?>
+          <?php if ($billOrderer !== ''): ?>
+            <div><span>Orderer</span> <?= h($billOrderer) ?></div>
           <?php endif; ?>
         </div>
       <?php endif; ?>
     </div>
   </section>
 
-  <table class="invoice-doc-table<?= $editable ? ' invoice-edit-table' : '' ?>">
+  <table class="invoice-doc-table<?= $editableLines ? ' invoice-edit-table' : '' ?>">
     <thead>
       <tr>
         <th class="col-line">#</th>
@@ -135,13 +194,13 @@ if ($editable && !$editRows) {
         <th class="num">Amount</th>
         <th class="num">Qty</th>
         <th class="num">Total</th>
-        <?php if ($editable): ?>
+        <?php if ($editableLines): ?>
           <th class="col-edit-actions no-print"></th>
         <?php endif; ?>
       </tr>
     </thead>
-    <tbody<?= $editable ? ' id="invoice-edit-items"' : '' ?>>
-      <?php if ($editable): ?>
+    <tbody<?= $editableLines ? ' id="invoice-edit-items"' : '' ?>>
+      <?php if ($editableLines): ?>
         <?php foreach ($editRows as $item): ?>
           <?php $lineNo++; ?>
           <tr class="invoice-edit-row">
@@ -149,6 +208,7 @@ if ($editable && !$editRows) {
             <td>
               <textarea name="line_desc[]" rows="2" class="invoice-edit-desc"
                         placeholder="Item description"><?= h((string) ($item['description'] ?? '')) ?></textarea>
+              <input type="hidden" name="line_order_item_ids[]" value="<?= h((string) ($item['order_item_ids'] ?? '')) ?>">
             </td>
             <td class="num">
               <input name="line_amount[]" type="text" inputmode="decimal" class="invoice-edit-amount"
@@ -185,24 +245,51 @@ if ($editable && !$editRows) {
       <?php endif; ?>
     </tbody>
   </table>
-  <?php if ($editable): ?>
+  <?php if ($editableLines): ?>
     <div class="invoice-edit-add-row no-print">
-      <button type="button" class="btn crystal small" id="invoice-edit-add">+ Add item</button>
+      <button type="button" class="btn secondary small" id="invoice-edit-add">+ Add item</button>
     </div>
   <?php endif; ?>
 
   <section class="invoice-doc-summary">
     <div class="invoice-doc-paybox">
       <div class="invoice-party-label">Payment details</div>
-      <div><strong class="invoice-pay-company"><?= h($invoice['company_name']) ?></strong></div>
-      <div>IBAN <span class="invoice-pay-iban"><?= h($invoice['company_iban']) ?></span></div>
-      <div>BIC <span class="invoice-pay-bic"><?= h($invoice['company_bic']) ?></span></div>
-      <div class="invoice-doc-vat invoice-pay-vat"><?= h($invoice['vat_note']) ?></div>
+      <?php if ($editableCompany): ?>
+        <div>
+          <input class="invoice-edit-input invoice-edit-strong invoice-pay-company"
+                 data-pay-mirror="company_name"
+                 value="<?= h($companyName) ?>" placeholder="Company name"
+                 aria-label="Payment company name">
+        </div>
+        <div class="invoice-pay-edit-row">
+          <span>IBAN</span>
+          <input class="invoice-edit-input invoice-pay-iban" data-pay-mirror="company_iban"
+                 value="<?= h($invoice['company_iban']) ?>" placeholder="IBAN" aria-label="IBAN">
+        </div>
+        <div class="invoice-pay-edit-row">
+          <span>BIC</span>
+          <input class="invoice-edit-input invoice-pay-bic" data-pay-mirror="company_bic"
+                 value="<?= h($invoice['company_bic']) ?>" placeholder="BIC" aria-label="BIC">
+        </div>
+        <input class="invoice-edit-input invoice-edit-vat invoice-pay-vat" data-pay-mirror="vat_note"
+               value="<?= h($invoice['vat_note']) ?>" placeholder="VAT note" aria-label="VAT note">
+      <?php else: ?>
+        <div><strong class="invoice-pay-company"><?= h($companyName) ?></strong></div>
+        <div>IBAN <span class="invoice-pay-iban"><?= h($invoice['company_iban']) ?></span></div>
+        <div>BIC <span class="invoice-pay-bic"><?= h($invoice['company_bic']) ?></span></div>
+        <div class="invoice-doc-vat invoice-pay-vat"><?= h($invoice['vat_note']) ?></div>
+      <?php endif; ?>
     </div>
     <div class="invoice-doc-totals">
       <div class="invoice-total-row">
         <span>Currency</span>
-        <strong><?= h((string) ($invoice['currency'] ?? 'EUR')) ?></strong>
+        <?php if ($editableCompany): ?>
+          <input class="invoice-edit-currency" name="currency" maxlength="3"
+                 value="<?= h((string) ($invoice['currency'] ?? 'EUR')) ?>"
+                 aria-label="Currency" required>
+        <?php else: ?>
+          <strong><?= h((string) ($invoice['currency'] ?? 'EUR')) ?></strong>
+        <?php endif; ?>
       </div>
       <div class="invoice-total-row invoice-total-grand">
         <span>TOTAL</span>
@@ -212,6 +299,6 @@ if ($editable && !$editRows) {
   </section>
 
   <footer class="invoice-doc-footer">
-    Thank you for your business — <span class="invoice-footer-company"><?= h($invoice['company_name'] !== '' ? $invoice['company_name'] : 'Topurlz Ltd') ?></span>
+    Thank you for your business — <span class="invoice-footer-company"><?= h($companyName) ?></span>
   </footer>
 </article>

@@ -10,6 +10,9 @@ function ensure_account_schema(): void
         return;
     }
     $done = true;
+    if (function_exists('txf_schema_is_current') && txf_schema_is_current(__FUNCTION__, __FILE__)) {
+        return;
+    }
     $pdo = db();
 
     try {
@@ -36,51 +39,16 @@ function ensure_account_schema(): void
           CONSTRAINT fk_auth_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+    if (function_exists('txf_schema_mark_current')) {
+        txf_schema_mark_current(__FUNCTION__);
+    }
 }
 
 function ensure_tasks_schema(): void
 {
-    static $done = false;
-    if ($done) {
-        return;
-    }
-    $done = true;
-    ensure_account_schema();
-    db()->exec(
-        "CREATE TABLE IF NOT EXISTS team_tasks (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          title VARCHAR(200) NOT NULL,
-          notes TEXT NULL,
-          country VARCHAR(100) NOT NULL DEFAULT '',
-          language VARCHAR(50) NOT NULL DEFAULT '',
-          niche VARCHAR(255) NOT NULL DEFAULT '',
-          work_type VARCHAR(40) NOT NULL DEFAULT 'sites',
-          target_count INT NULL,
-          status ENUM('open','in_progress','done','cancelled') NOT NULL DEFAULT 'open',
-          assigned_to INT NOT NULL,
-          created_by INT NOT NULL,
-          due_date DATE NULL,
-          completed_at DATETIME NULL,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          INDEX (assigned_to, status),
-          INDEX (created_by),
-          INDEX (country),
-          INDEX (due_date),
-          CONSTRAINT fk_task_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE CASCADE,
-          CONSTRAINT fk_task_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
-    try {
-        $cols = db()->query('SHOW COLUMNS FROM team_tasks')->fetchAll(PDO::FETCH_COLUMN);
-        if (!in_array('work_type', $cols, true)) {
-            db()->exec(
-                "ALTER TABLE team_tasks ADD COLUMN work_type VARCHAR(40) NOT NULL DEFAULT 'sites' AFTER niche"
-            );
-        }
-    } catch (Throwable $e) {
-        // ignore
-    }
+    // Retired: Assign tasks UI redirects to Departments. Do not CREATE/ALTER
+    // team_tasks on each request. Existing installs keep the table; old rows
+    // are not migrated.
 }
 
 function load_user_by_id(int $id): ?array
@@ -170,7 +138,7 @@ function send_admin_email_verification(array $user): array
     }
     $email = trim((string) ($user['email'] ?? ''));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return ['ok' => false, 'error' => 'Add a valid email on your account first.'];
+        return ['ok' => false, 'error' => 'Add a valid email first.'];
     }
     $token = create_auth_token((int) $user['id'], 'email_verify', 48);
     $link = public_page_url('verify_email', ['token' => $token]);
@@ -235,10 +203,37 @@ function mark_admin_email_verified(int $userId): void
     )->execute([$userId]);
 }
 
+/**
+ * Another admin already uses this email (case-insensitive, including inactive).
+ * Used by Admin → Users so email login / password reset stay unambiguous.
+ */
+function admin_email_taken_by_other(string $email, int $excludeId = 0): bool
+{
+    ensure_account_schema();
+    $email = trim($email);
+    if ($email === '') {
+        return false;
+    }
+    $stmt = db()->prepare(
+        "SELECT id FROM users
+         WHERE role='admin'
+           AND email <> ''
+           AND LOWER(TRIM(email)) = LOWER(?)
+           AND id <> ?
+         LIMIT 1"
+    );
+    $stmt->execute([$email, $excludeId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function set_user_password(int $userId, string $password): void
 {
     db()->prepare('UPDATE users SET password_hash=? WHERE id=?')
         ->execute([password_hash($password, PASSWORD_DEFAULT), $userId]);
+    $keep = isset($_SESSION['user']) && (int) ($_SESSION['user']['id'] ?? 0) === $userId;
+    if (function_exists('bump_user_session_version')) {
+        bump_user_session_version($userId, $keep);
+    }
 }
 
 /* -------------------- Tasks -------------------- */
@@ -267,26 +262,34 @@ function list_team_tasks(?int $assignedTo = null, string $status = '', int $limi
     }
     $sql .= ' ORDER BY FIELD(t.status,\'open\',\'in_progress\',\'done\',\'cancelled\'), t.due_date IS NULL, t.due_date ASC, t.id DESC LIMIT '
         . (int) $limit;
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll();
+    try {
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    } catch (Throwable $e) {
+        return [];
+    }
 }
 
 function get_team_task(int $id): ?array
 {
     ensure_tasks_schema();
-    $stmt = db()->prepare(
-        "SELECT t.*,
-                a.username AS assignee_username, a.full_name AS assignee_name,
-                c.username AS creator_username, c.full_name AS creator_name
-         FROM team_tasks t
-         INNER JOIN users a ON a.id = t.assigned_to
-         INNER JOIN users c ON c.id = t.created_by
-         WHERE t.id=? LIMIT 1"
-    );
-    $stmt->execute([$id]);
-    $row = $stmt->fetch();
-    return $row ?: null;
+    try {
+        $stmt = db()->prepare(
+            "SELECT t.*,
+                    a.username AS assignee_username, a.full_name AS assignee_name,
+                    c.username AS creator_username, c.full_name AS creator_name
+             FROM team_tasks t
+             INNER JOIN users a ON a.id = t.assigned_to
+             INNER JOIN users c ON c.id = t.created_by
+             WHERE t.id=? LIMIT 1"
+        );
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
 }
 
 /**
@@ -425,9 +428,13 @@ function task_status_label(string $status): string
 function count_open_tasks_for_user(int $userId): int
 {
     ensure_tasks_schema();
-    $stmt = db()->prepare(
-        "SELECT COUNT(*) FROM team_tasks WHERE assigned_to=? AND status IN ('open','in_progress')"
-    );
-    $stmt->execute([$userId]);
-    return (int) $stmt->fetchColumn();
+    try {
+        $stmt = db()->prepare(
+            "SELECT COUNT(*) FROM team_tasks WHERE assigned_to=? AND status IN ('open','in_progress')"
+        );
+        $stmt->execute([$userId]);
+        return (int) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
 }

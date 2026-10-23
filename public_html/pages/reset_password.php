@@ -45,6 +45,7 @@ render_header('Reset password');
     <?php else: ?>
       <p class="muted">Setting a new password for <strong><?= h($preview['user']['username']) ?></strong>.</p>
       <form method="post">
+        <?= csrf_field() ?>
         <input type="hidden" name="token" value="<?= h($token) ?>">
         <label>New password</label>
         <input type="password" name="password" required minlength="8" autocomplete="new-password">
@@ -55,5 +56,6 @@ render_header('Reset password');
     <?php endif; ?>
     <p class="help" style="margin-top:1rem"><a href="index.php?page=login">Back to sign in</a></p>
   </div>
+  <?php render_project_credit(); ?>
 </div>
 <?php render_footer(); ?>

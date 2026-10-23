@@ -27,6 +27,15 @@
   var saveAgain = false;
   var MAX_UNDO = 80;
   var SAVE_DELAY_MS = 550;
+  var countTimer = null;
+
+  function scheduleCounts() {
+    if (countTimer) window.clearTimeout(countTimer);
+    countTimer = window.setTimeout(function () {
+      countTimer = null;
+      updateCounts();
+    }, 80);
+  }
 
   function normalizeText(text) {
     return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -52,6 +61,13 @@
   function setAutosaveLabel(msg) {
     if (!autosaveLabel) return;
     autosaveLabel.textContent = msg || '';
+  }
+
+  function lastWriterText(name, at) {
+    name = String(name || '').trim();
+    at = String(at || '').slice(0, 16);
+    if (!name && !at) return '';
+    return 'Last saved by ' + (name || 'Someone') + (at ? ' · ' + at : '');
   }
 
   function updateCounts(n) {
@@ -157,6 +173,8 @@
     body.set('action', 'autosave_sites');
     body.set('ajax', '1');
     body.set('sites_text', text);
+    var writerAt = shell.getAttribute('data-writer-at') || '';
+    if (writerAt) body.set('writer_at', writerAt);
 
     fetch(postUrl, {
       method: 'POST',
@@ -169,6 +187,9 @@
     })
       .then(function (res) {
         return res.json().then(function (data) {
+          if (data && data.conflict) {
+            throw Object.assign(new Error(data.error || 'Reload to avoid overwriting.'), { conflict: true, data: data });
+          }
           if (!res.ok || !data || data.ok === false) {
             throw new Error((data && data.error) || 'Autosave failed');
           }
@@ -177,9 +198,25 @@
       })
       .then(function (data) {
         lastSavedText = text;
-        var n = typeof data.total === 'number' ? data.total : linesOf(text).length;
+        if (data.domains != null) {
+          var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
+          var saved = normalizeText(savedRaw);
+          if (saved !== normalizeText(ta.value)) {
+            applyingHistory = true;
+            ta.value = savedRaw;
+            lastSnapshot = saved;
+            applyingHistory = false;
+            setStatus('Autosaved — invalid lines were removed so the box matches the sheet.');
+          }
+        }
+        var n = typeof data.total === 'number' ? data.total : linesOf(ta.value).length;
         updateCounts(n);
-        setAutosaveLabel('Saved');
+        if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+        if (data.writer_name || data.writer_at) {
+          setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+        } else {
+          setAutosaveLabel('Saved');
+        }
         if (data.empty) {
           setStatus('Sheet empty — this country will hide from Semrush Research until Admin adds sites again.');
           return;
@@ -193,7 +230,28 @@
         }
       })
       .catch(function (err) {
-        setAutosaveLabel('Save failed');
+        if (err && err.conflict) {
+          saveAgain = false;
+          var data = err.data || {};
+          if (data.writer_at) shell.setAttribute('data-writer-at', data.writer_at);
+          if (data.domains != null) {
+            var savedRaw = Array.isArray(data.domains) ? data.domains.join('\n') : String(data.domains || '');
+            applyingHistory = true;
+            ta.value = savedRaw;
+            lastSnapshot = normalizeText(savedRaw);
+            lastSavedText = lastSnapshot;
+            applyingHistory = false;
+            updateCounts();
+          }
+          undoStack = [];
+          redoStack = [];
+          syncHistoryButtons();
+          if (data.writer_name || data.writer_at) {
+            setAutosaveLabel(lastWriterText(data.writer_name, data.writer_at) || 'Saved');
+          }
+        } else {
+          setAutosaveLabel('Save failed');
+        }
         setStatus(err.message || 'Could not autosave.', true);
       })
       .then(function () {
@@ -207,7 +265,9 @@
 
   updateCounts();
   syncHistoryButtons();
-  setAutosaveLabel('Saved');
+  if (autosaveLabel && !String(autosaveLabel.textContent || '').trim()) {
+    setAutosaveLabel('Saved');
+  }
 
   ta.addEventListener('input', function () {
     if (applyingHistory) return;
@@ -218,7 +278,7 @@
       redoStack = [];
       lastSnapshot = now;
     }
-    updateCounts();
+    scheduleCounts();
     syncHistoryButtons();
     scheduleAutosave();
   });
