@@ -47,6 +47,23 @@ If anyone still uses old demo passwords (`admin123` / `team123`), upgrade flags 
 
 Do **not** leave `tests_run.php`, `tests_http.php`, `smoke_admin_mvp.php`, or `reset_admin_once.php` on the live server. They refuse web hits, but they still belong off production.
 
+### Auto-deploy from GitHub (FTP)
+
+Workflow: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). On every push to `main` (and via **Actions → Deploy to Hostinger → Run workflow**), it runs `php -l` on all PHP under `public_html/`, then uploads **only** `public_html/` to the Hostinger document root with [SamKirkland/FTP-Deploy-Action@v4.3.5](https://github.com/SamKirkland/FTP-Deploy-Action).
+
+**Important:** Hostinger’s built-in Git deploy copies the whole repo (so you get a nested `public_html/` and a wiped site). Leave that Git integration **disabled**. Use this workflow instead — it maps `public_html/` → document root and never deletes remote files (`dangerous-clean-slate: false`).
+
+Add these repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Required | Example / notes |
+|--------|----------|-----------------|
+| `FTP_SERVER` | **Yes** | Hostinger FTP hostname from hPanel → Files → FTP Accounts (e.g. `ftp.techxform.com`) |
+| `FTP_USERNAME` | **Yes** | FTP username |
+| `FTP_PASSWORD` | **Yes** | FTP password |
+| `FTP_SERVER_DIR` | No | Remote directory ending in `/`. Defaults to `./` (account document root). Only set this if FTP lands above the web root. |
+
+Excluded from upload (always left alone on the server): `config.php`, `uploads/**`, and `.git*`. After the first successful run, confirm `https://techxform.com` still loads and `config.php` was not overwritten.
+
 ## Local preview (optional)
 
 ```bash
