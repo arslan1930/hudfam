@@ -56,23 +56,23 @@ jobs:
             REMOTE_DIR="./"
           fi
 
-          # lftp reads LFTP_PASSWORD when -u has no password (keeps it out of argv).
+          # Trailing comma = empty password → lftp uses LFTP_PASSWORD (not argv).
           export LFTP_PASSWORD="$FTP_PASSWORD"
 
           lftp <<EOF
           set cmd:fail-exit true
-          set net:max-retries 10
-          set net:persist-retries 5
+          set net:max-retries 5
+          set net:persist-retries 3
           set net:timeout 60
-          set net:reconnect-interval-base 10
+          set net:reconnect-interval-base 5
           set net:reconnect-interval-multiplier 2
-          set net:reconnect-interval-max 120
+          set net:reconnect-interval-max 60
           set ftp:passive-mode true
           set ftp:ssl-allow true
           set ssl:verify-certificate no
           set ftp:list-options -a
           set mirror:parallel-transfer-count 2
-          open -u ${FTP_USERNAME} ftp://${FTP_SERVER}
+          open -u ${FTP_USERNAME}, ftp://${FTP_SERVER}
           cd ${REMOTE_DIR}
           lcd public_html
           mirror --reverse --only-newer --parallel=2 --verbose --exclude-glob config.php --exclude-glob uploads --exclude-glob uploads/** --exclude-glob .git* --exclude-glob **/.git* --exclude-glob **/.git*/**
